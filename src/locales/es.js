@@ -1,0 +1,25 @@
+const es = {
+  appName: "meetro",
+  greeting: "Buenos días",
+  assistantReady: "Tu asistente de IA está listo para ayudarte.",
+  helpQuestion: "¿Cómo podemos ayudarte hoy?",
+  helpPlaceholder: "Describe tu proyecto o problema...",
+  plumbingIssue: "Problema de Plomería",
+  plumbingDesc: "Fugas, tuberías, drenajes y más",
+  remodelBathroom: "Remodelar Mi Baño",
+  remodelDesc: "Renovaciones, acabados y más",
+  electrician: "Electricista",
+  electricalDesc: "Instalaciones, reparaciones y más",
+  projects: "Tus Proyectos",
+  viewAll: "Ver Todo",
+  messages: "Mensajes",
+  aiRecommendations: "Recomendaciones IA",
+  popularServices: "Servicios Populares",
+  home: "Inicio",
+  aiAssistant: "Asistente IA",
+  newRequest: "Nueva Solicitud",
+  discover: "Descubrir",
+  profile: "Perfil",
+};
+
+export default es;

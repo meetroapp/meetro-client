@@ -1,85 +1,182 @@
-import { useState } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 
-const API = "https://athletic-rebirth-production-0a28.up.railway.app";
+import Home from "./pages/Home";
+import Assistant from "./pages/Assistant";
+import Discover from "./pages/Discover";
+import Upload from "./pages/Upload";
+import Profile from "./pages/Profile";
+import ContractorProfile from "./pages/ContractorProfile";
+import Chat from "./pages/Chat";
+import Conversation from "./pages/Conversation";
+import ProjectDetails from "./pages/ProjectDetails";
+import Login from "./pages/login";
+import Contractors from "./pages/Contractors";
+import ContractorDetails from "./pages/ContractorDetails";
+import QuoteRequests from "./pages/QuoteRequests";
+import ConversationThread from "./pages/ConversationThread";
 
 function App() {
-  const [email, setEmail] = useState("test2@test.com");
-  const [password, setPassword] = useState("123456");
-  const [token, setToken] = useState("");
-  const [users, setUsers] = useState([]);
+  const token = localStorage.getItem("token");
 
-  async function login() {
-    try {
-      const res = await axios.post(`${API}/auth/login`, {
-        email,
-        password,
-      });
+  const getInitialPage = () => {
+    const currentHash =
+      window.location.hash.replace("#", "") || "";
 
-      setToken(res.data.token);
-      alert("Login successful");
-    } catch (err) {
-      console.error(err);
-      alert("Login failed");
+    if (!token) {
+      return "login";
     }
-  }
 
-  async function getUsers() {
-    try {
-      const res = await axios.get(`${API}/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    return currentHash || "home";
+  };
 
-      setUsers(res.data);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to fetch users");
+  const [page, setPageState] = useState(getInitialPage());
+
+  const protectedPages = [
+    "home",
+    "assistant",
+    "upload",
+    "discover",
+    "profile",
+    "contractorProfile",
+    "chat",
+    "conversation",
+    "projectDetails",
+    "contractors",
+    "contractorDetails",
+    "quoteRequests",
+    "conversationThread",
+  ];
+
+  const setPage = (newPage) => {
+    const hasToken = localStorage.getItem("token");
+
+    if (
+      protectedPages.includes(newPage) &&
+      !hasToken
+    ) {
+      window.location.hash = "login";
+      setPageState("login");
+      return;
     }
-  }
+
+    window.location.hash = newPage;
+    setPageState(newPage);
+
+    window.scrollTo(0, 0);
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const currentPage =
+        window.location.hash.replace("#", "") || "";
+
+      const hasToken = localStorage.getItem("token");
+
+      if (
+        protectedPages.includes(currentPage) &&
+        !hasToken
+      ) {
+        setPageState("login");
+        window.location.hash = "login";
+        return;
+      }
+
+      setPageState(currentPage || "home");
+
+      window.scrollTo(0, 0);
+    };
+
+    window.addEventListener(
+      "hashchange",
+      handleHashChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "hashchange",
+        handleHashChange
+      );
+    };
+  }, []);
 
   return (
-    <div
-      style={{
-        background: "#0f172a",
-        minHeight: "100vh",
-        color: "white",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "Arial",
-      }}
-    >
-      <h1 style={{ fontSize: "48px" }}>Athletic Rebirth</h1>
-      <p>Train. Recover. Rebuild.</p>
+    <>
+      {page === "login" && (
+        <Login setPage={setPage} currentPage={page} />
+      )}
 
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ margin: "10px", padding: "12px", width: "250px" }}
-      />
+      {page === "home" && (
+        <Home setPage={setPage} currentPage={page} />
+      )}
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={{ margin: "10px", padding: "12px", width: "250px" }}
-      />
+      {page === "assistant" && (
+        <Assistant setPage={setPage} currentPage={page} />
+      )}
 
-      <button onClick={login} style={{ padding: "12px 24px", marginTop: "20px" }}>
-        Login
-      </button>
+      {page === "upload" && (
+        <Upload setPage={setPage} currentPage={page} />
+      )}
 
-      <button onClick={getUsers} style={{ padding: "12px 24px", marginTop: "10px" }}>
-        Load Users
-      </button>
+      {page === "discover" && (
+        <Discover setPage={setPage} currentPage={page} />
+      )}
 
-      <pre>{JSON.stringify(users, null, 2)}</pre>
-    </div>
+      {page === "profile" && (
+        <Profile setPage={setPage} currentPage={page} />
+      )}
+
+      {page === "contractorProfile" && (
+        <ContractorProfile
+          setPage={setPage}
+          currentPage={page}
+        />
+      )}
+
+      {page === "chat" && (
+        <Chat setPage={setPage} currentPage={page} />
+      )}
+
+      {page === "conversation" && (
+        <Conversation
+          setPage={setPage}
+          currentPage={page}
+        />
+      )}
+      
+      {page === "contractors" && (
+  <Contractors
+    setPage={setPage}
+    currentPage={page}
+  />
+)}
+
+{page === "contractorDetails" && (
+  <ContractorDetails
+    setPage={setPage}
+    currentPage={page}
+  />
+)}
+
+{page === "quoteRequests" && (
+  <QuoteRequests
+    setPage={setPage}
+    currentPage={page}
+  />
+)}
+
+{page === "conversationThread" && (
+  <ConversationThread
+    setPage={setPage}
+    currentPage={page}
+  />
+)}
+      {page === "projectDetails" && (
+        <ProjectDetails
+          setPage={setPage}
+          currentPage={page}
+        />
+      )}
+    </>
   );
 }
 
