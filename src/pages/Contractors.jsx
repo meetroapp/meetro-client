@@ -1,179 +1,275 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
-import API_URL from "../api";
+import LoadingScreen from "../components/LoadingScreen";
+import { t } from "../utils/language";
 
 function Contractors({ setPage, currentPage }) {
-  const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+
+  const contractors = [
+    {
+      id: 1,
+      business_name: "Elite Home Services",
+      category: "Remodeling",
+      location: "Cape Coral, FL",
+      rating: 4.9,
+      image:
+        "https://images.unsplash.com/photo-1504307651254-35680f356dfd",
+    },
+    {
+      id: 2,
+      business_name: "Rapid Repair Pros",
+      category: "Handyman",
+      location: "Fort Myers, FL",
+      rating: 4.8,
+      image:
+        "https://images.unsplash.com/photo-1521791136064-7986c2920216",
+    },
+    {
+      id: 3,
+      business_name: "Luxury Outdoor Living",
+      category: "Pavers & Landscaping",
+      location: "Naples, FL",
+      rating: 5.0,
+      image:
+        "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85",
+    },
+  ];
 
   useEffect(() => {
-    async function fetchProfiles() {
-      try {
-        const response = await fetch(`${API_URL}/contractor-profiles`);
-        const data = await response.json();
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 700);
 
-        setProfiles(data.profiles || []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProfiles();
+    return () => clearTimeout(timer);
   }, []);
 
-  const filteredProfiles = profiles.filter((profile) => {
-    const text = `
-      ${profile.business_name}
-      ${profile.category}
-      ${profile.location}
-      ${profile.bio}
-    `.toLowerCase();
+  function openDetails(contractor) {
+    localStorage.setItem(
+      "selectedContractor",
+      JSON.stringify(contractor)
+    );
 
-    return text.includes(search.toLowerCase());
-  });
+    localStorage.setItem(
+      "selectedContractorId",
+      contractor.id
+    );
+
+    setPage("contractorDetails");
+  }
+
+  if (loading) {
+    return (
+      <LoadingScreen
+        text={t("contractorsLoading")}
+      />
+    );
+  }
 
   return (
-    <div style={{ padding: 20, paddingBottom: 120 }}>
-      <h1 style={{ textAlign: "center", fontSize: "42px" }}>
-        Contractors
-      </h1>
+    <div
+      style={{
+        background: "#f5f5f7",
+        minHeight: "100vh",
+        padding: "24px 18px 120px",
+        boxSizing: "border-box",
+        color: "#111",
+      }}
+    >
+      <div style={heroCard}>
+        <h1 style={heroTitle}>
+          {t("contractorsHeroTitle")}
+        </h1>
 
-      <p style={{ textAlign: "center", color: "#666" }}>
-        Find local professionals on Meetro
-      </p>
+        <p style={heroSubtitle}>
+          {t("contractorsHeroSubtitle")}
+        </p>
+      </div>
 
-      <input
-        placeholder="Search contractors..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{
-          width: "100%",
-          padding: "14px",
-          borderRadius: "16px",
-          border: "1px solid #ddd",
-          fontSize: "16px",
-          marginBottom: "24px",
-          boxSizing: "border-box",
-        }}
-      />
-
-      {loading && <p>Loading contractors...</p>}
-
-      {!loading && filteredProfiles.length === 0 && (
-        <p style={{ textAlign: "center" }}>No contractors found.</p>
-      )}
-
-      {filteredProfiles.map((profile) => (
-        <div
-          key={profile.id}
-          style={{
-            background: "white",
-            borderRadius: "24px",
-            padding: "18px",
-            marginBottom: "20px",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
-          }}
-        >
-          {profile.image_url && (
-            <img
-              src={profile.image_url}
-              alt={profile.business_name}
-              style={{
-                width: "100%",
-                height: "360px",
-                objectFit: "contain",
-                objectPosition: "center",
-                background: "#f4f4f4",
-                borderRadius: "18px",
-                marginBottom: "14px",
-                padding: "10px",
-                boxSizing: "border-box",
-              }}
-            />
-          )}
-
-          <h2>{profile.business_name || "Contractor"}</h2>
-
-          <p style={{ color: "#5b3df5", fontWeight: "bold" }}>
-            {profile.category || "Service Provider"}
-          </p>
-
-          <p style={{ color: "#666" }}>
-            📍 {profile.location || "Location not set"}
-          </p>
-
-          <p style={{ lineHeight: 1.6 }}>
-            {profile.bio || "No bio added yet."}
-          </p>
-
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <span style={badgeStyle}>{profile.plan_type || "free"}</span>
-
-            {profile.is_verified && (
-              <span style={verifiedBadge}>Verified</span>
-            )}
-
-            {profile.is_featured && (
-              <span style={featuredBadge}>Featured</span>
-            )}
-          </div>
-
-          <button
-            onClick={() => {
-              localStorage.setItem("selectedContractorId", profile.id);
-              setPage("contractorDetails");
-            }}
-            style={{
-              width: "100%",
-              marginTop: "18px",
-              padding: "14px",
-              border: "none",
-              borderRadius: "14px",
-              background: "#5b3df5",
-              color: "white",
-              fontWeight: "bold",
-              cursor: "pointer",
-              fontSize: "16px",
-            }}
+      <div style={contractorGrid}>
+        {contractors.map((contractor) => (
+          <div
+            key={contractor.id}
+            style={contractorCard}
           >
-            View Full Profile
-          </button>
-        </div>
-      ))}
+            <img
+              src={contractor.image}
+              alt={contractor.business_name}
+              style={contractorImage}
+            />
 
-      <BottomNav setPage={setPage} currentPage={currentPage} />
+            <div style={cardContent}>
+              <div style={badgeRow}>
+                <span style={verifiedBadge}>
+                  ✓ {t("verified")}
+                </span>
+
+                <span style={ratingBadge}>
+                  ⭐ {contractor.rating}
+                </span>
+              </div>
+
+              <h2 style={contractorTitle}>
+                {contractor.business_name}
+              </h2>
+
+              <p style={categoryText}>
+                {contractor.category}
+              </p>
+
+              <p style={locationText}>
+                📍 {contractor.location}
+              </p>
+
+              <div style={buttonRow}>
+                <button
+                  onClick={() =>
+                    openDetails(contractor)
+                  }
+                  style={primaryButton}
+                >
+                  {t("viewProfile")}
+                </button>
+
+                <button
+                  onClick={() =>
+                    setPage("upload")
+                  }
+                  style={secondaryButton}
+                >
+                  {t("requestQuote")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <BottomNav
+        setPage={setPage}
+        currentPage={currentPage}
+      />
     </div>
   );
 }
 
-const badgeStyle = {
-  background: "#f1ecff",
-  color: "#5b3df5",
-  padding: "8px 12px",
-  borderRadius: "12px",
-  fontWeight: "bold",
-  fontSize: "14px",
+const heroCard = {
+  background:
+    "linear-gradient(135deg, #5b3df5 0%, #7b61ff 100%)",
+  borderRadius: "30px",
+  padding: "30px 24px",
+  marginBottom: "28px",
+  color: "white",
+  boxShadow:
+    "0 18px 40px rgba(91,61,245,0.28)",
+};
+
+const heroTitle = {
+  margin: 0,
+  fontSize: "40px",
+  lineHeight: 1.1,
+};
+
+const heroSubtitle = {
+  marginTop: "14px",
+  lineHeight: 1.6,
+  opacity: 0.92,
+  fontSize: "16px",
+};
+
+const contractorGrid = {
+  display: "grid",
+  gap: "22px",
+};
+
+const contractorCard = {
+  background: "white",
+  borderRadius: "28px",
+  overflow: "hidden",
+  boxShadow:
+    "0 10px 24px rgba(0,0,0,0.07)",
+};
+
+const contractorImage = {
+  width: "100%",
+  height: "240px",
+  objectFit: "cover",
+};
+
+const cardContent = {
+  padding: "22px",
+};
+
+const badgeRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  marginBottom: "16px",
 };
 
 const verifiedBadge = {
-  background: "#e8fff0",
-  color: "#12a150",
-  padding: "8px 12px",
-  borderRadius: "12px",
+  background: "#eef2ff",
+  color: "#5b3df5",
+  padding: "8px 14px",
+  borderRadius: "999px",
   fontWeight: "bold",
-  fontSize: "14px",
+  fontSize: "13px",
 };
 
-const featuredBadge = {
-  background: "#fff7df",
-  color: "#c79b00",
-  padding: "8px 12px",
-  borderRadius: "12px",
+const ratingBadge = {
+  background: "#fff7e6",
+  color: "#ff9900",
+  padding: "8px 14px",
+  borderRadius: "999px",
   fontWeight: "bold",
-  fontSize: "14px",
+  fontSize: "13px",
+};
+
+const contractorTitle = {
+  margin: 0,
+  marginBottom: "10px",
+  color: "#111",
+  fontSize: "30px",
+};
+
+const categoryText = {
+  color: "#5b3df5",
+  fontWeight: "bold",
+  marginBottom: "10px",
+};
+
+const locationText = {
+  color: "#666",
+  marginBottom: "20px",
+};
+
+const buttonRow = {
+  display: "flex",
+  gap: "12px",
+};
+
+const primaryButton = {
+  flex: 1,
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  padding: "15px",
+  borderRadius: "16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  fontSize: "15px",
+};
+
+const secondaryButton = {
+  flex: 1,
+  border: "none",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  padding: "15px",
+  borderRadius: "16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  fontSize: "15px",
 };
 
 export default Contractors;

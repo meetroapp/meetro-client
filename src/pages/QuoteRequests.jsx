@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
-import API_URL from "../api";
+import LoadingScreen from "../components/LoadingScreen";
+import { authFetch } from "../utils/authFetch";
 
 function QuoteRequests({ setPage, currentPage }) {
   const [quotes, setQuotes] = useState([]);
@@ -10,28 +11,26 @@ function QuoteRequests({ setPage, currentPage }) {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    async function fetchQuotes() {
-      try {
-        const token = localStorage.getItem("token");
-
-        const response = await fetch(`${API_URL}/contractor-quote-requests`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await response.json();
-
-        setQuotes(data.quotes || []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchQuotes();
   }, []);
+
+  async function fetchQuotes() {
+    try {
+      const result = await authFetch(
+        "/contractor-quote-requests",
+        {},
+        setPage
+      );
+
+      if (!result) return;
+
+      setQuotes(result.data.quotes || []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function sendReply(quote) {
     if (!replyText.trim()) {
@@ -42,27 +41,30 @@ function QuoteRequests({ setPage, currentPage }) {
     try {
       setSending(true);
 
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(`${API_URL}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const result = await authFetch(
+        "/messages",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            quote_request_id: quote.id,
+            receiver_id: quote.homeowner_id,
+            message_text: replyText,
+          }),
         },
-        body: JSON.stringify({
-          quote_request_id: quote.id,
-          receiver_id: quote.homeowner_id,
-          message_text: replyText,
-        }),
-      });
+        setPage
+      );
 
-      const data = await response.json();
+      if (!result) return;
+
+      const data = result.data;
 
       if (data.data) {
         alert("Message sent!");
+
         setReplyText("");
         setActiveQuoteId(null);
+
+        await fetchQuotes();
       } else {
         alert(data.error || "Failed to send message");
       }
@@ -75,57 +77,131 @@ function QuoteRequests({ setPage, currentPage }) {
   }
 
   function openConversation(quote) {
-    localStorage.setItem("selectedQuoteRequestId", quote.id);
-    localStorage.setItem("selectedQuoteRequest", JSON.stringify(quote));
-    localStorage.setItem("selectedMessageReceiverId", quote.homeowner_id);
+    localStorage.setItem(
+      "selectedQuoteRequestId",
+      quote.id
+    );
+
+    localStorage.setItem(
+      "selectedQuoteRequest",
+      JSON.stringify(quote)
+    );
+
+    localStorage.setItem(
+      "selectedMessageReceiverId",
+      quote.homeowner_id
+    );
 
     setPage("conversationThread");
   }
 
+  if (loading) {
+    return (
+      <LoadingScreen text="Loading leads..." />
+    );
+  }
+
   return (
-    <div style={{ padding: 20, paddingBottom: 120 }}>
-      <h1 style={{ textAlign: "center", fontSize: "42px" }}>
-        Quote Requests
+    <div
+      style={{
+        background: "#f5f5f7",
+        minHeight: "100vh",
+        padding: "22px 18px 120px",
+        boxSizing: "border-box",
+        color: "#111",
+      }}
+    >
+      <button
+        onClick={() => setPage("businessDashboard")}
+        style={backButton}
+      >
+        ← Back to Dashboard
+      </button>
+
+      <h1 style={pageTitle}>
+        Leads
       </h1>
 
-      <p style={{ textAlign: "center", color: "#666" }}>
-        Incoming homeowner project leads
+      <p style={pageSubtitle}>
+        Incoming homeowner quote requests
       </p>
 
-      {loading && <p>Loading quote requests...</p>}
+      <div style={summaryCard}>
+        <div>
+          <strong style={summaryNumber}>
+            {quotes.length}
+          </strong>
 
-      {!loading && quotes.length === 0 && (
+          <p style={summaryLabel}>
+            Total leads
+          </p>
+        </div>
+
+        <div>
+          <strong style={summaryNumber}>
+            {
+              quotes.filter(
+                (quote) => quote.status === "new"
+              ).length
+            }
+          </strong>
+
+          <p style={summaryLabel}>
+            New
+          </p>
+        </div>
+      </div>
+
+      {quotes.length === 0 && (
         <div style={cardStyle}>
-          <h2>No quote requests yet</h2>
-          <p style={{ color: "#666" }}>
-            New homeowner requests will appear here.
+          <h2 style={emptyTitle}>
+            No leads yet
+          </h2>
+
+          <p style={emptyText}>
+            New homeowner quote requests will appear here.
           </p>
         </div>
       )}
 
       {quotes.map((quote) => (
-        <div key={quote.id} style={cardStyle}>
-          <h2>{quote.project_title}</h2>
+        <div
+          key={quote.id}
+          style={cardStyle}
+        >
+          <div style={leadHeader}>
+            <div>
+              <h2 style={leadTitle}>
+                {quote.project_title ||
+                  "Untitled project"}
+              </h2>
 
-          <p style={{ color: "#555", lineHeight: 1.6 }}>
-            {quote.project_description || "No description added."}
+              <p style={homeownerText}>
+                From{" "}
+                {quote.homeowner_email ||
+                  "Homeowner"}
+              </p>
+            </div>
+
+            <span style={statusBadge}>
+              {quote.status || "new"}
+            </span>
+          </div>
+
+          <p style={descriptionText}>
+            {quote.project_description ||
+              "No description added."}
           </p>
 
-          <p>
-            <strong>Location:</strong> {quote.location || "Not set"}
-          </p>
-
-          <p>
-            <strong>Status:</strong> {quote.status || "new"}
-          </p>
-
-          <p>
-            <strong>Homeowner:</strong>{" "}
-            {quote.homeowner_email || "Unknown"}
+          <p style={locationText}>
+            <strong>Location:</strong>{" "}
+            {quote.location || "Not set"}
           </p>
 
           <button
-            onClick={() => openConversation(quote)}
+            onClick={() =>
+              openConversation(quote)
+            }
             style={primaryButton}
           >
             Open Conversation
@@ -133,57 +209,168 @@ function QuoteRequests({ setPage, currentPage }) {
 
           <button
             onClick={() =>
-              setActiveQuoteId(activeQuoteId === quote.id ? null : quote.id)
+              setActiveQuoteId(
+                activeQuoteId === quote.id
+                  ? null
+                  : quote.id
+              )
             }
             style={secondaryButton}
           >
-            {activeQuoteId === quote.id ? "Cancel Quick Reply" : "Quick Reply"}
+            {activeQuoteId === quote.id
+              ? "Cancel Quick Reply"
+              : "Quick Reply"}
           </button>
 
           {activeQuoteId === quote.id && (
-            <div
-              style={{
-                marginTop: "18px",
-                background: "#fafafa",
-                borderRadius: "18px",
-                padding: "16px",
-                border: "1px solid #eee",
-              }}
-            >
+            <div style={replyBox}>
               <textarea
                 placeholder="Write your reply..."
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) =>
+                  setReplyText(e.target.value)
+                }
                 style={textareaStyle}
               />
 
               <button
-                onClick={() => sendReply(quote)}
+                onClick={() =>
+                  sendReply(quote)
+                }
                 disabled={sending}
                 style={{
                   ...primaryButton,
-                  background: sending ? "#999" : "#5b3df5",
-                  cursor: sending ? "not-allowed" : "pointer",
+                  background: sending
+                    ? "#999"
+                    : "#5b3df5",
+                  cursor: sending
+                    ? "not-allowed"
+                    : "pointer",
                 }}
               >
-                {sending ? "Sending..." : "Send Message"}
+                {sending
+                  ? "Sending..."
+                  : "Send Message"}
               </button>
             </div>
           )}
         </div>
       ))}
 
-      <BottomNav setPage={setPage} currentPage={currentPage} />
+      <BottomNav
+        setPage={setPage}
+        currentPage={currentPage}
+      />
     </div>
   );
 }
+
+const backButton = {
+  border: "none",
+  background: "#eee7ff",
+  color: "#5b3df5",
+  padding: "10px 14px",
+  borderRadius: "14px",
+  fontWeight: "bold",
+  marginBottom: "18px",
+  cursor: "pointer",
+};
+
+const pageTitle = {
+  textAlign: "center",
+  fontSize: "42px",
+  marginBottom: "6px",
+  color: "#111",
+};
+
+const pageSubtitle = {
+  textAlign: "center",
+  color: "#666",
+  marginBottom: "22px",
+  fontSize: "17px",
+};
+
+const summaryCard = {
+  background: "white",
+  borderRadius: "22px",
+  padding: "18px",
+  marginBottom: "20px",
+  display: "flex",
+  justifyContent: "space-around",
+  color: "#111",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+};
+
+const summaryNumber = {
+  display: "block",
+  textAlign: "center",
+  fontSize: "30px",
+  color: "#111",
+};
+
+const summaryLabel = {
+  margin: 0,
+  color: "#666",
+  textAlign: "center",
+};
 
 const cardStyle = {
   background: "white",
   borderRadius: "22px",
   padding: "20px",
   marginBottom: "18px",
+  color: "#111",
   boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+};
+
+const emptyTitle = {
+  color: "#111",
+  marginTop: 0,
+};
+
+const emptyText = {
+  color: "#666",
+  marginBottom: 0,
+};
+
+const leadHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  alignItems: "flex-start",
+};
+
+const leadTitle = {
+  marginTop: 0,
+  marginBottom: "6px",
+  color: "#111",
+  fontSize: "24px",
+};
+
+const homeownerText = {
+  color: "#777",
+  margin: 0,
+  fontSize: "14px",
+};
+
+const statusBadge = {
+  background: "#e8fff0",
+  color: "#12a150",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  fontSize: "13px",
+  textTransform: "capitalize",
+};
+
+const descriptionText = {
+  color: "#555",
+  lineHeight: 1.6,
+  marginTop: "16px",
+};
+
+const locationText = {
+  color: "#444",
 };
 
 const primaryButton = {
@@ -212,6 +399,14 @@ const secondaryButton = {
   fontSize: "16px",
 };
 
+const replyBox = {
+  marginTop: "18px",
+  background: "#fafafa",
+  borderRadius: "18px",
+  padding: "16px",
+  border: "1px solid #eee",
+};
+
 const textareaStyle = {
   width: "100%",
   minHeight: "120px",
@@ -220,6 +415,9 @@ const textareaStyle = {
   border: "1px solid #ddd",
   fontSize: "16px",
   boxSizing: "border-box",
+  resize: "none",
+  background: "white",
+  color: "#111",
 };
 
 export default QuoteRequests;

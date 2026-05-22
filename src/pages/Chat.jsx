@@ -1,189 +1,263 @@
+import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import LoadingScreen from "../components/LoadingScreen";
+import { getLanguage, t } from "../utils/language";
 
 function Chat({ setPage, currentPage }) {
-  return (
-    <div
-      style={{
-        background: "#f5f5f7",
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        fontFamily: "Arial",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "430px",
-          display: "flex",
-          flexDirection: "column",
-          paddingBottom: "100px",
-        }}
-      >
-        <div
-          style={{
-            background: "white",
-            padding: "20px",
-            borderBottom: "1px solid #eee",
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-          }}
-        >
-          <div style={{ paddingTop: "10px", paddingBottom: "6px" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "42px",
-                lineHeight: 1,
-              }}
-            >
-              Messages
-            </h1>
+  const [loading, setLoading] = useState(true);
+  const [language, updateLanguage] = useState(getLanguage());
 
-            <p
-              style={{
-                color: "#666",
-                marginTop: "10px",
-                fontSize: "16px",
-              }}
-            >
-              Your conversations
-            </p>
+  const conversations = [
+    {
+      id: 1,
+      quoteRequestId: 1,
+      receiverId: 101,
+      name: "Elite Home Services",
+      projectTitle: t("bathroomRemodel"),
+      location: "Fort Myers",
+      message: t("estimateTomorrow"),
+      time: t("twoMinutesAgo"),
+      unread: true,
+    },
+    {
+      id: 2,
+      quoteRequestId: 2,
+      receiverId: 102,
+      name: "Rapid Repair Pros",
+      projectTitle: t("outletRepair"),
+      location: "Cape Coral",
+      message: t("thanksPhotos"),
+      time: t("oneHourAgo"),
+      unread: false,
+    },
+    {
+      id: 3,
+      quoteRequestId: 3,
+      receiverId: 103,
+      name: "Luxury Outdoor Living",
+      projectTitle: t("paverSealingProject"),
+      location: "Naples",
+      message: t("quoteReady"),
+      time: t("threeHoursAgo"),
+      unread: true,
+    },
+  ];
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      updateLanguage(getLanguage());
+    };
+
+    window.addEventListener("languageChanged", handleLanguageChange);
+
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [language]);
+
+  function openConversation(conversation) {
+    localStorage.setItem(
+      "selectedQuoteRequestId",
+      conversation.quoteRequestId
+    );
+
+    localStorage.setItem(
+      "selectedMessageReceiverId",
+      conversation.receiverId
+    );
+
+    localStorage.setItem(
+      "selectedQuoteRequest",
+      JSON.stringify({
+        id: conversation.quoteRequestId,
+        project_title: conversation.projectTitle,
+        project_description: conversation.message,
+        location: conversation.location,
+        business_name: conversation.name,
+      })
+    );
+
+    setPage("conversationThread");
+  }
+
+  if (loading) {
+    return <LoadingScreen text={t("myMessages")} />;
+  }
+
+  return (
+    <div style={pageWrapper}>
+      <div style={heroCard}>
+        <h1 style={heroTitle}>{t("myMessages")}</h1>
+        <p style={heroSubtitle}>{t("chatSubtitle")}</p>
+      </div>
+
+      <div style={conversationGrid}>
+        {conversations.length === 0 ? (
+          <div style={emptyCard}>
+            <h2 style={emptyTitle}>{t("noMessagesYet")}</h2>
+            <p style={emptyText}>{t("noMessagesText")}</p>
           </div>
-        </div>
+        ) : (
+          conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              onClick={() => openConversation(conversation)}
+              style={conversationCard}
+            >
+              <div style={avatarCircle}>
+                {conversation.name.charAt(0).toUpperCase()}
+              </div>
 
-        <div
-          style={{
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "14px",
-          }}
-        >
-          <ChatCard
-            name="Aqua Flow Plumbing"
-            message="We can come by tomorrow morning."
-            time="2m ago"
-            initials="AF"
-            unread={true}
-            onClick={() => setPage("conversation")}
-          />
+              <div style={{ flex: 1 }}>
+                <div style={topRow}>
+                  <h2 style={conversationTitle}>{conversation.name}</h2>
+                  <span style={timeText}>{conversation.time}</span>
+                </div>
 
-          <ChatCard
-            name="VoltCore Electric"
-            message="Estimate sent to your inbox."
-            time="12m ago"
-            initials="VC"
-            onClick={() => setPage("conversation")}
-          />
+                <p style={projectText}>{conversation.projectTitle}</p>
+                <p style={messageText}>{conversation.message}</p>
+              </div>
 
-          <ChatCard
-            name="Cool Breeze HVAC"
-            message="Thanks for contacting us."
-            time="1h ago"
-            initials="CB"
-            onClick={() => setPage("conversation")}
-          />
-        </div>
-
-        <BottomNav setPage={setPage} currentPage={currentPage} />
+              {conversation.unread && <div style={unreadDot}></div>}
+            </button>
+          ))
+        )}
       </div>
+
+      <BottomNav setPage={setPage} currentPage="chat" />
     </div>
   );
 }
 
-function ChatCard({
-  name,
-  message,
-  time,
-  initials,
-  unread,
-  onClick,
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: "white",
-        borderRadius: "24px",
-        padding: "16px",
-        display: "flex",
-        alignItems: "center",
-        gap: "14px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.05)",
-        cursor: "pointer",
-      }}
-    >
-      <div
-        style={{
-          width: "60px",
-          height: "60px",
-          borderRadius: "20px",
-          background: "linear-gradient(135deg, #5b3df5, #9b7bff)",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: "bold",
-          fontSize: "20px",
-          flexShrink: 0,
-        }}
-      >
-        {initials}
-      </div>
+const pageWrapper = {
+  background: "#f5f5f7",
+  minHeight: "100vh",
+  padding: "24px 18px 120px",
+  boxSizing: "border-box",
+  color: "#111",
+};
 
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: "18px",
-            }}
-          >
-            {name}
-          </h3>
+const heroCard = {
+  background: "linear-gradient(135deg, #5b3df5 0%, #7b61ff 100%)",
+  borderRadius: "30px",
+  padding: "30px 24px",
+  marginBottom: "28px",
+  color: "white",
+  boxShadow: "0 18px 40px rgba(91,61,245,0.28)",
+};
 
-          <span
-            style={{
-              color: "#999",
-              fontSize: "13px",
-            }}
-          >
-            {time}
-          </span>
-        </div>
+const heroTitle = {
+  margin: 0,
+  fontSize: "40px",
+};
 
-        <p
-          style={{
-            marginTop: "8px",
-            color: unread ? "#111" : "#777",
-            fontWeight: unread ? "bold" : "normal",
-            lineHeight: 1.4,
-          }}
-        >
-          {message}
-        </p>
-      </div>
+const heroSubtitle = {
+  marginTop: "12px",
+  lineHeight: 1.6,
+  opacity: 0.92,
+};
 
-      {unread && (
-        <div
-          style={{
-            width: "12px",
-            height: "12px",
-            borderRadius: "50%",
-            background: "#5b3df5",
-          }}
-        />
-      )}
-    </div>
-  );
-}
+const conversationGrid = {
+  display: "grid",
+  gap: "18px",
+};
+
+const conversationCard = {
+  background: "white",
+  border: "none",
+  borderRadius: "24px",
+  padding: "18px",
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  cursor: "pointer",
+  textAlign: "left",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+};
+
+const avatarCircle = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  fontSize: "24px",
+  flexShrink: 0,
+};
+
+const topRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const conversationTitle = {
+  margin: 0,
+  color: "#111",
+  fontSize: "20px",
+};
+
+const projectText = {
+  marginTop: "6px",
+  marginBottom: 0,
+  color: "#5b3df5",
+  fontWeight: "bold",
+  fontSize: "14px",
+};
+
+const timeText = {
+  color: "#888",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
+};
+
+const messageText = {
+  marginTop: "8px",
+  marginBottom: 0,
+  color: "#666",
+  lineHeight: 1.5,
+};
+
+const unreadDot = {
+  width: "12px",
+  height: "12px",
+  borderRadius: "50%",
+  background: "#5b3df5",
+  flexShrink: 0,
+};
+
+const emptyCard = {
+  background: "white",
+  borderRadius: "24px",
+  padding: "34px 20px",
+  textAlign: "center",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+};
+
+const emptyTitle = {
+  margin: "0 0 10px",
+  fontSize: "24px",
+  fontWeight: "900",
+};
+
+const emptyText = {
+  margin: 0,
+  color: "#666",
+  fontSize: "16px",
+  lineHeight: 1.5,
+};
 
 export default Chat;

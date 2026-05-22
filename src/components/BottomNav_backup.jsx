@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getLanguage, t } from "../utils/language";
 
-function BottomNav({ setPage, currentPage = "" }) {
+function BottomNav({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const [activeMode, setActiveMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
@@ -26,45 +26,43 @@ function BottomNav({ setPage, currentPage = "" }) {
     };
   }, []);
 
+  const messagePages = [
+    "chat",
+    "messages",
+    "messagesInbox",
+    "conversationThread",
+    "conversation",
+    "thread",
+  ];
+
   const personalNavItems = [
     {
       page: "home",
-      aliases: ["home"],
       icon: "🏠",
       label: t("home"),
       sub: t("dashboard"),
     },
     {
       page: "discover",
-      aliases: ["discover"],
       icon: "🔎",
       label: t("discover"),
       sub: t("services"),
     },
     {
       page: "upload",
-      aliases: ["upload"],
       icon: "➕",
       label: t("upload"),
       sub: t("project"),
     },
     {
-      page: "messagesInbox",
-      aliases: [
-        "chat",
-        "messages",
-        "messagesInbox",
-        "conversationThread",
-        "conversation",
-        "thread",
-      ],
+      page: "chat",
       icon: "💬",
       label: t("messages"),
       sub: t("chat"),
+      group: "messages",
     },
     {
       page: "profile",
-      aliases: ["profile", "businessProfile"],
       icon: "👤",
       label: t("profile"),
       sub: t("account"),
@@ -73,75 +71,61 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   const businessNavItems = [
     {
-       page: "businessDashboard",
-      aliases: ["businessDashboard", "dashboard", "businessHome"],
+      page: "businessDashboard",
       icon: "📊",
       label: t("dashboard"),
       sub: t("business"),
     },
     {
-      page: "businessLeads",
-      aliases: [
-        "businessLeads",
-        "leads",
-        "leadInbox",
-        "businessLeadInbox",
-        "quoteRequests",
-        "contractorRequests",
-      ],
-      icon: "📥",
-      label: t("leads"),
-      sub: t("openRequests"),
+    page: "businessLeads",
+    aliases: ["businessLeads", "leads"],
+    icon: "📥",
+    label: t("leads"),
+    sub: t("openRequests"),
     },
     {
       page: "messagesInbox",
-      aliases: [
-        "messagesInbox",
-        "messages",
-        "chat",
-        "conversationThread",
-        "conversation",
-        "thread",
-      ],
       icon: "💬",
       label: t("messages"),
       sub: t("customers"),
+      group: "messages",
     },
     {
-     page: "projectGallery",
-aliases: ["projectGallery", "gallery", "businessGallery"],
-icon: "🗂️",
-label: "Project Folder",
-sub: "Portfolio",
+      page: "projectGallery",
+      icon: "▧",
+      label: t("gallery"),
+      sub: t("portfolio"),
     },
     {
       page: "profile",
-      aliases: ["profile", "businessProfile"],
       icon: "👤",
       label: t("profile"),
       sub: t("account"),
     },
   ];
 
-  const navItems = activeMode === "business" ? businessNavItems : personalNavItems;
-  const normalizedPage = currentPage || "";
+  const navItems =
+    activeMode === "business"
+      ? businessNavItems
+      : personalNavItems;
+
+  const isMessagesPage = messagePages.includes(currentPage);
 
   return (
     <div style={navWrapper}>
       <div style={navContainer}>
         {navItems.map((item) => {
-          const active =
-  item.page === normalizedPage ||
+
+        const normalizedPage = currentPage || "";
+
+const active =
+  normalizedPage === item.page ||
   item.aliases?.includes(normalizedPage) ||
-  (
-    item.page === "businessLeads" &&
-    normalizedPage === "businessLeads"
-  );
+  (item.page === "businessLeads" && normalizedPage === "businessLeads") ||
+  (item.group === "messages" && isMessagesPage);
 
           const unread =
-            item.aliases?.some((alias) =>
-              ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
-            )
+            item.group === "messages"
               ? Number(localStorage.getItem("mockUnreadMessages") || 0)
               : 0;
 
@@ -161,16 +145,32 @@ sub: "Portfolio",
                   position: "relative",
                 }}
               >
-                <span style={active ? activeIconText : iconText}>{item.icon}</span>
+                <span style={active ? activeIconText : iconText}>
+                  {item.icon}
+                </span>
 
-                {unread > 0 && <div style={badge}>{unread}</div>}
+                {unread > 0 && (
+                  <div style={badge}>
+                    {unread}
+                  </div>
+                )}
               </div>
 
-              <span style={{ ...label, ...(active ? activeLabel : {}) }}>
+              <span
+                style={{
+                  ...label,
+                  ...(active ? activeLabel : {}),
+                }}
+              >
                 {item.label}
               </span>
 
-              <span style={{ ...subLabel, ...(active ? activeSubLabel : {}) }}>
+              <span
+                style={{
+                  ...subLabel,
+                  ...(active ? activeSubLabel : {}),
+                }}
+              >
                 {item.sub}
               </span>
             </button>
