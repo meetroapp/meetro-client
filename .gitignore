@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local backup files
+*.bak.*
+*.backup*
+*_backup.jsx
