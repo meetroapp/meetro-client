@@ -189,53 +189,6 @@ function Discover({ setPage, currentPage }) {
     { value: "other", label: t("otherService") },
   ];
 
-  const demoPosts = [
-    {
-      id: 1,
-      title: t("demoPlumbingTitle"),
-      description: t("demoPlumbingDescription"),
-      category: "plumbing",
-      location: "Cape Coral",
-      date: "May 11",
-      status: t("openRequest"),
-      image:
-        "https://images.unsplash.com/photo-1616046229478-9901c5536a45?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 2,
-      title: t("demoPaintingTitle"),
-      description: t("demoPaintingDescription"),
-      category: "painting",
-      location: "Fort Myers",
-      date: "May 11",
-      status: t("openRequest"),
-      image:
-        "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 3,
-      title: t("demoDrywallTitle"),
-      description: t("demoDrywallDescription"),
-      category: "drywall",
-      location: "Cape Coral",
-      date: "May 12",
-      status: t("openRequest"),
-      image:
-        "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 4,
-      title: t("demoFlooringTitle"),
-      description: t("demoFlooringDescription"),
-      category: "flooring",
-      location: "Lehigh Acres",
-      date: "May 12",
-      status: t("openRequest"),
-      image:
-        "https://images.unsplash.com/photo-1586105251261-72a756497a11?auto=format&fit=crop&w=1200&q=80",
-    },
-  ];
-
   useEffect(() => {
     const handleLanguageChange = () => {
       updateLanguage(getLanguage());
@@ -265,16 +218,12 @@ function Discover({ setPage, currentPage }) {
             ? data
             : data.posts || [];
 
-          setPosts(
-            incomingPosts.length > 0
-              ? incomingPosts
-              : demoPosts
-          );
+          setPosts(incomingPosts);
         } else {
-          setPosts(demoPosts);
+          setPosts([]);
         }
       } catch (error) {
-        setPosts(demoPosts);
+        setPosts([]);
       } finally {
         setLoading(false);
       }
