@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import API_URL from "../api";
+import { authFetch } from "../utils/authFetch";
+import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
+import { isProfessionalSession } from "../utils/session";
 
 function BusinessLeads({ setPage, currentPage }) {
   const [loading, setLoading] = useState(true);
@@ -12,9 +15,9 @@ function BusinessLeads({ setPage, currentPage }) {
 
   const businessName = localStorage.getItem("businessName") || "Business";
   const businessCategory = localStorage.getItem("businessCategory") || "";
-  const accountType = localStorage.getItem("accountType") || "homeowner";
 
-  const isProfessional = accountType === "professional";
+  const isProfessional =
+    isProfessionalSession();
 
   const isSpanish = language === "es";
 
@@ -186,21 +189,19 @@ function BusinessLeads({ setPage, currentPage }) {
          useEffect(() => {
   async function loadLeads() {
     try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(`${API_URL}/posts`, {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      });
+      const result = await authFetch(
+        "/posts",
+        {},
+        setPage
+      );
 
       let incomingPosts = [];
 
-      if (response.ok) {
-        const data = await response.json();
-        incomingPosts = Array.isArray(data) ? data : data.posts || [];
+      if (result.response?.ok) {
+        const data = result.data || {};
+        incomingPosts = Array.isArray(data)
+          ? data
+          : data.posts || [];
       }
 
       const normalizedBusinessCategory = businessCategory
@@ -253,26 +254,97 @@ function BusinessLeads({ setPage, currentPage }) {
         return itemCategory === normalizedBusinessCategory;
       }
 
-      const convertedPosts = incomingPosts.map((post) => ({
-        id: post.id,
-        title: post.title,
-        description: post.description,
-        category: post.category,
-        location: post.location || "Local Area",
-        distance: "Nearby",
-        posted: post.date || "Today",
-        value: "$150 - $500",
-        urgency: isSpanish ? "Nuevo" : "New",
-        verified: true,
-        user_id: post.user_id,
-        image_url: post.image_url,
-        username: post.username,
-        email: post.email,
-      }));
+      const homeownerRequests =
+        getStoredHomeownerRequests();
+
+      function isClosedLead(item) {
+        const itemId = String(item.id || item.requestId || "");
+
+        return getStoredHomeownerRequests().some((request) => {
+          const requestId = String(request.id || request.requestId || "");
+
+          const sameId = itemId && requestId && itemId === requestId;
+
+          const sameTitle =
+            String(request.title || "").trim().toLowerCase() ===
+            String(item.title || "").trim().toLowerCase();
+
+          const closedStatuses = [
+            "accepted",
+            "selected",
+            "scheduled",
+            "active",
+            "completed",
+            "cancelled",
+            "closed",
+          ];
+
+          const hasAcceptedQuote =
+            request.acceptedQuote ||
+            request.selectedProfessional ||
+            request.quotesReceived?.some(
+              (quote) => quote.status === "accepted"
+            );
+
+          return (
+            (sameId || sameTitle) &&
+            (closedStatuses.includes(request.status) || hasAcceptedQuote)
+          );
+        });
+      }
+
+      const convertedPosts = incomingPosts.map((post) => {
+        const exactIdMatch = getStoredHomeownerRequests().find((request) => {
+          return (
+            String(request.id || request.requestId || "") ===
+            String(post.id || "")
+          );
+        });
+
+        const titleFallbackMatch = getStoredHomeownerRequests().find((request) => {
+          const requestId = String(request.id || request.requestId || "");
+          const postId = String(post.id || "");
+
+          if (requestId && postId) return false;
+
+          return (
+            String(request.title || "").trim().toLowerCase() ===
+            String(post.title || "").trim().toLowerCase()
+          );
+        });
+
+        const matchingHomeownerRequest = exactIdMatch || titleFallbackMatch;
+
+        const photos = Array.isArray(matchingHomeownerRequest?.photos)
+          ? matchingHomeownerRequest.photos
+          : Array.isArray(post.photos)
+          ? post.photos
+          : [];
+
+        return {
+          id: post.id,
+          title: post.title,
+          description: post.description,
+          category: post.category,
+          location: post.location || "Local Area",
+          distance: "Nearby",
+          posted: post.date || "Today",
+          value: "$150 - $500",
+          urgency: isSpanish ? "Nuevo" : "New",
+          verified: true,
+          user_id: post.user_id,
+          image_url: photos[0] || post.image_url,
+          photos,
+          username: post.username,
+          email: post.email,
+        };
+      });
 
       const combinedLeads = [...convertedPosts, ...demoLeads];
 
-      const matchedLeads = combinedLeads.filter(matchesBusinessCategory);
+      const matchedLeads = combinedLeads
+        .filter(matchesBusinessCategory)
+        .filter((lead) => !isClosedLead(lead));
 
       setLeads(matchedLeads);
     } catch (error) {
@@ -477,12 +549,38 @@ function BusinessLeads({ setPage, currentPage }) {
                 <button
                   style={secondaryButton}
                   onClick={() => {
+                    localStorage.removeItem("selectedActiveProject");
+                    localStorage.removeItem("lastCompletedProject");
+                    localStorage.removeItem("selectedHomeownerRequestId");
+                    localStorage.removeItem("selectedWorkCenterRequest");
+                    localStorage.removeItem("activeWorkCenterQuoteRequestId");
+
                     localStorage.setItem("selectedPostId", lead.id);
-                    localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
+
                     localStorage.setItem(
-                    "projectDetailsReturnPage",
-                    "businessLeads"
-                   );
+                      "selectedActiveProject",
+                      JSON.stringify({
+                        ...lead,
+                        project: {
+                          ...lead,
+                          photos: Array.isArray(lead.photos)
+                            ? lead.photos
+                            : [],
+                          image_url: lead.image_url || "",
+                        },
+                      })
+                    );
+
+                    localStorage.setItem(
+                      "selectedQuoteRequest",
+                      JSON.stringify(lead)
+                    );
+
+                    localStorage.setItem(
+                      "projectDetailsReturnPage",
+                      "businessLeads"
+                    );
+
                     setPage("projectDetails");
                   }}
                 >
@@ -492,22 +590,32 @@ function BusinessLeads({ setPage, currentPage }) {
                 <button
                   style={primaryActionButton}
                   onClick={() => {
-                    localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
-                    localStorage.setItem("selectedQuoteRequestId", lead.id);
-                    localStorage.setItem("selectedMessageReceiverId", lead.user_id || "");
+                    localStorage.removeItem("selectedActiveProject");
+                    localStorage.removeItem("lastCompletedProject");
+                    localStorage.removeItem("selectedHomeownerRequestId");
+                    localStorage.removeItem("selectedQuoteRequest");
+
                     localStorage.setItem(
-                     "conversationReturnPage",
-                     "businessLeads"
+                      "selectedWorkCenterRequest",
+                      JSON.stringify(lead)
                     );
+
                     localStorage.setItem(
-                    "conversationReturnPage",
-                    "businessLeads"
-                   );
+                      "activeWorkCenterQuoteRequestId",
+                      lead.id
+                    );
+
                     localStorage.setItem(
-                      "conversationReturnPage",
+                      "workCenterReturnPage",
                       "businessLeads"
-                     );
-                    setPage("conversationThread");
+                    );
+
+                    localStorage.setItem(
+                      "activeWorkCenterTab",
+                      "quotes"
+                    );
+
+                    setPage("quoteBuilder");
                   }}
                 >
                   {text.sendQuote}

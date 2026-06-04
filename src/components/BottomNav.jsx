@@ -1,28 +1,37 @@
 import { useEffect, useState } from "react";
 import { getLanguage, t } from "../utils/language";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  saveNotifications,
+} from "../utils/notifications";
 
 function BottomNav({ setPage, currentPage = "" }) {
   const [language, updateLanguage] = useState(getLanguage());
   const [activeMode, setActiveMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
+  const [notificationTick, setNotificationTick] = useState(0);
 
   useEffect(() => {
     const syncNav = () => {
       updateLanguage(getLanguage());
       setActiveMode(localStorage.getItem("activeAccountMode") || "personal");
+      setNotificationTick((tick) => tick + 1);
     };
 
     window.addEventListener("languageChanged", syncNav);
     window.addEventListener("meetro-language-change", syncNav);
     window.addEventListener("accountModeChanged", syncNav);
     window.addEventListener("storage", syncNav);
+    window.addEventListener("meetroNotificationsUpdated", syncNav);
 
     return () => {
       window.removeEventListener("languageChanged", syncNav);
       window.removeEventListener("meetro-language-change", syncNav);
       window.removeEventListener("accountModeChanged", syncNav);
       window.removeEventListener("storage", syncNav);
+      window.removeEventListener("meetroNotificationsUpdated", syncNav);
     };
   }, []);
 
@@ -94,6 +103,20 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("openRequests"),
     },
     {
+      page: "contractorDashboard",
+      aliases: [
+        "contractorDashboard",
+        "workCenter",
+        "workDashboard",
+        "schedule",
+        "activeJobs",
+      ],
+      icon: "🧰",
+      label: "Work Center",
+      sub: "Operations",
+      center: true,
+    },
+    {
       page: "messagesInbox",
       aliases: [
         "messagesInbox",
@@ -108,13 +131,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("customers"),
     },
     {
-     page: "projectGallery",
-aliases: ["projectGallery", "gallery", "businessGallery"],
-icon: "🗂️",
-label: "Project Folder",
-sub: "Portfolio",
-    },
-    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "👤",
@@ -125,6 +141,13 @@ sub: "Portfolio",
 
   const navItems = activeMode === "business" ? businessNavItems : personalNavItems;
   const normalizedPage = currentPage || "";
+
+  const operationsAlertCount =
+    activeMode === "business"
+      ? getUnreadNotificationCount("professional")
+      : 0;
+
+  void notificationTick;
 
   return (
     <div style={navWrapper}>
@@ -139,25 +162,50 @@ sub: "Portfolio",
   );
 
           const unread =
-            item.aliases?.some((alias) =>
-              ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
-            )
+            item.page === "contractorDashboard"
+              ? operationsAlertCount
+              : item.aliases?.some((alias) =>
+                  ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
+                )
               ? Number(localStorage.getItem("mockUnreadMessages") || 0)
               : 0;
+
+          const isCenterAction = activeMode === "business" && item.center;
 
           return (
             <button
               key={item.page}
-              onClick={() => setPage(item.page)}
+              onClick={() => {
+                if (item.page === "contractorDashboard") {
+                  const notifications = getNotifications();
+
+                  saveNotifications(
+                    notifications.map((notice) =>
+                      notice.targetRole === "professional" ||
+                      notice.targetRole === "all"
+                        ? { ...notice, read: true }
+                        : notice
+                    )
+                  );
+                }
+
+                setPage(item.page);
+              }}
               style={{
                 ...navButton,
-                ...(active ? activeButton : {}),
+                ...(isCenterAction ? centerNavButton : {}),
+                ...(active && !isCenterAction ? activeButton : {}),
+                ...(active && isCenterAction ? centerNavButtonActive : {}),
+                ...(isCenterAction && unread > 0 ? centerNavButtonAlert : {}),
               }}
             >
               <div
                 style={{
                   ...iconWrap,
-                  ...(active ? activeIconWrap : {}),
+                  ...(isCenterAction ? centerIconWrap : {}),
+                  ...(active && !isCenterAction ? activeIconWrap : {}),
+                  ...(active && isCenterAction ? centerIconWrapActive : {}),
+                  ...(isCenterAction && unread > 0 ? centerIconWrapAlert : {}),
                   position: "relative",
                 }}
               >
@@ -180,6 +228,44 @@ sub: "Portfolio",
     </div>
   );
 }
+
+const centerNavButton = {
+  transform: "translateY(-8px)",
+};
+
+const centerNavButtonActive = {
+  background: "rgba(124,58,237,0.08)",
+  border: "1px solid rgba(124,58,237,0.18)",
+  boxShadow: "0 10px 24px rgba(124,58,237,0.16)",
+};
+
+const centerNavButtonAlert = {
+  filter: "drop-shadow(0 10px 18px rgba(249,115,22,0.22))",
+};
+
+const centerIconWrap = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "22px",
+  background: "#f8f7ff",
+  color: "#5b3df5",
+  border: "1px solid #ede9fe",
+  boxShadow: "0 10px 24px rgba(91,61,245,0.14)",
+};
+
+const centerIconWrapActive = {
+  background: "linear-gradient(135deg, #7c3aed, #8b5cf6)",
+  color: "white",
+  border: "1px solid rgba(124,58,237,0.14)",
+  boxShadow: "0 10px 22px rgba(124,58,237,0.24)",
+};
+
+const centerIconWrapAlert = {
+  background: "#fff7ed",
+  color: "#f97316",
+  border: "1px solid #fed7aa",
+  boxShadow: "0 10px 24px rgba(249,115,22,0.22)",
+};
 
 const navWrapper = {
   position: "fixed",

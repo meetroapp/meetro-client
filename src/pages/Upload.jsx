@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import API_URL from "../api";
+import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 
 function Upload({ setPage, currentPage }) {
@@ -12,6 +13,8 @@ function Upload({ setPage, currentPage }) {
   const [customCategory, setCustomCategory] = useState("");
   const [location, setLocation] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [projectPhotos, setProjectPhotos] = useState([]);
+  const [photoRecords, setPhotoRecords] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -66,29 +69,51 @@ function Upload({ setPage, currentPage }) {
 
   async function handleImageUpload(event) {
     try {
-      const file = event.target.files[0];
+      const files = Array.from(event.target.files || []);
 
-      if (!file) return;
+      if (files.length === 0) return;
 
       setUploading(true);
 
-      const formData = new FormData();
+      const uploadedUrls = [];
 
-      formData.append("file", file);
-      formData.append("upload_preset", "meetro_uploads");
+      for (const file of files) {
+        const formData = new FormData();
 
-      const response = await fetch(
-        "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-        {
-          method: "POST",
-          body: formData,
+        formData.append("file", file);
+        formData.append("upload_preset", "meetro_uploads");
+
+        const response = await fetch(
+          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.secure_url) {
+          uploadedUrls.push(data.secure_url);
         }
-      );
+      }
 
-      const data = await response.json();
+      if (uploadedUrls.length > 0) {
+        setProjectPhotos((current) => {
+          const updated = [...current, ...uploadedUrls];
+          setImageUrl(updated[0] || "");
+          return updated;
+        });
 
-      if (data.secure_url) {
-        setImageUrl(data.secure_url);
+        setPhotoRecords((current) => [
+          ...current,
+          ...uploadedUrls.map((url) => ({
+            url,
+            tag: "progress",
+            caption: "",
+            createdAt: new Date().toISOString(),
+          })),
+        ]);
       } else {
         alert(t("uploadFailed"));
       }
@@ -110,32 +135,83 @@ function Upload({ setPage, currentPage }) {
 
       setCreating(true);
 
-      const token = localStorage.getItem("token");
-
       const selectedCategory =
         category === "other" ? customCategory.trim() || "other" : category;
 
-      const response = await fetch(`${API_URL}/posts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: JSON.stringify({
+      const result = await authFetch(
+        "/posts",
+        {
+          method: "POST",
+          body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
           category: selectedCategory,
           location: location.trim(),
-          image_url: imageUrl,
+          image_url: projectPhotos[0] || imageUrl,
           post_type: "quote_request",
           status: "open",
-        }),
-      });
+          }),
+        },
+        setPage
+      );
 
-      const data = await response.json();
+      const data = result.data || {};
 
       if (data.post) {
+        const existingRequests = JSON.parse(
+          localStorage.getItem("homeownerRequests") || "[]"
+        );
+
+        const requestId = String(data.post.id || Date.now());
+
+        const requestRecord = {
+          requestId,
+          id: requestId,
+
+          title: title.trim(),
+          description: description.trim(),
+
+          category: selectedCategory,
+          location: location.trim(),
+
+          photos: projectPhotos.length > 0 ? projectPhotos : imageUrl ? [imageUrl] : [],
+          photoRecords: photoRecords.length > 0
+            ? photoRecords
+            : (projectPhotos.length > 0 ? projectPhotos : imageUrl ? [imageUrl] : []).map((url) => ({
+                url,
+                tag: "progress",
+                caption: "",
+                createdAt: new Date().toISOString(),
+              })),
+          image_url: projectPhotos[0] || imageUrl,
+
+          status: "pending",
+
+          projectTimeline: [
+            {
+              type: "created",
+              label: "Project request created",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+
+          viewedByBusinesses: [],
+          quotesReceived: [],
+          messagesCount: 0,
+
+          selectedProfessional: null,
+          invoice: null,
+          completionRecord: null,
+          review: null,
+
+          createdAt: new Date().toISOString(),
+        };
+
+        localStorage.setItem(
+          "homeownerRequests",
+          JSON.stringify([requestRecord, ...existingRequests])
+        );
+
         alert(t("projectPostedSuccess"));
 
         setTitle("");
@@ -144,8 +220,9 @@ function Upload({ setPage, currentPage }) {
         setCustomCategory("");
         setLocation("");
         setImageUrl("");
+        setProjectPhotos([]);
 
-        setPage("discover");
+        setPage("home");
       } else {
         alert(data.error || t("postCreateFailed"));
       }
@@ -247,7 +324,7 @@ function Upload({ setPage, currentPage }) {
             id="postImageInput"
             type="file"
             accept="image/*"
-            capture="environment"
+            multiple
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
@@ -255,13 +332,70 @@ function Upload({ setPage, currentPage }) {
           {uploading && <p style={uploadingText}>{t("uploadingImage")}</p>}
         </div>
 
-        {imageUrl && (
+        {projectPhotos.length > 0 && (
           <div style={previewBox}>
-            <img src={imageUrl} alt={t("preview")} style={previewImage} />
+            <div style={photoPreviewStrip}>
+              {projectPhotos.map((photo, index) => (
+                <div key={photo + index} style={photoPreviewItem}>
+                  <img src={photo} alt={t("preview")} style={previewImage} />
 
-            <button onClick={() => setImageUrl("")} style={removeButton}>
-              {t("removeImage")}
-            </button>
+                  <div style={photoTagRow}>
+                    {["before", "progress", "after"].map((tag) => {
+                      const activeRecord = photoRecords.find(
+                        (record) => record.url === photo
+                      );
+
+                      const isActive = (activeRecord?.tag || "progress") === tag;
+
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          style={{
+                            ...photoTagButton,
+                            ...(isActive ? photoTagButtonActive : {}),
+                          }}
+                          onClick={() => {
+                            setPhotoRecords((current) =>
+                              current.map((record) =>
+                                record.url === photo
+                                  ? { ...record, tag }
+                                  : record
+                              )
+                            );
+                          }}
+                        >
+                          {tag === "before"
+                            ? "Before"
+                            : tag === "after"
+                            ? "After"
+                            : "Progress"}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const updated = projectPhotos.filter((_, i) => i !== index);
+                      setProjectPhotos(updated);
+                      setPhotoRecords((current) =>
+                        current.filter((record) => record.url !== photo)
+                      );
+                      setImageUrl(updated[0] || "");
+                    }}
+                    style={removePhotoButton}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p style={photoCountText}>
+              {projectPhotos.length} {projectPhotos.length === 1 ? "photo" : "photos"} added
+            </p>
           </div>
         )}
 
@@ -284,9 +418,9 @@ function Upload({ setPage, currentPage }) {
 }
 
 const pageWrapper = {
-  background: "linear-gradient(to bottom, #f7f7fb 0%, #f2f3f8 100%)",
+  background: "linear-gradient(180deg,#f8f7ff 0%,#eef2ff 100%)",
   minHeight: "100vh",
-  padding: "24px 18px 130px",
+  padding: "18px 18px 130px",
   boxSizing: "border-box",
 };
 
@@ -301,12 +435,12 @@ const backButton = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background: "linear-gradient(135deg,#5b3df5,#8b5cf6)",
   color: "white",
-  borderRadius: "32px",
-  padding: "30px 24px",
-  marginBottom: "18px",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.28)",
+  borderRadius: "26px",
+  padding: "24px 22px",
+  marginBottom: "14px",
+  boxShadow: "0 14px 32px rgba(91,61,245,0.24)",
 };
 
 const eyebrow = {
@@ -316,35 +450,38 @@ const eyebrow = {
 };
 
 const pageTitle = {
-  margin: "12px 0",
-  fontSize: "38px",
+  margin: "8px 0",
+  fontSize: "32px",
   color: "white",
-  lineHeight: 1.1,
+  lineHeight: 1.05,
 };
 
 const pageSubtitle = {
   margin: 0,
   color: "white",
-  lineHeight: 1.6,
+  lineHeight: 1.45,
   opacity: 0.95,
+  fontSize: "15px",
 };
 
 const tipCard = {
-  background: "white",
-  borderRadius: "24px",
-  padding: "18px",
-  marginBottom: "18px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
-  color: "#111",
+  background: "rgba(255,255,255,.92)",
+  border: "1px solid rgba(124,58,237,.10)",
+  borderRadius: "20px",
+  padding: "14px 16px",
+  marginBottom: "14px",
+  boxShadow: "0 8px 20px rgba(15,23,42,.04)",
+  color: "#111827",
 };
 
 const cardStyle = {
-  background: "white",
-  borderRadius: "28px",
-  padding: "22px",
+  background: "rgba(255,255,255,.96)",
+  border: "1px solid rgba(124,58,237,.10)",
+  borderRadius: "24px",
+  padding: "18px",
   display: "grid",
-  gap: "12px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+  gap: "10px",
+  boxShadow: "0 12px 28px rgba(15,23,42,.06)",
 };
 
 const fieldLabel = {
@@ -356,40 +493,41 @@ const fieldLabel = {
 
 const inputStyle = {
   width: "100%",
-  padding: "16px",
-  borderRadius: "18px",
-  border: "1px solid #ddd",
-  fontSize: "16px",
+  padding: "14px 15px",
+  borderRadius: "16px",
+  border: "1px solid #e5e7eb",
+  fontSize: "15px",
   boxSizing: "border-box",
   outline: "none",
-  background: "white",
-  color: "#111",
+  background: "#ffffff",
+  color: "#111827",
 };
 
 const textareaStyle = {
   ...inputStyle,
-  minHeight: "130px",
+  minHeight: "112px",
   resize: "none",
 };
 
 const uploadBox = {
-  border: "2px dashed #d9d4ff",
-  borderRadius: "24px",
-  padding: "26px",
+  border: "1.5px dashed #c4b5fd",
+  borderRadius: "22px",
+  padding: "22px",
   textAlign: "center",
-  background: "#faf9ff",
+  background: "linear-gradient(135deg,#faf7ff,#ffffff)",
 };
 
 const plusUploadButton = {
-  width: "64px",
-  height: "64px",
-  borderRadius: "20px",
+  width: "54px",
+  height: "54px",
+  borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
   color: "white",
-  fontSize: "34px",
-  fontWeight: "bold",
+  fontSize: "30px",
+  fontWeight: "900",
   cursor: "pointer",
+  boxShadow: "0 10px 24px rgba(91,61,245,.22)",
 };
 
 const uploadText = {
@@ -416,30 +554,80 @@ const previewBox = {
   gap: "12px",
 };
 
-const previewImage = {
-  width: "100%",
-  borderRadius: "22px",
-  objectFit: "cover",
-  maxHeight: "300px",
+const photoPreviewStrip = {
+  display: "flex",
+  gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
 };
 
-const removeButton = {
-  border: "none",
-  background: "#ffefef",
-  color: "#d11",
-  padding: "14px",
-  borderRadius: "16px",
-  fontWeight: "bold",
+const photoPreviewItem = {
+  position: "relative",
+  flexShrink: 0,
+};
+
+const previewImage = {
+  width: "120px",
+  height: "120px",
+  borderRadius: "22px",
+  objectFit: "cover",
+  border: "1px solid #e5e7eb",
+};
+
+const photoTagRow = {
+  display: "flex",
+  gap: "5px",
+  padding: "7px",
+  background: "white",
+};
+
+const photoTagButton = {
+  flex: 1,
+  border: "1px solid #ede9fe",
+  background: "#f8f7ff",
+  color: "#6b6478",
+  borderRadius: "999px",
+  padding: "5px 6px",
+  fontSize: "10px",
+  fontWeight: "900",
   cursor: "pointer",
+};
+
+const photoTagButtonActive = {
+  background: "#5b3df5",
+  color: "white",
+  border: "1px solid #5b3df5",
+};
+
+const removePhotoButton = {
+  position: "absolute",
+  top: "8px",
+  right: "8px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(239,68,68,0.95)",
+  color: "white",
+  fontSize: "20px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const photoCountText = {
+  margin: 0,
+  color: "#5b3df5",
+  fontWeight: "900",
+  fontSize: "13px",
 };
 
 const primaryButton = {
   border: "none",
   color: "white",
-  padding: "16px",
-  borderRadius: "18px",
-  fontWeight: "bold",
-  fontSize: "16px",
+  padding: "15px",
+  borderRadius: "16px",
+  fontWeight: "900",
+  fontSize: "15px",
 };
 
 export default Upload;

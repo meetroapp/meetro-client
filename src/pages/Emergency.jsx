@@ -1,10 +1,31 @@
-function Emergency({ setPage, language = "en" }) {
-  const text = {
+import { useEffect, useState } from "react";
+import BottomNav from "../components/BottomNav";
+import { getLanguage } from "../utils/language";
+
+function Emergency({ setPage }) {
+  const [language, setLanguage] = useState(getLanguage());
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      setLanguage(getLanguage());
+    };
+
+    window.addEventListener("languageChanged", handleLanguageChange);
+    window.addEventListener("meetro-language-change", handleLanguageChange);
+    window.addEventListener("meetroLanguageChanged", handleLanguageChange);
+
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+      window.removeEventListener("meetro-language-change", handleLanguageChange);
+      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
+    };
+  }, []);
+
+ const text = {
     en: {
       title: "Emergency Help",
       subtitle: "Fast access to urgent local services near you.",
       available: "Available now",
-      call: "Call Now",
       request: "Request Help",
       back: "Back Home",
       services: [
@@ -34,18 +55,16 @@ function Emergency({ setPage, language = "en" }) {
           note: "Shutters, sandbags, cleanup prep",
         },
         {
-         icon: "🆘",
-         name: "Other Emergency",
-         note: "Describe your issue and connect with available professionals",
+          icon: "🆘",
+          name: "Other Emergency",
+          note: "Describe your issue and connect with available professionals",
         },
       ],
     },
-
     es: {
       title: "Ayuda de Emergencia",
       subtitle: "Acceso rápido a servicios urgentes cerca de ti.",
       available: "Disponible ahora",
-      call: "Llamar Ahora",
       request: "Pedir Ayuda",
       back: "Regresar al Inicio",
       services: [
@@ -85,6 +104,30 @@ function Emergency({ setPage, language = "en" }) {
 
   const t = text[language] || text.en;
 
+  function openRequest(service) {
+    const activeStatus = localStorage.getItem("emergencyDispatchStatus");
+
+    if (
+      activeStatus &&
+      !["completed", "cancelled", "closed"].includes(activeStatus)
+    ) {
+      localStorage.setItem("meetroConversationType", "emergency");
+      localStorage.setItem("conversationReturnPage", "home");
+      localStorage.setItem("dispatchReturnPage", "conversationThread");
+      setPage("conversationThread");
+      return;
+    }
+
+    localStorage.removeItem("emergencyIssue");
+    localStorage.removeItem("emergencyGateCode");
+    localStorage.removeItem("emergencyEntryNotes");
+    localStorage.removeItem("emergencyPetWarning");
+    localStorage.removeItem("emergencyUrgency");
+
+    localStorage.setItem("selectedEmergencyService", service.name);
+    setPage("emergencyBusinessSelection");
+  }
+
   return (
     <div style={page}>
       <div style={card}>
@@ -97,7 +140,6 @@ function Emergency({ setPage, language = "en" }) {
         </div>
 
         <h1 style={title}>{t.title}</h1>
-
         <p style={subtitle}>{t.subtitle}</p>
 
         <div style={grid}>
@@ -107,39 +149,27 @@ function Emergency({ setPage, language = "en" }) {
                 <div style={iconBox}>{service.icon}</div>
 
                 <div>
-                  <strong style={serviceName}>
-                    {service.name}
-                  </strong>
-
-                  <p style={serviceNote}>
-                    {service.note}
-                  </p>
+                  <strong style={serviceName}>{service.name}</strong>
+                  <p style={serviceNote}>{service.note}</p>
                 </div>
               </div>
 
-              <div style={actions}>
-                
-                <button
-  style={primaryButton}
-  onClick={() => {
-    localStorage.setItem("selectedEmergencyService", service.name);
-    setPage("emergencyRequest");
-  }}
->
-  {t.request}
-</button>
-              </div>
+              <button
+                style={primaryButton}
+                onClick={() => openRequest(service)}
+              >
+                {t.request}
+              </button>
             </div>
           ))}
         </div>
 
-        <button
-          style={button}
-          onClick={() => setPage("home")}
-        >
+        <button style={button} onClick={() => setPage("home")}>
           {t.back}
         </button>
       </div>
+
+      <BottomNav currentPage="emergency" setPage={setPage} />
     </div>
   );
 }
@@ -147,7 +177,7 @@ function Emergency({ setPage, language = "en" }) {
 const page = {
   minHeight: "100vh",
   background: "#f5f7fb",
-  padding: "22px",
+  padding: "22px 22px 210px",
   boxSizing: "border-box",
 };
 
@@ -189,6 +219,7 @@ const title = {
   fontWeight: "900",
   marginBottom: "8px",
   color: "#111827",
+  textAlign: "center",
 };
 
 const subtitle = {
@@ -196,6 +227,7 @@ const subtitle = {
   marginBottom: "22px",
   lineHeight: "1.5",
   fontSize: "16px",
+  textAlign: "center",
 };
 
 const grid = {
@@ -242,23 +274,8 @@ const serviceNote = {
   lineHeight: "1.35",
 };
 
-const actions = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
-};
-
-const secondaryButton = {
-  padding: "12px",
-  borderRadius: "16px",
-  border: "1px solid #e5e7eb",
-  background: "white",
-  color: "#111827",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
 const primaryButton = {
+  width: "100%",
   padding: "12px",
   borderRadius: "16px",
   border: "none",

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
+import { getStoredHomeownerRequests, saveStoredHomeownerRequests } from "../utils/workflowTimeline";
 
 function QuoteRequests({ setPage, currentPage }) {
   const [quotes, setQuotes] = useState([]);
@@ -13,6 +14,64 @@ function QuoteRequests({ setPage, currentPage }) {
   useEffect(() => {
     fetchQuotes();
   }, []);
+
+  useEffect(() => {
+    markRequestsAsViewed();
+  }, [quotes]);
+
+  function markRequestsAsViewed() {
+    try {
+      if (!quotes.length) return;
+
+      const homeownerRequests =
+        getStoredHomeownerRequests();
+
+      const businessName =
+        localStorage.getItem("businessName") ||
+        localStorage.getItem("userName") ||
+        "Business";
+
+      let updated = false;
+
+      const updatedRequests = homeownerRequests.map((request) => {
+        const matchingQuote = quotes.find((quote) => {
+          return (
+            quote.project_title === request.title ||
+            quote.project_description === request.description
+          );
+        });
+
+        if (!matchingQuote) return request;
+
+        const currentViews = Array.isArray(request.viewedByBusinesses)
+          ? request.viewedByBusinesses
+          : [];
+
+        if (currentViews.includes(businessName)) {
+          return request;
+        }
+
+        updated = true;
+
+        return {
+          ...request,
+          viewedByBusinesses: [...currentViews, businessName],
+          status:
+            request.status === "pending"
+              ? "viewed"
+              : request.status,
+        };
+      });
+
+      if (updated) {
+        saveStoredHomeownerRequests(
+          updatedRequests
+        );
+      }
+    } catch (error) {
+      console.error("Failed to sync viewed requests", error);
+    }
+  }
 
   async function fetchQuotes() {
     try {
@@ -59,12 +118,61 @@ function QuoteRequests({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.data) {
+        try {
+          const homeownerRequests = JSON.parse(
+            localStorage.getItem("homeownerRequests") || "[]"
+          );
+
+          const updatedRequests = homeownerRequests.map((request) => {
+            const isMatch =
+              request.title === quote.project_title ||
+              request.description === quote.project_description;
+
+            if (!isMatch) return request;
+
+            const currentMessages =
+              Number(request.messagesCount || 0);
+
+            return {
+              ...request,
+              messagesCount: currentMessages + 1,
+              status:
+                request.status === "pending" ||
+                request.status === "viewed"
+                  ? "messaged"
+                  : request.status,
+              lastBusinessMessage: replyText,
+              lastBusinessMessageAt:
+                new Date().toISOString(),
+            };
+          });
+
+          localStorage.setItem(
+            "homeownerRequests",
+            JSON.stringify(updatedRequests)
+          );
+        } catch (syncError) {
+          console.error(syncError);
+        }
+
         alert("Message sent!");
+
+        setQuotes((currentQuotes) =>
+          currentQuotes.map((currentQuote) =>
+            currentQuote.id === quote.id
+              ? {
+                  ...currentQuote,
+                  status:
+                    currentQuote.status === "new"
+                      ? "messaged"
+                      : currentQuote.status,
+                }
+              : currentQuote
+          )
+        );
 
         setReplyText("");
         setActiveQuoteId(null);
-
-        await fetchQuotes();
       } else {
         alert(data.error || "Failed to send message");
       }

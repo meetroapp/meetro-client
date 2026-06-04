@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, setLanguage, t } from "../utils/language";
+import { authFetch, clearMeetroSession } from "../utils/authFetch";
+import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
 
 function Profile({ setPage, currentPage }) {
   const [user, setUser] = useState(null);
@@ -10,8 +12,24 @@ function Profile({ setPage, currentPage }) {
     localStorage.getItem("activeAccountMode") || "personal"
   );
 
-  const userRole = localStorage.getItem("userRole") || "standard";
-  const accountType = localStorage.getItem("accountType") || "homeowner";
+  const currentPhotoKey =
+    activeMode === "business"
+      ? "meetroBusinessProfilePhoto"
+      : "meetroPersonalProfilePhoto";
+
+  const [profilePhoto, setProfilePhoto] = useState(
+    localStorage.getItem(currentPhotoKey) || ""
+  );
+
+  useEffect(() => {
+    const nextPhotoKey =
+      activeMode === "business"
+        ? "meetroBusinessProfilePhoto"
+        : "meetroPersonalProfilePhoto";
+
+    setProfilePhoto(localStorage.getItem(nextPhotoKey) || "");
+  }, [activeMode]);
+
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
   const userName = localStorage.getItem("userName") || "";
@@ -20,14 +38,11 @@ function Profile({ setPage, currentPage }) {
   const contractorProfileComplete =
     localStorage.getItem("contractorProfileComplete") === "true";
 
-  const isProfessionalAccount =
-    accountType === "professional" ||
-    userRole === "professional" ||
-    userRole === "contractor" ||
-    Boolean(businessName) ||
-    Boolean(businessCategory);
-
-  const hasBusinessAccess = contractorProfileComplete && isProfessionalAccount;
+  const hasBusinessAccess =
+    isProfessionalSession() ||
+    contractorProfileComplete ||
+    Boolean(localStorage.getItem("businessName")) ||
+    Boolean(localStorage.getItem("businessCategory"));
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
@@ -46,24 +61,18 @@ function Profile({ setPage, currentPage }) {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const token = localStorage.getItem("token");
+        const result = await authFetch(
+          "/auth/me",
+          {},
+          setPage
+        );
 
-        if (!token) {
+        if (!result.response?.ok) {
           setUser(null);
           return;
         }
 
-        const response = await fetch(
-          "https://athletic-rebirth-production-0a28.up.railway.app/auth/me",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await response.json();
-        setUser(data.user || null);
+        setUser(result.data?.user || null);
       } catch (error) {
         console.error(error);
       }
@@ -72,17 +81,42 @@ function Profile({ setPage, currentPage }) {
     fetchUser();
   }, [language]);
 
+  function handleProfilePhotoUpload(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const imageResult = reader.result;
+
+      setProfilePhoto(imageResult);
+
+      const photoKey =
+        activeMode === "business"
+          ? "meetroBusinessProfilePhoto"
+          : "meetroPersonalProfilePhoto";
+
+      localStorage.setItem(photoKey, imageResult);
+
+      if (activeMode !== "business") {
+        localStorage.setItem("meetroPersonalProfilePhoto", imageResult);
+      }
+
+      window.dispatchEvent(
+        new Event("meetro-profile-photo-updated")
+      );
+    };
+
+    reader.readAsDataURL(file);
+  }
+
   function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("accountType");
-    localStorage.removeItem("businessName");
-    localStorage.removeItem("businessCategory");
-    localStorage.removeItem("activeAccountMode");
-    localStorage.removeItem("contractorProfileComplete");
+    clearMeetroSession();
 
     window.location.hash = "login";
+
     window.location.reload();
   }
 
@@ -98,9 +132,8 @@ function Profile({ setPage, currentPage }) {
       return;
     }
 
+    setActiveAccountMode(mode);
     setActiveMode(mode);
-    localStorage.setItem("activeAccountMode", mode);
-    window.dispatchEvent(new Event("accountModeChanged"));
 
     if (mode === "business") {
       setPage("businessDashboard");
@@ -132,7 +165,26 @@ function Profile({ setPage, currentPage }) {
   return (
     <div style={pageWrapper}>
       <div style={heroCard}>
-        <div style={avatarCircle}>{isBusinessMode ? "🏢" : "👤"}</div>
+        <label style={avatarUploadWrap}>
+          {profilePhoto ? (
+            <img
+              src={profilePhoto}
+              alt="Profile"
+              style={profileAvatarImage}
+            />
+          ) : (
+            <div style={avatarCircle}>{isBusinessMode ? "🏢" : "👤"}</div>
+          )}
+
+          <div style={uploadPhotoBadge}>📷</div>
+
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleProfilePhotoUpload}
+          />
+        </label>
 
         <h1 style={pageTitle}>{t("settings")}</h1>
 
@@ -287,9 +339,9 @@ function Profile({ setPage, currentPage }) {
             />
 
             <SettingRow
-              icon="🖼️"
+              icon="📸"
               label={t("projectGallery")}
-              value={t("gallery")}
+              value={language === "es" ? "Portafolio" : "Portfolio"}
               onClick={() => openProfessionalPage("projectGallery")}
             />
 
@@ -464,6 +516,42 @@ const heroCard = {
   marginBottom: "20px",
   textAlign: "center",
   boxShadow: "0 18px 40px rgba(91,61,245,0.28)",
+};
+
+
+const avatarUploadWrap = {
+  position: "relative",
+  width: "120px",
+  height: "120px",
+  borderRadius: "999px",
+  cursor: "pointer",
+};
+
+const profileAvatarImage = {
+  width: "120px",
+  height: "120px",
+  borderRadius: "999px",
+  objectFit: "cover",
+  border: "4px solid rgba(255,255,255,0.22)",
+  boxShadow: "0 12px 28px rgba(0,0,0,0.18)",
+};
+
+const uploadPhotoBadge = {
+  position: "absolute",
+  right: "0px",
+  bottom: "0px",
+  width: "38px",
+  height: "38px",
+  borderRadius: "999px",
+  background: "#7c3aed",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "18px",
+  fontWeight: "700",
+  border: "3px solid white",
+  boxShadow: "0 8px 18px rgba(124,58,237,0.32)",
 };
 
 const avatarCircle = {

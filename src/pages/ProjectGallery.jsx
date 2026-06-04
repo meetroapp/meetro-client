@@ -11,9 +11,15 @@ function ProjectGallery({ setPage, currentPage }) {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [images, setImages] = useState([]);
 
   const [uploading, setUploading] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editImages, setEditImages] = useState([]);
+  const [activeEditImage, setActiveEditImage] = useState("");
+  const [expandedEditImage, setExpandedEditImage] = useState("");
   const [language, updateLanguage] = useState(getLanguage());
 
   useEffect(() => {
@@ -73,33 +79,44 @@ function ProjectGallery({ setPage, currentPage }) {
 
   async function handleImageUpload(event) {
     try {
-      const file = event.target.files[0];
+      const selectedFiles = Array.from(event.target.files || []);
 
-      if (!file) return;
+      if (selectedFiles.length === 0) return;
 
       setUploading(true);
 
-      const formData = new FormData();
+      const uploadedUrls = [];
 
-      formData.append("file", file);
+      for (const file of selectedFiles) {
+        const formData = new FormData();
 
-      formData.append(
-        "upload_preset",
-        "meetro_uploads"
-      );
+        formData.append("file", file);
 
-      const response = await fetch(
-        "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-        {
-          method: "POST",
-          body: formData,
+        formData.append(
+          "upload_preset",
+          "meetro_uploads"
+        );
+
+        const response = await fetch(
+          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.secure_url) {
+          uploadedUrls.push(data.secure_url);
         }
-      );
+      }
 
-      const data = await response.json();
-
-      if (data.secure_url) {
-        setImageUrl(data.secure_url);
+      if (uploadedUrls.length > 0) {
+        setImages((currentImages) => [
+          ...currentImages,
+          ...uploadedUrls,
+        ]);
       } else {
         alert(t("uploadFailed"));
       }
@@ -117,7 +134,7 @@ function ProjectGallery({ setPage, currentPage }) {
       if (
         !title ||
         !description ||
-        !imageUrl
+        images.length === 0
       ) {
         alert(t("completeAllFields"));
         return;
@@ -131,7 +148,8 @@ function ProjectGallery({ setPage, currentPage }) {
             contractor_id: profile.id,
             title,
             description,
-            image_url: imageUrl,
+            image_url: images[0],
+            image_urls: images,
           }),
         },
         setPage
@@ -146,7 +164,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
         setTitle("");
         setDescription("");
-        setImageUrl("");
+        setImages([]);
 
         await fetchMyProfileAndProjects();
       }
@@ -156,11 +174,279 @@ function ProjectGallery({ setPage, currentPage }) {
     }
   }
 
+  async function handleEditImageUpload(event) {
+    try {
+      const selectedFiles = Array.from(event.target.files || []);
+
+      if (selectedFiles.length === 0) return;
+
+      setUploading(true);
+
+      const uploadedUrls = [];
+
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+
+        formData.append("file", file);
+        formData.append("upload_preset", "meetro_uploads");
+
+        const response = await fetch(
+          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.secure_url) {
+          uploadedUrls.push(data.secure_url);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setEditImages((currentImages) => [
+          ...currentImages,
+          ...uploadedUrls,
+        ]);
+      }
+    } catch (error) {
+      console.error(error);
+      alert(t("uploadError"));
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleSaveProjectEdit() {
+    if (!editingProject) return;
+
+    try {
+      const result = await authFetch(
+        `/contractor-projects/${editingProject.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            title: editTitle,
+            description: editDescription,
+            image_url: editImages[0] || "",
+            image_urls: editImages,
+          }),
+        },
+        setPage
+      );
+
+      if (!result || !result.response?.ok) {
+        alert(language === "es" ? "No se pudo guardar el portafolio." : "Portfolio changes could not be saved.");
+        return;
+      }
+
+      const updatedProject = result.data?.project || {
+        ...editingProject,
+        title: editTitle,
+        description: editDescription,
+        image_url: editImages[0] || "",
+        image_urls: editImages,
+      };
+
+      setProjects((currentProjects) =>
+        currentProjects.map((project) =>
+          project.id === editingProject.id ? updatedProject : project
+        )
+      );
+
+      setEditingProject(null);
+      setEditTitle("");
+      setEditDescription("");
+      setEditImages([]);
+    setActiveEditImage("");
+    setExpandedEditImage("");
+
+      await fetchMyProfileAndProjects();
+    } catch (error) {
+      console.error(error);
+      alert(language === "es" ? "Error guardando el portafolio." : "Error saving portfolio.");
+    }
+  }
+
+  function getProjectImages(project) {
+    if (Array.isArray(project?.image_urls) && project.image_urls.length > 0) {
+      return project.image_urls.filter(Boolean);
+    }
+
+    if (typeof project?.image_urls === "string") {
+      try {
+        const parsedImages = JSON.parse(project.image_urls);
+        if (Array.isArray(parsedImages)) {
+          return parsedImages.filter(Boolean);
+        }
+      } catch {}
+    }
+
+    return project?.image_url ? [project.image_url] : [];
+  }
+
   if (loading) {
     return (
       <LoadingScreen
         text={t("loadingProjectGallery")}
       />
+    );
+  }
+
+  if (editingProject) {
+
+    return (
+      <div style={pageWrapper}>
+        <button
+          style={backButton}
+          onClick={() => setEditingProject(null)}
+        >
+          ← {language === "es" ? "Volver al portafolio" : "Back to Portfolio"}
+        </button>
+
+        <div style={editPageCard}>
+          <h1 style={editPageTitle}>
+            {language === "es" ? "Editar portafolio" : "Edit Portfolio Item"}
+          </h1>
+
+          <p style={editPageSubtitle}>
+            {language === "es"
+              ? "Actualiza la información visible para clientes."
+              : "Update the information customers will see."}
+          </p>
+
+          <div style={editPhotoHeader}>
+            <strong>
+              {language === "es" ? "Fotos del portafolio" : "Portfolio Photos"}
+            </strong>
+
+            <button
+              style={smallAddPhotoBtn}
+              onClick={() =>
+                document.getElementById("editPortfolioImageInput").click()
+              }
+            >
+              + {language === "es" ? "Agregar fotos" : "Add Photos"}
+            </button>
+          </div>
+
+          <input
+            id="editPortfolioImageInput"
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={handleEditImageUpload}
+          />
+
+          {editImages.length > 0 ? (
+            <>
+              <img
+                src={activeEditImage || editImages[0]}
+                alt={editTitle || "Portfolio preview"}
+                style={editMainImage}
+                onClick={() =>
+                  setExpandedEditImage(
+                    activeEditImage || editImages[0]
+                  )
+                }
+              />
+
+              <div style={editImagesGrid}>
+                {editImages.map((url, index) => (
+                  <div key={`${editingProject.id}-edit-${index}`} style={editImageTile}>
+                    <img
+                      src={url}
+                      alt={`Portfolio ${index + 1}`}
+                      style={{
+                        ...editImage,
+                        ...((activeEditImage || editImages[0]) === url
+                          ? activeEditThumbnail
+                          : {}),
+                      }}
+                      onClick={() => setActiveEditImage(url)}
+                    />
+
+                    <button
+                      style={deletePhotoBtn}
+                      onClick={() => {
+                        setEditImages((currentImages) => {
+                          const nextImages = currentImages.filter((image) => image !== url);
+
+                          if ((activeEditImage || currentImages[0]) === url) {
+                            setActiveEditImage(nextImages[0] || "");
+                          }
+
+                          return nextImages;
+                        });
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={emptyEditPhotos}>
+              {language === "es"
+                ? "No hay fotos en este portafolio."
+                : "No photos in this portfolio item."}
+            </div>
+          )}
+
+          {uploading && (
+            <p style={uploadingText}>
+              {language === "es" ? "Subiendo fotos..." : "Uploading photos..."}
+            </p>
+          )}
+
+          <input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder={t("projectTitle")}
+            style={inputStyle}
+          />
+
+          <textarea
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder={t("projectDescription")}
+            style={{
+              ...inputStyle,
+              minHeight: "150px",
+              resize: "none",
+            }}
+          />
+
+          <button
+            style={publishButton}
+            onClick={handleSaveProjectEdit}
+          >
+            {language === "es" ? "Guardar cambios" : "Save Changes"}
+          </button>
+        </div>
+
+        {expandedEditImage && (
+          <div
+            style={imagePreviewOverlay}
+            onClick={() => setExpandedEditImage("")}
+          >
+            <button style={closePreviewBtn}>×</button>
+
+            <img
+              src={expandedEditImage}
+              alt="Expanded portfolio preview"
+              style={expandedPreviewImage}
+            />
+          </div>
+        )}
+
+        <BottomNav setPage={setPage} currentPage="profile" />
+      </div>
     );
   }
 
@@ -195,7 +481,7 @@ function ProjectGallery({ setPage, currentPage }) {
             </div>
 
             <div style={statLabel}>
-              Proyectos
+              {t("projects")}
             </div>
           </div>
 
@@ -205,7 +491,7 @@ function ProjectGallery({ setPage, currentPage }) {
             </div>
 
             <div style={statLabel}>
-              Perfil
+              {t("profile")}
             </div>
           </div>
 
@@ -286,6 +572,7 @@ function ProjectGallery({ setPage, currentPage }) {
                 id="projectImageInput"
                 type="file"
                 accept="image/*"
+                multiple
                 style={{ display: "none" }}
                 onChange={handleImageUpload}
               />
@@ -304,9 +591,11 @@ function ProjectGallery({ setPage, currentPage }) {
               </button>
 
               <h3 style={uploadTitle}>
-                {imageUrl
-                  ? "Imagen lista"
-                  : "Subir Proyecto"}
+                {images.length > 0
+                  ? `${images.length} ${language === "es" ? "fotos listas" : "photos ready"}`
+                  : language === "es"
+                  ? "Subir fotos"
+                  : "Upload Photos"}
               </h3>
 
               <p style={uploadText}>
@@ -321,12 +610,29 @@ function ProjectGallery({ setPage, currentPage }) {
               )}
             </div>
 
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt="Preview"
-                style={previewImage}
-              />
+            {images.length > 0 && (
+              <div style={previewGrid}>
+                {images.map((url, index) => (
+                  <div key={url} style={previewTile}>
+                    <img
+                      src={url}
+                      alt={`Portfolio preview ${index + 1}`}
+                      style={previewImage}
+                    />
+
+                    <button
+                      style={removePreviewBtn}
+                      onClick={() =>
+                        setImages((currentImages) =>
+                          currentImages.filter((image) => image !== url)
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             <button
@@ -365,36 +671,61 @@ function ProjectGallery({ setPage, currentPage }) {
               </div>
             )}
 
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                style={projectCard}
-              >
-                <img
-                  src={project.image_url}
-                  alt={project.title}
-                  style={projectImage}
-                />
+            {projects.map((project) => {
+              const projectImages = getProjectImages(project);
+              const coverImage = projectImages[0];
 
-                <div style={projectContent}>
-                  <div style={projectTag}>
-                    Proyecto Verificado
+              return (
+                <div
+                  key={project.id}
+                  style={projectCard}
+                >
+                  {coverImage && (
+                    <div style={coverImageWrap}>
+                      <img
+                        src={coverImage}
+                        alt={project.title}
+                        style={coverImageStyle}
+                      />
+
+                      {projectImages.length > 1 && (
+                        <span style={photoCountBadge}>
+                          +{projectImages.length - 1} photos
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={projectContent}>
+                    <div style={projectTag}>
+                      {language === "es" ? "Portafolio" : "Portfolio"}
+                    </div>
+
+                    <h3 style={projectTitle}>
+                      {project.title}
+                    </h3>
+
+                    <p style={projectDescriptionStyle}>
+                      {project.description}
+                    </p>
+
+                    <button
+                      style={editPortfolioBtn}
+                      onClick={() => {
+                        setEditingProject(project);
+                        setEditTitle(project.title || "");
+                        setEditDescription(project.description || "");
+                        const projectImages = getProjectImages(project);
+                        setEditImages(projectImages);
+                        setActiveEditImage(projectImages[0] || "");
+                      }}
+                    >
+                      {language === "es" ? "Editar portafolio" : "Edit Portfolio"}
+                    </button>
                   </div>
-
-                  <h3 style={projectTitle}>
-                    {project.title}
-                  </h3>
-
-                  <p
-                    style={
-                      projectDescriptionStyle
-                    }
-                  >
-                    {project.description}
-                  </p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -425,32 +756,37 @@ const backButton = {
 
 const heroCard = {
   background:
-    "linear-gradient(135deg,#0f1d63 0%,#5b3df5 100%)",
+    "linear-gradient(135deg,#111827 0%,#1e293b 58%,#312e81 100%)",
   borderRadius: "34px",
   padding: "34px 24px",
   color: "white",
   marginBottom: "24px",
+  border: "1px solid rgba(255,255,255,0.10)",
   boxShadow:
-    "0 18px 40px rgba(91,61,245,0.30)",
+    "0 16px 38px rgba(15,23,42,0.22)",
 };
 
 const heroBadge = {
-  background: "rgba(255,255,255,0.14)",
+  background: "white",
+  color: "#5b3df5",
   display: "inline-block",
   padding: "8px 14px",
   borderRadius: "999px",
-  fontWeight: "700",
+  fontWeight: "800",
   marginBottom: "20px",
+  boxShadow: "0 8px 18px rgba(91,61,245,0.10)",
 };
 
 const heroTitle = {
   fontSize: "44px",
   margin: 0,
   lineHeight: 1,
+  color: "white",
+  textShadow: "0 2px 10px rgba(0,0,0,0.22)",
 };
 
 const heroSubtitle = {
-  opacity: 0.9,
+  color: "rgba(255,255,255,0.78)",
   marginTop: "16px",
   lineHeight: 1.6,
   fontSize: "17px",
@@ -460,26 +796,27 @@ const statsGrid = {
   display: "grid",
   gridTemplateColumns:
     "repeat(3, 1fr)",
-  gap: "14px",
-  marginTop: "26px",
+  gap: "10px",
+  marginTop: "22px",
 };
 
 const statCard = {
-  background: "rgba(255,255,255,0.12)",
-  borderRadius: "22px",
-  padding: "18px",
+  background: "rgba(255,255,255,0.10)",
+  borderRadius: "18px",
+  padding: "12px 8px",
   textAlign: "center",
+  backdropFilter: "blur(10px)",
 };
 
 const statNumber = {
-  fontSize: "28px",
+  fontSize: "23px",
   fontWeight: "900",
 };
 
 const statLabel = {
-  marginTop: "6px",
-  opacity: 0.85,
-  fontSize: "14px",
+  marginTop: "4px",
+  opacity: 0.82,
+  fontSize: "12px",
 };
 
 const uploadCard = {
@@ -563,6 +900,35 @@ const uploadingText = {
   marginTop: "14px",
 };
 
+const previewGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "10px",
+  marginTop: "16px",
+};
+
+const previewTile = {
+  position: "relative",
+  borderRadius: "18px",
+  overflow: "hidden",
+  background: "#e5e7eb",
+  minHeight: "96px",
+};
+
+const removePreviewBtn = {
+  position: "absolute",
+  top: "8px",
+  right: "8px",
+  width: "28px",
+  height: "28px",
+  borderRadius: "999px",
+  border: "none",
+  background: "rgba(15,23,42,0.76)",
+  color: "white",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
 const previewImage = {
   width: "100%",
   borderRadius: "24px",
@@ -632,6 +998,199 @@ const projectCard = {
     "0 12px 30px rgba(0,0,0,0.06)",
 };
 
+const editPageCard = {
+  background: "white",
+  borderRadius: "28px",
+  padding: "22px",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+};
+
+const editPageTitle = {
+  margin: 0,
+  fontSize: "30px",
+  fontWeight: "950",
+  color: "#111827",
+};
+
+const editPageSubtitle = {
+  margin: "8px 0 18px",
+  color: "#64748b",
+  lineHeight: 1.5,
+};
+
+const editPhotoHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "12px",
+};
+
+const smallAddPhotoBtn = {
+  border: "none",
+  background: "#ede9fe",
+  color: "#5b3df5",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editImageTile = {
+  position: "relative",
+};
+
+const deletePhotoBtn = {
+  position: "absolute",
+  top: "8px",
+  right: "8px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "999px",
+  border: "none",
+  background: "rgba(15,23,42,0.78)",
+  color: "white",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const emptyEditPhotos = {
+  background: "#f8fafc",
+  border: "1px dashed #cbd5e1",
+  borderRadius: "18px",
+  padding: "18px",
+  marginBottom: "18px",
+  color: "#64748b",
+  fontWeight: "700",
+};
+
+const imagePreviewOverlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15,23,42,0.92)",
+  zIndex: 3000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "18px",
+};
+
+const expandedPreviewImage = {
+  maxWidth: "100%",
+  maxHeight: "86vh",
+  objectFit: "contain",
+  borderRadius: "18px",
+};
+
+const closePreviewBtn = {
+  position: "fixed",
+  top: "18px",
+  right: "18px",
+  width: "42px",
+  height: "42px",
+  borderRadius: "999px",
+  border: "none",
+  background: "white",
+  color: "#111827",
+  fontSize: "28px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editMainImage = {
+  width: "100%",
+  height: "260px",
+  objectFit: "cover",
+  borderRadius: "22px",
+  background: "#f1f5f9",
+  marginBottom: "12px",
+};
+
+const activeEditThumbnail = {
+  border: "3px solid #5b3df5",
+};
+
+const editImagesGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 1fr)",
+  gap: "10px",
+  marginBottom: "18px",
+};
+
+const editImage = {
+  width: "100%",
+  height: "150px",
+  borderRadius: "18px",
+  objectFit: "cover",
+};
+
+const coverImageWrap = {
+  position: "relative",
+  width: "100%",
+  height: "250px",
+  overflow: "hidden",
+  borderRadius: "28px 28px 0 0",
+  background: "#f1f5f9",
+};
+
+const coverImageStyle = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const photoCountBadge = {
+  position: "absolute",
+  right: "14px",
+  bottom: "14px",
+  background: "rgba(15,23,42,0.72)",
+  color: "white",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "900",
+  backdropFilter: "blur(10px)",
+};
+
+const portfolioActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+  marginTop: "16px",
+};
+
+const openPortfolioBtn = {
+  border: "none",
+  background: "linear-gradient(135deg,#7c5cff,#5b3df5)",
+  color: "white",
+  padding: "13px",
+  borderRadius: "16px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editPortfolioBtn = {
+  width: "auto",
+  alignSelf: "center",
+  border: "1px solid #ddd6fe",
+  background: "#fcfbff",
+  color: "#5b3df5",
+  padding: "10px 18px",
+  borderRadius: "999px",
+  fontWeight: "800",
+  fontSize: "13px",
+  cursor: "pointer",
+  marginTop: "14px",
+};
+
+const projectImageGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "6px",
+  padding: "10px",
+};
+
 const projectImage = {
   width: "100%",
   height: "260px",
@@ -643,14 +1202,18 @@ const projectContent = {
 };
 
 const projectTag = {
-  background: "#f1edff",
-  color: "#5b3df5",
-  display: "inline-block",
-  padding: "8px 12px",
-  borderRadius: "999px",
+  background: "transparent",
+  color: "#64748b",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "0",
+  borderRadius: "0",
   fontWeight: "800",
   fontSize: "12px",
-  marginBottom: "12px",
+  marginBottom: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.6px",
 };
 
 const projectTitle = {

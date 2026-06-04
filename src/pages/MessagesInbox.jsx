@@ -2,12 +2,100 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
+import { isProfessionalSession } from "../utils/session";
 import { getLanguage, t } from "../utils/language";
+
+
+function getDeletedConversationIds() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("deletedConversationIds") || "[]"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function filterDeletedConversations(list) {
+  const deletedIds = getDeletedConversationIds();
+
+  return list.filter(
+    (item) => !deletedIds.includes(item.id)
+  );
+}
+
+function getConversationRegistry() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("meetro_conversation_registry") || "[]"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveConversationRegistryItem(item) {
+  const registry = getConversationRegistry();
+
+  const normalized = {
+    id: String(item.id),
+    project_title: item.project_title || item.name || "Conversation",
+    project_description:
+      item.project_description || item.lastMessage || "Tap to open conversation",
+    homeowner_email: item.homeowner_email || item.customer || item.name || "Contact",
+    location: item.location || "Saved Contact",
+    status: item.saved_to_history
+      ? "Saved History"
+      : item.status || "Message",
+    unread: item.unread ?? false,
+    conversation_type: item.conversation_type || "standard",
+    saved_to_history:
+      item.saved_to_history ||
+      localStorage.getItem(`meetro_conversation_saved_${item.id}`) === "true" ||
+      false,
+    savedAt: item.savedAt || new Date().toISOString(),
+  };
+
+  const withoutDuplicate = registry.filter(
+    (entry) => String(entry.id) !== String(normalized.id)
+  );
+
+  const updated = [normalized, ...withoutDuplicate];
+
+  localStorage.setItem(
+    "meetro_conversation_registry",
+    JSON.stringify(updated)
+  );
+
+  window.dispatchEvent(new Event("meetro-messages-updated"));
+}
+
+function dedupeConversations(list) {
+  const seen = new Set();
+
+  return list.filter((item) => {
+    const id = String(item.id || "");
+
+    if (!id || seen.has(id)) return false;
+
+    seen.add(id);
+    return true;
+  });
+}
+
 
 function MessagesInbox({ setPage, currentPage }) {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [language, updateLanguage] = useState(getLanguage());
+  const [messageView, setMessageViewState] = useState(
+    localStorage.getItem("meetroMessageView") || "active"
+  );
+
+  const setMessageView = (view) => {
+    localStorage.setItem("meetroMessageView", view);
+    setMessageViewState(view);
+  };
 
   const isSpanish = language === "es";
 
@@ -60,6 +148,9 @@ function MessagesInbox({ setPage, currentPage }) {
     localStorage.getItem("userEmail") ||
     "guest";
 
+  const activeJobId =
+    localStorage.getItem("activeJobId");
+
   const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
 
   const emergencySaved =
@@ -70,6 +161,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const emergencyService =
     localStorage.getItem(`selectedEmergencyService_${currentUserKey}`) ||
+    localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     (isSpanish ? "Emergencia" : "Emergency Request");
 
@@ -126,6 +218,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
     window.addEventListener("focus", refreshMessages);
     window.addEventListener("storage", refreshMessages);
+    window.addEventListener("meetro-messages-updated", refreshMessages);
     window.addEventListener(
       "meetroEmergencyConversationUpdated",
       refreshMessages
@@ -134,6 +227,7 @@ function MessagesInbox({ setPage, currentPage }) {
     return () => {
       window.removeEventListener("focus", refreshMessages);
       window.removeEventListener("storage", refreshMessages);
+      window.removeEventListener("meetro-messages-updated", refreshMessages);
       window.removeEventListener(
         "meetroEmergencyConversationUpdated",
         refreshMessages
@@ -144,7 +238,11 @@ function MessagesInbox({ setPage, currentPage }) {
   }, [language]);
 
   useEffect(() => {
-    const unreadCount = quotes.filter((quote) => quote.unread).length;
+    const activeQuotes = quotes.filter((quote) => !quote.saved_to_history);
+  const savedQuotes = quotes.filter((quote) => quote.saved_to_history);
+  const visibleQuotes = messageView === "saved" ? savedQuotes : activeQuotes;
+
+  const unreadCount = visibleQuotes.filter((quote) => quote.unread).length;
 
     localStorage.setItem("mockUnreadMessages", String(unreadCount));
 
@@ -186,13 +284,110 @@ function MessagesInbox({ setPage, currentPage }) {
         }
       }
 
-      setQuotes(mergeEmergencyConversation(nextQuotes));
+      const registryConversations = getConversationRegistry().map((item) => ({
+        ...item,
+        saved_to_history:
+          item.saved_to_history ||
+          localStorage.getItem(`meetro_conversation_saved_${item.id}`) === "true",
+        status:
+          item.saved_to_history ||
+          localStorage.getItem(`meetro_conversation_saved_${item.id}`) === "true"
+            ? isSpanish
+              ? "Historial guardado"
+              : "Saved History"
+            : item.status,
+      }));
+
+      const localBusinessConversations = Object.keys(localStorage)
+        .filter((key) => key.startsWith("meetro_conversation_business_"))
+        .map((key) => {
+          const id = key.replace("meetro_conversation_", "");
+          const meta = JSON.parse(
+            localStorage.getItem(`meetro_conversation_meta_${id}`) || "{}"
+          );
+
+          return {
+            id,
+            project_title:
+              meta.activeJobService ||
+              meta.projectTitle ||
+              localStorage.getItem("conversationBusinessName") ||
+              t("projectConversation"),
+            project_description:
+              meta.lastMessage ||
+              t("tapOpenConversation"),
+            location:
+              meta.location ||
+              t("location"),
+            status: "Message",
+            conversation_type: "standard",
+            unread:
+              localStorage.getItem(`meetro_conversation_read_${id}`) === "false",
+          };
+        });
+
+      setQuotes(
+        filterDeletedConversations(
+          dedupeConversations(
+            mergeEmergencyConversation([
+              ...registryConversations,
+              ...nextQuotes,
+              ...localBusinessConversations,
+            ])
+          )
+        )
+      );
     } catch (error) {
       console.error(error);
-      setQuotes(mergeEmergencyConversation(demoQuotes));
+      setQuotes(filterDeletedConversations(mergeEmergencyConversation(demoQuotes)));
     } finally {
       setLoading(false);
     }
+  }
+
+  function deleteConversation(e, quoteId) {
+    e.stopPropagation();
+
+    const confirmed = window.confirm(
+      language === "es"
+        ? "¿Eliminar esta conversación?"
+        : "Delete this conversation?"
+    );
+
+    if (!confirmed) return;
+
+    const deletedIds = getDeletedConversationIds();
+
+    localStorage.setItem(
+      "deletedConversationIds",
+      JSON.stringify([...new Set([...deletedIds, quoteId])])
+    );
+
+    const updatedQuotes =
+      quotes.filter((q) => q.id !== quoteId);
+
+    setQuotes(updatedQuotes);
+
+    localStorage.removeItem(
+      `meetro_conversation_${quoteId}`
+    );
+
+    localStorage.removeItem(
+      `meetro_conversation_meta_${quoteId}`
+    );
+
+    const registry = getConversationRegistry();
+
+    localStorage.setItem(
+      "meetro_conversation_registry",
+      JSON.stringify(
+        registry.filter((item) => String(item.id) !== String(quoteId))
+      )
+    );
+
+    window.dispatchEvent(
+      new Event("meetro-messages-updated")
+    );
   }
 
   function openConversation(quote) {
@@ -242,10 +437,36 @@ function MessagesInbox({ setPage, currentPage }) {
       quote.conversation_type || "standard"
     );
 
+    saveConversationRegistryItem({
+      ...quote,
+      id: quote.id,
+      project_title:
+        quote.project_title ||
+        quote.business_name ||
+        quote.homeowner_email ||
+        "Conversation",
+      project_description:
+        quote.project_description ||
+        "Saved conversation for future communication.",
+      homeowner_email:
+        quote.homeowner_email ||
+        quote.business_name ||
+        "Contact",
+      conversation_type: quote.conversation_type || "standard",
+      unread: false,
+      saved_to_history:
+        quote.saved_to_history ||
+        localStorage.getItem(`meetro_conversation_saved_${quote.id}`) === "true",
+    });
+
     setPage("conversationThread");
   }
 
-  const unreadCount = quotes.filter((quote) => quote.unread).length;
+  const activeQuotes = quotes.filter((quote) => !quote.saved_to_history);
+  const savedQuotes = quotes.filter((quote) => quote.saved_to_history);
+  const visibleQuotes = messageView === "saved" ? savedQuotes : activeQuotes;
+
+  const unreadCount = visibleQuotes.filter((quote) => quote.unread).length;
 
   const emergencyCount = quotes.filter(
     (quote) => quote.conversation_type === "emergency"
@@ -259,12 +480,8 @@ function MessagesInbox({ setPage, currentPage }) {
     <div style={pageWrapper}>
       <button
   onClick={() => {
-    const accountType = localStorage.getItem("accountType") || "standard";
-    const userRole = localStorage.getItem("userRole") || "standard";
-
     const isBusinessUser =
-      accountType !== "standard" ||
-      ["professional", "contractor", "business"].includes(userRole);
+      isProfessionalSession();
 
     setPage(isBusinessUser ? "businessDashboard" : "home");
   }}
@@ -297,8 +514,8 @@ function MessagesInbox({ setPage, currentPage }) {
 
       <div style={summaryGrid}>
         <div style={summaryCard}>
-          <strong>{quotes.length}</strong>
-          <span>{isSpanish ? "Conversaciones" : "Conversations"}</span>
+          <strong>{activeQuotes.length}</strong>
+          <span>{isSpanish ? "Activos" : "Active"}</span>
         </div>
 
         <div style={summaryCard}>
@@ -307,12 +524,34 @@ function MessagesInbox({ setPage, currentPage }) {
         </div>
 
         <div style={summaryCard}>
-          <strong>{emergencyCount}</strong>
-          <span>{isSpanish ? "Emergencia" : "Emergency"}</span>
+          <strong>{savedQuotes.length}</strong>
+          <span>{isSpanish ? "Historial" : "Saved"}</span>
         </div>
       </div>
 
-      {quotes.length === 0 && (
+      <div style={messageTabs}>
+        <button
+          style={{
+            ...messageTab,
+            ...(messageView === "active" ? activeMessageTab : {}),
+          }}
+          onClick={() => setMessageView("active")}
+        >
+          {isSpanish ? "Activos" : "Active Messages"}
+        </button>
+
+        <button
+          style={{
+            ...messageTab,
+            ...(messageView === "saved" ? activeMessageTab : {}),
+          }}
+          onClick={() => setMessageView("saved")}
+        >
+          💾 {isSpanish ? "Historial guardado" : "Saved History"}
+        </button>
+      </div>
+
+      {visibleQuotes.length === 0 && (
         <div style={emptyCard}>
           <div style={emptyIcon}>💬</div>
 
@@ -323,16 +562,19 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       <div style={conversationList}>
-        {quotes.map((quote) => (
-          <button
+        {visibleQuotes.map((quote) => (
+          <div
             key={quote.id}
             onClick={() => openConversation(quote)}
+            role="button"
+            tabIndex={0}
             style={{
               ...conversationCard,
               ...(quote.unread ? unreadConversationCard : {}),
               ...(quote.conversation_type === "emergency"
                 ? emergencyConversationCard
                 : {}),
+              ...(quote.saved_to_history ? savedHistoryCard : {}),
             }}
           >
             <div
@@ -364,6 +606,21 @@ function MessagesInbox({ setPage, currentPage }) {
                   <span style={timeText}>{t("recent")}</span>
 
                   {quote.unread && <span style={unreadDot}></span>}
+
+                  <button
+                    onClick={(e)=>deleteConversation(e,quote.id)}
+                    style={{
+                      border:"none",
+                      background:"transparent",
+                      cursor:"pointer",
+                      fontSize:"18px",
+                      color:"#ef4444",
+                      padding:"4px"
+                    }}
+                  >
+                    🗑️
+                  </button>
+
                 </div>
               </div>
 
@@ -389,13 +646,14 @@ function MessagesInbox({ setPage, currentPage }) {
                     ...(quote.conversation_type === "emergency"
                       ? emergencyStatusBadge
                       : {}),
+                    ...(quote.saved_to_history ? savedHistoryBadge : {}),
                   }}
                 >
                   {quote.status || t("new")}
                 </span>
               </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
@@ -529,6 +787,42 @@ const emptyText = {
   color: "#667085",
   marginBottom: 0,
   lineHeight: 1.5,
+};
+
+
+const messageTabs = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+  marginBottom: "16px",
+};
+
+const messageTab = {
+  border: "1px solid rgba(91,61,245,0.14)",
+  background: "#ffffff",
+  color: "#5b3df5",
+  borderRadius: "18px",
+  padding: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const activeMessageTab = {
+  background: "linear-gradient(135deg, #7357ff, #5b3df5)",
+  color: "#ffffff",
+  boxShadow: "0 10px 24px rgba(91,61,245,0.18)",
+};
+
+const savedHistoryCard = {
+  border: "2px solid rgba(16,185,129,0.24)",
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(240,253,244,0.96))",
+};
+
+const savedHistoryBadge = {
+  background: "#ecfdf5",
+  color: "#047857",
+  border: "1px solid rgba(16,185,129,0.18)",
 };
 
 const conversationList = {

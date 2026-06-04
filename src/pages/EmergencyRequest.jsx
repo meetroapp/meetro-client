@@ -1,11 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
-function EmergencyRequest({ setPage, language = "en", selectedService }) {
-  const [issue, setIssue] = useState("");
-  const [gateCode, setGateCode] = useState("");
-  const [entryNotes, setEntryNotes] = useState("");
-  const [petWarning, setPetWarning] = useState(false);
-  const [urgency, setUrgency] = useState("urgent");
+import BottomNav from "../components/BottomNav";
+
+function EmergencyRequest({ setPage }) {
+  const [language, setLanguage] = useState(
+    localStorage.getItem("language") || "en"
+  );
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      setLanguage(localStorage.getItem("language") || "en");
+    };
+
+    window.addEventListener(
+      "languageChanged",
+      handleLanguageChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "languageChanged",
+        handleLanguageChange
+      );
+    };
+  }, []);
+
+const selectedService =
+    localStorage.getItem("selectedEmergencyService") || "Emergency Help";
+
+  const [issue, setIssue] = useState(
+    localStorage.getItem("emergencyIssue") || ""
+  );
+  const [gateCode, setGateCode] = useState(
+    localStorage.getItem("emergencyGateCode") || ""
+  );
+  const [entryNotes, setEntryNotes] = useState(
+    localStorage.getItem("emergencyEntryNotes") || ""
+  );
+  const [petWarning, setPetWarning] = useState(
+    localStorage.getItem("emergencyPetWarning") === "true"
+  );
+  const [urgency, setUrgency] = useState(
+    localStorage.getItem("emergencyUrgency") || "urgent"
+  );
+
+  const sendRequestRef = useRef(null);
+
+  function scrollToSendRequest() {
+    setTimeout(() => {
+      sendRequestRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 120);
+  }
 
   const text = {
     en: {
@@ -15,38 +63,34 @@ function EmergencyRequest({ setPage, language = "en", selectedService }) {
       issue: "What happened?",
       issuePlaceholder: "Example: Water leaking under sink, breaker keeps tripping...",
       access: "Access Info",
-      gateCode: "Gate / Access Code",
       gatePlaceholder: "Example: 4821",
-      entryNotes: "Entry Notes",
       entryPlaceholder: "Example: Use side gate, call when outside...",
       petWarning: "Pet or safety warning",
       urgency: "Urgency Level",
       normal: "Today",
       urgent: "Urgent",
       critical: "Critical",
-      photos: "Upload photos",
-      photosNote: "Photo upload coming soon",
+      upload: "Upload photos",
+      uploadNote: "Photo upload coming soon",
       submit: "Send Request",
       back: "Back to Emergency",
     },
     es: {
-      title: "Pedir Ayuda de Emergencia",
-      subtitle: "Dile a los profesionales locales qué necesitas.",
+      title: "Solicitar Ayuda de Emergencia",
+      subtitle: "Dile a profesionales locales qué necesitas.",
       service: "Servicio Seleccionado",
       issue: "¿Qué pasó?",
-      issuePlaceholder: "Ejemplo: Agua saliendo debajo del fregadero, breaker fallando...",
+      issuePlaceholder: "Ejemplo: Fuga debajo del fregadero, breaker fallando...",
       access: "Información de Acceso",
-      gateCode: "Código de Entrada",
       gatePlaceholder: "Ejemplo: 4821",
-      entryNotes: "Notas de Entrada",
-      entryPlaceholder: "Ejemplo: Use la puerta lateral, llame al llegar...",
+      entryPlaceholder: "Ejemplo: Usa la puerta lateral, llama al llegar...",
       petWarning: "Advertencia de mascota o seguridad",
       urgency: "Nivel de Urgencia",
       normal: "Hoy",
       urgent: "Urgente",
       critical: "Crítico",
-      photos: "Subir fotos",
-      photosNote: "Subida de fotos próximamente",
+      upload: "Subir fotos",
+      uploadNote: "Fotos próximamente",
       submit: "Enviar Solicitud",
       back: "Regresar a Emergencia",
     },
@@ -54,81 +98,118 @@ function EmergencyRequest({ setPage, language = "en", selectedService }) {
 
   const t = text[language] || text.en;
 
-  const submitRequest = () => {
+  function saveUrgency(value) {
+    setUrgency(value);
+    localStorage.setItem("emergencyUrgency", value);
+  }
+
+  function submitRequest() {
+    const currentUserKey =
+      localStorage.getItem("userId") ||
+      localStorage.getItem("userEmail") ||
+      "guest";
+
+    const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
+
     localStorage.setItem("emergencyIssue", issue);
     localStorage.setItem("emergencyGateCode", gateCode);
     localStorage.setItem("emergencyEntryNotes", entryNotes);
     localStorage.setItem("emergencyPetWarning", petWarning ? "true" : "false");
     localStorage.setItem("emergencyUrgency", urgency);
 
-const currentUserKey =
-  localStorage.getItem("userId") ||
-  localStorage.getItem("userEmail") ||
-  "guest";
+    localStorage.setItem("activeConversationId", emergencyConversationId);
+    localStorage.setItem("activeConversationName", selectedService);
+    localStorage.setItem("meetroConversationType", "emergency");
+    const emergencyCategory =
+      selectedService.includes("Plumbing")
+        ? "plumbing"
+        : selectedService.includes("Electrical")
+        ? "electrical"
+        : selectedService.includes("Roof")
+        ? "roofing"
+        : selectedService.includes("Locksmith")
+        ? "locksmith"
+        : selectedService.includes("Storm")
+        ? "storm"
+        : "general";
 
-const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
+    localStorage.setItem("selectedEmergencyCategory", emergencyCategory);
 
-const emergencyService =
-  localStorage.getItem(`selectedEmergencyService_${currentUserKey}`) ||
-  localStorage.getItem("selectedEmergencyService") ||
-  "Emergency Request";
+    localStorage.setItem("emergencyDispatchStatus", "pending");
 
-localStorage.setItem("activeConversationId", emergencyConversationId);
-localStorage.setItem("activeConversationName", emergencyService);
-localStorage.setItem("meetroConversationType", "emergency");
+    localStorage.setItem(
+      `selectedEmergencyService_${currentUserKey}`,
+      selectedService
+    );
 
-localStorage.setItem(
-  `selectedEmergencyService_${currentUserKey}`,
-  emergencyService
-);
+    localStorage.setItem(
+      `meetro_emergency_conversation_meta_${currentUserKey}`,
+      JSON.stringify({
+        id: emergencyConversationId,
+        type: "emergency",
+        title: selectedService,
+        issue,
+        gateCode,
+        entryNotes,
+        petWarning,
+        urgency,
+        location: "Cape Coral",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      })
+    );
 
-localStorage.setItem(
-  `meetro_emergency_conversation_meta_${currentUserKey}`,
-  JSON.stringify({
-    id: emergencyConversationId,
-    type: "emergency",
-    title: emergencyService,
-    location: "Cape Coral",
-    status: "emergency",
-    createdAt: new Date().toISOString(),
-  })
-);
+    const starterMessages = [
+      {
+        id: Date.now(),
+        type: "text",
+        sender: "me",
+        text:
+          issue.trim() ||
+          (language === "es"
+            ? "Solicitud de emergencia enviada."
+            : "Emergency request submitted."),
+        time: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        status: "sent",
+        seenAt: "",
+        unsent: false,
+        createdAt: Date.now(),
+      },
+    ];
 
-const starterMessages = [
-  {
-    id: Date.now(),
-    type: "text",
-    sender: "me",
-    text:
-      issue.trim() ||
-      (language === "es"
-        ? "Solicitud de emergencia enviada."
-        : "Emergency request submitted."),
-    time: new Date().toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    status: "sent",
-    seenAt: "",
-    unsent: false,
-    createdAt: Date.now(),
-  },
-];
+    localStorage.setItem(
+      `meetro_conversation_${emergencyConversationId}`,
+      JSON.stringify(starterMessages)
+    );
 
-localStorage.setItem(
-  `meetro_conversation_${emergencyConversationId}`,
-  JSON.stringify(starterMessages)
-);
+    localStorage.setItem(
+      `meetro_conversation_read_${emergencyConversationId}`,
+      "false"
+    );
 
-localStorage.setItem(
-  `meetro_conversation_read_${emergencyConversationId}`,
-  "false"
-);
+        window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
 
-window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
+    localStorage.removeItem("emergencyIssue");
+    localStorage.removeItem("emergencyGateCode");
+    localStorage.removeItem("emergencyEntryNotes");
+    localStorage.removeItem("emergencyPetWarning");
+    localStorage.removeItem("emergencyUrgency");
 
-    setPage("emergencyStatus");
-  };
+    setIssue("");
+    setGateCode("");
+    setEntryNotes("");
+    setPetWarning(false);
+    setUrgency("urgent");
+
+    localStorage.setItem("meetroConversationType", "emergency");
+    localStorage.setItem("conversationReturnPage", "home");
+    localStorage.setItem("dispatchReturnPage", "conversationThread");
+
+    setPage("conversationThread");
+  }
 
   return (
     <div style={page}>
@@ -142,7 +223,7 @@ window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
 
         <div style={section}>
           <label style={label}>{t.service}</label>
-          <div style={serviceBox}>{selectedService || "Emergency Help"}</div>
+          <div style={serviceBox}>{selectedService}</div>
         </div>
 
         <div style={section}>
@@ -150,7 +231,10 @@ window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
           <textarea
             style={textarea}
             value={issue}
-            onChange={(e) => setIssue(e.target.value)}
+            onChange={(e) => {
+              setIssue(e.target.value);
+              localStorage.setItem("emergencyIssue", e.target.value);
+            }}
             placeholder={t.issuePlaceholder}
           />
         </div>
@@ -161,20 +245,30 @@ window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
           <input
             style={input}
             value={gateCode}
-            onChange={(e) => setGateCode(e.target.value)}
+            onChange={(e) => {
+              setGateCode(e.target.value);
+              localStorage.setItem("emergencyGateCode", e.target.value);
+            }}
             placeholder={t.gatePlaceholder}
           />
 
           <textarea
             style={{ ...textarea, minHeight: "90px", marginTop: "12px" }}
             value={entryNotes}
-            onChange={(e) => setEntryNotes(e.target.value)}
+            onChange={(e) => {
+              setEntryNotes(e.target.value);
+              localStorage.setItem("emergencyEntryNotes", e.target.value);
+            }}
             placeholder={t.entryPlaceholder}
           />
 
           <button
             style={petWarning ? activeWarningButton : warningButton}
-            onClick={() => setPetWarning(!petWarning)}
+            onClick={() => {
+              const nextValue = !petWarning;
+              setPetWarning(nextValue);
+              localStorage.setItem("emergencyPetWarning", nextValue.toString());
+            }}
           >
             {petWarning ? "⚠️ " : "🐶 "}
             {t.petWarning}
@@ -187,150 +281,156 @@ window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
           <div style={urgencyGrid}>
             <button
               style={urgency === "normal" ? activeOptionButton : optionButton}
-              onClick={() => setUrgency("normal")}
+              onClick={() => {
+                saveUrgency("normal");
+                scrollToSendRequest();
+              }}
             >
               {t.normal}
             </button>
 
             <button
               style={urgency === "urgent" ? activeOptionButton : optionButton}
-              onClick={() => setUrgency("urgent")}
+              onClick={() => {
+                saveUrgency("urgent");
+                scrollToSendRequest();
+              }}
             >
               {t.urgent}
             </button>
 
             <button
-              style={urgency === "critical" ? optionButtonDanger : optionButton}
-              onClick={() => setUrgency("critical")}
+              style={urgency === "critical" ? activeDangerButton : optionButton}
+              onClick={() => {
+                saveUrgency("critical");
+                scrollToSendRequest();
+              }}
             >
               {t.critical}
             </button>
           </div>
         </div>
 
-        <div style={photoBox}>
-          <strong>{t.photos}</strong>
-          <span>{t.photosNote}</span>
+        <div style={uploadBox}>
+          <strong>{t.upload}</strong>
+          <p>{t.uploadNote}</p>
         </div>
 
-        <button style={submitButton} onClick={submitRequest}>
-          {t.submit}
-        </button>
-
-        <button style={backButton} onClick={() => setPage("emergency")}>
+        <div ref={sendRequestRef} style={sendArea}>
+          <button style={submitButton} onClick={submitRequest}>
+            {t.submit}
+          </button>
+        </div>
+         
+             <button style={darkButton} onClick={() => setPage("emergency")}>
           {t.back}
         </button>
       </div>
+
+      <BottomNav currentPage="emergency" setPage={setPage} />
     </div>
   );
-}
+}         
 
-const page = {
+  const page = {
   minHeight: "100vh",
   background: "#f5f7fb",
-  padding: "22px",
+  padding: "24px 24px 210px",
   boxSizing: "border-box",
 };
 
-const card = {
+  const card = {
   maxWidth: "430px",
   margin: "0 auto",
+  textAlign: "center",
+  paddingTop: "24px",
+  paddingBottom: "90px",
 };
 
 const backMini = {
-  width: "44px",
-  height: "44px",
+  width: "48px",
+  height: "48px",
   borderRadius: "16px",
   border: "none",
   background: "white",
-  fontSize: "22px",
-  fontWeight: "800",
-  boxShadow: "0 8px 22px rgba(0,0,0,0.06)",
+  fontSize: "24px",
   cursor: "pointer",
-  marginBottom: "22px",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
+  marginBottom: "28px",
 };
 
 const title = {
-  fontSize: "31px",
+  fontSize: "30px",
   fontWeight: "900",
-  marginBottom: "8px",
   color: "#111827",
+  marginBottom: "8px",
 };
 
 const subtitle = {
   color: "#6b7280",
-  marginBottom: "24px",
-  lineHeight: "1.5",
   fontSize: "16px",
+  marginBottom: "28px",
 };
 
 const section = {
-  marginBottom: "20px",
+  marginBottom: "24px",
 };
 
 const label = {
   display: "block",
-  fontSize: "14px",
-  fontWeight: "800",
+  fontWeight: "900",
   color: "#111827",
-  marginBottom: "9px",
+  marginBottom: "12px",
 };
 
 const serviceBox = {
   background: "white",
-  padding: "16px",
+  padding: "18px",
   borderRadius: "18px",
-  fontWeight: "800",
   color: "#5b3df5",
-  boxShadow: "0 10px 28px rgba(0,0,0,0.05)",
+  fontWeight: "900",
+  fontSize: "18px",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
 };
 
 const input = {
   width: "100%",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  padding: "15px 16px",
+  padding: "16px",
+  borderRadius: "16px",
+  border: "1px solid #d1d5db",
   fontSize: "15px",
   boxSizing: "border-box",
   outline: "none",
-  fontFamily: "inherit",
 };
 
 const textarea = {
   width: "100%",
   minHeight: "120px",
-  border: "1px solid #e5e7eb",
-  borderRadius: "20px",
   padding: "16px",
+  borderRadius: "16px",
+  border: "1px solid #d1d5db",
   fontSize: "15px",
   boxSizing: "border-box",
   outline: "none",
   resize: "vertical",
-  fontFamily: "inherit",
 };
 
 const warningButton = {
   width: "100%",
   marginTop: "12px",
-  padding: "14px",
-  borderRadius: "18px",
+  padding: "15px",
+  borderRadius: "16px",
   border: "1px solid #e5e7eb",
   background: "white",
-  color: "#111827",
-  fontWeight: "800",
+  fontWeight: "900",
   cursor: "pointer",
 };
 
 const activeWarningButton = {
-  width: "100%",
-  marginTop: "12px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "none",
+  ...warningButton,
   background: "#fef3c7",
+  border: "1px solid #fbbf24",
   color: "#92400e",
-  fontWeight: "900",
-  cursor: "pointer",
 };
 
 const urgencyGrid = {
@@ -339,44 +439,40 @@ const urgencyGrid = {
   gap: "10px",
 };
 
+const sendArea = {
+  scrollMarginBottom: "190px",
+  marginTop: "20px",
+};
+
 const optionButton = {
-  padding: "13px 8px",
-  borderRadius: "16px",
+  padding: "13px",
+  borderRadius: "15px",
   border: "1px solid #e5e7eb",
   background: "white",
-  fontWeight: "800",
+  fontWeight: "900",
   cursor: "pointer",
 };
 
 const activeOptionButton = {
-  padding: "13px 8px",
-  borderRadius: "16px",
-  border: "none",
+  ...optionButton,
   background: "#ede9fe",
   color: "#5b3df5",
-  fontWeight: "900",
-  cursor: "pointer",
+  border: "1px solid #ddd6fe",
 };
 
-const optionButtonDanger = {
-  padding: "13px 8px",
-  borderRadius: "16px",
-  border: "none",
+const activeDangerButton = {
+  ...optionButton,
   background: "#fee2e2",
-  color: "#b91c1c",
-  fontWeight: "900",
-  cursor: "pointer",
+  color: "#991b1b",
+  border: "1px solid #fecaca",
 };
 
-const photoBox = {
+const uploadBox = {
   background: "white",
-  borderRadius: "22px",
-  padding: "20px",
-  display: "grid",
-  gap: "6px",
-  color: "#111827",
-  boxShadow: "0 10px 28px rgba(0,0,0,0.05)",
+  padding: "24px",
+  borderRadius: "20px",
   marginBottom: "20px",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
 };
 
 const submitButton = {
@@ -386,21 +482,21 @@ const submitButton = {
   border: "none",
   background: "#5b3df5",
   color: "white",
-  fontSize: "16px",
   fontWeight: "900",
+  fontSize: "16px",
   cursor: "pointer",
   marginBottom: "12px",
 };
 
-const backButton = {
+const darkButton = {
   width: "100%",
   padding: "15px",
   borderRadius: "18px",
   border: "none",
   background: "#111827",
   color: "white",
+  fontWeight: "900",
   fontSize: "15px",
-  fontWeight: "800",
   cursor: "pointer",
 };
 

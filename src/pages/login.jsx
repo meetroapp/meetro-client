@@ -1,6 +1,7 @@
 import { useState } from "react";
 import API_URL from "../api";
 import { getLanguage, setLanguage } from "../utils/language";
+import { saveMeetroSession, getPostLoginPage, isProfessionalUser } from "../utils/session";
 
 function Login({ setPage }) {
   const [mode, setMode] = useState("login");
@@ -137,73 +138,16 @@ function Login({ setPage }) {
   }
 
 function checkIsProfessional(user = {}) {
-  return (
-    user.account_type === "professional" ||
-    user.accountType === "professional"
-  );
+  return isProfessionalUser(user);
 }
 
   function saveUserData(data) {
-    const user = data.user || {};
-    const isProfessional = checkIsProfessional(user);
-
-    const finalAccountType = isProfessional ? "professional" : "homeowner";
-    const finalMode = isProfessional ? "business" : "personal";
-
-    localStorage.setItem("token", data.token || "");
-    localStorage.setItem("user", JSON.stringify(user));
-    localStorage.setItem("userId", user.id || "");
-    localStorage.setItem("userName", user.username || user.name || "");
-    localStorage.setItem("userEmail", user.email || email.trim());
-
-    localStorage.setItem(
-      "userRole",
-      isProfessional
-        ? user.business_category ||
-            user.businessCategory ||
-            user.role ||
-            "professional"
-        : "homeowner"
-    );
-
-    localStorage.setItem("accountType", finalAccountType);
-    localStorage.setItem(
-      "businessName",
-      user.business_name || user.businessName || ""
-    );
-    localStorage.setItem(
-      "businessCategory",
-      user.business_category || user.businessCategory || ""
-    );
-    localStorage.setItem("activeAccountMode", finalMode);
-    localStorage.setItem("isProfessional", isProfessional ? "true" : "false");
-    localStorage.setItem(
-      "hasBusinessProfile",
-      isProfessional ? "true" : "false"
-    );
-   
-     localStorage.setItem(
-    "contractorProfileComplete",
-    isProfessional ? "true" : "false"
-   );
+    return saveMeetroSession(data, email.trim());
   }
 
   function routeUser(data) {
-    const user = data.user || {};
-    const isProfessional = checkIsProfessional(user);
-
-    if (isProfessional) {
-      localStorage.setItem("activeAccountMode", "business");
-      localStorage.setItem("isProfessional", "true");
-      localStorage.setItem("hasBusinessProfile", "true");
-      setPage("businessDashboard");
-      return;
-    }
-
-    localStorage.setItem("activeAccountMode", "personal");
-    localStorage.setItem("isProfessional", "false");
-    localStorage.setItem("hasBusinessProfile", "false");
-    setPage("home");
+    const page = getPostLoginPage(data.user || {});
+    setPage(page);
   }
 
   async function handleSubmit() {

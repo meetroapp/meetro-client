@@ -1,4 +1,7 @@
+import BottomNav from "../components/BottomNav";
+
 function ContractorJobAccepted({ setPage, language = "en" }) {
+  
   const text = {
     en: {
       title: "Job Accepted",
@@ -7,10 +10,10 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
       customer: "Homeowner",
       location: "Cape Coral, FL",
       eta: "ETA: 12 minutes",
-      next: "Next Step",
-      nextText: "Open dispatch to start route tracking and customer communication.",
+      next: "Next Steps",
+      nextText: "Open dispatch to begin navigation and live job tracking.",
       dispatch: "Open Dispatch",
-      dashboard: "Back to Dashboard",
+      dashboard: "Dashboard",
     },
     es: {
       title: "Trabajo Aceptado",
@@ -19,10 +22,10 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
       customer: "Propietario",
       location: "Cape Coral, FL",
       eta: "Llegada: 12 minutos",
-      next: "Próximo Paso",
-      nextText: "Abre el servicio para iniciar la ruta y comunicación con el cliente.",
-      dispatch: "Abrir Servicio",
-      dashboard: "Regresar al Panel",
+      next: "Próximos Pasos",
+      nextText: "Abre despacho para iniciar navegación y seguimiento en vivo.",
+      dispatch: "Abrir Despacho",
+      dashboard: "Panel",
     },
   };
 
@@ -59,13 +62,18 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
           {t.dispatch}
         </button>
 
-        <button
+            <button
           style={darkButton}
           onClick={() => setPage("contractorDashboard")}
         >
           {t.dashboard}
         </button>
       </div>
+
+      <BottomNav
+        setPage={setPage}
+        currentPage="businessDashboard"
+      />
     </div>
   );
 }
@@ -74,7 +82,7 @@ const page = {
   minHeight: "100vh",
   background:
     "linear-gradient(160deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
-  padding: "24px",
+  padding: "24px 24px 190px",
   boxSizing: "border-box",
 };
 
@@ -83,6 +91,7 @@ const card = {
   margin: "0 auto",
   textAlign: "center",
   paddingTop: "38px",
+  paddingBottom: "90px",
 };
 
 const successCircle = {

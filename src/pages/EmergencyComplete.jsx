@@ -1,76 +1,183 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import BottomNav from "../components/BottomNav";
+import { updateRequestById } from "../utils/workflowTimeline";
+import { getLanguage, t } from "../utils/language";
 
-function EmergencyComplete({ setPage, language = "en" }) {
-  const selectedService =
-    localStorage.getItem("selectedEmergencyService") || "Emergency Help";
-
+function EmergencyComplete({ setPage }) {
+  const [language, setLanguage] = useState(getLanguage());
   const [rating, setRating] = useState(5);
+  const [review, setReview] = useState("");
   const [saved, setSaved] = useState(false);
 
-  const text = {
-    en: {
-      title: "Service Completed",
-      subtitle: "Your emergency service request has been marked complete.",
-      contractor: "Bgone Construction Cleanup",
-      service: "Completed Service",
-      ratingTitle: "Rate Your Experience",
-      reviewPlaceholder: "Write a quick review...",
-      save: "Save Contractor",
-      saved: "Saved to Favorites",
-      invoice: "Invoice / Payment",
-      invoiceNote: "Payment and invoice details will be connected later.",
-      home: "Back Home",
-      emergency: "Emergency Services",
-    },
-    es: {
-      title: "Servicio Completado",
-      subtitle: "Tu solicitud de emergencia fue marcada como completada.",
-      contractor: "Bgone Construction Cleanup",
-      service: "Servicio Completado",
-      ratingTitle: "Califica tu Experiencia",
-      reviewPlaceholder: "Escribe una reseña rápida...",
-      save: "Guardar Contratista",
-      saved: "Guardado en Favoritos",
-      invoice: "Factura / Pago",
-      invoiceNote: "Los detalles de pago y factura se conectarán luego.",
-      home: "Regresar al Inicio",
-      emergency: "Servicios de Emergencia",
-    },
+  const completedProject = JSON.parse(
+    localStorage.getItem("lastCompletedProject") || "null"
+  );
+
+  const selectedService =
+    completedProject?.title ||
+    completedProject?.category ||
+    localStorage.getItem("selectedEmergencyService") ||
+    "Home Project";
+
+  const professionalName =
+    localStorage.getItem("selectedProfessionalName") ||
+    completedProject?.selectedProfessional ||
+    completedProject?.acceptedQuote?.businessName ||
+    localStorage.getItem("businessName") ||
+    "Professional";
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      setLanguage(getLanguage());
+    };
+
+    window.addEventListener("languageChanged", handleLanguageChange);
+    window.addEventListener("meetro-language-change", handleLanguageChange);
+    window.addEventListener("meetroLanguageChanged", handleLanguageChange);
+
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+      window.removeEventListener("meetro-language-change", handleLanguageChange);
+      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
+    };
+  }, []);
+
+  const pageText = {
+    title: t("projectCompleted"),
+    subtitle: t("projectCompletedSubtitle"),
+    contractor: t("contractor"),
+    service: t("completedProject"),
+    ratingTitle: t("howWasExperience"),
+    reviewPlaceholder: t("writeReview"),
+    save: t("submitReview"),
+    saved: t("reviewSubmitted"),
+    invoice: t("projectSummary"),
+    invoiceNote: t("completedProjectSaved"),
+    home: t("done"),
+    emergency: t("viewMyRequests"),
   };
 
-  const t = text[language] || text.en;
+  const translatedService =
+    language === "es"
+      ? selectedService
+          ?.replace("Emergency Plumbing", "Plomería de Emergencia")
+          ?.replace("Emergency Electrical", "Electricista de Emergencia")
+          ?.replace("Roof Leak Repair", "Reparación de Techo")
+          ?.replace("Locksmith", "Cerrajero")
+          ?.replace("Storm Prep Help", "Preparación para Tormentas")
+          ?.replace("Other Emergency", "Otra Emergencia")
+      : selectedService;
+
+function submitReview() {
+  const professionalId =
+    localStorage.getItem("selectedProfessionalId") ||
+    completedProject?.acceptedQuote?.businessId ||
+    localStorage.getItem("activeProfessionalId") ||
+    localStorage.getItem("businessName") ||
+    "Professional";
+
+  const reviewKey = `meetroReviews_${professionalId}`;
+
+  const existingReviews = JSON.parse(
+    localStorage.getItem(reviewKey) || "[]"
+  );
+
+  const newReview = {
+    id: Date.now(),
+    professionalId,
+    professionalName,
+    service: selectedService,
+    rating,
+    review,
+    createdAt: new Date().toISOString(),
+    source: completedProject ? "homeowner_project" : "emergency",
+    projectTitle:
+      completedProject?.title ||
+      completedProject?.category ||
+      selectedService,
+  };
+
+  const updatedReviews = [newReview, ...existingReviews];
+
+  const totalRating = updatedReviews.reduce(
+    (sum, item) => sum + Number(item.rating || 0),
+    0
+  );
+
+  const averageRating =
+    updatedReviews.length > 0
+      ? (totalRating / updatedReviews.length).toFixed(1)
+      : "5.0";
+
+  localStorage.setItem(reviewKey, JSON.stringify(updatedReviews));
+
+  localStorage.setItem(
+    "professionalRatingAverage",
+    averageRating
+  );
+
+  localStorage.setItem(
+    "professionalReviewCount",
+    String(updatedReviews.length)
+  );
+
+  localStorage.setItem("emergencyNeedsReview", "false");
+  localStorage.setItem("homeownerNeedsReview", "false");
+
+  if (completedProject) {
+    updateRequestById(
+      completedProject.requestId ||
+        completedProject.id,
+      (request) => ({
+        ...request,
+        needsReview: false,
+        reviewSubmitted: true,
+        reviewSubmittedAt:
+          new Date().toISOString(),
+      })
+    );
+  }
+  localStorage.setItem("emergencyDispatchStatus", "closed");
+  localStorage.setItem("emergencyWorkOrderClosed", "true");
+
+  window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
+  window.dispatchEvent(new Event("meetroProfessionalReviewUpdated"));
+
+  setSaved(true);
+}
 
   return (
     <div style={page}>
       <div style={card}>
         <div style={successCircle}>✓</div>
 
-        <h1 style={title}>{t.title}</h1>
-        <p style={subtitle}>{t.subtitle}</p>
+        <h1 style={title}>{pageText.title}</h1>
+        <p style={subtitle}>{pageText.subtitle}</p>
 
         <div style={summaryCard}>
           <div style={contractorTop}>
-            <div style={avatar}>BC</div>
+            <div style={avatar}>PRO</div>
 
             <div>
-              <strong style={contractorName}>{t.contractor}</strong>
-              <p style={serviceText}>{selectedService}</p>
+              <strong style={contractorName}>{professionalName}</strong>
+              <p style={serviceText}>{translatedService}</p>
             </div>
           </div>
 
           <div style={divider}></div>
 
-          <span style={label}>{t.service}</span>
-          <strong style={completedService}>{selectedService}</strong>
+          <span style={label}>{pageText.service}</span>
+          <strong style={completedService}>{translatedService}</strong>
         </div>
 
         <div style={reviewCard}>
-          <h3 style={sectionTitle}>{t.ratingTitle}</h3>
+          <h3 style={sectionTitle}>{pageText.ratingTitle}</h3>
 
           <div style={stars}>
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
+                type="button"
                 style={star <= rating ? activeStar : starButton}
                 onClick={() => setRating(star)}
               >
@@ -81,30 +188,34 @@ function EmergencyComplete({ setPage, language = "en" }) {
 
           <textarea
             style={textarea}
-            placeholder={t.reviewPlaceholder}
+            value={review}
+            onChange={(e) => setReview(e.target.value)}
+            placeholder={pageText.reviewPlaceholder}
           />
 
           <button
             style={saved ? savedButton : saveButton}
-            onClick={() => setSaved(true)}
+            onClick={submitReview}
           >
-            {saved ? t.saved : t.save}
+            {saved ? pageText.saved : pageText.save}
           </button>
         </div>
 
         <div style={invoiceCard}>
-          <strong>{t.invoice}</strong>
-          <span>{t.invoiceNote}</span>
+          <strong>{pageText.invoice}</strong>
+          <span>{pageText.invoiceNote}</span>
         </div>
 
         <button style={primaryButton} onClick={() => setPage("home")}>
-          {t.home}
+          {pageText.home}
         </button>
 
-        <button style={darkButton} onClick={() => setPage("emergency")}>
-          {t.emergency}
+        <button style={darkButton} onClick={() => setPage("myRequests")}>
+          {pageText.emergency}
         </button>
       </div>
+
+      <BottomNav currentPage="emergency" setPage={setPage} />
     </div>
   );
 }
@@ -113,7 +224,7 @@ const page = {
   minHeight: "100vh",
   background:
     "linear-gradient(160deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
-  padding: "24px",
+  padding: "24px 24px 190px",
   boxSizing: "border-box",
 };
 
@@ -121,16 +232,17 @@ const card = {
   maxWidth: "430px",
   margin: "0 auto",
   textAlign: "center",
+  paddingBottom: "90px",
 };
 
 const successCircle = {
-  width: "88px",
-  height: "88px",
+  width: "72px",
+  height: "72px",
   borderRadius: "30px",
   margin: "16px auto 22px",
   background: "#10b981",
   color: "white",
-  fontSize: "46px",
+  fontSize: "38px",
   fontWeight: "900",
   display: "flex",
   alignItems: "center",
@@ -177,7 +289,7 @@ const avatar = {
   alignItems: "center",
   justifyContent: "center",
   fontWeight: "900",
-  fontSize: "18px",
+  fontSize: "15px",
 };
 
 const contractorName = {

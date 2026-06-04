@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { isProfessionalSession } from "./utils/session";
 
-import Home from "./pages/Home";
+const Home = lazy(() => import("./pages/Home"));
+import MyRequests from "./pages/MyRequests";
 import Assistant from "./pages/Assistant";
-import Discover from "./pages/Discover";
+const Discover = lazy(() => import("./pages/Discover"));
 import Upload from "./pages/Upload";
 import Profile from "./pages/Profile";
 import ContractorProfile from "./pages/ContractorProfile";
@@ -13,215 +15,135 @@ import Login from "./pages/Login";
 import Contractors from "./pages/Contractors";
 import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
-import ConversationThread from "./pages/ConversationThread";
-import BusinessDashboard from "./pages/BusinessDashboard";
+const ConversationThread = lazy(() => import("./pages/ConversationThread"));
+const BusinessDashboard = lazy(() => import("./pages/BusinessDashboard"));
 import ProjectGallery from "./pages/ProjectGallery";
-import MessagesInbox from "./pages/MessagesInbox";
+const MessagesInbox = lazy(() => import("./pages/MessagesInbox"));
 import Welcome from "./pages/Welcome";
 import WelcomeIntro from "./pages/WelcomeIntro";
 import Favorites from "./pages/Favorites";
 import Emergency from "./pages/Emergency";
+import EmergencyBusinessSelection from "./pages/EmergencyBusinessSelection";
+import EmergencyBusinessSettings from "./pages/EmergencyBusinessSettings";
 import EmergencyRequest from "./pages/EmergencyRequest";
 import EmergencyStatus from "./pages/EmergencyStatus";
 import EmergencyDispatch from "./pages/EmergencyDispatch";
+import EmergencyCompletionActions from "./pages/EmergencyCompletionActions";
+import InvoiceBuilder from "./pages/InvoiceBuilder";
+import EmergencyOperationsCenter from "./pages/EmergencyOperationsCenter";
+import CompletionSheet from "./pages/CompletionSheet";
 import EmergencyChat from "./pages/EmergencyChat";
 import EmergencyComplete from "./pages/EmergencyComplete";
 import ContractorDashboard from "./pages/ContractorDashboard";
+import CompletedJobDetails from "./pages/CompletedJobDetails";
 import ContractorJobAccepted from "./pages/ContractorJobAccepted";
 import BusinessLeads from "./pages/BusinessLeads";
+import QuoteBuilder from "./pages/QuoteBuilder";
+import ChangeOrderRequest from "./pages/ChangeOrderRequest";
 import BusinessAnalytics from "./pages/BusinessAnalytics";
 import BusinessCommandCenter from "./pages/BusinessCommandCenter";
+import JobUpdate from "./pages/JobUpdate";
+
+const PageLoader = () => (
+  <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
+    Loading Meetro...
+  </div>
+);
+
+function withSuspense(component) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {component}
+    </Suspense>
+  );
+}
 
 function App() {
   const token = localStorage.getItem("token");
-  const userRole = localStorage.getItem("userRole") || "standard";
-
-const professionalRoles = [
-  "professional",
-  "contractor",
-  "handyman",
-
-  "applianceRepair",
-  "automotiveServices",
-  "carDetailing",
-  "carpentry",
-  "cleaning",
-  "concrete",
-
-  "demolition",
-  "doorsWindows",
-  "drywall",
-  "electrical",
-  "fencing",
-  "flooring",
-
-  "homeHealthCare",
-
-  "hvac",
-
-  "junkRemoval",
-
-  "landscaping",
-  "lawnCare",
-
-  "mechanic",
-  "mobileServices",
-  "moving",
-
-  "painting",
-  "paverSealing",
-  "pestControl",
-  "plumbing",
-
-  "poolService",
-  "pressureWashing",
-
-  "privateTransportation",
-
-  "realEstate",
-
-  "roofing",
-
-  "tile",
-  "treeService",
-
-  "other",
-];
-
-const accountType =
-  localStorage.getItem("accountType") || "homeowner";
-
-const isProfessional =
-  accountType === "professional" ||
-  professionalRoles.includes(userRole);
 
  const professionalOnlyPages = [
   "quoteRequests",
   "businessDashboard",
   "businessLeads",
   "businessCommandCenter",
+  "quoteBuilder",
 ];  
 
   const getInitialPage = () => {
     const currentHash =
       window.location.hash.replace("#", "") || "";
 
-    if (!token) {
+    const hasToken =
+      localStorage.getItem("token");
+
+    if (!hasToken) {
       return "login";
     }
 
     const onboardingComplete =
-  localStorage.getItem("onboardingComplete");
+      localStorage.getItem("onboardingComplete");
 
-if (!onboardingComplete) {
-  return "welcomeIntro";
-}
+    if (!onboardingComplete) {
+      return "welcomeIntro";
+    }
 
-return currentHash || "home";
+    if (
+      currentHash &&
+      professionalOnlyPages.includes(currentHash)
+    ) {
+      return currentHash;
+    }
+
+    return currentHash || "home";
   };
 
   const [page, setPageState] = useState(getInitialPage());
 
-  const protectedPages = [];
+  
 
   const setPage = (newPage) => {
     const hasToken = localStorage.getItem("token");
 
     if (
-      protectedPages.includes(newPage) &&
+      professionalOnlyPages.includes(newPage) &&
       !hasToken
     ) {
       window.location.hash = "login";
       setPageState("login");
       return;
     }
-   const latestAccountType =
-      localStorage.getItem("accountType") || "homeowner";
 
-   const latestUserRole =
-     localStorage.getItem("userRole") || "standard";
+    const latestIsProfessional =
+      isProfessionalSession();
 
-   const latestIsProfessional =
-     latestAccountType === "professional" ||
-     professionalRoles.includes(latestUserRole);
+    if (
+      professionalOnlyPages.includes(newPage) &&
+      !latestIsProfessional
+    ) {
+      window.dispatchEvent(
+        new CustomEvent("meetroPremiumNotice", {
+          detail: {
+            title: "Professional access required",
+            message:
+              "Only professional accounts can access this section.",
+            type: "locked",
+          },
+        })
+      );
 
-   if (
-    professionalOnlyPages.includes(newPage) &&
-  !latestIsProfessional
-) {
-  window.dispatchEvent(
-  new CustomEvent("meetroPremiumNotice", {
-    detail: {
-      title: "Professional access required",
-      message: "Only professional accounts can access this section.",
-      type: "locked",
-    },
-  })
-);
+      return;
+    }
 
-  window.location.hash = "profile";
-
-  setPageState("profile");
-
-  return;
-}
-
-window.location.hash = newPage;
-
-setPageState(newPage);
-
-window.scrollTo({
-  top: 0,
-  behavior: "smooth",
-});    
-
+    window.location.hash = newPage;
+    setPageState(newPage);
   };
 
-  useEffect(() => {
-    const handleHashChange = () => {
-      const newHash =
-        window.location.hash.replace("#", "") || "home";
-
-      const hasToken = localStorage.getItem("token");
-
-      if (
-        protectedPages.includes(newHash) &&
-        !hasToken
-      ) {
-        setPageState("login");
-        return;
-      }
-
-      setPageState(newHash);
-    };
-
-    window.addEventListener(
-      "hashchange",
-      handleHashChange
-    );
-
-    return () => {
-      window.removeEventListener(
-        "hashchange",
-        handleHashChange
-      );
-    };
-  }, []);
-
-if (page === "login") {
-  return <Login setPage={setPage} />;
-}
-
-if (page === "welcome") {
-  return <Welcome setPage={setPage} />;
-}
-
-if (page === "welcomeIntro") {
-  return <WelcomeIntro setPage={setPage} />;
-}
-
 if (page === "home") {
-  return <Home setPage={setPage} />;
+  return withSuspense(<Home setPage={setPage} />);
+}
+
+if (page === "myRequests") {
+  return <MyRequests setPage={setPage} />;
 }
 
 if (page === "assistant") {
@@ -229,7 +151,7 @@ if (page === "assistant") {
 }
 
 if (page === "discover") {
-  return <Discover setPage={setPage} />;
+  return withSuspense(<Discover setPage={setPage} />);
 }
 
 if (page === "upload") {
@@ -269,12 +191,12 @@ if (page === "quoteRequests") {
 }
 
 if (page === "conversationThread") {
-  return <ConversationThread setPage={setPage} />;
+  return withSuspense(<ConversationThread setPage={setPage} />);
 }
 
  
 if (page === "businessDashboard") {
-  return <BusinessDashboard setPage={setPage} />;
+  return withSuspense(<BusinessDashboard setPage={setPage} />);
 }
 
 if (page === "businessAnalytics") {
@@ -285,8 +207,20 @@ if (page === "businessLeads") {
   return <BusinessLeads setPage={setPage} />;
 }
 
+if (page === "quoteBuilder") {
+  return <QuoteBuilder setPage={setPage} />;
+}
+
+if (page === "changeOrderRequest") {
+  return <ChangeOrderRequest setPage={setPage} />;
+}
+
 if (page === "businessCommandCenter") {
   return <BusinessCommandCenter setPage={setPage} />;
+}
+
+if (page === "jobUpdate") {
+  return <JobUpdate setPage={setPage} />;
 }
 
 if (page === "projectGallery") {
@@ -294,7 +228,7 @@ if (page === "projectGallery") {
 }
 
 if (page === "messagesInbox") {
-  return <MessagesInbox setPage={setPage} />;
+  return withSuspense(<MessagesInbox setPage={setPage} />);
 }
 
 if (page === "favorites") {
@@ -303,6 +237,14 @@ if (page === "favorites") {
 
 if (page === "emergency") {
   return <Emergency setPage={setPage} />;
+}
+
+if (page === "emergencyBusinessSelection") {
+  return <EmergencyBusinessSelection setPage={setPage} />;
+}
+
+if (page === "emergencyBusinessSettings") {
+  return <EmergencyBusinessSettings setPage={setPage} />;
 }
 
 if (page === "emergencyRequest") {
@@ -322,6 +264,22 @@ if (page === "emergencyDispatch") {
   return <EmergencyDispatch setPage={setPage} />;
 }
 
+if (page === "emergencyCompletionActions") {
+  return <EmergencyCompletionActions setPage={setPage} />;
+}
+
+if (page === "invoiceBuilder") {
+  return <InvoiceBuilder setPage={setPage} />;
+}
+
+if (page === "emergencyOperationsCenter") {
+  return <EmergencyOperationsCenter setPage={setPage} />;
+}
+
+if (page === "completionSheet") {
+  return <CompletionSheet setPage={setPage} />;
+}
+
 if (page === "emergencyChat") {
   return <EmergencyChat setPage={setPage} />;
 }
@@ -334,10 +292,14 @@ if (page === "contractorDashboard") {
   return <ContractorDashboard setPage={setPage} />;
 }
 
+if (page === "completedJobDetails") {
+  return <CompletedJobDetails setPage={setPage} />;
+}
+
 if (page === "contractorJobAccepted") {
   return <ContractorJobAccepted setPage={setPage} />;
 }
 
-return <Home setPage={setPage} />;
+return withSuspense(<Home setPage={setPage} />);
 }
   export default App;

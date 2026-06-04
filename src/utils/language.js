@@ -37,6 +37,13 @@ export const translations = {
 
     homeGreeting: "Hi",
     homeQuestion: "What project can we help you with today?",
+    homeJobStatus: "Job Status",
+    homeTodaySummary: "Today",
+    homeViewAll: "View all",
+    homeJobs: "Jobs",
+    homeSchedule: "Today",
+    homeUrgent: "Urgent",
+    homeChat: "Chat",
 
     discoverHeroTitle: "Local Project Feed",
     discoverHeroSubtitle:
@@ -44,7 +51,7 @@ export const translations = {
     localProjectFeed: "Local Project Feed",
     findLocalServices: "Find Local Services",
     professionalDiscoverText:
-      "Browse homeowner project requests that match your business category.",
+  "Explore local opportunities matching your business category.",
     homeownerDiscoverText:
       "Find trusted local professionals and request help for your next project.",
 
@@ -65,8 +72,6 @@ export const translations = {
 
     allProjects: "All Projects",
     handyman: "Handyman",
-    contractor: "Contractor",
-    generalContractor: "General Contractor",
     painting: "Painting",
     plumbing: "Plumbing",
     electrical: "Electrical",
@@ -114,7 +119,7 @@ export const translations = {
     availableToday: "Available Today",
 
     quoteRequests: "Quote Requests",
-    projectGallery: "Project Gallery",
+    projectGallery: "Business Portfolio",
 
     manageEmergencyJobs: "Manage emergency jobs",
     reviewIncomingRequests: "Review incoming quote requests",
@@ -156,16 +161,16 @@ export const translations = {
     location: "Location",
     new: "new",
     projectGallerySubtitle:
-  "Upload before & after project photos to showcase your contractor work.",
+  "Showcase before & after photos, finished work, and your professional reputation.",
 
 noContractorProfileFound:
-  "No contractor profile found",
+  "No business profile found",
 
 createContractorProfileFirst:
-  "Create your contractor profile first.",
+  "Create Business Profile first",
 
 createContractorProfile:
-  "Create Contractor Profile",
+"Create Business Profile",
 
 addProject: "Add Project",
 
@@ -195,6 +200,38 @@ projectAdded:
 failedAddProject:
   "Failed to add project",
 yourBusiness: "Your Business",
+
+emergencyPlumbing: "Emergency Plumbing",
+completedJobNote: "This emergency job has been completed.",
+cancelledJobNote: "This emergency request was cancelled.",
+acceptedShort: "Accept",
+enRouteShort: "Route",
+arrivedShort: "Arrived",
+startedShort: "Start",
+completeShort: "Done",
+
+
+service: "Service",
+activeNow: "Active Now",
+
+statusPending: "Pending — looking for a professional",
+statusAccepted: "Professional accepted your request",
+statusEnroute: "Professional on the way",
+statusArrived: "Professional arrived",
+statusStarted: "Job started",
+statusCompleted: "Service completed",
+statusCancelled: "Request cancelled",
+
+routeAssigned: "Professional assigned",
+routeEnroute: "Professional is on the way",
+routeArrived: "Professional at your location",
+routeInProgress: "Work in progress",
+routeCompleted: "Service completed",
+emergencyPlumbing: "Emergency Plumbing",
+noNewRequests: "No new requests right now.",
+completed: "Completed",
+handymanLabel: "Handyman",
+
 loadingBusinessDashboard: "Loading business dashboard...",
 businessGreeting: "Good morning",
 businessDashboardText:
@@ -272,10 +309,7 @@ comingSoon: "Coming Soon",
 meetroPro: "Meetro Pro",
 growWithMeetro: "Grow with Meetro",
 meetroProSettingsText:
-  "Unlock premium visibility, unlimited leads, emergency priority, AI business tools, and advanced contractor features.",
-conversation: "Conversation",
-loadingConversation: "Loading conversation...",
-localContractor: "Local Contractor",
+  "Unlock premium visibility, unlimited leads, emergency priority, AI business tools, and advanced business features.",
 startConversation: "Start the conversation by sending a message or photo.",
 typeMessage: "Type a message...",
 send: "Send",
@@ -317,7 +351,7 @@ voiceNoteReady: "Voice note ready",
 voiceNotSupported:
   "Voice notes are not supported on this device or browser.",
 
-loadingContractorProfile: "Loading contractor profile...",
+loadingContractorProfile: "Loading business profile...",
 businessProfileSubtitle:
   "Build trust with homeowners using a strong professional profile.",
 verifiedBusiness: "Verified Business",
@@ -329,7 +363,7 @@ dispatchReady: "Dispatch Ready",
 profileImageUploaded: "Profile image uploaded",
 uploadBusinessImage: "Upload business image",
 createProfile: "Create Profile",
-contractorProfileCreated: "Contractor profile created!",
+contractorProfileCreated: "Business profile created!",
 failedCreateProfile: "Failed to create profile",
 profileUpdated: "Profile updated!",
 failedUpdateProfile: "Failed to update profile",
@@ -356,7 +390,7 @@ manage: "Manage",
 leads: "Leads",
 gallery: "Gallery",
 photos: "Photos",
-projectPostedSuccess: "Project posted! Contractors can now view your request.",
+
 uploadTipTitle: "Add clear project details",
 uploadTipText:
   "Photos, location, and a short description help local professionals give faster and better quotes.",
@@ -438,7 +472,7 @@ back: "Back",
 verified: "Verified",
 verificationSuccess: "Verification successful",
 
-findContractors: "Find Contractors",
+
 findContractorsText:
   "Browse trusted local professionals near you.",
 
@@ -468,7 +502,36 @@ there: "there",
 postAProject: "Post A Project",
 
 projectReplies:
-  "Project replies and contractor conversations",
+  "Project replies and business conversations",
+
+myProjects: "My Projects",
+projectTracking: "Project Tracking",
+myProjectsSubtitle:
+  "Track views, quotes, messages, photos, and progress for each project.",
+noProjectsYet: "No projects yet",
+editProject: "Edit Project",
+cancelProject: "Cancel Project",
+saveChanges: "Save Changes",
+cancelEdit: "Cancel Edit",
+projectCancelled: "Project Cancelled",
+selected: "Selected",
+posted: "Posted",
+views: "Views",
+quotes: "Quotes",
+messages: "Messages",
+workflowStarted: "Workflow started",
+projectPhotos: "Project Photos",
+projectPhoto: "photo",
+expandedProjectPhoto: "Expanded project photo",
+tapAnyPhotoToView: "Tap any photo to view",
+addPhotos: "+ Add photos",
+uploading: "Uploading...",
+noPhotosYet: "No photos yet",
+addPhotosHelp:
+  "Add photos to help professionals understand the project.",
+confirmCancelProject:
+  "Are you sure you want to cancel this project?",
+
 loadingProject: "Loading project...",
 postNotFound: "Post not found",
 projectCouldNotBeLoaded:
@@ -563,7 +626,223 @@ stepInvoices: "Invoices",
 ccComingSoonTitle: "coming soon",
 ccComingSoonMessage:
   "This tool will connect directly into Project Folders so every quote, permit, reminder, design, inspection, or invoice stays organized by job.",
-  },
+emergencyHelp: "Emergency Help",
+requestEmergencyHelp: "Request Emergency Help",
+selectedService: "Selected Service",
+whatHappened: "What happened?",
+accessInfo: "Access Information",
+urgencyLevel: "Urgency Level",
+
+professionalAssigned: "Professional assigned",
+professionalOnTheWay: "Professional on the way",
+professionalArrived: "Professional arrived",
+
+requestAccepted: "Request accepted",
+arrivingSoon: "Arriving soon",
+jobStarted: "Job started",
+workProgress: "Work Progress",
+
+startJob: "Start Job",
+trackWork: "Track Work",
+completeService: "Complete Service",
+
+workActive: "Work active",
+status: "Status",
+message: "Message",
+callButton: "Call",
+
+requestQuote: "Request Quote",
+cancelQuoteRequest: "Cancel Quote Request",
+leaveReview: "Leave Review",
+writeReview: "Write a review...",
+submitReview: "Submit Review",
+projectGallery: "Business Portfolio",
+noProjectPhotos: "No project photos yet",
+reviews: "Reviews",
+noReviewsYet: "No reviews yet",
+contractorDetailsLoading: "Loading business...",
+fastResponse: "Fast Response",
+verified: "Verified",  
+// Universal business wording overrides
+contractor: "Professional",
+generalContractor: "General Service",
+localContractor: "Local Professional",
+findContractors: "Find Businesses",
+findContractorsText:
+  "Browse trusted local businesses and professionals near you.",
+messageContractor: "Message Business",
+backToContractors: "Back to Businesses",
+contractorNotFound: "Business Not Found",
+contractorNotFoundText:
+  "We could not find this business profile.",
+contractorConversation: "Business Conversation",
+contractorDetailsLoading: "Loading business...",
+workCenter: "Work Center",
+workTabSchedule: "Schedule",
+workTabPending: "Pending",
+workTabActive: "Active",
+workTabCompleted: "Completed",
+workTabQuotes: "Quotes",
+workTabMaterials: "Materials",
+workTabRevenue: "Revenue",
+
+
+materials: "Materials",
+materialsCenter: "Materials Center",
+workflowRequested: "Requested",
+workflowReview: "Review",
+workflowScheduled: "Scheduled",
+workflowQuoteNeeded: "Quote needed",
+workflowQuoteSent: "Quote sent",
+workflowQuoteApproved: "Quote approved",
+workflowActive: "Active",
+workflowOnTheWay: "On the way",
+workflowArrived: "Arrived",
+workflowWorking: "Working",
+workflowPausedMaterials: "Paused: Materials",
+workflowWaitingCustomer: "Waiting customer",
+workflowCompleted: "Completed",
+workflowCancelled: "Cancelled",
+workflowNoteOnTheWay: "🚗 On the way to customer",
+workflowNoteArrived: "📍 Arrived at location",
+workflowNoteWorking: "🛠️ Work in progress",
+workflowNotePausedMaterials: "⏸ Job paused — waiting on materials",
+workflowNoteActive: "💬 Customer waiting for update",
+workflowNoteReview: "🧭 Review job details before moving forward",
+resumeWork: "Resume Work",
+pauseForMaterials: "Pause for Materials",
+speakOrTypeMaterials: "Speak or Type Materials",
+materialsAssistantDescription: "Speak or type the needed materials. Meetro will add them directly to the list.",
+materialsPlaceholder: "Example: base cabinet, screws, silicone, shutoff valve...",
+generateMaterialsList: "Generate Materials List",
+manualAdd: "Manual Add",
+manualAddSubtitle: "Add a material manually",
+material: "Material",
+quantity: "Quantity",
+providedBy: "Provided by",
+needsApproval: "Needs Approval",
+saveMaterial: "Save Material",
+updateMaterial: "Update Material",
+cancelEdit: "Cancel Edit",
+pauseJob: "Pause Job",
+materialsList: "Materials List",
+searchMaterials: "Search materials...",
+sendToCustomer: "Send to Customer",
+noMaterialsSaved: "No materials saved yet.",
+jobMaterial: "Job material",
+needed: "Needed",
+requested: "Requested",
+received: "Received",
+markReceived: "Mark Received",
+deleteMaterial: "Delete material?",
+deleteMaterialConfirm: "This will remove this material from the list.",
+waitingOnMaterials: "Waiting on materials",
+allMaterialsReadyResume: "All Materials Ready — Resume Job",
+materialsReceived: "materials received",
+pending: "pending",
+schedule: "Schedule",
+workSchedule: "Work Schedule",
+addVisit: "Add Visit",
+closeForm: "Close Form",
+visitTitle: "Visit title",
+date: "Date",
+time: "Time",
+customerLocation: "Customer location",
+scheduleNotes: "Notes",
+saveVisit: "Save Visit",
+updateVisit: "Update Visit",
+noScheduledVisits: "No scheduled visits yet.",
+scheduledVisitsFromChat: "Visits saved from chat will appear here.",
+manualScheduleEntry: "Manual calendar entry",
+manualScheduleNotice: "Manually added customers will not have chat, automatic records, AI tracking, or full project workflow until converted into a Meetro project.",
+manualCustomerWarning: "Manual customer: no chat, automatic records, AI tracking, or full workflow until converted into a Meetro project.",
+manualCustomerHowToConnect: "How to connect",
+manualCustomerConnectSteps: "To connect this customer:\n\n1. Tap Convert to Project.\n2. Create or send a project invitation.\n3. Once the customer accepts or connects, Meetro will unlock chat, records, AI, materials, and full workflow.",
+manualVisit: "Manual Visit",
+scheduled: "Scheduled",
+scheduledVisit: "Scheduled Visit",
+scheduledWork: "Scheduled Work",
+openChat: "Open Chat",
+edit: "Edit",
+startJob: "Start Job",
+createCompletion: "Create Completion",
+delete: "Delete",
+deleteVisit: "Delete visit?",
+deleteVisitConfirm: "This will remove the visit from your schedule.",
+cancel: "Cancel",
+today: "Today",
+timeTbd: "Time TBD",
+locationPending: "Location pending",
+
+workGuidanceSchedule:
+"Manage visits, appointments, and job timelines connected to customer conversations.",
+workGuidancePending:
+"Review incoming requests before turning them into active jobs or customer conversations.",
+workGuidanceActive:
+"Monitor active jobs, dispatches, progress stages, and updates sent through chat.",
+workGuidanceCompleted:
+"Review completed work and job records generated from conversations, materials, and customer approvals.",
+workGuidanceQuotes:
+"Manage estimates, pricing approvals, and proposals connected to customer conversations.",
+workGuidanceMaterials:
+"Track requested, pending, approved, and received materials tied to jobs and chats.",
+workGuidanceRevenue:
+"Review revenue, material costs, estimated profit, and operational performance.",
+
+workCenterSubtitle:
+  "Manage incoming requests, active jobs and work history.",
+
+liveDispatch: "Live Dispatch",
+workSummary: "Work Summary",
+
+completedJobs: "Completed Jobs",
+weeklyRevenue: "This Week",
+activeJobsCount: "Active Jobs",
+
+accepted: "Accepted",
+enRoute: "En Route",
+arrived: "Arrived",
+started: "Started",
+complete: "Complete",
+
+noActiveService: "No active service",
+noStatus: "No Status",
+activeNow: "Active Now",
+
+completedProject: "Completed Project",
+viewCompletedRecord: "View Completed Record",
+projectCompleted: "Project Completed",
+projectCompletedSubtitle: "Your project has been completed successfully.",
+selectedQuote: "Selected Quote",
+howWasExperience: "How was your experience?",
+projectSummary: "Project Summary",
+reviewSubmitted: "Review submitted",
+reviewPending: "Review pending",
+viewMyRequests: "View My Requests",
+done: "Done",
+completedProjectSaved: "This completed project has been saved to your history.",
+projectFinalizedReviewText: "This project is finalized. You can view the record or leave a review.",
+reviewSubmittedHistoryText: "Review submitted. This project is saved in your history.",
+backHome: "Back Home",
+backToWorkCenter: "Back to Work Center",
+completedProjectRecord: "Completed Project Record",
+completedJobReport: "Completed Job Report",
+jobNotes: "Job Notes",
+paymentSummary: "Payment Summary",
+totalCharged: "Total Charged",
+materialCost: "Material Cost",
+estimatedProfit: "Estimated Profit",
+customerReview: "Customer Review",
+yourReviewSubmitted: "Your review was submitted.",
+messageProfessional: "Message Professional",
+printRecord: "Print Record",
+homeowner: "Homeowner",
+date: "Date",
+time: "Time",
+before: "Before",
+after: "After",
+afterApprovalWorkStarts: "After approval work starts",
+},
 
   es: {
     home: "Inicio",
@@ -601,7 +880,7 @@ ccComingSoonMessage:
     localProjectFeed: "Proyectos Locales",
     findLocalServices: "Buscar Servicios Locales",
     professionalDiscoverText:
-      "Explora solicitudes de propietarios que coincidan con tu categoría de negocio.",
+    "Explora oportunidades locales que coincidan con tu categoría de negocio.",
     homeownerDiscoverText:
       "Encuentra profesionales locales confiables y solicita ayuda para tu próximo proyecto.",
 
@@ -622,8 +901,8 @@ ccComingSoonMessage:
 
     allProjects: "Todos los Proyectos",
     handyman: "Handyman",
-    contractor: "Contratista",
-    generalContractor: "Contratista General",
+    contractor: "Profesional",
+    generalContractor: "Servicio General",
     painting: "Pintura",
     plumbing: "Plomería",
     electrical: "Electricidad",
@@ -671,7 +950,7 @@ ccComingSoonMessage:
     availableToday: "Disponible Hoy",
 
     quoteRequests: "Solicitudes de Cotización",
-    projectGallery: "Galería de Proyectos",
+    projectGallery: "Portafolio del Negocio",
 
     manageEmergencyJobs: "Administrar trabajos de emergencia",
     reviewIncomingRequests: "Revisar solicitudes entrantes",
@@ -715,16 +994,15 @@ ccComingSoonMessage:
     location: "Ubicación",
     new: "nuevo",
     projectGallerySubtitle:
-  "Sube fotos de proyectos antes y después para mostrar tu trabajo.",
-
+  "Muestra fotos de antes y después, trabajos terminados y tu reputación profesional.",
 noContractorProfileFound:
-  "No se encontró perfil de contratista",
+"No se encontró perfil de negocio",
 
 createContractorProfileFirst:
-  "Primero crea tu perfil de contratista.",
+  "Primero crea tu perfil de negocio.",
 
 createContractorProfile:
-  "Crear Perfil de Contratista",
+  "Crear Perfil de Negocio",
 
 addProject:
   "Agregar Proyecto",
@@ -757,6 +1035,38 @@ failedAddProject:
   "No se pudo agregar el proyecto",
 
 yourBusiness: "Tu Negocio",
+
+emergencyPlumbing: "Plomería de Emergencia",
+completedJobNote: "Este trabajo de emergencia fue completado.",
+cancelledJobNote: "Esta solicitud de emergencia fue cancelada.",
+acceptedShort: "Aceptar",
+enRouteShort: "Ruta",
+arrivedShort: "Llegó",
+startedShort: "Inicio",
+completeShort: "Final",
+
+
+service: "Servicio",
+activeNow: "Activo Ahora",
+
+statusPending: "Pendiente — buscando profesional",
+statusAccepted: "Profesional aceptó tu solicitud",
+statusEnroute: "Profesional en camino",
+statusArrived: "Profesional llegó",
+statusStarted: "Trabajo iniciado",
+statusCompleted: "Servicio completado",
+statusCancelled: "Solicitud cancelada",
+
+routeAssigned: "Profesional asignado",
+routeEnroute: "Profesional en camino",
+routeArrived: "Profesional en tu ubicación",
+routeInProgress: "Trabajo en progreso",
+routeCompleted: "Servicio completado",
+emergencyPlumbing: "Plomería de Emergencia",
+noNewRequests: "No hay solicitudes nuevas.",
+completed: "Completado",
+handymanLabel: "Mantenimiento",
+
 loadingBusinessDashboard: "Cargando panel de negocio...",
 businessGreeting: "Buenos días",
 businessDashboardText:
@@ -834,10 +1144,10 @@ comingSoon: "Próximamente",
 meetroPro: "Meetro Pro",
 growWithMeetro: "Crece con Meetro",
 meetroProSettingsText:
-  "Desbloquea visibilidad premium, clientes ilimitados, prioridad de emergencia, herramientas de IA para negocios y funciones avanzadas para contratistas.",
+  "Desbloquea visibilidad premium, clientes ilimitados, prioridad de emergencia, herramientas de IA para negocios y funciones avanzadas para negocios.",
 conversation: "Conversación",
 loadingConversation: "Cargando conversación...",
-localContractor: "Contratista Local",
+localContractor: "Negocio Local",
 startConversation: "Comienza la conversación enviando un mensaje o foto.",
 typeMessage: "Escribe un mensaje...",
 send: "Enviar",
@@ -880,7 +1190,7 @@ voiceNoteReady: "Nota de voz lista",
 voiceNotSupported:
   "Las notas de voz no son compatibles con este dispositivo o navegador.",
 
-loadingContractorProfile: "Cargando perfil del contratista...",
+loadingContractorProfile: "Cargando perfil del negocio...",
 businessProfileSubtitle:
   "Genera confianza con propietarios usando un perfil profesional sólido.",
 verifiedBusiness: "Negocio Verificado",
@@ -892,7 +1202,8 @@ dispatchReady: "Listo para Despacho",
 profileImageUploaded: "Imagen del perfil subida",
 uploadBusinessImage: "Subir imagen del negocio",
 createProfile: "Crear Perfil",
-contractorProfileCreated: "¡Perfil de contratista creado!",
+contractorProfileCreated:
+"¡Perfil de negocio creado!",
 failedCreateProfile: "No se pudo crear el perfil",
 profileUpdated: "¡Perfil actualizado!",
 failedUpdateProfile: "No se pudo actualizar el perfil",
@@ -919,14 +1230,23 @@ manage: "Administrar",
 leads: "Clientes",
 gallery: "Galería",
 photos: "Fotos",
-projectPostedSuccess: "Project posted! Contractors can now view your request.",
-uploadTipTitle: "Add clear project details",
+projectPostedSuccess:
+"¡Proyecto publicado! Los negocios ahora pueden ver tu solicitud.",
+
+uploadTipTitle:
+  "Comparte detalles claros del proyecto",
+
 uploadTipText:
-  "Photos, location, and a short description help local professionals give faster and better quotes.",
-projectTitlePlaceholder: "Example: Bathroom tile repair",
+  "Agregar fotos, ubicación y una descripción ayuda a los profesionales a ofrecer cotizaciones más rápidas y precisas.",
+
+projectTitlePlaceholder:
+  "Ejemplo: Reparación de Cerámicas del baño",
+
 projectDescriptionPlaceholder:
-  "Describe what needs to be done, timing, and any important details.",
-photoHelpsPros: "Photos help professionals understand the job faster.",
+  "Describe lo que necesitas, tiempos estimados o cualquier detalle importante.",
+
+photoHelpsPros:
+  "Las fotos ayudan a los profesionales a entender el proyecto más rápido.",
 
 backToHome: "Volver al Inicio",
 
@@ -1003,7 +1323,7 @@ back: "Volver",
 verified: "Verificado",
 verificationSuccess: "Verificación exitosa",
 
-findContractors: "Buscar Contratistas",
+findContractors: "Buscar Negocios",
 findContractorsText:
   "Explora profesionales locales confiables cerca de ti.",
 
@@ -1032,8 +1352,36 @@ there: "amigo",
 
 postAProject: "Publicar Proyecto",
 
+myProjects: "Mis Proyectos",
+projectTracking: "Seguimiento de Proyectos",
+myProjectsSubtitle:
+  "Rastrea vistas, cotizaciones, mensajes, fotos y progreso de cada proyecto.",
+noProjectsYet: "No hay proyectos todavía",
+editProject: "Editar Proyecto",
+cancelProject: "Cancelar Proyecto",
+saveChanges: "Guardar Cambios",
+cancelEdit: "Cancelar Edición",
+projectCancelled: "Proyecto Cancelado",
+selected: "Seleccionado",
+posted: "Publicado",
+views: "Vistas",
+quotes: "Cotizaciones",
+messages: "Mensajes",
+workflowStarted: "Flujo iniciado",
+projectPhotos: "Fotos del Proyecto",
+projectPhoto: "foto",
+expandedProjectPhoto: "Foto ampliada del proyecto",
+tapAnyPhotoToView: "Toca cualquier foto para verla",
+addPhotos: "+ Agregar fotos",
+uploading: "Subiendo...",
+noPhotosYet: "No hay fotos",
+addPhotosHelp:
+  "Agrega fotos para ayudar a los profesionales a entender el proyecto.",
+confirmCancelProject:
+  "¿Seguro que quieres cancelar este proyecto?",
+
 projectReplies:
-  "Respuestas del proyecto y conversaciones con contratistas",
+  "Respuestas del proyecto y conversaciones con negocios",
 
 loadingProject: "Cargando proyecto...",
 postNotFound: "Proyecto no encontrado",
@@ -1129,6 +1477,230 @@ stepInvoices: "Facturas",
 ccComingSoonTitle: "próximamente",
 ccComingSoonMessage:
   "Esta herramienta se conectará directamente con Carpetas de Proyecto para que cada cotización, permiso, recordatorio, diseño, inspección o factura quede organizada por trabajo.",
+emergencyHelp: "Ayuda de Emergencia",
+requestEmergencyHelp: "Solicitar Ayuda de Emergencia",
+selectedService: "Servicio Seleccionado",
+whatHappened: "¿Qué pasó?",
+accessInfo: "Información de Acceso",
+urgencyLevel: "Nivel de Urgencia",
+
+professionalAssigned: "Profesional asignado",
+professionalOnTheWay: "Profesional en camino",
+professionalArrived: "Profesional llegó",
+
+requestAccepted: "Solicitud aceptada",
+arrivingSoon: "Llegando pronto",
+jobStarted: "Trabajo comenzado",
+workProgress: "Progreso del Trabajo",
+
+startJob: "Comenzar Trabajo",
+trackWork: "Seguir Trabajo",
+completeService: "Completar Servicio",
+
+workActive: "Trabajo activo",
+status: "Estado",
+message: "Mensaje",
+callButton: "Llamar",
+
+requestQuote: "Solicitar cotización",
+cancelQuoteRequest: "Cancelar solicitud",
+messageContractor:
+"Enviar mensaje al negocio",
+
+leaveReview: "Dejar reseña",
+writeReview: "Escribir reseña...",
+submitReview: "Enviar reseña",
+projectGallery: "Portafolio del negocio",
+noProjectPhotos: "Sin fotos de proyectos",
+reviews: "Reseñas",
+noReviewsYet: "Aún no hay reseñas",
+contractorDetailsLoading:
+"Cargando negocio...",
+fastResponse: "Respuesta rápida",
+verified: "Verificado",
+// Texto universal de negocio
+contractor: "Profesional",
+generalContractor: "Servicio General",
+localContractor: "Negocio Local",
+findContractors: "Buscar Negocios",
+findContractorsText:
+  "Explora negocios y profesionales locales confiables cerca de ti.",
+messageContractor: "Enviar mensaje al negocio",
+backToContractors: "Volver a negocios",
+contractorNotFound: "Negocio no encontrado",
+contractorNotFoundText:
+  "No pudimos encontrar este perfil de negocio.",
+contractorConversation: "Conversación del negocio",
+contractorDetailsLoading:
+  "Cargando negocio...",
+projectReplies:
+  "Respuestas del proyecto y conversaciones con negocios",
+
+workCenter: "Centro de Trabajo",
+workTabSchedule: "Agenda",
+workTabPending: "Pendientes",
+workTabActive: "Activos",
+workTabCompleted: "Completados",
+workTabQuotes: "Cotizaciones",
+workTabMaterials: "Materiales",
+workTabRevenue: "Ingresos",
+
+
+materials: "Materiales",
+materialsCenter: "Centro de materiales",
+workflowRequested: "Solicitado",
+workflowReview: "En revisión",
+workflowScheduled: "Programado",
+workflowQuoteNeeded: "Requiere cotización",
+workflowQuoteSent: "Cotización enviada",
+workflowQuoteApproved: "Cotización aprobada",
+workflowActive: "Activo",
+workflowOnTheWay: "En camino",
+workflowArrived: "Llegó",
+workflowWorking: "Trabajando",
+workflowPausedMaterials: "Pausado por materiales",
+workflowWaitingCustomer: "Esperando cliente",
+workflowCompleted: "Completado",
+workflowCancelled: "Cancelado",
+workflowNoteOnTheWay: "🚗 En camino al cliente",
+workflowNoteArrived: "📍 Llegaste a la ubicación",
+workflowNoteWorking: "🛠️ Trabajo en progreso",
+workflowNotePausedMaterials: "⏸ Trabajo pausado — esperando materiales",
+workflowNoteActive: "💬 Cliente esperando actualización",
+workflowNoteReview: "🧭 Revisa los detalles antes de continuar",
+resumeWork: "Reanudar trabajo",
+pauseForMaterials: "Pausar por materiales",
+speakOrTypeMaterials: "Dicta o escribe materiales",
+materialsAssistantDescription: "Dicta o escribe los materiales necesarios. Meetro los agregará directo a la lista.",
+materialsPlaceholder: "Ejemplo: gabinete base, tornillos, silicona, llave de paso...",
+generateMaterialsList: "Generar lista de materiales",
+manualAdd: "Agregar manualmente",
+manualAddSubtitle: "Agregar material uno por uno",
+material: "Material",
+quantity: "Cantidad",
+providedBy: "Quién provee",
+needsApproval: "Necesita aprobación",
+saveMaterial: "Guardar material",
+updateMaterial: "Actualizar material",
+cancelEdit: "Cancelar edición",
+pauseJob: "Pausar trabajo",
+materialsList: "Lista de materiales",
+searchMaterials: "Buscar materiales...",
+sendToCustomer: "Enviar al cliente",
+noMaterialsSaved: "Aún no has guardado materiales.",
+jobMaterial: "Material del trabajo",
+needed: "Necesario",
+requested: "Solicitado",
+received: "Recibido",
+markReceived: "Marcar recibido",
+deleteMaterial: "¿Eliminar material?",
+deleteMaterialConfirm: "Esto eliminará este material de la lista.",
+waitingOnMaterials: "Esperando materiales",
+allMaterialsReadyResume: "Materiales listos — reanudar",
+materialsReceived: "materiales recibidos",
+pending: "pendientes",
+schedule: "Agenda",
+workSchedule: "Agenda de trabajo",
+addVisit: "Agregar visita",
+closeForm: "Cerrar formulario",
+visitTitle: "Título de la visita",
+date: "Fecha",
+time: "Hora",
+customerLocation: "Ubicación del cliente",
+scheduleNotes: "Notas",
+saveVisit: "Guardar visita",
+updateVisit: "Actualizar visita",
+noScheduledVisits: "No hay visitas programadas todavía.",
+scheduledVisitsFromChat: "Las visitas guardadas desde el chat aparecerán aquí.",
+manualScheduleEntry: "Entrada manual de calendario",
+manualScheduleNotice: "Los clientes agregados manualmente no tendrán chat, registros automáticos, seguimiento AI ni flujo completo de proyecto hasta convertirse en un proyecto Meetro.",
+manualCustomerWarning: "Cliente manual: no tiene chat, registros automáticos, AI ni flujo completo hasta convertirlo en proyecto Meetro.",
+manualCustomerHowToConnect: "¿Cómo conectarlo?",
+manualCustomerConnectSteps: "Para conectar este cliente:\n\n1. Toca Convertir a proyecto.\n2. Crea o envía una invitación de proyecto.\n3. Cuando el cliente acepte o se conecte, Meetro activará chat, registros, AI, materiales y flujo completo.",
+manualVisit: "Visita manual",
+scheduled: "Programado",
+scheduledVisit: "Visita programada",
+scheduledWork: "Trabajo programado",
+openChat: "Abrir chat",
+edit: "Editar",
+startJob: "Iniciar trabajo",
+createCompletion: "Crear cierre",
+delete: "Eliminar",
+deleteVisit: "¿Eliminar visita?",
+deleteVisitConfirm: "Esto eliminará la visita de tu agenda.",
+cancel: "Cancelar",
+today: "Hoy",
+timeTbd: "Hora pendiente",
+locationPending: "Ubicación pendiente",
+
+workGuidanceSchedule:
+"Agenda visitas, citas y trabajos conectados a conversaciones con clientes.",
+workGuidancePending:
+"Revisa solicitudes entrantes antes de convertirlas en trabajos activos o conversaciones.",
+workGuidanceActive:
+"Monitorea trabajos activos, despachos, etapas de progreso y actualizaciones enviadas por chat.",
+workGuidanceCompleted:
+"Consulta trabajos completados y registros generados desde conversaciones, materiales y aprobación del cliente.",
+workGuidanceQuotes:
+"Administra cotizaciones, aprobaciones de precios y propuestas conectadas a conversaciones.",
+workGuidanceMaterials:
+"Rastrea materiales solicitados, pendientes, aprobados y recibidos vinculados a trabajos y chats.",
+workGuidanceRevenue:
+"Revisa ingresos, costos de materiales, ganancias estimadas y rendimiento operativo.",
+
+workCenterSubtitle:
+  "Administra solicitudes, trabajos activos e historial.",
+
+liveDispatch: "Despacho en Vivo",
+workSummary: "Resumen de Trabajo",
+
+completedJobs: "Trabajos Completados",
+weeklyRevenue: "Esta Semana",
+activeJobsCount: "Trabajos Activos",
+
+accepted: "Aceptado",
+enRoute: "En Camino",
+arrived: "Llegó",
+started: "Iniciado",
+complete: "Completo",
+
+noActiveService: "Sin servicio activo",
+noStatus: "Sin estado",
+activeNow: "Activo Ahora",
+
+completedProject: "Proyecto Completado",
+viewCompletedRecord: "Ver Registro Completado",
+projectCompleted: "Proyecto Completado",
+projectCompletedSubtitle: "Tu proyecto fue completado exitosamente.",
+selectedQuote: "Cotización Seleccionada",
+howWasExperience: "¿Cómo fue tu experiencia?",
+projectSummary: "Resumen del Proyecto",
+reviewSubmitted: "Reseña enviada",
+reviewPending: "Reseña pendiente",
+viewMyRequests: "Ver Mis Solicitudes",
+done: "Listo",
+completedProjectSaved: "Este proyecto completado fue guardado en tu historial.",
+projectFinalizedReviewText: "Este proyecto está finalizado. Puedes ver el registro o dejar una reseña.",
+reviewSubmittedHistoryText: "Reseña enviada. Este proyecto está guardado en tu historial.",
+backHome: "Volver al Inicio",
+backToWorkCenter: "Volver al Centro de Trabajo",
+completedProjectRecord: "Registro del Proyecto Completado",
+completedJobReport: "Reporte de Trabajo Completado",
+jobNotes: "Notas del Trabajo",
+paymentSummary: "Resumen de Pago",
+totalCharged: "Total Cobrado",
+materialCost: "Costo de Materiales",
+estimatedProfit: "Ganancia Estimada",
+customerReview: "Reseña del Cliente",
+yourReviewSubmitted: "Tu reseña fue enviada.",
+messageProfessional: "Enviar Mensaje al Profesional",
+printRecord: "Imprimir Registro",
+homeowner: "Propietario",
+date: "Fecha",
+time: "Hora",
+before: "Antes",
+after: "Después",
+afterApprovalWorkStarts: "El trabajo comienza después de la aprobación.",
  },
 };
 

@@ -1,13 +1,18 @@
+import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
+import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 
-function BusinessDashboard({ setPage, currentPage }) {
+function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [language, updateLanguage] = useState(getLanguage());
+  const [availableNow, setAvailableNow] = useState(
+    localStorage.getItem("meetroAvailableNow") === "true"
+  );
 
   const businessName =
     localStorage.getItem("businessName") ||
@@ -20,33 +25,31 @@ function BusinessDashboard({ setPage, currentPage }) {
     localStorage.getItem("userRole") ||
     "professional";
 
-   const [availableNow, setAvailableNow] = useState(
-   localStorage.getItem("meetroAvailableNow") === "true"
-   );
-
   useEffect(() => {
-  const syncAvailability = () => {
-    setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
-  };
-
-  window.addEventListener("meetroAvailabilityChanged", syncAvailability);
-  window.addEventListener("storage", syncAvailability);
-
-  return () => {
-    window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
-    window.removeEventListener("storage", syncAvailability);
-  };
-}, []);
-
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
+    const syncAvailability = () => {
+      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
     };
 
+    window.addEventListener("meetroAvailabilityChanged", syncAvailability);
+    window.addEventListener("storage", syncAvailability);
+
+    return () => {
+      window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
+      window.removeEventListener("storage", syncAvailability);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleLanguageChange = () => updateLanguage(getLanguage());
+
     window.addEventListener("languageChanged", handleLanguageChange);
+    window.addEventListener("meetro-language-change", handleLanguageChange);
+    window.addEventListener("meetroLanguageChanged", handleLanguageChange);
 
     return () => {
       window.removeEventListener("languageChanged", handleLanguageChange);
+      window.removeEventListener("meetro-language-change", handleLanguageChange);
+      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
     };
   }, []);
 
@@ -59,7 +62,26 @@ function BusinessDashboard({ setPage, currentPage }) {
       const result = await authFetch("/my-contractor-profile", {}, setPage);
 
       if (result?.data?.profile) {
-        setProfile(result.data.profile);
+        const backendProfile = result.data.profile;
+
+        setProfile(backendProfile);
+
+        localStorage.setItem(
+          "contractorProfile",
+          JSON.stringify({
+            id: backendProfile.id,
+            business_name: backendProfile.business_name || "",
+            name: backendProfile.business_name || "",
+            category: backendProfile.category || "",
+            business_category: backendProfile.category || "",
+            location: backendProfile.location || "",
+            bio: backendProfile.bio || "",
+            image_url: backendProfile.image_url || "",
+            logo: backendProfile.image_url || "",
+            rating: backendProfile.rating || "5.0",
+            status: "active",
+          })
+        );
       }
     } catch (error) {
       console.error(error);
@@ -69,81 +91,188 @@ function BusinessDashboard({ setPage, currentPage }) {
   }
 
   function formatCategory(value) {
-    if (!value) return t("professionalUser");
+    if (!value) return language === "es" ? "Profesional" : "Professional";
 
-    const normalizedValue = String(value)
-      .replaceAll("_", "")
-      .replace(/\s+/g, "")
-      .toLowerCase();
-
-    const categoryMap = {
-      professional: t("professionalUser"),
-      contractor: t("contractor"),
-      handyman: t("handyman"),
-      plumbing: t("plumbing"),
-      painting: t("painting"),
-      electrical: t("electrical"),
-      flooring: t("flooring"),
-      roofing: t("roofing"),
-      hvac: t("hvac"),
-      landscaping: t("landscaping"),
-      lawncare: t("lawnCare"),
-      treeservice: t("treeService"),
-      poolservice: t("poolService"),
-      cleaning: t("cleaning"),
-      pressurewashing: t("pressureWashing"),
-      paversealing: t("paverSealing"),
-      junkremoval: t("junkRemoval"),
-      demolition: t("demolition"),
-      drywall: t("drywall"),
-      carpentry: t("carpentry"),
-      doorswindows: t("doorsWindows"),
-      fencing: t("fencing"),
-      concrete: t("concrete"),
-      tile: t("tile"),
-      appliancerepair: t("applianceRepair"),
-      pestcontrol: t("pestControl"),
-      moving: t("moving"),
-      realestate: t("realEstate"),
-      homehealthcare: t("homeHealthCare"),
-      automotiveservices: t("automotiveServices"),
-      cardetailing: t("carDetailing"),
-      mobileservices: t("mobileServices"),
-      mechanic: t("mechanic"),
-      privatetransportation: t("privateTransportation"),
-      other: t("otherService"),
-    };
-
-    return (
-      categoryMap[normalizedValue] ||
-      String(value)
-        .replaceAll("_", " ")
-        .replace(/([A-Z])/g, " $1")
-        .replace(/\b\w/g, (letter) => letter.toUpperCase())
-    );
+    return String(value)
+      .replaceAll("_", " ")
+      .replace(/([A-Z])/g, " $1")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   if (loading) {
     return <LoadingScreen text={t("loadingBusinessDashboard")} />;
   }
 
+  const dashboardBusinessCategory =
+    localStorage.getItem("businessCategory") || "";
+
+  const dashboardEmergencyService =
+    localStorage.getItem("selectedEmergencyService") || "";
+
+  const dashboardEmergencyCategory =
+    localStorage.getItem("selectedEmergencyCategory") ||
+    inferEmergencyCategory(dashboardEmergencyService);
+
+  const canDashboardSeeEmergency = canBusinessSeeCategory(
+    dashboardBusinessCategory,
+    dashboardEmergencyCategory
+  );
+
+  const dispatchStatus =
+    localStorage.getItem("emergencyDispatchStatus") || "";
+
+  const hasActiveEmergency =
+    canDashboardSeeEmergency &&
+    dashboardEmergencyService &&
+    ["pending", "accepted", "enroute", "arrived", "started"].includes(
+      dispatchStatus
+    );
+
+  const completedJobs = localStorage.getItem("completedJobsCount") || "1";
+  const revenue = localStorage.getItem("totalJobRevenue") || "0";
+
+  const getBusinessSchedule = () => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem("meetro_business_schedule") || "[]"
+      );
+
+      if (Array.isArray(saved) && saved.length > 0) {
+        return saved;
+      }
+    } catch {}
+
+    return [];
+  };
+
+  const businessSchedule = getBusinessSchedule();
+  const todayScheduleCount = businessSchedule.length;
+
+  const homeownerRequests =
+    getStoredHomeownerRequests();
+
+  const quoteHistory = JSON.parse(
+    localStorage.getItem("workCenterQuoteHistory") || "[]"
+  );
+
+  const activeProjectsCount = homeownerRequests.filter(
+    (project) =>
+      ["accepted", "scheduled", "active"].includes(project.status)
+  ).length;
+
+  const pendingQuotesCount = quoteHistory.filter(
+    (quote) =>
+      quote.status === "sent" ||
+      quote.status === "quoted" ||
+      !quote.status
+  ).length;
+
+  const quoteResponseAlertCount = quoteHistory.filter(
+    (quote) =>
+      !quote.movedToActiveAt &&
+      (
+        quote.status === "accepted" ||
+        quote.status === "revision_requested"
+      )
+  ).length;
+
+  const unreadMessages =
+    localStorage.getItem("mockStandardUnreadMessages") || "0";
+
+  const text = {
+    en: {
+      dashboard: "Business Dashboard",
+      greeting: "Good morning",
+      subtitle: "Your workday at a glance. Handle what matters first.",
+      online: "Online",
+      offline: "Offline",
+      available: "Available now",
+      notAvailable: "Not accepting jobs",
+      emergency: "Emergency",
+      needsAttention: "Needs attention",
+      noEmergency: "No active emergencies",
+      readyDispatch: "Ready to dispatch",
+      messages: "Messages",
+      unread: "Unread",
+      todayJobs: "Today's Jobs",
+      activeJobs: "Active Jobs",
+      pendingQuotes: "Pending Quotes",
+      todayRevenue: "Today's Revenue",
+      quickActions: "Quick Actions",
+      allTools: "All tools",
+      workCenter: "Work Center",
+      workSubtitle: "Active jobs, quotes, and work records.",
+      openWorkCenter: "Open Work Center",
+      newLeads: "New Leads Near You",
+      viewAllLeads: "View all leads",
+      upgradeTitle: "Unlock unlimited homeowner leads",
+      upgradeText:
+        "Priority placement, unlimited lead access, and verified business visibility.",
+      upgrade: "Upgrade to Meetro Pro",
+    },
+    es: {
+      dashboard: "Panel de Negocio",
+      greeting: "Buenos días",
+      subtitle: "Tu día de trabajo en un vistazo. Atiende lo más importante primero.",
+      online: "En línea",
+      offline: "Desconectado",
+      available: "Disponible ahora",
+      notAvailable: "No aceptando trabajos",
+      emergency: "Emergencia",
+      needsAttention: "Necesita atención",
+      noEmergency: "Sin emergencias activas",
+      readyDispatch: "Listo para despacho",
+      messages: "Mensajes",
+      unread: "Sin leer",
+      todayJobs: "Trabajos de hoy",
+      activeJobs: "Trabajos activos",
+      pendingQuotes: "Cotizaciones pendientes",
+      todayRevenue: "Ingresos de hoy",
+      quickActions: "Acciones Rápidas",
+      allTools: "Todas",
+      workCenter: "Centro de Trabajo",
+      workSubtitle: "Trabajos activos, cotizaciones e historial.",
+      openWorkCenter: "Abrir Centro de Trabajo",
+      newLeads: "Nuevas Oportunidades Cerca",
+      viewAllLeads: "Ver todos",
+      upgradeTitle: "Desbloquea clientes ilimitados",
+      upgradeText:
+        "Prioridad, acceso ilimitado a oportunidades y visibilidad verificada.",
+      upgrade: "Actualizar a Meetro Pro",
+    },
+  }[language];
+
   return (
     <div style={pageWrapper}>
+      <style>
+        {`
+          @keyframes pendingQuotePulse {
+            0% {
+              box-shadow: 0 0 16px rgba(251,191,36,0.18);
+              transform: scale(1);
+            }
+            50% {
+              box-shadow: 0 0 30px rgba(251,191,36,0.38);
+              transform: scale(1.015);
+            }
+            100% {
+              box-shadow: 0 0 16px rgba(251,191,36,0.18);
+              transform: scale(1);
+            }
+          }
+        `}
+      </style>
       <div style={topBar}>
         <div style={brandWrap}>
           <span style={brandMain}>Meetro</span>
-          <span style={brandBadge}>Community</span>
+          <span style={brandBadge}>Business</span>
         </div>
 
         <button
           onClick={() => {
-  localStorage.setItem(
-    "contractorProfileReturnPage",
-    "businessDashboard"
-  );
-
-  setPage("contractorProfile");
-}}
+            localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
+            setPage("contractorProfile");
+          }}
           style={profileMini}
         >
           {profile?.image_url ? (
@@ -154,244 +283,302 @@ function BusinessDashboard({ setPage, currentPage }) {
         </button>
       </div>
 
-      <div style={heroCard}>
-        <div style={heroTop}>
+      <div style={statusStrip}>
+        <button
+          style={statusItem}
+          onClick={() => {
+            const next = !availableNow;
+            localStorage.setItem("meetroAvailableNow", next ? "true" : "false");
+            setAvailableNow(next);
+            window.dispatchEvent(new Event("meetroAvailabilityChanged"));
+          }}
+        >
+          <span style={statusDot(availableNow)}></span>
           <div>
-            <p style={eyebrow}>{t("businessDashboard")}</p>
-
-            <h1 style={heroTitle}>
-              {t("businessGreeting")}, {businessName}! 👋
-            </h1>
-
-            <p style={heroSubtitle}>{t("businessDashboardText")}</p>
+            <strong>{availableNow ? text.online : text.offline}</strong>
+            <p>{availableNow ? text.available : text.notAvailable}</p>
           </div>
+        </button>
 
-          <div style={statusPill}>
-            {availableNow ? "🟢 " : "⚪ "}
-            {availableNow ? t("availableNow") : "Inactive"}
-           </div>
-            <div style={statusPill}>
-             {localStorage.getItem("meetroDispatchReady") === "true"
-               ? "🚗 Dispatch Ready"
-               : "🚫 Dispatch Offline"}
-           </div>
-        </div>
-
-        <div style={statsGrid}>
-          <StatCard          
-            title={t("newLeads")}
-            value="8"
-            note={t("last24h")}
-            icon="📥"
-            onClick={() => setPage("businessLeads")}
-          />
-
-          <StatCard          
-            title={t("messages")}
-            value={localStorage.getItem("mockStandardUnreadMessages") || "0"}
-            note={t("unread")}
-            icon="💬"
-            onClick={() => setPage("messagesInbox")} 
-         />
-
-          <StatCard          
-            title={t("profileViews")}
-            value="32"
-            note={t("thisWeek")}
-            icon="👁️"
-            onClick={() => setPage("businessAnalytics")}
-          />
-
-          <StatCard
-            title={t("profileScore")}
-            value="92%"
-            note={t("great")}
-            icon="👑"
-            onClick={() => setPage("contractorProfile")}
-          />
-                 
-           <StatCard
-             title="Emergency"
-             value={localStorage.getItem("mockEmergencyRequests") || "0"}
-              note="Pending Dispatch"
-             icon="🚨"
-             onClick={() => setPage("contractorDashboard")}
-             />        
-
-         </div>
-      </div>
-
-      <div style={profileCard}>
-        {profile?.image_url ? (
-          <img src={profile.image_url} alt={businessName} style={profileImage} />
-        ) : (
-          <div style={profilePlaceholder}>🏢</div>
-        )}
-
-        <div style={profileInfo}>
-          <h2 style={profileTitle}>{businessName}</h2>
-
-          <p style={profileText}>{formatCategory(businessCategory)}</p>
-
-          <div style={profileProgressWrap}>
-            <div style={progressTop}>
-              <span>{t("profileCompletion")}</span>
-              <strong>72%</strong>
-            </div>
-
-            <div style={progressBar}>
-              <div style={progressFill}></div>
-            </div>
+        <button
+          style={statusItem}
+          onClick={() => setPage("emergencyOperationsCenter")}
+        >
+          <span style={statusIcon}>🚨</span>
+          <div>
+            <strong>{hasActiveEmergency ? `1 ${text.emergency}` : text.noEmergency}</strong>
+            <p>{hasActiveEmergency ? text.needsAttention : text.readyDispatch}</p>
           </div>
+        </button>
 
-          <button
-            onClick={() => setPage("contractorProfile")}
-            style={primaryButton}
-          >
-            {profile ? t("editBusinessProfile") : t("createBusinessProfile")}
-          </button>
-        </div>
-      </div>
-
-      <div style={sectionHeader}>
-        <h2 style={sectionTitle}>{t("newLeadsNearYou")}</h2>
-
-        <button onClick={() => setPage("discover")} style={viewAllButton}>
-          {t("viewAllLeads")}
+        <button style={statusItem} onClick={() => setPage("messagesInbox")}>
+          <span style={statusIcon}>💬</span>
+          <div>
+            <strong>{text.messages}</strong>
+            <p>
+              {unreadMessages} {text.unread}
+            </p>
+          </div>
         </button>
       </div>
 
-      <div style={leadList}>
-        <LeadCard
-          category={t("plumbing")}
-          title={t("leadKitchenSink")}
-          location={t("leadCapeCoral3")}
-          time={t("posted1hAgo")}
-          setPage={setPage}
-        />
+      <section style={heroCard}>
+        <div style={heroHeader}>
+          <div>
+            <p style={eyebrow}>{text.dashboard}</p>
 
-        <LeadCard
-          category={t("electrical")}
-          title={t("leadCeilingFan")}
-          location={t("leadCapeCoral2")}
-          time={t("posted2hAgo")}
-          setPage={setPage}
-        />
+            <h1 style={heroTitle}>
+              {text.greeting}, {businessName}! 👋
+            </h1>
 
-        <LeadCard
-          category={t("roofing")}
-          title={t("leadRoofInspection")}
-          location={t("leadCapeCoral5")}
-          time={t("posted3hAgo")}
-          setPage={setPage}
-        />
-      </div>
+            <p style={heroSubtitle}>{text.subtitle}</p>
+          </div>
+        </div>
 
-      <h2 style={sectionTitle}>{t("businessTools")}</h2>
+        <div style={glanceGrid}>
+          <GlanceItem
+            icon="📅"
+            title={text.todayJobs}
+            value={todayScheduleCount}
+            note={
+              language === "es"
+                ? "Programados"
+                : "Scheduled"
+            }
+          />
 
-       
-            <div style={toolsGrid}>
-        <ToolButton
-          icon="🧾"
-          label={t("quotes")}
-          text={t("projectEstimates")}
+          <GlanceItem
+            icon="✅"
+            title={text.activeJobs}
+            value={activeProjectsCount}
+            note={
+              language === "es"
+                ? "En progreso"
+                : "In progress"
+            }
+          />
+
+          <div
+            style={
+              quoteResponseAlertCount > 0
+                ? pendingQuoteGlowWrap
+                : {}
+            }
+          >
+            <GlanceItem
+              icon="🧾"
+              title={text.pendingQuotes}
+              value={pendingQuotesCount}
+              note={
+                language === "es"
+                  ? "Esperando respuesta"
+                  : "Awaiting response"
+              }
+            />
+          </div>
+
+          <GlanceItem
+            icon="💵"
+            title={text.todayRevenue}
+            value={`$${revenue}`}
+            note={
+              language === "es"
+                ? "Hoy"
+                : "Today"
+            }
+          />
+        </div>
+      </section>
+
+      <section style={singleActionSection}>
+        <button
+          style={quoteActionButton}
           onClick={() => {
             localStorage.setItem("meetroCommandTool", "quotes");
             setPage("businessCommandCenter");
           }}
+        >
+          <div style={quoteActionIcon}>🧾</div>
+
+          <div style={quoteActionContent}>
+            <strong style={{ fontSize: "18px" }}>
+              {language === "es"
+                ? "Centro de Comando Empresarial"
+                : "Business Command Center"}
+            </strong>
+
+            <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
+              {language === "es"
+                ? "Herramientas empresariales con IA para operaciones y flujos futuros."
+                : "AI-powered business tools for future operations workflows."}
+            </span>
+          </div>
+        </button>
+      </section>
+
+      <section style={sectionCard}>
+        <div style={sectionTop}>
+          <div>
+            <h2 style={sectionTitle}>
+              {language === "es" ? "Próximo en agenda" : "Next Up Today"}
+            </h2>
+            <p style={sectionSub}>
+              {language === "es"
+                ? "Visitas, trabajos y citas que mueven el día."
+                : "Visits, jobs, and appointments that move the day forward."}
+            </p>
+          </div>
+
+          <button
+            style={linkButton}
+            onClick={() => {
+              localStorage.setItem("meetroWorkCenterTab", "schedule");
+              setPage("contractorDashboard");
+            }}
+          >
+            {language === "es" ? "Ver agenda" : "View full schedule"} →
+          </button>
+        </div>
+
+        <div style={activeWorkList}>
+          {businessSchedule.length > 0 ? (
+            businessSchedule.slice(0, 4).map((item) => (
+              <WorkRow
+                key={item.id}
+                title={item.title}
+                meta={item.location || (language === "es" ? "Ubicación del cliente" : "Customer location")}
+                status={item.status || (language === "es" ? "Programado" : "Scheduled")}
+                time={item.time}
+                onClick={() => setPage("contractorDashboard")}
+              />
+            ))
+          ) : (
+            <div style={emptyScheduleCard}>
+              <div style={emptyScheduleIcon}>📅</div>
+              <div>
+                <strong>
+                  {language === "es" ? "No hay citas para hoy" : "No appointments scheduled today"}
+                </strong>
+                <p>
+                  {language === "es"
+                    ? "Cuando agregues una visita o trabajo, aparecerá aquí."
+                    : "When you add a visit or job, it will appear here."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section style={leadsCard}>
+        <div style={sectionTop}>
+          <h2 style={sectionTitle}>{text.newLeads}</h2>
+
+          <button style={linkButton} onClick={() => setPage("businessLeads")}>
+            {text.viewAllLeads} →
+          </button>
+        </div>
+
+        <LeadCard
+          category="Plumbing"
+          title="Kitchen Sink Installation"
+          location="Cape Coral, FL • 3 mi away"
+          time="Posted 1h ago"
+          setPage={setPage}
         />
 
-        <ToolButton
-          icon="📂"
-          label={t("projects")}
-          text={t("activeJobs")}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "jobs");
-            setPage("businessCommandCenter");
-          }}
+        <LeadCard
+          category="Electrical"
+          title="Ceiling Fan Installation"
+          location="Cape Coral, FL • 2 mi away"
+          time="Posted 2h ago"
+          setPage={setPage}
         />
 
-        <ToolButton
-          icon="🏛️"
-          label={t("permits")}
-          text={t("projectTracking")}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "permits");
-            setPage("businessCommandCenter");
-          }}
+        <LeadCard
+          category="Roofing"
+          title="Roof Inspection & Repair"
+          location="Cape Coral, FL • 5 mi away"
+          time="Posted 3h ago"
+          setPage={setPage}
         />
+      </section>
 
-        <ToolButton
-          icon="📐"
-          label={t("designFiles")}
-          text={t("layoutsPlans")}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "plans");
-            setPage("businessCommandCenter");
-          }}
-        />
+      <section style={upgradeCard}>
+        <div style={upgradeIcon}>👑</div>
 
-        <ToolButton
-          icon="⏰"
-          label={t("followUps")}
-          text={t("projectReminders")}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "reminders");
-            setPage("businessCommandCenter");
-          }}
-        />
+        <div>
+          <span style={upgradeBadge}>Founding Pro</span>
+          <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
+          <p style={upgradeText}>{text.upgradeText}</p>
+        </div>
 
-        <ToolButton
-          icon="👥"
-          label={t("clients")}
-          text={t("projectHistory")}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "customers");
-            setPage("businessCommandCenter");
-          }}
-        />
-      </div>
-
-      <div style={upgradeCard}>
-        <span style={upgradeBadge}>{t("foundingPro")}</span>
-
-        <h2 style={upgradeTitle}>{t("unlockUnlimitedLeads")}</h2>
-
-        <p style={upgradeText}>{t("meetroProText")}</p>
-
-        <button style={upgradeButton}>{t("upgradeToMeetroPro")}</button>
-      </div>
+        <button style={upgradeButton}>{text.upgrade}</button>
+      </section>
 
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
     </div>
   );
 }
 
-function StatCard({ title, value, note, icon, onClick }) {
+function GlanceItem({ icon, title, value, note }) {
   return (
-    <button
-      onClick={onClick}
-      style={statCard}
-    >
-      <div style={statTop}>
-        <span style={statTitle}>{title}</span>
-        <span style={statIcon}>{icon}</span>
+    <div style={glanceItem}>
+      <div style={glanceIcon}>{icon}</div>
+      <span style={glanceTitle}>{title}</span>
+      <strong style={glanceValue}>{value}</strong>
+      <p style={glanceNote}>{note}</p>
+    </div>
+  );
+}
+
+function QuickAction({ icon, label, note, badge, onClick }) {
+  return (
+    <button style={quickAction} onClick={onClick}>
+      <div style={quickIconWrap}>
+        <span style={quickIcon}>{icon}</span>
+        {badge && badge !== "0" && <span style={miniBadge}>{badge}</span>}
       </div>
 
-      <h2 style={statValue}>{value}</h2>
-
-      <p style={statNote}>{note}</p>
+      <strong>{label}</strong>
+      <span>{note}</span>
     </button>
   );
 }
 
-function LeadCard({
-  category,
-  title,
-  location,
-  time,
-  setPage,
-}) {
+function WorkMetric({ label, value }) {
+  return (
+    <div style={workMetric}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function WorkRow({ title, meta, status, time, onClick }) {
+  return (
+    <button style={workRow} onClick={onClick}>
+      {time ? (
+        <div style={scheduleTimeBadge}>
+          <strong>{time}</strong>
+          <span>Today</span>
+        </div>
+      ) : (
+        <div style={workThumb}>🏠</div>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <strong>{title}</strong>
+        <p>{meta}</p>
+      </div>
+
+      <span style={workStatus}>{status}</span>
+      <span style={chevron}>›</span>
+    </button>
+  );
+}
+
+function LeadCard({ category, title, location, time, setPage }) {
   return (
     <button
       onClick={() => {
@@ -401,26 +588,15 @@ function LeadCard({
           category,
           location,
           posted: time,
-          description:
-            "Customer is requesting service assistance.",
+          description: "Customer is requesting service assistance.",
           urgency: "New",
           verified: true,
         };
 
-        localStorage.setItem(
-          "selectedQuoteRequest",
-          JSON.stringify(lead)
-        );
+        localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
+        localStorage.setItem("selectedPostId", lead.id);
+        localStorage.setItem("projectDetailsReturnPage", "businessDashboard");
 
-        localStorage.setItem(
-          "selectedPostId",
-          lead.id
-        );
-        
-        localStorage.setItem(
-  "projectDetailsReturnPage",
-  "businessDashboard"
-);
         setPage("projectDetails");
       }}
       style={leadCard}
@@ -429,37 +605,30 @@ function LeadCard({
 
       <div style={{ flex: 1 }}>
         <span style={leadBadge}>{category}</span>
-
         <h3 style={leadTitle}>{title}</h3>
-
         <p style={leadMeta}>{location}</p>
-
         <p style={leadMeta}>{time}</p>
       </div>
 
-      <span style={newBadge}>{t("new")}</span>
+      <span style={newBadge}>New</span>
     </button>
   );
 }
 
-function ToolButton({ icon, label, text, onClick }) {
-  return (
-    <button onClick={onClick} style={toolButton}>
-      <div style={toolIcon}>{icon}</div>
 
-      <strong style={toolLabel}>{label}</strong>
 
-      <span style={toolText}>{text}</span>
-    </button>
-  );
-}
+const pendingQuoteGlowWrap = {
+  borderRadius: "22px",
+  boxShadow: "0 0 24px rgba(251,191,36,0.32)",
+  animation: "pendingQuotePulse 2.4s ease-in-out infinite",
+};
 
 const pageWrapper = {
-  background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "24px 18px 130px",
+  background: "linear-gradient(180deg, #071225 0%, #0b1630 48%, #f5f7fb 48%)",
+  padding: "22px 18px 150px",
   boxSizing: "border-box",
-  color: "#111",
+  color: "#111827",
 };
 
 const topBar = {
@@ -478,28 +647,28 @@ const brandWrap = {
 const brandMain = {
   fontSize: "30px",
   fontWeight: "900",
-  color: "#5b3df5",
-  letterSpacing: "-1px",
+  color: "#7c5cff",
 };
 
 const brandBadge = {
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "rgba(124,92,255,0.15)",
+  color: "#7c5cff",
   padding: "6px 10px",
   borderRadius: "999px",
   fontSize: "11px",
-  fontWeight: "800",
+  fontWeight: "900",
   letterSpacing: "1px",
   textTransform: "uppercase",
 };
 
 const profileMini = {
-  width: "48px",
-  height: "48px",
+  width: "50px",
+  height: "50px",
   borderRadius: "18px",
-  border: "none",
-  background: "white",
-  boxShadow: "0 8px 18px rgba(0,0,0,0.08)",
+  border: "1px solid rgba(255,255,255,0.18)",
+  background: "rgba(255,255,255,0.08)",
+  color: "white",
+  boxShadow: "0 8px 18px rgba(0,0,0,0.18)",
   cursor: "pointer",
   overflow: "hidden",
   display: "flex",
@@ -514,220 +683,349 @@ const miniAvatar = {
   objectFit: "cover",
 };
 
-const heroCard = {
-  background:
-    "linear-gradient(135deg, #071225 0%, #142a63 48%, #173b91 100%)",
+const statusStrip = {
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: "24px",
+  padding: "12px",
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "8px",
+  marginBottom: "16px",
   color: "white",
-  borderRadius: "34px",
-  padding: "26px 22px",
-  marginBottom: "26px",
-  boxShadow: "0 22px 55px rgba(15,23,42,0.26)",
 };
 
-const heroTop = {
+const statusItem = {
+  border: "none",
+  background: "transparent",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  textAlign: "left",
+  cursor: "pointer",
+  padding: "8px",
+};
+
+const statusDot = (active) => ({
+  width: "17px",
+  height: "17px",
+  borderRadius: "50%",
+  background: active ? "#22c55e" : "#94a3b8",
+  boxShadow: active ? "0 0 0 8px rgba(34,197,94,0.14)" : "none",
+  flexShrink: 0,
+});
+
+const statusIcon = {
+  fontSize: "24px",
+  flexShrink: 0,
+};
+
+const heroCard = {
+  background: "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06))",
+  color: "white",
+  borderRadius: "30px",
+  padding: "24px",
+  marginBottom: "16px",
+  boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
+  border: "1px solid rgba(255,255,255,0.12)",
+};
+
+const heroHeader = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "18px",
   alignItems: "flex-start",
 };
 
 const eyebrow = {
   margin: 0,
-  color: "rgba(219,234,254,0.9)",
-  fontWeight: "800",
-  fontSize: "14px",
-  letterSpacing: "0.4px",
+  color: "#c7d2fe",
+  fontWeight: "900",
+  fontSize: "13px",
 };
 
 const heroTitle = {
-  margin: "16px 0 14px",
-  fontSize: "clamp(24px, 5vw, 36px)",
-  lineHeight: "1.12",
-  letterSpacing: "-1.4px",
-  fontWeight: "800",
-  color: "#dbeafe",
-  maxWidth: "820px",
+  margin: "10px 0 10px",
+  fontSize: "clamp(25px, 5vw, 34px)",
+  lineHeight: 1.12,
+  fontWeight: "900",
+  color: "#e8efff",
 };
 
 const heroSubtitle = {
-  margin: "0 0 10px",
+  margin: "0 0 18px",
   color: "#aebee3",
-  lineHeight: 1.6,
-  fontSize: "15px",
-  maxWidth: "620px",
+  lineHeight: 1.5,
 };
 
-const statusPill = {
-  background: "rgba(255,255,255,0.14)",
-  color: "white",
-  padding: "12px 16px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  whiteSpace: "nowrap",
-  fontSize: "14px",
-  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
-};
-
-const statsGrid = {
+const glanceGrid = {
+  background: "rgba(255,255,255,0.08)",
+  borderRadius: "24px",
+  padding: "14px",
   display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
-  gap: "18px",
-  marginTop: "22px",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: "10px",
 };
 
-const statCard = {
+const glanceItem = {
+  textAlign: "center",
+  borderRight: "1px solid rgba(255,255,255,0.1)",
+};
+
+const glanceIcon = {
+  fontSize: "24px",
+  marginBottom: "6px",
+};
+
+const glanceTitle = {
+  display: "block",
+  fontSize: "12px",
+  color: "#cbd5e1",
+  fontWeight: "800",
+};
+
+const glanceValue = {
+  display: "block",
+  fontSize: "28px",
+  color: "white",
+  marginTop: "8px",
+};
+
+const glanceNote = {
+  margin: "5px 0 0",
+  color: "#94a3b8",
+  fontSize: "12px",
+};
+
+const singleActionSection = {
+  marginBottom: "14px",
+};
+
+const quoteActionButton = {
+  width: "100%",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "linear-gradient(135deg, #111c36 0%, #172554 100%)",
+  borderRadius: "24px",
+  padding: "20px 22px",
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: "18px",
+  cursor: "pointer",
+  color: "white",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.28)",
+};
+
+const quoteActionIcon = {
+  width: "56px",
+  height: "56px",
+  borderRadius: "18px",
   background: "rgba(255,255,255,0.12)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "28px",
+  flexShrink: 0,
+};
+
+
+const quoteActionContent = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  textAlign: "left",
+};
+
+
+const sectionCard = {
+  background: "white",
   borderRadius: "26px",
   padding: "18px",
-  backdropFilter: "blur(16px)",
-  minHeight: "125px",
-  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
+  marginBottom: "16px",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
 };
 
-const statTop = {
+const sectionTop = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: "12px",
+  marginBottom: "14px",
+};
+
+const sectionTitle = {
+  margin: 0,
+  fontSize: "22px",
+  fontWeight: "900",
+};
+
+const sectionSub = {
+  margin: "4px 0 0",
+  color: "#667085",
+  fontSize: "13px",
+  fontWeight: "700",
+};
+
+const linkButton = {
+  border: "none",
+  background: "transparent",
+  color: "#5b3df5",
+  fontWeight: "900",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const quickGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "10px",
+};
+
+const quickAction = {
+  minHeight: "96px",
+  border: "1px solid #e5e7eb",
+  background: "#f8fafc",
+  borderRadius: "20px",
+  padding: "12px 8px",
+  display: "grid",
+  justifyItems: "center",
+  alignContent: "center",
+  gap: "5px",
+  cursor: "pointer",
+};
+
+const quickIconWrap = {
+  position: "relative",
+};
+
+const quickIcon = {
+  fontSize: "26px",
+};
+
+const miniBadge = {
+  position: "absolute",
+  top: "-8px",
+  right: "-10px",
+  background: "#ef4444",
+  color: "white",
+  fontSize: "11px",
+  fontWeight: "900",
+  borderRadius: "999px",
+  padding: "3px 7px",
+};
+
+const workMetrics = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
   gap: "8px",
-  opacity: 0.95,
+  marginBottom: "12px",
 };
 
-const statTitle = {
-  fontSize: "18px",
-  lineHeight: 1.35,
-  color: "#cbd8f5",
-  fontWeight: "500",
+const workMetric = {
+  background: "#f8fafc",
+  borderRadius: "18px",
+  padding: "12px",
+  textAlign: "center",
 };
 
-const statIcon = {
-  width: "58px",
-  height: "58px",
-  borderRadius: "22px",
-  background: "rgba(255,255,255,0.12)",
+const activeWorkList = {
+  display: "grid",
+  gap: "8px",
+};
+
+const summaryOpenBtn = {
+  width: "100%",
+  border: "1px solid #eef2f7",
+  background: "#f8fafc",
+  borderRadius: "18px",
+  padding: "16px",
+  color: "#334155",
+  fontWeight: "800",
+  textAlign: "center",
+  cursor: "pointer",
+};
+
+const workRow = {
+  width: "100%",
+  border: "1px solid #eef2f7",
+  background: "white",
+  borderRadius: "18px",
+  padding: "12px",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const workThumb = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "16px",
+  background: "#eef2ff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "24px",
 };
 
-const statValue = {
-  margin: "24px 0 10px",
-  fontSize: "42px",
-  lineHeight: 1,
-  color: "#e8efff",
-  fontWeight: "700",
-};
-
-const statNote = {
-  margin: 0,
-  opacity: 0.78,
-  fontSize: "17px",
-  color: "#9fb0d8",
-};
-
-const profileCard = {
-  background: "white",
-  borderRadius: "28px",
+const emptyScheduleCard = {
+  background: "#f8fafc",
+  border: "1px dashed #cbd5e1",
+  borderRadius: "20px",
   padding: "18px",
   display: "flex",
-  gap: "16px",
-  marginBottom: "26px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+  alignItems: "center",
+  gap: "14px",
+  color: "#334155",
 };
 
-const profileImage = {
-  width: "104px",
-  height: "104px",
-  borderRadius: "24px",
-  objectFit: "cover",
-};
-
-const profilePlaceholder = {
-  width: "104px",
-  height: "104px",
-  borderRadius: "24px",
-  background: "#f3f0ff",
+const emptyScheduleIcon = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "16px",
+  background: "white",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "42px",
+  fontSize: "24px",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
 };
 
-const profileInfo = {
-  flex: 1,
-};
-
-const profileTitle = {
-  margin: 0,
-  fontSize: "22px",
-};
-
-const profileText = {
-  margin: "6px 0 12px",
-  color: "#667085",
-};
-
-const profileProgressWrap = {
-  marginBottom: "14px",
-};
-
-const progressTop = {
-  display: "flex",
-  justifyContent: "space-between",
-  fontSize: "13px",
-  marginBottom: "6px",
-};
-
-const progressBar = {
-  height: "9px",
-  borderRadius: "999px",
-  background: "#eee",
-  overflow: "hidden",
-};
-
-const progressFill = {
-  width: "72%",
-  height: "100%",
-  background: "#5b3df5",
-};
-
-const primaryButton = {
-  border: "none",
-  background: "#5b3df5",
-  color: "white",
-  padding: "13px 16px",
+const scheduleTimeBadge = {
+  width: "70px",
+  minWidth: "70px",
   borderRadius: "16px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const sectionHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "12px",
-};
-
-const sectionTitle = {
-  margin: "0 0 12px",
-  fontSize: "23px",
-  color: "#111",
-};
-
-const viewAllButton = {
-  border: "none",
-  background: "transparent",
+  background: "#f3f0ff",
   color: "#5b3df5",
-  fontWeight: "bold",
-  cursor: "pointer",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "10px 6px",
+  lineHeight: 1.1,
 };
 
-const leadList = {
+const workStatus = {
+  background: "#eef2ff",
+  color: "#5b3df5",
+  padding: "7px 10px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const chevron = {
+  fontSize: "24px",
+  color: "#94a3b8",
+};
+
+const leadsCard = {
   background: "white",
-  borderRadius: "24px",
-  overflow: "hidden",
-  marginBottom: "26px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
+  borderRadius: "26px",
+  padding: "18px",
+  marginBottom: "16px",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
 };
 
 const leadCard = {
@@ -737,21 +1035,21 @@ const leadCard = {
   display: "flex",
   alignItems: "center",
   gap: "14px",
-  padding: "14px",
-  borderBottom: "1px solid #eee",
+  padding: "13px 0",
+  borderBottom: "1px solid #eef2f7",
   textAlign: "left",
   cursor: "pointer",
 };
 
 const leadThumb = {
-  width: "72px",
-  height: "72px",
-  borderRadius: "16px",
+  width: "58px",
+  height: "58px",
+  borderRadius: "18px",
   background: "#f3f0ff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "30px",
+  fontSize: "28px",
 };
 
 const leadBadge = {
@@ -760,7 +1058,7 @@ const leadBadge = {
   padding: "4px 8px",
   borderRadius: "999px",
   fontSize: "12px",
-  fontWeight: "bold",
+  fontWeight: "900",
 };
 
 const leadTitle = {
@@ -779,82 +1077,63 @@ const newBadge = {
   color: "#5b3df5",
   padding: "7px 10px",
   borderRadius: "999px",
-  fontWeight: "bold",
+  fontWeight: "900",
   fontSize: "12px",
-};
-
-const toolsGrid = {
-  background: "white",
-  borderRadius: "24px",
-  display: "grid",
-  gridTemplateColumns: "repeat(5, 1fr)",
-  overflow: "hidden",
-  marginBottom: "26px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
-};
-
-const toolButton = {
-  border: "none",
-  background: "white",
-  padding: "16px 8px",
-  display: "grid",
-  gap: "6px",
-  justifyItems: "center",
-  cursor: "pointer",
-  borderRight: "1px solid #eee",
-};
-
-const toolIcon = {
-  fontSize: "28px",
-};
-
-const toolLabel = {
-  fontSize: "13px",
-  textAlign: "center",
-  lineHeight: 1.25,
-};
-
-const toolText = {
-  color: "#667085",
-  fontSize: "12px",
-  textAlign: "center",
 };
 
 const upgradeCard = {
   background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
   color: "white",
-  borderRadius: "28px",
-  padding: "24px",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.24)",
+  borderRadius: "26px",
+  padding: "20px",
+  display: "flex",
+  gap: "14px",
+  alignItems: "center",
+  boxShadow: "0 18px 40px rgba(91,61,245,0.22)",
+};
+
+const upgradeIcon = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.18)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "28px",
 };
 
 const upgradeBadge = {
   background: "rgba(255,255,255,0.18)",
-  padding: "7px 12px",
+  padding: "6px 10px",
   borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "bold",
+  fontSize: "11px",
+  fontWeight: "900",
+  textTransform: "uppercase",
 };
 
 const upgradeTitle = {
-  margin: "18px 0 8px",
-  fontSize: "26px",
+  margin: "10px 0 6px",
+  fontSize: "20px",
 };
 
 const upgradeText = {
-  lineHeight: 1.6,
+  margin: 0,
+  lineHeight: 1.45,
   opacity: 0.92,
+  fontSize: "14px",
 };
 
 const upgradeButton = {
   border: "none",
   background: "white",
   color: "#5b3df5",
-  padding: "15px 18px",
-  borderRadius: "18px",
-  fontWeight: "bold",
+  padding: "13px 14px",
+  borderRadius: "16px",
+  fontWeight: "900",
   cursor: "pointer",
-  marginTop: "14px",
+  marginLeft: "auto",
+  whiteSpace: "nowrap",
 };
 
 export default BusinessDashboard;

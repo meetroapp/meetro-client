@@ -10,6 +10,9 @@ function ContractorDetails({ setPage, currentPage }) {
   const [reviews, setReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [activeProjectImage, setActiveProjectImage] = useState("");
+  const [expandedProjectImage, setExpandedProjectImage] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -26,14 +29,187 @@ function ContractorDetails({ setPage, currentPage }) {
     fetchContractor();
   }, []);
 
+  function safeJson(key, fallback = []) {
+    try {
+      return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+    } catch {
+      return fallback;
+    }
+  }
+
+  function normalizeGalleryItem(item, index, source = "local") {
+    let imageUrls = [];
+
+    if (Array.isArray(item.image_urls)) {
+      imageUrls = item.image_urls.filter(Boolean);
+    } else if (typeof item.image_urls === "string") {
+      try {
+        const parsedImages = JSON.parse(item.image_urls);
+        if (Array.isArray(parsedImages)) {
+          imageUrls = parsedImages.filter(Boolean);
+        }
+      } catch {}
+    }
+
+    const fallbackImage =
+      item.image_url ||
+      item.imageUrl ||
+      item.url ||
+      item.photoUrl ||
+      item.secure_url ||
+      item.src ||
+      "";
+
+    if (fallbackImage && imageUrls.length === 0) {
+      imageUrls = [fallbackImage];
+    }
+
+    return {
+      id: item.id || `${source}-${index}`,
+      title:
+        item.title ||
+        item.project_title ||
+        item.caption ||
+        item.name ||
+        t("projectGallery"),
+      description:
+        item.description ||
+        item.project_description ||
+        item.caption ||
+        "",
+      image_url: imageUrls[0] || "",
+      image_urls: imageUrls,
+    };
+  }
+
+  function getLocalGalleryForProfile(contractorProfile) {
+    if (!contractorProfile) return [];
+
+    const profileId = String(contractorProfile.id || "");
+    const profileName = String(
+      contractorProfile.business_name || contractorProfile.name || ""
+    ).toLowerCase();
+
+    const possibleKeys = [
+      "businessGallery",
+      "businessGalleryPhotos",
+      "projectGallery",
+      "projectGalleryPhotos",
+      "contractorProjects",
+      "meetroBusinessPhotos",
+      "meetroProjectGallery",
+      "uploadedBusinessPhotos",
+      "uploadedGalleryPhotos",
+    ];
+
+    let collected = [];
+
+    possibleKeys.forEach((key) => {
+      const saved = safeJson(key, []);
+
+      if (Array.isArray(saved)) {
+        collected = [...collected, ...saved];
+      }
+    });
+
+    const selectedBusiness = safeJson("selectedContractor", {});
+
+    const embeddedGallery = [
+      ...(Array.isArray(contractorProfile.gallery) ? contractorProfile.gallery : []),
+      ...(Array.isArray(contractorProfile.photos) ? contractorProfile.photos : []),
+      ...(Array.isArray(contractorProfile.projects) ? contractorProfile.projects : []),
+      ...(Array.isArray(contractorProfile.projectGallery)
+        ? contractorProfile.projectGallery
+        : []),
+      ...(Array.isArray(selectedBusiness.gallery) ? selectedBusiness.gallery : []),
+      ...(Array.isArray(selectedBusiness.photos) ? selectedBusiness.photos : []),
+      ...(Array.isArray(selectedBusiness.projects) ? selectedBusiness.projects : []),
+      ...(Array.isArray(selectedBusiness.projectGallery)
+        ? selectedBusiness.projectGallery
+        : []),
+    ];
+
+    collected = [...collected, ...embeddedGallery];
+
+    return collected
+      .filter((item) => item && typeof item === "object")
+      .filter((item) => {
+        const itemBusinessId = String(
+          item.businessId ||
+            item.business_id ||
+            item.contractorId ||
+            item.contractor_id ||
+            ""
+        );
+
+        const itemBusinessName = String(
+          item.businessName ||
+            item.business_name ||
+            item.contractorName ||
+            item.contractor_name ||
+            item.ownerName ||
+            ""
+        ).toLowerCase();
+
+        if (!itemBusinessId && !itemBusinessName) return true;
+
+        return (
+          (profileId && itemBusinessId === profileId) ||
+          (profileName && itemBusinessName === profileName)
+        );
+      })
+      .map((item, index) => normalizeGalleryItem(item, index, "local"))
+      .filter((item) => item.image_url);
+  }
+
+  function mergeProjects(apiProjects, localProjects) {
+    const seen = new Set();
+
+    return [...apiProjects, ...localProjects].filter((project) => {
+      const key =
+        project.id ||
+        project.image_url ||
+        project.title ||
+        JSON.stringify(project);
+
+      if (seen.has(key)) return false;
+
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function getProjectImages(project) {
+    if (Array.isArray(project?.image_urls) && project.image_urls.length > 0) {
+      return project.image_urls.filter(Boolean);
+    }
+
+    return project?.image_url ? [project.image_url] : [];
+  }
+
   async function fetchContractor() {
     try {
       const savedContractor = JSON.parse(
         localStorage.getItem("selectedContractor") || "{}"
       );
 
-      const contractorId =
-        localStorage.getItem("selectedContractorId") || savedContractor.id;
+      if (savedContractor.name || savedContractor.business_name) {
+        const localGallery = getLocalGalleryForProfile(savedContractor);
+
+        setProfile(savedContractor);
+
+        if (savedContractor.id) {
+          await fetchProjects(savedContractor.id, localGallery);
+          await fetchReviews(savedContractor.id);
+        } else {
+          setProjects(localGallery);
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      const contractorId = savedContractor.id;
 
       const response = await fetch(
         `${API_URL}/contractor-profiles/${contractorId}`
@@ -42,11 +218,16 @@ function ContractorDetails({ setPage, currentPage }) {
       const data = await response.json();
 
       if (data.profile) {
+        const localGallery = getLocalGalleryForProfile(data.profile);
+
         setProfile(data.profile);
         await fetchReviews(data.profile.id);
-        await fetchProjects(data.profile.id);
-      } else if (savedContractor.id) {
+        await fetchProjects(data.profile.id, localGallery);
+      } else if (savedContractor.id || savedContractor.name) {
+        const localGallery = getLocalGalleryForProfile(savedContractor);
+
         setProfile(savedContractor);
+        setProjects(localGallery);
       }
     } catch (error) {
       console.error(error);
@@ -55,8 +236,11 @@ function ContractorDetails({ setPage, currentPage }) {
         localStorage.getItem("selectedContractor") || "{}"
       );
 
-      if (savedContractor.id) {
+      if (savedContractor.id || savedContractor.name) {
+        const localGallery = getLocalGalleryForProfile(savedContractor);
+
         setProfile(savedContractor);
+        setProjects(localGallery);
       }
     } finally {
       setLoading(false);
@@ -75,7 +259,7 @@ function ContractorDetails({ setPage, currentPage }) {
     }
   }
 
-  async function fetchProjects(contractorId) {
+  async function fetchProjects(contractorId, localGallery = []) {
     try {
       const response = await fetch(
         `${API_URL}/contractor-projects/${contractorId}`
@@ -83,9 +267,14 @@ function ContractorDetails({ setPage, currentPage }) {
 
       const data = await response.json();
 
-      setProjects(data.projects || []);
+      const apiProjects = (data.projects || []).map((project, index) =>
+        normalizeGalleryItem(project, index, "api")
+      );
+
+      setProjects(mergeProjects(apiProjects, localGallery));
     } catch (error) {
       console.error(error);
+      setProjects(localGallery);
     }
   }
 
@@ -178,16 +367,35 @@ function ContractorDetails({ setPage, currentPage }) {
       "selectedQuoteRequest",
       JSON.stringify({
         id: profile.id,
-        project_title: profile.business_name || t("contractorConversation"),
+        project_title:
+          profile.business_name || profile.name || t("contractorConversation"),
         project_description: profile.bio || t("messageContractor"),
         location: profile.location || "",
       })
     );
 
-    localStorage.setItem("selectedQuoteRequestId", profile.id);
+    const conversationId = `business_${profile.user_id || profile.id}`;
+
+    localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("selectedQuoteRequestId", conversationId);
     localStorage.setItem(
       "selectedMessageReceiverId",
       profile.user_id || profile.id
+    );
+    localStorage.setItem("meetroConversationType", "standard");
+
+    localStorage.setItem(
+      "selectedContractor",
+      JSON.stringify({
+        ...profile,
+        business_name: profile.business_name || profile.name,
+        name: profile.name || profile.business_name,
+      })
+    );
+
+    localStorage.setItem(
+      "conversationBusinessName",
+      profile.business_name || profile.name || t("businessProfile")
     );
 
     setPage("conversationThread");
@@ -206,8 +414,93 @@ function ContractorDetails({ setPage, currentPage }) {
 
         <div style={cardStyle}>
           <h2 style={sectionTitle}>{t("contractorNotFound")}</h2>
+
           <p style={mutedText}>{t("contractorNotFoundText")}</p>
         </div>
+
+        <BottomNav setPage={setPage} currentPage={currentPage} />
+      </div>
+    );
+  }
+
+  if (selectedProject) {
+    const selectedImages = getProjectImages(selectedProject);
+    const mainProjectImage = activeProjectImage || selectedImages[0] || "";
+
+    return (
+      <div style={pageWrapper}>
+        <button
+          onClick={() => {
+            setSelectedProject(null);
+            setActiveProjectImage("");
+          }}
+          style={backButton}
+        >
+          ← {t("back")}
+        </button>
+
+        <div style={cardStyle}>
+          <h1 style={businessTitle}>{selectedProject.title}</h1>
+
+          <p style={mutedText}>
+            {profile.business_name || profile.name || t("businessProfile")}
+          </p>
+
+          {selectedProject.description && (
+            <p style={bioStyle}>{selectedProject.description}</p>
+          )}
+
+          {selectedImages[0] && (
+            <img
+              src={mainProjectImage}
+              alt={selectedProject.title}
+              style={publicMainImage}
+              onClick={() => setExpandedProjectImage(mainProjectImage)}
+            />
+          )}
+
+          {selectedImages.length > 1 && (
+            <div style={publicGalleryGrid}>
+              {selectedImages.map((url, index) => (
+                <img
+                  key={`${selectedProject.id}-${index}`}
+                  src={url}
+                  alt={`${selectedProject.title} ${index + 1}`}
+                  style={{
+                    ...publicGalleryImage,
+                    ...(mainProjectImage === url ? activeThumbnailImage : {}),
+                  }}
+                  onClick={() => setActiveProjectImage(url)}
+                />
+              ))}
+            </div>
+          )}
+
+          <button onClick={messageContractor} style={primaryButton}>
+            {t("messageContractor")}
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedProject(null);
+              setShowQuoteForm(true);
+            }}
+            style={secondaryButton}
+          >
+            {t("requestQuote")}
+          </button>
+        </div>
+
+        {expandedProjectImage && (
+          <div style={imagePreviewOverlay} onClick={() => setExpandedProjectImage("")}>
+            <button style={closePreviewBtn}>×</button>
+            <img
+              src={expandedProjectImage}
+              alt="Expanded project preview"
+              style={expandedPreviewImage}
+            />
+          </div>
+        )}
 
         <BottomNav setPage={setPage} currentPage={currentPage} />
       </div>
@@ -220,20 +513,24 @@ function ContractorDetails({ setPage, currentPage }) {
         ← {t("backToContractors")}
       </button>
 
-      <div style={heroCard}>
-        {profile.image_url || profile.image ? (
+      <div style={cardStyle}>
+        {profile.image_url || profile.imageUrl || profile.logo ? (
           <img
-            src={profile.image_url || profile.image}
-            alt={profile.business_name}
-            style={heroImage}
+            src={profile.image_url || profile.imageUrl || profile.logo}
+            alt={profile.business_name || profile.name || "Business"}
+            style={profileImage}
           />
         ) : (
           <div style={imagePlaceholder}>
-            {(profile.business_name || "C").charAt(0).toUpperCase()}
+            {(profile.business_name || profile.name || "B")
+              .charAt(0)
+              .toUpperCase()}
           </div>
         )}
 
-        <h1 style={businessTitle}>{profile.business_name || t("contractor")}</h1>
+        <h1 style={businessTitle}>
+          {profile.business_name || profile.name || t("contractor")}
+        </h1>
 
         <p style={categoryStyle}>
           {profile.category || t("serviceProvider")}
@@ -263,7 +560,7 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
 
         <p style={bioStyle}>
-          {profile.bio || t("defaultContractorBio")}
+          {profile.bio || "Business description coming soon"}
         </p>
 
         <button
@@ -328,19 +625,56 @@ function ContractorDetails({ setPage, currentPage }) {
           <p style={mutedText}>{t("noProjectPhotos")}</p>
         )}
 
-        {projects.map((project) => (
-          <div key={project.id} style={innerCard}>
-            <img
-              src={project.image_url}
-              alt={project.title}
-              style={projectImage}
-            />
+        {projects.map((project) => {
+          const projectImages = getProjectImages(project);
+          const coverImage = projectImages[0];
 
-            <h3 style={innerTitle}>{project.title}</h3>
+          return (
+            <div key={project.id} style={portfolioCard}>
+              {coverImage && (
+                <div style={portfolioCoverWrap}>
+                  <img
+                    src={coverImage}
+                    alt={project.title}
+                    style={portfolioCoverImage}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
 
-            <p style={innerText}>{project.description}</p>
-          </div>
-        ))}
+                  {projectImages.length > 1 && (
+                    <span style={portfolioPhotoBadge}>
+                      +{projectImages.length - 1} photos
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div style={portfolioContent}>
+                <span style={portfolioTrustBadge}>
+                  {t("projectGallery")}
+                </span>
+
+                <h3 style={innerTitle}>{project.title}</h3>
+
+                {project.description && (
+                  <p style={innerText}>{project.description}</p>
+                )}
+
+                <button
+                  style={portfolioOpenButton}
+                  onClick={() => {
+                    const projectImages = getProjectImages(project);
+                    setSelectedProject(project);
+                    setActiveProjectImage(projectImages[0] || "");
+                  }}
+                >
+                  {t("open")} {t("project")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div style={cardStyle}>
@@ -392,9 +726,7 @@ function ContractorDetails({ setPage, currentPage }) {
 
         {reviews.map((review) => (
           <div key={review.id} style={innerCard}>
-            <p style={{ margin: 0 }}>
-              {"⭐".repeat(Number(review.rating))}
-            </p>
+            <p style={{ margin: 0 }}>{"⭐".repeat(Number(review.rating))}</p>
 
             <p style={innerText}>
               {review.review_text || t("noReviewText")}
@@ -429,26 +761,6 @@ const backButton = {
   fontWeight: "bold",
   marginBottom: "18px",
   cursor: "pointer",
-};
-
-const heroCard = {
-  background: "white",
-  borderRadius: "30px",
-  padding: "22px",
-  marginBottom: "22px",
-  textAlign: "center",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
-};
-
-const heroImage = {
-  width: "100%",
-  height: "340px",
-  objectFit: "contain",
-  background: "#f4f4f4",
-  borderRadius: "24px",
-  marginBottom: "20px",
-  padding: "10px",
-  boxSizing: "border-box",
 };
 
 const imagePlaceholder = {
@@ -589,6 +901,144 @@ const secondaryButton = {
   cursor: "pointer",
 };
 
+const imagePreviewOverlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15,23,42,0.92)",
+  zIndex: 3000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "18px",
+};
+
+const expandedPreviewImage = {
+  maxWidth: "100%",
+  maxHeight: "86vh",
+  objectFit: "contain",
+  borderRadius: "18px",
+};
+
+const closePreviewBtn = {
+  position: "fixed",
+  top: "18px",
+  right: "18px",
+  width: "42px",
+  height: "42px",
+  borderRadius: "999px",
+  border: "none",
+  background: "white",
+  color: "#111827",
+  fontSize: "28px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const publicMainImage = {
+  width: "100%",
+  height: "260px",
+  objectFit: "cover",
+  borderRadius: "22px",
+  background: "#f1f5f9",
+  marginTop: "18px",
+  marginBottom: "12px",
+};
+
+const publicGalleryGrid = {
+  display: "flex",
+  gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
+  marginTop: "18px",
+  marginBottom: "18px",
+  scrollSnapType: "x mandatory",
+};
+
+const activeThumbnailImage = {
+  border: "3px solid #5b3df5",
+  opacity: 1,
+};
+
+const publicGalleryImage = {
+  minWidth: "260px",
+  width: "260px",
+  height: "170px",
+  objectFit: "cover",
+  borderRadius: "18px",
+  background: "#f1f5f9",
+  flexShrink: 0,
+  scrollSnapAlign: "start",
+};
+
+const portfolioCard = {
+  background: "white",
+  borderRadius: "22px",
+  overflow: "hidden",
+  marginTop: "14px",
+  border: "1px solid #e5e7eb",
+  boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+};
+
+const portfolioCoverWrap = {
+  position: "relative",
+  width: "100%",
+  height: "180px",
+  background: "#f1f5f9",
+  overflow: "hidden",
+};
+
+const portfolioCoverImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const portfolioPhotoBadge = {
+  position: "absolute",
+  right: "14px",
+  bottom: "14px",
+  background: "rgba(15,23,42,0.78)",
+  color: "white",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const portfolioContent = {
+  padding: "16px",
+};
+
+const portfolioTrustBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  background: "transparent",
+  color: "#64748b",
+  padding: "0",
+  borderRadius: "0",
+  fontSize: "12px",
+  fontWeight: "800",
+  marginBottom: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.6px",
+};
+
+const portfolioOpenButton = {
+  width: "auto",
+  alignSelf: "center",
+  border: "1px solid #ddd6fe",
+  background: "#fcfbff",
+  color: "#5b3df5",
+  padding: "10px 18px",
+  borderRadius: "999px",
+  fontWeight: "800",
+  fontSize: "13px",
+  cursor: "pointer",
+  marginTop: "14px",
+};
+
 const innerCard = {
   background: "#fafafa",
   borderRadius: "18px",
@@ -633,6 +1083,14 @@ const starButton = {
   background: "transparent",
   fontSize: "30px",
   cursor: "pointer",
+};
+
+const profileImage = {
+  width: "96px",
+  height: "96px",
+  borderRadius: "28px",
+  objectFit: "cover",
+  marginBottom: "18px",
 };
 
 export default ContractorDetails;

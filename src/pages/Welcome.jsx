@@ -1,22 +1,11 @@
+import { isProfessionalSession } from "../utils/session";
 function Welcome({ setPage }) {
   const userRole = localStorage.getItem("userRole");
   const businessName = localStorage.getItem("businessName");
   const userEmail = localStorage.getItem("userEmail");
 
-  const professionalRoles = [
-    "professional",
-    "contractor",
-    "cleaning",
-    "distribution",
-    "home_health_care",
-    "landscaping",
-    "pool_service",
-    "moving",
-    "real_estate",
-    "other",
-  ];
-
-  const isProfessional = professionalRoles.includes(userRole);
+  const isProfessional =
+    isProfessionalSession();
 
   return (
     <div style={pageWrapper}>

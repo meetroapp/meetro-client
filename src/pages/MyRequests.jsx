@@ -1,0 +1,2550 @@
+import { useState } from "react";
+import BottomNav from "../components/BottomNav";
+import { getLanguage, t } from "../utils/language";
+import { addNotification } from "../utils/notifications";
+
+function PhotoStrip({ request, onPreview }) {
+  const photos = [
+    ...(Array.isArray(request.photos) ? request.photos : []),
+    ...(request.image_url ? [request.image_url] : []),
+  ].filter(Boolean);
+
+  const uniquePhotos = [...new Set(photos)];
+
+  if (uniquePhotos.length === 0) {
+    return (
+      <div style={galleryEmpty}>
+        <div style={galleryEmptyIcon}>🏠</div>
+        <strong>{t("noPhotosYet")}</strong>
+        <span>{t("addPhotosHelp")}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={swipeGalleryWrap}>
+      <div style={swipeGalleryHeader}>
+        <strong>{t("projectPhotos")} ({uniquePhotos.length})</strong>
+        <span>{t("tapAnyPhotoToView")}</span>
+      </div>
+
+      <div style={swipeGalleryRow}>
+        {uniquePhotos.map((photo, index) => (
+          <button
+            key={photo + index}
+            style={swipePhotoCard}
+            onClick={() => onPreview(photo)}
+            type="button"
+          >
+            <img src={photo} alt="" style={swipePhotoImage} />
+
+            <div style={swipePhotoOverlay}>
+              <span>{index === 0 ? "Main Photo" : `Photo ${index + 1}`}</span>
+            </div>
+          </button>
+        ))}
+
+        {uniquePhotos.length > 4 && (
+          <div style={swipeEndCard}>
+            <strong>{uniquePhotos.length}</strong>
+            <span>{uniquePhotos.length === 1 ? "photo" : "photos"}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditPhotoManager({
+  photos,
+  uploading,
+  onUpload,
+  onRemove,
+  onPreview,
+  language,
+}) {
+  return (
+    <div style={editPhotoManager}>
+      <div style={swipeGalleryHeader}>
+        <strong>
+          {language === "es"
+            ? `${t("projectPhotos")} (${photos.length})`
+            : `${t("projectPhotos")} (${photos.length})`}
+        </strong>
+
+        <button
+          type="button"
+          style={addPhotoButton}
+          onClick={() => document.getElementById("editPhotoInput").click()}
+          disabled={uploading}
+        >
+          {uploading
+            ? language === "es"
+              ? "Subiendo..."
+              : "Uploading..."
+            : language === "es"
+            ? "+ Agregar fotos"
+            : "+ Add photos"}
+        </button>
+      </div>
+
+      <input
+        id="editPhotoInput"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onUpload}
+        style={{ display: "none" }}
+      />
+
+      {photos.length === 0 ? (
+        <div style={galleryEmpty}>
+          <div style={galleryEmptyIcon}>🏠</div>
+          <strong>{t("noPhotosYet")}</strong>
+          <span>
+            {language === "es"
+              ? t("addPhotosHelp")
+              : t("addPhotosHelp")}
+          </span>
+        </div>
+      ) : (
+        <div style={swipeGalleryRow}>
+          {photos.map((photo, index) => (
+            <div key={photo + index} style={editPhotoCard}>
+              <button
+                type="button"
+                style={editPhotoPreviewButton}
+                onClick={() => onPreview(photo)}
+              >
+                <img src={photo} alt="" style={swipePhotoImage} />
+              </button>
+
+              <button
+                type="button"
+                style={deletePhotoButton}
+                onClick={() => onRemove(index)}
+              >
+                ×
+              </button>
+
+              <span style={swipePhotoOverlay}>
+                {index === 0 ? "Main Photo" : `Photo ${index + 1}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MyRequests({ setPage }) {
+  const language = getLanguage();
+
+  const requests = JSON.parse(
+    localStorage.getItem("homeownerRequests") || "[]"
+  );
+
+  const selectedId = localStorage.getItem("selectedHomeownerRequestId");
+  const [previewImage, setPreviewImage] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [revisionQuoteId, setRevisionQuoteId] = useState(null);
+  const [revisionText, setRevisionText] = useState("");
+  const [acceptQuoteId, setAcceptQuoteId] = useState(null);
+  const [nextStepsQuoteId, setNextStepsQuoteId] = useState(null);
+  const [pendingCancelId, setPendingCancelId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    location: "",
+    photos: [],
+  });
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  const pendingCancelRequest = pendingCancelId
+    ? requests.find(
+        (request) => String(request.requestId || request.id) === String(pendingCancelId)
+      )
+    : null;
+
+  const acceptedAtTime = pendingCancelRequest?.acceptedAt
+    ? new Date(pendingCancelRequest.acceptedAt).getTime()
+    : pendingCancelRequest?.acceptedQuote?.acceptedAt
+    ? new Date(pendingCancelRequest.acceptedQuote.acceptedAt).getTime()
+    : null;
+
+  const minutesSinceAccepted = acceptedAtTime
+    ? Math.floor((Date.now() - acceptedAtTime) / 60000)
+    : null;
+
+  const isAcceptedCancellation =
+    pendingCancelRequest?.status === "accepted" ||
+    pendingCancelRequest?.acceptedQuote;
+
+  const freeCancelWindowMinutes = 15;
+
+  const cancellationFeeApplies =
+    isAcceptedCancellation &&
+    minutesSinceAccepted !== null &&
+    minutesSinceAccepted > freeCancelWindowMinutes;
+
+  const sortedRequests = [...requests].sort((a, b) => {
+    const aSelected = (a.requestId || a.id) === selectedId ? 1 : 0;
+    const bSelected = (b.requestId || b.id) === selectedId ? 1 : 0;
+    return bSelected - aSelected;
+  });
+
+  function getStatusLabel(status) {
+    const value = status || "pending";
+
+    if (language === "es") {
+      return value
+        .replace("pending", "Esperando cotizaciones")
+        .replace("Awaiting Quotes", "Esperando cotizaciones")
+        .replace("viewed", "Visto por profesionales")
+        .replace("quoted", "Cotización recibida")
+        .replace("messaged", "Mensaje recibido")
+        .replace("accepted", "Profesional aceptado")
+        .replace("scheduled", "Programado")
+        .replace("active", "En progreso")
+        .replace("completed", "Completado")
+        .replace("cancelled", "Cancelado");
+    }
+
+    return value
+      .replace("pending", "Awaiting quotes")
+      .replace("Awaiting Quotes", "Awaiting quotes")
+      .replace("viewed", "Viewed by professionals")
+      .replace("quoted", "Quote received")
+      .replace("messaged", "Message received")
+      .replace("accepted", "Professional accepted")
+      .replace("scheduled", "Scheduled")
+      .replace("active", "In progress")
+      .replace("completed", "Completed")
+      .replace("cancelled", "Cancelled");
+  }
+
+  function getCount(value) {
+    return Array.isArray(value) ? value.length : value || 0;
+  }
+
+  function startEdit(request) {
+    setEditingId(request.requestId || request.id);
+    setEditForm({
+      title: request.title || "",
+      description: request.description || "",
+      location: request.location || "",
+      photos: [
+        ...(Array.isArray(request.photos) ? request.photos : []),
+        ...(request.image_url ? [request.image_url] : []),
+      ].filter(Boolean),
+    });
+  }
+
+  function saveEdit(requestId) {
+    const updatedRequests = requests.map((request) => {
+      const currentId = request.requestId || request.id;
+
+      if (currentId !== requestId) return request;
+
+      return {
+        ...request,
+        title: editForm.title.trim() || request.title,
+        description: editForm.description.trim(),
+        location: editForm.location.trim(),
+        photos: [...new Set(editForm.photos)],
+        image_url: [...new Set(editForm.photos)][0] || "",
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+    setEditingId(null);
+    window.location.reload();
+  }
+
+  async function handleEditPhotoUpload(event) {
+    try {
+      const files = Array.from(event.target.files || []);
+
+      if (files.length === 0) return;
+
+      setUploadingPhotos(true);
+
+      const uploadedUrls = [];
+
+      for (const file of files) {
+        const formData = new FormData();
+
+        formData.append("file", file);
+        formData.append("upload_preset", "meetro_uploads");
+
+        const response = await fetch(
+          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.secure_url) {
+          uploadedUrls.push(data.secure_url);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        setEditForm((current) => ({
+          ...current,
+          photos: [...new Set([...current.photos, ...uploadedUrls])],
+        }));
+      }
+    } catch (error) {
+      console.error(error);
+      alert(language === "es" ? "Error al subir fotos." : "Photo upload error.");
+    } finally {
+      setUploadingPhotos(false);
+      event.target.value = "";
+    }
+  }
+
+  function removeEditPhoto(indexToRemove) {
+    setEditForm((current) => ({
+      ...current,
+      photos: current.photos.filter((_, index) => index !== indexToRemove),
+    }));
+  }
+
+  function requestCancelProject(requestId) {
+    setPendingCancelId(requestId);
+  }
+
+  function confirmCancelProject() {
+    if (!pendingCancelId) return;
+
+    const updatedRequests = requests.map((request) => {
+      const currentId = request.requestId || request.id;
+
+      if (currentId !== pendingCancelId) return request;
+
+      return {
+        ...request,
+        status: "cancelled",
+        cancelledAt: new Date().toISOString(),
+        cancellationFeeApplies,
+        cancellationPolicyNote: cancellationFeeApplies
+          ? "Cancellation fee may apply because the free cancellation window passed."
+          : isAcceptedCancellation
+          ? "Cancelled within free cancellation window."
+          : "Cancelled before quote acceptance.",
+        projectTimeline: [
+          {
+            type: "cancelled",
+            label: cancellationFeeApplies
+              ? "Project cancelled - cancellation fee may apply"
+              : "Project cancelled",
+            createdAt: new Date().toISOString(),
+            cancellationFeeApplies,
+            freeCancelWindowMinutes,
+          },
+          ...(Array.isArray(request.projectTimeline)
+            ? request.projectTimeline
+            : []),
+        ],
+      };
+    });
+
+    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+    setEditingId(null);
+    setPendingCancelId(null);
+
+    window.dispatchEvent(new Event("storage"));
+    window.location.reload();
+  }
+
+  function restoreProject(requestId) {
+    const updatedRequests = requests.map((request) => {
+      const currentId = request.requestId || request.id;
+
+      if (currentId !== requestId) return request;
+
+      return {
+        ...request,
+        status: "pending",
+        cancelledAt: null,
+        restoredAt: new Date().toISOString(),
+        projectTimeline: [
+          {
+            type: "restored",
+            label: "Project restored",
+            createdAt: new Date().toISOString(),
+          },
+          ...(Array.isArray(request.projectTimeline)
+            ? request.projectTimeline
+            : []),
+        ],
+      };
+    });
+
+    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+    window.location.reload();
+  }
+
+  function getCreatedDate(request) {
+    return request.createdAt
+      ? new Date(request.createdAt).toLocaleDateString(
+          language === "es" ? "es-US" : "en-US",
+          { month: "short", day: "numeric", year: "numeric" }
+        )
+      : language === "es"
+      ? "Fecha pendiente"
+      : "Date pending";
+  }
+
+  return (
+    <div style={page}>
+      <button style={backButton} onClick={() => setPage("home")}>
+        ← {t("back") || "Back"}
+      </button>
+
+      <div style={header}>
+        <p style={eyebrow}>
+          {language === "es" ? "Seguimiento de Proyectos" : "Project Tracking"}
+        </p>
+
+        <h1 style={title}>
+          {language === "es" ? "Mis Solicitudes" : "My Requests"}
+        </h1>
+
+        <p style={subtitle}>
+          {language === "es"
+            ? "Rastrea vistas, cotizaciones, mensajes y el progreso de cada proyecto."
+            : "Track views, quotes, messages, and progress for each project."}
+        </p>
+      </div>
+
+      {sortedRequests.length === 0 ? (
+        <div style={emptyCard}>
+          <div style={emptyIcon}>📋</div>
+
+          <h2>{language === "es" ? "No hay solicitudes todavía" : "No requests yet"}</h2>
+
+          <p>
+            {language === "es"
+              ? "Sube un proyecto para empezar a rastrear respuestas de negocios."
+              : "Upload a project to start tracking business responses."}
+          </p>
+
+          <button style={primaryButton} onClick={() => setPage("upload")}>
+            {language === "es" ? "Subir Proyecto" : "Upload Project"}
+          </button>
+        </div>
+      ) : (
+        <div style={list}>
+          {sortedRequests.map((request) => {
+            const requestId = request.requestId || request.id;
+            const isSelected = requestId === selectedId;
+
+            const viewsCount = getCount(request.viewedByBusinesses);
+            const quotesCount = getCount(request.quotesReceived);
+
+            return (
+              <div
+                style={{
+                  ...requestCard,
+                  ...(isSelected ? selectedRequestCard : {}),
+                }}
+                key={requestId || request.createdAt}
+              >
+                <div style={requestSplit}>
+                  <div style={requestMainPanel}>
+                    <div style={cardPillRow}>
+                      <span style={statusPill}>
+                        {getStatusLabel(request.status)}
+                      </span>
+
+                      {isSelected && (
+                        <span style={selectedPill}>
+                          {language === "es" ? "Seleccionado" : "Selected"}
+                        </span>
+                      )}
+                    </div>
+
+                    {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
+                      <EditPhotoManager
+                        photos={editForm.photos}
+                        uploading={uploadingPhotos}
+                        onUpload={handleEditPhotoUpload}
+                        onRemove={removeEditPhoto}
+                        onPreview={setPreviewImage}
+                        language={language}
+                      />
+                    ) : (
+                      <PhotoStrip request={request} onPreview={setPreviewImage} />
+                    )}
+
+                    {Array.isArray(request.projectTimeline) &&
+                      request.projectTimeline.length > 0 && (
+                        <div style={miniTimeline}>
+                          {request.projectTimeline.slice(0, 3).map((event, index) => (
+                            <div
+                              key={`${event.type}-${event.createdAt}-${index}`}
+                              style={miniTimelineItem}
+                            >
+                              <span style={miniTimelineDot}>
+                                {event.type === "created"
+                                  ? "➕"
+                                  : event.type === "cancelled"
+                                  ? "✖"
+                                  : event.type === "restored"
+                                  ? "↩"
+                                  : event.type === "quoteAccepted"
+                                  ? "✅"
+                                  : event.type === "quoteReceived"
+                                  ? "💵"
+                                  : "•"}
+                              </span>
+
+                              <div>
+                                <strong style={miniTimelineLabel}>
+                                  {language === "es"
+                                    ? event.type === "created"
+                                      ? "Proyecto creado"
+                                      : event.type === "cancelled"
+                                      ? "Proyecto cancelado"
+                                      : event.type === "restored"
+                                      ? "Proyecto restaurado"
+                                      : event.type === "quoteAccepted"
+                                      ? "Cotización aceptada"
+                                      : event.type === "quoteReceived"
+                                      ? "Cotización recibida"
+                                      : event.label
+                                    : event.label}
+                                </strong>
+
+                                {event.createdAt && (
+                                  <p style={miniTimelineDate}>
+                                    {new Date(event.createdAt).toLocaleDateString(
+                                      language === "es" ? "es-US" : "en-US",
+                                      {
+                                        month: "short",
+                                        day: "numeric",
+                                      }
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+                <div style={metricsGrid}>
+                  <div style={metricBox}>
+                    <strong>{viewsCount}</strong>
+                    <span>{language === "es" ? "Vistas" : "Views"}</span>
+                  </div>
+
+                  <div
+                    style={
+                      quotesCount > 0 && request.status !== "accepted"
+                        ? quoteAlertMetricBox
+                        : metricBox
+                    }
+                  >
+                    <strong>{quotesCount}</strong>
+                    <span>{language === "es" ? "Cotizaciones" : "Quotes"}</span>
+                    {quotesCount > 0 && request.status !== "accepted" && (
+                      <small style={quoteAlertText}>
+                        {language === "es" ? "Nueva cotización" : "New quote"}
+                      </small>
+                    )}
+
+                    {request.status === "accepted" && (
+                      <small style={acceptedMiniText}>
+                        {language === "es" ? "Profesional seleccionado" : "Professional selected"}
+                      </small>
+                    )}
+                  </div>
+
+                  <div style={metricBox}>
+                    <strong>{request.messagesCount || 0}</strong>
+                    <span>{language === "es" ? "Mensajes" : "Messages"}</span>
+                  </div>
+                </div>
+
+                <div style={timelineBox}>
+                  <div style={timelineDot}></div>
+                  <div>
+                    <strong>
+                      {t("workflowStarted")}
+                    </strong>
+                    <p>
+                      {language === "es"
+                        ? "Tu proyecto ya está guardado y listo para vistas, mensajes y cotizaciones."
+                        : "Your project is saved and ready for views, messages, and quotes."}
+                    </p>
+                  </div>
+                </div>
+
+                {request.status === "accepted" && request.acceptedQuote && (
+                  <div style={acceptedNotice}>
+                    <div style={acceptedCheck}>✓</div>
+
+                    <div>
+                      <strong style={acceptedNoticeTitle}>
+                        {language === "es"
+                          ? "Cotización aceptada"
+                          : "Quote Accepted"}
+                      </strong>
+
+                      <p style={acceptedNoticeText}>
+                        {language === "es"
+                          ? `Seleccionaste a ${request.selectedProfessional || "este profesional"} para continuar con este proyecto.`
+                          : `You selected ${request.selectedProfessional || "this professional"} to continue with this project.`}
+                      </p>
+
+                      <div style={acceptedNoticeMeta}>
+                        <span>
+                          {language === "es" ? "Total aceptado" : "Accepted total"}
+                        </span>
+
+                        <strong>${request.acceptedQuote.amount || 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(request.quotesReceived) &&
+                  request.quotesReceived.length > 0 && (
+                    <div style={quoteSection}>
+                      <div style={quoteHeader}>
+                        <h3 style={quoteTitle}>
+                          {language === "es"
+                            ? "Cotizaciones Recibidas"
+                            : "Received Quotes"}
+                        </h3>
+
+                        <span style={quoteCountBadge}>
+                          {request.quotesReceived.length}
+                        </span>
+                      </div>
+
+                      <div style={quoteList}>
+                        {request.quotesReceived.map((quote) => (
+                          <div
+                            key={quote.quoteId}
+                            style={{
+                              ...quoteCard,
+                              ...(quote.status === "accepted" ? acceptedQuoteCard : {}),
+                            }}
+                          >
+                            {quote.status === "accepted" && (
+                              <div style={acceptedQuoteBanner}>
+                                ✓ {language === "es" ? "Cotización seleccionada" : "Selected quote"}
+                              </div>
+                            )}
+
+                            <div style={quoteTop}>
+                              <div>
+                                <strong style={quoteBusiness}>
+                                  {quote.businessName || "Business"}
+                                </strong>
+
+                                <p style={quoteDate}>
+                                  {quote.createdAt
+                                    ? new Date(quote.createdAt).toLocaleDateString()
+                                    : ""}
+                                </p>
+                              </div>
+
+                              <div style={quotePrice}>
+                                ${quote.amount || 0}
+                              </div>
+                            </div>
+
+                            <div style={quoteDetailsGrid}>
+                              <div style={quoteMiniCard}>
+                                <span>
+                                  {language === "es"
+                                    ? "Mano de obra"
+                                    : "Labor"}
+                                </span>
+
+                                <strong>${quote.labor || 0}</strong>
+                              </div>
+
+                              <div style={quoteMiniCard}>
+                                <span>
+                                  {language === "es"
+                                    ? "Materiales"
+                                    : "Materials"}
+                                </span>
+
+                                <strong>${quote.materials || 0}</strong>
+                              </div>
+
+                              <div style={quoteMiniCard}>
+                                <span>
+                                  {language === "es"
+                                    ? "Tiempo"
+                                    : "Timeline"}
+                                </span>
+
+                                <strong>{quote.timeline || "-"}</strong>
+                              </div>
+                            </div>
+
+                            <div style={quoteNotes}>
+                              {quote.notes ||
+                                (language === "es"
+                                  ? "Sin notas agregadas."
+                                  : "No notes added.")}
+                            </div>
+
+                            {!["completed", "cancelled"].includes(request.status) && (
+                            <div style={quoteActionRow}>
+                              <button
+                                style={
+                                  quote.status === "accepted"
+                                    ? acceptedStatusPill
+                                    : acceptQuoteButton
+                                }
+                                disabled={quote.status === "accepted"}
+                                onClick={() => {
+                                  if (quote.status === "accepted") return;
+
+                                  setAcceptQuoteId(
+                                    acceptQuoteId === quote.quoteId
+                                      ? null
+                                      : quote.quoteId
+                                  );
+                                }}
+                              >
+                                {quote.status === "accepted"
+                                  ? language === "es"
+                                    ? "✓ Cotización Seleccionada"
+                                    : "✓ Selected Quote"
+                                  : language === "es"
+                                  ? "Aceptar"
+                                  : "Accept"}
+                              </button>
+
+                              <button
+                                style={
+                                  quote.status === "accepted"
+                                    ? nextStepsButton
+                                    : rejectQuoteButton
+                                }
+                                disabled={false}
+                                onClick={() => {
+                                  if (quote.status === "accepted") {
+                                    localStorage.setItem(
+                                      "selectedConversation",
+                                      JSON.stringify({
+                                        businessName:
+                                          quote.businessName || "Business",
+                                        projectTitle:
+                                          request.title || "Project",
+                                      })
+                                    );
+
+                                    setNextStepsQuoteId(
+                                      nextStepsQuoteId === quote.quoteId
+                                        ? null
+                                        : quote.quoteId
+                                    );
+                                    return;
+                                  }
+
+                                  setRevisionQuoteId(
+                                    revisionQuoteId === quote.quoteId
+                                      ? null
+                                      : quote.quoteId
+                                  );
+
+                                  setRevisionText(quote.revisionNote || "");
+                                }}
+                              >
+                                {quote.status === "accepted"
+                                  ? language === "es"
+                                    ? "Ver Próximos Pasos"
+                                    : "View Next Steps"
+                                  : quote.status === "revision_requested"
+                                  ? language === "es"
+                                    ? "Cambios Solicitados"
+                                    : "Changes Requested"
+                                  : language === "es"
+                                  ? "Solicitar Cambios"
+                                  : "Request Changes"}
+                              </button>
+                            </div>
+                            )}
+
+                            {acceptQuoteId === quote.quoteId && (
+                              <div style={acceptConfirmBox}>
+                                <div style={acceptConfirmIcon}>✓</div>
+
+                                <div style={{ flex: 1 }}>
+                                  <strong style={acceptConfirmTitle}>
+                                    {language === "es"
+                                      ? "Aceptar esta cotización"
+                                      : "Accept this quote"}
+                                  </strong>
+
+                                  <p style={acceptConfirmText}>
+                                    {language === "es"
+                                      ? "Estás seleccionando este profesional para continuar con tu proyecto."
+                                      : "You are selecting this professional to continue with your project."}
+                                  </p>
+
+                                  <div style={acceptConfirmSummary}>
+                                    <span>
+                                      {quote.businessName || "Business"}
+                                    </span>
+                                    <strong>${quote.amount || 0}</strong>
+                                  </div>
+
+                                  <div style={acceptConfirmActions}>
+                                    <button
+                                      style={confirmAcceptButton}
+                                      onClick={() => {
+                                        const updatedRequests = requests.map((item) => {
+                                          const itemId = item.requestId || item.id;
+
+                                          if (itemId !== requestId) return item;
+
+                                          const updatedQuotes = Array.isArray(item.quotesReceived)
+                                            ? item.quotesReceived.map((savedQuote) => ({
+                                                ...savedQuote,
+                                                status:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? "accepted"
+                                                    : "not_selected",
+                                              }))
+                                            : [];
+
+                                          return {
+                                            ...item,
+                                            status: "accepted",
+                                            quotesReceived: updatedQuotes,
+                                            acceptedQuote: {
+                                              ...quote,
+                                              status: "accepted",
+                                              acceptedAt: new Date().toISOString(),
+                                            },
+                                            selectedProfessional:
+                                              quote.businessName || "Business",
+                                            acceptedAt: new Date().toISOString(),
+                                            projectTimeline: [
+                                              {
+                                                type: "quoteAccepted",
+                                                label: `Quote accepted from ${quote.businessName || "Business"}`,
+                                                createdAt: new Date().toISOString(),
+                                                quoteId: quote.quoteId || "",
+                                                amount: quote.amount || "",
+                                                businessName: quote.businessName || "",
+                                              },
+                                              ...(Array.isArray(item.projectTimeline)
+                                                ? item.projectTimeline
+                                                : []),
+                                            ],
+                                          };
+                                        });
+
+                                        localStorage.setItem(
+                                          "homeownerRequests",
+                                          JSON.stringify(updatedRequests)
+                                        );
+
+                                        addNotification({
+                                          type: "quote_accepted",
+                                          title:
+                                            language === "es"
+                                              ? "Cotización aceptada"
+                                              : "Quote accepted",
+                                          message:
+                                            language === "es"
+                                              ? `El cliente aceptó la cotización de $${quote.amount || 0}.`
+                                              : `The customer accepted your $${quote.amount || 0} quote.`,
+                                          priority: "high",
+                                          targetRole: "professional",
+                                          requestId,
+                                          quoteId: quote.quoteId || "",
+                                        });
+
+                                        const quoteHistory = JSON.parse(
+                                          localStorage.getItem("workCenterQuoteHistory") || "[]"
+                                        );
+
+                                        const updatedQuoteHistory = quoteHistory.map((savedQuote) =>
+                                          savedQuote.quoteId === quote.quoteId
+                                            ? {
+                                                ...savedQuote,
+                                                status: "accepted",
+                                                acceptedAt: new Date().toISOString(),
+                                              }
+                                            : savedQuote
+                                        );
+
+                                        localStorage.setItem(
+                                          "workCenterQuoteHistory",
+                                          JSON.stringify(updatedQuoteHistory)
+                                        );
+
+                                        setAcceptQuoteId(null);
+                                        window.dispatchEvent(new Event("storage"));
+                                        window.location.reload();
+                                      }}
+                                    >
+                                      {language === "es"
+                                        ? "Confirmar Aceptación"
+                                        : "Confirm Acceptance"}
+                                    </button>
+
+                                    <button
+                                      style={cancelAcceptButton}
+                                      onClick={() => setAcceptQuoteId(null)}
+                                    >
+                                      {language === "es" ? "Cancelar" : "Cancel"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {nextStepsQuoteId === quote.quoteId && (
+                              <div style={nextStepsBox}>
+                                <div style={nextStepsHeader}>
+                                  <span style={nextStepsIcon}>✅</span>
+                                  <div>
+                                    <strong>
+                                      {language === "es"
+                                        ? "Próximos pasos"
+                                        : "Project Next Steps"}
+                                    </strong>
+                                    <p>
+                                      {language === "es"
+                                        ? "Tu cotización fue aceptada. Ahora puedes coordinar con el profesional."
+                                        : "Your quote was accepted. You can now coordinate with the professional."}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div
+                                  style={
+                                    request.status === "scheduled"
+                                      ? scheduledStatus
+                                      : nextStepsStatus
+                                  }
+                                >
+                                  <span
+                                    style={
+                                      request.status === "scheduled"
+                                        ? scheduledStatusDot
+                                        : nextStepsStatusDot
+                                    }
+                                  ></span>
+
+                                  <strong>
+                                    {request.status === "scheduled"
+                                      ? language === "es"
+                                        ? "Proyecto programado"
+                                        : "Project Scheduled"
+                                      : language === "es"
+                                      ? "Proyecto en programación"
+                                      : "Project entering scheduling"}
+                                  </strong>
+                                </div>
+
+                                <div style={nextStepsList}>
+                                  <div
+                                    style={
+                                      request.status === "scheduled"
+                                        ? completedStepItem
+                                        : nextStepItem
+                                    }
+                                  >
+                                    {request.status === "scheduled" ? "✅" : "1."}{" "}
+                                    {language === "es"
+                                      ? "Confirmar fecha de inicio"
+                                      : "Confirm start date"}
+                                  </div>
+
+                                  <div style={nextStepItem}>
+                                    {request.status === "scheduled" ? "✅" : "2."}{" "}
+                                    {language === "es"
+                                      ? "Proyecto programado"
+                                      : "Project scheduled"}
+                                  </div>
+
+                                  <div style={pendingStepItem}>
+                                    ⏳{" "}
+                                    {language === "es"
+                                      ? "Coordinar materiales y acceso"
+                                      : "Coordinate materials and access"}
+                                  </div>
+
+                                  <div style={pendingStepItem}>
+                                    ⏳{" "}
+                                    {language === "es"
+                                      ? "Seguir progreso del proyecto"
+                                      : "Track project progress"}
+                                  </div>
+                                </div>
+
+                                <div style={nextStepsActionGrid}>
+                                  <button
+                                    style={nextPrimaryButton}
+                                    onClick={() => {
+                                      const updatedRequests = requests.map((item) => {
+                                        const itemId = item.requestId || item.id;
+
+                                        if (itemId !== requestId) return item;
+
+                                        return {
+                                          ...item,
+                                          status: "scheduled",
+                                          scheduledAt: new Date().toISOString(),
+                                        };
+                                      });
+
+                                      localStorage.setItem(
+                                        "homeownerRequests",
+                                        JSON.stringify(updatedRequests)
+                                      );
+
+                                      window.dispatchEvent(new Event("storage"));
+                                      window.location.reload();
+                                    }}
+                                  >
+                                    {request.status === "scheduled"
+                                      ? language === "es"
+                                        ? "Programado"
+                                        : "Scheduled"
+                                      : language === "es"
+                                      ? "Programar Proyecto"
+                                      : "Schedule Project"}
+                                  </button>
+
+                                  <button
+                                    style={nextSecondaryButton}
+                                    onClick={() => {
+                                      setPage("messages");
+                                    }}
+                                  >
+                                    {language === "es"
+                                      ? "Mensaje Profesional"
+                                      : "Message Professional"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {revisionQuoteId === quote.quoteId && (
+                              <div style={revisionBox}>
+                                <textarea
+                                  style={revisionTextarea}
+                                  placeholder={
+                                    language === "es"
+                                      ? "Explica qué cambios quieres..."
+                                      : "Explain what changes you want..."
+                                  }
+                                  value={revisionText}
+                                  onChange={(e) =>
+                                    setRevisionText(e.target.value)
+                                  }
+                                />
+
+                                <div style={revisionButtonRow}>
+                                  <button
+                                    style={sendRevisionButton}
+                                    onClick={() => {
+                                      if (!revisionText.trim()) return;
+
+                                      const updatedRequests = requests.map((item) => {
+                                        const itemId = item.requestId || item.id;
+
+                                        if (itemId !== requestId) return item;
+
+                                        const updatedQuotes = Array.isArray(item.quotesReceived)
+                                          ? item.quotesReceived.map((savedQuote) =>
+                                              savedQuote.quoteId === quote.quoteId
+                                                ? {
+                                                    ...savedQuote,
+                                                    status: "revision_requested",
+                                                    revisionNote: revisionText.trim(),
+                                                    revisionRequestedAt: new Date().toISOString(),
+                                                  }
+                                                : savedQuote
+                                            )
+                                          : [];
+
+                                        return {
+                                          ...item,
+                                          status: "quoted",
+                                          quotesReceived: updatedQuotes,
+                                          lastQuoteRevisionNote: revisionText.trim(),
+                                          lastQuoteRevisionAt: new Date().toISOString(),
+                                        };
+                                      });
+
+                                      localStorage.setItem(
+                                        "homeownerRequests",
+                                        JSON.stringify(updatedRequests)
+                                      );
+
+                                      const quoteHistory = JSON.parse(
+                                        localStorage.getItem("workCenterQuoteHistory") || "[]"
+                                      );
+
+                                      const updatedQuoteHistory = quoteHistory.map((savedQuote) =>
+                                        savedQuote.quoteId === quote.quoteId
+                                          ? {
+                                              ...savedQuote,
+                                              status: "revision_requested",
+                                              revisionNote: revisionText.trim(),
+                                              revisionRequestedAt: new Date().toISOString(),
+                                            }
+                                          : savedQuote
+                                      );
+
+                                      localStorage.setItem(
+                                        "workCenterQuoteHistory",
+                                        JSON.stringify(updatedQuoteHistory)
+                                      );
+
+                                      addNotification({
+                                        type: "quote_revision_requested",
+                                        title:
+                                          language === "es"
+                                            ? "Cambios solicitados"
+                                            : "Quote revision requested",
+                                        message: revisionText.trim(),
+                                        priority: "high",
+                                        targetRole: "professional",
+                                        requestId,
+                                        quoteId: quote.quoteId || "",
+                                      });
+
+                                      setRevisionQuoteId(null);
+                                      setRevisionText("");
+
+                                      window.dispatchEvent(new Event("storage"));
+                                      window.location.reload();
+                                    }}
+                                  >
+                                    {language === "es"
+                                      ? "Enviar Solicitud"
+                                      : "Send Request"}
+                                  </button>
+
+                                  <button
+                                    style={cancelRevisionButton}
+                                    onClick={() => {
+                                      setRevisionQuoteId(null);
+                                      setRevisionText("");
+                                    }}
+                                  >
+                                    {language === "es" ? "Cancelar" : "Cancel"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {request.status === "completed" && (
+                  <div style={completedStateBox}>
+                    <div>
+                      <strong>
+                        🏁 {language === "es"
+                          ? "Proyecto completado"
+                          : "Project completed"}
+                      </strong>
+
+                      <p>
+                        {request.reviewSubmitted
+                          ? language === "es"
+                            ? "Reseña enviada. Este proyecto está guardado en tu historial."
+                            : t("reviewSubmittedHistoryText")
+                          : language === "es"
+                          ? "Este proyecto está finalizado. Puedes revisar el resumen o dejar una reseña."
+                          : "This project is finalized. You can view the record or leave a review."}
+                      </p>
+                    </div>
+
+                    <button
+                      style={completedPrimaryButton}
+                      onClick={() => {
+                        localStorage.setItem(
+                          "lastCompletedProject",
+                          JSON.stringify(request)
+                        );
+
+                        localStorage.setItem(
+                          "completedJobViewMode",
+                          "homeowner"
+                        );
+
+                        setPage("completedJobDetails");
+                      }}
+                    >
+                      {language === "es"
+                        ? "Ver Registro"
+                        : t("viewCompletedRecord")}
+                    </button>
+
+                    {!request.reviewSubmitted && (
+                      <button
+                        style={completedReviewButton}
+                        onClick={() => {
+                          localStorage.setItem(
+                            "lastCompletedProject",
+                            JSON.stringify(request)
+                          );
+
+                          localStorage.setItem(
+                            "selectedProfessionalName",
+                            request.selectedProfessional || "Professional"
+                          );
+
+                          localStorage.setItem(
+                            "completedJobViewMode",
+                            "homeowner"
+                          );
+
+                          setPage("emergencyComplete");
+                        }}
+                      >
+                        ⭐ {language === "es"
+                          ? "Dejar Reseña"
+                          : t("leaveReview")}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
+                  <div style={actionRow}>
+                    <button
+                      style={primaryButton}
+                      onClick={() => saveEdit(requestId)}
+                    >
+                      {language === "es" ? "Guardar Cambios" : "Save Changes"}
+                    </button>
+
+                    <button
+                      style={secondaryButton}
+                      onClick={() => setEditingId(null)}
+                    >
+                      {language === "es" ? "Cancelar Edición" : "Cancel Edit"}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={actionRow}>
+                    {!["completed", "cancelled"].includes(request.status) && (
+                      <button
+                        style={secondaryButton}
+                        onClick={() => {
+                          localStorage.setItem("selectedHomeownerRequestId", requestId);
+
+                          localStorage.setItem(
+                            "selectedChangeOrderRequest",
+                            JSON.stringify(request)
+                          );
+
+                          localStorage.setItem(
+                            "selectedHomeownerRequest",
+                            JSON.stringify(request)
+                          );
+
+                          localStorage.setItem(
+                            "selectedHomeownerRequestId",
+                            requestId
+                          );
+
+                          setPage("changeOrderRequest");
+                          return;
+                        }}
+                      >
+                        {request.status === "accepted"
+                          ? language === "es"
+                            ? "Solicitar Cambio"
+                            : "Request Change Order"
+                          : language === "es"
+                          ? "Editar Solicitud"
+                          : "Edit Request"}
+                      </button>
+                    )}
+
+                    {request.status === "completed" ? (
+                      <>
+                        {request.needsReview && (
+                          <button
+                            style={reviewButton}
+                            onClick={() => {
+                              localStorage.setItem(
+                                "emergencyNeedsReview",
+                                "true"
+                              );
+
+                              localStorage.setItem(
+                                "selectedProfessionalId",
+                                request.acceptedQuote?.businessId || ""
+                              );
+
+                              localStorage.setItem(
+                                "selectedProfessionalName",
+                                request.selectedProfessional || "Professional"
+                              );
+
+                              setPage("emergencyComplete");
+                            }}
+                          >
+                            ⭐ {language === "es"
+                              ? "Dejar Reseña"
+                              : t("leaveReview")}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      request.status === "cancelled" ? (
+                        <button
+                          style={primaryButton}
+                          onClick={() => restoreProject(requestId)}
+                        >
+                          {language === "es"
+                            ? "Restaurar Proyecto"
+                            : "Restore Project"}
+                        </button>
+                      ) : (
+                        <button
+                          style={dangerButton}
+                          onClick={() => requestCancelProject(requestId)}
+                        >
+                          {language === "es"
+                            ? request.status === "accepted"
+                              ? "Cancelar Proyecto"
+                              : "Cancelar Solicitud"
+                            : request.status === "accepted"
+                            ? "Cancel Project"
+                            : "Cancel Request"}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {previewImage && (
+        <div
+          style={imageModal}
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            style={closePreview}
+            type="button"
+            onClick={() => setPreviewImage(null)}
+          >
+            ×
+          </button>
+
+          <div
+            style={imagePreviewShell}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewImage}
+              alt=""
+              style={largePreviewImage}
+            />
+          </div>
+        </div>
+      )}
+
+      {pendingCancelId && (
+        <div style={confirmOverlay}>
+          <div style={confirmCard}>
+            <div style={confirmIcon}>⚠️</div>
+
+            <h3 style={confirmTitle}>
+              {isAcceptedCancellation
+                ? language === "es"
+                  ? "¿Cancelar proyecto aceptado?"
+                  : "Cancel accepted project?"
+                : language === "es"
+                ? "¿Cancelar este proyecto?"
+                : "Cancel this project?"}
+            </h3>
+
+            <p style={confirmText}>
+              {isAcceptedCancellation
+                ? cancellationFeeApplies
+                  ? language === "es"
+                    ? "La ventana gratuita de cancelación ya pasó. Puede aplicar una tarifa de cancelación porque el profesional ya fue seleccionado."
+                    : "The free cancellation window has passed. A cancellation fee may apply because the professional was already selected."
+                  : language === "es"
+                  ? `Estás dentro de la ventana gratuita de ${freeCancelWindowMinutes} minutos. Puedes cancelar sin tarifa por ahora.`
+                  : `You are within the ${freeCancelWindowMinutes}-minute free cancellation window. You can cancel without a fee for now.`
+                : language === "es"
+                ? "Esta acción ocultará el proyecto de tus proyectos activos y de los leads profesionales."
+                : "This will remove the project from your active projects and hide it from professional leads."}
+            </p>
+
+            <div style={confirmActions}>
+              <button
+                style={confirmKeepButton}
+                onClick={() => setPendingCancelId(null)}
+              >
+                {language === "es" ? "Mantener proyecto" : "Keep Project"}
+              </button>
+
+              <button
+                style={confirmCancelButton}
+                onClick={confirmCancelProject}
+              >
+                {language === "es" ? "Sí, cancelar" : "Yes, Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <BottomNav setPage={setPage} currentPage="home" />
+    </div>
+  );
+}
+
+const page = {
+  minHeight: "100vh",
+  background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
+  padding: "24px 24px 220px",
+  boxSizing: "border-box",
+};
+
+const backButton = {
+  border: "none",
+  background: "white",
+  borderRadius: "18px",
+  padding: "12px 16px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const header = {
+  textAlign: "center",
+  margin: "18px 0 24px",
+};
+
+const eyebrow = {
+  margin: "0 0 8px",
+  color: "#5b3df5",
+  fontWeight: "900",
+};
+
+const title = {
+  fontSize: "38px",
+  fontWeight: "900",
+  margin: "0 0 8px",
+  color: "#111827",
+};
+
+const subtitle = {
+  color: "#64748b",
+  fontWeight: "700",
+  lineHeight: 1.5,
+  maxWidth: "640px",
+  margin: "0 auto",
+};
+
+const emptyCard = {
+  maxWidth: "520px",
+  margin: "0 auto",
+  background: "white",
+  borderRadius: "28px",
+  padding: "28px",
+  textAlign: "center",
+  boxShadow: "0 14px 34px rgba(15,23,42,.06)",
+};
+
+const emptyIcon = {
+  fontSize: "46px",
+};
+
+const list = {
+  maxWidth: "860px",
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: "16px",
+};
+
+const miniTimeline = {
+  marginTop: "12px",
+  display: "grid",
+  gap: "8px",
+  background: "#f8f7ff",
+  border: "1px solid #ede9fe",
+  borderRadius: "18px",
+  padding: "10px",
+};
+
+const miniTimelineItem = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const miniTimelineDot = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "999px",
+  background: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "13px",
+  boxShadow: "0 4px 10px rgba(91,61,245,0.08)",
+  flexShrink: 0,
+};
+
+const miniTimelineLabel = {
+  display: "block",
+  fontSize: "12px",
+  fontWeight: "900",
+  color: "#111827",
+};
+
+const miniTimelineDate = {
+  margin: "2px 0 0",
+  fontSize: "11px",
+  fontWeight: "800",
+  color: "#64748b",
+};
+
+const requestCard = {
+  background: "white",
+  borderRadius: "28px",
+  padding: "22px",
+  boxShadow: "0 14px 34px rgba(15,23,42,.07)",
+  border: "1px solid #eef2ff",
+};
+
+const selectedRequestCard = {
+  border: "2px solid #a78bfa",
+  boxShadow: "0 18px 42px rgba(91,61,245,.14)",
+};
+
+const requestSplit = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "18px",
+  alignItems: "stretch",
+};
+
+const requestMainPanel = {
+  background: "white",
+  borderRadius: "22px",
+};
+
+const requestMediaPanel = {
+  background: "#f8fafc",
+  border: "1px solid #eef2ff",
+  borderRadius: "22px",
+  padding: "18px",
+  minWidth: 0,
+};
+
+const mediaHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+  marginBottom: "12px",
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const cardTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
+};
+
+const cardPillRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const statusPill = {
+  display: "inline-flex",
+  background: "#eef2ff",
+  color: "#5b3df5",
+  padding: "7px 11px",
+  borderRadius: "999px",
+  fontWeight: "900",
+  fontSize: "12px",
+};
+
+const selectedPill = {
+  display: "inline-flex",
+  background: "#ecfdf5",
+  color: "#047857",
+  padding: "7px 11px",
+  borderRadius: "999px",
+  fontWeight: "900",
+  fontSize: "12px",
+};
+
+const cardTitle = {
+  fontSize: "24px",
+  margin: "12px 0 6px",
+  color: "#111827",
+};
+
+const cardText = {
+  color: "#64748b",
+  fontWeight: "700",
+  lineHeight: 1.5,
+};
+
+const dateText = {
+  color: "#475569",
+  fontWeight: "800",
+  fontSize: "13px",
+};
+
+const swipeGalleryWrap = {
+  width: "100%",
+  display: "grid",
+  gap: "12px",
+};
+
+const swipeGalleryHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "900",
+  marginBottom: "8px",
+};
+
+const swipeGalleryRow = {
+  display: "flex",
+  gap: "16px",
+  overflowX: "auto",
+  padding: "4px 2px 10px",
+  WebkitOverflowScrolling: "touch",
+  scrollSnapType: "x mandatory",
+};
+
+const swipePhotoCard = {
+  position: "relative",
+  width: "140px",
+  height: "150px",
+  border: "none",
+  borderRadius: "18px",
+  overflow: "hidden",
+  padding: 0,
+  cursor: "pointer",
+  flex: "0 0 auto",
+  scrollSnapAlign: "start",
+  background: "#111827",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+};
+
+const swipePhotoImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const swipePhotoOverlay = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  padding: "28px 10px 10px",
+  background: "linear-gradient(to top, rgba(0,0,0,0.72), transparent)",
+  color: "white",
+  fontSize: "13px",
+  fontWeight: "900",
+  textAlign: "left",
+};
+
+const swipeEndCard = {
+  width: "110px",
+  height: "150px",
+  borderRadius: "24px",
+  flex: "0 0 auto",
+  scrollSnapAlign: "start",
+  background: "linear-gradient(135deg,#f3f0ff,#eef2ff)",
+  border: "1px dashed #c4b5fd",
+  color: "#5b3df5",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "900",
+};
+
+const galleryEmpty = {
+  minHeight: "150px",
+  borderRadius: "18px",
+  background: "linear-gradient(135deg,#f8fafc,#f3f0ff)",
+  border: "1px dashed #c4b5fd",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  gap: "6px",
+  color: "#64748b",
+  padding: "16px",
+};
+
+const galleryEmptyIcon = {
+  fontSize: "34px",
+};
+
+const imageModal = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15,23,42,0.82)",
+  zIndex: 9999,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "24px",
+};
+
+const imagePreviewShell = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const largePreviewImage = {
+  width: "min(92vw, 1100px)",
+  maxHeight: "84vh",
+  objectFit: "contain",
+  borderRadius: "24px",
+  boxShadow: "0 24px 70px rgba(0,0,0,0.45)",
+  background: "white",
+};
+
+const closePreview = {
+  position: "fixed",
+  top: "22px",
+  right: "22px",
+  width: "44px",
+  height: "44px",
+  borderRadius: "50%",
+  border: "none",
+  background: "white",
+  color: "#111827",
+  fontSize: "28px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const metricsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3,1fr)",
+  gap: "10px",
+  margin: "16px 0",
+};
+
+const metricBox = {
+  background: "#f8fafc",
+  borderRadius: "18px",
+  padding: "14px",
+  textAlign: "center",
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  color: "#111827",
+  fontWeight: "900",
+};
+
+const quoteAlertMetricBox = {
+  ...metricBox,
+  background: "linear-gradient(135deg,#f5f3ff,#ffffff)",
+  border: "2px solid #8b5cf6",
+  color: "#5b3df5",
+  boxShadow: "0 0 0 4px rgba(91,61,245,0.10), 0 0 28px rgba(91,61,245,0.35)",
+};
+
+const quoteAlertText = {
+  color: "#5b3df5",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const timelineBox = {
+  display: "flex",
+  gap: "12px",
+  background: "#faf9ff",
+  border: "1px solid #ede9fe",
+  borderRadius: "20px",
+  padding: "14px",
+  color: "#4c1d95",
+  marginBottom: "14px",
+};
+
+const timelineDot = {
+  width: "12px",
+  height: "12px",
+  borderRadius: "50%",
+  background: "#5b3df5",
+  marginTop: "5px",
+  flexShrink: 0,
+};
+
+const acceptedMiniText = {
+  color: "#047857",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const acceptedNotice = {
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  background: "linear-gradient(135deg,#ecfdf5,#ffffff)",
+  border: "1px solid #86efac",
+  borderRadius: "18px",
+  padding: "12px",
+  marginBottom: "12px",
+  boxShadow: "0 8px 20px rgba(16,185,129,0.08)",
+};
+
+const acceptedCheck = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "50%",
+  background: "#16a34a",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "900",
+  fontSize: "16px",
+  flexShrink: 0,
+};
+
+const acceptedNoticeTitle = {
+  display: "block",
+  color: "#065f46",
+  fontSize: "15px",
+  marginBottom: "2px",
+};
+
+const acceptedNoticeText = {
+  margin: "0 0 6px",
+  color: "#047857",
+  fontWeight: "700",
+  lineHeight: 1.35,
+  fontSize: "12px",
+};
+
+const acceptedNoticeMeta = {
+  background: "white",
+  border: "1px solid #bbf7d0",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  color: "#065f46",
+  fontWeight: "900",
+  fontSize: "12px",
+};
+
+const acceptedQuoteCard = {
+  border: "2px solid #22c55e",
+  boxShadow: "0 12px 30px rgba(34,197,94,0.14)",
+};
+
+const acceptedQuoteBanner = {
+  background: "#dcfce7",
+  color: "#047857",
+  borderRadius: "999px",
+  padding: "6px 10px",
+  display: "inline-flex",
+  fontWeight: "900",
+  marginBottom: "10px",
+  fontSize: "11px",
+};
+
+const quoteSection = {
+  marginBottom: "16px",
+};
+
+const quoteHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: "12px",
+};
+
+const quoteTitle = {
+  margin: 0,
+  fontSize: "20px",
+  fontWeight: "900",
+  color: "#111827",
+};
+
+const quoteCountBadge = {
+  background: "#ede9fe",
+  color: "#5b3df5",
+  borderRadius: "999px",
+  padding: "6px 12px",
+  fontWeight: "900",
+};
+
+const quoteList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+};
+
+const quoteCard = {
+  background: "#ffffff",
+  border: "1px solid #e9e5ff",
+  borderRadius: "18px",
+  padding: "14px",
+  boxShadow: "0 6px 16px rgba(15,23,42,0.04)",
+};
+
+const quoteTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "10px",
+  gap: "10px",
+};
+
+const quoteBusiness = {
+  fontSize: "15px",
+  color: "#111827",
+  fontWeight: "900",
+};
+
+const quoteDate = {
+  margin: "2px 0 0",
+  color: "#64748b",
+  fontSize: "11px",
+};
+
+const quotePrice = {
+  fontSize: "22px",
+  fontWeight: "950",
+  color: "#5b3df5",
+  letterSpacing: "-0.03em",
+};
+
+const quoteDetailsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3,1fr)",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const quoteMiniCard = {
+  background: "#f8fafc",
+  borderRadius: "16px",
+  padding: "12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  textAlign: "center",
+  color: "#111827",
+};
+
+const quoteNotes = {
+  background: "#faf9ff",
+  borderRadius: "16px",
+  padding: "14px",
+  color: "#4b5563",
+  lineHeight: 1.6,
+  marginBottom: "14px",
+};
+
+const quoteActionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+};
+
+const acceptQuoteButton = {
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxShadow: "0 0 0 4px rgba(91,61,245,0.12), 0 0 30px rgba(91,61,245,0.45)",
+};
+
+const rejectQuoteButton = {
+  border: "1px solid #fca5a5",
+  background: "#fff5f5",
+  color: "#dc2626",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const acceptConfirmBox = {
+  marginTop: "10px",
+  border: "1px solid #ddd6fe",
+  background: "#faf7ff",
+  borderRadius: "16px",
+  padding: "12px",
+  display: "flex",
+  gap: "10px",
+  alignItems: "flex-start",
+};
+
+const acceptConfirmIcon = {
+  width: "42px",
+  height: "42px",
+  borderRadius: "50%",
+  background: "#5b3df5",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "900",
+  flexShrink: 0,
+};
+
+const acceptConfirmTitle = {
+  display: "block",
+  fontSize: "18px",
+  color: "#111827",
+  marginBottom: "4px",
+};
+
+const acceptConfirmText = {
+  margin: "0 0 12px",
+  color: "#64748b",
+  fontWeight: "700",
+  lineHeight: 1.5,
+};
+
+const acceptConfirmSummary = {
+  background: "white",
+  border: "1px solid #ede9fe",
+  borderRadius: "16px",
+  padding: "12px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  color: "#111827",
+  fontWeight: "900",
+  marginBottom: "12px",
+};
+
+const acceptConfirmActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+};
+
+const confirmAcceptButton = {
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  borderRadius: "14px",
+  padding: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const cancelAcceptButton = {
+  border: "1px solid #e5e7eb",
+  background: "white",
+  color: "#64748b",
+  borderRadius: "14px",
+  padding: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const revisionBox = {
+  marginTop: "10px",
+  border: "1px solid #fde68a",
+  background: "#fffdf7",
+  borderRadius: "16px",
+  padding: "12px",
+};
+
+const revisionTextarea = {
+  width: "100%",
+  minHeight: "100px",
+  borderRadius: "14px",
+  border: "1px solid #d8d4fe",
+  padding: "14px",
+  fontSize: "15px",
+  resize: "vertical",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const revisionButtonRow = {
+  display: "flex",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const sendRevisionButton = {
+  flex: 1,
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  borderRadius: "14px",
+  padding: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const cancelRevisionButton = {
+  flex: 1,
+  border: "1px solid #e5e7eb",
+  background: "white",
+  color: "#64748b",
+  borderRadius: "14px",
+  padding: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const nextStepsBox = {
+  marginTop: "10px",
+  border: "1px solid #dbeafe",
+  background: "linear-gradient(135deg,#f8fbff,#ffffff)",
+  borderRadius: "16px",
+  padding: "12px",
+};
+
+const nextStepsHeader = {
+  display: "flex",
+  gap: "12px",
+  alignItems: "flex-start",
+  marginBottom: "12px",
+};
+
+const nextStepsIcon = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  background: "#16a34a",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const scheduledStatus = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  background: "#ecfdf5",
+  border: "1.5px solid #22c55e",
+  borderRadius: "999px",
+  padding: "10px 14px",
+  marginBottom: "14px",
+  color: "#047857",
+  fontWeight: "900",
+  boxShadow: "0 8px 22px rgba(34,197,94,0.14)",
+};
+
+const scheduledStatusDot = {
+  width: "10px",
+  height: "10px",
+  borderRadius: "50%",
+  background: "#16a34a",
+};
+
+const nextStepsStatus = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  background: "white",
+  border: "1px solid #bbf7d0",
+  borderRadius: "999px",
+  padding: "10px 14px",
+  marginBottom: "14px",
+  color: "#047857",
+  fontWeight: "900",
+};
+
+const nextStepsStatusDot = {
+  width: "10px",
+  height: "10px",
+  borderRadius: "50%",
+  background: "#16a34a",
+};
+
+const nextStepsActionGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const nextPrimaryButton = {
+  border: "none",
+  background: "#16a34a",
+  color: "white",
+  borderRadius: "14px",
+  padding: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const nextSecondaryButton = {
+  border: "1px solid #bbf7d0",
+  background: "white",
+  color: "#047857",
+  borderRadius: "14px",
+  padding: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const nextStepsList = {
+  display: "grid",
+  gap: "8px",
+};
+
+const completedStepItem = {
+  background: "#ecfdf5",
+  border: "1px solid #86efac",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  fontWeight: "900",
+  color: "#047857",
+};
+
+const pendingStepItem = {
+  background: "#ffffff",
+  border: "1px solid #d1fae5",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  fontWeight: "800",
+  color: "#065f46",
+};
+
+const nextStepItem = {
+  background: "white",
+  border: "1px solid #bbf7d0",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  fontWeight: "900",
+};
+
+const nextStepsButton = {
+  border: "none",
+  background: "linear-gradient(135deg,#16a34a,#22c55e)",
+  color: "white",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxShadow: "0 0 0 4px rgba(34,197,94,0.12), 0 12px 26px rgba(34,197,94,0.25)",
+};
+
+const disabledQuoteButton = {
+  border: "1px solid #e5e7eb",
+  background: "#f8fafc",
+  color: "#94a3b8",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "not-allowed",
+};
+
+const editBox = {
+  display: "grid",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const editLabel = {
+  fontSize: "13px",
+  fontWeight: "900",
+  color: "#111827",
+};
+
+const editInput = {
+  width: "100%",
+  padding: "13px",
+  borderRadius: "14px",
+  border: "1px solid #dbeafe",
+  fontSize: "15px",
+  boxSizing: "border-box",
+};
+
+const editTextarea = {
+  ...editInput,
+  minHeight: "90px",
+  resize: "vertical",
+};
+
+const actionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+};
+
+const acceptedStatusPill = {
+  border: "none",
+  background: "#dcfce7",
+  color: "#166534",
+  borderRadius: "999px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "default",
+};
+
+const completedStateBox = {
+  marginTop: "18px",
+  background: "linear-gradient(135deg,#f8fafc,#ffffff)",
+  border: "1px solid #e5e7eb",
+  borderRadius: "22px",
+  padding: "18px",
+  display: "grid",
+  gap: "14px",
+  color: "#111827",
+  boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
+};
+
+const completedReviewButton = {
+  width: "100%",
+  border: "1px solid #facc15",
+  background: "#fefce8",
+  color: "#854d0e",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const completedPrimaryButton = {
+  width: "100%",
+  border: "none",
+  background: "#111827",
+  color: "white",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const completedProjectButton = {
+  width: "100%",
+  border: "1px solid #e5e7eb",
+  background: "white",
+  color: "#111827",
+  borderRadius: "20px",
+  padding: "16px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+};
+
+const reviewButton = {
+  width: "100%",
+  border: "1px solid #facc15",
+  background: "#fefce8",
+  color: "#854d0e",
+  borderRadius: "16px",
+  padding: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxShadow: "0 10px 24px rgba(250,204,21,0.16)",
+};
+
+const dangerButton = {
+  width: "100%",
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  color: "#be123c",
+  borderRadius: "16px",
+  padding: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editPhotoManager = {
+  display: "grid",
+  gap: "12px",
+};
+
+const addPhotoButton = {
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  padding: "9px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editPhotoCard = {
+  position: "relative",
+  width: "140px",
+  height: "150px",
+  borderRadius: "18px",
+  overflow: "hidden",
+  flex: "0 0 auto",
+  scrollSnapAlign: "start",
+  background: "#111827",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+};
+
+const editPhotoPreviewButton = {
+  width: "100%",
+  height: "100%",
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  cursor: "pointer",
+};
+
+const deletePhotoButton = {
+  position: "absolute",
+  top: "8px",
+  right: "8px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(239,68,68,0.95)",
+  color: "white",
+  fontSize: "20px",
+  fontWeight: "900",
+  cursor: "pointer",
+  zIndex: 2,
+};
+
+const primaryButton = {
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  borderRadius: "16px",
+  padding: "14px 18px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const secondaryButton = {
+  width: "100%",
+  border: "1px solid #e5e7eb",
+  background: "white",
+  borderRadius: "16px",
+  padding: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+
+const confirmOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  background: "rgba(15,23,42,0.62)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "18px",
+};
+
+const confirmCard = {
+  width: "100%",
+  maxWidth: "390px",
+  background: "white",
+  borderRadius: "28px",
+  padding: "24px",
+  textAlign: "center",
+  boxShadow: "0 24px 70px rgba(0,0,0,0.35)",
+};
+
+const confirmIcon = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  background: "#fff7ed",
+  color: "#ea580c",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "0 auto 14px",
+  fontSize: "28px",
+};
+
+const confirmTitle = {
+  margin: "0 0 10px",
+  fontSize: "22px",
+  fontWeight: "950",
+  color: "#111827",
+};
+
+const confirmText = {
+  margin: "0 0 20px",
+  color: "#64748b",
+  lineHeight: 1.5,
+  fontWeight: "700",
+};
+
+const confirmActions = {
+  display: "grid",
+  gap: "10px",
+};
+
+const confirmKeepButton = {
+  border: "none",
+  borderRadius: "16px",
+  padding: "13px",
+  background: "#5b3df5",
+  color: "white",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const confirmCancelButton = {
+  border: "1px solid #fecaca",
+  borderRadius: "16px",
+  padding: "13px",
+  background: "#fee2e2",
+  color: "#991b1b",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+
+export default MyRequests;

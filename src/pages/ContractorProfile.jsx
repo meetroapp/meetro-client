@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
+import { setActiveAccountMode } from "../utils/session";
 
 function ContractorProfile({ setPage, currentPage }) {
   const [profile, setProfile] = useState(null);
@@ -18,6 +19,11 @@ function ContractorProfile({ setPage, currentPage }) {
   );
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
+  const [country, setCountry] = useState(
+  
+  localStorage.getItem("businessCountry") || ""
+  );
+  
   const [bio, setBio] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
@@ -114,19 +120,37 @@ function ContractorProfile({ setPage, currentPage }) {
   );
 
   localStorage.setItem(
-    "activeAccountMode",
-    "business"
+    "contractorProfile",
+    JSON.stringify({
+      id: profileData.id,
+      business_name:
+        profileData.business_name || "",
+      name:
+        profileData.business_name || "",
+      category:
+        profileData.category || "",
+      business_category:
+        profileData.category || "",
+      location:
+        profileData.location || "",
+      bio:
+        profileData.bio || "",
+      image_url:
+        profileData.image_url || "",
+      logo:
+        profileData.image_url || "",
+      rating:
+        profileData.rating || "5.0",
+      status: "active",
+    })
   );
 
-  window.dispatchEvent(
-    new Event("accountModeChanged")
-  );
+  setActiveAccountMode("business");
 }
 
   function lockBusinessAccess() {
     localStorage.removeItem("contractorProfileComplete");
-    localStorage.setItem("activeAccountMode", "personal");
-    window.dispatchEvent(new Event("accountModeChanged"));
+    setActiveAccountMode("personal");
   }
 
   async function fetchMyProfile() {
@@ -207,6 +231,38 @@ function ContractorProfile({ setPage, currentPage }) {
     }
   }
 
+   function saveBusinessToDirectory(profileData) {
+  const existingBusinesses = JSON.parse(
+    localStorage.getItem("meetroBusinesses") || "[]"
+  );
+
+  const businessRecord = {
+    id: profileData.id || Date.now(),
+    name: profileData.business_name || businessName,
+    category: profileData.category || category,
+    phone: profileData.phone || phone,
+    location: profileData.location || location,
+    bio: profileData.bio || bio,
+    imageUrl: profileData.image_url || imageUrl,
+    rating:
+      localStorage.getItem(
+        "professionalRatingAverage"
+      ) || "5.0",
+  };
+
+  const filteredBusinesses =
+    existingBusinesses.filter(
+      (item) => item.id !== businessRecord.id
+    );
+
+  localStorage.setItem(
+    "meetroBusinesses",
+    JSON.stringify([
+      businessRecord,
+      ...filteredBusinesses,
+    ])
+  );
+}
   async function handleCreateProfile() {
     try {
       if (!businessName.trim() || !category.trim() || !location.trim()) {
@@ -239,6 +295,9 @@ function ContractorProfile({ setPage, currentPage }) {
         setProfile(data.profile);
         fillForm(data.profile);
         unlockBusinessAccess(data.profile);
+      
+        saveBusinessToDirectory(data.profile);
+        
         setPage("profile");
       } else {
         alert(data.error || t("failedCreateProfile"));
@@ -286,6 +345,9 @@ function ContractorProfile({ setPage, currentPage }) {
         setProfile(data.profile);
         fillForm(data.profile);
         unlockBusinessAccess(data.profile);
+        
+        saveBusinessToDirectory(data.profile);         
+
         setEditing(false);
       } else {
         alert(data.error || t("failedUpdateProfile"));
@@ -331,11 +393,15 @@ function ContractorProfile({ setPage, currentPage }) {
           </div>
         </div>
 
-        <div style={heroStats}>
-          <div style={heroStat}>
-            <strong>{profile ? "4.9" : "--"}</strong>
-            <span>{t("reviews")}</span>
-          </div>
+          <div style={heroStats}>
+  <div style={heroStat}>
+    <strong>
+      {localStorage.getItem("professionalRatingAverage") || "4.9"}
+    </strong>
+    <span>
+      ⭐ {localStorage.getItem("professionalReviewCount") || "0"} {t("reviews")}
+    </span>
+  </div>
 
           <div style={heroStat}>
             <strong>{profile ? "92%" : "0%"}</strong>
@@ -351,7 +417,11 @@ function ContractorProfile({ setPage, currentPage }) {
 
       {!profile && (
         <ProfileForm
-          title={t("createYourBusinessProfile")}
+          title={
+  businessName || category || phone || location || bio || imageUrl
+    ? t("editBusinessProfile")
+    : t("createYourBusinessProfile")
+}
           businessName={businessName}
           setBusinessName={setBusinessName}
           category={category}
@@ -361,6 +431,9 @@ function ContractorProfile({ setPage, currentPage }) {
           setPhone={setPhone}
           location={location}
           setLocation={setLocation}
+          country={country}
+          setCountry={setCountry}
+          language={language}
           bio={bio}
           setBio={setBio}
           imageUrl={imageUrl}
@@ -371,7 +444,11 @@ function ContractorProfile({ setPage, currentPage }) {
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
-          submitLabel={t("createProfile")}
+          submitLabel={
+  businessName || category || phone || location || bio || imageUrl
+    ? t("saveChanges")
+    : t("createProfile")
+}
           onSubmit={handleCreateProfile}
         />
       )}
@@ -512,6 +589,9 @@ function ContractorProfile({ setPage, currentPage }) {
           setPhone={setPhone}
           location={location}
           setLocation={setLocation}
+          country={country}
+          setCountry={setCountry}
+          language={language}
           bio={bio}
           setBio={setBio}
           imageUrl={imageUrl}
@@ -528,7 +608,7 @@ function ContractorProfile({ setPage, currentPage }) {
         />
       )}
 
-      <BottomNav setPage={setPage} currentPage={currentPage} />
+      <BottomNav setPage={setPage} currentPage="contractorProfile" />
     </div>
   );
 }
@@ -540,11 +620,14 @@ function ProfileForm({
   category,
   setCategory,
   categories,
+  country,
+  setCountry,
+  language,
   phone,
   setPhone,
   location,
   setLocation,
-  bio,
+  bio, 
   setBio,
   imageUrl,
   setImageUrl,
@@ -612,13 +695,17 @@ function ProfileForm({
         style={inputStyle}
       />
 
-      <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-        {categories.map(([value, label]) => (
-          <option key={value || "empty"} value={value}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <select
+  value={category}
+  onChange={(e) => setCategory(e.target.value)}
+  style={inputStyle}
+>
+  {categories.map(([value, label]) => (
+    <option key={value || "empty"} value={value}>
+      {label}
+    </option>
+  ))}
+</select>
 
       <input
         placeholder={t("phoneNumber")}
@@ -627,12 +714,47 @@ function ProfileForm({
         style={inputStyle}
       />
 
-      <input
-        placeholder={t("location")}
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        style={inputStyle}
-      />
+<select
+  value={country}
+  onChange={(e) => {
+    setCountry(e.target.value);
+    localStorage.setItem("businessCountry", e.target.value);
+    setLocation("");
+  }}
+  style={inputStyle}
+>
+  <option value="">
+    {language === "es" ? "Seleccionar país" : "Select Country"}
+  </option>
+  <option value="US">United States</option>
+  <option value="CA">Canada</option>
+  <option value="MX">Mexico</option>
+  <option value="OTHER">
+    {language === "es" ? "Otro" : "Other"}
+  </option>
+</select>
+
+{country && (
+  <textarea
+    placeholder={
+      country === "US"
+        ? "Street address, city, state, ZIP"
+        : country === "CA"
+        ? "Street address, city, province, postal code"
+        : country === "MX"
+        ? "Street address, city, state, postal code"
+        : "Full business address"
+    }
+    value={location}
+    onChange={(e) => setLocation(e.target.value)}
+    style={{
+      ...inputStyle,
+      minHeight: "90px",
+      resize: "vertical",
+      fontFamily: "inherit",
+    }}
+  />
+)}
 
       <div style={toggleRow}>
         <button

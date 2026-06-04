@@ -16,25 +16,23 @@ function EmergencyChat({ setPage, language = "en" }) {
 
   const text = {
     en: {
-      contractor: "Bgone Construction Cleanup",
-      status: "En Route • ETA 12 min",
+      status: "On the way • ETA 12 min",
       placeholder: "Type a message...",
       send: "Send",
       quickCall: "Please call me",
       quickPhotos: "I uploaded photos",
       petWarning: "Pet or safety warning on site",
-      typing: "Contractor typing...",
+      typing: "Professional typing...",
       seen: "Seen",
     },
     es: {
-      contractor: "Bgone Construction Cleanup",
       status: "En camino • Llegada 12 min",
       placeholder: "Escribe un mensaje...",
       send: "Enviar",
       quickCall: "Por favor llámame",
       quickPhotos: "Subí fotos",
       petWarning: "Advertencia de mascota o seguridad en la propiedad",
-      typing: "Contratista escribiendo...",
+      typing: "Profesional escribiendo...",
       seen: "Visto",
     },
   };
@@ -102,7 +100,8 @@ function EmergencyChat({ setPage, language = "en" }) {
       lower.includes("mascota") ||
       lower.includes("perro")
     ) {
-      return language === "es"
+
+        return language === "es"
         ? "Gracias por avisarme. Tendré cuidado al llegar."
         : "Thanks for letting me know. I’ll be careful when I arrive.";
     }

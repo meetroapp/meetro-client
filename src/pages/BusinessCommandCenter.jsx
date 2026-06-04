@@ -154,6 +154,12 @@ function BusinessCommandCenter({ setPage }) {
             }}
             onClick={() => {
               localStorage.setItem("meetroCommandTool", tool.id);
+
+              if (tool.id === "jobs") {
+                setPage("projectGallery");
+                return;
+              }
+
               setActiveTool(tool.id);
             }}
           >
