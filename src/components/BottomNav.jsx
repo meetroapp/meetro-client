@@ -275,7 +275,7 @@ const navWrapper = {
   width: "100%",
   maxWidth: "460px",
   zIndex: 1000,
-  padding: "0 10px 12px",
+  padding: "0 10px calc(12px + env(safe-area-inset-bottom))",
   boxSizing: "border-box",
 };
 
