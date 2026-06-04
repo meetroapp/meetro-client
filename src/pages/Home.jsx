@@ -377,18 +377,10 @@ function Home({ setPage }) {
 
         <QuickCard
           icon="🚨"
-title={
-  language === "es"
-    ? "Ayuda de Emergencia"
-    : "Emergency Help"
-}
-text={
-  language === "es"
-    ? "Ayuda urgente para el hogar cuando necesitas apoyo rápido."
-    : "Urgent home service help when you need fast support."
-}
-onClick={() => setPage("emergency")}
-/>
+          title={t("emergencyHelp")}
+          text={t("emergencyHelpText")}
+          onClick={() => setPage("emergency")}
+        />
       </div>
 
       <div style={sectionHeader}>
