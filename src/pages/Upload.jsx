@@ -185,12 +185,12 @@ function Upload({ setPage, currentPage }) {
               })),
           image_url: projectPhotos[0] || imageUrl,
 
-          status: "pending",
+          status: "open",
 
           projectTimeline: [
             {
               type: "created",
-              label: "Project request created",
+              label: t("projectRequestCreated"),
               createdAt: new Date().toISOString(),
             },
           ],

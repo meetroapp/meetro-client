@@ -440,6 +440,8 @@ projectDescriptionPlaceholder:
 photoHelpsPros:
   "Photos help professionals understand the project faster.",
 
+projectRequestCreated: "Project request created",
+projectRequestCreated: "Solicitud de proyecto creada",
 projectPostedSuccess:
   "Your project has been posted successfully.",
 
