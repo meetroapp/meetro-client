@@ -99,6 +99,80 @@ function App() {
 
   const [page, setPageState] = useState(getInitialPage());
 
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashPage =
+        window.location.hash.replace("#", "") || "";
+
+      const hasToken =
+        localStorage.getItem("token");
+
+      if (!hasToken) {
+        setPageState("login");
+        return;
+      }
+
+      if (hashPage) {
+        setPageState(hashPage);
+      }
+    };
+
+    const handleAuthExpired = () => {
+      setPageState("login");
+    };
+
+    const handleVisibilityResume = () => {
+      const hasToken =
+        localStorage.getItem("token");
+
+      if (!hasToken) {
+        setPageState("login");
+        return;
+      }
+
+      const currentHash =
+        window.location.hash.replace("#", "") || "";
+
+      if (currentHash) {
+        setPageState(currentHash);
+      }
+    };
+
+    window.addEventListener(
+      "hashchange",
+      handleHashChange
+    );
+
+    window.addEventListener(
+      "meetroAuthExpired",
+      handleAuthExpired
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityResume
+    );
+
+    return () => {
+      window.removeEventListener(
+        "hashchange",
+        handleHashChange
+      );
+
+      window.removeEventListener(
+        "meetroAuthExpired",
+        handleAuthExpired
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityResume
+      );
+    };
+  }, []);
+
+
   
 
   const setPage = (newPage) => {
