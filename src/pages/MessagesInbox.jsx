@@ -99,49 +99,6 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const isSpanish = language === "es";
 
-  const demoQuotes = [
-    {
-      id: 1,
-      project_title: isSpanish
-        ? "Reparación de Llave de Cocina"
-        : "Kitchen Faucet Repair",
-      project_description: isSpanish
-        ? "Cliente necesita reemplazar una llave con fuga."
-        : "Customer needs help replacing a leaking faucet.",
-      homeowner_email: "Sarah",
-      location: "Cape Coral",
-      status: isSpanish ? "nuevo" : "new",
-      unread: true,
-      conversation_type: "standard",
-    },
-    {
-      id: 2,
-      project_title: isSpanish ? "Parche de Drywall" : "Drywall Patch",
-      project_description: isSpanish
-        ? "Necesita reparación de drywall después de trabajo de plomería."
-        : "Needs drywall repair after plumbing work.",
-      homeowner_email: "Michael",
-      location: "Fort Myers",
-      status: isSpanish ? "nuevo" : "new",
-      unread: true,
-      conversation_type: "standard",
-    },
-    {
-      id: 3,
-      project_title: isSpanish
-        ? "Instalación de Abanico"
-        : "Ceiling Fan Install",
-      project_description: isSpanish
-        ? "Necesita instalar un abanico en la sala."
-        : "Needs a ceiling fan installed in the living room.",
-      homeowner_email: "David",
-      location: "Naples",
-      status: isSpanish ? "cotizado" : "quoted",
-      unread: false,
-      conversation_type: "standard",
-    },
-  ];
-
    function getEmergencyConversation() {
   const currentUserKey =
     localStorage.getItem("userId") ||
@@ -266,13 +223,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
       let nextQuotes = [];
 
-      if (!result) {
-        nextQuotes = demoQuotes.map((quote) => ({
-          ...quote,
-          unread:
-            quote.unread && !readConversationIds.includes(String(quote.id)),
-        }));
-      } else {
+      if (result) {
         const incomingQuotes = result.data.quotes || [];
 
         if (incomingQuotes.length > 0) {
@@ -281,12 +232,6 @@ function MessagesInbox({ setPage, currentPage }) {
             conversation_type: quote.conversation_type || "standard",
             unread:
               index < 2 && !readConversationIds.includes(String(quote.id)),
-          }));
-        } else {
-          nextQuotes = demoQuotes.map((quote) => ({
-            ...quote,
-            unread:
-              quote.unread && !readConversationIds.includes(String(quote.id)),
           }));
         }
       }
