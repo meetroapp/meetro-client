@@ -689,8 +689,15 @@ function ConversationThread({ setPage }) {
 
     loadMessages();
 
+    const pollingInterval = setInterval(() => {
+      if (!document.hidden) {
+        loadMessages();
+      }
+    }, 5000);
+
     return () => {
       cancelled = true;
+      clearInterval(pollingInterval);
     };
   }, [storageKey, conversationId, starterMessages, currentViewerRole, setPage]);
 
