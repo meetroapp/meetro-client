@@ -46,7 +46,7 @@ function BusinessLeads({ setPage, currentPage }) {
       : "Fast response recommended",
     viewDetails: isSpanish ? "Ver Detalles" : "View Details",
     sendQuote: isSpanish ? "Enviar Cotización" : "Send Quote",
-    potential: isSpanish ? "Potencial" : "Potential",
+    potential: isSpanish ? "Guía de Precio" : "Price Guide",
     posted: isSpanish ? "Publicado" : "Posted",
     professionalRequired: isSpanish
       ? "Acceso profesional requerido"
