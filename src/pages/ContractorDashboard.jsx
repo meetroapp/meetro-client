@@ -806,21 +806,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
               ? "Propietario esperando actualización"
               : "Homeowner waiting for update",
         },
-
-        ...(localStorage.getItem("meetroDemoMultipleActiveJobs") === "true"
-          ? [
-              {
-                id: "demo-active-2",
-                service: "Leak Detection",
-                status: "enroute",
-                eta: "18",
-                customer:
-                  activeLanguage === "es"
-                    ? "Cliente esperando llegada"
-                    : "Customer waiting for arrival",
-              },
-            ]
-          : []),
       ]
     : [];
 
