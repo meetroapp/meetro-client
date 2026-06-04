@@ -29,6 +29,52 @@ function BusinessDashboard({ setPage }) {
     localStorage.getItem("userRole") ||
     "professional";
 
+  const liveHomeownerRequests = getStoredHomeownerRequests();
+
+  const matchingDashboardLeads = liveHomeownerRequests
+    .filter((request) => {
+      const status = String(request.status || "open").toLowerCase();
+
+      if (
+        status.includes("accepted") ||
+        status.includes("completed") ||
+        status.includes("cancelled")
+      ) {
+        return false;
+      }
+
+      return canBusinessSeeCategory(
+        businessCategory,
+        request.category ||
+          request.business_category ||
+          request.serviceCategory ||
+          inferEmergencyCategory(request)
+      );
+    })
+    .slice(0, 3);
+
+  const formatLeadTitle = (request) =>
+    request.title ||
+    request.project_title ||
+    request.category ||
+    request.serviceCategory ||
+    t("dashboardNewRequest");
+
+  const formatLeadLocation = (request) =>
+    request.location ||
+    request.city ||
+    request.address ||
+    t("locationPending");
+
+  const formatLeadCategory = (request) =>
+    formatCategory(
+      request.category ||
+        request.business_category ||
+        request.serviceCategory ||
+        inferEmergencyCategory(request)
+    );
+
+
   useEffect(() => {
     const syncAvailability = () => {
       setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
@@ -521,29 +567,24 @@ function BusinessDashboard({ setPage }) {
           </button>
         </div>
 
-        <LeadCard
-          category="Plumbing"
-          title="Kitchen Sink Installation"
-          location="Cape Coral, FL • 3 mi away"
-          time="Posted 1h ago"
-          setPage={setPage}
-        />
+        {matchingDashboardLeads.length > 0 ? (
+          matchingDashboardLeads.map((request) => (
+            <LeadCard
+              key={request.id || request.requestId || formatLeadTitle(request)}
+              category={formatLeadCategory(request)}
+              title={formatLeadTitle(request)}
+              location={formatLeadLocation(request)}
+              time={t("dashboardRecentlyPosted")}
+              setPage={setPage}
+            />
+          ))
+        ) : (
+          <div style={emptyLeadsState}>
+            <strong>{t("dashboardNoNewLeads")}</strong>
 
-        <LeadCard
-          category="Electrical"
-          title="Ceiling Fan Installation"
-          location="Cape Coral, FL • 2 mi away"
-          time="Posted 2h ago"
-          setPage={setPage}
-        />
-
-        <LeadCard
-          category="Roofing"
-          title="Roof Inspection & Repair"
-          location="Cape Coral, FL • 5 mi away"
-          time="Posted 3h ago"
-          setPage={setPage}
-        />
+            <p>{t("dashboardNoNewLeadsText")}</p>
+          </div>
+        )}
       </section>
 
       <section style={upgradeCard}>
@@ -1060,6 +1101,16 @@ const workStatus = {
 const chevron = {
   fontSize: "24px",
   color: "#94a3b8",
+};
+
+const emptyLeadsState = {
+  padding: "18px",
+  borderRadius: "18px",
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
 
 const leadsCard = {
