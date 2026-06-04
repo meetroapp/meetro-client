@@ -10,6 +10,10 @@ function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [language, updateLanguage] = useState(getLanguage());
+  const [liveUnreadCount, setLiveUnreadCount] = useState(
+    Number(localStorage.getItem("mockUnreadMessages") || 0)
+  );
+
   const [availableNow, setAvailableNow] = useState(
     localStorage.getItem("meetroAvailableNow") === "true"
   );
@@ -38,6 +42,44 @@ function BusinessDashboard({ setPage }) {
       window.removeEventListener("storage", syncAvailability);
     };
   }, []);
+
+  useEffect(() => {
+    const syncUnreadMessages = () => {
+      setLiveUnreadCount(
+        Number(localStorage.getItem("mockUnreadMessages") || 0)
+      );
+    };
+
+    syncUnreadMessages();
+
+    window.addEventListener(
+      "meetro-messages-updated",
+      syncUnreadMessages
+    );
+
+    window.addEventListener("storage", syncUnreadMessages);
+
+    const pollingInterval = setInterval(() => {
+      if (!document.hidden) {
+        syncUnreadMessages();
+      }
+    }, 7000);
+
+    return () => {
+      clearInterval(pollingInterval);
+
+      window.removeEventListener(
+        "meetro-messages-updated",
+        syncUnreadMessages
+      );
+
+      window.removeEventListener(
+        "storage",
+        syncUnreadMessages
+      );
+    };
+  }, []);
+
 
   useEffect(() => {
     const handleLanguageChange = () => updateLanguage(getLanguage());
@@ -176,7 +218,7 @@ function BusinessDashboard({ setPage }) {
       )
   ).length;
 
-  const unreadMessages =
+  const unreadMessages = liveUnreadCount ||
     localStorage.getItem("mockStandardUnreadMessages") || "0";
 
   const text = {

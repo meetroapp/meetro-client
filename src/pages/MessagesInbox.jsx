@@ -224,7 +224,14 @@ function MessagesInbox({ setPage, currentPage }) {
       refreshMessages
     );
 
+    const pollingInterval = setInterval(() => {
+      if (!document.hidden) {
+        refreshMessages();
+      }
+    }, 7000);
+
     return () => {
+      clearInterval(pollingInterval);
       window.removeEventListener("focus", refreshMessages);
       window.removeEventListener("storage", refreshMessages);
       window.removeEventListener("meetro-messages-updated", refreshMessages);
