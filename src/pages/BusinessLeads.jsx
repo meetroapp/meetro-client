@@ -111,69 +111,6 @@ function BusinessLeads({ setPage, currentPage }) {
     };
   }
 
-  const demoLeads = [
-    {
-      id: 1,
-      title: isSpanish
-        ? "Instalación de Fregadero de Cocina"
-        : "Kitchen Sink Installation",
-      description: isSpanish
-        ? "Cliente necesita reemplazar fregadero y conectar plomería."
-        : "Client needs a sink replacement and plumbing connection.",
-      category: "plumbing",
-      location: "Cape Coral, FL",
-      distance: "3 mi",
-      posted: isSpanish ? "Hace 1 h" : "1h ago",
-      value: "$250 - $450",
-      urgency: isSpanish ? "Nuevo" : "New",
-      verified: true,
-    },
-    {
-      id: 2,
-      title: isSpanish
-        ? "Instalación de Abanico de Techo"
-        : "Ceiling Fan Installation",
-      description: isSpanish
-        ? "Necesita instalar abanico nuevo en sala principal."
-        : "Needs a new ceiling fan installed in the main living room.",
-      category: "electrical",
-      location: "Fort Myers, FL",
-      distance: "7 mi",
-      posted: isSpanish ? "Hace 2 h" : "2h ago",
-      value: "$150 - $275",
-      urgency: isSpanish ? "Abierto" : "Open",
-      verified: true,
-    },
-    {
-      id: 3,
-      title: isSpanish ? "Reparación de Drywall" : "Drywall Repair",
-      description: isSpanish
-        ? "Hueco pequeño en pared. Cliente quiere reparación y pintura."
-        : "Small wall hole. Client wants repair and paint touch-up.",
-      category: "drywall",
-      location: "Cape Coral, FL",
-      distance: "5 mi",
-      posted: isSpanish ? "Hoy" : "Today",
-      value: "$300 - $600",
-      urgency: "Popular",
-      verified: false,
-    },
-    {
-      id: 4,
-      title: isSpanish ? "Limpieza Profunda de Casa" : "Deep Home Cleaning",
-      description: isSpanish
-        ? "Servicio de limpieza profunda para casa de 3 habitaciones."
-        : "Deep cleaning service for a 3-bedroom home.",
-      category: "cleaning",
-      location: "Lehigh Acres, FL",
-      distance: "12 mi",
-      posted: isSpanish ? "Hoy" : "Today",
-      value: "$180 - $350",
-      urgency: isSpanish ? "Nuevo" : "New",
-      verified: true,
-    },
-  ];
-
   useEffect(() => {
     const handleLanguageChange = () => {
       updateLanguage(getLanguage());
@@ -340,9 +277,7 @@ function BusinessLeads({ setPage, currentPage }) {
         };
       });
 
-      const combinedLeads = [...convertedPosts, ...demoLeads];
-
-      const matchedLeads = combinedLeads
+      const matchedLeads = convertedPosts
         .filter(matchesBusinessCategory)
         .filter((lead) => !isClosedLead(lead));
 
@@ -350,15 +285,7 @@ function BusinessLeads({ setPage, currentPage }) {
     } catch (error) {
       console.error(error);
 
-      const normalizedBusinessCategory = businessCategory
-        .toLowerCase()
-        .replace(/\s+/g, "");
-
-      if (normalizedBusinessCategory === "handyman") {
-        setLeads(demoLeads);
-      } else {
-        setLeads(demoLeads);
-      }
+      setLeads([]);
     } finally {
       setLoading(false);
     }
