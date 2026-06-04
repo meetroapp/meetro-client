@@ -873,6 +873,38 @@ function ConversationThread({ setPage }) {
         );
 
         if (result?.response?.ok && result?.data?.data?.id) {
+          const resolvedWorkflowType =
+            messageWithRole.workflowType ||
+            (messageWithRole.type?.startsWith("workflow_")
+              ? messageWithRole.type
+              : null);
+
+          if (resolvedWorkflowType) {
+            authFetch(
+              "/workflow-events",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  quote_request_id: Number(selectedQuoteRequestId),
+                  workflow_type: resolvedWorkflowType,
+                  workflow_status: messageWithRole.status || null,
+                  workflow_payload: messageWithRole,
+                  event_label:
+                    messageWithRole.title ||
+                    messageWithRole.label ||
+                    messageWithRole.text ||
+                    resolvedWorkflowType,
+                }),
+              },
+              setPage
+            ).catch((workflowErr) => {
+              console.warn(
+                "Workflow event mirror failed; message persistence remains active",
+                workflowErr
+              );
+            });
+          }
+
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === messageWithRole.id
