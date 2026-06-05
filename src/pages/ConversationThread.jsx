@@ -2336,8 +2336,11 @@ const handleImageUpload = (event) => {
               return (
                 <div
                   key={msg.id}
-                  style={{ overscrollBehavior: 'contain' }} className="meetro-message-enter"
-                  style={operationalRow}
+                  className="meetro-message-enter"
+                  style={{
+                    ...operationalRow,
+                    overscrollBehavior: "contain",
+                  }}
                 >
                   <div style={operationalCard} onClick={() => openJobStory(msg)}>
                     <div style={operationalHeader}>
@@ -2574,10 +2577,11 @@ const handleImageUpload = (event) => {
             return (
               <div
                 key={msg.id}
-                style={{ overscrollBehavior: 'contain' }} className="meetro-message-enter"
+                className="meetro-message-enter"
                 style={{
                   ...messageRow,
                   justifyContent: mine ? "flex-end" : "flex-start",
+                  overscrollBehavior: "contain",
                 }}
                 onMouseDown={() => startLongPress(msg)}
                 onMouseUp={cancelLongPress}
@@ -4782,7 +4786,7 @@ const typingBubble = {
 const actionMenu = {
   position: "fixed",
   left: "50%",
-  bottom: "240px",
+  bottom: "calc(240px + env(safe-area-inset-bottom))",
   transform: "translateX(-50%)",
   width: "calc(100% - 32px)",
   maxWidth: "460px",
@@ -4807,7 +4811,7 @@ const actionBtn = {
 
 const bottomStack = {
   position: "fixed",
-  bottom: "102px",
+  bottom: "calc(102px + env(safe-area-inset-bottom))",
   left: "50%",
   transform: "translateX(-50%)",
   width: "100%",
