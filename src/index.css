@@ -50,6 +50,19 @@
   }
 }
 
+
+
+:root {
+  --meetro-safe-vh: 100svh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --meetro-safe-vh: 100dvh;
+  }
+}
+
+
 body {
   margin: 0;
 }
