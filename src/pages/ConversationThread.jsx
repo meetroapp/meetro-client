@@ -2291,6 +2291,7 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
+          <div style={messagesScroll}>
           <div style={dateRow}>
             <span style={dateLine}></span>
             <strong>{language === "es" ? "Hoy" : "Today"}</strong>
@@ -2725,6 +2726,8 @@ const handleImageUpload = (event) => {
             )}
           </div>
         )}
+
+        </div>
 
         <div style={bottomStack}>
           {!showAttachMenu && (
@@ -3290,7 +3293,7 @@ const handleImageUpload = (event) => {
           </div>
         )}
 
-        <BottomNav setPage={setPage} currentPage="messages" />
+        
 
         {previewImage && (
           <div style={imageModal} onClick={() => setPreviewImage(null)}>
@@ -3353,24 +3356,40 @@ const animations = `
 `;
 
 const page = {
-  minHeight: "100vh",
+  height: "var(--meetro-safe-vh)",
+  maxHeight: "var(--meetro-safe-vh)",
   background: "linear-gradient(135deg, #eef1f8 0%, #f8fafc 100%)",
   display: "flex",
   justifyContent: "center",
   padding: 0,
-  overflowX: "hidden",
+  overflow: "hidden",
 };
 
 const phone = {
   width: "100%",
   maxWidth: "860px",
   background: "#ffffff",
-  minHeight: "100vh",
+  height: "var(--meetro-safe-vh)",
+  maxHeight: "var(--meetro-safe-vh)",
   position: "relative",
-  paddingBottom: "250px",
-  overflowX: "hidden",
+  paddingBottom: "0",
+  overflow: "hidden",
   boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
   margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const messagesScroll = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
+  display: "flex",
+  flexDirection: "column",
+  paddingBottom: "150px",
 };
 
 
@@ -3399,7 +3418,7 @@ const profileOverlay = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
-  padding: "86px 18px 18px",
+  padding: "calc(env(safe-area-inset-top) + 18px) 18px 18px",
   boxSizing: "border-box",
 };
 
@@ -3517,13 +3536,13 @@ const profileSecondaryAction = {
 };
 
 const header = {
-  minHeight: "92px",
+  minHeight: "112px",
   display: "flex",
   alignItems: "center",
   gap: "12px",
-  padding: "18px 16px",
+  padding: "calc(env(safe-area-inset-top) + 42px) 16px 14px",
   borderBottom: "1px solid #edf0f5",
-  background: "rgba(255,255,255,0.96)",
+  background: "rgba(255,255,255,0.98)",
   backdropFilter: "blur(14px)",
   position: "sticky",
   top: 0,
@@ -3618,14 +3637,14 @@ const jobRecordMiniBadge = {
   color: "#5b3df5",
   padding: "4px 8px",
   borderRadius: "999px",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "900",
 };
 
 
 const callMenu = {
   position: "fixed",
-  top: "82px",
+  top: "72px",
   right: "max(68px, calc((100vw - 860px) / 2 + 68px))",
   width: "210px",
   background: "#ffffff",
@@ -3652,7 +3671,7 @@ const callMenuBtn = {
 
 const threadMenu = {
   position: "fixed",
-  top: "82px",
+  top: "72px",
   right: "max(16px, calc((100vw - 860px) / 2 + 16px))",
   width: "250px",
   maxHeight: "70vh",
@@ -3682,7 +3701,7 @@ const threadMenuBtn = {
 
 const emergencyBanner = {
   position: "sticky",
-  top: "92px",
+  top: "78px",
   zIndex: 20,
   marginBottom: "18px",
   padding: "14px",
@@ -3774,7 +3793,7 @@ const emergencyStep = {
   gap: "6px",
   whiteSpace: "nowrap",
   color: "#9ca3af",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "800",
 };
 
@@ -3860,7 +3879,7 @@ const routePreviewTitle = {
 };
 
 const routePreviewSubtitle = {
-  fontSize: "11px",
+  fontSize: "10px",
   color: "#7f1d1d",
   opacity: 0.72,
   marginTop: "2px",
@@ -3873,7 +3892,7 @@ const routePreviewBtn = {
   background: "#fef2f2",
   color: "#dc2626",
   fontWeight: "800",
-  fontSize: "11px",
+  fontSize: "10px",
   cursor: "pointer",
 };
 
@@ -3919,7 +3938,7 @@ const completedEmergencyPill = {
   background: "#ecfdf5",
   border: "1px solid rgba(16,185,129,0.16)",
   color: "#047857",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "800",
 };
 
@@ -3929,7 +3948,7 @@ const emergencyPill = {
   background: "#ffffff",
   border: "1px solid rgba(239,68,68,0.12)",
   color: "#991b1b",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "800",
 };
 
@@ -4001,21 +4020,28 @@ const operationalSubtitle = {
 };
 
 const scheduleCardDetails = {
+  width: "100%",
+  maxWidth: "100%",
+  overflow: "hidden",
   marginTop: "12px",
   display: "grid",
   gap: "8px",
+  boxSizing: "border-box",
 };
 
 const scheduleDetailRow = {
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
   display: "flex",
   justifyContent: "space-between",
-  gap: "12px",
+  gap: "8px",
   background: "rgba(255,255,255,0.74)",
   border: "1px solid rgba(226,232,240,0.95)",
   borderRadius: "14px",
   padding: "10px 12px",
   color: "#334155",
-  fontSize: "13px",
+  boxSizing: "border-box",
 };
 
 const materialsListCard = {
@@ -4061,6 +4087,11 @@ const approveBtn = {
 };
 
 const requestChangeBtn = {
+  background: "#ffffff",
+  color: "#5b3df5",
+  border: "2px solid #5b3df5",
+  fontWeight: "900",
+
   border: "1px solid #e5e7eb",
   background: "#f8fafc",
   color: "#111827",
@@ -4617,28 +4648,31 @@ const changeRequestStatus = {
   borderRadius: "999px",
   background: "#f5f3ff",
   color: "#6d28d9",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "900",
 };
 
 const operationalTime = {
   marginTop: "10px",
   color: "#94a3b8",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "800",
   textAlign: "right",
 };
 
 
 const bubble = {
-  minWidth: "110px",
-  maxWidth: "min(88%, 760px)",
+  minWidth: "0",
+  maxWidth: "calc(100vw - 58px)",
+  overflow: "hidden",
+  wordBreak: "break-word",
   padding: "12px 14px",
   borderRadius: "26px",
   fontSize: "14px",
   lineHeight: 1.45,
   cursor: "pointer",
   boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  boxSizing: "border-box",
 };
 
 const theirBubble = {
@@ -4690,7 +4724,7 @@ const timeRow = {
   gap: "10px",
   marginTop: "6px",
   fontSize: "9px",
-  opacity: 0.55,
+  opacity: 1,
   fontWeight: "700",
 };
 
@@ -4702,7 +4736,7 @@ const replyPreviewMine = {
   borderLeft: "3px solid rgba(255,255,255,0.75)",
   display: "flex",
   flexDirection: "column",
-  fontSize: "11px",
+  fontSize: "10px",
 };
 
 const replyPreviewTheirs = {
@@ -4713,7 +4747,7 @@ const replyPreviewTheirs = {
   borderLeft: "3px solid #5b3df5",
   display: "flex",
   flexDirection: "column",
-  fontSize: "11px",
+  fontSize: "10px",
 };
 
 
@@ -4810,23 +4844,32 @@ const actionBtn = {
 };
 
 const bottomStack = {
+  flexShrink: 0,
   position: "fixed",
-  bottom: "calc(102px + env(safe-area-inset-bottom))",
+  bottom: "0",
   left: "50%",
   transform: "translateX(-50%)",
   width: "100%",
   maxWidth: "860px",
   background: "rgba(255,255,255,0.97)",
   backdropFilter: "blur(14px)",
-  zIndex: 35,
+  zIndex: 1200,
   borderTop: "1px solid #eef2f7",
+  boxSizing: "border-box",
+  overflowX: "hidden",
+  paddingBottom: "env(safe-area-inset-bottom)",
 };
 
 const quickWrap = {
   display: "flex",
-  gap: "8px",
+  width: "100%",
+  maxWidth: "100%",
   overflowX: "auto",
+  overflowY: "hidden",
+  WebkitOverflowScrolling: "touch",
+  gap: "8px",
   padding: "8px 16px",
+  boxSizing: "border-box",
 };
 
 
@@ -4837,14 +4880,16 @@ const emergencyQuickBtn = {
 };
 
 const quickBtn = {
-  border: "1px solid #e5e7eb",
+  flexShrink: 0,
+  border: "1px solid #e7eaf2",
   background: "#ffffff",
-  borderRadius: "16px",
-  padding: "10px 14px",
+  color: "#111827",
+  borderRadius: "999px",
+  padding: "8px 12px",
   fontSize: "12px",
-  fontWeight: "700",
-  whiteSpace: "nowrap",
+  fontWeight: "800",
   cursor: "pointer",
+  whiteSpace: "nowrap",
 };
 
 const replyComposer = {
@@ -4904,36 +4949,39 @@ const pendingImageName = {
 
 const attachMenu = {
   margin: "0 16px 8px",
+  maxHeight: "170px",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
   background: "#ffffff",
   border: "1px solid #e7eaf2",
   borderRadius: "24px",
   padding: "10px",
   display: "grid",
   gridTemplateColumns: "repeat(2, 1fr)",
-  gap: "9px",
+  gap: "8px",
   boxShadow: "0 18px 45px rgba(15,23,42,0.14)",
   animation: "meetroSheetIn 180ms ease-out",
 };
 
 const attachMenuBtn = {
-  minHeight: "70px",
+  minHeight: "52px",
   border: "none",
   borderRadius: "19px",
   background: "#f8fafc",
   color: "#111827",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "800",
   cursor: "pointer",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: "7px",
+  gap: "4px",
 };
 
 const attachIconCircle = {
-  width: "38px",
-  height: "38px",
+  width: "32px",
+  height: "32px",
   borderRadius: "15px",
   background: "#eef2ff",
   color: "#5b3df5",
@@ -4995,7 +5043,7 @@ const photoExplainInput = {
   fontFamily: "inherit",
 };
 const composer = {
-  margin: "0 16px 10px",
+  margin: "0 16px 8px",
   background: "#ffffff",
   border: "1px solid #e7eaf2",
   borderRadius: "24px",

@@ -94,11 +94,37 @@ function App() {
       return currentHash;
     }
 
-    return currentHash || "home";
+    if (currentHash) {
+      return currentHash;
+    }
+
+    return isProfessionalSession()
+      ? "businessDashboard"
+      : "home";
   };
 
   const [page, setPageState] = useState(getInitialPage());
 
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      window.location.hash = "login";
+
+      setPageState("login");
+    };
+
+    window.addEventListener(
+      "meetroAuthExpired",
+      handleAuthExpired
+    );
+
+    return () => {
+      window.removeEventListener(
+        "meetroAuthExpired",
+        handleAuthExpired
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -139,9 +165,22 @@ function App() {
       }
     };
 
+    const handleNativePageChange = (event) => {
+      const nextPage = event?.detail?.page;
+
+      if (nextPage) {
+        setPageState(nextPage);
+      }
+    };
+
     window.addEventListener(
       "hashchange",
       handleHashChange
+    );
+
+    window.addEventListener(
+      "meetroNativePageChange",
+      handleNativePageChange
     );
 
     window.addEventListener(
@@ -158,6 +197,11 @@ function App() {
       window.removeEventListener(
         "hashchange",
         handleHashChange
+      );
+
+      window.removeEventListener(
+        "meetroNativePageChange",
+        handleNativePageChange
       );
 
       window.removeEventListener(
@@ -211,6 +255,18 @@ function App() {
     window.location.hash = newPage;
     setPageState(newPage);
   };
+
+if (page === "login") {
+  return <Login setPage={setPage} />;
+}
+
+if (page === "welcome") {
+  return <Welcome setPage={setPage} />;
+}
+
+if (page === "welcomeIntro") {
+  return <WelcomeIntro setPage={setPage} />;
+}
 
 if (page === "home") {
   return withSuspense(<Home setPage={setPage} />);
