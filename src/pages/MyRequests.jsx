@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
+import { authFetch } from "../utils/authFetch";
 
 function PhotoStrip({ request, onPreview }) {
   const photos = [
@@ -141,9 +142,88 @@ function EditPhotoManager({
 function MyRequests({ setPage }) {
   const language = getLanguage();
 
+  const [recoveryTick, setRecoveryTick] = useState(0);
+
   const requests = JSON.parse(
     localStorage.getItem("homeownerRequests") || "[]"
-  );
+  ).filter((request) => {
+    if (!request || request.status === "closed") return false;
+    const hasId = request.requestId || request.id;
+    const hasContent = request.title || request.description || request.service;
+    return Boolean(hasId && hasContent);
+  });
+
+  useEffect(() => {
+    async function recoverHomeownerRequests() {
+      if (requests.length > 0) return;
+
+      try {
+        const result = await authFetch("/posts", {}, setPage);
+
+        if (!result?.response?.ok) return;
+
+        const data = result.data || {};
+        const posts = Array.isArray(data) ? data : data.posts || [];
+
+        const currentUserId = localStorage.getItem("userId");
+        const currentUserEmail = localStorage.getItem("userEmail");
+
+        const recoveredRequests = posts
+          .filter((post) => {
+            const sameUserId =
+              currentUserId &&
+              String(post.user_id || post.userId || "") === String(currentUserId);
+
+            const sameEmail =
+              currentUserEmail &&
+              String(post.email || post.user_email || "").toLowerCase() ===
+                String(currentUserEmail).toLowerCase();
+
+            const looksLikeHomeownerQuoteRequest =
+              String(post.post_type || post.type || "").includes("quote_request") ||
+              String(post.status || "").toLowerCase() === "open";
+
+            return sameUserId || sameEmail || looksLikeHomeownerQuoteRequest;
+          })
+          .map((post) => ({
+            id: post.id,
+            requestId: post.id,
+            source: "backend-post-recovery",
+            title: post.title || post.project_title || "Project Request",
+            description: post.description || post.project_description || "",
+            category: post.category || "handyman",
+            location: post.location || "Local Area",
+            photos: Array.isArray(post.photos) ? post.photos : [],
+            image_url: post.image_url || "",
+            status: post.status || "open",
+            createdAt: post.created_at || post.createdAt || new Date().toISOString(),
+            viewedByBusinesses: [],
+            quotesReceived: [],
+            messagesCount: 0,
+          }));
+
+        if (recoveredRequests.length === 0) return;
+
+        localStorage.setItem(
+          "homeownerRequests",
+          JSON.stringify(recoveredRequests)
+        );
+
+        localStorage.setItem(
+          "meetroHomeownerRequestsBackup",
+          JSON.stringify(recoveredRequests)
+        );
+
+        setRecoveryTick((tick) => tick + 1);
+      } catch (error) {
+        console.error("Failed to recover homeowner requests", error);
+      }
+    }
+
+    recoverHomeownerRequests();
+  }, [requests.length, setPage]);
+
+  void recoveryTick;
 
   const selectedId = localStorage.getItem("selectedHomeownerRequestId");
   const [previewImage, setPreviewImage] = useState(null);
@@ -404,8 +484,8 @@ function MyRequests({ setPage }) {
 
   return (
     <div style={page}>
-      <button style={backButton} onClick={() => setPage("home")}>
-        ← {t("back") || "Back"}
+      <button style={backButton} onClick={() => setPage("myRequests")}>
+        ← {t("back") || "Back to Requests"}
       </button>
 
       <div style={header}>
@@ -1033,7 +1113,7 @@ function MyRequests({ setPage }) {
                                   <button
                                     style={nextSecondaryButton}
                                     onClick={() => {
-                                      setPage("messages");
+                                      setPage("messagesInbox");
                                     }}
                                   >
                                     {language === "es"
@@ -1461,7 +1541,7 @@ const title = {
 };
 
 const subtitle = {
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
   maxWidth: "640px",
@@ -1530,7 +1610,7 @@ const miniTimelineDate = {
   margin: "2px 0 0",
   fontSize: "11px",
   fontWeight: "800",
-  color: "#64748b",
+  color: "#475569",
 };
 
 const requestCard = {
@@ -1616,7 +1696,7 @@ const cardTitle = {
 };
 
 const cardText = {
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };
@@ -1715,7 +1795,7 @@ const galleryEmpty = {
   justifyContent: "center",
   textAlign: "center",
   gap: "6px",
-  color: "#64748b",
+  color: "#475569",
   padding: "16px",
 };
 
@@ -1727,7 +1807,7 @@ const imageModal = {
   position: "fixed",
   inset: 0,
   background: "rgba(15,23,42,0.82)",
-  zIndex: 9999,
+  zIndex: 90,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1742,7 +1822,8 @@ const imagePreviewShell = {
 };
 
 const largePreviewImage = {
-  width: "min(92vw, 1100px)",
+  width: "100%",
+  maxWidth: "calc(100vw - 32px)",
   maxHeight: "84vh",
   objectFit: "contain",
   borderRadius: "24px",
@@ -1950,7 +2031,7 @@ const quoteBusiness = {
 
 const quoteDate = {
   margin: "2px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "11px",
 };
 
@@ -2048,7 +2129,7 @@ const acceptConfirmTitle = {
 
 const acceptConfirmText = {
   margin: "0 0 12px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };
@@ -2085,7 +2166,7 @@ const confirmAcceptButton = {
 const cancelAcceptButton = {
   border: "1px solid #e5e7eb",
   background: "white",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "14px",
   padding: "12px",
   fontWeight: "900",
@@ -2106,7 +2187,7 @@ const revisionTextarea = {
   borderRadius: "14px",
   border: "1px solid #d8d4fe",
   padding: "14px",
-  fontSize: "15px",
+  fontSize: "16px",
   resize: "vertical",
   outline: "none",
   boxSizing: "border-box",
@@ -2133,7 +2214,7 @@ const cancelRevisionButton = {
   flex: 1,
   border: "1px solid #e5e7eb",
   background: "white",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "14px",
   padding: "12px",
   fontWeight: "900",
@@ -2280,7 +2361,7 @@ const nextStepsButton = {
 const disabledQuoteButton = {
   border: "1px solid #e5e7eb",
   background: "#f8fafc",
-  color: "#94a3b8",
+  color: "#475569",
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
@@ -2304,7 +2385,7 @@ const editInput = {
   padding: "13px",
   borderRadius: "14px",
   border: "1px solid #dbeafe",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
 };
 
@@ -2476,7 +2557,7 @@ const secondaryButton = {
 const confirmOverlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 9999,
+  zIndex: 90,
   background: "rgba(15,23,42,0.62)",
   display: "flex",
   alignItems: "center",
@@ -2516,7 +2597,7 @@ const confirmTitle = {
 
 const confirmText = {
   margin: "0 0 20px",
-  color: "#64748b",
+  color: "#475569",
   lineHeight: 1.5,
   fontWeight: "700",
 };

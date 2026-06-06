@@ -278,7 +278,7 @@ const title = {
 
 const subtitle = {
   textAlign: "center",
-  color: "#64748b",
+  color: "#475569",
   lineHeight: 1.5,
   marginBottom: "20px",
 };
@@ -303,6 +303,7 @@ const textarea = {
   borderRadius: "18px",
   padding: "14px",
   fontWeight: "700",
+  fontSize: "16px",
   boxSizing: "border-box",
   resize: "vertical",
 };
@@ -319,6 +320,7 @@ const input = {
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
+  fontSize: "16px",
   boxSizing: "border-box",
 };
 

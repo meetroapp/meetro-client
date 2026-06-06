@@ -197,7 +197,7 @@ const title = {
 const subtitle = {
   fontSize: "14px",
   lineHeight: 1.5,
-  color: "#64748b",
+  color: "#475569",
   marginBottom: "20px",
 };
 

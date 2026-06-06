@@ -10,6 +10,21 @@ function QuoteRequests({ setPage, currentPage }) {
   const [activeQuoteId, setActiveQuoteId] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const language = localStorage.getItem("language") || "en";
+  const isSpanish = language === "es";
+
+  const pageText = {
+    enterMessage: isSpanish ? "Escribe un mensaje." : "Please enter a message.",
+    messageSent: isSpanish ? "Mensaje enviado." : "Message sent!",
+    sendFailed: isSpanish ? "No se pudo enviar el mensaje." : "Failed to send message",
+    serverError: isSpanish ? "Error del servidor." : "Server error",
+    cancelQuickReply: isSpanish ? "Cancelar respuesta rápida" : "Cancel Quick Reply",
+    quickReply: isSpanish ? "Respuesta rápida" : pageText.quickReply,
+    replyPlaceholder: isSpanish ? "Escribe tu respuesta..." : "Write your reply...",
+    sending: isSpanish ? "Enviando..." : "Sending...",
+    sendReply: isSpanish ? "Enviar respuesta" : pageText.sendReply,
+  };
+
 
   useEffect(() => {
     fetchQuotes();
@@ -93,7 +108,7 @@ function QuoteRequests({ setPage, currentPage }) {
 
   async function sendReply(quote) {
     if (!replyText.trim()) {
-      alert("Please enter a message.");
+      alert(pageText.enterMessage);
       return;
     }
 
@@ -155,7 +170,7 @@ function QuoteRequests({ setPage, currentPage }) {
           console.error(syncError);
         }
 
-        alert("Message sent!");
+        alert(pageText.messageSent);
 
         setQuotes((currentQuotes) =>
           currentQuotes.map((currentQuote) =>
@@ -174,11 +189,11 @@ function QuoteRequests({ setPage, currentPage }) {
         setReplyText("");
         setActiveQuoteId(null);
       } else {
-        alert(data.error || "Failed to send message");
+        alert(data.error || pageText.sendFailed);
       }
     } catch (error) {
       console.error(error);
-      alert("Server error");
+      alert(pageText.serverError);
     } finally {
       setSending(false);
     }
@@ -326,14 +341,14 @@ function QuoteRequests({ setPage, currentPage }) {
             style={secondaryButton}
           >
             {activeQuoteId === quote.id
-              ? "Cancel Quick Reply"
-              : "Quick Reply"}
+              ? pageText.cancelQuickReply
+              : pageText.quickReply}
           </button>
 
           {activeQuoteId === quote.id && (
             <div style={replyBox}>
               <textarea
-                placeholder="Write your reply..."
+                placeholder={pageText.replyPlaceholder}
                 value={replyText}
                 onChange={(e) =>
                   setReplyText(e.target.value)
@@ -357,7 +372,7 @@ function QuoteRequests({ setPage, currentPage }) {
                 }}
               >
                 {sending
-                  ? "Sending..."
+                  ? pageText.sending
                   : "Send Message"}
               </button>
             </div>

@@ -385,7 +385,7 @@ const label = {
 };
 
 const value = {
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };

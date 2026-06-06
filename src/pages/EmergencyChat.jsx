@@ -351,14 +351,14 @@ const userBubble = {
 const contractorMeta = {
   marginTop: "5px",
   fontSize: "11px",
-  color: "#9ca3af",
+  color: "#475569",
   textAlign: "left",
 };
 
 const userMeta = {
   marginTop: "5px",
   fontSize: "11px",
-  color: "#9ca3af",
+  color: "#475569",
   textAlign: "right",
 };
 
@@ -403,7 +403,7 @@ const input = {
   border: "1px solid #e5e7eb",
   borderRadius: "18px",
   padding: "14px 16px",
-  fontSize: "15px",
+  fontSize: "16px",
   outline: "none",
 };
 

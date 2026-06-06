@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import SafeBackBar from "../components/SafeBackBar";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
@@ -429,18 +430,8 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
-      <button
-  onClick={() => {
-    const isBusinessUser =
-      isProfessionalSession();
-
-    setPage(isBusinessUser ? "businessDashboard" : "home");
-  }}
-  style={backButton}
->
-        ← {t("backToDashboard")}
-      </button>
+    <div style={{ ...pageWrapper, paddingTop: "calc(env(safe-area-inset-top) + 64px)" }}>
+      <SafeBackBar setPage={setPage} fallback="businessDashboard" label="← Back to Dashboard" />
 
       <div style={heroCard}>
         <div>
@@ -609,7 +600,8 @@ function MessagesInbox({ setPage, currentPage }) {
         ))}
       </div>
 
-      <BottomNav setPage={setPage} currentPage="messagesInbox" />
+
+        <BottomNav setPage={setPage} currentPage="messagesInbox" />
     </div>
   );
 }
@@ -618,7 +610,7 @@ const pageWrapper = {
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 32%), linear-gradient(to bottom, #f7f7fb, #eef0f7)",
   minHeight: "100vh",
-  padding: "22px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 170px",
   boxSizing: "border-box",
   color: "#111827",
 };
@@ -638,8 +630,8 @@ const backButton = {
 const heroCard = {
   background:
     "linear-gradient(135deg, #111b46 0%, #263b92 45%, #5b3df5 100%)",
-  borderRadius: "32px",
-  padding: "26px",
+  borderRadius: "30px",
+  padding: "22px",
   marginBottom: "16px",
   color: "white",
   boxShadow: "0 22px 55px rgba(35,54,139,0.30)",
@@ -658,7 +650,7 @@ const eyebrow = {
 };
 
 const pageTitle = {
-  fontSize: "40px",
+  fontSize: "34px",
   margin: "10px 0 8px",
   color: "#eef4ff",
   lineHeight: 1,

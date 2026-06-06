@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, setLanguage, t } from "../utils/language";
+import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
+import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
 import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
 
 function Home({ setPage }) {
@@ -79,6 +81,30 @@ function Home({ setPage }) {
     };
   }, []);
 
+  const liveHomeownerRequests = getStoredHomeownerRequests();
+
+  const matchingBusinessLeads = liveHomeownerRequests.filter((request) => {
+    const status = String(request.status || "open").toLowerCase();
+
+    if (
+      status.includes("accepted") ||
+      status.includes("completed") ||
+      status.includes("cancelled")
+    ) {
+      return false;
+    }
+
+    return canBusinessSeeCategory(
+      businessCategory,
+      request.category ||
+        request.business_category ||
+        request.serviceCategory ||
+        inferEmergencyCategory(request)
+    );
+  });
+
+  const realBusinessLeadCount = String(matchingBusinessLeads.length);
+
   function toggleLanguage() {
     const nextLanguage = language === "en" ? "es" : "en";
     setLanguage(nextLanguage);
@@ -112,7 +138,7 @@ function Home({ setPage }) {
           <p style={businessText}>{t("businessDashboardText")}</p>
 
           <div style={statsGrid}>
-            <StatCard title={t("newLeads")} value="8" note={t("last24h")} />
+            <StatCard title={t("newLeads")} value={realBusinessLeadCount} note={t("live")} />
             <StatCard title={t("messages")} value="5" note={t("unread")} />
             <StatCard title={t("profileViews")} value="32" note={t("thisWeek")} />
             <StatCard title={t("profileScore")} value="92%" note={t("great")} />
@@ -808,7 +834,7 @@ function ProCard({ name, category, location, onClick }) {
 const pageWrapper = {
   background: "linear-gradient(to bottom, #f7f7fb 0%, #f2f3f8 100%)",
   minHeight: "100vh",
-  padding: "24px 18px 130px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 130px",
   boxSizing: "border-box",
   color: "#111",
 };
@@ -817,7 +843,7 @@ const topBar = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: "22px",
+  marginBottom: "16px",
   gap: "12px",
 };
 
@@ -869,7 +895,7 @@ const businessHero = {
   background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)",
   color: "white",
   borderRadius: "32px",
-  padding: "30px 24px",
+  padding: "22px 18px",
   marginBottom: "22px",
   boxShadow: "0 18px 40px rgba(15,23,42,0.24)",
 };
@@ -888,7 +914,7 @@ const heroTitle = {
 
 const businessTitle = {
   margin: "12px 0",
-  fontSize: "34px",
+  fontSize: "28px",
   lineHeight: 1.15,
   textAlign: "center",
 };
@@ -1425,13 +1451,13 @@ const statsGrid = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: "14px",
-  marginTop: "22px",
+  marginTop: "14px",
 };
 
 const statCard = {
   background: "rgba(255,255,255,0.12)",
   borderRadius: "22px",
-  padding: "20px",
+  padding: "14px",
   textAlign: "center",
 };
 

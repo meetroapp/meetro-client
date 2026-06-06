@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Keyboard } from "@capacitor/keyboard";
 import { getLanguage, t } from "../utils/language";
 import {
   getNotifications,
@@ -12,6 +13,7 @@ function BottomNav({ setPage, currentPage = "" }) {
     localStorage.getItem("activeAccountMode") || "personal"
   );
   const [notificationTick, setNotificationTick] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     const syncNav = () => {
@@ -32,6 +34,69 @@ function BottomNav({ setPage, currentPage = "" }) {
       window.removeEventListener("accountModeChanged", syncNav);
       window.removeEventListener("storage", syncNav);
       window.removeEventListener("meetroNotificationsUpdated", syncNav);
+    };
+  }, []);
+
+  useEffect(() => {
+    let showListener;
+    let hideListener;
+
+    const isEditableTarget = (target) => {
+      const tag = target?.tagName?.toLowerCase();
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        target?.isContentEditable
+      );
+    };
+
+    const handleFocusIn = (event) => {
+      if (isEditableTarget(event.target)) {
+        setKeyboardOpen(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      setTimeout(() => setKeyboardOpen(false), 220);
+    };
+
+    const handleViewportResize = () => {
+      if (!window.visualViewport) return;
+
+      const heightDifference =
+        window.innerHeight - window.visualViewport.height;
+
+      if (heightDifference > 100) {
+        setKeyboardOpen(true);
+      }
+    };
+
+    const setupKeyboardListeners = async () => {
+      try {
+        showListener = await Keyboard.addListener("keyboardWillShow", () => {
+          setKeyboardOpen(true);
+        });
+
+        hideListener = await Keyboard.addListener("keyboardWillHide", () => {
+          setKeyboardOpen(false);
+        });
+      } catch (error) {
+        // Browser fallback only.
+      }
+    };
+
+    setupKeyboardListeners();
+
+    document.addEventListener("focusin", handleFocusIn, true);
+    document.addEventListener("focusout", handleFocusOut, true);
+    window.visualViewport?.addEventListener("resize", handleViewportResize);
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn, true);
+      document.removeEventListener("focusout", handleFocusOut, true);
+      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+      showListener?.remove?.();
+      hideListener?.remove?.();
     };
   }, []);
 
@@ -139,6 +204,10 @@ function BottomNav({ setPage, currentPage = "" }) {
     },
   ];
 
+  useEffect(() => {
+    setKeyboardOpen(false);
+  }, [currentPage]);
+
   const navItems = activeMode === "business" ? businessNavItems : personalNavItems;
   const normalizedPage = currentPage || "";
 
@@ -148,6 +217,10 @@ function BottomNav({ setPage, currentPage = "" }) {
       : 0;
 
   void notificationTick;
+
+  if (keyboardOpen) {
+    return null;
+  }
 
   return (
     <div style={navWrapper}>
@@ -172,24 +245,37 @@ function BottomNav({ setPage, currentPage = "" }) {
 
           const isCenterAction = activeMode === "business" && item.center;
 
+          const handleNavPress = () => {
+            if (item.page === "contractorDashboard") {
+              const notifications = getNotifications();
+
+              saveNotifications(
+                notifications.map((notice) =>
+                  notice.targetRole === "professional" ||
+                  notice.targetRole === "all"
+                    ? { ...notice, read: true }
+                    : notice
+                )
+              );
+            }
+
+            setKeyboardOpen(false);
+            document.activeElement?.blur?.();
+            setPage(item.page);
+          };
+
           return (
             <button
               key={item.page}
-              onClick={() => {
-                if (item.page === "contractorDashboard") {
-                  const notifications = getNotifications();
-
-                  saveNotifications(
-                    notifications.map((notice) =>
-                      notice.targetRole === "professional" ||
-                      notice.targetRole === "all"
-                        ? { ...notice, read: true }
-                        : notice
-                    )
-                  );
-                }
-
-                setPage(item.page);
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handleNavPress();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
               }}
               style={{
                 ...navButton,
@@ -229,9 +315,7 @@ function BottomNav({ setPage, currentPage = "" }) {
   );
 }
 
-const centerNavButton = {
-  transform: "translateY(-8px)",
-};
+const centerNavButton = {};
 
 const centerNavButtonActive = {
   background: "rgba(124,58,237,0.08)",
@@ -269,31 +353,40 @@ const centerIconWrapAlert = {
 
 const navWrapper = {
   position: "fixed",
-  bottom: "0",
-  left: "50%",
-  transform: "translateX(-50%)",
+  bottom: "0px",
+  left: "0",
+  right: "0",
   width: "100%",
   maxWidth: "460px",
-  zIndex: 1000,
-  padding: "0 10px calc(12px + env(safe-area-inset-bottom))",
+  margin: "0 auto",
+  zIndex: 2147483000,
+  pointerEvents: "auto",
+  padding: "0 10px calc(4px + env(safe-area-inset-bottom))",
   boxSizing: "border-box",
 };
 
 const navContainer = {
+  touchAction: "manipulation",
+  WebkitTransform: "translateZ(0)",
+  transform: "translateZ(0)",
   background: "rgba(255,255,255,0.96)",
   backdropFilter: "blur(24px)",
   border: "1px solid rgba(226,232,240,0.95)",
   borderRadius: "30px",
   padding: "9px 8px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
+  display: "grid",
+  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  alignItems: "stretch",
+  gap: "4px",
+  pointerEvents: "auto",
   boxShadow:
     "0 18px 48px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.75)",
 };
 
 const navButton = {
-  flex: 1,
+  width: "100%",
+  minWidth: 0,
+  minHeight: "68px",
   border: "1px solid transparent",
   background: "transparent",
   display: "flex",
@@ -301,17 +394,24 @@ const navButton = {
   alignItems: "center",
   justifyContent: "center",
   gap: "4px",
-  padding: "8px 4px",
+  padding: "10px 4px",
   borderRadius: "24px",
   cursor: "pointer",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  pointerEvents: "auto",
+  position: "relative",
+  zIndex: 1,
   transition:
-    "background 180ms ease, transform 180ms ease, box-shadow 180ms ease, border 180ms ease",
+    "background 180ms ease, box-shadow 180ms ease, border 180ms ease",
 };
 
 const activeButton = {
   background: "#f1edff",
   border: "1px solid rgba(91,61,245,0.25)",
-  transform: "translateY(-4px)",
+  
   boxShadow:
     "0 12px 28px rgba(91,61,245,0.22), inset 0 1px 0 rgba(255,255,255,0.85)",
 };
@@ -376,7 +476,7 @@ const activeLabel = {
 
 const subLabel = {
   fontSize: "9px",
-  color: "#94a3b8",
+  color: "#475569",
   lineHeight: 1.1,
   marginTop: "1px",
   textAlign: "center",

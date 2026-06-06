@@ -203,6 +203,7 @@ const input = {
   border: "1px solid #e5e7eb",
   marginBottom: "16px",
   fontWeight: "800",
+  fontSize: "16px",
   boxSizing: "border-box",
 };
 
@@ -252,6 +253,7 @@ const textarea = {
   border: "1px solid #e5e7eb",
   marginBottom: "18px",
   fontWeight: "700",
+  fontSize: "16px",
   boxSizing: "border-box",
 };
 

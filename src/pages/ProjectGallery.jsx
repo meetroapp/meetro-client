@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import API_URL from "../api";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
@@ -60,7 +61,7 @@ function ProjectGallery({ setPage, currentPage }) {
         setProfile(profileData.profile);
 
         const projectsResponse = await fetch(
-          `http://localhost:3000/contractor-projects/${profileData.profile.id}`
+          `${API_URL}/contractor-projects/${profileData.profile.id}`
         );
 
         const projectsData =
@@ -739,7 +740,7 @@ function ProjectGallery({ setPage, currentPage }) {
 const pageWrapper = {
   background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "22px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   boxSizing: "border-box",
 };
 
@@ -1014,7 +1015,7 @@ const editPageTitle = {
 
 const editPageSubtitle = {
   margin: "8px 0 18px",
-  color: "#64748b",
+  color: "#475569",
   lineHeight: 1.5,
 };
 
@@ -1060,7 +1061,7 @@ const emptyEditPhotos = {
   borderRadius: "18px",
   padding: "18px",
   marginBottom: "18px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
 };
 
@@ -1068,7 +1069,7 @@ const imagePreviewOverlay = {
   position: "fixed",
   inset: 0,
   background: "rgba(15,23,42,0.92)",
-  zIndex: 3000,
+  zIndex: 80,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1203,7 +1204,7 @@ const projectContent = {
 
 const projectTag = {
   background: "transparent",
-  color: "#64748b",
+  color: "#475569",
   display: "inline-flex",
   alignItems: "center",
   gap: "6px",

@@ -140,7 +140,7 @@ function Chat({ setPage, currentPage }) {
 const pageWrapper = {
   background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "24px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   boxSizing: "border-box",
   color: "#111",
 };

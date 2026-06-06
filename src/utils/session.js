@@ -58,7 +58,13 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
   const isProfessional = isProfessionalUser(user);
 
   const finalAccountType = isProfessional ? "professional" : "homeowner";
-  const finalMode = isProfessional ? "business" : "personal";
+  const preferredMode =
+    localStorage.getItem("meetroPreferredAccountMode") ||
+    localStorage.getItem("activeAccountMode") ||
+    "personal";
+
+  const finalMode =
+    isProfessional && preferredMode === "business" ? "business" : "personal";
   const finalRole = isProfessional
     ? user.business_category ||
       user.businessCategory ||
@@ -98,7 +104,16 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
 }
 
 export function getPostLoginPage(user = {}) {
-  return isProfessionalUser(user) ? "businessDashboard" : "home";
+  const preferredMode =
+    localStorage.getItem("meetroPreferredAccountMode") ||
+    localStorage.getItem("activeAccountMode") ||
+    "personal";
+
+  if (preferredMode === "business" && isProfessionalUser(user)) {
+    return "businessDashboard";
+  }
+
+  return "home";
 }
 
 

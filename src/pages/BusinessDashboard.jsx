@@ -571,10 +571,11 @@ function BusinessDashboard({ setPage }) {
           matchingDashboardLeads.map((request) => (
             <LeadCard
               key={request.id || request.requestId || formatLeadTitle(request)}
+              request={request}
               category={formatLeadCategory(request)}
               title={formatLeadTitle(request)}
               location={formatLeadLocation(request)}
-              time={t("dashboardRecentlyPosted")}
+              time={request.posted || request.date || t("dashboardRecentlyPosted")}
               setPage={setPage}
             />
           ))
@@ -661,24 +662,40 @@ function WorkRow({ title, meta, status, time, onClick }) {
   );
 }
 
-function LeadCard({ category, title, location, time, setPage }) {
+function LeadCard({ request, category, title, location, time, setPage }) {
   return (
     <button
       onClick={() => {
         const lead = {
-          id: Date.now(),
+          ...request,
+          id: request.id || request.requestId,
+          requestId: request.requestId || request.id,
           title,
           category,
           location,
           posted: time,
-          description: "Customer is requesting service assistance.",
-          urgency: "New",
-          verified: true,
+          description:
+            request.description ||
+            request.project_description ||
+            request.service ||
+            "",
+          urgency: request.urgency || "New",
+          verified: request.verified ?? true,
         };
 
+        // preserved selectedActiveProject
+        localStorage.removeItem("lastCompletedProject");
+        localStorage.removeItem("selectedHomeownerRequestId");
+        localStorage.removeItem("selectedWorkCenterRequest");
+        localStorage.removeItem("activeWorkCenterQuoteRequestId");
+
+        localStorage.setItem("selectedPostId", lead.id || lead.requestId);
+
         localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
-        localStorage.setItem("selectedPostId", lead.id);
         localStorage.setItem("projectDetailsReturnPage", "businessDashboard");
+
+        localStorage.setItem("leadWorkflowStage", "project_review");
+        localStorage.setItem("leadWorkflowIntent", "review_contact_schedule");
 
         setPage("projectDetails");
       }}
@@ -709,7 +726,7 @@ const pendingQuoteGlowWrap = {
 const pageWrapper = {
   minHeight: "100vh",
   background: "linear-gradient(180deg, #071225 0%, #0b1630 48%, #f5f7fb 48%)",
-  padding: "22px 18px 150px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 150px",
   boxSizing: "border-box",
   color: "#111827",
 };
@@ -876,7 +893,7 @@ const glanceValue = {
 
 const glanceNote = {
   margin: "5px 0 0",
-  color: "#94a3b8",
+  color: "#475569",
   fontSize: "12px",
 };
 
@@ -925,7 +942,8 @@ const sectionCard = {
   borderRadius: "26px",
   padding: "18px",
   marginBottom: "16px",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  border: "1px solid rgba(203,213,225,0.95)",
+  boxShadow: "0 18px 42px rgba(15,23,42,0.13)",
 };
 
 const sectionTop = {
@@ -939,7 +957,9 @@ const sectionTop = {
 const sectionTitle = {
   margin: 0,
   fontSize: "22px",
-  fontWeight: "900",
+  fontWeight: "950",
+  color: "#0f172a",
+  opacity: 1,
 };
 
 const sectionSub = {
@@ -1100,16 +1120,17 @@ const workStatus = {
 
 const chevron = {
   fontSize: "24px",
-  color: "#94a3b8",
+  color: "#475569",
 };
 
 const emptyLeadsState = {
   padding: "18px",
   borderRadius: "18px",
-  background: "#f8fafc",
-  border: "1px solid #e5e7eb",
-  color: "#64748b",
-  fontSize: "14px",
+  background: "#ffffff",
+  border: "1px solid #cbd5e1",
+  color: "#1f2937",
+  fontSize: "15px",
+  fontWeight: "800",
   lineHeight: 1.5,
 };
 
@@ -1118,7 +1139,8 @@ const leadsCard = {
   borderRadius: "26px",
   padding: "18px",
   marginBottom: "16px",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  border: "1px solid rgba(203,213,225,0.95)",
+  boxShadow: "0 18px 42px rgba(15,23,42,0.13)",
 };
 
 const leadCard = {

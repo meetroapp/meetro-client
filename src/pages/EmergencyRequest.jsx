@@ -398,7 +398,7 @@ const input = {
   padding: "16px",
   borderRadius: "16px",
   border: "1px solid #d1d5db",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
 };
@@ -409,7 +409,7 @@ const textarea = {
   padding: "16px",
   borderRadius: "16px",
   border: "1px solid #d1d5db",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
   resize: "vertical",

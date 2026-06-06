@@ -401,7 +401,7 @@ const pageWrapper = {
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 32%), linear-gradient(to bottom, #f7f7fb, #eef0f7)",
   minHeight: "100vh",
-  padding: "22px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   boxSizing: "border-box",
   color: "#111827",
 };

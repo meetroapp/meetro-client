@@ -9,8 +9,8 @@ function FloatingBackButton({ onClick, label }) {
 
 const backButton = {
   position: "fixed",
-  top: "22px",
-  left: "22px",
+  top: "72px",
+  left: "18px",
   zIndex: 999,
   pointerEvents: "auto",
   width: "52px",

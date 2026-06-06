@@ -347,7 +347,7 @@ const stars = {
 const starButton = {
   border: "none",
   background: "#e5e7eb",
-  color: "#9ca3af",
+  color: "#475569",
   width: "42px",
   height: "42px",
   borderRadius: "14px",
@@ -374,7 +374,7 @@ const textarea = {
   border: "1px solid #e5e7eb",
   borderRadius: "20px",
   padding: "15px",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
   resize: "vertical",

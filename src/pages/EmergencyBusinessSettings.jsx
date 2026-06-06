@@ -297,7 +297,7 @@ const textarea = {
   background: "#f8fafc",
   borderRadius: "18px",
   padding: "14px",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: "700",
   lineHeight: 1.5,
   outline: "none",

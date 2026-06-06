@@ -207,9 +207,16 @@ function Upload({ setPage, currentPage }) {
           createdAt: new Date().toISOString(),
         };
 
+        const updatedHomeownerRequests = [requestRecord, ...existingRequests];
+
         localStorage.setItem(
           "homeownerRequests",
-          JSON.stringify([requestRecord, ...existingRequests])
+          JSON.stringify(updatedHomeownerRequests)
+        );
+
+        localStorage.setItem(
+          "meetroHomeownerRequestsBackup",
+          JSON.stringify(updatedHomeownerRequests)
         );
 
         alert(t("projectPostedSuccess"));
@@ -234,10 +241,36 @@ function Upload({ setPage, currentPage }) {
     }
   }
 
+  function handleCancelRequest() {
+    const hasChanges =
+      title ||
+      description ||
+      location ||
+      imageUrl ||
+      projectPhotos.length > 0;
+
+    if (hasChanges) {
+      const confirmed = window.confirm(t("cancelRequestWarning"));
+
+      if (!confirmed) return;
+    }
+
+    setTitle("");
+    setDescription("");
+    setCategory("handyman");
+    setCustomCategory("");
+    setLocation("");
+    setImageUrl("");
+    setProjectPhotos([]);
+    setPhotoRecords([]);
+
+    setPage("home");
+  }
+
   return (
     <div style={pageWrapper}>
-      <button onClick={() => setPage("home")} style={backButton}>
-        ← {t("backToHome")}
+      <button onClick={handleCancelRequest} style={backButton}>
+        ←
       </button>
 
       <div style={heroCard}>
@@ -339,42 +372,6 @@ function Upload({ setPage, currentPage }) {
                 <div key={photo + index} style={photoPreviewItem}>
                   <img src={photo} alt={t("preview")} style={previewImage} />
 
-                  <div style={photoTagRow}>
-                    {["before", "progress", "after"].map((tag) => {
-                      const activeRecord = photoRecords.find(
-                        (record) => record.url === photo
-                      );
-
-                      const isActive = (activeRecord?.tag || "progress") === tag;
-
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          style={{
-                            ...photoTagButton,
-                            ...(isActive ? photoTagButtonActive : {}),
-                          }}
-                          onClick={() => {
-                            setPhotoRecords((current) =>
-                              current.map((record) =>
-                                record.url === photo
-                                  ? { ...record, tag }
-                                  : record
-                              )
-                            );
-                          }}
-                        >
-                          {tag === "before"
-                            ? "Before"
-                            : tag === "after"
-                            ? "After"
-                            : "Progress"}
-                        </button>
-                      );
-                    })}
-                  </div>
-
                   <button
                     onClick={() => {
                       const updated = projectPhotos.filter((_, i) => i !== index);
@@ -410,6 +407,14 @@ function Upload({ setPage, currentPage }) {
         >
           {creating ? t("creating") : t("createPost")}
         </button>
+
+        <button
+          type="button"
+          onClick={handleCancelRequest}
+          style={cancelRequestButton}
+        >
+          {t("cancelRequest")}
+        </button>
       </div>
 
       <BottomNav setPage={setPage} currentPage="upload" />
@@ -420,17 +425,24 @@ function Upload({ setPage, currentPage }) {
 const pageWrapper = {
   background: "linear-gradient(180deg,#f8f7ff 0%,#eef2ff 100%)",
   minHeight: "100vh",
-  padding: "18px 18px 130px",
+  padding: "calc(env(safe-area-inset-top) + 34px) 18px 190px",
   boxSizing: "border-box",
 };
 
 const backButton = {
+  width: "44px",
+  height: "44px",
   border: "none",
-  background: "transparent",
+  borderRadius: "16px",
+  background: "#ffffff",
   color: "#5b3df5",
-  fontWeight: "bold",
-  fontSize: "16px",
+  fontSize: "24px",
+  fontWeight: "900",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   marginBottom: "18px",
+  boxShadow: "0 8px 20px rgba(15,23,42,0.08)",
   cursor: "pointer",
 };
 
@@ -496,7 +508,7 @@ const inputStyle = {
   padding: "14px 15px",
   borderRadius: "16px",
   border: "1px solid #e5e7eb",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
   background: "#ffffff",
@@ -619,6 +631,20 @@ const photoCountText = {
   color: "#5b3df5",
   fontWeight: "900",
   fontSize: "13px",
+};
+
+
+const cancelRequestButton = {
+  width: "100%",
+  border: "none",
+  borderRadius: "18px",
+  padding: "15px",
+  background: "#fee2e2",
+  color: "#b91c1c",
+  fontWeight: "900",
+  fontSize: "15px",
+  marginTop: "10px",
+  cursor: "pointer",
 };
 
 const primaryButton = {

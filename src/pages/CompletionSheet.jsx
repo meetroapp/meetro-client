@@ -405,7 +405,7 @@ const title = {
 };
 
 const subtitle = {
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
 };
 
@@ -443,6 +443,7 @@ const textarea = {
   ...input,
   width: "100%",
   minHeight: "120px",
+  fontSize: "16px",
   boxSizing: "border-box",
 };
 
@@ -494,7 +495,7 @@ const aiBox = {
 const photoNotice = {
   background: "white",
   border: "1px dashed #cbd5e1",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "18px",
   padding: "22px",
   textAlign: "center",

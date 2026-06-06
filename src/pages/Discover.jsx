@@ -652,7 +652,7 @@ const businessLogoWrap = {
 };
 
 const businessCardTitle = {
-  margin: "10px 0",
+  margin: "6px 0",
   fontSize: "18px",
   lineHeight: 1.2,
   fontWeight: "900",
@@ -692,7 +692,7 @@ const businessCardTop = {
 const ratingPill = {
   background: "#fff7df",
   color: "#8a6500",
-  padding: "8px 12px",
+  padding: "6px 10px",
   borderRadius: "999px",
   fontWeight: "900",
   fontSize: "13px",
@@ -763,7 +763,7 @@ const businessSecondaryButton = {
 const pageWrapper = {
   minHeight: "100vh",
   background: "#f4f3f8",
-  padding: "24px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   maxWidth: "1100px",
   margin: "0 auto",
 };
@@ -771,7 +771,7 @@ const pageWrapper = {
 const heroCard = {
   background: "linear-gradient(135deg, #5b35f5, #8257ff)",
   borderRadius: "28px",
-  padding: "34px 24px",
+  padding: "22px 18px",
   color: "white",
   textAlign: "center",
   boxShadow: "0 18px 40px rgba(91, 53, 245, 0.25)",
@@ -785,7 +785,7 @@ const heroEyebrow = {
 };
 
 const heroTitle = {
-  fontSize: "36px",
+  fontSize: "29px",
   lineHeight: "1.1",
   margin: "0 0 14px",
   color: "#0b0b0f",
@@ -795,7 +795,7 @@ const heroTitle = {
 const heroText = {
   fontSize: "17px",
   lineHeight: "1.5",
-  margin: "0 auto 24px",
+  margin: "0 auto 16px",
   maxWidth: "760px",
   color: "white",
 };

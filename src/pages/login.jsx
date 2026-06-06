@@ -24,7 +24,7 @@ function Login({ setPage }) {
       welcomeBack: "Welcome back to your community.",
       createYourAccount: "Create your Meetro account.",
       chooseAccountType: "Choose Account Type",
-      homeowner: "Homeowner",
+      homeowner: "User Account",
       homeownerDescription:
         "Find trusted local pros, request quotes, and manage home projects.",
       professional: "Professional",
@@ -57,7 +57,7 @@ function Login({ setPage }) {
       welcomeBack: "Bienvenido de nuevo a tu comunidad.",
       createYourAccount: "Crea tu cuenta de Meetro.",
       chooseAccountType: "Elige el tipo de cuenta",
-      homeowner: "Dueño de casa",
+      homeowner: "Cuenta de Usuario",
       homeownerDescription:
         "Encuentra profesionales locales, pide cotizaciones y administra proyectos.",
       professional: "Profesional",
@@ -658,7 +658,7 @@ const input = {
   border: "1px solid #e5e7eb",
   borderRadius: "18px",
   padding: "15px 16px",
-  fontSize: "15px",
+  fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
   marginBottom: "14px",

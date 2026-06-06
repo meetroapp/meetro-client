@@ -747,7 +747,7 @@ function ContractorDetails({ setPage, currentPage }) {
 const pageWrapper = {
   background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "22px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   boxSizing: "border-box",
   color: "#111",
 };
@@ -905,7 +905,7 @@ const imagePreviewOverlay = {
   position: "fixed",
   inset: 0,
   background: "rgba(15,23,42,0.92)",
-  zIndex: 3000,
+  zIndex: 80,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1015,7 +1015,7 @@ const portfolioTrustBadge = {
   alignItems: "center",
   gap: "6px",
   background: "transparent",
-  color: "#64748b",
+  color: "#475569",
   padding: "0",
   borderRadius: "0",
   fontSize: "12px",

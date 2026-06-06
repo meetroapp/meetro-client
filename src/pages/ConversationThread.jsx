@@ -399,16 +399,33 @@ function ConversationThread({ setPage }) {
     localStorage.getItem("activeJobService") ||
     "";
 
+  const selectedQuoteRequest = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("selectedQuoteRequest") || "null");
+    } catch {
+      return null;
+    }
+  })();
+
   const activeCustomerName =
-    localStorage.getItem("activeConversationName") ||
+    selectedQuoteRequest?.homeownerName ||
+    selectedQuoteRequest?.homeowner_name ||
+    selectedQuoteRequest?.customerName ||
+    selectedQuoteRequest?.homeowner_email ||
     localStorage.getItem("activeJobCustomer") ||
     localStorage.getItem("homeownerName") ||
+    localStorage.getItem("activeConversationName") ||
     "Customer";
 
   const activeBusinessName =
+    selectedQuoteRequest?.businessName ||
+    selectedQuoteRequest?.business_name ||
+    selectedQuoteRequest?.contractorName ||
+    selectedQuoteRequest?.providerName ||
+    conversationBusinessName ||
+    localStorage.getItem("conversationBusinessName") ||
     localStorage.getItem("businessName") ||
     localStorage.getItem("companyName") ||
-    conversationBusinessName ||
     activeName;
 
   const activeRole =
@@ -839,6 +856,10 @@ function ConversationThread({ setPage }) {
 
     setMessages((prev) => [...prev, messageWithRole]);
 
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    });
+
     const selectedQuoteRequestId =
       localStorage.getItem("selectedQuoteRequestId") || conversationId;
 
@@ -945,7 +966,7 @@ function ConversationThread({ setPage }) {
       normalized.includes("save history") ||
       normalized.includes("guardar historial")
     ) {
-      setPage("messages");
+      setPage("messagesInbox");
       return;
     }
 
@@ -1697,9 +1718,9 @@ const handleImageUpload = (event) => {
           >
             <div style={avatar}>
               {activeLogo ? (
-                <img src={activeLogo} alt={activeName} style={avatarImage} />
+                <img src={activeLogo} alt={activeHeaderName} style={avatarImage} />
               ) : (
-                activeName
+                activeHeaderName
                   .split(" ")
                   .map((word) => word[0])
                   .join("")
@@ -1713,7 +1734,7 @@ const handleImageUpload = (event) => {
             style={headerIdentityButton}
             onClick={() => setShowProfileCard(true)}
           >
-            <div style={name}>{activeName}</div>
+            <div style={name}>{activeHeaderName}</div>
 
             {!isEmergencyConversation && (activeCategory || activeLocation) && (
               <div style={businessInfoLine}>
@@ -2215,7 +2236,7 @@ const handleImageUpload = (event) => {
                           window.dispatchEvent(new Event("meetroDispatchStatusChanged"));
                           window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
                           window.dispatchEvent(new Event("meetro-messages-updated"));
-                          setPage("messages");
+                          setPage("messagesInbox");
                         }}
                       >
                         💾 {language === "es" ? "Guardar historial" : "Save History"}
@@ -3362,7 +3383,8 @@ const page = {
   display: "flex",
   justifyContent: "center",
   padding: 0,
-  overflow: "hidden",
+  overflowX: "hidden",
+  overflowY: "hidden",
 };
 
 const phone = {
@@ -3373,7 +3395,8 @@ const phone = {
   maxHeight: "var(--meetro-safe-vh)",
   position: "relative",
   paddingBottom: "0",
-  overflow: "hidden",
+  overflowX: "hidden",
+  overflowY: "hidden",
   boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
   margin: "0 auto",
   display: "flex",
@@ -3482,13 +3505,13 @@ const profileCardTitle = {
 
 const profileCardMeta = {
   margin: 0,
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
 };
 
 const profileCardLocation = {
   margin: "8px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
 };
 
@@ -3605,7 +3628,7 @@ const businessInfoLine = {
   alignItems: "center",
   gap: "6px",
   marginTop: "3px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   fontSize: "12px",
   overflow: "hidden",
@@ -3792,7 +3815,7 @@ const emergencyStep = {
   alignItems: "center",
   gap: "6px",
   whiteSpace: "nowrap",
-  color: "#9ca3af",
+  color: "#475569",
   fontSize: "10px",
   fontWeight: "800",
 };
@@ -3881,7 +3904,7 @@ const routePreviewTitle = {
 const routePreviewSubtitle = {
   fontSize: "10px",
   color: "#7f1d1d",
-  opacity: 0.72,
+  opacity: 0.882,
   marginTop: "2px",
 };
 
@@ -3963,7 +3986,7 @@ const dateRow = {
   justifyContent: "center",
   gap: "12px",
   marginBottom: "24px",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "13px",
 };
 
@@ -4064,7 +4087,7 @@ const materialsListRow = {
 
 const materialsMoreText = {
   margin: "4px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "13px",
   fontWeight: "700",
 };
@@ -4314,7 +4337,7 @@ const invoiceWorkflowRow = {
 
 const invoiceWorkflowNotes = {
   margin: "12px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };
@@ -4565,7 +4588,7 @@ const revisedQuoteRow = {
 
 const revisedQuoteNotes = {
   margin: "12px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };
@@ -4654,7 +4677,7 @@ const changeRequestStatus = {
 
 const operationalTime = {
   marginTop: "10px",
-  color: "#94a3b8",
+  color: "#475569",
   fontSize: "10px",
   fontWeight: "800",
   textAlign: "right",
@@ -4767,7 +4790,7 @@ const imageTitle = {
 
 const imageSubtitle = {
   fontSize: "10px",
-  opacity: 0.74,
+  opacity: 0.884,
   marginBottom: "6px",
   lineHeight: 1.3,
   textAlign: "center",
@@ -4865,6 +4888,7 @@ const quickWrap = {
   width: "100%",
   maxWidth: "100%",
   overflowX: "auto",
+  overscrollBehaviorX: "contain",
   overflowY: "hidden",
   WebkitOverflowScrolling: "touch",
   gap: "8px",
@@ -5008,7 +5032,7 @@ const photoExplainTitle = {
 
 const photoExplainSubtitle = {
   fontSize: "12px",
-  opacity: 0.7,
+  opacity: 0.88,
   lineHeight: 1.4,
   marginBottom: "12px",
 };
@@ -5089,7 +5113,7 @@ const input = {
   maxHeight: "120px",
   border: "none",
   outline: "none",
-  fontSize: "14px",
+  fontSize: "16px",
   lineHeight: "1.45",
   background: "transparent",
   resize: "none",
@@ -5239,7 +5263,7 @@ const recordClose = {
 const recordDescription = {
   padding: "0 22px 18px",
   marginTop: "-4px",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "13px",
   lineHeight: 1.5,
   fontWeight: "650",
@@ -5405,13 +5429,13 @@ const recordItemText = {
 const recordTime = {
   fontSize: "12px",
   fontWeight: "800",
-  color: "#94a3b8",
+  color: "#475569",
 };
 
 const emptyRecord = {
   padding: "40px 20px",
   textAlign: "center",
-  color: "#94a3b8",
+  color: "#475569",
   fontWeight: "700",
 };
 

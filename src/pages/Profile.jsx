@@ -133,13 +133,15 @@ function Profile({ setPage, currentPage }) {
     }
 
     setActiveAccountMode(mode);
+    localStorage.setItem("meetroPreferredAccountMode", mode);
     setActiveMode(mode);
 
-    if (mode === "business") {
-      setPage("businessDashboard");
-    } else {
-      setPage("home");
-    }
+    const nextPage = mode === "business" ? "businessDashboard" : "home";
+
+    window.location.hash = nextPage;
+    window.dispatchEvent(new Event("accountModeChanged"));
+
+    setPage(nextPage);
   }
 
   function openProfessionalPage(pageName) {
@@ -503,7 +505,7 @@ function SettingRow({ icon, label, value, onClick }) {
 const pageWrapper = {
   background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "24px 18px 130px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 160px",
   boxSizing: "border-box",
   color: "#111",
 };
@@ -630,7 +632,7 @@ const activeModeButton = {
 };
 
 const disabledModeButton = {
-  opacity: 0.55,
+  opacity: 0.85,
   cursor: "not-allowed",
 };
 

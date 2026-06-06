@@ -9,7 +9,6 @@ export function clearMeetroSession() {
     "userEmail",
     "userRole",
     "accountType",
-    "activeAccountMode",
     "isProfessional",
     "hasBusinessProfile",
     "contractorProfileComplete",

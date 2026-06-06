@@ -308,14 +308,7 @@ function CompletedJobDetails({ setPage }) {
                 {t("printRecord")}
               </button>
 
-              <button
-                style={pdfButton}
-                onClick={() =>
-                  alert("PDF export will be connected after invoice PDF generation is built.")
-                }
-              >
-                PDF Coming Soon
-              </button>
+              {/* PDF export hidden until invoice PDF generation is production-ready. */}
             </>
           )}
         </div>
@@ -394,7 +387,7 @@ const title = {
 };
 
 const subtitle = {
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
 };
 
@@ -418,7 +411,7 @@ const infoBox = {
   display: "flex",
   flexDirection: "column",
   gap: "6px",
-  color: "#64748b",
+  color: "#475569",
 };
 
 
@@ -440,7 +433,7 @@ fontWeight:"800",
 const photoNotice = {
   background: "#f8fafc",
   border: "1px dashed #cbd5e1",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "18px",
   padding: "22px",
   textAlign: "center",

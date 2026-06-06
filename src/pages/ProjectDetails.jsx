@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import SafeBackBar from "../components/SafeBackBar";
 import API_URL from "../api";
 import { t } from "../utils/language";
 
@@ -18,8 +19,15 @@ function ProjectDetails({ setPage, currentPage }) {
     localStorage.getItem("selectedActiveProject") || "null"
   );
 
+  const projectDetailsReturnPageValue =
+    localStorage.getItem("projectDetailsReturnPage") || "";
+
   const isProfessionalProject =
-    activeProjectData && activeProjectData.source === "homeownerProject";
+    projectDetailsReturnPageValue === "contractorDashboard";
+
+  const isBusinessLeadReviewPage =
+    projectDetailsReturnPageValue === "businessLeads" ||
+    projectDetailsReturnPageValue === "businessDashboard";
 
   const memoryStats = {
     updates: jobRecords.filter((item) => item.type === "update").length,
@@ -109,8 +117,7 @@ const projectDetailsReturnPage =
 
 if (
   activeProject &&
-  (projectDetailsReturnPage === "contractorDashboard" ||
-    projectDetailsReturnPage === "businessLeads")
+  projectDetailsReturnPage === "contractorDashboard"
 ) {
   const parsedActiveProject = JSON.parse(activeProject);
   setPost(parsedActiveProject.project || parsedActiveProject);
@@ -192,19 +199,19 @@ if (data.post) {
               )}
             </div>
 
-            {isProfessionalProject && (
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
               <div style={professionalStatusCard}>
                 <div style={professionalStatusIcon}>✓</div>
 
                 <div>
                   <strong>
                     {post.status === "scheduled"
-                      ? "Project Scheduled"
-                      : "Project Accepted"}
+                      ? t("projectScheduled")
+                      : t("projectUnderReview")}
                   </strong>
 
                   <p>
-                    This homeowner project is now active in your Work Center.
+                    {t("projectReviewWorkCenterNote")}
                   </p>
                 </div>
               </div>
@@ -216,11 +223,11 @@ if (data.post) {
 
             <div style={projectLifecycleStrip}>
               {[
-                { key: "requested", icon: "📨", label: "Requested" },
-                { key: "review", icon: "👀", label: "Review" },
-                { key: "quote", icon: "🧾", label: "Quote" },
-                { key: "active", icon: "🛠️", label: "Active" },
-                { key: "completed", icon: "✅", label: "Done" },
+                { key: "requested", icon: "📨", label: t("requested") },
+                { key: "review", icon: "👀", label: t("reviewContact") },
+                { key: "quote", icon: "🧾", label: t("quoteAfterReview") },
+                { key: "active", icon: "🛠️", label: t("active") },
+                { key: "completed", icon: "✅", label: t("done") },
               ].map((step) => {
                 const status = String(post.status || "").toLowerCase();
 
@@ -594,46 +601,72 @@ if (data.post) {
               )}
             </div>
 
-            <button
-              onClick={() => {
-                localStorage.setItem(
-                  "selectedQuoteRequest",
-                  JSON.stringify(post)
-                );
+            <div style={projectPrimaryActions}>
+              <button
+                onClick={() => {
+                  localStorage.setItem(
+                    "selectedQuoteRequest",
+                    JSON.stringify(post)
+                  );
 
-                localStorage.setItem("selectedQuoteRequestId", post.id);
+                  localStorage.setItem("selectedQuoteRequestId", post.id);
 
-                localStorage.setItem(
-                  "selectedMessageReceiverId",
-                  post.user_id || ""
-                );
+                  localStorage.setItem(
+                    "selectedMessageReceiverId",
+                    post.user_id || ""
+                  );
 
-                const conversationId =
-                  post.conversationId ||
-                  post.requestId ||
-                  post.id ||
-                  localStorage.getItem("activeJobId") ||
-                  "project-conversation";
+                  const conversationId =
+                    post.conversationId ||
+                    post.requestId ||
+                    post.id ||
+                    localStorage.getItem("activeJobId") ||
+                    "project-conversation";
 
-                localStorage.setItem("activeConversationId", String(conversationId));
-                localStorage.setItem(
-                  "activeConversationName",
-                  post.username || post.customer || post.email || "Customer"
-                );
-                localStorage.setItem("meetroConversationType", "activeJob");
-                localStorage.setItem("conversationReturnPage", "projectDetails");
-                localStorage.setItem("returnPage", "projectDetails");
+                  localStorage.setItem("activeConversationId", String(conversationId));
+                  localStorage.setItem(
+                    "activeConversationName",
+                    post.username || post.customer || post.email || "Customer"
+                  );
+                  localStorage.setItem("meetroConversationType", "activeJob");
+                  localStorage.setItem("conversationReturnPage", "projectDetails");
+                  localStorage.setItem("returnPage", "projectDetails");
 
-                setPage("conversationThread");
-              }}
-              style={messageButton}
-            >
-              💬 {isProfessionalProject ? "Open Project Conversation" : "Open Project Conversation"}
-            </button>
+                  setPage("conversationThread");
+                }}
+                style={messageButton}
+              >
+                💬 {(isProfessionalProject || isBusinessLeadReviewPage)
+                  ? t("contactCustomer")
+                  : t("openProjectConversation")}
+              </button>
 
-            {isProfessionalProject && (
+              {(isProfessionalProject || isBusinessLeadReviewPage) && post.status !== "active" && post.status !== "completed" && (
+                <button
+                  style={schedulePrimaryButton}
+                  onClick={() => {
+                    localStorage.setItem(
+                      "selectedWorkCenterRequest",
+                      JSON.stringify(post)
+                    );
+
+                    localStorage.setItem("meetroWorkCenterTab", "schedule");
+                    localStorage.setItem("activeWorkCenterTab", "schedule");
+                    localStorage.setItem("leadWorkflowStage", "customer_contact");
+                    localStorage.setItem("leadWorkflowIntent", "schedule_before_quote");
+
+                    setPage("contractorDashboard");
+                  }}
+                >
+                  📅 {t("scheduleVisitCall")}
+                </button>
+              )}
+            </div>
+
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
               <div style={projectActionGrid}>
-                {post.status !== "active" && post.status !== "completed" && (
+
+                {post.status === "scheduled" && (
                   <button
                     style={startProjectButton}
                     onClick={() => {
@@ -677,7 +710,7 @@ if (data.post) {
                       window.location.reload();
                     }}
                   >
-                    ▶ Start Project
+                    ▶ {t("activateProject")}
                   </button>
                 )}
 
@@ -794,6 +827,8 @@ if (data.post) {
 
           </div>
         )}
+
+        <SafeBackBar setPage={setPage} fallback={localStorage.getItem("projectDetailsReturnPage") || "discover"} />
 
         <BottomNav setPage={setPage} currentPage={currentPage} />
       </div>
@@ -944,7 +979,7 @@ const latestActivityLabel = {
   fontWeight: "900",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
-  opacity: 0.75,
+  opacity: 0.885,
   marginBottom: "12px",
 };
 
@@ -1132,7 +1167,7 @@ const projectTitle = {
 const photoModalOverlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 9999,
+  zIndex: 90,
   background: "rgba(15, 23, 42, 0.82)",
   display: "flex",
   alignItems: "center",
@@ -1222,7 +1257,7 @@ const projectLifecycleStep = {
   display: "grid",
   gap: "4px",
   placeItems: "center",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "900",
   fontSize: "11px",
 };
@@ -1329,7 +1364,7 @@ const photoAnimationStyle = document.createElement("style");
 photoAnimationStyle.innerHTML = `
 @keyframes photoFadeIn {
   from {
-    opacity: 0.72;
+    opacity: 0.882;
     transform: scale(0.985);
   }
   to {
@@ -1424,6 +1459,25 @@ const secondaryButton = {
   fontWeight: "900",
   fontSize: "16px",
   cursor: "pointer",
+};
+
+const projectPrimaryActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  marginTop: "20px",
+  marginBottom: "18px",
+};
+
+const schedulePrimaryButton = {
+  border: "none",
+  borderRadius: "22px",
+  padding: "18px 20px",
+  background: "linear-gradient(135deg, #0ea5e9, #2563eb)",
+  color: "white",
+  fontWeight: 900,
+  fontSize: "1rem",
+  boxShadow: "0 14px 28px rgba(37,99,235,0.24)",
 };
 
 const messageButton = {

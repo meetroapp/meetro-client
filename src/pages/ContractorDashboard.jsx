@@ -15,12 +15,27 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState(null);
-  const [scheduleForm, setScheduleForm] = useState({
-    title: "",
-    date: new Date().toISOString().slice(0, 10),
-    time: "12:00",
-    location: "",
-    notes: "",
+  const [scheduleForm, setScheduleForm] = useState(() => {
+    const selectedLead = JSON.parse(
+      localStorage.getItem("selectedWorkCenterRequest") || "null"
+    );
+
+    return {
+      appointmentType: "walkthrough",
+      title:
+        selectedLead?.title ||
+        selectedLead?.service ||
+        "",
+      date: new Date().toISOString().slice(0, 10),
+      time: "12:00",
+      location:
+        selectedLead?.location ||
+        selectedLead?.address ||
+        "",
+      notes:
+        selectedLead?.description ||
+        "",
+    };
   });
 
   const [materialsDraft, setMaterialsDraft] = useState("");
@@ -505,18 +520,63 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return status || translate("scheduled");
   }
 
+  function getScheduleAppointmentOptions() {
+    return [
+      {
+        value: "walkthrough",
+        label: translate("walkthrough"),
+        title: translate("scheduledWalkthrough"),
+      },
+      {
+        value: "estimate_visit",
+        label: translate("estimateVisit"),
+        title: translate("scheduledEstimateVisit"),
+      },
+      {
+        value: "consultation",
+        label: translate("consultation"),
+        title: translate("scheduledConsultation"),
+      },
+      {
+        value: "emergency_dispatch",
+        label: translate("emergencyDispatch"),
+        title: translate("scheduledEmergencyDispatch"),
+      },
+      {
+        value: "virtual_meeting",
+        label: translate("virtualMeeting"),
+        title: translate("scheduledVirtualMeeting"),
+      },
+    ];
+  }
+
+  function getScheduleAppointmentMeta(type) {
+    return (
+      getScheduleAppointmentOptions().find((option) => option.value === type) ||
+      getScheduleAppointmentOptions()[0]
+    );
+  }
+
 
   function saveManualScheduleVisit() {
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
     );
 
+    const appointmentMeta = getScheduleAppointmentMeta(
+      scheduleForm.appointmentType || "walkthrough"
+    );
+
     const newVisit = {
       id: editingScheduleId || `schedule-${Date.now()}`,
-      title: scheduleForm.title || translate("scheduledVisit"),
+      appointmentType: scheduleForm.appointmentType || "walkthrough",
+      appointmentLabel: appointmentMeta.label,
+      workflowStage: "scheduling",
+      workflowStatus: appointmentMeta.title,
+      title: scheduleForm.title || appointmentMeta.title || translate("scheduledVisit"),
       date: scheduleForm.date,
       time: normalizeScheduleTime(scheduleForm.time),
-      location: scheduleForm.location || "Customer location",
+      location: scheduleForm.location || translate("customerLocation"),
       notes: scheduleForm.notes,
       status:
         schedule.find((item) => item.id === editingScheduleId)?.status ||
@@ -559,8 +619,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
         conversationId,
         text:
           activeLanguage === "es"
-            ? `📅 Visita programada: ${newVisit.title} — ${newVisit.date} a las ${newVisit.time}.`
-            : `📅 Scheduled visit: ${newVisit.title} — ${newVisit.date} at ${newVisit.time}.`,
+            ? `📅 ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} a las ${newVisit.time}.`
+            : `📅 ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} at ${newVisit.time}.`,
         schedule: newVisit,
         time: new Date().toLocaleTimeString([], {
           hour: "2-digit",
@@ -1361,15 +1421,34 @@ setPage("emergencyDispatch");
             >
               {showScheduleForm
                 ? translate("closeForm")
-                : `+ ${translate("addVisit")}`}
+                : `+ ${translate("addAppointment")}`}
             </button>
           </div>
 
           {showScheduleForm && (
             <div style={scheduleFormCard}>
+              <select
+                style={scheduleInput}
+                value={scheduleForm.appointmentType || "walkthrough"}
+                onChange={(e) => {
+                  const nextMeta = getScheduleAppointmentMeta(e.target.value);
+                  setScheduleForm({
+                    ...scheduleForm,
+                    appointmentType: e.target.value,
+                    title: scheduleForm.title || nextMeta.title,
+                  });
+                }}
+              >
+                {getScheduleAppointmentOptions().map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
               <input
                 style={scheduleInput}
-                placeholder={translate("visitTitle")}
+                placeholder={translate("appointmentTitle")}
                 value={scheduleForm.title}
                 onChange={(e) =>
                   setScheduleForm({ ...scheduleForm, title: e.target.value })
@@ -1416,8 +1495,8 @@ setPage("emergencyDispatch");
 
               <button style={saveScheduleButton} onClick={saveManualScheduleVisit}>
                 {editingScheduleId
-                  ? translate("updateVisit")
-                  : translate("saveVisit")}
+                  ? translate("updateAppointment")
+                  : translate("saveAppointment")}
               </button>
 
               <div style={manualScheduleNotice}>
@@ -1556,7 +1635,9 @@ setPage("emergencyDispatch");
                                 "";
 
                               localStorage.setItem("pendingWorkStatus", "review");
-                              localStorage.setItem("pendingWorkType", "scheduled");
+                              localStorage.setItem("pendingWorkType", item.appointmentType || "scheduled");
+                              localStorage.setItem("pendingWorkWorkflowStage", item.workflowStage || "scheduling");
+                              localStorage.setItem("pendingWorkWorkflowStatus", item.workflowStatus || item.status || "scheduled");
                               localStorage.setItem("pendingWorkSource", item.source || "schedule");
                               localStorage.setItem("pendingWorkService", item.title || translate("scheduledVisit"));
                               localStorage.setItem("pendingWorkLocation", item.location || "");
@@ -1696,7 +1777,7 @@ setPage("emergencyDispatch");
                     openWorkTab("quotes");
                   }}
                 >
-                  🧾 {activeLanguage === "es" ? "Crear cotización" : "Create Quote"}
+                  🧾 {translate("createQuote")}
                 </button>
 
                 <button
@@ -2623,7 +2704,7 @@ setPage("completedJobDetails");
                     setPage("businessCommandCenter");
                   }}
                 >
-                  🧾 {activeLanguage === "es" ? "Crear cotización" : "Create quote"}
+                  🧾 {translate("createQuote")}
                 </button>
               </div>
             </div>
@@ -3923,8 +4004,9 @@ setPage("completedJobDetails");
 const page = {
   minHeight: "100vh",
   background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
-  padding: "10px 9px 260px",
+  padding: "72px 11px 260px",
   boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const topBar = {
@@ -3933,6 +4015,7 @@ const topBar = {
   alignItems: "center",
   width: "100%",
   marginBottom: "11px",
+  paddingTop: "18px",
   paddingRight: "11px",
   boxSizing: "border-box",
 };
@@ -4148,7 +4231,7 @@ const quoteHistoryTitle = {
 
 const quoteHistoryMeta = {
   margin: 0,
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
   fontSize: "13px",
 };
@@ -4176,7 +4259,7 @@ const quoteHistoryFooter = {
   justifyContent: "space-between",
   gap: "10px",
   flexWrap: "wrap",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
   fontSize: "12px",
 };
@@ -4279,7 +4362,7 @@ const workCenterAlertIcon = {
 const workTab = {
   border: "none",
   background: "#f8fafc",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "18px",
   padding: "12px 16px",
   fontWeight: "900",
@@ -4394,15 +4477,16 @@ const scheduleFormGrid = {
 const scheduleInput = {
   width: "100%",
   border: "1px solid #dbe3ef",
-  borderRadius: "10px",
-  padding: "9px",
-  fontSize: "12px",
+  borderRadius: "14px",
+  padding: "13px",
+  fontSize: "16px",
+  lineHeight: 1.25,
   boxSizing: "border-box",
 };
 
 const scheduleTextarea = {
   ...scheduleInput,
-  minHeight: "82px",
+  minHeight: "96px",
   resize: "vertical",
 };
 
@@ -4560,7 +4644,7 @@ const jobCardTop = {
 
 const jobMeta = {
   margin: "6px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "12px",
   lineHeight: 1.4,
 };
@@ -4683,7 +4767,7 @@ const pendingReviewMeta = {
 
 const pendingReviewLocation = {
   margin: "4px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
 };
 
@@ -5324,7 +5408,7 @@ color:"#166534",
 
 const recordsIntroText = {
   margin: "0 0 18px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
   lineHeight: 1.5,
 };
@@ -5376,7 +5460,7 @@ const projectRecordTitle = {
 
 const projectRecordMeta = {
   margin: "3px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "750",
   fontSize: "13px",
 };
@@ -5586,7 +5670,7 @@ const materialsSearchBox = {
   border: "1px solid #ddd6fe",
   borderRadius: "16px",
   padding: "13px 16px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
   background: "#faf7ff",
   minWidth: "240px",
@@ -5606,7 +5690,7 @@ const materialsTableHeader = {
   gridTemplateColumns: "2.1fr .55fr 1.1fr .9fr .9fr 1.45fr",
   gap: "10px",
   background: "linear-gradient(90deg,#f8fafc,#f5f3ff)",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "12px",
   fontWeight: "900",
   padding: "11px 14px",
@@ -5686,14 +5770,15 @@ const materialCompactName = {
 };
 
 const materialCompactMeta = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "6px",
-  fontSize: "11.5px",
-  color: "#6b7280",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "4px",
+  fontSize: "12px",
+  color: "#475569",
   fontWeight: 800,
-  marginTop: "0px",
-  lineHeight: 1.15,
+  marginTop: "2px",
+  lineHeight: 1.2,
+  minWidth: 0,
 };
 
 
@@ -5703,32 +5788,35 @@ const materialDivider = {
   marginTop: "12px",
 };
 const materialCompactActions = {
-  display: "flex",
-  alignItems: "center",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "8px",
-  flexWrap: "wrap",
   paddingTop: "9px",
+  width: "100%",
 };
 
 const materialCard = {
+  width: "100%",
+  maxWidth: "100%",
+  overflow: "hidden",
+  boxSizing: "border-box",
   background: "white",
   border: "1px solid #e9e8ff",
-  borderRadius: "22px",
-  padding: "18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "18px",
-  flexWrap: "wrap",
-  boxShadow: "0 10px 24px rgba(15,23,42,.04)",
+  borderRadius: "20px",
+  padding: "14px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  boxShadow: "0 10px 24px rgba(15,23,42,.06)",
 };
 
 const materialCardTop = {
   display: "flex",
   alignItems: "center",
-  gap: "16px",
-  flex: 1,
-  minWidth: "240px",
+  gap: "12px",
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const materialTableRow = {
@@ -5766,7 +5854,7 @@ const materialMainName = {
 
 const materialSubText = {
   margin: "4px 0 0",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "12px",
   fontWeight: "800",
 };
@@ -5783,7 +5871,7 @@ const materialActionGroup = {
 const materialCancelEditButton = {
   border: "1px solid #e5e7eb",
   background: "white",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "16px",
   padding: "13px",
   fontWeight: "1000",
@@ -5856,7 +5944,7 @@ const compactDeleteButton = {
 const receivedDisabledButton = {
   border: "none",
   background: "#f1f5f9",
-  color: "#64748b",
+  color: "#475569",
   borderRadius: "9px",
   padding: "8px 10px",
   fontWeight: "900",
@@ -5980,7 +6068,7 @@ const activeProjectContextMeta = {
   margin: 0,
   fontSize: "13px",
   fontWeight: 750,
-  color: "#64748b",
+  color: "#475569",
 };
 
 const activeProjectContextStatus = {
@@ -6015,7 +6103,7 @@ const materialsHeroIcon = {
 };
 
 const materialsHeroTitle = {
-  fontSize: "40px",
+  fontSize: "28px",
   margin: "6px 0",
   fontWeight: "1000",
   color: "#0f172a",
@@ -6023,10 +6111,11 @@ const materialsHeroTitle = {
 };
 
 const materialsHeroText = {
-  margin: "8px 0 0",
-  color: "#64748b",
-  fontWeight: "900",
-  fontSize: "12px",
+  margin: "6px 0 0",
+  color: "#475569",
+  fontWeight: "800",
+  fontSize: "13px",
+  lineHeight: 1.35,
 };
 
 
@@ -6052,7 +6141,7 @@ const materialsMicCircle = {
 
 const materialsVoiceTitle = {
   margin: 0,
-  fontSize: "34px",
+  fontSize: "24px",
   fontWeight: "1000",
   color: "#0f172a",
 };
@@ -6248,7 +6337,7 @@ const micMiniButton = {
 
 const materialsMicHint = {
   textAlign: "center",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
   margin: "12px 0 0",
   fontSize: "14px",
@@ -6279,13 +6368,15 @@ const materialsSubTitle = {
 
 const materialsListPanel = {
   width: "100%",
+  maxWidth: "100%",
+  overflow: "hidden",
   background: "white",
   border: "1px solid #ddd6fe",
   borderRadius: "22px",
-  padding: "20px",
+  padding: "14px",
   marginTop: "0",
   boxSizing: "border-box",
-  boxShadow: "0 14px 34px rgba(15,23,42,.05)",
+  boxShadow: "0 14px 34px rgba(15,23,42,.07)",
 };
 
 const materialsListHeader = {
@@ -6323,7 +6414,7 @@ const materialsEmptyBox = {
   border: "1px dashed #cbd5e1",
   borderRadius: "9px",
   padding: "10px",
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "800",
 };
 
@@ -6581,7 +6672,7 @@ const changeOrderTitle = {
 
 const changeOrderCustomer = {
   margin: 0,
-  color: "#64748b",
+  color: "#475569",
   fontWeight: "700",
 };
 

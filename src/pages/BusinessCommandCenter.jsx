@@ -155,11 +155,6 @@ function BusinessCommandCenter({ setPage }) {
             onClick={() => {
               localStorage.setItem("meetroCommandTool", tool.id);
 
-              if (tool.id === "jobs") {
-                setPage("projectGallery");
-                return;
-              }
-
               setActiveTool(tool.id);
             }}
           >
@@ -218,7 +213,7 @@ function BusinessCommandCenter({ setPage }) {
             )
           }
         >
-          {t("openProjectFolderTool")}
+          {t("ccToolComingSoon")}
         </button>
       </div>
 
@@ -266,7 +261,7 @@ const subtitle = {
   margin: "7px 0 0",
   fontSize: "14px",
   lineHeight: 1.45,
-  color: "#64748b",
+  color: "#475569",
 };
 
 const trialCard = {
@@ -333,7 +328,7 @@ const flowTitle = {
 
 const flowText = {
   margin: 0,
-  color: "#64748b",
+  color: "#475569",
   fontSize: "13px",
   lineHeight: 1.45,
 };
@@ -392,7 +387,7 @@ const toolDesc = {
   margin: 0,
   fontSize: "12px",
   lineHeight: 1.4,
-  color: "#64748b",
+  color: "#475569",
 };
 
 const workspace = {
@@ -436,7 +431,7 @@ const workspacePill = {
 
 const workspaceText = {
   margin: "12px 0",
-  color: "#64748b",
+  color: "#475569",
   fontSize: "14px",
   lineHeight: 1.5,
 };

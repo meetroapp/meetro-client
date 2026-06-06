@@ -5,6 +5,13 @@ import { addNotification } from "../utils/notifications";
 import { updateRequestById, appendTimelineEvent } from "../utils/workflowTimeline";
 
 function ChangeOrderRequest({ setPage }) {
+  const placeholderStyle = `
+    .meetro-change-order-textarea::placeholder {
+      color: #475569;
+      opacity: 1;
+      font-weight: 700;
+    }
+  `;
   const language = getLanguage();
   const isSpanish = language === "es";
 
@@ -18,6 +25,7 @@ function ChangeOrderRequest({ setPage }) {
   if (!request) {
     return (
       <div style={page}>
+      <style>{placeholderStyle}</style>
         <div style={card}>
           <h2>{isSpanish ? "No hay proyecto seleccionado" : "No project selected"}</h2>
           <button style={primaryButton} onClick={() => setPage("myRequests")}>
@@ -243,8 +251,9 @@ function ChangeOrderRequest({ setPage }) {
 
   return (
     <div style={page}>
+      <style>{placeholderStyle}</style>
       <button style={backButton} onClick={() => setPage("myRequests")}>
-        ← {isSpanish ? "Volver" : "Back"}
+        ←
       </button>
 
       <div style={heroCard}>
@@ -268,6 +277,7 @@ function ChangeOrderRequest({ setPage }) {
         </h2>
 
         <textarea
+          className="meetro-change-order-textarea"
           style={textarea}
           value={changeText}
           onChange={(event) => setChangeText(event.target.value)}
@@ -306,7 +316,7 @@ function ChangeOrderRequest({ setPage }) {
         <button
           style={{
             ...primaryButton,
-            opacity: changeText.trim() ? 1 : 0.55,
+            opacity: 1,
           }}
           onClick={submitChangeOrder}
         >
@@ -322,19 +332,25 @@ function ChangeOrderRequest({ setPage }) {
 const page = {
   minHeight: "100vh",
   background: "#f8f7ff",
-  padding: "22px 18px 110px",
+  padding: "calc(env(safe-area-inset-top) + 34px) 18px 190px",
   boxSizing: "border-box",
 };
 
 const backButton = {
+  width: "44px",
+  height: "44px",
   border: "none",
-  background: "white",
-  borderRadius: "999px",
-  padding: "10px 14px",
-  fontWeight: "900",
+  borderRadius: "16px",
+  background: "#ffffff",
   color: "#5b3df5",
+  fontSize: "24px",
+  fontWeight: "900",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   marginBottom: "14px",
   boxShadow: "0 8px 20px rgba(15,23,42,0.08)",
+  cursor: "pointer",
 };
 
 const heroCard = {
@@ -388,6 +404,8 @@ const sectionTitle = {
   margin: "0 0 12px",
   fontSize: "20px",
   fontWeight: "950",
+  color: "#111827",
+  opacity: 1,
 };
 
 const textarea = {
@@ -434,6 +452,10 @@ const noticeBox = {
 };
 
 const primaryButton = {
+  background: "#5b3df5",
+  color: "#ffffff",
+  fontWeight: "900",
+
   width: "100%",
   border: "none",
   background: "#5b3df5",

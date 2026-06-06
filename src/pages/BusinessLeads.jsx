@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import SafeBackBar from "../components/SafeBackBar";
 import LoadingScreen from "../components/LoadingScreen";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
@@ -44,8 +45,8 @@ function BusinessLeads({ setPage, currentPage }) {
     fastResponse: isSpanish
       ? "Respuesta rápida recomendada"
       : "Fast response recommended",
-    viewDetails: isSpanish ? "Ver Detalles" : "View Details",
-    sendQuote: isSpanish ? "Enviar Cotización" : "Send Quote",
+    viewDetails: isSpanish ? "Revisar trabajo" : "Review Job",
+    sendQuote: isSpanish ? "Contactar / Programar" : "Contact / Schedule",
     potential: isSpanish ? "Guía de Precio" : "Price Guide",
     posted: isSpanish ? "Publicado" : "Posted",
     professionalRequired: isSpanish
@@ -294,15 +295,71 @@ function BusinessLeads({ setPage, currentPage }) {
   loadLeads();
 }, [language, businessCategory]);
 
-  const visibleLeads = [...leads].sort((a, b) => {
-    if (activeFilter === "highestBudget") return 1;
-    if (activeFilter === "nearby") return 0;
-    if (activeFilter === "urgent") {
-      const aUrgent = String(a.urgency || "").toLowerCase().includes("urgent");
-      const bUrgent = String(b.urgency || "").toLowerCase().includes("urgent");
-      return Number(bUrgent) - Number(aUrgent);
+  const getBudgetValue = (lead) => {
+    const raw = String(lead.value || lead.budget || lead.priceGuide || "");
+    const numbers = raw.match(/\d+/g);
+
+    if (!numbers) return 0;
+
+    return Math.max(...numbers.map((number) => Number(number)));
+  };
+
+  const getDistanceValue = (lead) => {
+    const raw = String(lead.distance || "");
+    const match = raw.match(/\d+(\.\d+)?/);
+
+    return match ? Number(match[0]) : 999;
+  };
+
+  const getUrgencyValue = (lead) => {
+    const value = String(lead.urgency || "").toLowerCase();
+
+    if (
+      value.includes("emergency") ||
+      value.includes("urgent") ||
+      value.includes("urgente")
+    ) {
+      return 3;
     }
+
+    if (value.includes("popular")) return 2;
+    if (value.includes("open") || value.includes("abierto")) return 1;
+
     return 0;
+  };
+
+  const getNewestValue = (lead) => {
+    const raw =
+      lead.createdAt ||
+      lead.created_at ||
+      lead.postedAt ||
+      lead.posted_at ||
+      lead.updatedAt ||
+      lead.updated_at ||
+      lead.id ||
+      "";
+
+    const time = Date.parse(raw);
+
+    if (!Number.isNaN(time)) return time;
+
+    return Number(String(raw).replace(/\D/g, "")) || 0;
+  };
+
+  const visibleLeads = [...leads].sort((a, b) => {
+    if (activeFilter === "highestBudget") {
+      return getBudgetValue(b) - getBudgetValue(a);
+    }
+
+    if (activeFilter === "nearby") {
+      return getDistanceValue(a) - getDistanceValue(b);
+    }
+
+    if (activeFilter === "urgent") {
+      return getUrgencyValue(b) - getUrgencyValue(a);
+    }
+
+    return getNewestValue(b) - getNewestValue(a);
   });
 
   if (loading) {
@@ -336,6 +393,8 @@ function BusinessLeads({ setPage, currentPage }) {
             {text.goToProfile}
           </button>
         </div>
+
+        <SafeBackBar setPage={setPage} fallback="businessDashboard" />
 
         <BottomNav setPage={setPage} currentPage="businessLeads" />
 
@@ -476,27 +535,15 @@ function BusinessLeads({ setPage, currentPage }) {
                 <button
                   style={secondaryButton}
                   onClick={() => {
-                    localStorage.removeItem("selectedActiveProject");
+                    // preserved selectedActiveProject
                     localStorage.removeItem("lastCompletedProject");
                     localStorage.removeItem("selectedHomeownerRequestId");
                     localStorage.removeItem("selectedWorkCenterRequest");
                     localStorage.removeItem("activeWorkCenterQuoteRequestId");
+                    localStorage.setItem("leadWorkflowStage", "project_review");
+                    localStorage.setItem("leadWorkflowIntent", "review_contact_schedule");
 
                     localStorage.setItem("selectedPostId", lead.id);
-
-                    localStorage.setItem(
-                      "selectedActiveProject",
-                      JSON.stringify({
-                        ...lead,
-                        project: {
-                          ...lead,
-                          photos: Array.isArray(lead.photos)
-                            ? lead.photos
-                            : [],
-                          image_url: lead.image_url || "",
-                        },
-                      })
-                    );
 
                     localStorage.setItem(
                       "selectedQuoteRequest",
@@ -517,7 +564,7 @@ function BusinessLeads({ setPage, currentPage }) {
                 <button
                   style={primaryActionButton}
                   onClick={() => {
-                    localStorage.removeItem("selectedActiveProject");
+                    // preserved selectedActiveProject
                     localStorage.removeItem("lastCompletedProject");
                     localStorage.removeItem("selectedHomeownerRequestId");
                     localStorage.removeItem("selectedQuoteRequest");
@@ -528,8 +575,18 @@ function BusinessLeads({ setPage, currentPage }) {
                     );
 
                     localStorage.setItem(
-                      "activeWorkCenterQuoteRequestId",
+                      "activeWorkCenterLeadRequestId",
                       lead.id
+                    );
+
+                    localStorage.setItem(
+                      "leadWorkflowStage",
+                      "customer_contact"
+                    );
+
+                    localStorage.setItem(
+                      "leadWorkflowIntent",
+                      "contact_schedule_before_quote"
                     );
 
                     localStorage.setItem(
@@ -538,11 +595,16 @@ function BusinessLeads({ setPage, currentPage }) {
                     );
 
                     localStorage.setItem(
-                      "activeWorkCenterTab",
-                      "quotes"
+                      "meetroWorkCenterTab",
+                      "schedule"
                     );
 
-                    setPage("quoteBuilder");
+                    localStorage.setItem(
+                      "activeWorkCenterTab",
+                      "schedule"
+                    );
+
+                    setPage("contractorDashboard");
                   }}
                 >
                   {text.sendQuote}
@@ -562,15 +624,16 @@ const pageWrapper = {
   minHeight: "100vh",
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 32%), linear-gradient(to bottom, #f7f7fb, #eef0f7)",
-  padding: "24px 18px 120px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 18px 130px",
   boxSizing: "border-box",
   color: "#111827",
+  overflowX: "hidden",
 };
 
 const heroCard = {
   background: "linear-gradient(135deg, #111b46 0%, #263b92 45%, #5b3df5 100%)",
-  borderRadius: "34px",
-  padding: "26px",
+  borderRadius: "30px",
+  padding: "22px",
   color: "white",
   marginBottom: "18px",
   boxShadow: "0 24px 60px rgba(35,54,139,0.32)",
@@ -592,9 +655,9 @@ const eyebrow = {
 };
 
 const heroTitle = {
-  margin: "10px 0",
-  fontSize: "38px",
-  lineHeight: 1,
+  margin: "9px 0",
+  fontSize: "32px",
+  lineHeight: 1.05,
 };
 
 const heroText = {
