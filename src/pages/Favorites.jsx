@@ -1,3 +1,4 @@
+import BottomNav from "../components/BottomNav";
 function Favorites({ setPage, language = "en" }) {
   const text = {
     en: {
@@ -32,6 +33,8 @@ function Favorites({ setPage, language = "en" }) {
           {t.back}
         </button>
       </div>
+
+      <BottomNav setPage={setPage} currentPage="home" />
     </div>
   );
 }
@@ -39,7 +42,7 @@ function Favorites({ setPage, language = "en" }) {
 const page = {
   minHeight: "100vh",
   background: "#f5f7fb",
-  padding: "24px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 24px 120px",
 };
 
 const card = {

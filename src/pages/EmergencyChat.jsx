@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import BottomNav from "../components/BottomNav";
 
 function EmergencyChat({ setPage, language = "en" }) {
   const messagesEndRef = useRef(null);
@@ -192,6 +193,7 @@ function EmergencyChat({ setPage, language = "en" }) {
   };
 
   return (
+    <>
     <div style={page}>
       <style>
         {`
@@ -269,6 +271,8 @@ function EmergencyChat({ setPage, language = "en" }) {
         </button>
       </div>
     </div>
+      <BottomNav currentPage="emergency" setPage={setPage} />
+    </>
   );
 }
 
