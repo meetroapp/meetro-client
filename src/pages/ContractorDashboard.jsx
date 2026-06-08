@@ -6,12 +6,14 @@ import { getNotifications } from "../utils/notifications";
 import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
 import {
   getActiveJobSnapshot,
+  getActiveWorkSnapshot,
   saveActiveJobSnapshot,
   saveSelectedActiveProject,
 } from "../utils/workCenter";
 
 function ContractorDashboard({ setPage, language = "en" }) {
   const activeJobSnapshot = getActiveJobSnapshot();
+  const activeWorkSnapshot = getActiveWorkSnapshot();
   const userRole = localStorage.getItem("businessCategory") || "Handyman";
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState(
@@ -195,28 +197,36 @@ function ContractorDashboard({ setPage, language = "en" }) {
   function getActiveWorkContext() {
     return {
       id:
+        activeWorkSnapshot?.requestId ||
         localStorage.getItem("activeWorkRequestId") ||
         activeJobSnapshot?.jobId ||
         localStorage.getItem("activeJobId") ||
+        activeWorkSnapshot?.quoteId ||
         localStorage.getItem("activeWorkQuoteId") ||
+        activeWorkSnapshot?.conversationId ||
         localStorage.getItem("activeWorkConversationId") ||
         "",
       service:
+        activeWorkSnapshot?.service ||
         localStorage.getItem("activeWorkService") ||
         activeJobSnapshot?.service ||
         localStorage.getItem("activeJobService") ||
         "",
       location:
+        activeWorkSnapshot?.location ||
         localStorage.getItem("activeWorkLocation") ||
         activeJobSnapshot?.location ||
         localStorage.getItem("activeJobLocation") ||
         "",
       type:
+        activeWorkSnapshot?.type ||
         localStorage.getItem("activeWorkType") ||
+        activeWorkSnapshot?.source ||
         localStorage.getItem("activeWorkSource") ||
         "",
       stage:
         localStorage.getItem("activeWorkStage") ||
+        activeWorkSnapshot?.status ||
         activeJobSnapshot?.status ||
         localStorage.getItem("activeJobStatus") ||
         "",
@@ -231,10 +241,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function getActiveMaterialsKey() {
     const activeProjectId =
+      activeWorkSnapshot?.requestId ||
       localStorage.getItem("activeWorkRequestId") ||
       activeJobSnapshot?.jobId ||
       localStorage.getItem("activeJobId") ||
+      activeWorkSnapshot?.quoteId ||
       localStorage.getItem("activeWorkQuoteId") ||
+      activeWorkSnapshot?.conversationId ||
       localStorage.getItem("activeWorkConversationId") ||
       "general";
 
@@ -395,10 +408,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       supplier: material.supplier || "",
       fromCatalog: !material.customItem,
       aiGenerated: true,
-      jobService: localStorage.getItem("activeWorkService") || "",
-      jobLocation: localStorage.getItem("activeWorkLocation") || "",
-      activeWorkRequestId: localStorage.getItem("activeWorkRequestId") || "",
-      activeWorkQuoteId: localStorage.getItem("activeWorkQuoteId") || "",
+      jobService: activeWorkSnapshot?.service || localStorage.getItem("activeWorkService") || "",
+      jobLocation: activeWorkSnapshot?.location || localStorage.getItem("activeWorkLocation") || "",
+      activeWorkRequestId: activeWorkSnapshot?.requestId || localStorage.getItem("activeWorkRequestId") || "",
+      activeWorkQuoteId: activeWorkSnapshot?.quoteId || localStorage.getItem("activeWorkQuoteId") || "",
       createdAt: new Date().toISOString(),
     };
 
@@ -434,8 +447,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       quantity: materialForm.quantity || "1",
       provider: materialForm.provider,
       status: materialForm.status,
-      jobService: localStorage.getItem("activeWorkService") || "",
-      jobLocation: localStorage.getItem("activeWorkLocation") || "",
+      jobService: activeWorkSnapshot?.service || localStorage.getItem("activeWorkService") || "",
+      jobLocation: activeWorkSnapshot?.location || localStorage.getItem("activeWorkLocation") || "",
     };
 
     const updatedMaterials = editingMaterial
@@ -1961,11 +1974,12 @@ setPage("emergencyDispatch");
             );
 
             const universalActiveWork = {
-              status: localStorage.getItem("activeWorkStatus") || "",
-              type: localStorage.getItem("activeWorkType") || "",
-              service: localStorage.getItem("activeWorkService") || "",
-              location: localStorage.getItem("activeWorkLocation") || "",
+              status: activeWorkSnapshot?.status || localStorage.getItem("activeWorkStatus") || "",
+              type: activeWorkSnapshot?.type || localStorage.getItem("activeWorkType") || "",
+              service: activeWorkSnapshot?.service || localStorage.getItem("activeWorkService") || "",
+              location: activeWorkSnapshot?.location || localStorage.getItem("activeWorkLocation") || "",
               conversationId:
+                activeWorkSnapshot?.conversationId ||
                 localStorage.getItem("activeWorkConversationId") || "",
               stage:
                 localStorage.getItem("activeWorkStage") || "working",
