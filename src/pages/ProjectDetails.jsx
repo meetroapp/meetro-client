@@ -3,7 +3,10 @@ import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
 import API_URL from "../api";
 import { t } from "../utils/language";
-import { getActiveJobSnapshot } from "../utils/workCenter";
+import {
+  getActiveJobSnapshot,
+  getJobRecord,
+} from "../utils/workCenter";
 
 function ProjectDetails({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -83,8 +86,7 @@ function ProjectDetails({ setPage, currentPage }) {
 
       localStorage.setItem("activeConversationId", conversationId);
 
-      const recordKey = `meetro_job_record_${conversationId}`;
-      const records = JSON.parse(localStorage.getItem(recordKey) || "[]");
+      const records = getJobRecord(conversationId);
 
       setJobRecords(Array.isArray(records) ? records : []);
     };

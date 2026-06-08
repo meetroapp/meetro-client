@@ -5,7 +5,10 @@ import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
 import { getLanguage, t } from "../utils/language";
-import { getActiveJobSnapshot } from "../utils/workCenter";
+import {
+  getActiveJobSnapshot,
+  getConversationMeta,
+} from "../utils/workCenter";
 
 
 function getDeletedConversationIds() {
@@ -260,9 +263,7 @@ function MessagesInbox({ setPage, currentPage }) {
         .filter((key) => key.startsWith("meetro_conversation_business_"))
         .map((key) => {
           const id = key.replace("meetro_conversation_", "");
-          const meta = JSON.parse(
-            localStorage.getItem(`meetro_conversation_meta_${id}`) || "{}"
-          );
+          const meta = getConversationMeta(id);
 
           return {
             id,
