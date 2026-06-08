@@ -142,7 +142,18 @@ function checkIsProfessional(user = {}) {
 }
 
   function saveUserData(data) {
-    return saveMeetroSession(data, email.trim());
+    const result = saveMeetroSession(data, email.trim());
+
+    const user = data?.user || {};
+
+    if (user.profile_photo_url) {
+      localStorage.setItem(
+        "meetroPersonalProfilePhoto",
+        user.profile_photo_url
+      );
+    }
+
+    return result;
   }
 
   function routeUser(data) {
