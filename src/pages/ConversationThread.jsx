@@ -675,16 +675,23 @@ function ConversationThread({ setPage }) {
         try {
           const parsed = JSON.parse(saved);
 
+          const conversationOwnerRoleKey = `meetro_conversation_owner_role_${conversationId}`;
+          const savedOwnerRole =
+            localStorage.getItem(conversationOwnerRoleKey) ||
+            currentViewerRole;
+
+          localStorage.setItem(conversationOwnerRoleKey, savedOwnerRole);
+
+          const oppositeRole =
+            savedOwnerRole === "business" ? "homeowner" : "business";
+
           const migrated = Array.isArray(parsed)
             ? parsed.map((msg) => ({
                 ...msg,
                 senderRole:
                   msg.senderRole ||
-                  (msg.sender === "me"
-                    ? currentViewerRole
-                    : currentViewerRole === "business"
-                    ? "homeowner"
-                    : "business"),
+                  msg.senderRoleOwner ||
+                  (msg.sender === "client" ? "homeowner" : oppositeRole),
               }))
             : starterMessages;
 
@@ -856,6 +863,13 @@ function ConversationThread({ setPage }) {
 
     setMessages((prev) => [...prev, messageWithRole]);
 
+    localStorage.setItem(`meetro_conversation_read_${conversationId}`, "true");
+
+    const currentUnread = Number(localStorage.getItem("mockUnreadMessages") || 0);
+    localStorage.setItem("mockUnreadMessages", String(Math.max(currentUnread, 0)));
+
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "auto" });
     });
@@ -993,6 +1007,7 @@ function ConversationThread({ setPage }) {
         id,
         type: "image",
         sender: "me",
+        senderRole: currentViewerRole,
         text:
           text ||
           (pendingPhotoPurpose === "explain"
@@ -1094,6 +1109,7 @@ function ConversationThread({ setPage }) {
       id,
       type: "text",
       sender: "me",
+      senderRole: currentViewerRole,
       text,
       time: getTime(),
       status: "sending",
@@ -1111,6 +1127,7 @@ function ConversationThread({ setPage }) {
       id: `loc-${Date.now()}`,
       type: "location",
       sender: "me",
+      senderRole: currentViewerRole,
       text: language === "es" ? "Ubicación compartida" : "Location shared",
       title: language === "es" ? "Ubicación del proyecto" : "Project location",
       subtitle:
@@ -1130,6 +1147,7 @@ function ConversationThread({ setPage }) {
       id: `scan-${Date.now()}`,
       type: "scan",
       sender: "me",
+      senderRole: currentViewerRole,
       text: language === "es" ? "Escaneo de documento" : "Document scan",
       title: language === "es" ? "Escaneo preparado" : "Scan prepared",
       subtitle:
@@ -1150,6 +1168,7 @@ const sendUpdateCard = () => {
     id: `update-${Date.now()}`,
     type: "update",
     sender: "me",
+    senderRole: currentViewerRole,
     text:
       language === "es"
         ? "Actualización enviada"
@@ -1174,6 +1193,7 @@ const sendApprovalCard = () => {
     id: `approval-${Date.now()}`,
     type: "approval",
     sender: "me",
+    senderRole: currentViewerRole,
     text:
       language === "es"
         ? "Aprobación solicitada"
@@ -1198,6 +1218,7 @@ const sendPaymentCard = () => {
     id: `payment-${Date.now()}`,
     type: "payment",
     sender: "me",
+    senderRole: currentViewerRole,
     text:
       language === "es"
         ? "Pago solicitado"
@@ -1260,6 +1281,7 @@ const sendPhotoWorkflow = (workflowType) => {
     workflowType,
     icon: data.icon,
     sender: "me",
+    senderRole: currentViewerRole,
     text: data.text,
     title: data.title,
     subtitle: data.subtitle,
@@ -1278,6 +1300,7 @@ const sendMaterialsCard = () => {
     id: `materials-approval-${Date.now()}`,
     type: "workflow_materials_approval",
     sender: "me",
+    senderRole: currentViewerRole,
     role: currentViewerRole,
     text:
       language === "es"
@@ -1417,6 +1440,7 @@ const handleImageUpload = (event) => {
         workflowType: pendingWorkflowPhotoType,
         icon: data.icon,
         sender: "me",
+        senderRole: currentViewerRole,
         text: data.text,
         title: data.title,
         subtitle: data.subtitle,
@@ -2320,10 +2344,7 @@ const handleImageUpload = (event) => {
           </div>
 
           {messages.map((msg) => {
-            const mine =
-              msg.senderRole
-                ? msg.senderRole === currentViewerRole
-                : msg.sender === "me";
+            const mine = msg.senderRole === currentViewerRole;
 
             const isWorkflow = isWorkflowType(msg.type);
             const workflowMessageProps = isWorkflow
@@ -2735,9 +2756,7 @@ const handleImageUpload = (event) => {
               📅 {language === "es" ? "Guardar como visita" : "Save as Schedule"}
             </button>
 
-            {(activeMessage.senderRole
-              ? activeMessage.senderRole === currentViewerRole
-              : activeMessage.sender === "me") && (
+            {(activeMessage.senderRole === currentViewerRole) && (
               <button
                 style={{ ...actionBtn, color: "#ef4444" }}
                 onClick={() => unsendMessage(activeMessage.id)}
@@ -3412,7 +3431,7 @@ const messagesScroll = {
   overscrollBehavior: "contain",
   display: "flex",
   flexDirection: "column",
-  paddingBottom: "150px",
+  paddingBottom: "118px",
 };
 
 
@@ -3977,7 +3996,7 @@ const emergencyPill = {
 
 const chatArea = {
   padding: "22px clamp(16px, 3vw, 34px)",
-  minHeight: "calc(100vh - 320px)",
+  minHeight: "calc(var(--meetro-safe-vh) - 320px)",
 };
 
 const dateRow = {
@@ -4917,7 +4936,7 @@ const quickBtn = {
 };
 
 const replyComposer = {
-  margin: "0 16px 8px",
+  margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   background: "#f7f8fb",
   borderLeft: "4px solid #5b3df5",
   borderRadius: "16px",
@@ -4946,7 +4965,7 @@ const replyCloseBtn = {
 };
 
 const pendingImageBox = {
-  margin: "0 16px 8px",
+  margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   background: "#f7f8fb",
   borderLeft: "4px solid #5b3df5",
   borderRadius: "16px",
@@ -4972,7 +4991,7 @@ const pendingImageName = {
 };
 
 const attachMenu = {
-  margin: "0 16px 8px",
+  margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   maxHeight: "170px",
   overflowY: "auto",
   WebkitOverflowScrolling: "touch",
@@ -5067,7 +5086,7 @@ const photoExplainInput = {
   fontFamily: "inherit",
 };
 const composer = {
-  margin: "0 16px 8px",
+  margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   background: "#ffffff",
   border: "1px solid #e7eaf2",
   borderRadius: "24px",
