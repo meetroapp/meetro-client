@@ -368,7 +368,7 @@ function ConversationThread({ setPage }) {
     localStorage.getItem("activeAccountMode") || "personal";
 
   const currentViewerRole =
-    isProfessionalSession()
+    activeAccountMode === "business"
       ? "business"
       : "homeowner";
 
