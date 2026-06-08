@@ -1,5 +1,10 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
+import {
+  getBusinessSchedule,
+  saveBusinessSchedule,
+  clearActiveJobSnapshot,
+} from "../utils/workCenter";
 import { getLanguage } from "../utils/language";
 
 function CompletionSheet({ setPage }) {
@@ -112,7 +117,7 @@ function CompletionSheet({ setPage }) {
     localStorage.setItem("totalJobRevenue", String(previousRevenue + total));
 
     if (completionScheduleId) {
-      const schedule = JSON.parse(localStorage.getItem("meetro_business_schedule") || "[]");
+      const schedule = getBusinessSchedule();
 
       const updatedSchedule = schedule.map((item) =>
         item.id === completionScheduleId
@@ -125,7 +130,7 @@ function CompletionSheet({ setPage }) {
           : item
       );
 
-      localStorage.setItem("meetro_business_schedule", JSON.stringify(updatedSchedule));
+      saveBusinessSchedule(updatedSchedule);
     }
 
     if (conversationId) {
