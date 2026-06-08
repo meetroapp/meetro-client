@@ -7,6 +7,7 @@ import {
   getActiveJobSnapshot,
   getJobRecord,
   getSelectedActiveProject,
+  saveSelectedActiveProject,
 } from "../utils/workCenter";
 
 function ProjectDetails({ setPage, currentPage }) {
@@ -697,18 +698,15 @@ if (data.post) {
                         JSON.stringify(updatedRequests)
                       );
 
-                      localStorage.setItem(
-                        "selectedActiveProject",
-                        JSON.stringify({
-                          ...activeProjectData,
+                      saveSelectedActiveProject({
+                        ...activeProjectData,
+                        status: "active",
+                        project: {
+                          ...post,
                           status: "active",
-                          project: {
-                            ...post,
-                            status: "active",
-                            startedAt: new Date().toISOString(),
-                          },
-                        })
-                      );
+                          startedAt: new Date().toISOString(),
+                        },
+                      });
 
                       window.dispatchEvent(new Event("storage"));
                       window.location.reload();
@@ -794,19 +792,16 @@ if (data.post) {
                         String(currentRevenue + acceptedAmount)
                       );
 
-                      localStorage.setItem(
-                        "selectedActiveProject",
-                        JSON.stringify({
-                          ...activeProjectData,
+                      saveSelectedActiveProject({
+                        ...activeProjectData,
+                        status: "completed",
+                        project: {
+                          ...post,
                           status: "completed",
-                          project: {
-                            ...post,
-                            status: "completed",
-                            completedAt: new Date().toISOString(),
-                            needsReview: true,
-                          },
-                        })
-                      );
+                          completedAt: new Date().toISOString(),
+                          needsReview: true,
+                        },
+                      });
 
                       localStorage.setItem(
                         "homeownerNeedsReview",
