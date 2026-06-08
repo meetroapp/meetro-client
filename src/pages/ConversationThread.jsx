@@ -19,6 +19,8 @@ import {
   prependProjectTimeline,
 } from "../utils/workflowTimeline";
 
+import { getBusinessSchedule, saveBusinessSchedule } from "../utils/workCenter";
+
 const IconBack = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
     <path
@@ -1532,9 +1534,7 @@ const handleImageUpload = (event) => {
   };
 
   const saveMessageAsSchedule = (message) => {
-    const schedule = JSON.parse(
-      localStorage.getItem("meetro_business_schedule") || "[]"
-    );
+    const schedule = getBusinessSchedule();
 
     const newVisit = {
       id: `schedule-${Date.now()}`,
@@ -1549,10 +1549,7 @@ const handleImageUpload = (event) => {
       createdAt: new Date().toISOString(),
     };
 
-    localStorage.setItem(
-      "meetro_business_schedule",
-      JSON.stringify([newVisit, ...schedule])
-    );
+    saveBusinessSchedule([newVisit, ...schedule]);
 
     const scheduleMessage = {
       id: Date.now(),
@@ -1938,9 +1935,7 @@ const handleImageUpload = (event) => {
             <button
               style={threadMenuBtn}
               onClick={() => {
-                const schedule = JSON.parse(
-                  localStorage.getItem("meetro_business_schedule") || "[]"
-                );
+                const schedule = getBusinessSchedule();
 
                 const newVisit = {
                   id: `schedule-${Date.now()}`,
@@ -1955,10 +1950,7 @@ const handleImageUpload = (event) => {
                   createdAt: new Date().toISOString(),
                 };
 
-                localStorage.setItem(
-                  "meetro_business_schedule",
-                  JSON.stringify([newVisit, ...schedule])
-                );
+                saveBusinessSchedule([newVisit, ...schedule]);
 
                 const scheduleMessage = {
                   id: Date.now(),
