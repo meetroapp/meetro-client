@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function EmergencyDispatch({ setPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const [language, setLanguage] = useState(getLanguage());
 
   const [dispatchStatus, setDispatchStatus] = useState(
+    activeJobSnapshot?.status ||
     localStorage.getItem("activeJobStatus") ||
     localStorage.getItem("emergencyDispatchStatus") ||
     ""
   );
 
   const selectedService =
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     t("emergencyHelp");
@@ -109,6 +114,7 @@ function EmergencyDispatch({ setPage }) {
       "activeCompletionJob",
       JSON.stringify({
         service:
+          activeJobSnapshot?.service ||
           localStorage.getItem("activeJobService") ||
           localStorage.getItem("selectedEmergencyService") ||
           "Emergency Service",
@@ -130,7 +136,12 @@ function EmergencyDispatch({ setPage }) {
     );
 
     localStorage.setItem("completionService", selectedService || "Emergency Service");
-    localStorage.setItem("completionLocation", localStorage.getItem("activeJobLocation") || "");
+    localStorage.setItem(
+      "completionLocation",
+      activeJobSnapshot?.location ||
+      localStorage.getItem("activeJobLocation") ||
+      ""
+    );
     localStorage.setItem("completionSource", "emergency");
     setPage("completionSheet");
   }

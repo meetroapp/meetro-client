@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function InvoiceBuilder({ setPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const language = getLanguage();
 
   const conversationId =
     localStorage.getItem("activeConversationId") || "general";
 
   const service =
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     localStorage.getItem("activeConversationName") ||
