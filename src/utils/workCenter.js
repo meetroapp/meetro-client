@@ -78,6 +78,31 @@ export function saveJobRecord(conversationId, records = []) {
   window.dispatchEvent(new Event("meetro-workcenter-updated"));
 }
 
+
+export function getSelectedActiveProject() {
+  return safeJsonParse(
+    localStorage.getItem("selectedActiveProject"),
+    null
+  );
+}
+
+export function saveSelectedActiveProject(project = null) {
+  if (!project) return;
+
+  localStorage.setItem(
+    "selectedActiveProject",
+    JSON.stringify(project)
+  );
+
+  window.dispatchEvent(new Event("meetro-workcenter-updated"));
+}
+
+export function clearSelectedActiveProject() {
+  localStorage.removeItem("selectedActiveProject");
+
+  window.dispatchEvent(new Event("meetro-workcenter-updated"));
+}
+
 export function getActiveJobSnapshot(fallbackConversationId = "") {
   return {
     id:
