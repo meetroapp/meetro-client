@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
-import { getActiveJobSnapshot } from "../utils/workCenter";
+import {
+  getActiveJobSnapshot,
+  saveActiveJobSnapshot,
+} from "../utils/workCenter";
 
 function EmergencyDispatch({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -60,6 +63,16 @@ function EmergencyDispatch({ setPage }) {
   }, []);
 
   function updateStatus(status) {
+    saveActiveJobSnapshot({
+      status,
+      service: selectedService,
+      location:
+        activeJobSnapshot?.location ||
+        localStorage.getItem("activeJobLocation") ||
+        localStorage.getItem("emergencyLocation") ||
+        "",
+    });
+
     localStorage.setItem("emergencyDispatchStatus", status);
     localStorage.setItem("activeJobStatus", status);
 

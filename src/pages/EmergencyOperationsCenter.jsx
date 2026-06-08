@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
+import { saveActiveJobSnapshot } from "../utils/workCenter";
 
 function EmergencyOperationsCenter({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
@@ -126,6 +127,13 @@ function EmergencyOperationsCenter({ setPage }) {
   };
 
   function updateStatus(nextStatus) {
+    saveActiveJobSnapshot({
+      status: nextStatus,
+      service: selectedService,
+      location,
+      customer: customerName,
+    });
+
     localStorage.setItem("emergencyDispatchStatus", nextStatus);
     localStorage.setItem("activeJobStatus", nextStatus);
 

@@ -1,8 +1,11 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
+import { getActiveJobSnapshot, saveActiveJobSnapshot } from "../utils/workCenter";
 
 function EmergencyCompletionActions({ setPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const language = getLanguage();
 
   const [paymentStatus, setPaymentStatus] = useState(
@@ -10,6 +13,7 @@ function EmergencyCompletionActions({ setPage }) {
   );
 
   const service =
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     "Emergency Service";
@@ -27,6 +31,15 @@ function EmergencyCompletionActions({ setPage }) {
   function saveToHistory() {
     localStorage.setItem("emergencySavedToHistory", "true");
     localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
+    saveActiveJobSnapshot({
+      status: "completed",
+      service,
+      location:
+        activeJobSnapshot?.location ||
+        localStorage.getItem("activeJobLocation") ||
+        "",
+    });
+
     localStorage.setItem("activeJobStatus", "completed");
     localStorage.setItem("emergencyDispatchStatus", "completed");
     localStorage.setItem("businessAcceptedEmergency", "false");
