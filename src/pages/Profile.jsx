@@ -104,6 +104,29 @@ function Profile({ setPage, currentPage }) {
         localStorage.setItem("meetroPersonalProfilePhoto", imageResult);
       }
 
+      if (activeMode !== "business") {
+        authFetch(
+          "/auth/profile-photo",
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              profile_photo_url: imageResult,
+            }),
+          },
+          setPage
+        )
+          .then((result) => {
+            const savedUrl =
+              result?.user?.profile_photo_url || imageResult;
+
+            localStorage.setItem("meetroPersonalProfilePhoto", savedUrl);
+            setProfilePhoto(savedUrl);
+          })
+          .catch((error) => {
+            console.error("Failed to save profile photo", error);
+          });
+      }
+
       window.dispatchEvent(
         new Event("meetro-profile-photo-updated")
       );
