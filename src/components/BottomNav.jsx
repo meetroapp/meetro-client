@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Keyboard } from "@capacitor/keyboard";
 import { getLanguage, t } from "../utils/language";
 import {
@@ -14,6 +14,7 @@ function BottomNav({ setPage, currentPage = "" }) {
   );
   const [notificationTick, setNotificationTick] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const navTouchStartRef = useRef({ x: 0, y: 0, moved: false });
 
   useEffect(() => {
     const syncNav = () => {
@@ -27,6 +28,7 @@ function BottomNav({ setPage, currentPage = "" }) {
     window.addEventListener("accountModeChanged", syncNav);
     window.addEventListener("storage", syncNav);
     window.addEventListener("meetroNotificationsUpdated", syncNav);
+    window.addEventListener("meetro-messages-updated", syncNav);
 
     return () => {
       window.removeEventListener("languageChanged", syncNav);
@@ -34,6 +36,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       window.removeEventListener("accountModeChanged", syncNav);
       window.removeEventListener("storage", syncNav);
       window.removeEventListener("meetroNotificationsUpdated", syncNav);
+      window.removeEventListener("meetro-messages-updated", syncNav);
     };
   }, []);
 
@@ -269,9 +272,28 @@ function BottomNav({ setPage, currentPage = "" }) {
               key={item.page}
               type="button"
               onPointerDown={(event) => {
+                navTouchStartRef.current = {
+                  x: event.clientX || 0,
+                  y: event.clientY || 0,
+                  moved: false,
+                };
+              }}
+              onPointerMove={(event) => {
+                const start = navTouchStartRef.current;
+                const dx = Math.abs((event.clientX || 0) - start.x);
+                const dy = Math.abs((event.clientY || 0) - start.y);
+
+                if (dx > 10 || dy > 10) {
+                  navTouchStartRef.current.moved = true;
+                }
+              }}
+              onPointerUp={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                handleNavPress();
+
+                if (!navTouchStartRef.current.moved) {
+                  handleNavPress();
+                }
               }}
               onClick={(event) => {
                 event.preventDefault();

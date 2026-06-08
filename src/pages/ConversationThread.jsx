@@ -432,7 +432,7 @@ function ConversationThread({ setPage }) {
     localStorage.getItem("activeAccountMode") || "personal";
 
   const activeHeaderName =
-    activeRole === "business"
+    currentViewerRole === "business"
       ? activeCustomerName
       : activeBusinessName;
 
@@ -442,14 +442,14 @@ function ConversationThread({ setPage }) {
     (language === "es" ? "Conversación de proyecto" : "Project Conversation");
 
   const displayCategory =
-    activeRole === "business"
+    currentViewerRole === "business"
       ? language === "es"
         ? "Cliente"
         : "Customer"
       : activeCategory || (language === "es" ? "Profesional" : "Professional");
 
   const displayLocation =
-    activeRole === "business"
+    currentViewerRole === "business"
       ? localStorage.getItem("activeCustomerLocation") ||
         localStorage.getItem("projectLocation") ||
         ""
@@ -502,7 +502,7 @@ function ConversationThread({ setPage }) {
       localStorage.getItem("meetroConversationType") || "standard";
 
     const isBusinessUser =
-      isProfessionalSession();
+      currentViewerRole === "business";
 
     if (activeConversationType === "emergency" && isBusinessUser) {
 
@@ -562,7 +562,7 @@ function ConversationThread({ setPage }) {
     return language === "es"
       ? ["¿Cuándo estás disponible?", "¿Me puedes dar precio?", "Te envío fotos", "Gracias"]
       : ["When are you available?", "Can you send pricing?", "I’ll send photos", "Thank you"];
-  }, [language]);
+  }, [language, currentViewerRole]);
   const starterMessages = useMemo(
     () => [
       {
@@ -1602,8 +1602,17 @@ const handleImageUpload = (event) => {
     return "";
   };
 
-  const startLongPress = (msg) => {
+  const startLongPress = (msg, event = null) => {
     clearTimeout(longPressTimerRef.current);
+
+    const touch = event?.touches?.[0];
+
+    if (touch) {
+      longPressTouchStartRef.current = {
+        x: touch.clientX || 0,
+        y: touch.clientY || 0,
+      };
+    }
 
     longPressTimerRef.current = setTimeout(() => {
       if (!msg.unsent) {
@@ -1613,11 +1622,23 @@ const handleImageUpload = (event) => {
         setShowThreadMenu(false);
         setShowAttachMenu(false);
       }
-    }, 420);
+    }, 520);
   };
 
   const cancelLongPress = () => {
     clearTimeout(longPressTimerRef.current);
+  };
+
+  const handleLongPressMove = (event) => {
+    const touch = event?.touches?.[0];
+    if (!touch) return;
+
+    const dx = Math.abs((touch.clientX || 0) - longPressTouchStartRef.current.x);
+    const dy = Math.abs((touch.clientY || 0) - longPressTouchStartRef.current.y);
+
+    if (dx > 8 || dy > 8) {
+      cancelLongPress();
+    }
   };
 
   const activeMessage = messages.find((msg) => msg.id === activeMessageId);
@@ -2629,7 +2650,8 @@ const handleImageUpload = (event) => {
                 onMouseDown={() => startLongPress(msg)}
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}
-                onTouchStart={() => startLongPress(msg)}
+                onTouchStart={(event) => startLongPress(msg, event)}
+                onTouchMove={handleLongPressMove}
                 onTouchEnd={cancelLongPress}
               >
                 <div
@@ -3401,7 +3423,8 @@ const page = {
   background: "linear-gradient(135deg, #eef1f8 0%, #f8fafc 100%)",
   display: "flex",
   justifyContent: "center",
-  padding: 0,
+  padding: "calc(env(safe-area-inset-top) + 64px) 0 0",
+  boxSizing: "border-box",
   overflowX: "hidden",
   overflowY: "hidden",
 };
@@ -3410,8 +3433,8 @@ const phone = {
   width: "100%",
   maxWidth: "860px",
   background: "#ffffff",
-  height: "var(--meetro-safe-vh)",
-  maxHeight: "var(--meetro-safe-vh)",
+  height: "100%",
+  maxHeight: "100%",
   position: "relative",
   paddingBottom: "0",
   overflowX: "hidden",
