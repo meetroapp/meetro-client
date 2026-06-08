@@ -421,6 +421,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
       JSON.stringify([newMaterial, ...currentMaterials])
     );
 
+    saveActiveWorkSnapshot({
+      stage: "pausedMaterials",
+      pauseReason: "materials",
+    });
+
     localStorage.setItem("activeWorkStage", "pausedMaterials");
     localStorage.setItem("activeWorkPauseReason", "materials");
 
@@ -475,6 +480,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
       getActiveMaterialsKey(),
       JSON.stringify(updatedMaterials)
     );
+
+    saveActiveWorkSnapshot({
+      stage: "pausedMaterials",
+      pauseReason: "materials",
+    });
 
     localStorage.setItem("activeWorkStage", "pausedMaterials");
     localStorage.setItem("activeWorkPauseReason", "materials");
@@ -2200,6 +2210,10 @@ setPage("emergencyDispatch");
                           : {}),
                       }}
                       onClick={() => {
+                        saveActiveWorkSnapshot({
+                          stage: "onTheWay",
+                        });
+
                         localStorage.setItem("activeWorkStage", "onTheWay");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
@@ -2212,6 +2226,10 @@ setPage("emergencyDispatch");
                       <button
                         style={resumeWorkButton}
                         onClick={() => {
+                          saveActiveWorkSnapshot({
+                            stage: "working",
+                          });
+
                           localStorage.setItem(
                             "activeWorkStage",
                             "working"
@@ -2236,6 +2254,10 @@ setPage("emergencyDispatch");
                           : {}),
                       }}
                       onClick={() => {
+                        saveActiveWorkSnapshot({
+                          stage: "arrived",
+                        });
+
                         localStorage.setItem("activeWorkStage", "arrived");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
@@ -2252,6 +2274,10 @@ setPage("emergencyDispatch");
                           : {}),
                       }}
                       onClick={() => {
+                        saveActiveWorkSnapshot({
+                          stage: "working",
+                        });
+
                         localStorage.setItem("activeWorkStage", "working");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
@@ -2268,6 +2294,11 @@ setPage("emergencyDispatch");
                           : {}),
                       }}
                       onClick={() => {
+                        saveActiveWorkSnapshot({
+                          stage: "pausedMaterials",
+                          pauseReason: "materials",
+                        });
+
                         localStorage.setItem("activeWorkStage", "pausedMaterials");
                         localStorage.setItem("activeWorkPauseReason", "materials");
                         setRefreshKey((prev) => prev + 1);
@@ -3671,6 +3702,10 @@ setPage("completedJobDetails");
                         }
                         onClick={() => {
                           if (neededCount !== 0) return;
+
+                          saveActiveWorkSnapshot({
+                            stage: "working",
+                          });
 
                           localStorage.setItem("activeWorkStage", "working");
                           localStorage.removeItem("activeWorkPauseReason");
