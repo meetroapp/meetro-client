@@ -6,6 +6,7 @@ import { t } from "../utils/language";
 import {
   getActiveJobSnapshot,
   getJobRecord,
+  getSelectedActiveProject,
 } from "../utils/workCenter";
 
 function ProjectDetails({ setPage, currentPage }) {
@@ -21,9 +22,7 @@ function ProjectDetails({ setPage, currentPage }) {
   const [touchStartX, setTouchStartX] = useState(null);
   const [showGalleryGrid, setShowGalleryGrid] = useState(false);
 
-  const activeProjectData = JSON.parse(
-    localStorage.getItem("selectedActiveProject") || "null"
-  );
+  const activeProjectData = getSelectedActiveProject();
 
   const projectDetailsReturnPageValue =
     localStorage.getItem("projectDetailsReturnPage") || "";
@@ -65,9 +64,7 @@ function ProjectDetails({ setPage, currentPage }) {
 
   useEffect(() => {
     const loadJobRecords = () => {
-      const activeProject = JSON.parse(
-        localStorage.getItem("selectedActiveProject") || "null"
-      );
+      const activeProject = getSelectedActiveProject();
 
       const activeProjectId =
         activeProject?.project?.conversationId ||
