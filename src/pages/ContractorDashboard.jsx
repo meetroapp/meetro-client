@@ -7,6 +7,7 @@ import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categor
 import {
   getActiveJobSnapshot,
   getActiveWorkSnapshot,
+  saveActiveWorkSnapshot,
   saveActiveJobSnapshot,
   saveSelectedActiveProject,
 } from "../utils/workCenter";
@@ -1825,6 +1826,16 @@ setPage("emergencyDispatch");
                       pendingWorkConversationId ||
                       `pending-${Date.now()}`;
 
+                    saveActiveWorkSnapshot({
+                      requestId: pendingProjectId,
+                      conversationId: pendingWorkConversationId,
+                      status: "started",
+                      service: pendingWorkService,
+                      location: pendingWorkLocation,
+                      type: localStorage.getItem("pendingWorkType") || "scheduled",
+                      source: localStorage.getItem("pendingWorkSource") || "pending",
+                    });
+
                     localStorage.setItem("activeWorkService", pendingWorkService);
                     localStorage.setItem("activeWorkLocation", pendingWorkLocation);
                     localStorage.setItem("activeWorkConversationId", pendingWorkConversationId);
@@ -2902,6 +2913,17 @@ setPage("completedJobDetails");
                             quote.requestId || ""
                           );
 
+                          saveActiveWorkSnapshot({
+                            requestId: quote.requestId || activeQuoteProjectId,
+                            quoteId: quote.quoteId || quote.id || "",
+                            conversationId: activeConversationId,
+                            status: "active",
+                            service: quote.projectTitle || quote.project_title || "Approved Quote",
+                            location: quote.location || "",
+                            type: "quote_approved",
+                            source: "quote",
+                          });
+
                           saveActiveJobSnapshot({
                             id: quote.quoteId || quote.id || quote.requestId || activeConversationId,
                             jobId: quote.quoteId || quote.id || quote.requestId || activeConversationId,
@@ -3801,6 +3823,20 @@ setPage("completedJobDetails");
                             "activeWorkRequestId",
                             group.conversationId
                           );
+
+                          saveActiveWorkSnapshot({
+                            requestId: group.conversationId,
+                            conversationId: group.conversationId,
+                            service: group.title || "",
+                            source: "job_record",
+                          });
+
+                          saveActiveWorkSnapshot({
+                            requestId: group.conversationId,
+                            conversationId: group.conversationId,
+                            service: group.title || "",
+                            source: "job_record",
+                          });
 
                           localStorage.setItem(
                             "activeWorkService",
