@@ -865,8 +865,7 @@ function ConversationThread({ setPage }) {
 
     localStorage.setItem(`meetro_conversation_read_${conversationId}`, "true");
 
-    const currentUnread = Number(localStorage.getItem("mockUnreadMessages") || 0);
-    localStorage.setItem("mockUnreadMessages", String(Math.max(currentUnread, 0)));
+    localStorage.setItem("mockUnreadMessages", "0");
 
     window.dispatchEvent(new Event("meetro-messages-updated"));
 
@@ -1502,6 +1501,8 @@ const handleImageUpload = (event) => {
 
   const markUnread = () => {
     localStorage.setItem(`meetro_conversation_read_${conversationId}`, "false");
+    const currentUnread = Number(localStorage.getItem("mockUnreadMessages") || 0);
+    localStorage.setItem("mockUnreadMessages", String(Math.max(currentUnread, 1)));
     window.dispatchEvent(new Event("meetro-messages-updated"));
     setShowThreadMenu(false);
     setPage("messagesInbox");
