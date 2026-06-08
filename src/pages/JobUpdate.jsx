@@ -1,15 +1,22 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import FloatingBackButton from "../components/FloatingBackButton";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function JobUpdate({ setPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const returnPage = localStorage.getItem("returnPage") || "contractorDashboard";
 
   const jobName =
-    localStorage.getItem("activeJobService") || "Active Job";
+    activeJobSnapshot?.service ||
+    localStorage.getItem("activeJobService") ||
+    "Active Job";
 
   const customer =
-    localStorage.getItem("activeJobCustomer") || "Customer";
+    activeJobSnapshot?.customer ||
+    localStorage.getItem("activeJobCustomer") ||
+    "Customer";
 
   const [status, setStatus] = useState("Work update");
   const [note, setNote] = useState("");

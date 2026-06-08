@@ -5,6 +5,7 @@ import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
 import { getLanguage, t } from "../utils/language";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 
 function getDeletedConversationIds() {
@@ -86,6 +87,8 @@ function dedupeConversations(list) {
 
 
 function MessagesInbox({ setPage, currentPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [language, updateLanguage] = useState(getLanguage());
@@ -107,6 +110,7 @@ function MessagesInbox({ setPage, currentPage }) {
     "guest";
 
   const activeJobId =
+    activeJobSnapshot?.jobId ||
     localStorage.getItem("activeJobId");
 
   const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
@@ -119,6 +123,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const emergencyService =
     localStorage.getItem(`selectedEmergencyService_${currentUserKey}`) ||
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     (isSpanish ? "Emergencia" : "Emergency Request");
