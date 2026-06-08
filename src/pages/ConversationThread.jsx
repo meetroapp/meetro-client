@@ -23,6 +23,9 @@ import {
   getBusinessSchedule,
   saveBusinessSchedule,
   getActiveJobSnapshot,
+  getJobRecord,
+  saveJobRecord,
+  saveConversationMeta,
 } from "../utils/workCenter";
 
 const IconBack = () => (
@@ -596,8 +599,7 @@ function ConversationThread({ setPage }) {
 
   useEffect(() => {
     const updateRecordCount = () => {
-      const recordKey = `meetro_job_record_${conversationId}`;
-      const records = JSON.parse(localStorage.getItem(recordKey) || "[]");
+      const records = getJobRecord(conversationId);
 
       setJobRecords(Array.isArray(records) ? records : []);
       setJobRecordCount(Array.isArray(records) ? records.length : 0);
@@ -785,10 +787,7 @@ function ConversationThread({ setPage }) {
           "",
       };
 
-      localStorage.setItem(
-        `meetro_conversation_meta_${conversationId}`,
-        JSON.stringify(metaPayload)
-      );
+      saveConversationMeta(conversationId, metaPayload);
 
       const registry = JSON.parse(
         localStorage.getItem("meetro_conversation_registry") || "[]"
@@ -1082,11 +1081,7 @@ function ConversationThread({ setPage }) {
       addOutgoingMessage(imageMessagePayload);
 
       if (pendingPhotoPurpose === "explain") {
-        const recordKey = `meetro_job_record_${conversationId}`;
-
-        const existing = JSON.parse(
-          localStorage.getItem(recordKey) || "[]"
-        );
+        const existing = getJobRecord(conversationId);
 
         const autoSavedItem = {
           id: `job-record-${Date.now()}`,
@@ -1111,10 +1106,7 @@ function ConversationThread({ setPage }) {
           autoSaved: true,
         };
 
-        localStorage.setItem(
-          recordKey,
-          JSON.stringify([autoSavedItem, ...existing])
-        );
+        saveJobRecord(conversationId, [autoSavedItem, ...existing]);
 
         window.dispatchEvent(
           new Event("meetroJobRecordUpdated")
@@ -1719,8 +1711,7 @@ const handleImageUpload = (event) => {
   const saveToJobRecord = () => {
     if (!jobStory) return;
 
-    const recordKey = `meetro_job_record_${conversationId}`;
-    const existing = JSON.parse(localStorage.getItem(recordKey) || "[]");
+    const existing = getJobRecord(conversationId);
 
     const savedItem = {
       id: `job-record-${Date.now()}`,
@@ -1748,7 +1739,7 @@ const handleImageUpload = (event) => {
       sharedWithBusiness: true,
     };
 
-    localStorage.setItem(recordKey, JSON.stringify([savedItem, ...existing]));
+    saveJobRecord(conversationId, [savedItem, ...existing]);
     localStorage.setItem("lastSavedJobRecord", JSON.stringify(savedItem));
 
     window.dispatchEvent(new Event("meetroJobRecordUpdated"));
