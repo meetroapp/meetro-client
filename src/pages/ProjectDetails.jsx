@@ -3,8 +3,11 @@ import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
 import API_URL from "../api";
 import { t } from "../utils/language";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function ProjectDetails({ setPage, currentPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jobRecords, setJobRecords] = useState([]);
@@ -70,6 +73,7 @@ function ProjectDetails({ setPage, currentPage }) {
         activeProject?.requestId ||
         activeProject?.project?.id ||
         activeProject?.id ||
+        activeJobSnapshot?.jobId ||
         localStorage.getItem("activeJobId") ||
         localStorage.getItem("selectedPostId") ||
         localStorage.getItem("activeConversationId") ||
@@ -620,6 +624,7 @@ if (data.post) {
                     post.conversationId ||
                     post.requestId ||
                     post.id ||
+                    activeJobSnapshot?.jobId ||
                     localStorage.getItem("activeJobId") ||
                     "project-conversation";
 
