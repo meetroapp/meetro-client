@@ -4,7 +4,10 @@ import FloatingBackButton from "../components/FloatingBackButton";
 import { t as translate } from "../utils/language";
 import { getNotifications } from "../utils/notifications";
 import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
-import { getActiveJobSnapshot } from "../utils/workCenter";
+import {
+  getActiveJobSnapshot,
+  saveActiveJobSnapshot,
+} from "../utils/workCenter";
 
 function ContractorDashboard({ setPage, language = "en" }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -878,6 +881,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function acceptEmergencyRequest() {
     localStorage.setItem("emergencyDispatchStatus", "accepted");
+    saveActiveJobSnapshot({ status: "accepted" });
     localStorage.setItem("activeJobStatus", "accepted");
     localStorage.removeItem("emergencyNeedsReview");
     localStorage.removeItem("emergencyCompletedAt");
@@ -1076,6 +1080,17 @@ setPage("emergencyDispatch");
   function saveActiveJobContext(job) {
     const jobId = job.id || job.requestId || `job-${Date.now()}`;
     const conversationId = `active-job-${jobId}`;
+
+    saveActiveJobSnapshot({
+      id: jobId,
+      jobId,
+      conversationId,
+      service: job.service || job.title || "Active Job",
+      status: job.status || "active",
+      eta: job.eta || "",
+      customer: job.customer || job.username || "Customer",
+      location: job.location || job.address || "",
+    });
 
     localStorage.setItem("activeJobId", jobId);
     localStorage.setItem("activeConversationId", conversationId);
@@ -1805,6 +1820,15 @@ setPage("emergencyDispatch");
                     localStorage.setItem("activeWorkRequestId", pendingProjectId);
                     localStorage.setItem("activeWorkType", localStorage.getItem("pendingWorkType") || "scheduled");
                     localStorage.setItem("activeWorkSource", localStorage.getItem("pendingWorkSource") || "pending");
+                    saveActiveJobSnapshot({
+                      id: pendingProjectId,
+                      jobId: pendingProjectId,
+                      conversationId: pendingWorkConversationId,
+                      service: pendingWorkService,
+                      location: pendingWorkLocation,
+                      status: "started",
+                    });
+
                     localStorage.setItem("activeJobService", pendingWorkService);
                     localStorage.setItem("activeJobLocation", pendingWorkLocation);
                     localStorage.setItem("activeJobStatus", "started");
@@ -2871,6 +2895,20 @@ setPage("completedJobDetails");
                             "activeWorkRequestId",
                             quote.requestId || ""
                           );
+
+                          saveActiveJobSnapshot({
+                            id: quote.quoteId || quote.id || quote.requestId || activeConversationId,
+                            jobId: quote.quoteId || quote.id || quote.requestId || activeConversationId,
+                            conversationId: activeConversationId,
+                            service: quote.projectTitle || quote.project_title || "Approved Quote",
+                            location: quote.location || "",
+                            status: "active",
+                            customer:
+                              quote.homeownerName ||
+                              quote.homeowner_email ||
+                              quote.homeownerEmail ||
+                              "Customer",
+                          });
 
                           localStorage.setItem(
                             "activeJobService",
