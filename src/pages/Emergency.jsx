@@ -177,7 +177,7 @@ function Emergency({ setPage }) {
 const page = {
   minHeight: "100vh",
   background: "#f5f7fb",
-  padding: "22px 22px 210px",
+  padding: "calc(env(safe-area-inset-top) + 64px) 22px 210px",
   boxSizing: "border-box",
 };
 
