@@ -3435,6 +3435,7 @@ const phone = {
   background: "#ffffff",
   height: "100%",
   maxHeight: "100%",
+  minHeight: 0,
   position: "relative",
   paddingBottom: "0",
   overflowX: "hidden",
@@ -4018,8 +4019,12 @@ const emergencyPill = {
 };
 
 const chatArea = {
+  flex: "1 1 auto",
+  minHeight: 0,
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
   padding: "22px clamp(16px, 3vw, 34px)",
-  minHeight: "calc(var(--meetro-safe-vh) - 320px)",
 };
 
 const dateRow = {
