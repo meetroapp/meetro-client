@@ -19,7 +19,11 @@ import {
   prependProjectTimeline,
 } from "../utils/workflowTimeline";
 
-import { getBusinessSchedule, saveBusinessSchedule } from "../utils/workCenter";
+import {
+  getBusinessSchedule,
+  saveBusinessSchedule,
+  getActiveJobSnapshot,
+} from "../utils/workCenter";
 
 const IconBack = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -314,6 +318,7 @@ function ConversationThread({ setPage }) {
 
   const emergencyDispatchStatus =
     localStorage.getItem("emergencyDispatchStatus") ||
+    activeJobSnapshot?.status ||
     localStorage.getItem("activeJobStatus") ||
     "";
 
@@ -323,6 +328,8 @@ function ConversationThread({ setPage }) {
     emergencyDispatchStatus !== "completed";
 
   const isEmergencyConversation = hasActiveEmergencyJob;
+
+  const activeJobSnapshot = getActiveJobSnapshot();
 
 
   const emergencyStatusSubtitle = {
@@ -376,6 +383,7 @@ function ConversationThread({ setPage }) {
 
   const activeJobService =
     localStorage.getItem("activeWorkService") ||
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     "";
@@ -414,6 +422,7 @@ function ConversationThread({ setPage }) {
     selectedQuoteRequest?.homeowner_name ||
     selectedQuoteRequest?.customerName ||
     selectedQuoteRequest?.homeowner_email ||
+    activeJobSnapshot?.customer ||
     localStorage.getItem("activeJobCustomer") ||
     localStorage.getItem("homeownerName") ||
     localStorage.getItem("activeConversationName") ||
@@ -753,14 +762,27 @@ function ConversationThread({ setPage }) {
         lastTime: lastMessage?.time || "",
         unread: 0,
         updatedAt: Date.now(),
-        activeJobId: localStorage.getItem("activeJobId") || "",
+        activeJobId:
+          activeJobSnapshot?.jobId ||
+          localStorage.getItem("activeJobId") ||
+          "",
         activeJobService:
           localStorage.getItem("activeWorkService") ||
+          activeJobSnapshot?.service ||
           localStorage.getItem("activeJobService") ||
           "",
-        activeJobStatus: localStorage.getItem("activeJobStatus") || "",
-        activeJobEta: localStorage.getItem("activeJobEta") || "",
-        activeJobCustomer: localStorage.getItem("activeJobCustomer") || "",
+        activeJobStatus:
+          activeJobSnapshot?.status ||
+          localStorage.getItem("activeJobStatus") ||
+          "",
+        activeJobEta:
+          activeJobSnapshot?.eta ||
+          localStorage.getItem("activeJobEta") ||
+          "",
+        activeJobCustomer:
+          activeJobSnapshot?.customer ||
+          localStorage.getItem("activeJobCustomer") ||
+          "",
       };
 
       localStorage.setItem(
@@ -1703,8 +1725,12 @@ const handleImageUpload = (event) => {
     const savedItem = {
       id: `job-record-${Date.now()}`,
       conversationId,
-      jobId: localStorage.getItem("activeJobId") || conversationId,
+      jobId:
+        activeJobSnapshot?.jobId ||
+        localStorage.getItem("activeJobId") ||
+        conversationId,
       jobService:
+        activeJobSnapshot?.service ||
         localStorage.getItem("activeJobService") ||
         localStorage.getItem("selectedEmergencyService") ||
         activeName,
