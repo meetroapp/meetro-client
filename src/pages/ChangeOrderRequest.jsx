@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { updateRequestById, appendTimelineEvent } from "../utils/workflowTimeline";
+import { getJobRecord, saveJobRecord } from "../utils/workCenter";
 
 function ChangeOrderRequest({ setPage }) {
   const placeholderStyle = `
@@ -137,11 +138,7 @@ function ChangeOrderRequest({ setPage }) {
         ])
       );
 
-      const recordKey = `meetro_job_record_${conversationId}`;
-
-      const existingRecords = JSON.parse(
-        localStorage.getItem(recordKey) || "[]"
-      );
+      const existingRecords = getJobRecord(conversationId);
 
       const jobRecordItem = {
         id: `job-record-change-order-${Date.now()}`,
@@ -166,13 +163,10 @@ function ChangeOrderRequest({ setPage }) {
         sharedWithHomeowner: true,
       };
 
-      localStorage.setItem(
-        recordKey,
-        JSON.stringify([
-          jobRecordItem,
-          ...existingRecords
-        ])
-      );
+      saveJobRecord(conversationId, [
+        jobRecordItem,
+        ...existingRecords
+      ]);
 
       localStorage.setItem(
         "lastSavedJobRecord",
