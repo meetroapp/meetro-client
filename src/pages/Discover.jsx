@@ -257,8 +257,8 @@ function Discover({ setPage, currentPage }) {
       category: business.category || "",
       location: business.location || "",
       bio: business.bio || "",
-      imageUrl: business.imageUrl || business.logo || "",
-      logo: business.logo || business.imageUrl || "",
+      imageUrl: business.image_url || business.imageUrl || business.logo || "",
+      logo: business.image_url || business.logo || business.imageUrl || "",
       rating: business.rating || "5.0",
       status: getBusinessStatus(business),
       businessStatus: getBusinessStatus(business),
@@ -467,9 +467,9 @@ function Discover({ setPage, currentPage }) {
                     onClick={() => viewBusinessProfile(business)}
                   >
                     <div style={businessLogoWrap}>
-                      {business.logo || business.imageUrl ? (
+                      {business.image_url || business.logo || business.imageUrl ? (
                         <img
-                          src={business.logo || business.imageUrl}
+                          src={business.image_url || business.logo || business.imageUrl}
                           alt={business.name}
                           style={businessLogo}
                         />
