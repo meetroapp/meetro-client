@@ -5,11 +5,14 @@ import {
   saveBusinessSchedule,
   clearActiveJobSnapshot,
   getActiveJobSnapshot,
+  getActiveWorkSnapshot,
+  clearActiveWorkSnapshot,
 } from "../utils/workCenter";
 import { getLanguage } from "../utils/language";
 
 function CompletionSheet({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
+  const activeWorkSnapshot = getActiveWorkSnapshot();
 
   const language = getLanguage();
   const isSpanish = language === "es";
@@ -18,6 +21,7 @@ function CompletionSheet({ setPage }) {
 
   const completionService =
     localStorage.getItem("completionService") ||
+    activeWorkSnapshot?.service ||
     localStorage.getItem("activeWorkService") ||
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
@@ -26,6 +30,7 @@ function CompletionSheet({ setPage }) {
 
   const completionLocation =
     localStorage.getItem("completionLocation") ||
+    activeWorkSnapshot?.location ||
     localStorage.getItem("activeWorkLocation") ||
     activeJobSnapshot?.location ||
     localStorage.getItem("activeJobLocation") ||
@@ -34,6 +39,7 @@ function CompletionSheet({ setPage }) {
 
   const completionScheduleId = localStorage.getItem("completionScheduleId") || "";
   const conversationId =
+    activeWorkSnapshot?.conversationId ||
     localStorage.getItem("activeWorkConversationId") ||
     localStorage.getItem("invoiceConversationId") ||
     localStorage.getItem("activeConversationId") ||
@@ -176,6 +182,7 @@ function CompletionSheet({ setPage }) {
     }
 
     localStorage.setItem("activeWorkStatus", "completed");
+    clearActiveWorkSnapshot();
     localStorage.setItem("emergencyDispatchStatus", "closed");
 
     [
