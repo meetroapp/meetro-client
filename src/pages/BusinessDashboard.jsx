@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
+import { getBusinessSchedule, getQuoteHistory } from "../utils/workCenter";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 
@@ -239,9 +240,7 @@ function BusinessDashboard({ setPage }) {
   const homeownerRequests =
     getStoredHomeownerRequests();
 
-  const quoteHistory = JSON.parse(
-    localStorage.getItem("workCenterQuoteHistory") || "[]"
-  );
+  const quoteHistory = getQuoteHistory();
 
   const activeProjectsCount = homeownerRequests.filter(
     (project) =>
