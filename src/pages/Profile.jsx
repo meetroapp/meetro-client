@@ -11,6 +11,7 @@ function Profile({ setPage, currentPage }) {
   const [activeMode, setActiveMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
+  const [businessProfile, setBusinessProfile] = useState(null);
 
   const currentPhotoKey =
     activeMode === "business"
@@ -29,6 +30,27 @@ function Profile({ setPage, currentPage }) {
 
     setProfilePhoto(localStorage.getItem(nextPhotoKey) || "");
   }, [activeMode]);
+
+  useEffect(() => {
+    if (activeMode !== "business") return;
+
+    authFetch("/my-contractor-profile", {}, setPage)
+      .then((result) => {
+        const profile = result?.profile || result?.data?.profile || null;
+
+        if (!profile) return;
+
+        setBusinessProfile(profile);
+
+        if (profile.image_url) {
+          localStorage.setItem("meetroBusinessProfilePhoto", profile.image_url);
+          setProfilePhoto(profile.image_url);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load business profile", error);
+      });
+  }, [activeMode, setPage]);
 
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -102,6 +124,44 @@ function Profile({ setPage, currentPage }) {
 
       if (activeMode !== "business") {
         localStorage.setItem("meetroPersonalProfilePhoto", imageResult);
+      }
+
+      if (activeMode === "business") {
+        if (!businessProfile?.id) {
+          console.warn("No business profile found for logo update");
+        } else {
+          authFetch(
+            `/contractor-profiles/${businessProfile.id}`,
+            {
+              method: "PUT",
+              body: JSON.stringify({
+                business_name:
+                  businessProfile.business_name || businessName || "",
+                category:
+                  businessProfile.category || businessCategory || "",
+                phone: businessProfile.phone || "",
+                location: businessProfile.location || "",
+                bio: businessProfile.bio || "",
+                image_url: imageResult,
+              }),
+            },
+            setPage
+          )
+            .then((result) => {
+              const savedProfile =
+                result?.profile || result?.data?.profile || null;
+              const savedUrl =
+                savedProfile?.image_url || imageResult;
+
+              setBusinessProfile(savedProfile || businessProfile);
+              localStorage.setItem("meetroBusinessProfilePhoto", savedUrl);
+              localStorage.setItem("businessImageUrl", savedUrl);
+              setProfilePhoto(savedUrl);
+            })
+            .catch((error) => {
+              console.error("Failed to save business logo", error);
+            });
+        }
       }
 
       if (activeMode !== "business") {
