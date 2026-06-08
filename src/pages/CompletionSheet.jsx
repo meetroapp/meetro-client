@@ -4,10 +4,13 @@ import {
   getBusinessSchedule,
   saveBusinessSchedule,
   clearActiveJobSnapshot,
+  getActiveJobSnapshot,
 } from "../utils/workCenter";
 import { getLanguage } from "../utils/language";
 
 function CompletionSheet({ setPage }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const language = getLanguage();
   const isSpanish = language === "es";
 
@@ -16,6 +19,7 @@ function CompletionSheet({ setPage }) {
   const completionService =
     localStorage.getItem("completionService") ||
     localStorage.getItem("activeWorkService") ||
+    activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     savedJob.service ||
     (isSpanish ? "Trabajo de servicio" : "Service Job");
@@ -23,6 +27,7 @@ function CompletionSheet({ setPage }) {
   const completionLocation =
     localStorage.getItem("completionLocation") ||
     localStorage.getItem("activeWorkLocation") ||
+    activeJobSnapshot?.location ||
     localStorage.getItem("activeJobLocation") ||
     savedJob.location ||
     (isSpanish ? "Ubicación del cliente" : "Customer location");
