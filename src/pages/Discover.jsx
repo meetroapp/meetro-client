@@ -332,6 +332,7 @@ function Discover({ setPage, currentPage }) {
       location: selectedBusiness.location || "Saved Business",
       status: "Saved Business",
       unread: false,
+      saved_to_history: false,
       conversation_type: "business",
       savedAt: new Date().toISOString(),
     };

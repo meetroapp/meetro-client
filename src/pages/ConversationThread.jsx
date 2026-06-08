@@ -791,6 +791,7 @@ function ConversationThread({ setPage }) {
           "Saved Contact",
         status: conversationType === "business" ? "Saved Business" : "Message",
         unread: false,
+        saved_to_history: false,
         conversation_type: conversationType || "standard",
         savedAt: new Date().toISOString(),
       };
