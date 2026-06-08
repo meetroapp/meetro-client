@@ -103,6 +103,56 @@ export function clearSelectedActiveProject() {
   window.dispatchEvent(new Event("meetro-workcenter-updated"));
 }
 
+
+export function getActiveWorkSnapshot() {
+  return {
+    id:
+      localStorage.getItem("activeWorkRequestId") ||
+      localStorage.getItem("activeWorkQuoteId") ||
+      localStorage.getItem("activeWorkConversationId") ||
+      "",
+    requestId: localStorage.getItem("activeWorkRequestId") || "",
+    quoteId: localStorage.getItem("activeWorkQuoteId") || "",
+    conversationId: localStorage.getItem("activeWorkConversationId") || "",
+    scheduleId: localStorage.getItem("activeWorkScheduleId") || "",
+    status: localStorage.getItem("activeWorkStatus") || "",
+    service: localStorage.getItem("activeWorkService") || "",
+    location: localStorage.getItem("activeWorkLocation") || "",
+    type: localStorage.getItem("activeWorkType") || "",
+    source: localStorage.getItem("activeWorkSource") || "",
+  };
+}
+
+export function saveActiveWorkSnapshot(work = {}) {
+  if (work.requestId) localStorage.setItem("activeWorkRequestId", String(work.requestId));
+  if (work.quoteId) localStorage.setItem("activeWorkQuoteId", String(work.quoteId));
+  if (work.conversationId) localStorage.setItem("activeWorkConversationId", String(work.conversationId));
+  if (work.scheduleId) localStorage.setItem("activeWorkScheduleId", String(work.scheduleId));
+  if (work.status) localStorage.setItem("activeWorkStatus", String(work.status));
+  if (work.service) localStorage.setItem("activeWorkService", String(work.service));
+  if (work.location) localStorage.setItem("activeWorkLocation", String(work.location));
+  if (work.type) localStorage.setItem("activeWorkType", String(work.type));
+  if (work.source) localStorage.setItem("activeWorkSource", String(work.source));
+
+  window.dispatchEvent(new Event("meetro-workcenter-updated"));
+}
+
+export function clearActiveWorkSnapshot() {
+  [
+    "activeWorkService",
+    "activeWorkLocation",
+    "activeWorkStatus",
+    "activeWorkScheduleId",
+    "activeWorkRequestId",
+    "activeWorkConversationId",
+    "activeWorkQuoteId",
+    "activeWorkType",
+    "activeWorkSource",
+  ].forEach((key) => localStorage.removeItem(key));
+
+  window.dispatchEvent(new Event("meetro-workcenter-updated"));
+}
+
 export function getActiveJobSnapshot(fallbackConversationId = "") {
   return {
     id:
