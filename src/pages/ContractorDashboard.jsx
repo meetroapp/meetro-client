@@ -7,6 +7,7 @@ import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categor
 import {
   getActiveJobSnapshot,
   saveActiveJobSnapshot,
+  saveSelectedActiveProject,
 } from "../utils/workCenter";
 
 function ContractorDashboard({ setPage, language = "en" }) {
@@ -1103,20 +1104,17 @@ setPage("emergencyDispatch");
     localStorage.setItem("activeConversationName", job.customer || job.username || "Customer");
     localStorage.setItem("meetroConversationType", "activeJob");
 
-    localStorage.setItem(
-      "selectedActiveProject",
-      JSON.stringify({
-        ...job,
+    saveSelectedActiveProject({
+      ...job,
+      id: jobId,
+      conversationId,
+      source: job.source || "activeJob",
+      project: {
+        ...(job.project || job),
         id: jobId,
         conversationId,
-        source: job.source || "activeJob",
-        project: {
-          ...(job.project || job),
-          id: jobId,
-          conversationId,
-        },
-      })
-    );
+      },
+    });
   }
 
   function setWorkCenterReturn() {
@@ -2426,14 +2424,11 @@ setPage("emergencyDispatch");
                         saveActiveJobContext(job);
                         setWorkCenterReturn();
 
-                        localStorage.setItem(
-                          "selectedActiveProject",
-                          JSON.stringify({
-                            ...job,
-                            source: job.source || "activeJob",
-                            project: job.project || job,
-                          })
-                        );
+                        saveSelectedActiveProject({
+                          ...job,
+                          source: job.source || "activeJob",
+                          project: job.project || job,
+                        });
 
                         localStorage.setItem("selectedPostId", job.id);
                         localStorage.setItem(
@@ -2483,10 +2478,7 @@ setPage("emergencyDispatch");
                       onClick={() => {
                         if (job.source === "homeownerProject") {
                           setWorkCenterReturn();
-                          localStorage.setItem(
-                            "selectedActiveProject",
-                            JSON.stringify(job)
-                          );
+                          saveSelectedActiveProject(job);
 
                           localStorage.setItem(
                             "selectedPostId",
