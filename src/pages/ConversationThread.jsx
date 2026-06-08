@@ -464,13 +464,13 @@ function ConversationThread({ setPage }) {
   const activeLogo =
     currentViewerRole === "business"
       ? personalProfilePhoto ||
-        selectedBusiness?.logo ||
-        selectedBusiness?.imageUrl ||
+        selectedBusiness?.profile_photo_url ||
         selectedBusiness?.profileImage ||
         ""
-      : businessProfilePhoto ||
+      : selectedBusiness?.image_url ||
         selectedBusiness?.logo ||
         selectedBusiness?.imageUrl ||
+        businessProfilePhoto ||
         selectedBusiness?.profileImage ||
         "";
 
