@@ -4,8 +4,10 @@ import FloatingBackButton from "../components/FloatingBackButton";
 import { t as translate } from "../utils/language";
 import { getNotifications } from "../utils/notifications";
 import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
+import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function ContractorDashboard({ setPage, language = "en" }) {
+  const activeJobSnapshot = getActiveJobSnapshot();
   const userRole = localStorage.getItem("businessCategory") || "Handyman";
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState(
@@ -190,16 +192,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return {
       id:
         localStorage.getItem("activeWorkRequestId") ||
+        activeJobSnapshot?.jobId ||
         localStorage.getItem("activeJobId") ||
         localStorage.getItem("activeWorkQuoteId") ||
         localStorage.getItem("activeWorkConversationId") ||
         "",
       service:
         localStorage.getItem("activeWorkService") ||
+        activeJobSnapshot?.service ||
         localStorage.getItem("activeJobService") ||
         "",
       location:
         localStorage.getItem("activeWorkLocation") ||
+        activeJobSnapshot?.location ||
         localStorage.getItem("activeJobLocation") ||
         "",
       type:
@@ -208,6 +213,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         "",
       stage:
         localStorage.getItem("activeWorkStage") ||
+        activeJobSnapshot?.status ||
         localStorage.getItem("activeJobStatus") ||
         "",
     };
@@ -222,6 +228,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   function getActiveMaterialsKey() {
     const activeProjectId =
       localStorage.getItem("activeWorkRequestId") ||
+      activeJobSnapshot?.jobId ||
       localStorage.getItem("activeJobId") ||
       localStorage.getItem("activeWorkQuoteId") ||
       localStorage.getItem("activeWorkConversationId") ||
