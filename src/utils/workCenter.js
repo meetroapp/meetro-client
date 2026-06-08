@@ -116,6 +116,8 @@ export function getActiveWorkSnapshot() {
     conversationId: localStorage.getItem("activeWorkConversationId") || "",
     scheduleId: localStorage.getItem("activeWorkScheduleId") || "",
     status: localStorage.getItem("activeWorkStatus") || "",
+    stage: localStorage.getItem("activeWorkStage") || "",
+    pauseReason: localStorage.getItem("activeWorkPauseReason") || "",
     service: localStorage.getItem("activeWorkService") || "",
     location: localStorage.getItem("activeWorkLocation") || "",
     type: localStorage.getItem("activeWorkType") || "",
@@ -129,6 +131,8 @@ export function saveActiveWorkSnapshot(work = {}) {
   if (work.conversationId) localStorage.setItem("activeWorkConversationId", String(work.conversationId));
   if (work.scheduleId) localStorage.setItem("activeWorkScheduleId", String(work.scheduleId));
   if (work.status) localStorage.setItem("activeWorkStatus", String(work.status));
+  if (work.stage) localStorage.setItem("activeWorkStage", String(work.stage));
+  if (work.pauseReason) localStorage.setItem("activeWorkPauseReason", String(work.pauseReason));
   if (work.service) localStorage.setItem("activeWorkService", String(work.service));
   if (work.location) localStorage.setItem("activeWorkLocation", String(work.location));
   if (work.type) localStorage.setItem("activeWorkType", String(work.type));
@@ -142,6 +146,8 @@ export function clearActiveWorkSnapshot() {
     "activeWorkService",
     "activeWorkLocation",
     "activeWorkStatus",
+    "activeWorkStage",
+    "activeWorkPauseReason",
     "activeWorkScheduleId",
     "activeWorkRequestId",
     "activeWorkConversationId",
