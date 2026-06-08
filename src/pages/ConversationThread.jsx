@@ -2033,6 +2033,7 @@ const handleImageUpload = (event) => {
                 if (isEmergencyThread) {
                   localStorage.setItem("emergencySavedToHistory", "true");
                   localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
+                  saveActiveJobSnapshot({ status: "completed" });
                   localStorage.setItem("activeJobStatus", "completed");
                   localStorage.setItem("emergencyDispatchStatus", "completed");
                   localStorage.setItem("businessAcceptedEmergency", "false");
@@ -2231,6 +2232,7 @@ const handleImageUpload = (event) => {
                       <button
                         style={completeFromChatBtn}
                         onClick={() => {
+                          saveActiveJobSnapshot({ status: "completed" });
                           localStorage.setItem("activeJobStatus", "completed");
                           localStorage.setItem("emergencyDispatchStatus", "completed");
                           localStorage.setItem("businessAcceptedEmergency", "false");
@@ -2285,6 +2287,7 @@ const handleImageUpload = (event) => {
                             "completedJob",
                           ].forEach((key) => localStorage.removeItem(key));
 
+                          clearActiveJobSnapshot();
                           localStorage.removeItem("emergencyDispatchStatus");
                           localStorage.removeItem("activeJobStatus");
                           localStorage.setItem("businessAcceptedEmergency", "false");
