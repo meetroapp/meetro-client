@@ -811,19 +811,42 @@ timeTbd: "Time TBD",
 locationPending: "Location pending",
 
 workGuidanceSchedule:
-"Manage visits, appointments, and job timelines connected to customer conversations.",
+"Schedule walkthroughs, estimate visits, consultations, virtual meetings, or dispatches before creating a quote.",
 workGuidancePending:
-"Review incoming requests before turning them into active jobs or customer conversations.",
+"Track jobs waiting on customer replies, visit results, missing details, approvals, deposits, or next decisions.",
 workGuidanceActive:
-"Monitor active jobs, dispatches, progress stages, and updates sent through chat.",
+"Manage approved jobs in progress, update status, communicate with the customer, and document work activity.",
 workGuidanceCompleted:
-"Review completed work and job records generated from conversations, materials, and customer approvals.",
+"Review finished jobs, completion records, customer follow-up, and work history.",
 workGuidanceQuotes:
-"Manage estimates, pricing approvals, and proposals connected to customer conversations.",
+"Prepare quotes and materials together after enough job information has been gathered.",
 workGuidanceMaterials:
-"Track requested, pending, approved, and received materials tied to jobs and chats.",
+"Track requested, pending, approved, customer-provided, business-provided, and received materials.",
 workGuidanceRevenue:
-"Review revenue, material costs, estimated profit, and operational performance.",
+"Review income, completed job value, material costs, estimated profit, and business performance.",
+pendingDecisions: "Pending Decisions",
+markVisitDone: "Mark Visit Done",
+moveToActiveJob: "Move to Active Job",
+currentStatus: "Current Status",
+nextStepArrive: "Next step: arrive at the job location.",
+nextStepBeginWork: "Next step: begin work or pause for materials.",
+nextStepResumeMaterials: "Next step: wait for materials and resume work.",
+nextStepContinueWork: "Next step: continue work, update customer, or create completion.",
+nextStepUpdateStatus: "Next step: update the work status.",
+nextStepAcceptedQuote:
+"Next step: move this project to Active Job only after the quote is accepted and the work is ready to begin.",
+workStageSchedule: "Schedule",
+workStagePending: "Pending",
+workStageQuotesMaterials: "Quote & Materials",
+workStageActive: "Active Job",
+workStageCompleted: "Completed",
+workStageMaterials: "Materials",
+workStageTimeline: "Timeline",
+workStageRevenue: "Revenue",
+activeWorkFallback: "Active Work",
+goToActiveJobs: "Go to Active Jobs",
+pendingDecisionWarning:
+"This job is waiting on a decision. Confirm whether it needs a quote, materials, deposit, or customer approval before moving it to Active Job.",
 
 workCenterSubtitle:
   "Manage incoming requests, active jobs and work history.",
@@ -1709,19 +1732,42 @@ timeTbd: "Hora pendiente",
 locationPending: "Ubicación pendiente",
 
 workGuidanceSchedule:
-"Agenda visitas, citas y trabajos conectados a conversaciones con clientes.",
+"Programa recorridos, visitas de estimado, consultas, reuniones virtuales o despachos antes de crear una cotización.",
 workGuidancePending:
-"Revisa solicitudes entrantes antes de convertirlas en trabajos activos o conversaciones.",
+"Rastrea trabajos esperando respuesta del cliente, resultados de visita, detalles faltantes, aprobaciones, depósitos o próximas decisiones.",
 workGuidanceActive:
-"Monitorea trabajos activos, despachos, etapas de progreso y actualizaciones enviadas por chat.",
+"Administra trabajos aprobados en progreso, actualiza estados, comunícate con el cliente y documenta la actividad del trabajo.",
 workGuidanceCompleted:
-"Consulta trabajos completados y registros generados desde conversaciones, materiales y aprobación del cliente.",
+"Revisa trabajos terminados, registros de finalización, seguimiento con clientes e historial de trabajo.",
 workGuidanceQuotes:
-"Administra cotizaciones, aprobaciones de precios y propuestas conectadas a conversaciones.",
+"Prepara cotizaciones y materiales juntos después de reunir suficiente información del trabajo.",
 workGuidanceMaterials:
-"Rastrea materiales solicitados, pendientes, aprobados y recibidos vinculados a trabajos y chats.",
+"Rastrea materiales solicitados, pendientes, aprobados, provistos por el cliente, provistos por el negocio y recibidos.",
 workGuidanceRevenue:
-"Revisa ingresos, costos de materiales, ganancias estimadas y rendimiento operativo.",
+"Revisa ingresos, valor de trabajos completados, costos de materiales, ganancia estimada y rendimiento del negocio.",
+pendingDecisions: "Decisiones pendientes",
+markVisitDone: "Marcar visita hecha",
+moveToActiveJob: "Mover a trabajo activo",
+currentStatus: "Estado actual",
+nextStepArrive: "Siguiente paso: llegar al lugar de trabajo.",
+nextStepBeginWork: "Siguiente paso: comenzar el trabajo o pausar por materiales.",
+nextStepResumeMaterials: "Siguiente paso: esperar materiales y reanudar el trabajo.",
+nextStepContinueWork: "Siguiente paso: continuar trabajo, actualizar cliente o crear cierre.",
+nextStepUpdateStatus: "Siguiente paso: actualizar el estado del trabajo.",
+nextStepAcceptedQuote:
+"Siguiente paso: mueve este proyecto a Trabajo activo solamente si la cotización fue aceptada y el trabajo está listo para comenzar.",
+workStageSchedule: "Programar",
+workStagePending: "Pendiente",
+workStageQuotesMaterials: "Cotización y materiales",
+workStageActive: "Trabajo activo",
+workStageCompleted: "Completado",
+workStageMaterials: "Materiales",
+workStageTimeline: "Cronología",
+workStageRevenue: "Ingresos",
+activeWorkFallback: "Trabajo activo",
+goToActiveJobs: "Ir a trabajos activos",
+pendingDecisionWarning:
+"Este trabajo está pendiente de decisión. Confirma si requiere cotización, materiales, depósito o aprobación del cliente antes de moverlo a Trabajo activo.",
 
 workCenterSubtitle:
   "Administra solicitudes, trabajos activos e historial.",

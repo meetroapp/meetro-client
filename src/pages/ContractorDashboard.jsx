@@ -1287,7 +1287,7 @@ setPage("emergencyDispatch");
           style={activeTab === "schedule" ? workTabActive : workTab}
           onClick={() => openWorkTab("schedule")}
         >
-          {translate("schedule")}
+          1. {translate("workStageSchedule")}
         </button>
 
         <button
@@ -1299,7 +1299,7 @@ setPage("emergencyDispatch");
           }}
           onClick={() => openWorkTab("pending")}
         >
-          <span>{translate("workTabPending")}</span>
+          <span>2. {translate("workStagePending")}</span>
 
           {pendingAlertsCount > 0 && (
             <span style={quoteAlertBadge}>
@@ -1317,7 +1317,7 @@ setPage("emergencyDispatch");
           }}
           onClick={() => openWorkTab("quotes")}
         >
-          <span>{translate("workTabQuotes")}</span>
+          <span>3. {translate("workStageQuotesMaterials")}</span>
 
           {totalQuoteAlerts > 0 && (
             <span style={quoteAlertBadge}>
@@ -1335,13 +1335,20 @@ setPage("emergencyDispatch");
           }}
           onClick={() => openWorkTab("active")}
         >
-          <span>{translate("workTabActive")}</span>
+          <span>4. {translate("workStageActive")}</span>
 
           {activeJobsAlertCount > 0 && (
             <span style={liveTabBadge}>
               LIVE
             </span>
           )}
+        </button>
+
+        <button
+          style={activeTab === "completed" ? workTabActive : workTab}
+          onClick={() => openWorkTab("completed")}
+        >
+          5. {translate("workStageCompleted")}
         </button>
 
         <button
@@ -1353,7 +1360,7 @@ setPage("emergencyDispatch");
           }}
           onClick={() => openWorkTab("materials")}
         >
-          <span>{translate("workTabMaterials")}</span>
+          <span>📦 {translate("workStageMaterials")}</span>
 
           {materialsAlertCount > 0 && (
             <span style={quoteAlertBadge}>
@@ -1367,22 +1374,15 @@ setPage("emergencyDispatch");
           onClick={() => openWorkTab("records")}
         >
           🗂️ {activeLanguage === "es"
-            ? "Registros"
-            : "Project Records"}
-        </button>
-
-        <button
-          style={activeTab === "completed" ? workTabActive : workTab}
-          onClick={() => openWorkTab("completed")}
-        >
-          {translate("workTabCompleted")}
+            ? "Cronología"
+            : translate("workStageTimeline")}
         </button>
 
         <button
           style={activeTab === "revenue" ? workTabActive : workTab}
           onClick={() => openWorkTab("revenue")}
         >
-          {translate("workTabRevenue")}
+          💰 {translate("workStageRevenue")}
         </button>
       </div>
 
@@ -1428,7 +1428,7 @@ setPage("emergencyDispatch");
 
               <h3 style={activeProjectContextTitle}>
                 {activeContext.service ||
-                  (activeLanguage === "es" ? "Trabajo activo" : "Active Work")}
+                  translate("activeWorkFallback")}
               </h3>
 
               <p style={activeProjectContextMeta}>
@@ -1705,7 +1705,7 @@ setPage("emergencyDispatch");
                             style={completeScheduleBtn}
                             onClick={() => markScheduleCompleted(item)}
                           >
-                            {activeLanguage === "es" ? "Completar" : "Complete"}
+                            {translate("markVisitDone")}
                           </button>
                         </>
                       )}
@@ -1759,7 +1759,9 @@ setPage("emergencyDispatch");
 
       {activeTab === "pending" && (
       <div style={section}>
-        <h2 style={sectionTitle}>{translate("requests")}</h2>
+        <h2 style={sectionTitle}>
+          {translate("pendingDecisions")}
+        </h2>
 
         {(() => {
           const pendingWorkStatus = localStorage.getItem("pendingWorkStatus") || "";
@@ -1795,9 +1797,7 @@ setPage("emergencyDispatch");
               </div>
 
               <div style={pendingReviewNotice}>
-                {activeLanguage === "es"
-                  ? "Este trabajo fue enviado desde Agenda. Antes de activarlo, confirma si requiere cotización, materiales, depósito o aprobación del cliente."
-                  : "This job was sent from Schedule. Before activating it, confirm whether it needs a quote, materials, deposit, or customer approval."}
+                {translate("pendingDecisionWarning")}
               </div>
 
               <div style={pendingReviewActions}>
@@ -1872,7 +1872,7 @@ setPage("emergencyDispatch");
                     setRefreshKey((prev) => prev + 1);
                   }}
                 >
-                  ✅ {activeLanguage === "es" ? "Activar trabajo" : "Activate Job"}
+                  ✅ {translate("moveToActiveJob")}
                 </button>
               </div>
             </div>
@@ -2173,7 +2173,7 @@ setPage("emergencyDispatch");
                       </span>
 
                       <h3 style={activeJobTitle}>
-                        {universalActiveWork.service || "Active Work"}
+                        {universalActiveWork.service || translate("activeWorkFallback")}
                       </h3>
 
                       <p style={activeJobSub}>
@@ -2199,6 +2199,24 @@ setPage("emergencyDispatch");
                         {getWorkflowStageLabel(universalActiveWork.stage || "working")}
                       </span>
                     </div>
+                  </div>
+
+                  <div style={activeWorkflowGuide}>
+                    <strong style={activeWorkflowGuideTitle}>
+                      {translate("currentStatus")}
+                    </strong>
+
+                    <p style={activeWorkflowGuideText}>
+                      {universalActiveWork.stage === "onTheWay"
+                        ? translate("nextStepArrive")
+                        : universalActiveWork.stage === "arrived"
+                        ? translate("nextStepBeginWork")
+                        : universalActiveWork.stage === "pausedMaterials"
+                        ? translate("nextStepResumeMaterials")
+                        : universalActiveWork.stage === "working"
+                        ? translate("nextStepContinueWork")
+                        : translate("nextStepUpdateStatus")}
+                    </p>
                   </div>
 
                   <div style={stageActions}>
@@ -2379,7 +2397,7 @@ setPage("emergencyDispatch");
                           ? translate("completed")
                           : activeLanguage === "es"
                           ? "Trabajo Activo"
-                          : "Active Job"}
+                          : translate("workStageActive")}
                       </span>
 
                       <h3 style={activeJobTitle}>
@@ -2854,9 +2872,7 @@ setPage("completedJobDetails");
                       </strong>
 
                       <p>
-                        {activeLanguage === "es"
-                          ? "Este proyecto ya está listo para programación y trabajo activo."
-                          : "This project is now ready for scheduling and active work."}
+                        {translate("nextStepAcceptedQuote")}
                       </p>
 
                       <button
@@ -2995,9 +3011,7 @@ setPage("completedJobDetails");
                           setRefreshKey((prev) => prev + 1);
                         }}
                       >
-                        🛠️ {activeLanguage === "es"
-                          ? "Ir a trabajos activos"
-                          : "Go to Active Jobs"}
+                        🛠️ {translate("goToActiveJobs")}
                       </button>
                     </div>
                   )}
@@ -4450,6 +4464,30 @@ const quoteAlertBadge = {
   color: "white",
   fontSize: "12px",
   fontWeight: "950",
+};
+
+
+const activeWorkflowGuide = {
+  background: "linear-gradient(135deg, #eef6ff, #f8fbff)",
+  border: "1px solid #bfdbfe",
+  borderRadius: 18,
+  padding: "14px 16px",
+  margin: "14px 0",
+  boxShadow: "0 10px 28px rgba(37, 99, 235, 0.08)",
+};
+
+const activeWorkflowGuideTitle = {
+  display: "block",
+  fontSize: 13,
+  color: "#1d4ed8",
+  marginBottom: 6,
+};
+
+const activeWorkflowGuideText = {
+  margin: 0,
+  fontSize: 14,
+  lineHeight: 1.45,
+  color: "#334155",
 };
 
 const workCenterAlertBanner = {

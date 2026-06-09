@@ -829,7 +829,18 @@ if (data.post) {
 
         <SafeBackBar setPage={setPage} fallback={localStorage.getItem("projectDetailsReturnPage") || "discover"} />
 
-        <BottomNav setPage={setPage} currentPage={currentPage} />
+        <BottomNav
+          setPage={setPage}
+          currentPage={
+            projectDetailsReturnPageValue === "businessLeads"
+              ? "businessLeads"
+              : projectDetailsReturnPageValue === "businessDashboard"
+              ? "businessDashboard"
+              : projectDetailsReturnPageValue === "contractorDashboard"
+              ? "contractorDashboard"
+              : currentPage || "discover"
+          }
+        />
       </div>
     </div>
   );

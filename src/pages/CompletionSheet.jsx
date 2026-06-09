@@ -208,7 +208,14 @@ function CompletionSheet({ setPage }) {
 
   return (
     <div style={page}>
-      <button style={backButton} onClick={() => setPage("contractorDashboard")}>
+      <button
+        style={backButton}
+        onClick={() => {
+          localStorage.setItem("meetroWorkCenterTab", "completed");
+          localStorage.setItem("activeWorkCenterTab", "completed");
+          setPage("contractorDashboard");
+        }}
+      >
         ← {isSpanish ? "Volver al centro de trabajo" : "Back to Work Center"}
       </button>
 
@@ -372,7 +379,7 @@ function CompletionSheet({ setPage }) {
         </div>
       </div>
 
-      <BottomNav setPage={setPage} currentPage="businessDashboard" />
+      <BottomNav setPage={setPage} currentPage="contractorDashboard" />
     </div>
   );
 }

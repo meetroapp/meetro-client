@@ -1,5 +1,4 @@
 import { lazy, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
-import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
 import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
