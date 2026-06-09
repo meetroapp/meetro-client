@@ -418,7 +418,7 @@ if (page === "emergencyComplete") {
   return <EmergencyComplete setPage={setPage} />;
 }
 
-if (page === "contractorDashboard") {
+if (page === "contractorDashboard" || page === "workCenter") {
   return <ContractorDashboard setPage={setPage} />;
 }
 

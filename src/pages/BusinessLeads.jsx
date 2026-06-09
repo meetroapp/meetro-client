@@ -567,16 +567,19 @@ function BusinessLeads({ setPage, currentPage }) {
                     // preserved selectedActiveProject
                     localStorage.removeItem("lastCompletedProject");
                     localStorage.removeItem("selectedHomeownerRequestId");
-                    localStorage.removeItem("selectedQuoteRequest");
+                    localStorage.removeItem("selectedWorkCenterRequest");
+                    localStorage.removeItem("activeWorkCenterQuoteRequestId");
+
+                    localStorage.setItem("selectedPostId", lead.id);
 
                     localStorage.setItem(
-                      "selectedWorkCenterRequest",
+                      "selectedQuoteRequest",
                       JSON.stringify(lead)
                     );
 
                     localStorage.setItem(
-                      "activeWorkCenterLeadRequestId",
-                      lead.id
+                      "projectDetailsReturnPage",
+                      "businessLeads"
                     );
 
                     localStorage.setItem(
@@ -586,25 +589,10 @@ function BusinessLeads({ setPage, currentPage }) {
 
                     localStorage.setItem(
                       "leadWorkflowIntent",
-                      "contact_schedule_before_quote"
+                      "contact_customer_before_schedule"
                     );
 
-                    localStorage.setItem(
-                      "workCenterReturnPage",
-                      "businessLeads"
-                    );
-
-                    localStorage.setItem(
-                      "meetroWorkCenterTab",
-                      "schedule"
-                    );
-
-                    localStorage.setItem(
-                      "activeWorkCenterTab",
-                      "schedule"
-                    );
-
-                    setPage("contractorDashboard");
+                    setPage("projectDetails");
                   }}
                 >
                   {text.sendQuote}
