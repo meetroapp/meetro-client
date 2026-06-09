@@ -27,3 +27,6 @@ dist-ssr
 *.bak.*
 *.backup*
 *_backup.jsx
+
+# Xcode workspace files
+ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/
