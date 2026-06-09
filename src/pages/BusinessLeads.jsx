@@ -577,10 +577,22 @@ function BusinessLeads({ setPage, currentPage }) {
                       JSON.stringify(lead)
                     );
 
+                    const conversationId =
+                      lead.conversationId ||
+                      lead.requestId ||
+                      lead.id ||
+                      `lead-${Date.now()}`;
+
+                    localStorage.setItem("activeConversationId", String(conversationId));
+
                     localStorage.setItem(
-                      "projectDetailsReturnPage",
-                      "businessLeads"
+                      "activeConversationName",
+                      lead.username || lead.customer || lead.email || "Customer"
                     );
+
+                    localStorage.setItem("meetroConversationType", "standard");
+                    localStorage.setItem("conversationReturnPage", "businessLeads");
+                    localStorage.setItem("returnPage", "businessLeads");
 
                     localStorage.setItem(
                       "leadWorkflowStage",
@@ -592,7 +604,7 @@ function BusinessLeads({ setPage, currentPage }) {
                       "contact_customer_before_schedule"
                     );
 
-                    setPage("projectDetails");
+                    setPage("conversationThread");
                   }}
                 >
                   {text.sendQuote}

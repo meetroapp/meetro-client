@@ -1106,8 +1106,8 @@ function MyRequests({ setPage }) {
                                         ? "Programado"
                                         : "Scheduled"
                                       : language === "es"
-                                      ? "Programar Proyecto"
-                                      : "Schedule Project"}
+                                      ? "Coordinar programación"
+                                      : "Coordinate Scheduling"}
                                   </button>
 
                                   <button

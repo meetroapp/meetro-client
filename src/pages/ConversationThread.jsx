@@ -318,6 +318,8 @@ function ConversationThread({ setPage }) {
 
   const isEmergencyThread = conversationType === "emergency";
 
+  const activeJobSnapshot = getActiveJobSnapshot();
+
   const emergencyDispatchStatus =
     localStorage.getItem("emergencyDispatchStatus") ||
     activeJobSnapshot?.status ||
@@ -330,8 +332,6 @@ function ConversationThread({ setPage }) {
     emergencyDispatchStatus !== "completed";
 
   const isEmergencyConversation = hasActiveEmergencyJob;
-
-  const activeJobSnapshot = getActiveJobSnapshot();
 
 
   const emergencyStatusSubtitle = {

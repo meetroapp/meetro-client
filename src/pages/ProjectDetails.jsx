@@ -454,9 +454,23 @@ if (data.post) {
               </div>
             )}
 
-            <p style={projectDescription}>
-              {post.description || t("noDescriptionAdded")}
-            </p>
+            <div style={projectScopeCard}>
+              <div style={projectScopeHeader}>
+                <span>📝</span>
+                <strong>
+                  {language === "es" ? "Alcance del trabajo" : "Project Scope"}
+                </strong>
+              </div>
+
+              <p style={projectScopeText}>
+                {post.description ||
+                  post.project_description ||
+                  post.details ||
+                  post.notes ||
+                  post.service ||
+                  t("noDescriptionAdded")}
+              </p>
+            </div>
 
             <div style={infoBox}>
               <div style={infoRow}>
@@ -845,6 +859,33 @@ if (data.post) {
     </div>
   );
 }
+
+
+const projectScopeCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 20,
+  padding: 18,
+  margin: "18px 0",
+  boxShadow: "0 12px 30px rgba(15, 23, 42, 0.06)",
+};
+
+const projectScopeHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 18,
+  color: "#0f172a",
+  marginBottom: 10,
+};
+
+const projectScopeText = {
+  margin: 0,
+  fontSize: 16,
+  lineHeight: 1.55,
+  color: "#334155",
+  whiteSpace: "pre-wrap",
+};
 
 const pageWrapper = {
   background:
