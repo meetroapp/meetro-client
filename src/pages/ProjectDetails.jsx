@@ -14,6 +14,10 @@ import {
   saveSelectedActiveProject,
 } from "../utils/workCenter";
 import { isProfessionalSession } from "../utils/session";
+import {
+  getConversationOriginContext,
+  restoreConversationOriginContext,
+} from "../utils/conversationOrigin";
 
 function ProjectDetails({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -30,7 +34,7 @@ function ProjectDetails({ setPage, currentPage }) {
   const [language, setLanguage] = useState(getLanguage());
 
   const activeProjectData = getSelectedActiveProject();
-
+  const openedFromConversation = Boolean(getConversationOriginContext());
   const projectDetailsReturnPageValue =
     localStorage.getItem("projectDetailsReturnPage") || "";
   const hasProfessionalAuthority = isProfessionalSession();
@@ -85,6 +89,8 @@ function ProjectDetails({ setPage, currentPage }) {
   }, []);
 
   function openProjectConversation() {
+    if (restoreConversationOriginContext(setPage)) return;
+
     if (!post) return;
 
     const requestId = post.requestId || post.id || "";
@@ -172,6 +178,7 @@ function ProjectDetails({ setPage, currentPage }) {
   useEffect(() => {
     const loadJobRecords = () => {
       const activeProject = getSelectedActiveProject();
+      const originConversation = getConversationOriginContext();
 
       const activeProjectId =
         activeProject?.project?.conversationId ||
@@ -186,9 +193,12 @@ function ProjectDetails({ setPage, currentPage }) {
         localStorage.getItem("activeConversationId") ||
         "demo-homeowner-1";
 
-      const conversationId = `active-job-${activeProjectId}`;
+      const conversationId =
+        originConversation?.conversationId || `active-job-${activeProjectId}`;
 
-      localStorage.setItem("activeConversationId", conversationId);
+      if (!originConversation?.conversationId) {
+        localStorage.setItem("activeConversationId", conversationId);
+      }
 
       const records = getJobRecord(conversationId);
 
@@ -273,6 +283,8 @@ if (data.post) {
       <div style={contentWrapper}>
         <button
   onClick={() => {
+    if (restoreConversationOriginContext(setPage)) return;
+
     const returnPage =
       localStorage.getItem("projectDetailsReturnPage") || "discover";
 
@@ -280,7 +292,7 @@ if (data.post) {
   }}
   style={backButton}
 >
-          ← {t("back")}
+          {openedFromConversation ? "× Close" : `← ${t("back")}`}
         </button>
 
         {loading && (
@@ -678,7 +690,7 @@ if (data.post) {
               </div>
             )}
 
-            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+            {!openedFromConversation && (isProfessionalProject || isBusinessLeadReviewPage) && (
               <div style={projectPrimaryActions}>
               {(isProfessionalProject || isBusinessLeadReviewPage) && (
                 <p style={contactCustomerHelper}>

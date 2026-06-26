@@ -1,6 +1,7 @@
 import { t } from "../../../utils/language";
 import { getWorkflowStatusLabel } from "../../../utils/workflowStatus";
 import UniversalDocumentCard from "../../documents/UniversalDocumentCard";
+import { captureConversationOriginContext } from "../../../utils/conversationOrigin";
 
 function CompletionWorkflowPresentation({
   msg,
@@ -54,6 +55,11 @@ function CompletionWorkflowPresentation({
   };
 
   const handleClosureReview = () => {
+    captureConversationOriginContext({
+      sourcePage: "conversationThread",
+      workspace: "completedJobDetails",
+      viewerRole: isBusinessViewer ? "business" : "homeowner",
+    });
     localStorage.setItem(
       "completedJobViewMode",
       isBusinessViewer ? "business" : "homeowner"
@@ -70,7 +76,7 @@ function CompletionWorkflowPresentation({
         status={statusLabel}
         language={language}
         icon="completion"
-        reviewProjectAction={handleReviewProject}
+        reviewProjectAction={showClosureReview ? undefined : handleReviewProject}
       />
 
       {showClosureReview ? (

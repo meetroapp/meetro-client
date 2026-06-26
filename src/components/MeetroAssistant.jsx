@@ -979,7 +979,8 @@ function makeRequestAssistantAction(actionKey, language, context = {}) {
     },
     reviewDetails: {
       label: t("assistantRequestReviewDetails"),
-      target: "projectDetails",
+      target: conversationId ? "conversationThread" : "myRequests",
+      conversationId,
     },
     moveWorkCenter: {
       label: t("assistantRequestMoveWorkCenter"),

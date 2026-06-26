@@ -5,6 +5,7 @@ import { addNotification } from "../utils/notifications";
 import { updateRequestById, appendTimelineEvent } from "../utils/workflowTimeline";
 import { formatMessageTime } from "../utils/displayTime";
 import { getJobRecord, saveJobRecord } from "../utils/workCenter";
+import { restoreConversationOriginContext } from "../utils/conversationOrigin";
 
 function ChangeOrderRequest({ setPage }) {
   const placeholderStyle = `
@@ -30,7 +31,13 @@ function ChangeOrderRequest({ setPage }) {
       <style>{placeholderStyle}</style>
         <div style={card}>
           <h2>{isSpanish ? "No hay proyecto seleccionado" : "No project selected"}</h2>
-          <button style={primaryButton} onClick={() => setPage("myRequests")}>
+          <button
+            style={primaryButton}
+            onClick={() => {
+              if (restoreConversationOriginContext(setPage)) return;
+              setPage("myRequests");
+            }}
+          >
             {isSpanish ? "Volver" : "Go Back"}
           </button>
         </div>
@@ -241,7 +248,13 @@ function ChangeOrderRequest({ setPage }) {
   return (
     <div className="app-page meetro-form-page" style={page}>
       <style>{placeholderStyle}</style>
-      <button style={backButton} onClick={() => setPage("myRequests")}>
+      <button
+        style={backButton}
+        onClick={() => {
+          if (restoreConversationOriginContext(setPage)) return;
+          setPage("myRequests");
+        }}
+      >
         ←
       </button>
 

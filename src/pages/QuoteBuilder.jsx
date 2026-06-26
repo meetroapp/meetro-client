@@ -24,6 +24,7 @@ import {
   calculateCustomerTotal,
   normalizeLaborPricingType,
 } from "../utils/pricingCalculations";
+import { restoreConversationOriginContext } from "../utils/conversationOrigin";
 
 function safeJson(value, fallback = null) {
   try {
@@ -2284,6 +2285,8 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
       <button
         style={backButton}
         onClick={() => {
+          if (restoreConversationOriginContext(setPage)) return;
+
           if (isEditingExistingQuote) {
             localStorage.removeItem("selectedQuoteForEdit");
             localStorage.setItem("meetroWorkCenterTab", "quotes");

@@ -65,18 +65,18 @@ export default function UniversalDocumentCard({
 
       {status ? <div style={documentStatus}>{status}</div> : null}
 
-      <button
-        type="button"
-        style={previewButton}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (typeof buttonAction === "function") {
+      {buttonAction ? (
+        <button
+          type="button"
+          style={previewButton}
+          onClick={(event) => {
+            event.stopPropagation();
             buttonAction(event);
-          }
-        }}
-      >
-        {t("reviewProject", language)} →
-      </button>
+          }}
+        >
+          {t("reviewProject", language)} →
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -5502,7 +5502,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function saveActiveJobContext(job) {
     const jobId = job.id || job.requestId || `job-${Date.now()}`;
-    const conversationId = `active-job-${jobId}`;
+    const conversationId =
+      job.conversationId ||
+      job.activeConversationId ||
+      job.projectConversationId ||
+      job.schedule?.conversationId ||
+      job.quote?.conversationId ||
+      job.active?.conversationId ||
+      job.request?.conversationId ||
+      job.project?.conversationId ||
+      `active-job-${jobId}`;
 
     saveActiveJobSnapshot({
       id: jobId,
@@ -5539,22 +5548,91 @@ function ContractorDashboard({ setPage, language = "en" }) {
     });
   }
 
-  function openActiveWorkProject(job = {}) {
-    saveActiveJobContext(job);
-    setWorkCenterReturn();
-
-    localStorage.setItem("selectedPostId", job.id);
-    localStorage.setItem(
-      "selectedQuoteRequest",
-      JSON.stringify(job.project || job)
+  function getRelationshipConversationId(record = {}) {
+    return (
+      record.conversationId ||
+      record.activeConversationId ||
+      record.projectConversationId ||
+      record.schedule?.conversationId ||
+      record.quote?.conversationId ||
+      record.active?.conversationId ||
+      record.request?.conversationId ||
+      record.project?.conversationId ||
+      record.requestId ||
+      record.projectId ||
+      record.id ||
+      ""
     );
-    localStorage.setItem("projectDetailsReturnPage", "contractorDashboard");
-    localStorage.setItem("conversationReturnPage", "projectDetails");
-    localStorage.setItem("activeConversationId", `active-job-${job.id}`);
-    localStorage.setItem("activeConversationName", job.customer || "Customer");
-    localStorage.setItem("meetroConversationType", "activeJob");
+  }
 
-    setPage("projectDetails");
+  function openWorkCenterRelationshipConversation(record = {}, returnSection = "job") {
+    const conversationId = getRelationshipConversationId(record);
+
+    if (!conversationId) return false;
+
+    const requestId =
+      record.requestId ||
+      record.projectId ||
+      record.jobId ||
+      record.id ||
+      record.schedule?.requestId ||
+      record.quote?.requestId ||
+      conversationId;
+    const customerName =
+      record.customer ||
+      record.customerName ||
+      record.username ||
+      record.homeownerName ||
+      record.schedule?.customerName ||
+      record.quote?.customerName ||
+      "Customer";
+    const projectTitle =
+      record.title ||
+      record.service ||
+      record.projectTitle ||
+      record.requestTitle ||
+      record.schedule?.title ||
+      record.quote?.projectTitle ||
+      "Project";
+
+    setWorkCenterReturn();
+    localStorage.setItem("selectedPostId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(record.project || record));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationName", customerName);
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("conversationReturnPage", "workCenter");
+    localStorage.setItem("returnPage", "workCenter");
+    localStorage.setItem("conversationReturnSection", returnSection);
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify({
+        id: conversationId,
+        type: "work",
+        category: "work",
+        participantName: customerName,
+        homeownerName: customerName,
+        projectTitle,
+        requestId,
+      })
+    );
+    setPage("conversationThread");
+    return true;
+  }
+
+  function openActiveWorkProject(job = {}) {
+    const conversationId = getRelationshipConversationId(job);
+    saveActiveJobContext({
+      ...job,
+      conversationId,
+    });
+
+    if (openWorkCenterRelationshipConversation({ ...job, conversationId }, "active")) {
+      return;
+    }
+
+    openWorkTab("active");
   }
 
   function setOperationalActiveWorkStatus(job = {}, nextStatus = "active") {
@@ -11731,14 +11809,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           key={job.id}
                           type="button"
                           style={jobListCard}
-                          onClick={() => {
-                            setSelectedJobDetailView("");
-                            setIsJobHistoryMode(false);
-	                            setJobMenuTab("current");
-	                            setHistoryActionNotice("");
-	                            setSelectedWorkCenterJob(job);
-	                            setIsWorkCenterSectionOpen(false);
-	                          }}
+                          onClick={() => openWorkCenterRelationshipConversation(job, "currentJobs")}
                         >
                           <span style={jobListCardMain}>
                             <strong style={jobListCustomer}>{job.customer}</strong>
@@ -13191,7 +13262,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <button
                       style={startScheduleBtn}
                       onClick={() =>
-                        isWorkSchedule ? openWorkTab("active") : openVisitDetail(item)
+                        isWorkSchedule
+                          ? openWorkCenterRelationshipConversation(item, "schedule") ||
+                            openWorkTab("active")
+                          : openVisitDetail(item)
                       }
                     >
                       {isWorkSchedule

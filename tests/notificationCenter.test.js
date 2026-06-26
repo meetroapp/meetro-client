@@ -21,7 +21,11 @@ test("notification categories separate project, message, quote, emergency, hirin
 test("notification routes open the existing destination for each workflow type", () => {
   assert.equal(
     getNotificationRoute({ type: "quote_sent", requestId: "req-1" }).page,
-    "projectDetails"
+    "conversationThread"
+  );
+  assert.equal(
+    getNotificationRoute({ type: "quote_sent", requestId: "req-1" }).context.activeConversationId,
+    "req-1"
   );
   assert.equal(
     getNotificationRoute({ type: "unread_message", conversationId: "conv-1" }).page,

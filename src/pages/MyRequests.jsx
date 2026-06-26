@@ -1059,7 +1059,7 @@ function MyRequests({ setPage }) {
       return;
     }
 
-    setPage("projectDetails");
+    openRequestConversation(projectRecord, workflow.quote || {});
   }
 
   function startEdit(request) {
@@ -1273,7 +1273,12 @@ function MyRequests({ setPage }) {
 
     if (returnPage === "projectDetails") {
       localStorage.removeItem("myRequestsReturnPage");
-      setPage("projectDetails");
+      if (localStorage.getItem("activeConversationId")) {
+        localStorage.setItem("conversationReturnPage", "myRequests");
+        setPage("conversationThread");
+        return;
+      }
+      setPage("home");
       return;
     }
 

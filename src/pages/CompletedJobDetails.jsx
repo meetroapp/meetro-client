@@ -8,8 +8,13 @@ import {
   moveJobToHistory,
   updateProjectLifecycleState,
 } from "../utils/projectLifecycleSync";
+import {
+  getConversationOriginContext,
+  restoreConversationOriginContext,
+} from "../utils/conversationOrigin";
 
 function CompletedJobDetails({ setPage }) {
+  const openedFromConversation = Boolean(getConversationOriginContext());
   const completedProject = JSON.parse(
     localStorage.getItem("lastCompletedProject") || "null"
   );
@@ -303,6 +308,8 @@ function CompletedJobDetails({ setPage }) {
   };
 
   const openProjectConversation = (context = "completion") => {
+    if (restoreConversationOriginContext(setPage)) return;
+
     const conversationId = getProjectConversationId();
 
     localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
@@ -572,9 +579,12 @@ function CompletedJobDetails({ setPage }) {
       <div className="app-page meetro-readable-page" style={page}>
         <button
           style={backButton}
-          onClick={() => setPage("projectDetails")}
+          onClick={() => {
+            if (restoreConversationOriginContext(setPage)) return;
+            setPage("projectDetails");
+          }}
         >
-          ← {t("backToProjectJourney")}
+          {openedFromConversation ? "× Close" : `← ${t("backToProjectJourney")}`}
         </button>
 
         <div style={completionHeader}>
@@ -908,11 +918,14 @@ function CompletedJobDetails({ setPage }) {
       </style>
       <button
         style={backButton}
-        onClick={() =>
-          setPage(isHomeownerView ? "home" : "contractorDashboard")
-        }
+        onClick={() => {
+          if (restoreConversationOriginContext(setPage)) return;
+          setPage(isHomeownerView ? "home" : "contractorDashboard");
+        }}
       >
-        ← {isHomeownerView ? t("backHome") : t("backToWorkCenter")}
+        {openedFromConversation
+          ? "× Close"
+          : `← ${isHomeownerView ? t("backHome") : t("backToWorkCenter")}`}
       </button>
 
       <div style={printHeader}>
@@ -1099,6 +1112,7 @@ function CompletedJobDetails({ setPage }) {
 
         </div>
 
+        {!openedFromConversation && (
         <div style={actionGrid}>
           {isHomeownerView ? (
             <>
@@ -1111,7 +1125,10 @@ function CompletedJobDetails({ setPage }) {
 
               <button
                 style={secondaryButton}
-                onClick={() => setPage("messagesInbox")}
+                onClick={() => {
+                  if (restoreConversationOriginContext(setPage)) return;
+                  setPage("messagesInbox");
+                }}
               >
                 {t("messageProfessional")}
               </button>
@@ -1144,7 +1161,10 @@ function CompletedJobDetails({ setPage }) {
 
               <button
                 style={secondaryButton}
-                onClick={() => setPage("messagesInbox")}
+                onClick={() => {
+                  if (restoreConversationOriginContext(setPage)) return;
+                  setPage("messagesInbox");
+                }}
               >
                 Open Messages
               </button>
@@ -1160,6 +1180,7 @@ function CompletedJobDetails({ setPage }) {
             </>
           )}
         </div>
+        )}
       </div>
 
       <BottomNav

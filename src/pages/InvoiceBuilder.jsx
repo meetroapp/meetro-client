@@ -13,6 +13,7 @@ import {
   saveBusinessSchedule,
 } from "../utils/workCenter";
 import { formatMessageTime } from "../utils/displayTime";
+import { restoreConversationOriginContext } from "../utils/conversationOrigin";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -895,6 +896,8 @@ ${invoice.customerMessage || "—"}`;
         <button
           style={backBtn}
           onClick={() => {
+            if (restoreConversationOriginContext(setPage)) return;
+
             if (isBusinessToolsInvoice) {
               localStorage.removeItem("invoiceBuilderReturnPage");
             }

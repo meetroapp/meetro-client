@@ -310,6 +310,84 @@ function BusinessDashboard({ setPage }) {
     setPage("contractorDashboard");
   }
 
+  function openRelationshipConversation(record = {}, returnSection = "") {
+    const conversationId =
+      record.conversationId ||
+      record.activeConversationId ||
+      record.projectConversationId ||
+      record.requestId ||
+      record.projectId ||
+      record.id ||
+      "";
+
+    if (!conversationId) return false;
+
+    const requestId = record.requestId || record.projectId || record.id || conversationId;
+    const participantName =
+      record.customerName ||
+      record.homeownerName ||
+      record.customer ||
+      record.username ||
+      record.name ||
+      t("customer");
+    const projectTitle =
+      record.projectTitle ||
+      record.requestTitle ||
+      record.title ||
+      record.service ||
+      record.category ||
+      t("project");
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(record));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationName", participantName);
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("conversationReturnPage", "businessDashboard");
+    localStorage.setItem("returnPage", "businessDashboard");
+    if (returnSection) {
+      localStorage.setItem("conversationReturnSection", returnSection);
+    }
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify({
+        id: conversationId,
+        type: "work",
+        category: "work",
+        participantName,
+        homeownerName: participantName,
+        businessName,
+        projectTitle,
+        requestId,
+      })
+    );
+    setPage("conversationThread");
+    return true;
+  }
+
+  function openFirstScheduledConversation() {
+    const item = businessSchedule.find(
+      (scheduleItem) =>
+        scheduleItem?.conversationId ||
+        scheduleItem?.activeConversationId ||
+        scheduleItem?.projectConversationId
+    );
+
+    if (item && openRelationshipConversation(item, "schedule")) return;
+
+    openWorkCenterSection("schedule", { filter: "today" });
+  }
+
+  function openFirstActiveProjectConversation() {
+    const project = homeownerRequests.find((item) =>
+      ["accepted", "scheduled", "active"].includes(String(item.status || "").toLowerCase())
+    );
+
+    if (project && openRelationshipConversation(project, "active")) return;
+
+    openWorkCenterSection("active");
+  }
+
   const unreadMessages = liveUnreadCount ||
     localStorage.getItem("mockStandardUnreadMessages") || "0";
 
@@ -623,7 +701,7 @@ function BusinessDashboard({ setPage }) {
                       : "Appointment response"
                     : text.scheduledToday
                 }
-                onClick={() => openWorkCenterSection("schedule", { filter: "today" })}
+                onClick={openFirstScheduledConversation}
               />
             </div>
 
@@ -631,7 +709,7 @@ function BusinessDashboard({ setPage }) {
               title={text.activeJobs}
               value={activeProjectsCount}
               note={text.inProgress}
-              onClick={() => openWorkCenterSection("active")}
+              onClick={openFirstActiveProjectConversation}
             />
 
             <div
@@ -691,7 +769,10 @@ function BusinessDashboard({ setPage }) {
                   status={scheduleItem.status}
                   time={scheduleItem.time}
                   dateLabel={scheduleItem.dateLabel}
-                  onClick={() => openWorkCenterSection("schedule", { filter: "today" })}
+                  onClick={() => {
+                    if (openRelationshipConversation(item, "schedule")) return;
+                    openWorkCenterSection("schedule", { filter: "today" });
+                  }}
                 />
               );
             })
@@ -842,9 +923,9 @@ function WorkRow({ title, meta, status, time, dateLabel, onClick }) {
         <div style={workThumb}>—</div>
       )}
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <strong>{title}</strong>
-        <p>{meta}</p>
+      <div style={workRowContent}>
+        <strong style={workRowTitle}>{title}</strong>
+        <p style={workRowMeta}>{meta}</p>
       </div>
 
       <span style={workStatus}>{status}</span>
@@ -1346,12 +1427,52 @@ const workRow = {
   background: "linear-gradient(135deg,#ffffff,#fbfdff)",
   borderRadius: "20px",
   padding: "14px",
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "70px minmax(0, 1fr) 18px",
+  gridTemplateAreas: `
+    "time content chevron"
+    "time status chevron"
+  `,
   alignItems: "center",
-  gap: "12px",
-  flexWrap: "wrap",
+  columnGap: "12px",
+  rowGap: "8px",
   textAlign: "left",
   cursor: "pointer",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const workRowContent = {
+  gridArea: "content",
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+};
+
+const workRowTitle = {
+  display: "block",
+  minWidth: 0,
+  maxWidth: "100%",
+  color: "#0f172a",
+  fontSize: "15px",
+  fontWeight: "900",
+  lineHeight: 1.25,
+  whiteSpace: "normal",
+  wordBreak: "normal",
+  overflowWrap: "break-word",
+};
+
+const workRowMeta = {
+  margin: "4px 0 0",
+  minWidth: 0,
+  maxWidth: "100%",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "700",
+  lineHeight: 1.35,
+  whiteSpace: "normal",
+  wordBreak: "normal",
+  overflowWrap: "break-word",
 };
 
 const emergencyChatBanner = {
@@ -1426,6 +1547,7 @@ const emptyScheduleCard = {
 };
 
 const scheduleTimeBadge = {
+  gridArea: "time",
   width: "70px",
   minWidth: "70px",
   borderRadius: "16px",
@@ -1440,16 +1562,23 @@ const scheduleTimeBadge = {
 };
 
 const workStatus = {
+  gridArea: "status",
+  justifySelf: "start",
+  maxWidth: "100%",
   background: "#eef2ff",
   color: "#5b3df5",
   padding: "7px 10px",
   borderRadius: "999px",
   fontSize: "12px",
   fontWeight: "900",
-  flexShrink: 0,
+  whiteSpace: "normal",
+  wordBreak: "normal",
+  overflowWrap: "break-word",
 };
 
 const chevron = {
+  gridArea: "chevron",
+  justifySelf: "end",
   fontSize: "24px",
   color: "#475569",
 };

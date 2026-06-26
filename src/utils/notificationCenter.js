@@ -75,21 +75,25 @@ export function getNotificationRoute(notification = {}, activeAccountMode = "per
 
   if (category === "quotes") {
     return {
-      page: "projectDetails",
+      page: requestId ? "conversationThread" : "home",
       context: {
+        activeConversationId: conversationId || requestId,
+        meetroConversationType: "standard",
         selectedHomeownerRequestId: requestId,
         selectedQuoteId: quoteId,
-        projectJourneyFocus: "quote",
+        conversationReturnPage: activeAccountMode === "business" ? "businessDashboard" : "home",
       },
     };
   }
 
   if (category === "schedule") {
     return {
-      page: "projectDetails",
+      page: requestId ? "conversationThread" : "home",
       context: {
+        activeConversationId: conversationId || requestId,
+        meetroConversationType: "standard",
         selectedHomeownerRequestId: requestId,
-        projectJourneyFocus: "schedule",
+        conversationReturnPage: activeAccountMode === "business" ? "businessDashboard" : "home",
       },
     };
   }
@@ -127,9 +131,16 @@ export function getNotificationRoute(notification = {}, activeAccountMode = "per
     return {
       page: String(notification.type || "").includes("completion")
         ? "completedJobDetails"
-        : "projectDetails",
+        : requestId
+        ? "conversationThread"
+        : activeAccountMode === "business"
+        ? "businessDashboard"
+        : "home",
       context: {
+        activeConversationId: conversationId || requestId,
+        meetroConversationType: "standard",
         selectedHomeownerRequestId: requestId,
+        conversationReturnPage: activeAccountMode === "business" ? "businessDashboard" : "home",
       },
     };
   }

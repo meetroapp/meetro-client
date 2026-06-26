@@ -227,17 +227,8 @@ function Home({ setPage }) {
   }
 
   function openHomeownerProject(request = {}) {
-    const requestId = request.requestId || request.id || "";
-
     setActiveAccountMode("personal");
-    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
-    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
-    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
-    localStorage.setItem("projectDetailsReturnPage", "home");
-    if (requestId) {
-      localStorage.setItem("selectedPostId", String(requestId));
-    }
-    setPage("projectDetails");
+    openWorkConversationForRequest(request);
   }
 
   const spotlightBusinesses = getLocalSpotlightBusinesses();

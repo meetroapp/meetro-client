@@ -127,7 +127,17 @@ function EmergencyCompletionActions({ setPage }) {
     window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
     window.dispatchEvent(new Event("meetro-messages-updated"));
 
-    setPage("messagesInbox");
+    localStorage.setItem("meetroConversationType", "emergency");
+    localStorage.setItem(
+      "activeConversationId",
+      activeEmergencyRecord.conversationId ||
+        activeEmergencyRecord.emergencyConversationId ||
+        localStorage.getItem("emergencyConversationId") ||
+        localStorage.getItem("activeConversationId") ||
+        ""
+    );
+    localStorage.setItem("conversationReturnPage", "emergencyComplete");
+    setPage("conversationThread");
   }
 
   function markPaid() {

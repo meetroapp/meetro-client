@@ -60,6 +60,7 @@ import {
   scheduleAppointmentReminderNotifications,
 } from "../utils/appointmentReminders";
 import { createNotification } from "../utils/meetroNotifications";
+import { captureConversationOriginContext } from "../utils/conversationOrigin";
 
 const IconBack = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -1337,6 +1338,12 @@ useEffect(() => {
   })();
 
   const openReviewProjectFromMessage = (messageRecord = {}) => {
+    captureConversationOriginContext({
+      sourcePage: "conversationThread",
+      workspace: "projectDetails",
+      viewerRole: currentViewerRole,
+    });
+
     const fallbackContext =
       conversationLinkedQuoteRequest ||
       conversationLinkedHomeownerRequest ||
@@ -2223,6 +2230,11 @@ useEffect(() => {
       normalized.includes("leave review") ||
       normalized.includes("dejar reseña")
     ) {
+      captureConversationOriginContext({
+        sourcePage: "conversationThread",
+        workspace: isEmergencyThread ? "emergencyComplete" : "completedJobDetails",
+        viewerRole: currentViewerRole,
+      });
       setPage(isEmergencyThread ? "emergencyComplete" : "completedJobDetails");
       return;
     }
