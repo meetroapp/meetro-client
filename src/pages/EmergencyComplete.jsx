@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { updateRequestById } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
+import {
+  getProfessionalReviews,
+  getProfessionalReviewStats,
+  saveProfessionalReview,
+} from "../utils/reviewStorage";
 
 function EmergencyComplete({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
@@ -13,15 +18,67 @@ function EmergencyComplete({ setPage }) {
     localStorage.getItem("lastCompletedProject") || "null"
   );
 
+  const activeEmergencyRecord = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
+  function saveEmergencyRecordPatch(patch = {}) {
+    const emergencyRequestId =
+      activeEmergencyRecord.id ||
+      completedProject?.emergencyRequestId ||
+      "";
+
+    const archivedRecord = (() => {
+      if (!emergencyRequestId) return {};
+
+      try {
+        return JSON.parse(
+          localStorage.getItem(
+            `meetro_emergency_record_${emergencyRequestId}`
+          ) || "{}"
+        );
+      } catch {
+        return {};
+      }
+    })();
+
+    const nextRecord = {
+      ...archivedRecord,
+      ...activeEmergencyRecord,
+      ...patch,
+      id: emergencyRequestId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (emergencyRequestId) {
+      localStorage.setItem(
+        `meetro_emergency_record_${emergencyRequestId}`,
+        JSON.stringify(nextRecord)
+      );
+    }
+
+    return nextRecord;
+  }
+
   const selectedService =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
     completedProject?.title ||
     completedProject?.category ||
     localStorage.getItem("selectedEmergencyService") ||
     "Home Project";
 
   const professionalName =
+    activeEmergencyRecord.businessName ||
+    localStorage.getItem("emergencyBusinessName") ||
+    localStorage.getItem("selectedEmergencyBusiness") ||
     localStorage.getItem("selectedProfessionalName") ||
     completedProject?.selectedProfessional ||
+    completedProject?.businessName ||
     completedProject?.acceptedQuote?.businessName ||
     localStorage.getItem("businessName") ||
     "Professional";
@@ -72,53 +129,57 @@ function submitReview() {
   const professionalId =
     localStorage.getItem("selectedProfessionalId") ||
     completedProject?.acceptedQuote?.businessId ||
+    activeEmergencyRecord.businessId ||
+    activeEmergencyRecord.professionalId ||
     localStorage.getItem("activeProfessionalId") ||
     localStorage.getItem("businessName") ||
     "Professional";
 
-  const reviewKey = `meetroReviews_${professionalId}`;
-
-  const existingReviews = JSON.parse(
-    localStorage.getItem(reviewKey) || "[]"
-  );
-
-  const newReview = {
-    id: Date.now(),
+  saveProfessionalReview({
     professionalId,
     professionalName,
+    customerDisplayName:
+      localStorage.getItem("userName") ||
+      completedProject?.homeownerName ||
+      activeEmergencyRecord.customerName ||
+      "Customer",
     service: selectedService,
     rating,
-    review,
+    comment: review,
+    jobId:
+      completedProject?.requestId ||
+      completedProject?.id ||
+      activeEmergencyRecord.id ||
+      localStorage.getItem("selectedHomeownerRequestId") ||
+      "",
+    requestId:
+      completedProject?.requestId ||
+      completedProject?.id ||
+      activeEmergencyRecord.id ||
+      localStorage.getItem("selectedHomeownerRequestId") ||
+      "",
     createdAt: new Date().toISOString(),
-    source: completedProject ? "homeowner_project" : "emergency",
+    source: completedProject ? "job_completion_review" : "homeowner_review",
     projectTitle:
       completedProject?.title ||
       completedProject?.category ||
       selectedService,
-  };
+  });
 
-  const updatedReviews = [newReview, ...existingReviews];
-
-  const totalRating = updatedReviews.reduce(
-    (sum, item) => sum + Number(item.rating || 0),
-    0
-  );
-
-  const averageRating =
-    updatedReviews.length > 0
-      ? (totalRating / updatedReviews.length).toFixed(1)
-      : "5.0";
-
-  localStorage.setItem(reviewKey, JSON.stringify(updatedReviews));
+  const professionalReviews = getProfessionalReviews({
+    professionalId,
+    professionalName,
+  });
+  const reviewStats = getProfessionalReviewStats(professionalReviews);
 
   localStorage.setItem(
     "professionalRatingAverage",
-    averageRating
+    reviewStats.averageRating || "5.0"
   );
 
   localStorage.setItem(
     "professionalReviewCount",
-    String(updatedReviews.length)
+    String(reviewStats.totalReviews)
   );
 
   localStorage.setItem("emergencyNeedsReview", "false");
@@ -140,6 +201,14 @@ function submitReview() {
   localStorage.setItem("emergencyDispatchStatus", "closed");
   localStorage.setItem("emergencyWorkOrderClosed", "true");
 
+  saveEmergencyRecordPatch({
+    status: "closed",
+    reviewSubmitted: true,
+    reviewSubmittedAt: new Date().toISOString(),
+    businessName: professionalName,
+    service: selectedService,
+  });
+
   window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
   window.dispatchEvent(new Event("meetroProfessionalReviewUpdated"));
 
@@ -147,12 +216,17 @@ function submitReview() {
 }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-readable-page" style={page}>
       <div style={card}>
         <div style={successCircle}>✓</div>
 
         <h1 style={title}>{pageText.title}</h1>
         <p style={subtitle}>{pageText.subtitle}</p>
+        <div style={closureNotice}>
+          {language === "es"
+            ? "Confirma que el trabajo fue realizado y comparte tu experiencia. El Cierre de pagos, documentos y otras obligaciones se verifica por separado."
+            : "Confirm the work was performed and share your experience. Closure of payment, documentation, and other obligations is verified separately."}
+        </div>
 
         <div style={summaryCard}>
           <div style={contractorTop}>
@@ -181,7 +255,7 @@ function submitReview() {
                 style={star <= rating ? activeStar : starButton}
                 onClick={() => setRating(star)}
               >
-                ★
+                {star}
               </button>
             ))}
           </div>
@@ -221,10 +295,11 @@ function submitReview() {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background:
     "linear-gradient(160deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
-  padding: "24px 24px 190px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -262,6 +337,18 @@ const subtitle = {
   fontSize: "16px",
   lineHeight: "1.5",
   marginBottom: "22px",
+};
+
+const closureNotice = {
+  margin: "-8px auto 22px",
+  padding: "13px 15px",
+  borderRadius: "16px",
+  background: "#fff7ed",
+  border: "1px solid #fed7aa",
+  color: "#9a3412",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  fontWeight: 700,
 };
 
 const summaryCard = {

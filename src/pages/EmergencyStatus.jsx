@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getLanguage } from "../utils/language";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 
 function EmergencyStatus({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
@@ -31,10 +32,26 @@ function EmergencyStatus({ setPage }) {
     };
   }, []);
 
+  function getActiveEmergencyRecord() {
+    try {
+      return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  const activeEmergencyRecord = getActiveEmergencyRecord();
+
   const selectedService =
-    localStorage.getItem("selectedEmergencyService") || "Emergency Help";
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
+    localStorage.getItem("selectedEmergencyService") ||
+    "Emergency Help";
 
   const businessName =
+    activeEmergencyRecord.businessName ||
+    localStorage.getItem("emergencyBusinessName") ||
+    localStorage.getItem("selectedEmergencyBusiness") ||
     localStorage.getItem("businessName") ||
     (language === "es" ? "Profesional" : "Professional");
 
@@ -52,7 +69,6 @@ function EmergencyStatus({ setPage }) {
       response: "Fast response",
       dispatchReady: "Dispatch Ready",
       message: "Message",
-      call: "Call",
       cancel: "Cancel Request",
       backHome: "Back to Chat",
       emergencyServices: "Emergency Services",
@@ -103,7 +119,6 @@ function EmergencyStatus({ setPage }) {
       response: "Respuesta rápida",
       dispatchReady: "Listo para despacho",
       message: "Mensaje",
-      call: "Llamar",
       cancel: "Cancelar Solicitud",
       backHome: "Regresar al Inicio",
       emergencyServices: "Servicios de Emergencia",
@@ -168,23 +183,23 @@ function EmergencyStatus({ setPage }) {
 
   const statusIcon =
     dispatchStatus === "pending"
-      ? "⏳"
+      ? "comingSoon"
       : dispatchStatus === "completed"
-      ? "✅"
+      ? "completion"
       : dispatchStatus === "cancelled"
-      ? "✕"
+      ? "warning"
       : dispatchStatus === "started"
-      ? "🛠️"
-      : "🚨";
+      ? "activeWork"
+      : "emergency";
 
   const routeIcon =
     dispatchStatus === "completed"
-      ? "✅"
+      ? "completion"
       : dispatchStatus === "started"
-      ? "🛠️"
+      ? "activeWork"
       : dispatchStatus === "arrived"
-      ? "📍"
-      : "🚚";
+      ? "location"
+      : "onTheWay";
 
   function getPrimaryStat() {
     if (dispatchStatus === "accepted" || dispatchStatus === "enroute") {
@@ -196,27 +211,27 @@ function EmergencyStatus({ setPage }) {
 
     if (dispatchStatus === "arrived") {
       return {
-        value: "📍",
+        icon: "location",
         label: language === "es" ? "Profesional llegó" : "Professional arrived",
       };
     }
 
     if (dispatchStatus === "started") {
       return {
-        value: "🛠️",
+        icon: "activeWork",
         label: language === "es" ? "Trabajo en progreso" : "Job in progress",
       };
     }
 
     if (dispatchStatus === "completed") {
       return {
-        value: "✅",
+        icon: "completion",
         label: language === "es" ? "Servicio completado" : "Service completed",
       };
     }
 
     return {
-      value: "⏳",
+      icon: "comingSoon",
       label: language === "es" ? "Esperando" : "Waiting",
     };
   }
@@ -227,8 +242,14 @@ function EmergencyStatus({ setPage }) {
       localStorage.getItem("userEmail") ||
       "guest";
 
-    const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
+    const activeRecord = getActiveEmergencyRecord();
 
+    const emergencyConversationId =
+      activeRecord.conversationId ||
+      localStorage.getItem("emergencyConversationId") ||
+      `emergency-active-request-${currentUserKey}`;
+
+    localStorage.setItem("emergencyConversationId", emergencyConversationId);
     localStorage.setItem("activeConversationId", emergencyConversationId);
     localStorage.setItem("activeConversationName", selectedService);
     localStorage.setItem("conversationReturnPage", "emergencyStatus");
@@ -238,16 +259,35 @@ function EmergencyStatus({ setPage }) {
   }
 
   function cancelRequest() {
+    const activeRecord = getActiveEmergencyRecord();
+    const nextRecord = {
+      ...activeRecord,
+      status: "cancelled",
+      updatedAt: new Date().toISOString(),
+    };
+
     localStorage.setItem("emergencyDispatchStatus", "cancelled");
+
+    if (nextRecord.id) {
+      localStorage.setItem(
+        `meetro_emergency_record_${nextRecord.id}`,
+        JSON.stringify(nextRecord)
+      );
+    }
+
+    localStorage.setItem("activeEmergencyRecord", JSON.stringify(nextRecord));
+
     window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
     setPage("home");
   }
 
   if (isClosed) {
     return (
-      <div style={page}>
+      <div className="app-page meetro-readable-page" style={page}>
         <div style={card}>
-          <div style={heroIcon}>✅</div>
+          <div style={heroIcon}>
+            <MeetroIcon name="completion" size={38} decorative />
+          </div>
 
           <h1 style={title}>
             {language === "es" ? "Solicitud cerrada" : "Request closed"}
@@ -272,7 +312,7 @@ function EmergencyStatus({ setPage }) {
   const primaryStat = getPrimaryStat();
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-readable-page" style={page}>
       <style>
         {`
           @keyframes pulseDot {
@@ -284,7 +324,9 @@ function EmergencyStatus({ setPage }) {
       </style>
 
       <div style={card}>
-        <div style={heroIcon}>{statusIcon}</div>
+        <div style={heroIcon}>
+          <MeetroIcon name={statusIcon} size={38} decorative />
+        </div>
 
         <h1 style={title}>{t.title}</h1>
 
@@ -326,7 +368,9 @@ function EmergencyStatus({ setPage }) {
 
         {showPending && (
           <div style={panel}>
-            <div style={largeIcon}>🔎</div>
+            <div style={largeIcon}>
+              <MeetroIcon name="discover" size={42} decorative />
+            </div>
             <h2 style={panelTitle}>{t.pendingTitle}</h2>
             <p style={panelText}>{t.pendingText}</p>
 
@@ -343,9 +387,9 @@ function EmergencyStatus({ setPage }) {
               <strong style={routeTitle}>{routeLabel}</strong>
 
               <div style={routeLine}>
-                <span style={routeDot}>🏠</span>
-                <span style={routeDot}>{routeIcon}</span>
-                <span style={routeDot}>🛠️</span>
+                <span style={routeDot}><MeetroIcon name="home" size={18} decorative /></span>
+                <span style={routeDot}><MeetroIcon name={routeIcon} size={18} decorative /></span>
+                <span style={routeDot}><MeetroIcon name="activeWork" size={18} decorative /></span>
               </div>
             </div>
 
@@ -365,27 +409,35 @@ function EmergencyStatus({ setPage }) {
                   <strong style={proName}>{businessName}</strong>
 
                   <div style={metaRow}>
-                    <span>⭐ {t.rating}</span>
+                    <span><MeetroIcon name="reviews" size={14} decorative /> {t.rating}</span>
                     <span>•</span>
                     <span>{t.nearby}</span>
                   </div>
 
                   <div style={trustRow}>
-                    <span style={trustBadge}>✅ {t.verified}</span>
-                    <span style={trustBadge}>⚡ {t.response}</span>
-                    <span style={trustBadge}>🚐 {t.dispatchReady}</span>
+                    <span style={trustBadge}><MeetroIcon name="verified" size={14} decorative /> {t.verified}</span>
+                    <span style={trustBadge}><MeetroIcon name="fastResponse" size={14} decorative /> {t.response}</span>
+                    <span style={trustBadge}><MeetroIcon name="dispatch" size={14} decorative /> {t.dispatchReady}</span>
                   </div>
                 </div>
               </div>
 
               <div style={statsBox}>
                 <div style={statCard}>
-                  <span style={statNumber}>{primaryStat.value}</span>
+                  <span style={statNumber}>
+                    {primaryStat.icon ? (
+                      <MeetroIcon name={primaryStat.icon} size={28} decorative />
+                    ) : (
+                      primaryStat.value
+                    )}
+                  </span>
                   <span style={statLabel}>{primaryStat.label}</span>
                 </div>
 
                 <div style={statCard}>
-                  <span style={statNumber}>⚡</span>
+                  <span style={statNumber}>
+                    <MeetroIcon name="fastResponse" size={28} decorative />
+                  </span>
                   <span style={statLabel}>
                     {language === "es" ? "Respuesta rápida" : "Fast Response"}
                   </span>
@@ -393,11 +445,9 @@ function EmergencyStatus({ setPage }) {
               </div>
 
               <div style={actionGrid}>
-                <button style={secondaryButton} onClick={openEmergencyChat}>
+                <button style={primaryButton} onClick={openEmergencyChat}>
                   {t.message}
                 </button>
-
-                <button style={secondaryButton}>{t.call}</button>
               </div>
 
               <div
@@ -407,7 +457,7 @@ function EmergencyStatus({ setPage }) {
                   ...(dispatchStatus === "completed" ? completedPill : {}),
                 }}
               >
-                ✅ {statusLabel}
+                <MeetroIcon name="completion" size={15} decorative /> {statusLabel}
               </div>
 
               <div style={reassuranceNote}>{reassuranceMessage}</div>
@@ -421,7 +471,9 @@ function EmergencyStatus({ setPage }) {
           </>
         )}
 
-        {isCompleted && localStorage.getItem("emergencyNeedsReview") === "true" && (
+        {isCompleted &&
+          localStorage.getItem("emergencySavedToHistory") === "true" &&
+          localStorage.getItem("emergencyNeedsReview") === "true" && (
           <button
             style={primaryButton}
             onClick={() => setPage("emergencyComplete")}
@@ -429,10 +481,6 @@ function EmergencyStatus({ setPage }) {
             {t.rate}
           </button>
         )}
-
-        <button style={primaryButton} onClick={openEmergencyChat}>
-          {t.backHome}
-        </button>
 
         <button style={darkButton} onClick={() => setPage("emergency")}>
           {t.emergencyServices}
@@ -445,9 +493,10 @@ function EmergencyStatus({ setPage }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "linear-gradient(180deg, #eef2ff 0%, #ffffff 55%, #f5f3ff 100%)",
-  padding: "24px 20px 190px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -689,19 +738,9 @@ const statLabel = {
 
 const actionGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "1fr",
   gap: "10px",
   marginBottom: "12px",
-};
-
-const secondaryButton = {
-  padding: "13px",
-  borderRadius: "16px",
-  border: "1px solid #d0d5dd",
-  background: "white",
-  color: "#111827",
-  fontWeight: "900",
-  cursor: "pointer",
 };
 
 const statusPill = {

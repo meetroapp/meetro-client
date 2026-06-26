@@ -1,17 +1,43 @@
-import { lazy, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
-import { getLanguage } from "../utils/language";
+import { Component, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
+import { getLanguage, t } from "../utils/language";
+import {
+  formatDateTimeDisplay,
+  formatMessageTime,
+  formatScheduleTime,
+} from "../utils/displayTime";
 import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
-const WorkflowRenderer =  lazy(() => import("../components/workflows/WorkflowRenderer"));
-const CompletionWorkflowPresentation = lazy(() => import("../components/workflows/presentations/CompletionWorkflowPresentation"));
-const InvoiceWorkflowPresentation = lazy(() => import("../components/workflows/presentations/InvoiceWorkflowPresentation"));
-const MaterialsWorkflowPresentation = lazy(() => import("../components/workflows/presentations/MaterialsWorkflowPresentation"));
-const RevisedQuoteWorkflowPresentation = lazy(() => import("../components/workflows/presentations/RevisedQuoteWorkflowPresentation"));
+import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
+import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
+import CompletionWorkflowPresentation from "../components/workflows/presentations/CompletionWorkflowPresentation";
+import InvoiceWorkflowPresentation from "../components/workflows/presentations/InvoiceWorkflowPresentation";
+import MaterialsWorkflowPresentation from "../components/workflows/presentations/MaterialsWorkflowPresentation";
+import RevisedQuoteWorkflowPresentation from "../components/workflows/presentations/RevisedQuoteWorkflowPresentation";
+import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
   isWorkflowType,
 } from "../utils/workflowTypes";
+import { mergeConversationMessages } from "../utils/conversationMessages";
+import {
+  getConversationRegistry,
+  markConversationRead,
+  markConversationUnread,
+  markConversationUnreadForRecipient,
+  writeUnreadConversationCount,
+} from "../utils/conversationUnread";
+import {
+  filterHiringConversationMessages,
+  isHiringConversationType,
+  isMessageAllowedInHiringConversation,
+} from "../utils/hiringConversations";
+import { addNotification } from "../utils/notifications";
+import {
+  CAMERA_PERMISSION_MESSAGE,
+  createPhotoInputEvent,
+  openJobPhotoPicker,
+} from "../utils/cameraPhotoPicker";
 
 import {
   updateMatchingHomeownerRequests,
@@ -26,6 +52,14 @@ import {
   saveJobRecord,
   saveConversationMeta,
 } from "../utils/workCenter";
+import { reconcileConversationTimelineEvents } from "../utils/conversationTimelineReconciliation";
+import { getConversationTimelineAudit } from "../utils/conversationTimelineAudit";
+import {
+  cancelAppointmentReminderNotifications,
+  openNotificationSettings,
+  scheduleAppointmentReminderNotifications,
+} from "../utils/appointmentReminders";
+import { createNotification } from "../utils/meetroNotifications";
 
 const IconBack = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -98,6 +132,18 @@ const IconSend = () => (
       strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const IconSearchClean = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle cx="11" cy="11" r="7.5" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="m20.5 20.5-4.35-4.35"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
     />
   </svg>
 );
@@ -236,6 +282,144 @@ const IconMaterialsClean = () => (
   </svg>
 );
 
+const IconDocumentClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="4" width="16" height="16" rx="2.4" stroke="currentColor" strokeWidth="1.9" />
+    <path
+      d="M8 8h8M8 12h5M8 16h8"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const IconCalendarClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <rect
+      x="4"
+      y="4"
+      width="16"
+      height="16"
+      rx="2.2"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    />
+    <path
+      d="M8 2.2v3.2M16 2.2v3.2M4 8h16"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+    <path d="m8 12h8" stroke="currentColor" strokeWidth="1.8" />
+  </svg>
+);
+
+const IconPhotoProgressClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M4 6h16v14H4z"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinejoin="round"
+      rx="2"
+    />
+    <path
+      d="M8.5 13.4 10.8 16l3-3.5 4.2 5.8"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="8" cy="9" r="1.2" fill="currentColor" />
+  </svg>
+);
+
+const IconIssueClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 4.2 20.6 19H3.4z"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <path d="M12 9v5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <circle cx="12" cy="17.2" r="1" fill="currentColor" />
+  </svg>
+);
+
+const IconCompletedClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <circle
+      cx="12"
+      cy="12"
+      r="9.2"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    />
+    <path
+      d="M8.3 12.5 10.8 15l5.5-5.2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const IconHistoryClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 6.8v6.4l4.4 2.6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 3a9 9 0 1 0 9 9"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const IconPhotoDoneClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M4 6h16v14H4z"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      rx="2"
+    />
+    <path
+      d="m7 14 3 3 8-8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const IconChangeRequestClean = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <path
+      d="m3.8 12 3.8 3.8L20.2 3.3"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="m12.5 4.7 3.2-1.2L14.7 4l-1-1L17 2"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
 
 const IconScanClean = () => (
   <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
@@ -250,6 +434,134 @@ const IconScanClean = () => (
   </svg>
 );
 
+const resolveWorkflowIcon = (iconKey) => {
+  const key = String(iconKey || "").toLowerCase();
+
+  const map = {
+    history: <IconHistoryClean />,
+    quote: <IconApprovalClean />,
+    materials: <IconMaterialsClean />,
+    quickinvoice: <IconPaymentClean />,
+    invoice: <IconPaymentClean />,
+    completion: <IconCompletedClean />,
+    notetext: <IconUpdateClean />,
+    photo: <IconPhotosClean />,
+    work: <IconPhotoProgressClean />,
+    alert: <IconIssueClean />,
+    done: <IconPhotoDoneClean />,
+  };
+
+  return (
+    map[key] || <IconUpdateClean />
+  );
+};
+
+const resolvePhotoWorkflowIcon = (workflowType) => {
+  const key = String(workflowType || "").toLowerCase();
+
+  const map = {
+    before: <IconPhotoDoneClean />,
+    progress: <IconPhotoProgressClean />,
+    issue: <IconIssueClean />,
+    completion: <IconCompletedClean />,
+  };
+
+  return map[key] || <IconPhotoProgressClean />;
+};
+
+const isDefaultImageCaption = (value) => {
+  const normalized = (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  return new Set([
+    "project explanation photo",
+    "foto para explicar el proyecto",
+    "project photo",
+    "foto del proyecto",
+    "customer uploaded photo",
+    "foto enviada por el cliente",
+    "image sent to help explain the job",
+    "imagen enviada para ayudar a explicar el trabajo",
+    "photo shared with customer",
+    "foto compartida con el cliente",
+    "image sent to explain the project",
+    "imagen enviada para explicar el proyecto",
+    "photo sent to explain the project",
+    "customer context",
+    "customer photo",
+  ]).has(normalized);
+};
+
+const DOCUMENT_WORKFLOW_TYPES = new Set([
+  "workflow_change_request",
+  "workflow_quote_sent",
+  "workflow_revised_quote",
+  "workflow_invoice_request",
+  "workflow_completion_closeout",
+]);
+
+const isDocumentWorkflowMessage = (msg) =>
+  Boolean(msg?.type && DOCUMENT_WORKFLOW_TYPES.has(msg.type));
+
+const isReceiptDocumentMessage = (msg) =>
+  msg?.type === "receipt" ||
+  msg?.type === "workflow_receipt" ||
+  msg?.documentType === "receipt";
+
+const getQuoteDocumentStatus = (msg, language) => {
+  const status = msg.quoteStatus || msg.status || msg.workflowStatus || "sent";
+
+  if (status === "accepted" || status === "approved") {
+    return t("documentStatusApproved", language);
+  }
+
+  if (status === "revision_requested" || status === "change_requested") {
+    return t("documentStatusRevisionRequested", language);
+  }
+
+  if (status === "declined") return t("documentStatusDeclined", language);
+
+  return t("documentStatusAwaitingApproval", language);
+};
+
+const getChangeOrderDocumentStatus = (msg, language) => {
+  const status = msg.status || "pending_review";
+
+  if (status === "reviewed") return t("documentStatusReviewed", language);
+  if (status === "needs_revised_quote") {
+    return t("documentStatusRevisedQuoteNeeded", language);
+  }
+
+  return t("documentStatusAwaitingApproval", language);
+};
+
+const getChangeOrderAmount = (msg) => {
+  const value =
+    msg.amount ||
+    msg.total ||
+    msg.changeAmount ||
+    msg.changeOrder?.amount ||
+    msg.changeOrder?.total ||
+    "";
+
+  if (value === "" || value === null || value === undefined) return "";
+  if (typeof value === "string" && value.trim().startsWith("+")) return value;
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? `+${numeric}` : value;
+};
+
+const getReceiptDocumentStatus = (msg, language) => {
+  const status = msg.receiptStatus || msg.paymentStatus || msg.status || "paid";
+
+  if (status === "sent") return t("documentStatusSent", language);
+  if (status === "created") return t("documentStatusCreated", language);
+
+  return t("documentStatusPaid", language);
+};
+
 
 
 const MessageItem = memo(({ message }) => {
@@ -261,12 +573,14 @@ const MessageItem = memo(({ message }) => {
 });
 
 
-function ConversationThread({ setPage }) {
+function ConversationThreadInner({ setPage, embedded = false }) {
   const [language, setLanguageState] = useState(getLanguage());
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
+  const [swipedScheduleId, setSwipedScheduleId] = useState(null);
+  const [scheduleDeleteCandidate, setScheduleDeleteCandidate] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [pendingImage, setPendingImage] = useState(null);
@@ -274,12 +588,25 @@ function ConversationThread({ setPage }) {
   const [pendingPhotoPurpose, setPendingPhotoPurpose] = useState(null);
   const [photoExplanationText, setPhotoExplanationText] = useState("");
   const [showThreadMenu, setShowThreadMenu] = useState(false);
-  const [emergencyPanelExpanded, setEmergencyPanelExpanded] = useState(true);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [chatScheduleForm, setChatScheduleForm] = useState({
+    appointmentType: "walkthrough",
+    date: new Date().toISOString().slice(0, 10),
+    time: "12:00",
+    title: "",
+    location: "",
+    notes: "",
+  });
+  const [emergencyPanelExpanded, setEmergencyPanelExpanded] = useState(false);
+  const [, setEmergencyWorkflowTick] = useState(0);
   const [showCallMenu, setShowCallMenu] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showMobileSheet, setShowMobileSheet] = useState(false);
   const [jobStory, setJobStory] = useState(null);
+  const [threadSearchTerm, setThreadSearchTerm] = useState("");
+  const [appointmentDetails, setAppointmentDetails] = useState(null);
+  const [appointmentReminderNotice, setAppointmentReminderNotice] = useState(null);
   const [saveNotice, setSaveNotice] = useState("");
   const [jobRecordCount, setJobRecordCount] = useState(0);
   const [showJobRecords, setShowJobRecords] = useState(false);
@@ -287,12 +614,116 @@ function ConversationThread({ setPage }) {
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [expandedRecord, setExpandedRecord] = useState(null);
   const [showProfileCard, setShowProfileCard] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const bottomRef = useRef(null);
+  const threadSearchInputRef = useRef(null);
+  const hasInitialScrolledRef = useRef(false);
   const longPressTimerRef = useRef(null);
+  const longPressTouchStartRef = useRef({ x: 0, y: 0 });
+  const scheduleSwipeStartRef = useRef({ x: 0, y: 0 });
+  const gallerySwipeStartRef = useRef({ x: 0, y: 0 });
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const updateOrientation = () => {
+      setIsLandscape(
+        window.matchMedia("(orientation: landscape)").matches ||
+          window.innerWidth > window.innerHeight
+      );
+    };
+
+    updateOrientation();
+
+    const mediaQuery = window.matchMedia("(orientation: landscape)");
+    const handleChange = () => updateOrientation();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+    } else {
+      mediaQuery.addListener(handleChange);
+    }
+
+    window.addEventListener("resize", handleChange);
+
+    return () => {
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", handleChange);
+      } else {
+        mediaQuery.removeListener(handleChange);
+      }
+      window.removeEventListener("resize", handleChange);
+    };
+  }, []);
+
+  const galleryImages = useMemo(
+    () =>
+      messages
+        .filter((message) => Boolean(message.imageUrl))
+        .map((message) => ({
+          id: String(message.id),
+          imageUrl: message.imageUrl,
+          alt: message.fileName || message.title || t("conversationPhoto"),
+        })),
+    [messages, language]
+  );
+
+  const activeGalleryIndex = previewImage
+    ? galleryImages.findIndex(
+        (image) =>
+          image.id === previewImage.id &&
+          image.imageUrl === previewImage.imageUrl
+      )
+    : -1;
+
+  const activeGalleryImage =
+    activeGalleryIndex >= 0 ? galleryImages[activeGalleryIndex] : previewImage;
+
+  function openImageGallery(message) {
+    if (!message?.imageUrl) return;
+
+    setPreviewImage({
+      id: String(message.id),
+      imageUrl: message.imageUrl,
+      alt: message.fileName || message.title || t("conversationPhoto"),
+    });
+  }
+
+  function showGalleryImage(index) {
+    const nextImage = galleryImages[index];
+    if (nextImage) setPreviewImage(nextImage);
+  }
+
+  function handleGallerySwipeStart(event) {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+
+    gallerySwipeStartRef.current = {
+      x: touch.clientX || 0,
+      y: touch.clientY || 0,
+    };
+  }
+
+  function handleGallerySwipeEnd(event) {
+    const touch = event.changedTouches?.[0];
+    if (!touch || activeGalleryIndex < 0) return;
+
+    const dx = (touch.clientX || 0) - gallerySwipeStartRef.current.x;
+    const dy = (touch.clientY || 0) - gallerySwipeStartRef.current.y;
+
+    if (Math.abs(dx) < 45 || Math.abs(dx) <= Math.abs(dy)) return;
+
+    if (dx < 0) {
+      showGalleryImage(activeGalleryIndex + 1);
+    } else {
+      showGalleryImage(activeGalleryIndex - 1);
+    }
+  }
 
   const conversationId =
     localStorage.getItem("activeConversationId") || "demo-homeowner-1";
@@ -317,10 +748,64 @@ function ConversationThread({ setPage }) {
     localStorage.getItem("meetroConversationType") || "standard";
 
   const isEmergencyThread = conversationType === "emergency";
+  const isHiringThread = isHiringConversationType(conversationType);
+  const sanitizeMessagesForConversation = (items = []) =>
+    isHiringThread ? filterHiringConversationMessages(items) : items;
+  const conversationSearchQuery = threadSearchTerm.trim().toLowerCase();
+
+  const threadMessages = useMemo(() => {
+    const sourceMessages = sanitizeMessagesForConversation(messages);
+
+    if (!conversationSearchQuery) return sourceMessages;
+
+    return sourceMessages.filter((message) => {
+      const values = [
+        message?.title,
+        message?.subtitle,
+        message?.text,
+        message?.content,
+        message?.type,
+        message?.workflowType,
+        message?.status,
+        message?.senderRole,
+        message?.workflowStatus,
+        message?.schedule?.appointmentType,
+        message?.schedule?.type,
+        message?.schedule?.location,
+        message?.sender,
+      ];
+
+      const hasImage =
+        message?.imageUrl || message?.type === "photoWorkflow" || message?.type === "image";
+
+      if (conversationSearchQuery.includes("photo") && hasImage) {
+        return true;
+      }
+
+      return values
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(conversationSearchQuery);
+    });
+  }, [messages, isHiringThread, conversationSearchQuery]);
+
+  const hasThreadSearch = Boolean(conversationSearchQuery);
+
+  const activeEmergencyRecord = (() => {
+    if (!isEmergencyThread) return {};
+
+    try {
+      return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
+    } catch {
+      return {};
+    }
+  })();
 
   const activeJobSnapshot = getActiveJobSnapshot();
 
   const emergencyDispatchStatus =
+    (isEmergencyThread && activeEmergencyRecord.status) ||
     localStorage.getItem("emergencyDispatchStatus") ||
     activeJobSnapshot?.status ||
     localStorage.getItem("activeJobStatus") ||
@@ -329,9 +814,45 @@ function ConversationThread({ setPage }) {
   const hasActiveEmergencyJob =
     isEmergencyThread &&
     Boolean(emergencyDispatchStatus) &&
-    emergencyDispatchStatus !== "completed";
+    !["cancelled", "closed", "archived"].includes(emergencyDispatchStatus);
 
   const isEmergencyConversation = hasActiveEmergencyJob;
+
+  
+useEffect(() => {
+    const refreshEmergencyWorkflow = () =>
+      setEmergencyWorkflowTick((tick) => tick + 1);
+
+    window.addEventListener(
+      "meetroEmergencyConversationUpdated",
+      refreshEmergencyWorkflow
+    );
+    window.addEventListener(
+      "meetroDispatchStatusChanged",
+      refreshEmergencyWorkflow
+    );
+
+    return () => {
+      window.removeEventListener(
+        "meetroEmergencyConversationUpdated",
+        refreshEmergencyWorkflow
+      );
+      window.removeEventListener(
+        "meetroDispatchStatusChanged",
+        refreshEmergencyWorkflow
+      );
+    };
+  }, []);
+
+  const advanceEmergencyFromChat = (nextStatus) => {
+    transitionEmergencyStatus(nextStatus, {
+      service: activeJobService || activeName || "Emergency Service",
+      businessName: activeBusinessName || "",
+      customerName: activeCustomerName || "",
+      location: activeLocation || activeEmergencyRecord.location || "",
+    });
+    setEmergencyWorkflowTick((tick) => tick + 1);
+  };
 
 
   const emergencyStatusSubtitle = {
@@ -383,7 +904,31 @@ function ConversationThread({ setPage }) {
       ? "business"
       : "homeowner";
 
+  const normalizeEmergencySenderRole = (message = {}, fallbackRole = "") => {
+    if (message.fromBusiness || message.authorRole === "business") {
+      return "business";
+    }
+
+    if (message.fromCustomer || message.authorRole === "homeowner") {
+      return "homeowner";
+    }
+
+    if (
+      isEmergencyThread &&
+      message.workflowType === "emergency_status" &&
+      ["", "system", "professional", "business"].includes(
+        String(message.senderRole || message.role || "")
+      )
+    ) {
+      return "business";
+    }
+
+    return message.senderRole || fallbackRole;
+  };
+
   const activeJobService =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
     localStorage.getItem("activeWorkService") ||
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
@@ -419,42 +964,458 @@ function ConversationThread({ setPage }) {
     }
   })();
 
+  const selectedHomeownerRequest = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("selectedHomeownerRequest") || "null");
+    } catch {
+      return null;
+    }
+  })();
+
+  const selectedConversation = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("selectedConversation") || "null");
+    } catch {
+      return null;
+    }
+  })();
+
+  const selectedHomeownerRequestId =
+    localStorage.getItem("selectedHomeownerRequestId") || "";
+
+  const firstIdentityValue = (...values) =>
+    values
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "";
+
+  const conversationRegistryItem = getConversationRegistry().find(
+    (item) =>
+      String(item.id || item.conversationId || "") === String(conversationId)
+  );
+
+  const conversationMeta = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem(`meetro_conversation_meta_${conversationId}`) || "{}"
+      );
+    } catch {
+      return {};
+    }
+  })();
+
+  const hiringPositionTitle = firstIdentityValue(
+    conversationRegistryItem?.positionTitle,
+    conversationRegistryItem?.position_title,
+    conversationRegistryItem?.project_title,
+    conversationMeta?.positionTitle,
+    conversationMeta?.projectTitle
+  );
+
+  const hiringParticipantName = firstIdentityValue(
+    conversationRegistryItem?.applicantName,
+    conversationRegistryItem?.participantName,
+    conversationRegistryItem?.homeowner_email,
+    conversationMeta?.applicantName,
+    conversationMeta?.participantName,
+    localStorage.getItem("activeConversationName")
+  );
+
+  const hiringBusinessName = firstIdentityValue(
+    conversationRegistryItem?.businessName,
+    conversationMeta?.businessName,
+    localStorage.getItem("conversationBusinessName"),
+    localStorage.getItem("businessName")
+  );
+
+  const isConversationLinkedRecord = (record = {}) => {
+    const linkedIds = [
+      record.id,
+      record.conversationId,
+      record.projectConversationId,
+      record.activeConversationId,
+      record.requestId,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+
+    return linkedIds.includes(String(conversationId));
+  };
+
+  const conversationLinkedSelectedConversation =
+    selectedConversation && isConversationLinkedRecord(selectedConversation)
+      ? selectedConversation
+      : null;
+
+  const conversationLinkedQuoteRequest =
+    selectedQuoteRequest && isConversationLinkedRecord(selectedQuoteRequest)
+      ? selectedQuoteRequest
+      : null;
+
+  const conversationLinkedHomeownerRequest =
+    selectedHomeownerRequest && isConversationLinkedRecord(selectedHomeownerRequest)
+      ? selectedHomeownerRequest
+      : null;
+
+  const conversationCustomerIdentity = {
+    name: firstIdentityValue(
+      conversationRegistryItem?.customerName,
+      conversationRegistryItem?.homeownerName,
+      conversationRegistryItem?.homeowner_email,
+      conversationRegistryItem?.customer,
+      conversationRegistryItem?.name,
+      conversationMeta?.customerName,
+      conversationMeta?.homeownerName,
+      conversationMeta?.homeowner_email,
+      conversationLinkedSelectedConversation?.customerName,
+      conversationLinkedSelectedConversation?.homeownerName,
+      conversationLinkedSelectedConversation?.homeowner_email,
+      conversationLinkedSelectedConversation?.customer,
+      conversationLinkedSelectedConversation?.name
+    ),
+    avatar: firstIdentityValue(
+      conversationRegistryItem?.customerAvatar,
+      conversationRegistryItem?.homeownerAvatar,
+      conversationRegistryItem?.avatar,
+      conversationRegistryItem?.profilePhoto,
+      conversationMeta?.customerAvatar,
+      conversationMeta?.avatar,
+      conversationLinkedSelectedConversation?.customerAvatar,
+      conversationLinkedSelectedConversation?.avatar,
+      conversationLinkedSelectedConversation?.profilePhoto
+    ),
+    location: firstIdentityValue(
+      conversationRegistryItem?.customerLocation,
+      conversationRegistryItem?.location,
+      conversationMeta?.customerLocation,
+      conversationMeta?.location,
+      conversationLinkedSelectedConversation?.customerLocation,
+      conversationLinkedSelectedConversation?.location
+    ),
+  };
+
+  const requestCustomerIdentity = {
+    name: firstIdentityValue(
+      conversationLinkedQuoteRequest?.homeownerName,
+      conversationLinkedQuoteRequest?.homeowner_name,
+      conversationLinkedQuoteRequest?.customerName,
+      conversationLinkedQuoteRequest?.homeowner_email,
+      conversationLinkedHomeownerRequest?.homeownerName,
+      conversationLinkedHomeownerRequest?.customerName,
+      conversationLinkedHomeownerRequest?.homeowner_email
+    ),
+    avatar: firstIdentityValue(
+      conversationLinkedQuoteRequest?.customerAvatar,
+      conversationLinkedQuoteRequest?.homeownerAvatar,
+      conversationLinkedQuoteRequest?.avatar,
+      conversationLinkedHomeownerRequest?.customerAvatar,
+      conversationLinkedHomeownerRequest?.homeownerAvatar,
+      conversationLinkedHomeownerRequest?.avatar
+    ),
+    location: firstIdentityValue(
+      conversationLinkedQuoteRequest?.location,
+      conversationLinkedQuoteRequest?.address,
+      conversationLinkedHomeownerRequest?.location,
+      conversationLinkedHomeownerRequest?.address
+    ),
+  };
+
+  const linkedCustomerIdentity = {
+    name: firstIdentityValue(
+      activeJobSnapshot?.conversationId === conversationId
+        ? activeJobSnapshot?.customer
+        : "",
+      localStorage.getItem("activeConversationId") === conversationId
+        ? localStorage.getItem("activeConversationName")
+        : ""
+    ),
+    avatar: "",
+    location: firstIdentityValue(
+      localStorage.getItem("activeConversationId") === conversationId
+        ? localStorage.getItem("activeCustomerLocation")
+        : "",
+      localStorage.getItem("activeConversationId") === conversationId
+        ? localStorage.getItem("projectLocation")
+        : ""
+    ),
+  };
+
+  const resolvedCustomerIdentity = {
+    name:
+      conversationCustomerIdentity.name ||
+      requestCustomerIdentity.name ||
+      linkedCustomerIdentity.name ||
+      "Customer",
+    avatar:
+      conversationCustomerIdentity.avatar ||
+      requestCustomerIdentity.avatar ||
+      linkedCustomerIdentity.avatar ||
+      "",
+    location:
+      conversationCustomerIdentity.location ||
+      requestCustomerIdentity.location ||
+      linkedCustomerIdentity.location ||
+      "",
+  };
+
+  const conversationBusinessIdentity = {
+    name: firstIdentityValue(
+      conversationRegistryItem?.businessName,
+      conversationRegistryItem?.providerName,
+      conversationMeta?.businessName,
+      conversationLinkedSelectedConversation?.businessName,
+      conversationBusinessName,
+      localStorage.getItem("conversationBusinessName")
+    ),
+    avatar: firstIdentityValue(
+      conversationRegistryItem?.businessAvatar,
+      conversationRegistryItem?.businessLogo,
+      conversationRegistryItem?.logo,
+      conversationMeta?.businessAvatar,
+      conversationMeta?.businessLogo,
+      conversationLinkedSelectedConversation?.businessAvatar,
+      conversationLinkedSelectedConversation?.businessLogo,
+      selectedBusiness?.image_url,
+      selectedBusiness?.logo,
+      selectedBusiness?.imageUrl,
+      selectedBusiness?.profileImage
+    ),
+  };
+
   const activeCustomerName =
-    selectedQuoteRequest?.homeownerName ||
-    selectedQuoteRequest?.homeowner_name ||
-    selectedQuoteRequest?.customerName ||
-    selectedQuoteRequest?.homeowner_email ||
-    activeJobSnapshot?.customer ||
-    localStorage.getItem("activeJobCustomer") ||
-    localStorage.getItem("homeownerName") ||
-    localStorage.getItem("activeConversationName") ||
-    "Customer";
+    activeEmergencyRecord.customerName || resolvedCustomerIdentity.name;
 
   const activeBusinessName =
-    selectedQuoteRequest?.businessName ||
-    selectedQuoteRequest?.business_name ||
-    selectedQuoteRequest?.contractorName ||
-    selectedQuoteRequest?.providerName ||
-    conversationBusinessName ||
-    localStorage.getItem("conversationBusinessName") ||
+    activeEmergencyRecord.businessName ||
+    conversationBusinessIdentity.name ||
+    conversationLinkedQuoteRequest?.businessName ||
+    conversationLinkedQuoteRequest?.business_name ||
+    conversationLinkedQuoteRequest?.contractorName ||
+    conversationLinkedQuoteRequest?.providerName ||
     localStorage.getItem("businessName") ||
     localStorage.getItem("companyName") ||
     activeName;
 
+  const emergencyServiceName =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
+    activeJobService ||
+    localStorage.getItem("selectedEmergencyService") ||
+    (language === "es" ? "Servicio de emergencia" : "Emergency Service");
+
+  const emergencyCustomerName =
+    activeEmergencyRecord.customerName ||
+    localStorage.getItem("emergencyCustomerName") ||
+    localStorage.getItem("homeownerName") ||
+    localStorage.getItem("userName") ||
+    (language === "es" ? "Cliente" : "Customer");
+
+  const emergencyBusinessName =
+    activeEmergencyRecord.businessName ||
+    localStorage.getItem("emergencyBusinessName") ||
+    localStorage.getItem("selectedEmergencyBusiness") ||
+    localStorage.getItem("businessName") ||
+    (language === "es" ? "Profesional" : "Professional");
+
+  const emergencyBusinessPhone =
+    activeEmergencyRecord.businessPhone ||
+    localStorage.getItem("emergencyBusinessPhone") ||
+    localStorage.getItem("businessEmergencyPhone") ||
+    localStorage.getItem("businessPhone") ||
+    localStorage.getItem("contractorPhone") ||
+    "";
+
+  const activeCallPhone = isEmergencyThread
+    ? emergencyBusinessPhone
+    : localStorage.getItem("conversationBusinessPhone") ||
+      localStorage.getItem("businessPhone") ||
+      localStorage.getItem("contractorPhone") ||
+      "";
+
+  function callActiveContact() {
+    const phoneNumber = String(activeCallPhone || "").trim();
+
+    if (!phoneNumber) {
+      alert(
+        language === "es"
+          ? "No hay teléfono agregado para este contacto."
+          : "No phone number has been added for this contact."
+      );
+      return;
+    }
+
+    window.location.href = phoneNumber.startsWith("tel:")
+      ? phoneNumber
+      : `tel:${phoneNumber}`;
+  }
+
   const activeRole =
     localStorage.getItem("activeAccountMode") || "personal";
 
-  const activeHeaderName =
-    currentViewerRole === "business"
-      ? activeCustomerName
-      : activeBusinessName;
+  const activeHeaderName = isEmergencyThread
+    ? currentViewerRole === "business"
+      ? emergencyCustomerName
+      : emergencyBusinessName
+    : isHiringThread
+    ? currentViewerRole === "business"
+      ? hiringParticipantName || "Applicant"
+      : hiringBusinessName || activeBusinessName
+    : currentViewerRole === "business"
+    ? activeCustomerName
+    : activeBusinessName;
 
-  const activeHeaderProject =
-    activeProjectTitle ||
-    activeName ||
-    (language === "es" ? "Conversación de proyecto" : "Project Conversation");
+  const activeHeaderProject = isEmergencyThread
+    ? emergencyServiceName
+    : isHiringThread
+    ? hiringPositionTitle || (language === "es" ? "Posición" : "Position")
+    : firstIdentityValue(
+      conversationRegistryItem?.project_title,
+      conversationRegistryItem?.projectTitle,
+      conversationMeta?.projectTitle,
+      conversationLinkedSelectedConversation?.projectTitle,
+      conversationLinkedSelectedConversation?.project_title
+    ) ||
+      (language === "es" ? "Conversación de proyecto" : "Project Conversation");
+
+  const activeWorkConversationId = localStorage.getItem("activeWorkConversationId") || "";
+  const isActiveWorkLinkedToConversation =
+    Boolean(activeWorkConversationId) &&
+    String(activeWorkConversationId) === String(conversationId);
+
+  const activeProjectStage =
+    conversationLinkedQuoteRequest?.status ||
+    conversationLinkedQuoteRequest?.workflowStage ||
+    conversationLinkedQuoteRequest?.stage ||
+    (isActiveWorkLinkedToConversation
+      ? localStorage.getItem("activeWorkStage") ||
+        localStorage.getItem("activeWorkStatus")
+      : "") ||
+    (activeJobSnapshot?.conversationId === conversationId
+      ? localStorage.getItem("activeJobStatus")
+      : "") ||
+    "";
+
+  const activeProjectStageLabel = (() => {
+    if (isEmergencyThread) {
+      return language === "es" ? "Despacho de emergencia" : "Emergency Dispatch";
+    }
+
+    if (isHiringThread) {
+      return language === "es" ? "Contratación" : "Hiring";
+    }
+
+    const stage = String(activeProjectStage || "").toLowerCase();
+
+    if (stage.includes("quote") || stage.includes("quoted")) {
+      return language === "es" ? "Cotización" : "Quote";
+    }
+
+    if (stage.includes("schedule") || stage.includes("visit")) {
+      return language === "es" ? "Programación" : "Schedule";
+    }
+
+    if (stage.includes("accepted")) {
+      return language === "es" ? "Aceptado" : "Accepted";
+    }
+
+    if (stage.includes("active") || stage.includes("working")) {
+      return language === "es" ? "Trabajo activo" : "Active Job";
+    }
+
+    if (stage.includes("completed")) {
+      return language === "es" ? "Completado" : "Completed";
+    }
+
+    if (stage.includes("revision")) {
+      return language === "es" ? "Revisión" : "Revision";
+    }
+
+    if (stage.includes("materials")) {
+      return language === "es" ? "Materiales" : "Materials";
+    }
+
+    return language === "es" ? "Conversación de proyecto" : "Project Conversation";
+  })();
+
+  const openReviewProjectFromMessage = (messageRecord = {}) => {
+    const fallbackContext =
+      conversationLinkedQuoteRequest ||
+      conversationLinkedHomeownerRequest ||
+      selectedQuoteRequest ||
+      selectedHomeownerRequest ||
+      activeJobSnapshot ||
+      {};
+
+    const reviewContext = { ...fallbackContext, ...(messageRecord || {}) };
+
+    const requestId =
+      reviewContext.requestId ||
+      reviewContext.id ||
+      reviewContext.quoteRequestId ||
+      selectedHomeownerRequestId ||
+      conversationId;
+
+    const projectTitle = firstIdentityValue(
+      reviewContext.projectTitle,
+      reviewContext.title,
+      reviewContext.service,
+      reviewContext.category,
+      activeProjectTitle,
+      activeHeaderProject,
+      t("project", language)
+    );
+
+    const professionalName = firstIdentityValue(
+      reviewContext.businessName,
+      reviewContext.providerName,
+      activeBusinessName,
+      activeName,
+      activeHeaderName
+    );
+
+    const requestPayload = {
+      ...reviewContext,
+      requestId,
+      title: projectTitle,
+      projectTitle,
+      service: reviewContext.service || reviewContext.category || "",
+      conversationId,
+    };
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(requestPayload));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(requestPayload));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationName", professionalName || activeName || "");
+    localStorage.setItem("activeProjectTitle", projectTitle);
+    localStorage.setItem("meetroConversationType", conversationType || "standard");
+
+    const selectedConversationPayload = {
+      id: conversationId,
+      requestId,
+      type: isHiringThread ? "hiring" : conversationType || "standard",
+      category: isHiringThread ? "hiring" : "work",
+      businessName: professionalName || activeBusinessName || "",
+      projectTitle,
+      ...reviewContext,
+    };
+
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify(selectedConversationPayload)
+    );
+    localStorage.setItem("conversationReturnPage", "conversationThread");
+    localStorage.setItem("returnPage", "conversationThread");
+    localStorage.setItem("projectDetailsReturnPage", "conversationThread");
+
+    setPage("projectDetails");
+  };
 
   const displayCategory =
+    isHiringThread
+      ? language === "es"
+        ? "Contratación"
+        : "Hiring"
+      :
     currentViewerRole === "business"
       ? language === "es"
         ? "Cliente"
@@ -462,10 +1423,11 @@ function ConversationThread({ setPage }) {
       : activeCategory || (language === "es" ? "Profesional" : "Professional");
 
   const displayLocation =
+    isHiringThread
+      ? hiringPositionTitle
+      :
     currentViewerRole === "business"
-      ? localStorage.getItem("activeCustomerLocation") ||
-        localStorage.getItem("projectLocation") ||
-        ""
+      ? resolvedCustomerIdentity.location
       : activeLocation;
 
   const personalProfilePhoto =
@@ -476,15 +1438,9 @@ function ConversationThread({ setPage }) {
 
   const activeLogo =
     currentViewerRole === "business"
-      ? personalProfilePhoto ||
-        selectedBusiness?.profile_photo_url ||
-        selectedBusiness?.profileImage ||
-        ""
-      : selectedBusiness?.image_url ||
-        selectedBusiness?.logo ||
-        selectedBusiness?.imageUrl ||
+      ? resolvedCustomerIdentity.avatar
+      : conversationBusinessIdentity.avatar ||
         businessProfilePhoto ||
-        selectedBusiness?.profileImage ||
         "";
 
   useEffect(() => {
@@ -513,68 +1469,175 @@ function ConversationThread({ setPage }) {
   const quickReplies = useMemo(() => {
     const activeConversationType =
       localStorage.getItem("meetroConversationType") || "standard";
+    const emergencyDispatchStatus =
+      localStorage.getItem("emergencyDispatchStatus") ||
+      localStorage.getItem("activeJobStatus") ||
+      "";
+    const replies = [];
+
+    const dedupeReplies = (list = []) => {
+      const seen = new Set();
+      const normalized = (value) =>
+        String(value || "")
+          .trim()
+          .toLowerCase();
+
+      return list
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean)
+        .filter((entry) => {
+          const normalizedEntry = normalized(entry);
+          if (seen.has(normalizedEntry)) return false;
+          seen.add(normalizedEntry);
+          return true;
+        });
+    };
+
+    const addReplies = (list = []) => {
+      if (Array.isArray(list)) {
+        replies.push(...list);
+      }
+    };
+
+    const asEmergencyState = () => {
+      const normalizedState = String(emergencyDispatchStatus || "")
+        .toLowerCase()
+        .replace(/[\s_-]+/g, "");
+
+      if (normalizedState.includes("complete") || normalizedState === "done") {
+        return "completed";
+      }
+      if (normalizedState.includes("arrived") || normalizedState.includes("arrival")) {
+        return "arrived";
+      }
+      if (
+        normalizedState.includes("started") ||
+        normalizedState.includes("inprogress") ||
+        normalizedState.includes("working") ||
+        normalizedState.includes("onsite")
+      ) {
+        return "started";
+      }
+      if (normalizedState.includes("way") || normalizedState.includes("enroute")) {
+        return "onway";
+      }
+
+      return "";
+    };
 
     const isBusinessUser =
       currentViewerRole === "business";
 
     if (activeConversationType === "emergency" && isBusinessUser) {
+      const emergencyState = asEmergencyState();
 
-      const emergencyDispatchStatus =
-        localStorage.getItem("emergencyDispatchStatus") ||
-        localStorage.getItem("activeJobStatus") ||
-        "";
+      if (emergencyState === "completed") {
+        addReplies(
+          language === "es"
+            ? ["Gracias", "Guardar historial", "Enviar seguimiento"]
+            : ["Thank you", "Save history", "Send follow-up"]
+        );
+      } else if (emergencyState === "started") {
+        addReplies(
+          language === "es"
+            ? [
+                "Completar trabajo",
+                "Enviar actualización",
+                "Necesito piezas",
+              ]
+            : [
+                "Complete Job",
+                "Send update",
+                "Need parts",
+              ]
+        );
+      } else if (emergencyState === "arrived") {
+        addReplies(
+          language === "es"
+            ? ["Enviar actualización", "Trabajo completado", "¿Necesitas algo más?"]
+            : ["Send update", "Work completed", "Anything else needed?"]
+        );
+      } else if (emergencyState === "onway") {
+        addReplies(
+          language === "es"
+            ? ["Voy en camino", "Te llamo", "Estoy revisando"]
+            : ["On the way", "I’m calling", "Checking now"]
+        );
+      } else {
+        addReplies(
+          language === "es"
+            ? ["Voy en camino", "Llegué", "Estoy revisando", "Trabajo iniciado"]
+            : ["On the way", "I arrived", "Checking now", "Job started"]
+        );
+      }
+    } else if (activeConversationType === "emergency" && !isBusinessUser) {
+      const emergencyState = asEmergencyState();
 
-      if (emergencyDispatchStatus === "completed") {
-        return language === "es"
-          ? ["Gracias", "Guardar historial", "Enviar seguimiento"]
-          : ["Thank you", "Save history", "Send follow-up"];
+      if (emergencyState === "completed") {
+        addReplies(
+          language === "es"
+            ? ["Gracias", "Dejar reseña", "Guardar historial"]
+            : ["Thank you", "Leave review", "Save history"]
+        );
       }
 
-      if (emergencyDispatchStatus === "started") {
-        return language === "es"
-          ? [
-              "Completar trabajo",
-              "Enviar actualización",
-              "Necesito piezas",
-            ]
+      if (emergencyState === "started" || emergencyState === "arrived") {
+        addReplies(
+          language === "es"
+            ? ["¿Todo bien?", "Gracias", "Necesito actualizar"]
+            : ["Is everything okay?", "Thank you", "Need an update"]
+        );
+      } else {
+        addReplies(
+          language === "es"
+            ? ["¿Alguna actualización?", "Gracias", "La puerta está abierta"]
+            : ["Any update?", "Thank you", "Door is unlocked"]
+        );
+      }
+    } else if (isHiringConversationType(activeConversationType)) {
+      if (isBusinessUser) {
+        addReplies(
+          language === "es"
+            ? [
+                "Gracias por aplicar",
+                "¿Cuándo estás disponible?",
+                "Cuéntame tu experiencia",
+                "Programemos entrevista",
+              ]
+            : [
+                "Thanks for applying",
+                "When are you available?",
+                "Tell me about your experience",
+                "Let’s schedule an interview",
+              ]
+        );
+      } else {
+        addReplies(
+          language === "es"
+            ? ["Estoy interesado", "Tengo transporte", "Estoy disponible esta semana", "Gracias"]
+            : ["I’m interested", "I have transportation", "I’m available this week", "Thank you"]
+        );
+      }
+    } else if (isBusinessUser) {
+      addReplies(
+        language === "es"
+          ? ["Puedo ayudarte", "Envíame fotos", "Te aviso pronto", "Gracias"]
+          : ["I can help", "Send me photos", "I’ll update you soon", "Thank you"]
+      );
+    } else {
+      addReplies(
+        language === "es"
+          ? ["¿Cuándo estás disponible?", "¿Me puedes dar precio?", "Te envío fotos", "Gracias"]
           : [
-              "Complete Job",
-              "Send update",
-              "Need parts",
-            ];
-      }
-
-      return language === "es"
-        ? ["Voy en camino", "Llegué", "Estoy revisando", "Trabajo iniciado"]
-        : ["On the way", "I arrived", "Checking now", "Job started"];
+              "When are you available?",
+              "Can you send pricing?",
+              "I’ll send photos",
+              "Thank you",
+            ]
+      );
     }
 
-    if (activeConversationType === "emergency" && !isBusinessUser) {
-      const emergencyDispatchStatus =
-        localStorage.getItem("emergencyDispatchStatus") ||
-        localStorage.getItem("activeJobStatus") ||
-        "";
-
-      if (emergencyDispatchStatus === "completed") {
-        return language === "es"
-          ? ["Gracias", "Dejar reseña", "Guardar historial"]
-          : ["Thank you", "Leave review", "Save history"];
-      }
-
-      return language === "es"
-        ? ["¿Alguna actualización?", "Gracias", "La puerta está abierta", "Llámame"]
-        : ["Any update?", "Thank you", "Door is unlocked", "Please call me"];
-    }
-
-    if (isBusinessUser) {
-      return language === "es"
-        ? ["Puedo ayudarte", "Envíame fotos", "Te aviso pronto", "Gracias"]
-        : ["I can help", "Send me photos", "I’ll update you soon", "Thank you"];
-    }
-
-    return language === "es"
-      ? ["¿Cuándo estás disponible?", "¿Me puedes dar precio?", "Te envío fotos", "Gracias"]
-      : ["When are you available?", "Can you send pricing?", "I’ll send photos", "Thank you"];
+    return dedupeReplies(replies).slice(0, 4);
   }, [language, currentViewerRole]);
   const starterMessages = useMemo(
     () => [
@@ -631,12 +1694,14 @@ function ConversationThread({ setPage }) {
             ? "me"
             : "them",
         senderRole:
-          payload.senderRole ||
-          (backendMessage.sender_id === Number(localStorage.getItem("userId") || 0)
-            ? currentViewerRole
-            : currentViewerRole === "business"
-            ? "homeowner"
-            : "business"),
+          normalizeEmergencySenderRole(
+            payload,
+            backendMessage.sender_id === Number(localStorage.getItem("userId") || 0)
+              ? currentViewerRole
+              : currentViewerRole === "business"
+              ? "homeowner"
+              : "business"
+          ),
         text: payload.text || backendMessage.message_text || "",
         imageUrl: payload.imageUrl || backendMessage.image_url || null,
         workflowType: payload.workflowType || backendMessage.workflow_type || "",
@@ -644,11 +1709,45 @@ function ConversationThread({ setPage }) {
         createdAt: payload.createdAt || new Date(backendMessage.created_at).getTime(),
         time:
           payload.time ||
-          new Date(backendMessage.created_at).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
+          formatMessageTime(backendMessage.created_at),
       };
+    };
+
+    const auditShadowTimeline = (legacyTimelineEvents, source) => {
+      if (!import.meta.env.DEV) return;
+
+      try {
+        const shadowReconciledTimeline =
+          reconcileConversationTimelineEvents(
+            legacyTimelineEvents.map((event) => ({ source, event }))
+          );
+        const audit = getConversationTimelineAudit(
+          legacyTimelineEvents,
+          shadowReconciledTimeline
+        );
+
+        console.info("Conversation Timeline Audit", {
+          source,
+          legacyCount: audit.legacyCount,
+          shadowCount: audit.shadowCount,
+          missingActorCount: audit.missingActorCount,
+          missingTimestampCount: audit.missingTimestampCount,
+          duplicateCandidates: audit.duplicateCandidates,
+          normalizationErrors: audit.normalizationErrors,
+        });
+      } catch {
+        console.warn("Conversation Timeline Audit", {
+          source,
+          legacyCount: Array.isArray(legacyTimelineEvents)
+            ? legacyTimelineEvents.length
+            : 0,
+          shadowCount: 0,
+          missingActorCount: 0,
+          missingTimestampCount: 0,
+          duplicateCandidates: 0,
+          normalizationErrors: 1,
+        });
+      }
     };
 
     const loadMessages = async () => {
@@ -657,6 +1756,7 @@ function ConversationThread({ setPage }) {
 
       if (
         selectedQuoteRequestId &&
+        !isHiringThread &&
         !String(selectedQuoteRequestId).startsWith("demo")
       ) {
         try {
@@ -669,10 +1769,32 @@ function ConversationThread({ setPage }) {
           const backendMessages = result?.data?.messages;
 
           if (!cancelled && Array.isArray(backendMessages) && backendMessages.length > 0) {
-            const mapped = backendMessages.map(mapBackendMessage);
-            setMessages(mapped);
-            localStorage.setItem(storageKey, JSON.stringify(mapped));
-            localStorage.setItem(`meetro_conversation_read_${conversationId}`, "true");
+            const mapped = backendMessages
+              .map(mapBackendMessage)
+              .filter(
+                (message) =>
+                  !isEmergencyThread ||
+                  message.workflowType !== "emergency_request"
+              );
+            let localMessages = [];
+
+            try {
+              const savedMessages = JSON.parse(
+                localStorage.getItem(storageKey) || "[]"
+              );
+              localMessages = Array.isArray(savedMessages) ? savedMessages : [];
+            } catch {
+              localMessages = [];
+            }
+
+            const merged = sanitizeMessagesForConversation(
+              mergeConversationMessages(localMessages, mapped)
+            );
+
+            auditShadowTimeline(merged, "backend-message");
+            setMessages(merged);
+            localStorage.setItem(storageKey, JSON.stringify(merged));
+            markConversationRead(conversationId, {}, currentViewerRole);
             window.dispatchEvent(new Event("meetro-messages-updated"));
             return;
           }
@@ -698,28 +1820,59 @@ function ConversationThread({ setPage }) {
             savedOwnerRole === "business" ? "homeowner" : "business";
 
           const migrated = Array.isArray(parsed)
-            ? parsed.map((msg) => ({
-                ...msg,
-                senderRole:
-                  msg.senderRole ||
-                  msg.senderRoleOwner ||
-                  (msg.sender === "client" ? "homeowner" : oppositeRole),
-              }))
+            ? sanitizeMessagesForConversation(parsed)
+                .filter(
+                  (msg) =>
+                    !isEmergencyThread ||
+                    msg.workflowType !== "emergency_request"
+                )
+                .map((msg) => ({
+                  ...msg,
+                  senderRole: normalizeEmergencySenderRole(
+                    msg,
+                    msg.senderRoleOwner ||
+                      (isEmergencyThread && msg.sender === "me"
+                        ? "homeowner"
+                        : msg.sender === "client"
+                        ? "homeowner"
+                        : oppositeRole)
+                  ),
+                }))
+            : isEmergencyThread
+            ? []
             : starterMessages;
 
+          const shouldPersistEmergencyMigration =
+            isEmergencyThread &&
+            Array.isArray(parsed) &&
+            migrated.some(
+              (msg, index) =>
+                msg.senderRole !== parsed[index]?.senderRole ||
+                msg.workflowType !== parsed[index]?.workflowType
+            );
+
           if (!cancelled) {
+            auditShadowTimeline(migrated, "local-conversation");
             setMessages(migrated);
+
+            if (
+              (isEmergencyThread || isHiringThread) &&
+              (migrated.length !== parsed.length ||
+                shouldPersistEmergencyMigration)
+            ) {
+              localStorage.setItem(storageKey, JSON.stringify(migrated));
+            }
           }
         } catch {
           if (!cancelled) {
-            setMessages(starterMessages);
+            setMessages(isEmergencyThread ? [] : starterMessages);
           }
         }
       } else if (!cancelled) {
-        setMessages(starterMessages);
+        setMessages(isEmergencyThread ? [] : starterMessages);
       }
 
-      localStorage.setItem(`meetro_conversation_read_${conversationId}`, "true");
+      markConversationRead(conversationId, {}, currentViewerRole);
       window.dispatchEvent(new Event("meetro-messages-updated"));
     };
 
@@ -735,13 +1888,32 @@ function ConversationThread({ setPage }) {
       cancelled = true;
       clearInterval(pollingInterval);
     };
-  }, [storageKey, conversationId, starterMessages, currentViewerRole, setPage]);
+  }, [storageKey, conversationId, starterMessages, currentViewerRole, setPage, isHiringThread]);
+
+  useEffect(() => {
+    const registry = getConversationRegistry();
+    const selectedId = String(conversationId);
+    const selectedItem = registry.find(
+      (item) => String(item.id) === selectedId
+    );
+
+    markConversationRead(conversationId, selectedItem || {}, currentViewerRole);
+  }, [conversationId]);
 
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem(storageKey, JSON.stringify(messages));
+      const messagesForConversation = sanitizeMessagesForConversation(messages);
 
-      const lastMessage = messages[messages.length - 1];
+      if (isHiringThread && messagesForConversation.length !== messages.length) {
+        localStorage.setItem(storageKey, JSON.stringify(messagesForConversation));
+        setMessages(messagesForConversation);
+        window.dispatchEvent(new Event("meetro-messages-updated"));
+        return;
+      }
+
+      localStorage.setItem(storageKey, JSON.stringify(messagesForConversation));
+
+      const lastMessage = messagesForConversation[messagesForConversation.length - 1];
 
       const lastMessageText =
         lastMessage?.type === "image"
@@ -788,53 +1960,68 @@ function ConversationThread({ setPage }) {
 
       saveConversationMeta(conversationId, metaPayload);
 
-      const registry = JSON.parse(
-        localStorage.getItem("meetro_conversation_registry") || "[]"
+      const registry = getConversationRegistry();
+      const existingRegistryItem = registry.find(
+        (item) => String(item.id) === String(conversationId)
       );
 
       const registryItem = {
+        ...(existingRegistryItem || {}),
         id: conversationId,
         project_title:
-          activeName ||
-          localStorage.getItem("activeConversationName") ||
-          localStorage.getItem("conversationBusinessName") ||
+          activeHeaderProject ||
           "Conversation",
         project_description:
           lastMessageText || "Saved conversation for future communication.",
         homeowner_email:
-          localStorage.getItem("activeConversationName") ||
-          localStorage.getItem("conversationBusinessName") ||
-          activeName ||
+          (isHiringThread ? hiringParticipantName : resolvedCustomerIdentity.name) ||
+          existingRegistryItem?.homeowner_email ||
           "Contact",
         location:
-          activeLocation ||
-          localStorage.getItem("activeWorkService") ||
-          localStorage.getItem("activeJobService") ||
+          (isHiringThread ? "Hiring" : resolvedCustomerIdentity.location) ||
+          existingRegistryItem?.location ||
           "Saved Contact",
-        status: conversationType === "business" ? "Saved Business" : "Message",
+        status:
+          existingRegistryItem?.status ||
+          (conversationType === "business" ? "Saved Business" : "Message"),
         unread: false,
-        saved_to_history: false,
+        saved_to_history: existingRegistryItem?.saved_to_history || false,
         conversation_type: conversationType || "standard",
+        positionTitle: existingRegistryItem?.positionTitle || hiringPositionTitle,
+        positionId: existingRegistryItem?.positionId || conversationMeta?.positionId || "",
+        applicantName: existingRegistryItem?.applicantName || hiringParticipantName,
+        applicantId: existingRegistryItem?.applicantId || conversationMeta?.applicantId || "",
+        businessName: existingRegistryItem?.businessName || hiringBusinessName,
+        source: existingRegistryItem?.source || conversationMeta?.source || "",
         savedAt: new Date().toISOString(),
       };
 
+      const updatedRegistry = [
+        registryItem,
+        ...registry.filter(
+          (item) => String(item.id) !== String(conversationId)
+        ),
+      ];
+
       localStorage.setItem(
         "meetro_conversation_registry",
-        JSON.stringify([
-          registryItem,
-          ...registry.filter(
-            (item) => String(item.id) !== String(conversationId)
-          ),
-        ])
+        JSON.stringify(updatedRegistry)
       );
+
+      writeUnreadConversationCount(updatedRegistry);
 
       window.dispatchEvent(new Event("meetro-messages-updated"));
     }
   }, [messages, storageKey, conversationId, language]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing, replyingTo, pendingImage, showAttachMenu]);
+    if (!hasInitialScrolledRef.current && messages.length > 0) {
+      hasInitialScrolledRef.current = true;
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      });
+    }
+  }, [messages.length]);
 
   const stopAiSpeech = () => {
     window.speechSynthesis?.cancel();
@@ -851,10 +2038,12 @@ function ConversationThread({ setPage }) {
   };
 
   const getTime = () =>
-    new Date().toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    formatMessageTime(new Date());
+
+  const getDisplayScheduleTime = (value) => formatScheduleTime(value) || value || "—";
+  const getDisplayScheduleSummary = (schedule = {}) =>
+    formatDateTimeDisplay(schedule.date || "", schedule.time || "") ||
+    [schedule.date, getDisplayScheduleTime(schedule.time)].filter(Boolean).join(" • ");
 
   const updateMessageStatus = (id, status, delay) => {
     setTimeout(() => {
@@ -879,16 +2068,40 @@ function ConversationThread({ setPage }) {
   };
 
   const addOutgoingMessage = async (message) => {
+    if (isHiringThread && !isMessageAllowedInHiringConversation(message)) {
+      return;
+    }
+
     const messageWithRole = {
       ...message,
       senderRole: message.senderRole || currentViewerRole,
     };
 
-    setMessages((prev) => [...prev, messageWithRole]);
+    setMessages((prev) => {
+      const nextMessages = mergeConversationMessages(prev, [messageWithRole]);
+      localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+      return nextMessages;
+    });
 
-    localStorage.setItem(`meetro_conversation_read_${conversationId}`, "true");
-
-    localStorage.setItem("mockUnreadMessages", "0");
+    markConversationRead(conversationId, {}, currentViewerRole);
+    markConversationUnreadForRecipient(conversationId, currentViewerRole, {
+      project_title:
+        activeHeaderProject ||
+        "Conversation",
+      project_description:
+        messageWithRole.title ||
+        messageWithRole.text ||
+        "New message",
+      homeowner_email:
+        (isHiringThread ? hiringParticipantName : resolvedCustomerIdentity.name) ||
+        "Contact",
+      conversation_type: conversationType || "standard",
+      positionTitle: isHiringThread ? hiringPositionTitle : "",
+      applicantName: isHiringThread ? hiringParticipantName : "",
+      businessName: isHiringThread ? hiringBusinessName : "",
+      source: isHiringThread ? "hiring_message" : "",
+      saved_to_history: false,
+    });
 
     window.dispatchEvent(new Event("meetro-messages-updated"));
 
@@ -1010,7 +2223,7 @@ function ConversationThread({ setPage }) {
       normalized.includes("leave review") ||
       normalized.includes("dejar reseña")
     ) {
-      setPage("completionSheet");
+      setPage(isEmergencyThread ? "emergencyComplete" : "completedJobDetails");
       return;
     }
 
@@ -1138,6 +2351,7 @@ function ConversationThread({ setPage }) {
   };
 
   const sendLocationCard = () => {
+    setShowAttachMenu(false);
     addOutgoingMessage({
       id: `loc-${Date.now()}`,
       type: "location",
@@ -1158,6 +2372,7 @@ function ConversationThread({ setPage }) {
   };
 
   const sendScanCard = () => {
+    setShowAttachMenu(false);
     addOutgoingMessage({
       id: `scan-${Date.now()}`,
       type: "scan",
@@ -1177,58 +2392,9 @@ function ConversationThread({ setPage }) {
     });
   };
 
-  
-const sendUpdateCard = () => {
-  addOutgoingMessage({
-    id: `update-${Date.now()}`,
-    type: "update",
-    sender: "me",
-    senderRole: currentViewerRole,
-    text:
-      language === "es"
-        ? "Actualización enviada"
-        : "Job update sent",
-    title:
-      language === "es"
-        ? "Actualización de trabajo"
-        : "Job Update",
-    subtitle:
-      language === "es"
-        ? "Progreso enviado al cliente"
-        : "Progress update sent to customer",
-    time: getTime(),
-    status: "sending",
-    unsent: false,
-    createdAt: Date.now(),
-  });
-};
-
-const sendApprovalCard = () => {
-  addOutgoingMessage({
-    id: `approval-${Date.now()}`,
-    type: "approval",
-    sender: "me",
-    senderRole: currentViewerRole,
-    text:
-      language === "es"
-        ? "Aprobación solicitada"
-        : "Approval requested",
-    title:
-      language === "es"
-        ? "Solicitud de aprobación"
-        : "Approval Request",
-    subtitle:
-      language === "es"
-        ? "Esperando respuesta del cliente"
-        : "Waiting for customer response",
-    time: getTime(),
-    status: "sending",
-    unsent: false,
-    createdAt: Date.now(),
-  });
-};
 
 const sendPaymentCard = () => {
+  setShowAttachMenu(false);
   addOutgoingMessage({
     id: `payment-${Date.now()}`,
     type: "payment",
@@ -1260,57 +2426,7 @@ const startWorkflowPhotoUpload = (workflowType) => {
   fileInputRef.current?.click();
 };
 
-const sendPhotoWorkflow = (workflowType) => {
-  const map = {
-    before: {
-      icon: "📸",
-      title: language === "es" ? "Foto Antes" : "Before Photo",
-      subtitle: language === "es" ? "Área antes del trabajo" : "Area before work begins",
-      text: language === "es" ? "Foto antes enviada" : "Before photo added",
-    },
-    progress: {
-      icon: "🔧",
-      title: language === "es" ? "Foto Progreso" : "Progress Photo",
-      subtitle: language === "es" ? "Actualización de progreso" : "Work progress update",
-      text: language === "es" ? "Foto de progreso enviada" : "Progress photo added",
-    },
-    issue: {
-      icon: "⚠️",
-      title: language === "es" ? "Problema Encontrado" : "Issue Found",
-      subtitle: language === "es" ? "Problema o retraso detectado" : "Problem or delay detected",
-      text: language === "es" ? "Problema documentado" : "Issue documented",
-    },
-    completion: {
-      icon: "✅",
-      title: language === "es" ? "Trabajo Finalizado" : "Completion Photo",
-      subtitle: language === "es" ? "Trabajo completado" : "Completed work result",
-      text: language === "es" ? "Foto final enviada" : "Completion photo added",
-    },
-  };
-
-  const data = map[workflowType];
-
-  addOutgoingMessage({
-    id: `photo-workflow-${workflowType}-${Date.now()}`,
-    type: "photoWorkflow",
-    workflowType,
-    icon: data.icon,
-    sender: "me",
-    senderRole: currentViewerRole,
-    text: data.text,
-    title: data.title,
-    subtitle: data.subtitle,
-    time: getTime(),
-    status: "sending",
-    unsent: false,
-    createdAt: Date.now(),
-  });
-
-  setShowAttachMenu(false);
-};
-
-
-const sendMaterialsCard = () => {
+  const sendMaterialsCard = () => {
   const materialsRequest = {
     id: `materials-approval-${Date.now()}`,
     type: "workflow_materials_approval",
@@ -1349,13 +2465,13 @@ const sendMaterialsCard = () => {
         : "Business will purchase materials",
     status: "pending_materials_approval",
     requestId:
-      conversation?.requestId ||
-      conversation?.id ||
-      activeConversationId ||
+      selectedQuoteRequest?.requestId ||
+      selectedQuoteRequest?.id ||
+      conversationId ||
       "",
     projectTitle:
-      conversation?.projectTitle ||
-      conversation?.title ||
+      selectedQuoteRequest?.projectTitle ||
+      selectedQuoteRequest?.title ||
       activeName ||
       "Project",
     time: getTime(),
@@ -1398,7 +2514,7 @@ const handleImageUpload = (event) => {
     if (pendingWorkflowPhotoType) {
       const map = {
         before: {
-          icon: "📸",
+          icon: "photo",
           title: language === "es" ? "Foto Antes" : "Before Photo",
           subtitle:
             language === "es"
@@ -1407,7 +2523,7 @@ const handleImageUpload = (event) => {
           text: language === "es" ? "Foto antes enviada" : "Before photo added",
         },
         progress: {
-          icon: "🔧",
+          icon: "work",
           title: language === "es" ? "Foto Progreso" : "Progress Photo",
           subtitle:
             language === "es"
@@ -1419,7 +2535,7 @@ const handleImageUpload = (event) => {
               : "Progress photo added",
         },
         issue: {
-          icon: "⚠️",
+          icon: "alert",
           title: language === "es" ? "Problema Encontrado" : "Issue Found",
           subtitle:
             language === "es"
@@ -1431,7 +2547,7 @@ const handleImageUpload = (event) => {
               : "Issue documented",
         },
         completion: {
-          icon: "✅",
+          icon: "done",
           title:
             language === "es"
               ? "Trabajo Finalizado"
@@ -1481,6 +2597,17 @@ const handleImageUpload = (event) => {
     event.target.value = "";
   };
 
+  const openConversationCamera = async () => {
+    setShowAttachMenu(false);
+    await openJobPhotoPicker({
+      inputRef: cameraInputRef,
+      fileNamePrefix: "message-photo",
+      onPhotos: (photos) =>
+        handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+      onError: (message) => setSaveNotice(message || CAMERA_PERMISSION_MESSAGE),
+    });
+  };
+
   const unsendMessage = (id) => {
     setMessages((prev) =>
       prev.map((msg) =>
@@ -1505,6 +2632,308 @@ const handleImageUpload = (event) => {
     setShowMobileSheet(false);
   };
 
+  const deleteScheduleCard = async (scheduleMessage) => {
+    if (!scheduleMessage?.id) return;
+
+    const scheduleId =
+      scheduleMessage.schedule?.id ||
+      scheduleMessage.scheduleId ||
+      scheduleMessage.appointmentId ||
+      "";
+
+    setMessages((prev) => prev.filter((msg) => msg.id !== scheduleMessage.id));
+
+    if (scheduleId) {
+      const updatedSchedule = getBusinessSchedule().filter(
+        (item) => String(item.id) !== String(scheduleId)
+      );
+      saveBusinessSchedule(updatedSchedule);
+    }
+
+    await cancelAppointmentReminderNotifications(
+      scheduleMessage.schedule || {
+        id: scheduleId,
+        scheduleId,
+      }
+    );
+
+    setSwipedScheduleId(null);
+    setAppointmentDetails(null);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+  };
+
+  const getAppointmentConfirmationStatus = (message) => {
+    const rawStatus =
+      message?.schedule?.customerConfirmationStatus ||
+      message?.customerConfirmationStatus ||
+      message?.schedule?.confirmationStatus ||
+      message?.confirmationStatus ||
+      message?.schedule?.workflowStatus ||
+      message?.workflowStatus ||
+      message?.schedule?.status ||
+      "";
+    const normalizedStatus = String(rawStatus).toLowerCase().replace(/\s+/g, "_");
+
+    if (
+      normalizedStatus.includes("confirmed") ||
+      normalizedStatus === "customer_confirmed"
+    ) {
+      return "confirmed";
+    }
+
+    if (
+      normalizedStatus.includes("change_requested") ||
+      normalizedStatus.includes("reschedule") ||
+      normalizedStatus.includes("needs_reschedule")
+    ) {
+      return "change_requested";
+    }
+
+    if (normalizedStatus.includes("cancel")) {
+      return "cancelled";
+    }
+
+    return "pending_customer_confirmation";
+  };
+
+  const getAppointmentConfirmationLabel = (status) => {
+    if (status === "confirmed") return t("appointmentConfirmed", language);
+    if (status === "change_requested") return t("appointmentChangeRequested", language);
+    if (status === "cancelled") return t("appointmentCancelled", language);
+    return t("appointmentPendingConfirmation", language);
+  };
+
+  const isWorkScheduleMessage = (message = {}) =>
+    message?.workflowType === "work_scheduled" ||
+    message?.schedule?.appointmentType === "work_visit" ||
+    message?.schedule?.workflowStage === "work_scheduled" ||
+    message?.schedule?.status === "work_scheduled";
+
+  const getScheduleCardTitle = (message = {}) => {
+    if (isWorkScheduleMessage(message)) {
+      return language === "es" ? "Trabajo programado" : "Work Scheduled";
+    }
+
+    return message.title || (language === "es" ? "Cita programada" : "Appointment Scheduled");
+  };
+
+  const getScheduleServices = (message = {}) => {
+    const services = Array.isArray(message.services)
+      ? message.services
+      : Array.isArray(message.schedule?.services)
+        ? message.schedule.services
+        : [];
+
+    if (services.length > 0) return services.filter(Boolean);
+
+    return [
+      message.schedule?.requestTitle ||
+        message.schedule?.projectTitle ||
+        message.schedule?.title ||
+        "",
+    ].filter(Boolean);
+  };
+
+  const isCustomerFacingPendingAppointment = (message) =>
+    currentViewerRole !== "business" &&
+    message?.type === "schedule" &&
+    getAppointmentConfirmationStatus(message) === "pending_customer_confirmation";
+
+  const updateScheduleConfirmationStatus = async (scheduleMessage, confirmationStatus) => {
+    if (!scheduleMessage?.id) return;
+
+    const updatedAt = new Date().toISOString();
+    const isWorkSchedule = isWorkScheduleMessage(scheduleMessage);
+    const scheduleId =
+      scheduleMessage.schedule?.id ||
+      scheduleMessage.scheduleId ||
+      scheduleMessage.appointmentId ||
+      "";
+
+    const statusLabel =
+      isWorkSchedule && confirmationStatus === "confirmed"
+        ? language === "es"
+          ? "Trabajo confirmado"
+          : "Work confirmed"
+        : isWorkSchedule && confirmationStatus === "change_requested"
+          ? language === "es"
+            ? "Cambio solicitado"
+            : "Change requested"
+          : getAppointmentConfirmationLabel(confirmationStatus);
+    const confirmationText =
+      confirmationStatus === "confirmed"
+        ? isWorkSchedule
+          ? language === "es"
+            ? "Trabajo confirmado. El horario programado funciona para el cliente."
+            : "Work schedule confirmed. The scheduled time works for the customer."
+          : t("appointmentConfirmedChatText", language)
+        : isWorkSchedule
+          ? language === "es"
+            ? "El cliente solicitó otro horario para el trabajo programado."
+            : "Customer requested a different time for the scheduled work."
+          : t("appointmentChangeRequestedChatText", language);
+
+    const updateSchedule = (schedule = {}) => ({
+      ...schedule,
+      customerConfirmationStatus: confirmationStatus,
+      confirmationStatus,
+      confirmationStatusLabel: statusLabel,
+      workflowStatus:
+        confirmationStatus === "confirmed"
+          ? "appointment_confirmed"
+          : confirmationStatus === "change_requested"
+          ? "appointment_change_requested"
+          : schedule.workflowStatus,
+      confirmedAt:
+        confirmationStatus === "confirmed" ? updatedAt : schedule.confirmedAt,
+      changeRequestedAt:
+        confirmationStatus === "change_requested"
+          ? updatedAt
+          : schedule.changeRequestedAt,
+      updatedAt,
+    });
+
+    let reminderSchedule = null;
+    if (confirmationStatus === "confirmed") {
+      reminderSchedule = await scheduleAppointmentReminderNotifications(
+        updateSchedule(scheduleMessage.schedule || {}),
+        { viewerRole: "customer", language }
+      );
+
+      if (reminderSchedule.permissionDenied) {
+        setAppointmentReminderNotice({
+          context: "conversation",
+          message:
+            language === "es"
+              ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
+              : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+        });
+      } else {
+        setAppointmentReminderNotice(null);
+      }
+    }
+
+    const mergeReminderMetadata = (schedule = {}) => ({
+      ...schedule,
+      reminders: reminderSchedule?.appointment?.reminders || schedule.reminders,
+    });
+
+    const updateMessage = (message) => {
+      if (String(message.id) !== String(scheduleMessage.id)) return message;
+
+      const nextSchedule = mergeReminderMetadata(updateSchedule(message.schedule || {}));
+
+      return {
+        ...message,
+        customerConfirmationStatus: confirmationStatus,
+        confirmationStatus,
+        status: confirmationStatus,
+        subtitle: `${getDisplayScheduleSummary(nextSchedule)} • ${statusLabel}`,
+        text: confirmationText,
+        schedule: nextSchedule,
+        updatedAt,
+      };
+    };
+
+    setMessages((prev) => {
+      const nextMessages = prev.map(updateMessage);
+      localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+      return nextMessages;
+    });
+
+    if (appointmentDetails?.id === scheduleMessage.id) {
+      setAppointmentDetails((prev) => (prev ? updateMessage(prev) : prev));
+    }
+
+    if (scheduleId) {
+      const updatedSchedule = getBusinessSchedule().map((item) =>
+        String(item.id) === String(scheduleId)
+          ? mergeReminderMetadata(updateSchedule(item))
+          : item
+      );
+      saveBusinessSchedule(updatedSchedule);
+    }
+
+    addNotification({
+      type:
+        confirmationStatus === "confirmed"
+          ? "appointment_confirmed"
+          : "appointment_change_requested",
+      title:
+        confirmationStatus === "confirmed"
+          ? statusLabel
+          : statusLabel,
+      message: confirmationText,
+      priority: "high",
+      targetRole: "professional",
+      requestId:
+        scheduleMessage.requestId ||
+        scheduleMessage.schedule?.requestId ||
+        selectedHomeownerRequestId ||
+        conversationId,
+      scheduleId,
+      conversationId,
+    });
+
+    createNotification({
+      type:
+        confirmationStatus === "confirmed"
+          ? "appointment_confirmed"
+          : "appointment_change_requested",
+      title:
+        confirmationStatus === "confirmed"
+          ? statusLabel
+          : statusLabel,
+      message: confirmationText,
+      role: "professional",
+      requestId:
+        scheduleMessage.requestId ||
+        scheduleMessage.schedule?.requestId ||
+        selectedHomeownerRequestId ||
+        conversationId,
+      conversationId,
+      appointmentId: scheduleId,
+      dedupeKey: `${confirmationStatus}:${scheduleId || scheduleMessage.id}`,
+    });
+
+    if (confirmationStatus === "change_requested") {
+      setMessageText(t("appointmentDifferentTimeMessage", language));
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+    window.dispatchEvent(new Event("storage"));
+  };
+
+  const handleScheduleSwipeStart = (event) => {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+
+    scheduleSwipeStartRef.current = {
+      x: touch.clientX || 0,
+      y: touch.clientY || 0,
+    };
+  };
+
+  const handleScheduleSwipeEnd = (event, scheduleMessage) => {
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+
+    const dx = (touch.clientX || 0) - scheduleSwipeStartRef.current.x;
+    const dy = Math.abs((touch.clientY || 0) - scheduleSwipeStartRef.current.y);
+
+    if (dx < -35 && dy < 90) {
+      setSwipedScheduleId(scheduleMessage.id);
+    }
+
+    if (dx > 25) {
+      setSwipedScheduleId(null);
+    }
+  };
+
   const clearLocalChat = () => {
     localStorage.removeItem(storageKey);
     setMessages(starterMessages);
@@ -1516,10 +2945,7 @@ const handleImageUpload = (event) => {
   };
 
   const markUnread = () => {
-    localStorage.setItem(`meetro_conversation_read_${conversationId}`, "false");
-    const currentUnread = Number(localStorage.getItem("mockUnreadMessages") || 0);
-    localStorage.setItem("mockUnreadMessages", String(Math.max(currentUnread, 1)));
-    window.dispatchEvent(new Event("meetro-messages-updated"));
+    markConversationUnread(conversationId);
     setShowThreadMenu(false);
     setPage("messagesInbox");
   };
@@ -1546,40 +2972,168 @@ const handleImageUpload = (event) => {
     setShowMobileSheet(false);
   };
 
-  const saveMessageAsSchedule = (message) => {
-    const schedule = getBusinessSchedule();
+  const openChatScheduleModal = () => {
+    if (isHiringThread) return;
 
-    const newVisit = {
-      id: `schedule-${Date.now()}`,
+    setShowThreadMenu(false);
+    setShowAttachMenu(false);
+    setChatScheduleForm({
+      appointmentType: "walkthrough",
       date: new Date().toISOString().slice(0, 10),
-      time: "12:00 PM",
-      title: activeName ? `Visit with ${activeName}` : "Scheduled Visit",
-      location: activeLocation || "Customer location",
-      status: "Scheduled",
+      time: "12:00",
+      title: activeName
+        ? `Visit with ${activeName}`
+        : language === "es"
+        ? "Visita programada"
+        : "Scheduled Visit",
+      location: activeLocation || "",
+      notes: "",
+    });
+    setShowScheduleModal(true);
+  };
+
+  const buildAppointmentReminderSystemMessage = (schedule, reminderResult) => {
+    const scheduledReminders = reminderResult?.appointment?.reminders?.scheduled || [];
+    if (!reminderResult?.ok || scheduledReminders.length === 0) return null;
+
+    return {
+      id: `appointment-reminders-${schedule.id}`,
+      sender: "system",
+      role: "system",
+      senderRole: "system",
+      type: "system",
+      workflowType: "appointment_reminders",
       conversationId,
-      source: "chat-message",
-      notes: message?.text || "",
+      scheduleId: schedule.id,
+      text:
+        language === "es"
+          ? "Recordatorios programados:\n• 1 día antes\n• 2 horas antes\n• 30 minutos antes"
+          : "Reminder scheduled:\n• 1 day before\n• 2 hours before\n• 30 minutes before",
+      time: formatMessageTime(new Date()),
       createdAt: new Date().toISOString(),
     };
+  };
+
+  const saveChatScheduleAppointment = async () => {
+    if (isHiringThread) return;
+
+    const schedule = getBusinessSchedule();
+    const linkedRequestId =
+      selectedHomeownerRequestId ||
+      selectedQuoteRequest?.requestId ||
+      selectedQuoteRequest?.id ||
+      selectedHomeownerRequest?.requestId ||
+      selectedHomeownerRequest?.id ||
+      conversationId;
+    const linkedRequestTitle =
+      selectedQuoteRequest?.title ||
+      selectedQuoteRequest?.projectTitle ||
+      selectedHomeownerRequest?.title ||
+      selectedHomeownerRequest?.projectTitle ||
+      selectedConversation?.projectTitle ||
+      activeProjectTitle ||
+      chatScheduleForm.title ||
+      activeName ||
+      "";
+
+    const appointmentMeta = {
+      walkthrough: language === "es" ? "Recorrido" : "Walkthrough",
+      estimate: language === "es" ? "Visita de estimado" : "Estimate Visit",
+      consultation: language === "es" ? "Consulta" : "Consultation",
+      virtual: language === "es" ? "Reunión virtual" : "Virtual Meeting",
+      emergency: language === "es" ? "Despacho de emergencia" : "Emergency Dispatch",
+    };
+
+    let newVisit = {
+      id: `schedule-${Date.now()}`,
+      appointmentType: chatScheduleForm.appointmentType || "walkthrough",
+      date: chatScheduleForm.date || new Date().toISOString().slice(0, 10),
+      time: chatScheduleForm.time || "12:00",
+      title:
+        chatScheduleForm.title ||
+        (activeName ? `Visit with ${activeName}` : "Scheduled Visit"),
+      location: chatScheduleForm.location || activeLocation || "Customer location",
+      notes: chatScheduleForm.notes || "",
+      status: "Scheduled",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      conversationId,
+      projectConversationId: conversationId,
+      activeConversationId: conversationId,
+      requestId: linkedRequestId,
+      selectedHomeownerRequestId,
+      customerName: activeCustomerName,
+      homeownerName: activeCustomerName,
+      businessName: activeBusinessName,
+      requestTitle: linkedRequestTitle,
+      projectTitle: linkedRequestTitle,
+      selectedConversation,
+      selectedHomeownerRequest,
+      conversationType,
+      source: "meetro_chat",
+      workflowSource: "meetro_chat_schedule",
+      workflowStage: "scheduling",
+      workflowStatus: "pending_customer_confirmation",
+      createdAt: new Date().toISOString(),
+    };
+
+    const reminderResult = await scheduleAppointmentReminderNotifications(newVisit, {
+      viewerRole: "professional",
+      language,
+    });
+
+    newVisit = reminderResult.appointment || newVisit;
+
+    if (reminderResult.permissionDenied) {
+      setAppointmentReminderNotice({
+        context: "conversation",
+        message:
+          language === "es"
+            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
+            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+      });
+    } else {
+      setAppointmentReminderNotice(null);
+    }
 
     saveBusinessSchedule([newVisit, ...schedule]);
 
+    localStorage.setItem("meetroWorkCenterTab", "schedule");
+    localStorage.setItem("activeWorkCenterTab", "schedule");
+
     const scheduleMessage = {
-      id: Date.now(),
+      id: `schedule-msg-${Date.now()}`,
       sender: "business",
       role: "business",
+      senderRole: "business",
       type: "schedule",
+      conversationId,
+      workflowSource: "meetro_chat_schedule",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      title:
+        language === "es"
+          ? "Cita programada"
+          : "Appointment Scheduled",
+      subtitle: `${getDisplayScheduleSummary(newVisit)} • ${t(
+        "appointmentPendingConfirmation",
+        language
+      )}`,
       text:
         language === "es"
-          ? `📅 Mensaje guardado como visita programada para hoy a las ${newVisit.time}.`
-          : `📅 Message saved as a scheduled visit for today at ${newVisit.time}.`,
+          ? ` ${appointmentMeta[newVisit.appointmentType] || "Cita"} programada para ${newVisit.date} a las ${getDisplayScheduleTime(newVisit.time)}.`
+          : ` ${appointmentMeta[newVisit.appointmentType] || "Appointment"} scheduled for ${newVisit.date} at ${getDisplayScheduleTime(newVisit.time)}.`,
       schedule: newVisit,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time: formatMessageTime(new Date()),
       createdAt: new Date().toISOString(),
     };
+    const reminderSystemMessage = buildAppointmentReminderSystemMessage(
+      newVisit,
+      reminderResult
+    );
+    const messagesToAdd = reminderSystemMessage
+      ? [scheduleMessage, reminderSystemMessage]
+      : [scheduleMessage];
 
     const storageKey = `meetro_conversation_${conversationId}`;
     const existingMessages = JSON.parse(
@@ -1588,7 +3142,133 @@ const handleImageUpload = (event) => {
 
     localStorage.setItem(
       storageKey,
-      JSON.stringify([...existingMessages, scheduleMessage])
+      JSON.stringify([...existingMessages, ...messagesToAdd])
+    );
+
+    setMessages((prev) => [...prev, ...messagesToAdd]);
+
+    createNotification({
+      type: "appointment_scheduled",
+      title: language === "es" ? "Cita programada" : "Appointment scheduled",
+      message:
+        language === "es"
+          ? `${activeBusinessName || "El profesional"} programó una cita para ${newVisit.date} a las ${getDisplayScheduleTime(newVisit.time)}.`
+          : `${activeBusinessName || "The professional"} scheduled an appointment for ${newVisit.date} at ${getDisplayScheduleTime(newVisit.time)}.`,
+      role: "homeowner",
+      requestId: linkedRequestId,
+      conversationId,
+      appointmentId: newVisit.id,
+      dedupeKey: `appointment_scheduled:${newVisit.id}`,
+    });
+
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+    window.dispatchEvent(new Event("storage"));
+
+    setShowScheduleModal(false);
+  };
+
+  const saveMessageAsSchedule = async (message) => {
+    if (isHiringThread) return;
+
+    const schedule = getBusinessSchedule();
+    const linkedRequestId =
+      selectedHomeownerRequestId ||
+      selectedQuoteRequest?.requestId ||
+      selectedQuoteRequest?.id ||
+      selectedHomeownerRequest?.requestId ||
+      selectedHomeownerRequest?.id ||
+      conversationId;
+    const linkedRequestTitle =
+      selectedQuoteRequest?.title ||
+      selectedQuoteRequest?.projectTitle ||
+      selectedHomeownerRequest?.title ||
+      selectedHomeownerRequest?.projectTitle ||
+      selectedConversation?.projectTitle ||
+      activeProjectTitle ||
+      activeName ||
+      "";
+
+    let newVisit = {
+      id: `schedule-${Date.now()}`,
+      date: new Date().toISOString().slice(0, 10),
+      time: "12:00 PM",
+      title: activeName ? `Visit with ${activeName}` : "Scheduled Visit",
+      location: activeLocation || "Customer location",
+      status: "Scheduled",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      conversationId,
+      projectConversationId: conversationId,
+      activeConversationId: conversationId,
+      requestId: linkedRequestId,
+      selectedHomeownerRequestId,
+      customerName: activeCustomerName,
+      homeownerName: activeCustomerName,
+      businessName: activeBusinessName,
+      requestTitle: linkedRequestTitle,
+      projectTitle: linkedRequestTitle,
+      selectedConversation,
+      selectedHomeownerRequest,
+      conversationType,
+      source: "meetro_chat",
+      workflowSource: "meetro_chat_message_schedule",
+      notes: message?.text || "",
+      createdAt: new Date().toISOString(),
+    };
+
+    const reminderResult = await scheduleAppointmentReminderNotifications(newVisit, {
+      viewerRole: "professional",
+      language,
+    });
+
+    newVisit = reminderResult.appointment || newVisit;
+
+    if (reminderResult.permissionDenied) {
+      setAppointmentReminderNotice({
+        context: "conversation",
+        message:
+          language === "es"
+            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
+            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+      });
+    } else {
+      setAppointmentReminderNotice(null);
+    }
+
+    saveBusinessSchedule([newVisit, ...schedule]);
+
+    const scheduleMessage = {
+      id: Date.now(),
+      sender: "business",
+      role: "business",
+      type: "schedule",
+      conversationId,
+      workflowSource: "meetro_chat_message_schedule",
+      text:
+        language === "es"
+          ? ` Mensaje guardado como visita programada para hoy a las ${getDisplayScheduleTime(newVisit.time)}.`
+          : ` Message saved as a scheduled visit for today at ${getDisplayScheduleTime(newVisit.time)}.`,
+      schedule: newVisit,
+      time: formatMessageTime(new Date()),
+      createdAt: new Date().toISOString(),
+    };
+    const reminderSystemMessage = buildAppointmentReminderSystemMessage(
+      newVisit,
+      reminderResult
+    );
+    const messagesToAdd = reminderSystemMessage
+      ? [scheduleMessage, reminderSystemMessage]
+      : [scheduleMessage];
+
+    const storageKey = `meetro_conversation_${conversationId}`;
+    const existingMessages = JSON.parse(
+      localStorage.getItem(storageKey) || "[]"
+    );
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify([...existingMessages, ...messagesToAdd])
     );
 
     window.dispatchEvent(new Event("meetro-messages-updated"));
@@ -1662,6 +3342,14 @@ const handleImageUpload = (event) => {
     setShowCallMenu(false);
   };
 
+  const openAppointmentDetails = (msg) => {
+    setAppointmentDetails(msg);
+    setJobStory(null);
+    setShowAttachMenu(false);
+    setShowThreadMenu(false);
+    setShowCallMenu(false);
+  };
+
   const speakJobStory = () => {
     if (!jobStory || !window.speechSynthesis) return;
 
@@ -1724,7 +3412,7 @@ const handleImageUpload = (event) => {
         localStorage.getItem("activeJobService") ||
         localStorage.getItem("selectedEmergencyService") ||
         activeName,
-      customer: activeName,
+      customer: activeCustomerName,
       type: jobStory.type,
       title: jobStory.title,
       subtitle: jobStory.subtitle,
@@ -1753,18 +3441,58 @@ const handleImageUpload = (event) => {
   };
 
   return (
-    <div style={page}>
+    <div
+      className="conversation-thread-page chat-thread-page"
+      style={embedded ? embeddedPage : page}
+    >
       <style>{animations}</style>
 
-      <div style={phone}>
-        <div style={header}>
+      <div style={embedded ? embeddedPhone : phone}>
+        <div className="chat-header" style={header}>
           <button
             style={headerBtn}
             onClick={() => {
-              const returnPage =
+              const routeReturnTo =
+                window.history?.state?.returnTo ||
+                window.history?.state?.usr?.returnTo ||
+                "";
+              const storedReturnPage =
+                sessionStorage.getItem("conversationReturnPage") ||
                 localStorage.getItem("conversationReturnPage") ||
                 localStorage.getItem("returnPage") ||
-                "messagesInbox";
+                "";
+              const returnSection =
+                window.history?.state?.returnSection ||
+                window.history?.state?.usr?.returnSection ||
+                sessionStorage.getItem("conversationReturnSection") ||
+                localStorage.getItem("conversationReturnSection") ||
+                "";
+              const isBusinessContext =
+                isProfessionalSession() ||
+                currentViewerRole === "business" ||
+                currentViewerRole === "professional" ||
+                localStorage.getItem("accountMode") === "business" ||
+                localStorage.getItem("accountType") === "professional";
+
+              const normalizeReturnPage = (value) => {
+                if (!value) return "";
+                if (value === "conversationThread") return "";
+                if (value === "/contractor-dashboard") return "contractorDashboard";
+                if (value === "/work-center") return "contractorDashboard";
+                if (value === "/messages") return "messagesInbox";
+                if (value === "/quote-builder") return "quoteBuilder";
+                return value.replace(/^\//, "");
+              };
+
+              if (returnSection) {
+                localStorage.setItem("meetroWorkCenterTab", returnSection);
+                localStorage.setItem("activeWorkCenterTab", returnSection);
+              }
+
+              const returnPage =
+                normalizeReturnPage(routeReturnTo) ||
+                normalizeReturnPage(storedReturnPage) ||
+                (isBusinessContext ? "contractorDashboard" : "messagesInbox");
 
               setPage(returnPage);
             }}
@@ -1796,11 +3524,25 @@ const handleImageUpload = (event) => {
           >
             <div style={name}>{activeHeaderName}</div>
 
+            <div style={chatProjectLabel}>
+              <span style={chatProjectTitleText}>
+                 {isHiringThread
+                   ? `${language === "es" ? "Contratación" : "Hiring"} · ${activeHeaderProject}`
+                   : activeHeaderProject}
+              </span>
+
+              {!isHiringThread && (
+                <strong style={chatProjectStagePill}>
+                  {activeProjectStageLabel}
+                </strong>
+              )}
+            </div>
+
             {!isEmergencyConversation && (activeCategory || activeLocation) && (
               <div style={businessInfoLine}>
                 {displayCategory && <span>{displayCategory}</span>}
                 {displayCategory && displayLocation && <span>•</span>}
-                {displayLocation && <span>📍 {displayLocation}</span>}
+                {displayLocation && <span> {displayLocation}</span>}
               </div>
             )}
 
@@ -1819,7 +3561,7 @@ const handleImageUpload = (event) => {
                   style={jobRecordMiniBadge}
                   onClick={() => setShowJobRecords(true)}
                 >
-                  📁 {jobRecordCount}
+                   {jobRecordCount}
                 </button>
               )}
             </div>
@@ -1852,6 +3594,38 @@ const handleImageUpload = (event) => {
           </button>
         </div>
 
+        {appointmentReminderNotice && (
+          <div style={appointmentReminderNoticeCard}>
+            <div>
+              <strong>
+                {language === "es"
+                  ? "Notificaciones necesarias"
+                  : "Notifications Needed"}
+              </strong>
+              <p>{appointmentReminderNotice.message}</p>
+            </div>
+
+            <div style={appointmentReminderNoticeActions}>
+              <button
+                type="button"
+                style={appointmentReminderSettingsButton}
+                onClick={openNotificationSettings}
+              >
+                {language === "es" ? "Abrir Configuración" : "Open Settings"}
+              </button>
+              <button
+                type="button"
+                style={appointmentReminderContinueButton}
+                onClick={() => setAppointmentReminderNotice(null)}
+              >
+                {language === "es"
+                  ? "Continuar sin recordatorios"
+                  : "Continue Without Reminders"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {showProfileCard && (
           <div style={profileOverlay} onClick={() => setShowProfileCard(false)}>
             <div style={profileMiniCard} onClick={(event) => event.stopPropagation()}>
@@ -1883,7 +3657,7 @@ const handleImageUpload = (event) => {
                 </p>
 
                 {displayLocation && (
-                  <p style={profileCardLocation}>📍 {displayLocation}</p>
+                  <p style={profileCardLocation}> {displayLocation}</p>
                 )}
               </div>
 
@@ -1904,10 +3678,10 @@ const handleImageUpload = (event) => {
                   style={profilePrimaryAction}
                   onClick={() => {
                     setShowProfileCard(false);
-                    setShowCallMenu(true);
+                    callActiveContact();
                   }}
                 >
-                  📞 {language === "es" ? "Llamar" : "Call"}
+                   {language === "es" ? "Llamar" : "Call"}
                 </button>
 
                 <button
@@ -1917,7 +3691,7 @@ const handleImageUpload = (event) => {
                     setShowJobRecords(true);
                   }}
                 >
-                  📁 {language === "es"
+                   {language === "es"
                     ? "Registro del trabajo"
                     : "Job Records"}
                 </button>
@@ -1928,7 +3702,13 @@ const handleImageUpload = (event) => {
 
         {showCallMenu && (
           <div style={callMenu}>
-            <button style={callMenuBtn} onClick={() => setShowCallMenu(false)}>
+            <button
+              style={callMenuBtn}
+              onClick={() => {
+                setShowCallMenu(false);
+                callActiveContact();
+              }}
+            >
               {language === "es" ? "Llamar" : "Call"}
             </button>
 
@@ -1940,170 +3720,118 @@ const handleImageUpload = (event) => {
 
         {showThreadMenu && (
           <div style={threadMenu}>
-            <button style={threadMenuBtn} onClick={() => setShowThreadMenu(false)}>
-              {language === "es" ? "Ver detalles" : "View details"}
-            </button>
+            <div style={menuSection}>
+              <div style={menuSectionTitle}>
+                {language === "es" ? "RELACIÓN" : "RELATIONSHIP"}
+              </div>
 
-            <button style={threadMenuBtn} onClick={markUnread}>
-              {language === "es" ? "Marcar como no leído" : "Mark as unread"}
-            </button>
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowProfileCard(false);
+                  setShowJobRecords(false);
+                  setShowThreadMenu(false);
+                  setShowProfileCard(true);
+                }}
+              >
+                {language === "es" ? "Detalles del proyecto" : "Project Details"}
+              </button>
 
-            <button
-              style={threadMenuBtn}
-              onClick={() => {
-                const schedule = getBusinessSchedule();
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  callActiveContact();
+                }}
+              >
+                {language === "es" ? "Cliente" : "Customer"}
+              </button>
 
-                const newVisit = {
-                  id: `schedule-${Date.now()}`,
-                  time: "12:00 PM",
-                  title: activeName
-                    ? `Visit with ${activeName}`
-                    : "Scheduled Visit",
-                  location: activeLocation || "Customer location",
-                  status: "Scheduled",
-                  conversationId,
-                  source: "chat",
-                  createdAt: new Date().toISOString(),
-                };
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowProfileCard(false);
+                  setShowThreadMenu(false);
+                  setShowJobRecords(true);
+                }}
+              >
+                {language === "es" ? "Línea de tiempo" : "Timeline"}
+              </button>
+            </div>
 
-                saveBusinessSchedule([newVisit, ...schedule]);
+            <div style={menuSection}>
+              <div style={menuSectionTitle}>
+                {language === "es" ? "RECURSOS" : "RESOURCES"}
+              </div>
 
-                const scheduleMessage = {
-                  id: Date.now(),
-                  sender: "business",
-                  role: "business",
-                  type: "schedule",
-                  text:
-                    language === "es"
-                      ? `📅 Visita programada para hoy a las ${newVisit.time}.`
-                      : `📅 Visit scheduled for today at ${newVisit.time}.`,
-                  schedule: newVisit,
-                  time: new Date().toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                  createdAt: new Date().toISOString(),
-                };
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  setShowJobRecords(true);
+                }}
+              >
+                {language === "es" ? "Documentos" : "Documents"}
+              </button>
 
-                const storageKey = `meetro_conversation_${conversationId}`;
-                const existingMessages = JSON.parse(
-                  localStorage.getItem(storageKey) || "[]"
-                );
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  setShowJobRecords(true);
+                }}
+              >
+                {language === "es" ? "Fotos" : "Photos"}
+              </button>
 
-                localStorage.setItem(
-                  storageKey,
-                  JSON.stringify([...existingMessages, scheduleMessage])
-                );
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  openChatScheduleModal();
+                }}
+              >
+                {language === "es" ? "Programación" : "Schedule"}
+              </button>
+            </div>
 
-                window.dispatchEvent(new Event("meetro-messages-updated"));
-                setShowThreadMenu(false);
-              }}
-            >
-              📅 {language === "es" ? "Programar visita" : "Schedule Visit"}
-            </button>
+            <div style={menuSection}>
+              <div style={menuSectionTitle}>
+                {language === "es" ? "CONVERSACIÓN" : "CONVERSATION"}
+              </div>
 
-            <button
-              style={threadMenuBtn}
-              onClick={() => {
-                localStorage.setItem("invoiceConversationId", conversationId);
-                localStorage.setItem("invoiceCustomerName", activeName || "Customer");
-                localStorage.setItem("invoiceCustomerLocation", activeLocation || "");
-                localStorage.setItem(
-                  "invoiceJobType",
-                  isEmergencyThread ? "Emergency Service" : "Service Job"
-                );
-                setShowThreadMenu(false);
-                localStorage.setItem("completionService", activeName || "Service Job");
-                localStorage.setItem("completionLocation", activeLocation || "");
-                localStorage.setItem("completionSource", isEmergencyThread ? "emergency" : "chat");
-                setPage("completionSheet");
-              }}
-            >
-              🧾 {language === "es" ? "Crear factura" : "Create Invoice"}
-            </button>
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  markUnread();
+                }}
+              >
+                {language === "es" ? "Marcar como no leído" : "Mark as unread"}
+              </button>
 
-            <button
-              style={{ ...threadMenuBtn, color: "#047857" }}
-              onClick={() => {
-                localStorage.setItem(`meetro_conversation_saved_${conversationId}`, "true");
-                localStorage.setItem("conversationSavedToHistory", "true");
-                localStorage.setItem("conversationArchivedAt", new Date().toISOString());
+              <button
+                style={threadMenuBtn}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  setTimeout(() => {
+                    threadSearchInputRef.current?.focus();
+                  }, 0);
+                }}
+              >
+                {language === "es" ? "Buscar en esta conversación" : "Search"}
+              </button>
 
-                if (isEmergencyThread) {
-                  localStorage.setItem("emergencySavedToHistory", "true");
-                  localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
-                  saveActiveJobSnapshot({ status: "completed" });
-                  localStorage.setItem("activeJobStatus", "completed");
-                  localStorage.setItem("emergencyDispatchStatus", "completed");
-                  localStorage.setItem("businessAcceptedEmergency", "false");
-                }
-
-                const registry = JSON.parse(
-                  localStorage.getItem("meetro_conversation_registry") || "[]"
-                );
-
-                const activeId =
-                  localStorage.getItem("activeConversationId") || conversationId;
-
-                const existingItem = registry.find(
-                  (item) => String(item.id) === String(activeId)
-                );
-
-                const savedItem = {
-                  ...(existingItem || {}),
-                  id: String(activeId),
-                  project_title: activeName || "Conversation",
-                  project_description:
-                    messages[messages.length - 1]?.text ||
-                    "Saved conversation history.",
-                  homeowner_email: activeName || "Contact",
-                  location: activeLocation || "Saved Contact",
-                  conversation_type: isEmergencyThread ? "emergency" : "standard",
-                  saved_to_history: true,
-                  status:
-                    language === "es"
-                      ? "Historial guardado"
-                      : "Saved History",
-                  archivedAt: new Date().toISOString(),
-                  savedAt: new Date().toISOString(),
-                  unread: false,
-                };
-
-                const updatedRegistry = [
-                  savedItem,
-                  ...registry.filter(
-                    (item) => String(item.id) !== String(activeId)
-                  ),
-                ];
-
-                localStorage.setItem(
-                  "meetro_conversation_registry",
-                  JSON.stringify(updatedRegistry)
-                );
-
-                window.dispatchEvent(new Event("meetro-messages-updated"));
-                window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
-
-                setShowThreadMenu(false);
-                setSaveNotice(
-                  language === "es"
-                    ? "Guardado en historial"
-                    : "Saved to history"
-                );
-              }}
-            >
-              💾 {language === "es" ? "Guardar historial" : "Save to History"}
-            </button>
-
-            <button
-              style={{ ...threadMenuBtn, color: "#ef4444" }}
-              onClick={() => {
-                setShowThreadMenu(false);
-                setShowClearConfirm(true);
-              }}
-            >
-              {language === "es" ? "Limpiar chat local" : "Clear local chat"}
-            </button>
+              <button
+                style={{ ...threadMenuBtn, color: "#ef4444" }}
+                onClick={() => {
+                  setShowThreadMenu(false);
+                  setShowClearConfirm(true);
+                }}
+              >
+                {language === "es" ? "Limpiar chat local" : "Clear local chat"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -2126,7 +3854,13 @@ const handleImageUpload = (event) => {
                     setEmergencyPanelExpanded((prev) => !prev)
                   }
                 >
-                  {emergencyPanelExpanded ? "−" : "+"}
+                  {emergencyPanelExpanded
+                    ? language === "es"
+                      ? "Ocultar ▲"
+                      : "Hide ▲"
+                    : language === "es"
+                    ? "Ver detalles ▼"
+                    : "View Details ▼"}
                 </button>
 
                 <div
@@ -2144,55 +3878,117 @@ const handleImageUpload = (event) => {
                       ? language === "es"
                         ? "Servicio completado"
                         : "Service Completed"
-                      : language === "es"
-                      ? "Emergencia activa"
-                      : "Emergency Active"}
+                      : emergencyServiceName}
                   </div>
 
                   <div style={emergencyBannerSubtitle}>
                     {activeAccountMode === "business" &&
                     emergencyDispatchStatus !== "completed"
-                      ? language === "es"
-                        ? "Cliente esperando actualización"
-                        : "Customer awaiting update"
-                      : emergencyStatusSubtitle}
+                      ? `${language === "es" ? "Cliente" : "Customer"}: ${emergencyCustomerName}`
+                      : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
                   </div>
                 </div>
               </div>
+
+              {currentViewerRole === "business" && (
+                <div style={emergencyChatActions}>
+                  {(!emergencyDispatchStatus ||
+                    emergencyDispatchStatus === "pending") && (
+                    <button
+                      style={emergencyPrimaryAction}
+                      onClick={() => advanceEmergencyFromChat("accepted")}
+                    >
+                      {t("acceptDispatch")}
+                    </button>
+                  )}
+
+                  {emergencyDispatchStatus === "accepted" && (
+                    <button
+                      style={emergencyPrimaryAction}
+                      onClick={() => advanceEmergencyFromChat("enroute")}
+                    >
+                      {t("onTheWay")}
+                    </button>
+                  )}
+
+                  {emergencyDispatchStatus === "enroute" && (
+                    <button
+                      style={emergencyPrimaryAction}
+                      onClick={() => advanceEmergencyFromChat("arrived")}
+                    >
+                      {t("arrived")}
+                    </button>
+                  )}
+
+                  {emergencyDispatchStatus === "arrived" && (
+                    <button
+                      style={emergencyPrimaryAction}
+                      onClick={() => advanceEmergencyFromChat("started")}
+                    >
+                      {t("startWork")}
+                    </button>
+                  )}
+
+                  {emergencyDispatchStatus === "started" && (
+                    <button
+                      style={completeFromChatBtn}
+                      onClick={() => advanceEmergencyFromChat("completed")}
+                    >
+                      {t("completeEmergency")}
+                    </button>
+                  )}
+
+                  {emergencyDispatchStatus === "completed" && (
+                    <button
+                      style={completeFromChatBtn}
+                      onClick={() => {
+                        localStorage.setItem(
+                          "completionService",
+                          emergencyServiceName || "Emergency Service"
+                        );
+                        localStorage.setItem(
+                          "completionLocation",
+                          activeLocation || activeEmergencyRecord.location || ""
+                        );
+                        localStorage.setItem("completionSource", "emergency");
+                        setPage("completionSheet");
+                      }}
+                    >
+                      {t("openCompletionSheet")}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {emergencyPanelExpanded && (
                 <>
                   <div style={emergencyPillRow}>
                     {emergencyDispatchStatus === "completed" ? (
                       <>
-                        <div style={completedEmergencyPill}>✅ Completed</div>
-                        <div style={completedEmergencyPill}>💾 History</div>
-                        <div style={completedEmergencyPill}>🧾 Summary</div>
+                        <div style={completedEmergencyPill}> {t("completed")}</div>
+                        <div style={completedEmergencyPill}>
+                           {language === "es" ? "Cierre pendiente" : "Closure pending"}
+                        </div>
+                        <div style={completedEmergencyPill}> {t("summary")}</div>
                       </>
                     ) : (
                       <>
                         <div style={emergencyPill}>
-                          🚨 {language === "es" ? "Activo" : "Active"}
+                           {t("active")}
                         </div>
 
                         <div style={emergencyPill}>
-                          ⏱ {emergencyDispatchStatus === "started"
-                            ? language === "es"
-                              ? "En progreso"
-                              : "In progress"
+                           {emergencyDispatchStatus === "started"
+                            ? t("inProgress")
                             : emergencyDispatchStatus === "arrived"
-                            ? language === "es"
-                              ? "Llegó"
-                              : "Arrived"
+                            ? t("arrived")
                             : "ETA 10m"}
                         </div>
 
                         <div style={emergencyPill}>
-                          📍 {emergencyDispatchStatus === "enroute"
-                            ? "Live"
-                            : language === "es"
-                            ? "Estado"
-                            : "Status"}
+                           {emergencyDispatchStatus === "enroute"
+                            ? t("live")
+                            : t("status")}
                         </div>
                       </>
                     )}
@@ -2200,12 +3996,12 @@ const handleImageUpload = (event) => {
 
                   <div style={emergencyTimeline}>
                 {[
-                  language === "es" ? "Solicitado" : "Requested",
-                  language === "es" ? "Aceptado" : "Accepted",
-                  language === "es" ? "En camino" : "On the way",
-                  language === "es" ? "Llegó" : "Arrived",
-                  language === "es" ? "Trabajando" : "Work started",
-                  language === "es" ? "Completado" : "Completed",
+                  t("requested"),
+                  t("accepted"),
+                  t("onTheWay"),
+                  t("arrived"),
+                  t("workStarted"),
+                  t("completed"),
                 ].map((step, index) => (
                   <div
                     key={step}
@@ -2226,78 +4022,18 @@ const handleImageUpload = (event) => {
                 ))}
                   </div>
 
-                  {activeAccountMode === "business" &&
-                    emergencyDispatchStatus === "started" && (
-                      <button
-                        style={completeFromChatBtn}
-                        onClick={() => {
-                          saveActiveJobSnapshot({ status: "completed" });
-                          localStorage.setItem("activeJobStatus", "completed");
-                          localStorage.setItem("emergencyDispatchStatus", "completed");
-                          localStorage.setItem("businessAcceptedEmergency", "false");
-                          localStorage.setItem("emergencyNeedsReview", "true");
-                          localStorage.setItem("emergencyCompletedAt", new Date().toISOString());
-                          localStorage.setItem("dispatchReturnPage", "conversationThread");
-                          window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
-                          localStorage.setItem("completionService", activeName || "Service Job");
-                localStorage.setItem("completionLocation", activeLocation || "");
-                localStorage.setItem("completionSource", isEmergencyThread ? "emergency" : "chat");
-                setPage("completionSheet");
-                        }}
-                      >
-                        ✅ {language === "es" ? "Completar servicio" : "Complete Service"}
-                      </button>
-                    )}
-
-                  {emergencyDispatchStatus === "completed" && (
+                  {emergencyDispatchStatus === "completed" &&
+                    currentViewerRole !== "business" && (
                     <div style={completedActionRow}>
                       <button
                         style={historyBtn}
                         onClick={() => {
-                          localStorage.setItem("emergencySavedToHistory", "true");
-                          localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
-                          localStorage.setItem(`meetro_conversation_saved_${conversationId}`, "true");
-                          localStorage.setItem("conversationSavedToHistory", "true");
-
-                          [
-                            "activeInvoiceWorkPerformed",
-                            "activeInvoiceLabor",
-                            "activeInvoiceMaterials",
-                            "activeInvoiceFee",
-                            "activeInvoiceDiscount",
-                            "activeInvoiceNotes",
-                            "activeInvoiceTotal",
-                            "activeInvoiceStatus",
-                            "emergencyLaborCharge",
-                            "emergencyMaterialCharge",
-                            "emergencyServiceFee",
-                            "emergencyDispatchStatus",
-                            "activeJobStatus",
-                            "businessAcceptedEmergency",
-                            "activeJobEta",
-                            "activeJobId",
-                            "activeJobService",
-                            "activeJobCustomer",
-                            "emergencyArchivedAt",
-                            "emergencyCompletedAt",
-                            "emergencyJobCompletedAt",
-                            "jobCompletedAt",
-                            "completedEmergency",
-                            "completedJob",
-                          ].forEach((key) => localStorage.removeItem(key));
-
-                          clearActiveJobSnapshot();
-                          localStorage.removeItem("emergencyDispatchStatus");
-                          localStorage.removeItem("activeJobStatus");
-                          localStorage.setItem("businessAcceptedEmergency", "false");
-
-                          window.dispatchEvent(new Event("meetroDispatchStatusChanged"));
-                          window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
-                          window.dispatchEvent(new Event("meetro-messages-updated"));
-                          setPage("messagesInbox");
+                          setPage("emergencyComplete");
                         }}
                       >
-                        💾 {language === "es" ? "Guardar historial" : "Save History"}
+                         {language === "es"
+                          ? "Revisar finalización"
+                          : "Review Completion"}
                       </button>
 
                       <button
@@ -2312,7 +4048,7 @@ const handleImageUpload = (event) => {
                           )
                         }
                       >
-                        🧾 {language === "es" ? "Resumen" : "Summary"}
+                         {t("summary")}
                       </button>
                     </div>
                   )}
@@ -2320,17 +4056,13 @@ const handleImageUpload = (event) => {
                   {emergencyDispatchStatus !== "completed" && (
                     <div style={routePreviewCard}>
                     <div style={routePreviewTop}>
-                      <div>
+                      <div style={routePreviewTitleWrap}>
                         <div style={routePreviewTitle}>
-                          {language === "es"
-                            ? "Vista previa de ruta"
-                            : "Live Route Preview"}
+                          {t("liveRoutePreview")}
                         </div>
 
                         <div style={routePreviewSubtitle}>
-                          {language === "es"
-                            ? "Profesional → Cliente"
-                            : "Professional → Customer"}
+                          {t("professionalToCustomer")}
                         </div>
                       </div>
 
@@ -2349,18 +4081,16 @@ const handleImageUpload = (event) => {
                           );
                         }}
                       >
-                        {language === "es"
-                          ? "Ver ruta"
-                          : "View Route"}
+                        {t("viewRoute")}
                       </button>
                     </div>
 
                     <div style={routeMapPlaceholder}>
                       <div style={routeLine}></div>
 
-                      <div style={routePinStart}>🚐</div>
+                      <div style={routePinStart}></div>
 
-                      <div style={routePinEnd}>📍</div>
+                      <div style={routePinEnd}></div>
                     </div>
                     </div>
                   )}
@@ -2370,14 +4100,185 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          <div style={messagesScroll}>
-          <div style={dateRow}>
-            <span style={dateLine}></span>
-            <strong>{language === "es" ? "Hoy" : "Today"}</strong>
-            <span style={dateLine}></span>
-          </div>
+          {showScheduleModal && (
+            <div style={scheduleModalOverlay}>
+              <div style={scheduleModalCard}>
+                <h3 style={scheduleModalTitle}>
+                  {language === "es"
+                    ? "Programar evaluación / visita"
+                    : "Schedule Evaluation / Visit"}
+                </h3>
 
-          {messages.map((msg) => {
+                <p style={scheduleModalSubtitle}>
+                  {language === "es"
+                    ? "Agrega los detalles de la evaluación o visita para guardarla en Work Center y compartirla en el chat."
+                    : "Add the evaluation or visit details to save it in Work Center and share it in chat."}
+                </p>
+
+                <select
+                  style={scheduleModalInput}
+                  value={chatScheduleForm.appointmentType}
+                  onChange={(e) =>
+                    setChatScheduleForm({
+                      ...chatScheduleForm,
+                      appointmentType: e.target.value,
+                    })
+                  }
+                >
+                  <option value="walkthrough">
+                    {language === "es" ? "Recorrido" : "Walkthrough"}
+                  </option>
+                  <option value="estimate">
+                    {language === "es" ? "Visita de estimado" : "Estimate Visit"}
+                  </option>
+                  <option value="consultation">
+                    {language === "es" ? "Consulta" : "Consultation"}
+                  </option>
+                  <option value="virtual">
+                    {language === "es" ? "Reunión virtual" : "Virtual Meeting"}
+                  </option>
+                  <option value="emergency">
+                    {language === "es" ? "Despacho de emergencia" : "Emergency Dispatch"}
+                  </option>
+                </select>
+
+                <input
+                  style={scheduleModalInput}
+                  value={chatScheduleForm.title}
+                  placeholder={language === "es" ? "Título de la cita" : "Appointment title"}
+                  onChange={(e) =>
+                    setChatScheduleForm({
+                      ...chatScheduleForm,
+                      title: e.target.value,
+                    })
+                  }
+                />
+
+                <div style={scheduleModalGrid}>
+                  <input
+                    style={scheduleModalInput}
+                    type="date"
+                    value={chatScheduleForm.date}
+                    onChange={(e) =>
+                      setChatScheduleForm({
+                        ...chatScheduleForm,
+                        date: e.target.value,
+                      })
+                    }
+                  />
+
+                  <input
+                    style={scheduleModalInput}
+                    type="time"
+                    value={chatScheduleForm.time}
+                    onChange={(e) =>
+                      setChatScheduleForm({
+                        ...chatScheduleForm,
+                        time: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <input
+                  style={scheduleModalInput}
+                  value={chatScheduleForm.location}
+                  placeholder={language === "es" ? "Ubicación" : "Location"}
+                  onChange={(e) =>
+                    setChatScheduleForm({
+                      ...chatScheduleForm,
+                      location: e.target.value,
+                    })
+                  }
+                />
+
+                <textarea
+                  style={scheduleModalTextarea}
+                  value={chatScheduleForm.notes}
+                  placeholder={language === "es" ? "Notas" : "Notes"}
+                  onChange={(e) =>
+                    setChatScheduleForm({
+                      ...chatScheduleForm,
+                      notes: e.target.value,
+                    })
+                  }
+                />
+
+                <div style={scheduleModalActions}>
+                  <button
+                    style={scheduleModalSecondary}
+                    onClick={() => setShowScheduleModal(false)}
+                  >
+                    {language === "es" ? "Cancelar" : "Cancel"}
+                  </button>
+
+                  <button
+                    style={scheduleModalPrimary}
+                    onClick={saveChatScheduleAppointment}
+                  >
+                    {language === "es" ? "Guardar cita" : "Save Appointment"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="chat-messages conversation-messages" style={messagesScroll}>
+            <div style={threadSearchRow}>
+              <div style={threadSearchInputWrap}>
+                <span style={threadSearchIcon} aria-hidden="true">
+                  <IconSearchClean />
+                </span>
+
+                <input
+                  ref={threadSearchInputRef}
+                  style={threadSearchInput}
+                  type="text"
+                  value={threadSearchTerm}
+                  onChange={(event) => setThreadSearchTerm(event.target.value)}
+                  placeholder={
+                    language === "es"
+                      ? "Buscar en la conversación"
+                      : "Search in conversation"
+                  }
+                />
+
+                {hasThreadSearch ? (
+                  <button
+                    type="button"
+                    style={threadSearchClear}
+                    onClick={() => setThreadSearchTerm("")}
+                    aria-label={language === "es" ? "Limpiar búsqueda" : "Clear search"}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={dateRow}>
+              <span style={dateLine}></span>
+              <strong>{language === "es" ? "Hoy" : "Today"}</strong>
+              <span style={dateLine}></span>
+            </div>
+
+            {threadMessages.length === 0 && hasThreadSearch ? (
+              <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
+                {language === "es"
+                  ? "No se encontró esta conversación"
+                  : "No messages found in this conversation."}
+              </div>
+            ) : null}
+
+            {threadMessages.length === 0 && !hasThreadSearch ? (
+              <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
+                {language === "es"
+                  ? "Aún no hay mensajes en esta conversación."
+                  : "No messages yet."}
+              </div>
+            ) : null}
+
+          {threadMessages.map((msg) => {
             const mine = msg.senderRole === currentViewerRole;
 
             const isWorkflow = isWorkflowType(msg.type);
@@ -2386,16 +4287,24 @@ const handleImageUpload = (event) => {
               : null;
 
             const workflowRenderProps = isWorkflow
-              ? {
+                ? {
                   msg,
                   language,
                   currentViewerRole,
-                  conversation,
+                  reviewProjectAction: () => openReviewProjectFromMessage(msg),
+                  conversation: {
+                    id: conversationId,
+                    requestId: selectedQuoteRequest?.requestId || selectedQuoteRequest?.id || conversationId,
+                    projectTitle: activeProjectTitle || activeName || "Project",
+                    title: activeProjectTitle || activeName || "Project",
+                    type: conversationType,
+                  },
                   setMessages,
                   setMessageText,
                   setPage,
                 }
               : null;
+            const isReceiptDocument = isReceiptDocumentMessage(msg);
 
             const isOperational =
               msg.type === "update" ||
@@ -2407,7 +4316,10 @@ const handleImageUpload = (event) => {
               msg.type === "schedule" ||
               msg.type === "location" ||
               msg.type === "scan" ||
-              msg.type === "photoWorkflow";
+              msg.type === "photoWorkflow" ||
+              isReceiptDocument;
+            const hideDocumentOperationalHeader =
+              isDocumentWorkflowMessage(msg) || isReceiptDocument;
 
             if (isOperational) {
               return (
@@ -2419,19 +4331,90 @@ const handleImageUpload = (event) => {
                     overscrollBehavior: "contain",
                   }}
                 >
-                  <div style={operationalCard} onClick={() => openJobStory(msg)}>
-                    <div style={operationalHeader}>
+                  <div style={{ position: "relative", overflow: "hidden" }}>
+                    {msg.type === "schedule" &&
+                      currentViewerRole === "business" &&
+                      swipedScheduleId === msg.id && (
+                      <button
+                        style={scheduleDeleteSwipeButton}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setScheduleDeleteCandidate(msg);
+                        }}
+                      >
+                        {language === "es" ? "Eliminar" : "Delete"}
+                      </button>
+                    )}
+
+                    <div
+                      style={{
+                        ...operationalCard,
+                        touchAction: msg.type === "schedule" ? "pan-y" : "auto",
+                        transform:
+                          msg.type === "schedule" && swipedScheduleId === msg.id
+                            ? "translateX(-76px)"
+                            : "translateX(0)",
+                        transition: "transform 0.2s ease",
+                      }}
+                      onTouchStart={(event) => {
+                        if (msg.type === "schedule" && currentViewerRole === "business") {
+                          handleScheduleSwipeStart(event);
+                        }
+                      }}
+                      onTouchEnd={(event) => {
+                        if (msg.type === "schedule" && currentViewerRole === "business") {
+                          handleScheduleSwipeEnd(event, msg);
+                        }
+                      }}
+                      onClick={() =>
+                        msg.type === "schedule"
+                          ? openAppointmentDetails(msg)
+                          : openJobStory(msg)
+                      }
+                    >
+                    {!hideDocumentOperationalHeader ? (
+                      <div style={operationalHeader}>
                       <span style={operationalIcon}>
-                        {msg.type === "update" && "📣"}
-                        {msg.type === "approval" && "✅"}
-                        {msg.type === "payment" && "💵"}
-                        {msg.type === "materials" && "🧰"}
-                        {msg.type === "materials-list" && "📦"}
-                        {workflowMessageProps?.icon}
-                        {msg.type === "schedule" && "📅"}
-                        {msg.type === "location" && "📍"}
-                        {msg.type === "scan" && "📄"}
-                        {msg.type === "photoWorkflow" && (msg.icon || "📸")}
+                        {msg.type === "update" && <IconUpdateClean />}
+                        {msg.type === "approval" && <IconApprovalClean />}
+                        {msg.type === "payment" && <IconPaymentClean />}
+                        {(msg.type === "materials" || msg.type === "materials-list") && (
+                          <IconMaterialsClean />
+                        )}
+                        {(msg.type === "schedule" || msg.type === "schedule-update") && (
+                          <IconCalendarClean />
+                        )}
+                        {(msg.type === "location" || msg.type === "location-share") && (
+                          <IconLocationClean />
+                        )}
+                        {(msg.type === "scan" || msg.type === "scan-share") && (
+                          <IconScanClean />
+                        )}
+                        {msg.type === "photoWorkflow" &&
+                          (resolvePhotoWorkflowIcon(msg.photoType || msg.workflowType) || workflowMessageProps?.icon)}
+                        {(msg.type === "workflow_change_request" || msg.type === "workflow-change") && (
+                          <IconChangeRequestClean />
+                        )}
+                        {!msg.type &&
+                          workflowMessageProps?.icon}
+                        {msg.type &&
+                          ![
+                            "update",
+                            "approval",
+                            "payment",
+                            "materials",
+                            "materials-list",
+                            "schedule",
+                            "schedule-update",
+                            "location",
+                            "location-share",
+                            "scan",
+                            "scan-share",
+                            "photoWorkflow",
+                            "workflow_change_request",
+                            "workflow-change",
+                          ].includes(msg.type) &&
+                          workflowMessageProps?.icon}
                       </span>
 
                       <div>
@@ -2463,11 +4446,12 @@ const handleImageUpload = (event) => {
                                 ? "Materiales enviados al cliente"
                                 : "Materials sent to customer"
                               : msg.type === "schedule" && msg.schedule
-                              ? `${msg.schedule.date || ""} • ${msg.schedule.time || ""}`
+                              ? getDisplayScheduleSummary(msg.schedule)
                               : "")}
                         </div>
                       </div>
                     </div>
+                    ) : null}
 
                     {msg.imageUrl && (
                       <img
@@ -2476,27 +4460,104 @@ const handleImageUpload = (event) => {
                         style={operationalImage}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPreviewImage(msg.imageUrl);
+                          openImageGallery(msg);
                         }}
                       />
                     )}
 
                     {msg.type === "schedule" && msg.schedule && (
                       <div style={scheduleCardDetails}>
+                        <div style={scheduleCustomerTitle}>
+                          {getScheduleCardTitle(msg)}
+                        </div>
                         <div style={scheduleDetailRow}>
-                          <span>{language === "es" ? "Fecha" : "Date"}</span>
+                          <span>
+                            {isWorkScheduleMessage(msg)
+                              ? language === "es"
+                                ? "Servicios"
+                                : "Services"
+                              : t("appointmentType", language)}
+                          </span>
+                          <strong>
+                            {isWorkScheduleMessage(msg)
+                              ? getScheduleServices(msg).length > 1
+                                ? language === "es"
+                                  ? `${getScheduleServices(msg).length} servicios`
+                                  : `${getScheduleServices(msg).length} services`
+                                : getScheduleServices(msg)[0] ||
+                                  t("scheduledVisit", language)
+                              : msg.schedule.appointmentType ||
+                                msg.schedule.type ||
+                                t("scheduledVisit", language)}
+                          </strong>
+                        </div>
+
+                        <div style={scheduleDetailRow}>
+                          <span>{t("date", language)}</span>
                           <strong>{msg.schedule.date || "—"}</strong>
                         </div>
 
                         <div style={scheduleDetailRow}>
-                          <span>{language === "es" ? "Hora" : "Time"}</span>
-                          <strong>{msg.schedule.time || "—"}</strong>
+                          <span>{t("time", language)}</span>
+                          <strong>{getDisplayScheduleTime(msg.schedule.time)}</strong>
                         </div>
 
                         <div style={scheduleDetailRow}>
                           <span>{language === "es" ? "Lugar" : "Location"}</span>
                           <strong>{msg.schedule.location || "—"}</strong>
                         </div>
+
+                        {isWorkScheduleMessage(msg) &&
+                          getScheduleServices(msg).length > 1 && (
+                            <div style={scheduleDetailNotes}>
+                              <span>{language === "es" ? "Servicios" : "Services"}</span>
+                              <ul style={scheduleServiceList}>
+                                {getScheduleServices(msg).map((service, index) => (
+                                  <li key={`${service}-${index}`}>{service}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                        {msg.schedule.notes && (
+                          <div style={scheduleDetailNotes}>
+                            <span>{t("scheduleNotes", language)}</span>
+                            <p>{msg.schedule.notes}</p>
+                          </div>
+                        )}
+
+                        <div style={scheduleStatusPill}>
+                          {getAppointmentConfirmationLabel(
+                            getAppointmentConfirmationStatus(msg)
+                          )}
+                        </div>
+
+                        {isCustomerFacingPendingAppointment(msg) && (
+                          <div style={appointmentActionRow}>
+                            <button
+                              style={appointmentConfirmButton}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateScheduleConfirmationStatus(msg, "confirmed");
+                              }}
+                            >
+                              {t("confirmAppointment", language)}
+                            </button>
+
+                            <button
+                              style={appointmentRequestTimeButton}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateScheduleConfirmationStatus(
+                                  msg,
+                                  "change_requested"
+                                );
+                              }}
+                            >
+                              {t("requestDifferentTime", language)}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2505,11 +4566,11 @@ const handleImageUpload = (event) => {
                         <div style={materialsListCard}>
                           {msg.materials.slice(0, 6).map((item) => (
                             <div key={item.id || item.title} style={materialsListRow}>
-                              <span>
+                              <span style={materialsListName}>
                                 {item.title}
                               </span>
 
-                              <strong>
+                              <strong style={materialsListAmount}>
                                 {item.quantity || "1"} × {item.status || "needed"}
                               </strong>
                             </div>
@@ -2537,16 +4598,33 @@ const handleImageUpload = (event) => {
                     )}
 
                     {isWorkflowMessageType(msg, "workflow_change_request") && (
-                      <WorkflowRenderer
-                        {...workflowRenderProps}
-                        styles={{
-                          changeRequestBody,
-                          changeRequestText,
-                          changeRequestStatus,
-                          changeRequestActions,
-                          reviewChangeButton,
-                          revisedQuoteButton,
-                        }}
+                      <UniversalDocumentCard
+                        documentType="changeOrder"
+                        language={language}
+                        projectTitle={
+                          msg.projectTitle ||
+                          msg.title ||
+                          activeProjectTitle ||
+                          selectedQuoteRequest?.projectTitle ||
+                          selectedQuoteRequest?.title ||
+                          t("project", language)
+                        }
+                        amount={getChangeOrderAmount(msg)}
+                        status={getChangeOrderDocumentStatus(msg, language)}
+                        icon="proposal"
+                        reviewProjectAction={() =>
+                          openReviewProjectFromMessage({
+                            ...selectedQuoteRequest,
+                            ...msg,
+                            requestId:
+                              msg.requestId ||
+                              msg.request_id ||
+                              selectedQuoteRequest?.requestId ||
+                              selectedQuoteRequest?.id ||
+                              selectedHomeownerRequestId ||
+                              conversationId,
+                          })
+                        }
                       />
                     )}
 
@@ -2595,6 +4673,45 @@ const handleImageUpload = (event) => {
                       />
                     )}
 
+                    {isReceiptDocument && (
+                      <UniversalDocumentCard
+                        documentType="receipt"
+                        language={language}
+                        projectTitle={
+                          msg.projectTitle ||
+                          msg.title ||
+                          msg.receipt?.service ||
+                          activeProjectTitle ||
+                          selectedQuoteRequest?.projectTitle ||
+                          selectedQuoteRequest?.title ||
+                          t("documentReceipt", language)
+                        }
+                        amount={
+                          msg.receipt?.total ||
+                          msg.receipt?.amount ||
+                          msg.total ||
+                          msg.amount ||
+                          ""
+                        }
+                        status={getReceiptDocumentStatus(msg, language)}
+                        icon="quickInvoice"
+                        reviewProjectAction={() =>
+                          openReviewProjectFromMessage({
+                            ...selectedQuoteRequest,
+                            ...msg,
+                            ...msg.receipt,
+                            requestId:
+                              msg.requestId ||
+                              msg.request_id ||
+                              selectedQuoteRequest?.requestId ||
+                              selectedQuoteRequest?.id ||
+                              selectedHomeownerRequestId ||
+                              conversationId,
+                          })
+                        }
+                      />
+                    )}
+
                     {isWorkflowMessageType(msg, "workflow_materials_approval") && (
                       <MaterialsWorkflowPresentation
                         msg={msg}
@@ -2618,6 +4735,43 @@ const handleImageUpload = (event) => {
                           materialsChangeNotice,
                           materialsCustomerProvidingNotice,
                         }}
+                      />
+                    )}
+
+                    {isWorkflowMessageType(msg, "workflow_quote_sent") && (
+                      <UniversalDocumentCard
+                        documentType="quote"
+                        language={language}
+                        projectTitle={
+                          msg.projectTitle ||
+                          msg.title ||
+                          selectedQuoteRequest?.projectTitle ||
+                          selectedQuoteRequest?.title ||
+                          t("documentQuote", language)
+                        }
+                        amount={
+                          msg.total ||
+                          msg.amount ||
+                          msg.quoteAmount ||
+                          selectedQuoteRequest?.total ||
+                          selectedQuoteRequest?.quoteAmount ||
+                          selectedQuoteRequest?.amount
+                        }
+                        status={getQuoteDocumentStatus(msg, language)}
+                        icon="quote"
+                        reviewProjectAction={() =>
+                          openReviewProjectFromMessage({
+                            ...selectedQuoteRequest,
+                            ...msg,
+                            requestId:
+                              msg.requestId ||
+                              msg.request_id ||
+                              selectedQuoteRequest?.requestId ||
+                              selectedQuoteRequest?.id ||
+                              selectedHomeownerRequestId ||
+                              conversationId,
+                          })
+                        }
                       />
                     )}
 
@@ -2645,7 +4799,8 @@ const handleImageUpload = (event) => {
                       />
                     )}
 
-                    <div style={operationalTime}>{msg.time}</div>
+                    <div style={operationalTime}>{formatMessageTime(msg.time)}</div>
+                    </div>
                   </div>
                 </div>
               );
@@ -2704,27 +4859,42 @@ const handleImageUpload = (event) => {
                     </div>
                   )}
 
-                  {msg.type === "image" && msg.imageUrl && (
-                    <>
-                      {msg.title && (
-                        <div style={imageTitle}>{msg.title}</div>
-                      )}
+                  {msg.type === "image" && msg.imageUrl && (() => {
+                    const mediaText = [msg.title, msg.subtitle, msg.text];
+                    const normalized = (value) =>
+                      (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+                    const imageLines = mediaText.filter(Boolean).filter(
+                      (value, index, array) =>
+                        array.findIndex((item) => normalized(item) === normalized(value)) === index
+                    );
+                    const shouldRenderImageText = Boolean(
+                      msg.text &&
+                        !isDefaultImageCaption(msg.text)
+                    );
 
-                      {msg.subtitle && (
-                        <div style={imageSubtitle}>{msg.subtitle}</div>
-                      )}
+                    return (
+                      <>
+                        {imageLines[0] ? <div style={imageTitle}>{imageLines[0]}</div> : null}
+                        {imageLines[1] ? (
+                          <div style={imageSubtitle}>{imageLines[1]}</div>
+                        ) : null}
 
-                      <img
-                        src={msg.imageUrl}
-                        alt=""
-                        style={imageMessage}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPreviewImage(msg.imageUrl);
-                        }}
-                      />
-                    </>
-                  )}
+                        <img
+                          src={msg.imageUrl}
+                          alt=""
+                          style={imageMessage}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openImageGallery(msg);
+                          }}
+                        />
+
+                        {shouldRenderImageText ? (
+                          <div style={imageBodyText}>{msg.text}</div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
 
                   {msg.type === "location" && (
                     <div style={richCard}>
@@ -2750,10 +4920,12 @@ const handleImageUpload = (event) => {
                     </div>
                   )}
 
-                  <div>{msg.text}</div>
+                  {msg.type !== "image" ? (
+                    <div style={messageTextBlock}>{msg.text}</div>
+                  ) : null}
 
                   <div style={timeRow}>
-                    <span>{msg.time}</span>
+                    <span>{formatMessageTime(msg.time)}</span>
                     {mine && !msg.unsent && <span>{getStatusLabel(msg.status)}</span>}
                   </div>
                 </div>
@@ -2784,12 +4956,14 @@ const handleImageUpload = (event) => {
               {language === "es" ? "Copiar" : "Copy"}
             </button>
 
-            <button
-              style={actionBtn}
-              onClick={() => saveMessageAsSchedule(activeMessage)}
-            >
-              📅 {language === "es" ? "Guardar como visita" : "Save as Schedule"}
-            </button>
+            {!isHiringThread && (
+              <button
+                style={actionBtn}
+                onClick={() => saveMessageAsSchedule(activeMessage)}
+              >
+                 {language === "es" ? "Guardar como visita" : "Save as Schedule"}
+              </button>
+            )}
 
             {(activeMessage.senderRole === currentViewerRole) && (
               <button
@@ -2804,10 +4978,10 @@ const handleImageUpload = (event) => {
 
         </div>
 
-        <div style={bottomStack}>
-          {!showAttachMenu && (
-            <div style={quickWrap}>
-              {quickReplies.map((reply) => (
+        <div className="chat-bottom-stack" style={bottomStack}>
+          {!showAttachMenu && !isLandscape && !isComposerFocused && (
+            <div className="quick-replies chat-quick-replies" style={quickWrap}>
+              {quickReplies.slice(0, 4).map((reply) => (
                 <button
                   key={reply}
                   style={{
@@ -2861,160 +5035,124 @@ const handleImageUpload = (event) => {
 
           {showAttachMenu && (
             <div style={attachMenu}>
-              <button style={attachMenuBtn} onClick={() => cameraInputRef.current.click()}>
-                <span style={attachIconCircle}>
-                  <IconCameraClean />
-                </span>
-                <span>{language === "es" ? "Cámara" : "Camera"}</span>
-              </button>
-
-              <button style={attachMenuBtn} onClick={() => fileInputRef.current.click()}>
-                <span style={attachIconCircle}>
-                  <IconPhotosClean />
-                </span>
-                <span>{language === "es" ? "Fotos" : "Photos"}</span>
-              </button>
-
-              <button style={attachMenuBtn} onClick={sendLocationCard}>
-                <span style={attachIconCircle}>
-                  <IconLocationClean />
-                </span>
-                <span>{language === "es" ? "Ubicación" : "Location"}</span>
-              </button>
-
-              <button style={attachMenuBtn} onClick={sendScanCard}>
-                <span style={attachIconCircle}>
-                  <IconScanClean />
-                </span>
-                <span>{language === "es" ? "Escanear" : "Scan"}</span>
-              </button>
-
-              {currentViewerRole === "business" ? (
-                <>
-                  <button style={attachMenuBtn} onClick={sendUpdateCard}>
+              <div style={menuSection}>
+                <div style={menuSectionTitle}>
+                  {language === "es" ? "Compartir" : "Share"}
+                </div>
+                <div style={attachMenuGrid}>
+                  <button style={attachMenuBtn} onClick={openConversationCamera}>
                     <span style={attachIconCircle}>
-                      <IconUpdateClean />
+                      <IconCameraClean />
                     </span>
-                    <span>{language === "es" ? "Actualización" : "Update"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={sendApprovalCard}>
-                    <span style={attachIconCircle}>
-                      <IconApprovalClean />
-                    </span>
-                    <span>{language === "es" ? "Aprobación" : "Approval"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={sendPaymentCard}>
-                    <span style={attachIconCircle}>
-                      <IconPaymentClean />
-                    </span>
-                    <span>{language === "es" ? "Pago" : "Payment"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={sendMaterialsCard}>
-                    <span style={attachIconCircle}>
-                      <IconMaterialsClean />
-                    </span>
-                    <span>{language === "es" ? "Materiales" : "Materials"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={() => startWorkflowPhotoUpload("before")}>
-                    <span style={attachIconCircle}>📸</span>
-                    <span>{language === "es" ? "Antes" : "Before"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={() => startWorkflowPhotoUpload("progress")}>
-                    <span style={attachIconCircle}>🔧</span>
-                    <span>{language === "es" ? "Progreso" : "Progress"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={() => startWorkflowPhotoUpload("issue")}>
-                    <span style={attachIconCircle}>⚠️</span>
-                    <span>{language === "es" ? "Problema" : "Issue"}</span>
-                  </button>
-
-                  <button style={attachMenuBtn} onClick={() => startWorkflowPhotoUpload("completion")}>
-                    <span style={attachIconCircle}>✅</span>
-                    <span>{language === "es" ? "Finalizado" : "Completion"}</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    style={attachMenuBtn}
-                    onClick={() => {
-                      const workflowMessage = {
-                        id: `workflow-change-${Date.now()}`,
-                        type: "workflow_change_request",
-                        sender: "me",
-                        senderRole: currentViewerRole,
-                        title:
-                          language === "es"
-                            ? "Solicitud de cambio"
-                            : "Change Request",
-                        subtitle:
-                          language === "es"
-                            ? "Cambio solicitado por el cliente"
-                            : "Customer requested project change",
-                        text:
-                          language === "es"
-                            ? "Me gustaría hacer un cambio en este proyecto."
-                            : "I would like to request a change to this project.",
-                        priority: "normal",
-                        status: "pending_review",
-                        time: new Date().toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        }),
-                        createdAt: Date.now(),
-                      };
-
-                      setMessages((prev) => [...prev, workflowMessage]);
-                      setShowAttachMenu(false);
-
-                      window.dispatchEvent(
-                        new Event("meetro-messages-updated")
-                      );
-                    }}
-                  >
-                    <span style={attachIconCircle}>🔁</span>
-                    <span>
-                      {language === "es"
-                        ? "Solicitar cambio"
-                        : "Request Change"}
-                    </span>
+                    <span>{language === "es" ? "Cámara" : "Camera"}</span>
                   </button>
 
                   <button
                     style={attachMenuBtn}
-                    onClick={() => {
-                      setPendingPhotoPurpose("explain");
-                      fileInputRef.current.click();
-                    }}
+                    onClick={() => fileInputRef.current.click()}
                   >
-                    <span style={attachIconCircle}>🖼️</span>
-                    <span>{language === "es" ? "Explicar con fotos" : "Explain with Photos"}</span>
+                    <span style={attachIconCircle}>
+                      <IconPhotosClean />
+                    </span>
+                    <span>{language === "es" ? "Fotos" : "Photos"}</span>
                   </button>
-                </>
-              )}
 
-              <button
-                style={attachMenuBtn}
-                onClick={() => {
-                  setShowAttachMenu(false);
-                  stopAiSpeech();
-                  setShowJobRecords(true);
-                }}
-              >
-                <span style={attachIconCircle}>📁</span>
-                <span>
-                  {language === "es"
-                    ? "Registro"
-                    : "Job Record"}
-                  {jobRecordCount > 0 ? ` (${jobRecordCount})` : ""}
-                </span>
-              </button>
+                  <button style={attachMenuBtn} onClick={sendLocationCard}>
+                    <span style={attachIconCircle}>
+                      <IconLocationClean />
+                    </span>
+                    <span>{language === "es" ? "Ubicación" : "Location"}</span>
+                  </button>
+
+                  <button style={attachMenuBtn} onClick={sendScanCard}>
+                    <span style={attachIconCircle}>
+                      <IconScanClean />
+                    </span>
+                    <span>{language === "es" ? "Escanear" : "Scan"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div style={menuSection}>
+                <div style={menuSectionTitle}>
+                  {language === "es" ? "Flujo de trabajo" : "Workflow"}
+                </div>
+                <div style={attachMenuGrid}>
+                  {!isHiringThread && (
+                    <>
+                      <button style={menuActionPrimary} onClick={openChatScheduleModal}>
+                        <span style={attachIconCircle}>
+                          <IconCalendarClean />
+                        </span>
+                        <span>{language === "es" ? "Programar" : "Schedule"}</span>
+                      </button>
+
+                      <button
+                        style={menuActionPrimary}
+                        onClick={() => startWorkflowPhotoUpload("progress")}
+                      >
+                        <span style={attachIconCircle}>
+                          {resolvePhotoWorkflowIcon("progress")}
+                        </span>
+                        <span>
+                          {language === "es" ? "Foto de progreso" : "Progress Photo"}
+                        </span>
+                      </button>
+
+                      <button
+                        style={menuActionPrimary}
+                        onClick={() => startWorkflowPhotoUpload("issue")}
+                      >
+                        <span style={attachIconCircle}>
+                          {resolvePhotoWorkflowIcon("issue")}
+                        </span>
+                        <span>{language === "es" ? "Reportar problema" : "Report Issue"}</span>
+                      </button>
+
+                      <button style={menuActionPrimary} onClick={sendMaterialsCard}>
+                        <span style={attachIconCircle}>
+                          <IconMaterialsClean />
+                        </span>
+                        <span>{language === "es" ? "Materiales" : "Materials"}</span>
+                      </button>
+
+                      <button style={menuActionPrimary} onClick={sendPaymentCard}>
+                        <span style={attachIconCircle}>
+                          <IconPaymentClean />
+                        </span>
+                        <span>{language === "es" ? "Pago" : "Payment"}</span>
+                      </button>
+
+                      <button
+                        style={menuActionPrimary}
+                        onClick={() => startWorkflowPhotoUpload("completion")}
+                      >
+                        <span style={attachIconCircle}>
+                          {resolvePhotoWorkflowIcon("completion")}
+                        </span>
+                        <span>{language === "es" ? "Finalización" : "Completion"}</span>
+                      </button>
+
+                      <button
+                        style={menuActionSecondary}
+                        onClick={() => {
+                          setShowAttachMenu(false);
+                          stopAiSpeech();
+                          setShowJobRecords(true);
+                        }}
+                      >
+                        <span style={attachIconCircle}>
+                          <IconDocumentClean />
+                        </span>
+                        <span>
+                          {language === "es" ? "Registros" : "Job Records"}
+                          {jobRecordCount > 0 ? ` (${jobRecordCount})` : ""}
+                        </span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
 
             </div>
           )}
@@ -3070,8 +5208,9 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          <div style={composer}>
+          <div className="chat-composer message-composer" style={composer}>
             <button
+              className="chat-plus-button message-plus-button"
               style={{ ...circleBtn, ...(showAttachMenu ? activeCircleBtn : {}) }}
               onClick={() => {
                 setShowCallMenu(false);
@@ -3083,12 +5222,15 @@ const handleImageUpload = (event) => {
               <IconPlus />
             </button>
 
-            <div style={inputWrap}>
-              <textarea
+            <div className="chat-input-wrapper message-input-wrapper" style={inputWrap}>
+            <textarea
+                className="chat-message-input message-input"
                 ref={textareaRef}
                 style={input}
                 value={messageText}
                 rows={1}
+                onFocus={() => setIsComposerFocused(true)}
+                onBlur={() => setIsComposerFocused(false)}
                 onChange={(e) => {
                   setMessageText(e.target.value);
                   e.target.style.height = "auto";
@@ -3110,6 +5252,7 @@ const handleImageUpload = (event) => {
             </div>
 
             <button
+              className="chat-mic-button message-mic-button"
               style={circleBtn}
               onClick={() =>
                 alert(
@@ -3123,6 +5266,7 @@ const handleImageUpload = (event) => {
             </button>
 
             <button
+              className="chat-send-button message-send-button"
               style={{
                 ...sendBtn,
                 ...(isEmergencyThread ? emergencySendBtn : {}),
@@ -3180,7 +5324,7 @@ const handleImageUpload = (event) => {
 
         {saveNotice && (
           <div style={saveToast}>
-            ✅ {saveNotice}
+             {saveNotice}
           </div>
         )}
 
@@ -3191,7 +5335,7 @@ const handleImageUpload = (event) => {
               <div style={recordHeader}>
                 <div>
                   <h2 style={recordTitle}>
-                    📁 {language === "es" ? "Registro del trabajo" : "Job Record"}
+                     {language === "es" ? "Registro del trabajo" : "Job Record"}
                   </h2>
 
                   <p style={recordSubtitle}>
@@ -3221,7 +5365,7 @@ const handleImageUpload = (event) => {
 
               <div style={recordTools}>
                 <button style={recordSpeakBtn} onClick={speakJobRecords}>
-                  {aiSpeaking ? "⏹ Stop AI Voice" : "🔊 " + (language === "es" ? "Explicar registro" : "AI Speak Job Record")}
+                  {aiSpeaking ? " Stop AI Voice" : " " + (language === "es" ? "Explicar registro" : "AI Speak Job Record")}
                 </button>
               </div>
 
@@ -3247,20 +5391,29 @@ const handleImageUpload = (event) => {
                         <div style={timelineLine} />
 
                         <div style={timelineDot}>
-                          {item.type === "approval" && "✅"}
-                          {item.type === "payment" && "💵"}
-                          {item.type === "materials" && "🧰"}
-                          {item.type === "location" && "📍"}
-                          {item.type === "scan" && "📄"}
-                          {item.type === "photoWorkflow" && "📸"}
-                          {item.type === "update" && "📣"}
+                          {item.type === "approval" && <IconApprovalClean />}
+                          {item.type === "payment" && <IconPaymentClean />}
+                          {(item.type === "materials" ||
+                            item.type === "materials-list") && <IconMaterialsClean />}
+                          {(item.type === "location" || item.type === "location-share") && <IconLocationClean />}
+                          {(item.type === "scan" || item.type === "scan-share") && <IconScanClean />}
+                          {(item.type === "photoWorkflow" ||
+                            item.type === "photoUpload" ||
+                            item.type === "photo") && (
+                            resolvePhotoWorkflowIcon(item.workflowType || item.photoType)
+                          )}
+                          {item.type === "update" && <IconUpdateClean />}
+                          {item.type === "history" && <IconHistoryClean />}
+                          {item.type === "completion" && <IconCompletedClean />}
+                          {item.type === "schedule" && <IconCalendarClean />}
+                          {!item.type && <IconDocumentClean />}
                         </div>
                       </div>
 
                       <div style={timelineContent}>
                         <div style={timelineTop}>
                           <strong>{item.title}</strong>
-                          <span>{item.time}</span>
+                          <span>{formatMessageTime(item.time)}</span>
                         </div>
 
                         <p>{item.subtitle}</p>
@@ -3268,20 +5421,22 @@ const handleImageUpload = (event) => {
                         {expandedRecord === item.id && (
                           <div style={expandedPanel}>
                             <div style={expandedPreview}>
-                              🖼️ Timeline preview
+                               Timeline preview
                             </div>
 
                             <div style={expandedInfo}>
                               <div style={expandedInfoRow}>
-                                📄 Documentation attached
+                                 Documentation attached
                               </div>
 
                               <div style={expandedInfoRow}>
-                                🤖 AI workflow summary available
+                                 AI workflow summary available
                               </div>
 
                               <div style={expandedInfoRow}>
-                                🕒 Saved to permanent project history
+                                 {language === "es"
+                                  ? "Guardado como memoria de la relación"
+                                  : "Saved as relationship memory"}
                               </div>
                             </div>
 
@@ -3312,8 +5467,8 @@ const handleImageUpload = (event) => {
                               }}
                             >
                               {aiSpeaking
-                                ? "⏹ Stop AI"
-                                : "🔊 Explain Timeline Item"}
+                                ? " Stop AI"
+                                : " Explain Timeline Item"}
                             </button>
                           </div>
                         )}
@@ -3322,6 +5477,168 @@ const handleImageUpload = (event) => {
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {scheduleDeleteCandidate && (
+          <div style={scheduleDeleteConfirmOverlay}>
+            <div style={scheduleDeleteConfirmCard}>
+              <h3 style={scheduleDeleteConfirmTitle}>
+                {language === "es" ? "¿Eliminar cita?" : "Delete appointment?"}
+              </h3>
+
+              <p style={scheduleDeleteConfirmText}>
+                {language === "es"
+                  ? "Esta cita se eliminará del chat y del calendario de trabajo local."
+                  : "This appointment will be removed from chat and the local Work Center schedule."}
+              </p>
+
+              <div style={scheduleDeleteConfirmActions}>
+                <button
+                  style={scheduleDeleteCancelButton}
+                  onClick={() => {
+                    setScheduleDeleteCandidate(null);
+                    setSwipedScheduleId(null);
+                  }}
+                >
+                  {language === "es" ? "Cancelar" : "Cancel"}
+                </button>
+
+                <button
+                  style={scheduleDeleteConfirmButton}
+                  onClick={() => {
+                    deleteScheduleCard(scheduleDeleteCandidate);
+                    setScheduleDeleteCandidate(null);
+                  }}
+                >
+                  {language === "es" ? "Eliminar" : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {appointmentDetails && (
+          <div style={storyOverlay}>
+            <div style={storyCard}>
+              <button
+                style={storyClose}
+                onClick={() => setAppointmentDetails(null)}
+              >
+                ×
+              </button>
+
+              <div style={storyIcon}>
+                <div style={storyIconInner}>
+                  <IconCalendarClean />
+                </div>
+              </div>
+
+              <h2 style={storyTitle}>
+                {language === "es"
+                  ? "Detalles de la cita"
+                  : "Appointment Details"}
+              </h2>
+
+              <p style={storyText}>
+                {appointmentDetails.schedule?.title ||
+                  appointmentDetails.title ||
+                  (language === "es" ? "Cita programada" : "Scheduled Appointment")}
+              </p>
+
+              <div style={appointmentDetailBox}>
+                <div style={appointmentDetailRow}>
+                  <span>{language === "es" ? "Tipo" : "Type"}</span>
+                  <strong>
+                    {appointmentDetails.schedule?.appointmentType ||
+                      appointmentDetails.schedule?.type ||
+                      (language === "es" ? "Cita" : "Appointment")}
+                  </strong>
+                </div>
+
+                <div style={appointmentDetailRow}>
+                  <span>{language === "es" ? "Fecha" : "Date"}</span>
+                  <strong>{appointmentDetails.schedule?.date || "—"}</strong>
+                </div>
+
+                <div style={appointmentDetailRow}>
+                  <span>{language === "es" ? "Hora" : "Time"}</span>
+                  <strong>{getDisplayScheduleTime(appointmentDetails.schedule?.time)}</strong>
+                </div>
+
+                <div style={appointmentDetailRow}>
+                  <span>{language === "es" ? "Ubicación" : "Location"}</span>
+                  <strong>{appointmentDetails.schedule?.location || "—"}</strong>
+                </div>
+
+                <div style={appointmentDetailRow}>
+                  <span>{language === "es" ? "Estado" : "Status"}</span>
+                  <strong>
+                    {getAppointmentConfirmationLabel(
+                      getAppointmentConfirmationStatus(appointmentDetails)
+                    )}
+                  </strong>
+                </div>
+
+                {appointmentDetails.schedule?.notes && (
+                  <div style={appointmentDetailNotes}>
+                    <span>{language === "es" ? "Notas" : "Notes"}</span>
+                    <p>{appointmentDetails.schedule.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              {isCustomerFacingPendingAppointment(appointmentDetails) && (
+                <div style={appointmentDetailActions}>
+                  <button
+                    style={appointmentConfirmButton}
+                    onClick={() =>
+                      updateScheduleConfirmationStatus(
+                        appointmentDetails,
+                        "confirmed"
+                      )
+                    }
+                  >
+                    {t("confirmAppointment", language)}
+                  </button>
+
+                  <button
+                    style={appointmentRequestTimeButton}
+                    onClick={() =>
+                      updateScheduleConfirmationStatus(
+                        appointmentDetails,
+                        "change_requested"
+                      )
+                    }
+                  >
+                    {t("requestDifferentTime", language)}
+                  </button>
+                </div>
+              )}
+
+              {currentViewerRole === "business" && (
+                <button
+                  style={storySpeakBtn}
+                  onClick={() => {
+                    localStorage.setItem("meetroWorkCenterTab", "schedule");
+                    localStorage.setItem("activeWorkCenterTab", "schedule");
+                    setAppointmentDetails(null);
+                    setPage("workCenter");
+                  }}
+                >
+                  {language === "es"
+                    ? "Abrir en Work Center"
+                    : "Open in Work Center"}
+                </button>
+              )}
+
+              <button
+                style={storySaveBtn}
+                onClick={() => setAppointmentDetails(null)}
+              >
+                {language === "es" ? "Cerrar" : "Close"}
+              </button>
             </div>
           </div>
         )}
@@ -3339,14 +5656,22 @@ const handleImageUpload = (event) => {
                 ×
               </button>
 
-              <div style={storyIcon}>{jobStory.icon || "📋"}</div>
+              <div style={storyIcon}>
+                <div style={storyIconInner}>
+                  {typeof jobStory.icon === "string"
+                    ? resolveWorkflowIcon(jobStory.icon)
+                    : jobStory.icon || <IconHistoryClean />}
+                </div>
+              </div>
 
               <h2 style={storyTitle}>{jobStory.title}</h2>
 
               <p style={storyText}>{jobStory.subtitle}</p>
 
               <div style={storyPreviewBox}>
-                <div style={storyPreviewIcon}>🖼️</div>
+                <div style={storyPreviewIcon}>
+                  <IconPhotosClean />
+                </div>
                 <strong>
                   {language === "es" ? "Vista previa del trabajo" : "Job preview"}
                 </strong>
@@ -3358,21 +5683,67 @@ const handleImageUpload = (event) => {
               </div>
 
               <button style={storySpeakBtn} onClick={speakJobStory}>
-                {aiSpeaking ? "⏹ Stop AI Voice" : "🔊 " + (language === "es" ? "Explicar con AI" : "AI Speak Summary")}
+                {aiSpeaking ? " Stop AI Voice" : " " + (language === "es" ? "Explicar con AI" : "AI Speak Summary")}
               </button>
 
               <button style={storySaveBtn} onClick={saveToJobRecord}>
-                📁 {language === "es" ? "Guardar en trabajo" : "Save to Job Record"}
+                 {language === "es" ? "Guardar en trabajo" : "Save to Job Record"}
               </button>
             </div>
           </div>
         )}
 
-        
-
-        {previewImage && (
+        {activeGalleryImage?.imageUrl && (
           <div style={imageModal} onClick={() => setPreviewImage(null)}>
-            <img src={previewImage} alt="" style={modalImage} />
+            <button
+              type="button"
+              style={galleryCloseButton}
+              aria-label={t("closePhotoGallery")}
+              onClick={() => setPreviewImage(null)}
+            >
+              ×
+            </button>
+
+            <div
+              style={galleryViewer}
+              onClick={(event) => event.stopPropagation()}
+              onTouchStart={handleGallerySwipeStart}
+              onTouchEnd={handleGallerySwipeEnd}
+            >
+              <div style={galleryCounter}>
+                {activeGalleryIndex + 1} / {galleryImages.length}
+              </div>
+
+              <img
+                src={activeGalleryImage.imageUrl}
+                alt={activeGalleryImage.alt}
+                style={modalImage}
+              />
+
+              {galleryImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    style={{ ...galleryArrowButton, left: "8px" }}
+                    aria-label={t("previousPhoto")}
+                    disabled={activeGalleryIndex <= 0}
+                    onClick={() => showGalleryImage(activeGalleryIndex - 1)}
+                  >
+                    ‹
+                  </button>
+
+                  <button
+                    type="button"
+                    style={{ ...galleryArrowButton, right: "8px" }}
+                    aria-label={t("nextPhoto")}
+                    disabled={activeGalleryIndex >= galleryImages.length - 1}
+                    onClick={() => showGalleryImage(activeGalleryIndex + 1)}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -3428,15 +5799,61 @@ const animations = `
     animation-duration: 160ms;
   }
 }
+
+@media (orientation: landscape), (max-width: 896px) and (min-width: 600px) and (max-aspect-ratio: 21 / 9) {
+  .chat-bottom-stack {
+    width: 100%;
+    max-width: 100%;
+    padding-top: 4px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-composer {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
+  }
+
+  .chat-plus-button,
+  .chat-mic-button,
+  .chat-send-button {
+    width: 34px !important;
+    height: 34px !important;
+  }
+
+  .chat-input-wrapper {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    border-radius: 999px;
+    padding: 0 10px;
+  }
+
+  .chat-message-input {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    max-height: 90px;
+  }
+
+  .chat-quick-replies {
+    display: none !important;
+  }
+}
 `;
 
 const page = {
-  height: "var(--meetro-safe-vh)",
-  maxHeight: "var(--meetro-safe-vh)",
+  height: "100dvh",
+  minHeight: "100dvh",
+  maxHeight: "100dvh",
   background: "linear-gradient(135deg, #eef1f8 0%, #f8fafc 100%)",
   display: "flex",
-  justifyContent: "center",
-  padding: "calc(env(safe-area-inset-top) + 64px) 0 0",
+  justifyContent: "flex-start",
+  alignItems: "center",
+  padding: 0,
   boxSizing: "border-box",
   overflowX: "hidden",
   overflowY: "hidden",
@@ -3459,8 +5876,35 @@ const phone = {
   flexDirection: "column",
 };
 
+const embeddedPage = {
+  ...page,
+  width: "100%",
+  height: "100%",
+  minHeight: 0,
+  maxHeight: "100%",
+  background: "transparent",
+  alignItems: "stretch",
+  justifyContent: "stretch",
+};
+
+const embeddedPhone = {
+  ...phone,
+  maxWidth: "100%",
+  height: "100%",
+  minHeight: 0,
+  maxHeight: "100%",
+  borderRadius: "28px",
+  boxShadow: "none",
+  border: "1px solid rgba(226,232,240,0.95)",
+};
+
+const messageTextBlock = {
+  whiteSpace: "pre-wrap",
+  lineHeight: 1.5,
+};
+
 const messagesScroll = {
-  flex: 1,
+  flex: "1 1 auto",
   minHeight: 0,
   overflowY: "auto",
   overflowX: "hidden",
@@ -3468,7 +5912,8 @@ const messagesScroll = {
   overscrollBehavior: "contain",
   display: "flex",
   flexDirection: "column",
-  paddingBottom: "118px",
+  paddingTop: "12px",
+  paddingBottom: "12px",
 };
 
 
@@ -3479,7 +5924,48 @@ const avatarProfileButton = {
   cursor: "pointer",
 };
 
+const chatProjectLabel = {
+  display: "flex",
+  alignItems: "center",
+  gap: "7px",
+  flexWrap: "wrap",
+  marginTop: "4px",
+  marginBottom: "3px",
+  width: "100%",
+  maxWidth: "100%",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: 850,
+  overflow: "hidden",
+};
+
+const chatProjectLabelStage = {
+  display: "inline-flex",
+};
+
+const chatProjectTitleText = {
+  display: "inline-block",
+  maxWidth: "145px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const chatProjectStagePill = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "999px",
+  padding: "3px 7px",
+  background: "#eef2ff",
+  color: "#3730a3",
+  fontSize: "11px",
+  fontWeight: 950,
+};
+
 const headerIdentityButton = {
+  flex: 1,
+  minWidth: 0,
   flex: 1,
   minWidth: 0,
   border: "none",
@@ -3513,7 +5999,7 @@ const profileMiniCard = {
 
 const profileCloseButton = {
   position: "absolute",
-  top: "14px",
+  top: "22px",
   right: "14px",
   border: "none",
   background: "#f1f5f9",
@@ -3581,7 +6067,7 @@ const profileInfoGrid = {
 const profileInfoBox = {
   background: "#f8fafc",
   borderRadius: "18px",
-  padding: "14px",
+  padding: "10px",
   display: "flex",
   flexDirection: "column",
   gap: "5px",
@@ -3615,16 +6101,16 @@ const profileSecondaryAction = {
 };
 
 const header = {
-  minHeight: "112px",
+  flex: "0 0 auto",
+  minHeight: "76px",
   display: "flex",
   alignItems: "center",
-  gap: "12px",
-  padding: "calc(env(safe-area-inset-top) + 42px) 16px 14px",
+  gap: "10px",
+  padding: "calc(env(safe-area-inset-top) + 8px) 12px 10px",
   borderBottom: "1px solid #edf0f5",
   background: "rgba(255,255,255,0.98)",
   backdropFilter: "blur(14px)",
-  position: "sticky",
-  top: 0,
+  position: "relative",
   zIndex: 20,
 };
 
@@ -3646,6 +6132,43 @@ const activeHeaderBtn = {
   border: "1px solid #5b3df5",
   color: "#5b3df5",
   background: "#f5f3ff",
+};
+
+const appointmentReminderNoticeCard = {
+  flex: "0 0 auto",
+  margin: "10px 12px 0",
+  padding: "12px",
+  borderRadius: "18px",
+  border: "1px solid #fde68a",
+  background: "#fffbeb",
+  color: "#92400e",
+  display: "grid",
+  gap: "10px",
+  boxSizing: "border-box",
+};
+
+const appointmentReminderNoticeActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "8px",
+};
+
+const appointmentReminderSettingsButton = {
+  border: "none",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  background: "#7c3aed",
+  color: "#ffffff",
+  fontWeight: 900,
+};
+
+const appointmentReminderContinueButton = {
+  border: "1px solid #fbbf24",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  background: "#ffffff",
+  color: "#92400e",
+  fontWeight: 900,
 };
 
 const avatar = {
@@ -3724,7 +6247,7 @@ const jobRecordMiniBadge = {
 const callMenu = {
   position: "fixed",
   top: "72px",
-  right: "max(68px, calc((100vw - 860px) / 2 + 68px))",
+  right: "max(68px, env(safe-area-inset-right, 0px))",
   width: "210px",
   background: "#ffffff",
   border: "1px solid #e8ebf3",
@@ -3751,9 +6274,9 @@ const callMenuBtn = {
 const threadMenu = {
   position: "fixed",
   top: "72px",
-  right: "max(16px, calc((100vw - 860px) / 2 + 16px))",
+  right: "max(16px, env(safe-area-inset-right, 0px))",
   width: "250px",
-  maxHeight: "70vh",
+  maxHeight: "75vh",
   overflowY: "auto",
   background: "#ffffff",
   border: "1px solid #e8ebf3",
@@ -3763,9 +6286,8 @@ const threadMenu = {
   zIndex: 120,
 };
 
-const threadMenuBtn = {
+const menuActionBase = {
   width: "100%",
-  height: "40px",
   border: "none",
   borderRadius: "12px",
   background: "transparent",
@@ -3777,12 +6299,60 @@ const threadMenuBtn = {
   padding: "0 12px",
 };
 
+const menuActionPrimary = {
+  ...menuActionBase,
+  minHeight: "46px",
+  border: "1px solid #e7eaf2",
+  background: "#f8fafc",
+  color: "#111827",
+  fontSize: "12px",
+  fontWeight: "800",
+  cursor: "pointer",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "4px",
+};
+
+const menuActionSecondary = {
+  ...menuActionPrimary,
+  background: "#eef2ff",
+  border: "1px solid rgba(226,232,240,0.9)",
+};
+
+const menuActionTertiary = {
+  ...menuActionBase,
+  minHeight: "40px",
+  fontSize: "13px",
+  fontWeight: "700",
+};
+
+const threadMenuBtn = {
+  ...menuActionTertiary,
+};
+
+const menuSection = {
+  borderTop: "1px solid #edf2ff",
+  paddingTop: "8px",
+  marginTop: "8px",
+};
+
+const menuSectionTitle = {
+  fontSize: "11px",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  fontWeight: "800",
+  color: "#5f6b85",
+  padding: "2px 12px 6px",
+};
+
 
 const emergencyBanner = {
   position: "sticky",
-  top: "78px",
+  top: "8px",
   zIndex: 20,
-  marginBottom: "18px",
+  marginBottom: "12px",
   padding: "14px",
   borderRadius: "24px",
   background: "linear-gradient(135deg, #fff7f7, #fff1f1)",
@@ -3806,13 +6376,14 @@ const emergencyBannerTop = {
 
 
 const emergencyExpandBtn = {
-  width: "28px",
-  height: "28px",
+  minWidth: "106px",
+  height: "30px",
+  padding: "0 10px",
   borderRadius: "999px",
   border: "1px solid rgba(239,68,68,0.16)",
   background: "#ffffff",
   color: "#dc2626",
-  fontSize: "18px",
+  fontSize: "11px",
   fontWeight: "900",
   cursor: "pointer",
   display: "flex",
@@ -3907,6 +6478,17 @@ const completeFromChatBtn = {
   boxShadow: "0 10px 24px rgba(16,185,129,0.18)",
 };
 
+const emergencyChatActions = {
+  marginTop: "12px",
+};
+
+const emergencyPrimaryAction = {
+  ...completeFromChatBtn,
+  marginTop: 0,
+  background: "#dc2626",
+  boxShadow: "0 10px 24px rgba(220,38,38,0.2)",
+};
+
 
 const completedActionRow = {
   display: "grid",
@@ -3941,6 +6523,10 @@ const routePreviewCard = {
   borderRadius: "22px",
   background: "#ffffff",
   border: "1px solid rgba(239,68,68,0.12)",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const routePreviewTop = {
@@ -3949,6 +6535,13 @@ const routePreviewTop = {
   alignItems: "center",
   gap: "10px",
   marginBottom: "12px",
+};
+
+const routePreviewTitleWrap = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const routePreviewTitle = {
@@ -4037,7 +6630,207 @@ const chatArea = {
   overflow: "hidden",
   display: "flex",
   flexDirection: "column",
-  padding: "22px clamp(16px, 3vw, 34px)",
+  padding: "8px clamp(16px, 3vw, 34px)",
+};
+
+const scheduleDeleteConfirmOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10000,
+  background: "rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(8px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+};
+
+const scheduleDeleteConfirmCard = {
+  width: "min(340px, calc(100% - 40px))",
+  background: "#ffffff",
+  borderRadius: "22px",
+  padding: "20px",
+  boxShadow: "0 24px 70px rgba(15, 23, 42, 0.25)",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+};
+
+const scheduleDeleteConfirmTitle = {
+  margin: "0 0 8px",
+  fontSize: "20px",
+  fontWeight: 900,
+  color: "#0f172a",
+};
+
+const scheduleDeleteConfirmText = {
+  margin: "0 0 18px",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  color: "#64748b",
+};
+
+const scheduleDeleteConfirmActions = {
+  display: "flex",
+  gap: "10px",
+  justifyContent: "flex-end",
+};
+
+const scheduleDeleteCancelButton = {
+  border: "1px solid rgba(148, 163, 184, 0.45)",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "14px",
+  padding: "11px 14px",
+  fontWeight: 800,
+};
+
+const scheduleDeleteConfirmButton = {
+  border: "none",
+  background: "#ef4444",
+  color: "#ffffff",
+  borderRadius: "14px",
+  padding: "11px 14px",
+  fontWeight: 900,
+};
+
+const scheduleDeleteSwipeButton = {
+  position: "absolute",
+  right: "10px",
+  top: "50%",
+  transform: "translateY(-50%)",
+  width: "70px",
+  height: "42px",
+  border: "none",
+  borderRadius: "12px",
+  background: "#ef4444",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: 800,
+  zIndex: 1,
+};
+
+const scheduleModalOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  background: "rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(8px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "18px",
+};
+
+const scheduleModalCard = {
+  width: "calc(100% - 32px)",
+  maxWidth: "360px",
+  background: "#ffffff",
+  borderRadius: "24px",
+  padding: "16px",
+  boxShadow: "0 24px 70px rgba(15, 23, 42, 0.25)",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+};
+
+const scheduleModalTitle = {
+  margin: "0 0 6px",
+  fontSize: "20px",
+  fontWeight: 900,
+  color: "#0f172a",
+};
+
+const scheduleModalSubtitle = {
+  margin: "0 0 16px",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  color: "#64748b",
+};
+
+const scheduleModalGrid = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+};
+
+const scheduleModalInput = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  WebkitAppearance: "none",
+  appearance: "none",
+  border: "1px solid rgba(148, 163, 184, 0.45)",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  marginBottom: "10px",
+  fontSize: "15px",
+  outline: "none",
+  background: "#f8fafc",
+  color: "#0f172a",
+};
+
+const scheduleModalTextarea = {
+  ...scheduleModalInput,
+  minHeight: "86px",
+  resize: "vertical",
+};
+
+const scheduleModalActions = {
+  display: "flex",
+  gap: "10px",
+  justifyContent: "flex-end",
+  marginTop: "4px",
+};
+
+const scheduleModalSecondary = {
+  border: "1px solid rgba(148, 163, 184, 0.45)",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "14px",
+  padding: "11px 14px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const scheduleModalPrimary = {
+  border: "none",
+  background: "#0f172a",
+  color: "#ffffff",
+  borderRadius: "14px",
+  padding: "11px 16px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const appointmentDetailBox = {
+  width: "100%",
+  display: "grid",
+  gap: "10px",
+  margin: "16px 0",
+};
+
+const appointmentDetailRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "12px 14px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  color: "#334155",
+  fontSize: "14px",
+};
+
+const appointmentDetailNotes = {
+  padding: "12px 14px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  color: "#334155",
+  fontSize: "14px",
+};
+
+const appointmentDetailActions = {
+  width: "100%",
+  display: "grid",
+  gap: "10px",
+  marginBottom: "12px",
 };
 
 const dateRow = {
@@ -4050,10 +6843,82 @@ const dateRow = {
   fontSize: "13px",
 };
 
+const threadSearchRow = {
+  width: "100%",
+  maxWidth: "860px",
+  margin: "0 auto 8px",
+  padding: "0 16px",
+  boxSizing: "border-box",
+};
+
+const threadSearchInputWrap = {
+  width: "100%",
+  height: "38px",
+  background: "#f8f9fc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "999px",
+  padding: "0 11px 0 12px",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  boxSizing: "border-box",
+};
+
+const threadSearchIcon = {
+  width: "18px",
+  height: "18px",
+  color: "#6b7280",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const threadSearchInput = {
+  width: "100%",
+  minWidth: 0,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: "700",
+};
+
+const threadSearchClear = {
+  width: "22px",
+  height: "22px",
+  borderRadius: "999px",
+  border: "none",
+  background: "#e5e7eb",
+  color: "#111827",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flexShrink: 0,
+  padding: "0",
+  fontSize: "14px",
+  lineHeight: "1",
+};
+
 const dateLine = {
   width: "60px",
   height: "1px",
   background: "#e5e7eb",
+};
+
+const timelineTopEmpty = {
+  width: "min(86%, 860px)",
+  color: "#667085",
+  fontWeight: "700",
+  fontSize: "14px",
+  background: "#f8fafc",
+  border: "1px solid #eef2f7",
+  borderRadius: "16px",
+  padding: "18px",
+  margin: "0 auto 18px",
+  boxSizing: "border-box",
 };
 
 const messageRow = {
@@ -4066,22 +6931,29 @@ const operationalRow = {
   display: "flex",
   justifyContent: "center",
   marginBottom: "18px",
+  width: "100%",
 };
 
 const operationalCard = {
-  width: "min(92%, 520px)",
+  width: "100%",
+  maxWidth: "min(520px, calc(100% - 20px))",
+  maxWidth: "100%",
   background: "#ffffff",
   border: "1px solid #e5e7eb",
   borderRadius: "24px",
   padding: "16px",
   boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const operationalHeader = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
   color: "#111827",
+  width: "100%",
+  minWidth: 0,
 };
 
 const operationalIcon = {
@@ -4100,6 +6972,9 @@ const operationalSubtitle = {
   color: "#667085",
   fontSize: "13px",
   fontWeight: "700",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  lineHeight: 1.35,
 };
 
 const scheduleCardDetails = {
@@ -4110,6 +6985,14 @@ const scheduleCardDetails = {
   display: "grid",
   gap: "8px",
   boxSizing: "border-box",
+};
+
+const scheduleCustomerTitle = {
+  margin: "0 0 2px",
+  color: "#0f172a",
+  fontSize: "18px",
+  fontWeight: "950",
+  lineHeight: 1.15,
 };
 
 const scheduleDetailRow = {
@@ -4125,6 +7008,82 @@ const scheduleDetailRow = {
   padding: "10px 12px",
   color: "#334155",
   boxSizing: "border-box",
+  alignItems: "flex-start",
+};
+
+const scheduleDetailLabel = {
+  flex: "0 1 auto",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  maxWidth: "45%",
+};
+
+const scheduleDetailValue = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  textAlign: "right",
+};
+
+const scheduleDetailNotes = {
+  background: "rgba(255,255,255,0.74)",
+  border: "1px solid rgba(226,232,240,0.95)",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  color: "#334155",
+  boxSizing: "border-box",
+};
+
+const scheduleServiceList = {
+  margin: "6px 0 0",
+  paddingLeft: "18px",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.45,
+};
+
+const scheduleStatusPill = {
+  justifySelf: "start",
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: "999px",
+  padding: "7px 11px",
+  background: "#fef3c7",
+  color: "#92400e",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const appointmentActionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  marginTop: "4px",
+};
+
+const appointmentConfirmButton = {
+  border: "none",
+  borderRadius: "16px",
+  padding: "12px 14px",
+  background: "#5b35d5",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const appointmentRequestTimeButton = {
+  border: "1px solid #c7d2fe",
+  borderRadius: "16px",
+  padding: "12px 14px",
+  background: "#ffffff",
+  color: "#4338ca",
+  fontSize: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const materialsListCard = {
@@ -4143,6 +7102,22 @@ const materialsListRow = {
   padding: "10px 12px",
   color: "#334155",
   fontSize: "13px",
+  alignItems: "flex-start",
+};
+
+const materialsListName = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const materialsListAmount = {
+  flex: "0 0 auto",
+  minWidth: 0,
+  textAlign: "right",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const materialsMoreText = {
@@ -4218,13 +7193,21 @@ const closeoutWorkflowBody = {
   border: "1px solid #dcfce7",
   borderRadius: "22px",
   padding: "16px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
+  overflowWrap: "anywhere",
+  wordBreak: "normal",
 };
 
 const closeoutWorkflowHeader = {
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
   gap: "14px",
   alignItems: "flex-start",
+  minWidth: 0,
 };
 
 const closeoutWorkflowEyebrow = {
@@ -4240,6 +7223,8 @@ const closeoutWorkflowTitle = {
   margin: "4px 0 0",
   color: "#111827",
   fontSize: "18px",
+  lineHeight: 1.2,
+  overflowWrap: "anywhere",
 };
 
 const closeoutWorkflowAmount = {
@@ -4256,6 +7241,8 @@ const closeoutWorkflowText = {
   fontWeight: "700",
   lineHeight: 1.5,
   margin: "12px 0",
+  overflowWrap: "anywhere",
+  wordBreak: "normal",
 };
 
 const closeoutWorkflowBreakdown = {
@@ -4265,21 +7252,26 @@ const closeoutWorkflowBreakdown = {
 };
 
 const closeoutWorkflowRow = {
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  alignItems: "center",
   gap: "12px",
   background: "#f8fafc",
   borderRadius: "14px",
   padding: "10px 12px",
   color: "#334155",
   fontWeight: "800",
+  minWidth: 0,
+  overflowWrap: "anywhere",
 };
 
 const closeoutWorkflowActions = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
   gap: "10px",
   marginTop: "14px",
+  width: "100%",
+  maxWidth: "100%",
 };
 
 const confirmCloseoutButton = {
@@ -4746,13 +7738,13 @@ const operationalTime = {
 
 const bubble = {
   minWidth: "0",
-  maxWidth: "calc(100vw - 58px)",
+  maxWidth: "calc(100% - 58px)",
   overflow: "hidden",
   wordBreak: "break-word",
-  padding: "12px 14px",
+  padding: "13px 15px",
   borderRadius: "26px",
-  fontSize: "14px",
-  lineHeight: 1.45,
+  fontSize: "15px",
+  lineHeight: 1.5,
   cursor: "pointer",
   boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
   boxSizing: "border-box",
@@ -4805,9 +7797,9 @@ const timeRow = {
   display: "flex",
   justifyContent: "space-between",
   gap: "10px",
-  marginTop: "6px",
-  fontSize: "9px",
-  opacity: 1,
+  marginTop: "7px",
+  fontSize: "10px",
+  opacity: 0.72,
   fontWeight: "700",
 };
 
@@ -4836,8 +7828,8 @@ const replyPreviewTheirs = {
 
 
 const imageBubble = {
-  width: "min(86vw, 430px)",
-  maxWidth: "min(86vw, 430px)",
+  width: "min(100%, 430px)",
+  maxWidth: "min(100%, 430px)",
   padding: "12px",
 };
 
@@ -4902,10 +7894,11 @@ const typingBubble = {
 
 const actionMenu = {
   position: "fixed",
-  left: "50%",
+  left: 0,
+  right: 0,
   bottom: "calc(240px + env(safe-area-inset-bottom))",
-  transform: "translateX(-50%)",
-  width: "calc(100% - 32px)",
+  margin: "0 auto",
+  width: "calc(100% - 24px)",
   maxWidth: "460px",
   background: "#ffffff",
   borderRadius: "20px",
@@ -4914,6 +7907,8 @@ const actionMenu = {
   gap: "8px",
   boxShadow: "0 18px 42px rgba(15,23,42,0.16)",
   zIndex: 60,
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const actionBtn = {
@@ -4927,32 +7922,32 @@ const actionBtn = {
 };
 
 const bottomStack = {
-  flexShrink: 0,
-  position: "fixed",
-  bottom: "0",
-  left: "50%",
-  transform: "translateX(-50%)",
+  flex: "0 0 auto",
   width: "100%",
   maxWidth: "860px",
   background: "rgba(255,255,255,0.97)",
   backdropFilter: "blur(14px)",
-  zIndex: 1200,
+  zIndex: 20,
   borderTop: "1px solid #eef2f7",
   boxSizing: "border-box",
   overflowX: "hidden",
-  paddingBottom: "env(safe-area-inset-bottom)",
+  paddingBottom: 0,
 };
 
 const quickWrap = {
-  display: "flex",
+  flex: "0 0 auto",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(84px, 1fr))",
+  alignItems: "center",
   width: "100%",
   maxWidth: "100%",
-  overflowX: "auto",
-  overscrollBehaviorX: "contain",
-  overflowY: "hidden",
+  overflowX: "hidden",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
   WebkitOverflowScrolling: "touch",
-  gap: "8px",
-  padding: "8px 16px",
+  gap: "6px",
+  padding: "6px 12px 2px",
+  maxHeight: "84px",
   boxSizing: "border-box",
 };
 
@@ -4965,15 +7960,20 @@ const emergencyQuickBtn = {
 
 const quickBtn = {
   flexShrink: 0,
+  minHeight: "24px",
+  lineHeight: "1.18",
   border: "1px solid #e7eaf2",
   background: "#ffffff",
   color: "#111827",
   borderRadius: "999px",
-  padding: "8px 12px",
-  fontSize: "12px",
+  padding: "6px 9px",
+  fontSize: "10px",
   fontWeight: "800",
   cursor: "pointer",
   whiteSpace: "nowrap",
+  textAlign: "center",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 const replyComposer = {
@@ -5033,7 +8033,7 @@ const pendingImageName = {
 
 const attachMenu = {
   margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
-  maxHeight: "170px",
+  maxHeight: "230px",
   overflowY: "auto",
   WebkitOverflowScrolling: "touch",
   background: "#ffffff",
@@ -5041,10 +8041,16 @@ const attachMenu = {
   borderRadius: "24px",
   padding: "10px",
   display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
+  gridTemplateColumns: "1fr",
   gap: "8px",
   boxShadow: "0 18px 45px rgba(15,23,42,0.14)",
   animation: "meetroSheetIn 180ms ease-out",
+};
+
+const attachMenuGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 1fr)",
+  gap: "8px",
 };
 
 const attachMenuBtn = {
@@ -5127,23 +8133,28 @@ const photoExplainInput = {
   fontFamily: "inherit",
 };
 const composer = {
-  margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
-  background: "#ffffff",
-  border: "1px solid #e7eaf2",
-  borderRadius: "24px",
-  padding: "8px",
+  flex: "0 0 auto",
+  margin: 0,
+  background: "rgba(255,255,255,0.98)",
+  border: "0",
+  borderTop: "1px solid rgba(203,213,225,0.7)",
+  borderRadius: 0,
+  padding: "8px 12px calc(8px + env(safe-area-inset-bottom))",
   display: "flex",
-  alignItems: "flex-end",
-  gap: "6px",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  alignItems: "center",
+  gap: "8px",
+  boxShadow: "none",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const circleBtn = {
-  width: "38px",
-  height: "38px",
+  width: "42px",
+  height: "42px",
   borderRadius: "14px",
-  border: "1px solid #e7eaf2",
+  border: "1px solid rgba(203,213,225,0.9)",
   background: "#ffffff",
+  color: "#0ea5ff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -5163,8 +8174,14 @@ const activeCircleBtn = {
 const inputWrap = {
   flex: 1,
   minWidth: 0,
+  minHeight: "40px",
   display: "flex",
   alignItems: "center",
+  border: "1.5px solid rgba(148,163,184,0.45)",
+  background: "rgba(248,250,252,0.95)",
+  borderRadius: "999px",
+  padding: "0 14px",
+  boxSizing: "border-box",
 };
 
 const input = {
@@ -5174,13 +8191,13 @@ const input = {
   border: "none",
   outline: "none",
   fontSize: "16px",
-  lineHeight: "1.45",
+  lineHeight: "1.2",
+  color: "#0f172a",
   background: "transparent",
   resize: "none",
   overflowY: "auto",
   fontFamily: "inherit",
-  paddingTop: "8px",
-  paddingBottom: "6px",
+  padding: "10px 0",
 };
 
 
@@ -5190,9 +8207,9 @@ const emergencySendBtn = {
 };
 
 const sendBtn = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "16px",
+  width: "42px",
+  height: "42px",
+  borderRadius: "14px",
   border: "none",
   background: "linear-gradient(135deg, #7c5cff, #4f2df0)",
   color: "#ffffff",
@@ -5211,7 +8228,7 @@ const confirmOverlay = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "20px",
+  padding: "16px",
 };
 
 const confirmBox = {
@@ -5219,7 +8236,7 @@ const confirmBox = {
   maxWidth: "340px",
   background: "#ffffff",
   borderRadius: "24px",
-  padding: "20px",
+  padding: "16px",
   boxShadow: "0 24px 80px rgba(15,23,42,0.24)",
 };
 
@@ -5522,7 +8539,7 @@ const storyOverlay = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "20px",
+  padding: "16px",
 };
 
 const storyCard = {
@@ -5559,6 +8576,17 @@ const storyIcon = {
   justifyContent: "center",
   fontSize: "34px",
   margin: "0 auto 14px",
+};
+
+const storyIconInner = {
+  width: "36px",
+  height: "36px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  color: "#5b3df5",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const storyTitle = {
@@ -5621,8 +8649,64 @@ const imageModal = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "20px",
+  padding: "16px",
   backdropFilter: "blur(6px)",
+};
+
+const galleryViewer = {
+  position: "relative",
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  touchAction: "pan-y",
+};
+
+const galleryCounter = {
+  position: "absolute",
+  top: "calc(env(safe-area-inset-top, 0px) + 20px)",
+  left: "50%",
+  transform: "translateX(-50%)",
+  zIndex: 2,
+  padding: "7px 12px",
+  borderRadius: "999px",
+  background: "rgba(15,23,42,0.72)",
+  color: "white",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const galleryCloseButton = {
+  position: "absolute",
+  top: "calc(env(safe-area-inset-top, 0px) + 56px)",
+  right: "16px",
+  zIndex: 3,
+  width: "46px",
+  height: "46px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.35)",
+  background: "rgba(15,23,42,0.72)",
+  color: "white",
+  fontSize: "28px",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const galleryArrowButton = {
+  position: "absolute",
+  top: "50%",
+  transform: "translateY(-50%)",
+  zIndex: 2,
+  width: "46px",
+  height: "58px",
+  borderRadius: "18px",
+  border: "1px solid rgba(255,255,255,0.35)",
+  background: "rgba(15,23,42,0.68)",
+  color: "white",
+  fontSize: "38px",
+  lineHeight: 1,
+  cursor: "pointer",
 };
 
 const modalImage = {
@@ -5635,5 +8719,46 @@ const modalImage = {
   animation: "meetroImageIn 180ms ease-out",
 };
 
+
+
+class ConversationThreadErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("ConversationThread crashed:", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, fontFamily: "system-ui", color: "#111827" }}>
+          <h2>Chat error</h2>
+          <p>The chat screen crashed instead of loading.</p>
+          <pre style={{ whiteSpace: "pre-wrap", background: "#fee2e2", padding: 12, borderRadius: 12 }}>
+            {String(this.state.error?.message || this.state.error)}
+          </pre>
+          <button onClick={() => this.props.setPage("messagesInbox")}>Back to Messages</button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function ConversationThread({ setPage, embedded = false }) {
+  return (
+    <ConversationThreadErrorBoundary setPage={setPage}>
+      <ConversationThreadInner setPage={setPage} embedded={embedded} />
+    </ConversationThreadErrorBoundary>
+  );
+}
 
 export default ConversationThread;

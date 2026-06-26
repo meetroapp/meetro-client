@@ -1,4 +1,6 @@
 import { getWorkflowStatusLabel } from "../../utils/workflowStatus";
+import { t } from "../../utils/language";
+import UniversalDocumentCard from "../documents/UniversalDocumentCard";
 
 function WorkflowChangeRequestCard({
   msg,
@@ -8,16 +10,48 @@ function WorkflowChangeRequestCard({
   setMessages,
   setMessageText,
   setPage,
-  styles,
+  reviewProjectAction,
 }) {
-  const {
-    changeRequestBody,
-    changeRequestText,
-    changeRequestStatus,
-    changeRequestActions,
-    reviewChangeButton,
-    revisedQuoteButton,
-  } = styles;
+  const projectTitle =
+    msg.projectTitle || msg.title || conversation?.projectTitle || t("project", language);
+  const status =
+    msg.status === "reviewed"
+      ? t("documentStatusReviewed", language)
+      : msg.status === "needs_revised_quote"
+      ? t("documentStatusRevisedQuoteNeeded", language)
+      : t("documentStatusAwaitingApproval", language);
+  const rawAmount =
+    msg.amount ||
+    msg.total ||
+    msg.changeAmount ||
+    msg.changeOrder?.amount ||
+    msg.changeOrder?.total ||
+    "";
+  const amount =
+    rawAmount && Number(rawAmount) > 0 && !String(rawAmount).trim().startsWith("+")
+      ? `+${rawAmount}`
+      : rawAmount;
+
+  return (
+    <UniversalDocumentCard
+      documentType="changeOrder"
+      projectTitle={projectTitle}
+      amount={amount}
+      status={status}
+      language={language}
+      icon="proposal"
+      reviewProjectAction={() =>
+        reviewProjectAction?.({
+          ...msg,
+          title: projectTitle,
+          projectTitle,
+          total: amount,
+          status,
+          type: "changeOrder",
+        })
+      }
+    />
+  );
 
   return (
     <div style={changeRequestBody}>

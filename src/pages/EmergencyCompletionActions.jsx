@@ -1,10 +1,42 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage } from "../utils/language";
 import { getActiveJobSnapshot, saveActiveJobSnapshot } from "../utils/workCenter";
+import {
+  normalizeLaborPricingType,
+  normalizePricingModel,
+} from "../utils/pricingCalculations";
 
 function EmergencyCompletionActions({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
+
+  const activeEmergencyRecord = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
+  function saveEmergencyRecordPatch(patch = {}) {
+    const nextRecord = {
+      ...activeEmergencyRecord,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem("activeEmergencyRecord", JSON.stringify(nextRecord));
+
+    if (nextRecord.id) {
+      localStorage.setItem(
+        `meetro_emergency_record_${nextRecord.id}`,
+        JSON.stringify(nextRecord)
+      );
+    }
+
+    return nextRecord;
+  }
 
   const language = getLanguage();
 
@@ -13,20 +45,57 @@ function EmergencyCompletionActions({ setPage }) {
   );
 
   const service =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     "Emergency Service";
 
   const businessName =
+    activeEmergencyRecord.businessName ||
+    localStorage.getItem("emergencyBusinessName") ||
+    localStorage.getItem("selectedEmergencyBusiness") ||
     localStorage.getItem("businessName") ||
     localStorage.getItem("activeProfessionalId") ||
     "Professional";
 
-  const labor = Number(localStorage.getItem("emergencyLaborCharge") || 0);
-  const materials = Number(localStorage.getItem("emergencyMaterialCharge") || 0);
-  const emergencyFee = Number(localStorage.getItem("emergencyServiceFee") || 0);
-  const total = labor + materials + emergencyFee;
+  const laborPricingType = normalizeLaborPricingType(
+    localStorage.getItem("emergencyLaborPricingType") || "flat_fee"
+  );
+  const pricingModel = normalizePricingModel({
+    laborPricingType,
+    laborFee:
+      localStorage.getItem("emergencyLaborFee") ||
+      localStorage.getItem("emergencyLaborCharge") ||
+      activeEmergencyRecord.laborFee ||
+      activeEmergencyRecord.labor,
+    laborHours:
+      localStorage.getItem("emergencyLaborHours") ||
+      activeEmergencyRecord.laborHours,
+    laborRate:
+      localStorage.getItem("emergencyLaborRate") ||
+      activeEmergencyRecord.laborRate,
+    materials:
+      localStorage.getItem("emergencyMaterialCharge") ||
+      activeEmergencyRecord.materials,
+    serviceFee:
+      localStorage.getItem("emergencyServiceFee") ||
+      activeEmergencyRecord.emergencyFee,
+    total: activeEmergencyRecord.total,
+  });
+  const labor = pricingModel.laborTotal;
+  const materials = pricingModel.materialsTotal;
+  const emergencyFee = Number(localStorage.getItem("emergencyServiceFee") || activeEmergencyRecord.emergencyFee || 0);
+  const total = pricingModel.customerTotal;
+  const pricingPatch = {
+    laborPricingType: pricingModel.laborPricingType,
+    laborTotal: pricingModel.laborTotal,
+    materialsTotal: pricingModel.materialsTotal,
+    emergencyFee,
+    subtotal: pricingModel.subtotal,
+    total,
+  };
 
   function saveToHistory() {
     localStorage.setItem("emergencySavedToHistory", "true");
@@ -44,6 +113,17 @@ function EmergencyCompletionActions({ setPage }) {
     localStorage.setItem("emergencyDispatchStatus", "completed");
     localStorage.setItem("businessAcceptedEmergency", "false");
 
+    saveEmergencyRecordPatch({
+      status: "completed",
+      savedToHistory: true,
+      archivedAt: new Date().toISOString(),
+      service,
+      businessName,
+      paymentStatus,
+      total,
+      ...pricingPatch,
+    });
+
     window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
     window.dispatchEvent(new Event("meetro-messages-updated"));
 
@@ -53,6 +133,16 @@ function EmergencyCompletionActions({ setPage }) {
   function markPaid() {
     localStorage.setItem("emergencyPaymentStatus", "paid");
     localStorage.setItem("emergencyPaidAt", new Date().toISOString());
+
+    saveEmergencyRecordPatch({
+      paymentStatus: "paid",
+      paidAt: new Date().toISOString(),
+      service,
+      businessName,
+      total,
+      ...pricingPatch,
+    });
+
     setPaymentStatus("paid");
   }
 
@@ -65,7 +155,9 @@ function EmergencyCompletionActions({ setPage }) {
   return (
     <div style={page}>
       <div style={card}>
-        <div style={successIcon}>{paymentStatus === "paid" ? "💰" : "✅"}</div>
+        <div style={successIcon}>
+          <MeetroIcon name={paymentStatus === "paid" ? "payment" : "completion"} size={42} decorative />
+        </div>
 
         <h1 style={title}>
           {paymentStatus === "paid"
@@ -114,23 +206,36 @@ function EmergencyCompletionActions({ setPage }) {
           </div>
 
           <div style={summaryRow}>
-            <span>{language === "es" ? "Mano de obra" : "Labor"}</span>
-            <strong>${labor}</strong>
+            <span>{language === "es" ? "Tipo de mano de obra" : "Labor Type"}</span>
+            <strong>
+              {pricingModel.laborPricingType === "hourly"
+                ? language === "es"
+                  ? "Por hora"
+                  : "Hourly"
+                : language === "es"
+                ? "Tarifa fija"
+                : "Flat Fee"}
+            </strong>
           </div>
 
           <div style={summaryRow}>
-            <span>{language === "es" ? "Materiales" : "Materials"}</span>
-            <strong>${materials}</strong>
+            <span>{language === "es" ? "Costo de mano de obra" : "Labor Cost"}</span>
+            <strong>${labor.toFixed(2)}</strong>
+          </div>
+
+          <div style={summaryRow}>
+            <span>{language === "es" ? "Costo de materiales" : "Material Cost"}</span>
+            <strong>${materials.toFixed(2)}</strong>
           </div>
 
           <div style={summaryRow}>
             <span>{language === "es" ? "Tarifa emergencia" : "Emergency fee"}</span>
-            <strong>${emergencyFee}</strong>
+            <strong>${emergencyFee.toFixed(2)}</strong>
           </div>
 
           <div style={totalRow}>
-            <span>{language === "es" ? "Total" : "Total"}</span>
-            <strong>${total}</strong>
+            <span>{language === "es" ? "Total cobrado" : "Total Charged"}</span>
+            <strong>${total.toFixed(2)}</strong>
           </div>
         </div>
 
@@ -149,20 +254,20 @@ function EmergencyCompletionActions({ setPage }) {
 
         {paymentStatus !== "paid" && (
           <button style={payBtn} onClick={markPaid}>
-            💳 {language === "es" ? `Pagar $${total}` : `Pay $${total}`}
+            <MeetroIcon name="payment" size={18} decorative /> {language === "es" ? `Pagar $${total.toFixed(2)}` : `Pay $${total.toFixed(2)}`}
           </button>
         )}
 
         <button style={primaryBtn} onClick={saveToHistory}>
-          💾 {language === "es" ? "Guardar en historial" : "Save to History"}
+          <MeetroIcon name="history" size={18} decorative /> {language === "es" ? "Guardar en historial" : "Save to History"}
         </button>
 
         <button style={secondaryBtn} onClick={continueConversation}>
-          💬 {language === "es" ? "Continuar conversación" : "Continue Conversation"}
+          <MeetroIcon name="messages" size={18} decorative /> {language === "es" ? "Continuar conversación" : "Continue Conversation"}
         </button>
 
         <button style={secondaryBtn} onClick={() => setPage("contractorDashboard")}>
-          🛠️ {language === "es" ? "Volver al centro de trabajo" : "Back to Work Center"}
+          <MeetroIcon name="workCenter" size={18} decorative /> {language === "es" ? "Volver al centro de trabajo" : "Back to Work Center"}
         </button>
       </div>
 
@@ -172,7 +277,7 @@ function EmergencyCompletionActions({ setPage }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "linear-gradient(135deg, #f7fff9, #f8fafc)",
   padding: "24px 20px 120px",
 };

@@ -37,6 +37,22 @@ export const categoryRoutes = {
     "junk_removal",
   ],
 
+  propertymanagement: [
+    "propertymanagement",
+    "property_management",
+    "maintenance",
+    "inspection",
+    "plumbing",
+    "electrical",
+    "roofing",
+    "hvac",
+    "cleaning",
+    "locksmith",
+    "storm",
+    "general",
+    "repair",
+  ],
+
   emergency: [
     "plumbing",
     "electrical",

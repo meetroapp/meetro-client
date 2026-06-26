@@ -1,0 +1,102 @@
+export const AI_BUTTON_POSITION_STORAGE_KEY = "meetroAiButtonPosition";
+
+export const AI_BUTTON_POSITION_DEFAULTS = Object.freeze({
+  buttonSize: 52,
+  edgeMargin: 12,
+  bottomClearance: 94,
+});
+
+function toFiniteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function getAiButtonBounds(viewport = {}, options = {}) {
+  const width = Math.max(0, toFiniteNumber(viewport.width));
+  const height = Math.max(0, toFiniteNumber(viewport.height));
+  const buttonSize = toFiniteNumber(
+    options.buttonSize,
+    AI_BUTTON_POSITION_DEFAULTS.buttonSize
+  );
+  const edgeMargin = toFiniteNumber(
+    options.edgeMargin,
+    AI_BUTTON_POSITION_DEFAULTS.edgeMargin
+  );
+  const bottomClearance = toFiniteNumber(
+    options.bottomClearance,
+    AI_BUTTON_POSITION_DEFAULTS.bottomClearance
+  );
+
+  return {
+    minX: edgeMargin,
+    maxX: Math.max(edgeMargin, width - edgeMargin - buttonSize),
+    minY: edgeMargin,
+    maxY: Math.max(edgeMargin, height - bottomClearance - buttonSize),
+    buttonSize,
+    edgeMargin,
+    bottomClearance,
+  };
+}
+
+export function clampAiButtonPosition(position = {}, viewport = {}, options = {}) {
+  const bounds = getAiButtonBounds(viewport, options);
+  const x = toFiniteNumber(position.x, bounds.maxX);
+  const y = toFiniteNumber(position.y, bounds.maxY);
+
+  return {
+    x: Math.min(bounds.maxX, Math.max(bounds.minX, x)),
+    y: Math.min(bounds.maxY, Math.max(bounds.minY, y)),
+  };
+}
+
+export function snapAiButtonPosition(position = {}, viewport = {}, options = {}) {
+  const bounds = getAiButtonBounds(viewport, options);
+  const clamped = clampAiButtonPosition(position, viewport, options);
+  const midpoint = (bounds.minX + bounds.maxX) / 2;
+
+  return {
+    x: clamped.x <= midpoint ? bounds.minX : bounds.maxX,
+    y: clamped.y,
+  };
+}
+
+export function isAiButtonPositionUsable(position = {}, viewport = {}, options = {}) {
+  if (!position || typeof position !== "object") return false;
+  if (!Number.isFinite(Number(position.x)) || !Number.isFinite(Number(position.y))) {
+    return false;
+  }
+
+  const clamped = clampAiButtonPosition(position, viewport, options);
+  return clamped.x === Number(position.x) && clamped.y === Number(position.y);
+}
+
+export function readStoredAiButtonPosition({
+  storage = globalThis.localStorage,
+  viewport = {},
+  options = {},
+} = {}) {
+  if (!storage) return null;
+
+  try {
+    const parsed = JSON.parse(
+      storage.getItem(AI_BUTTON_POSITION_STORAGE_KEY) || "null"
+    );
+
+    if (!isAiButtonPositionUsable(parsed, viewport, options)) return null;
+    return clampAiButtonPosition(parsed, viewport, options);
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredAiButtonPosition(position = {}, {
+  storage = globalThis.localStorage,
+  viewport = {},
+  options = {},
+} = {}) {
+  if (!storage) return null;
+
+  const snapped = snapAiButtonPosition(position, viewport, options);
+  storage.setItem(AI_BUTTON_POSITION_STORAGE_KEY, JSON.stringify(snapped));
+  return snapped;
+}

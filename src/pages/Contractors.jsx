@@ -54,6 +54,7 @@ function Contractors({ setPage, currentPage }) {
       "selectedContractorId",
       contractor.id
     );
+    localStorage.setItem("contractorDetailsReturnPage", "contractors");
 
     setPage("contractorDetails");
   }
@@ -105,7 +106,7 @@ function Contractors({ setPage, currentPage }) {
                 </span>
 
                 <span style={ratingBadge}>
-                  ⭐ {contractor.rating}
+                   {contractor.rating}
                 </span>
               </div>
 
@@ -118,7 +119,7 @@ function Contractors({ setPage, currentPage }) {
               </p>
 
               <p style={locationText}>
-                📍 {contractor.location}
+                 {contractor.location}
               </p>
 
               <div style={buttonRow}>

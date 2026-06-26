@@ -1,17 +1,29 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import {
   getActiveJobSnapshot,
-  saveActiveJobSnapshot,
 } from "../utils/workCenter";
+import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
+import { formatMessageTime } from "../utils/displayTime";
+import { normalizePricingModel } from "../utils/pricingCalculations";
 
 function EmergencyDispatch({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
 
+  const activeEmergencyRecord = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
   const [language, setLanguage] = useState(getLanguage());
 
   const [dispatchStatus, setDispatchStatus] = useState(
+    activeEmergencyRecord.status ||
     activeJobSnapshot?.status ||
     localStorage.getItem("activeJobStatus") ||
     localStorage.getItem("emergencyDispatchStatus") ||
@@ -19,12 +31,17 @@ function EmergencyDispatch({ setPage }) {
   );
 
   const selectedService =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
     t("emergencyHelp");
 
   const professionalName =
+    activeEmergencyRecord.businessName ||
+    localStorage.getItem("emergencyBusinessName") ||
+    localStorage.getItem("selectedEmergencyBusiness") ||
     localStorage.getItem("businessName") ||
     (language === "es" ? "Profesional" : "Professional");
 
@@ -34,7 +51,18 @@ function EmergencyDispatch({ setPage }) {
     };
 
     const syncEmergency = () => {
+      let currentRecord = {};
+
+      try {
+        currentRecord = JSON.parse(
+          localStorage.getItem("activeEmergencyRecord") || "{}"
+        );
+      } catch {
+        currentRecord = {};
+      }
+
       setDispatchStatus(
+        currentRecord.status ||
         localStorage.getItem("emergencyDispatchStatus") || ""
       );
     };
@@ -63,22 +91,15 @@ function EmergencyDispatch({ setPage }) {
   }, []);
 
   function updateStatus(status) {
-    saveActiveJobSnapshot({
-      status,
+    transitionEmergencyStatus(status, {
       service: selectedService,
+      businessName: professionalName,
       location:
         activeJobSnapshot?.location ||
         localStorage.getItem("activeJobLocation") ||
         localStorage.getItem("emergencyLocation") ||
         "",
     });
-
-    localStorage.setItem("emergencyDispatchStatus", status);
-    localStorage.setItem("activeJobStatus", status);
-
-    window.dispatchEvent(new Event("meetroDispatchStatusChanged"));
-    window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
-    window.dispatchEvent(new Event("meetro-messages-updated"));
 
     setDispatchStatus(status);
   }
@@ -102,50 +123,34 @@ function EmergencyDispatch({ setPage }) {
     }
   }
 
-  function goBack() {
-    const returnPage =
-      localStorage.getItem("dispatchReturnPage") ||
-      "conversationThread";
-
-    setPage(returnPage);
-  }
-
   function completeService() {
     updateStatus("completed");
-
-    localStorage.setItem("activeJobStatus", "completed");
-    localStorage.setItem("emergencyDispatchStatus", "completed");
-    localStorage.setItem("businessAcceptedEmergency", "false");
-    localStorage.setItem("emergencyNeedsReview", "true");
-    localStorage.setItem("emergencyCompletedAt", new Date().toISOString());
-
-    window.dispatchEvent(
-      new Event("meetroEmergencyConversationUpdated")
-    );
+    const emergencyPricing = normalizePricingModel({
+      laborPricingType: "flat_fee",
+      laborFee: activeEmergencyRecord.laborFee || activeEmergencyRecord.amount || "250",
+      laborHours: activeEmergencyRecord.laborHours || "",
+      materials: activeEmergencyRecord.materialsTotal || activeEmergencyRecord.materialCost || "0",
+    });
 
     localStorage.setItem(
       "activeCompletionJob",
       JSON.stringify({
         service:
+          activeEmergencyRecord.service ||
+          activeEmergencyRecord.title ||
           activeJobSnapshot?.service ||
           localStorage.getItem("activeJobService") ||
           localStorage.getItem("selectedEmergencyService") ||
           "Emergency Service",
         location: "Cape Coral, FL",
-        amount: "250",
+        amount: String(emergencyPricing.customerTotal),
+        laborPricingType: emergencyPricing.laborPricingType,
+        laborFee: String(emergencyPricing.laborTotal),
+        laborHours: activeEmergencyRecord.laborHours || "",
+        materials: String(emergencyPricing.materialsTotal),
         date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
+        time: formatMessageTime(new Date()),
       })
-    );
-
-    localStorage.setItem(
-      "emergencyNeedsReview",
-      "true"
-    );
-
-    localStorage.setItem(
-      "emergencyCompletedAt",
-      new Date().toISOString()
     );
 
     localStorage.setItem("completionService", selectedService || "Emergency Service");
@@ -165,7 +170,7 @@ function EmergencyDispatch({ setPage }) {
         language === "es"
           ? "Solicitud aceptada"
           : "Request Accepted",
-      icon: "✅",
+      icon: "selected",
       subtitle:
         language === "es"
           ? "Comienza navegación."
@@ -177,7 +182,7 @@ function EmergencyDispatch({ setPage }) {
         language === "es"
           ? "En camino"
           : "On the Way",
-      icon: "🚐",
+      icon: "onTheWay",
       subtitle:
         language === "es"
           ? "Conduciendo al cliente."
@@ -189,7 +194,7 @@ function EmergencyDispatch({ setPage }) {
         language === "es"
           ? "Llegó"
           : "Arrived",
-      icon: "📍",
+      icon: "arrived",
       subtitle:
         language === "es"
           ? "Llegaste a la ubicación."
@@ -201,7 +206,7 @@ function EmergencyDispatch({ setPage }) {
         language === "es"
           ? "Trabajo iniciado"
           : "Job Started",
-      icon: "🛠️",
+      icon: "activeWork",
       subtitle:
         language === "es"
           ? "Trabajo en progreso."
@@ -213,7 +218,7 @@ function EmergencyDispatch({ setPage }) {
         language === "es"
           ? "Trabajo completado"
           : "Job Completed",
-      icon: "🎉",
+      icon: "completion",
       subtitle:
         language === "es"
           ? "Servicio terminado."
@@ -226,25 +231,16 @@ function EmergencyDispatch({ setPage }) {
     statusMap.accepted;
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-readable-page" style={page}>
       <div style={card}>
-
-        <button
-          style={dispatchBackBtn}
-          onClick={goBack}
-        >
-          ← {language === "es"
-            ? "Volver al centro de trabajo"
-            : "Back to Work Center"}
-        </button>
         <div style={missionHeader}>
           <div style={iconBox}>
-            {current.icon}
+            <MeetroIcon name={current.icon} size={42} decorative />
           </div>
 
           <div>
             <div style={missionEyebrow}>
-              {language === "es" ? "Vista en vivo" : "Live Emergency View"}
+              {t("liveEmergencyView")}
             </div>
 
             <h1 style={title}>
@@ -259,11 +255,11 @@ function EmergencyDispatch({ setPage }) {
 
         <div style={statusTimeline}>
           {[
-            ["accepted", language === "es" ? "Aceptado" : "Accepted"],
-            ["enroute", language === "es" ? "En camino" : "On the way"],
-            ["arrived", language === "es" ? "Llegó" : "Arrived"],
-            ["started", language === "es" ? "Trabajando" : "Working"],
-            ["completed", language === "es" ? "Completado" : "Completed"],
+            ["accepted", t("accepted")],
+            ["enroute", t("onTheWay")],
+            ["arrived", t("arrived")],
+            ["started", t("working")],
+            ["completed", t("completed")],
           ].map(([status, label]) => {
             const order = ["accepted", "enroute", "arrived", "started", "completed"];
             const active = order.indexOf(status) <= order.indexOf(dispatchStatus);
@@ -280,8 +276,8 @@ function EmergencyDispatch({ setPage }) {
         <div style={liveRouteCard}>
           <div style={routeTop}>
             <div>
-              <strong>{language === "es" ? "Ruta en vivo" : "Live Route"}</strong>
-              <p>{language === "es" ? "Profesional → Cliente" : "Professional → Customer"}</p>
+              <strong>{t("liveRoute")}</strong>
+              <p>{t("professionalToCustomer")}</p>
             </div>
 
             <span style={etaPill}>ETA 10m</span>
@@ -289,8 +285,12 @@ function EmergencyDispatch({ setPage }) {
 
           <div style={routeMap}>
             <div style={routeLine}></div>
-            <div style={routeVan}>🚐</div>
-            <div style={routePin}>📍</div>
+            <div style={routeVan}>
+              <MeetroIcon name="onTheWay" size={24} decorative />
+            </div>
+            <div style={routePin}>
+              <MeetroIcon name="location" size={24} decorative />
+            </div>
           </div>
         </div>
 
@@ -306,10 +306,10 @@ function EmergencyDispatch({ setPage }) {
 
         <div style={dispatchActionStack}>
           <button
-            style={messageButton}
+            style={dispatchBackBtn}
             onClick={openEmergencyChat}
           >
-            💬 {language === "es" ? "Volver al chat" : "Back to Chat"}
+            ← {t("backToChat")}
           </button>
 
         {dispatchStatus === "accepted" && (
@@ -319,9 +319,7 @@ function EmergencyDispatch({ setPage }) {
               updateStatus("enroute")
             }
           >
-            {language === "es"
-              ? "Comenzar ruta"
-              : "Start Route"}
+            {t("startRoute")}
           </button>
         )}
 
@@ -332,9 +330,7 @@ function EmergencyDispatch({ setPage }) {
               updateStatus("arrived")
             }
           >
-            {language === "es"
-              ? "Marcar Llegada"
-              : "Mark Arrived"}
+            {t("markArrived")}
           </button>
         )}
 
@@ -345,9 +341,7 @@ function EmergencyDispatch({ setPage }) {
               updateStatus("started")
             }
           >
-            {language === "es"
-              ? "Iniciar Trabajo"
-              : "Start Job"}
+            {t("startJob")}
           </button>
         )}
 
@@ -356,9 +350,7 @@ function EmergencyDispatch({ setPage }) {
             style={completeButton}
             onClick={completeService}
           >
-            ✅ {language === "es"
-              ? "Completar Servicio"
-              : "Complete Service"}
+            <MeetroIcon name="completion" size={18} decorative /> {t("completeService")}
           </button>
         )}
         </div>
@@ -366,28 +358,28 @@ function EmergencyDispatch({ setPage }) {
 
       <BottomNav
         setPage={setPage}
-        currentPage="emergency"
+        currentPage="emergencyDispatch"
       />
     </div>
   );
 }
 
 const page={
-minHeight:"100vh",
+minHeight: "100dvh",
 background:"#f5f7fb",
-padding:"24px 24px 190px"
+padding:
+"calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))"
 };
 
 
 const dispatchBackBtn={
 width:"100%",
-padding:"14px",
+padding:"16px",
 border:"1px solid #fecaca",
 borderRadius:"18px",
 background:"#fff7f7",
 color:"#b91c1c",
 fontWeight:"900",
-marginBottom:"16px",
 cursor:"pointer"
 };
 
@@ -550,17 +542,6 @@ const dispatchActionStack={
 display:"grid",
 gap:"12px",
 marginTop:"12px"
-};
-
-const messageButton={
-width:"100%",
-padding:"16px",
-border:"none",
-borderRadius:"18px",
-background:"#111827",
-color:"white",
-fontWeight:"900",
-marginBottom:"12px"
 };
 
 const primaryButton={

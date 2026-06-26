@@ -3,7 +3,17 @@ export const WORKFLOW_PERSIST_KEYS = [
   "completedProjects",
   "selectedActiveProject",
   "lastCompletedProject",
+  "lastSavedJobRecord",
+  "lastJobUpdate",
+  "jobUpdates",
+  "projectOutcome",
+  "projectOutcomeDate",
+  "projectWorkflowStatus",
+  "workflowSource",
   "meetro_business_schedule",
+  "workCenterQuoteHistory",
+  "meetroQuoteHistory",
+  "quoteHistory",
   "activeWorkService",
   "activeWorkLocation",
   "activeWorkStatus",
@@ -11,10 +21,23 @@ export const WORKFLOW_PERSIST_KEYS = [
   "activeWorkSource",
   "activeWorkRequestId",
   "activeWorkConversationId",
+  "activeWorkQuoteId",
+  "activeWorkScheduleId",
+  "activeWorkStage",
+  "activeWorkPauseReason",
   "activeJobService",
   "activeJobLocation",
   "activeJobStatus",
+  "activeJobId",
+  "activeJobCustomer",
+  "activeJobEta",
+  "activeInvoiceConversationId",
+  "invoiceConversationId",
+  "invoiceCustomerLocation",
   "homeownerNeedsReview",
+  "conversationArchivedAt",
+  "conversationSavedToHistory",
+  "lastManualQuoteNumber",
 ];
 
 export function preserveWorkflowSnapshot() {
@@ -31,7 +54,9 @@ export function preserveWorkflowSnapshot() {
     if (
       key.startsWith("meetro_conversation_") ||
       key.startsWith("meetro_job_record_") ||
-      key.startsWith("meetro_conversation_read_")
+      key.startsWith("meetro_conversation_read_") ||
+      key.startsWith("meetro_conversation_meta_") ||
+      key.startsWith("meetro_notifications")
     ) {
       snapshot[key] = localStorage.getItem(key);
     }

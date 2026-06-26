@@ -3,7 +3,22 @@ import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
-import { t } from "../utils/language";
+import { getLanguage, t } from "../utils/language";
+import {
+  getProfessionalReviews,
+  getProfessionalReviewStats,
+  saveProfessionalReview,
+} from "../utils/reviewStorage";
+import {
+  canProfessionalReceiveRequest,
+  inferRequestCategory,
+  inferServiceDomain,
+} from "../utils/professionalRequestMatching";
+import {
+  getProfessionalSpecialtyLabel,
+  inferProfessionalSpecialtiesFromLegacyCategories,
+  normalizeSelectedSpecialties,
+} from "../utils/professionalOnboardingSpecialties";
 
 function ContractorDetails({ setPage, currentPage }) {
   const [profile, setProfile] = useState(null);
@@ -24,6 +39,8 @@ function ContractorDetails({ setPage, currentPage }) {
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const language = getLanguage();
+  const isSpanish = language === "es";
 
   useEffect(() => {
     fetchContractor();
@@ -35,6 +52,52 @@ function ContractorDetails({ setPage, currentPage }) {
     } catch {
       return fallback;
     }
+  }
+
+  function getLinkedPublicProfileId() {
+    const hash = window.location.hash.replace("#", "");
+    const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+
+    return new URLSearchParams(query).get("profileId") || "";
+  }
+
+  function getStoredPublicProfile(profileId) {
+    if (!profileId) return null;
+
+    const publicProfiles = safeJson("meetroPublicBusinessProfiles", {});
+    return publicProfiles?.[profileId] || null;
+  }
+
+  function returnToBusinessDirectory() {
+    const returnPage =
+      localStorage.getItem("contractorDetailsReturnPage") || "discover";
+
+    localStorage.removeItem("contractorDetailsReturnPage");
+
+    if (returnPage === "home") {
+      setPage("home");
+      return;
+    }
+
+    if (returnPage === "emergency") {
+      setPage("emergencyBusinessSelection");
+      return;
+    }
+
+    if (returnPage === "contractors") {
+      setPage("contractors");
+      return;
+    }
+
+    if (returnPage === "contractorProfile") {
+      localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
+      setPage("contractorProfile");
+      return;
+    }
+
+    localStorage.setItem("activeDiscoverMode", "businessDirectory");
+    localStorage.setItem("discoverReturnMode", "businessDirectory");
+    setPage("discover");
   }
 
   function normalizeGalleryItem(item, index, source = "local") {
@@ -189,27 +252,37 @@ function ContractorDetails({ setPage, currentPage }) {
 
   async function fetchContractor() {
     try {
-      const savedContractor = JSON.parse(
-        localStorage.getItem("selectedContractor") || "{}"
-      );
+      const linkedProfileId = getLinkedPublicProfileId();
+      const linkedContractor = getStoredPublicProfile(linkedProfileId);
+      const savedContractor =
+        linkedContractor ||
+        JSON.parse(localStorage.getItem("selectedContractor") || "{}");
 
       if (savedContractor.name || savedContractor.business_name) {
+        localStorage.setItem("selectedContractor", JSON.stringify(savedContractor));
+
         const localGallery = getLocalGalleryForProfile(savedContractor);
 
         setProfile(savedContractor);
 
         if (savedContractor.id) {
           await fetchProjects(savedContractor.id, localGallery);
-          await fetchReviews(savedContractor.id);
+          await fetchReviews(savedContractor.id, savedContractor);
         } else {
           setProjects(localGallery);
+          await fetchReviews("", savedContractor);
         }
 
         setLoading(false);
         return;
       }
 
-      const contractorId = savedContractor.id;
+      const contractorId = savedContractor.id || linkedProfileId;
+
+      if (!contractorId) {
+        setLoading(false);
+        return;
+      }
 
       const response = await fetch(
         `${API_URL}/contractor-profiles/${contractorId}`
@@ -221,7 +294,7 @@ function ContractorDetails({ setPage, currentPage }) {
         const localGallery = getLocalGalleryForProfile(data.profile);
 
         setProfile(data.profile);
-        await fetchReviews(data.profile.id);
+        await fetchReviews(data.profile.id, data.profile);
         await fetchProjects(data.profile.id, localGallery);
       } else if (savedContractor.id || savedContractor.name) {
         const localGallery = getLocalGalleryForProfile(savedContractor);
@@ -247,15 +320,51 @@ function ContractorDetails({ setPage, currentPage }) {
     }
   }
 
-  async function fetchReviews(contractorId) {
+  async function fetchReviews(contractorId, contractorProfile = profile) {
+    const localReviews = getProfessionalReviews({
+      professionalId: contractorId || contractorProfile?.id,
+      professionalName:
+        contractorProfile?.business_name || contractorProfile?.name,
+    });
+    const localStats = getProfessionalReviewStats(localReviews);
+
     try {
       const response = await fetch(`${API_URL}/reviews/${contractorId}`);
       const data = await response.json();
+      const apiReviews = data.reviews || [];
+      const combinedReviews = [...localReviews, ...apiReviews];
+      const seen = new Set();
+      const dedupedReviews = combinedReviews.filter((review) => {
+        const key =
+          review.id ||
+          [
+            review.professionalId || contractorId,
+            review.jobId || review.requestId,
+            review.createdAt || review.created_at,
+            review.comment || review.review_text,
+          ].join(":");
 
-      setReviews(data.reviews || []);
-      setReviewStats(data.stats || null);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const combinedStats = getProfessionalReviewStats(dedupedReviews);
+
+      setReviews(dedupedReviews);
+      setReviewStats({
+        average_rating:
+          combinedStats.averageRating || data.stats?.average_rating || "",
+        total_reviews:
+          combinedStats.totalReviews || data.stats?.total_reviews || 0,
+      });
     } catch (error) {
       console.error(error);
+      setReviews(localReviews);
+      setReviewStats({
+        average_rating: localStats.averageRating,
+        total_reviews: localStats.totalReviews,
+      });
     }
   }
 
@@ -345,12 +454,23 @@ function ContractorDetails({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.review) {
+        saveProfessionalReview({
+          ...data.review,
+          professionalId: profile.id,
+          professionalName: profile.business_name || profile.name,
+          customerDisplayName: localStorage.getItem("userName") || "Customer",
+          rating,
+          comment: reviewText,
+          service: profile.category || profile.business_category || "",
+          source: "homeowner_review",
+        });
+
         alert(t("reviewSubmitted"));
 
         setRating(5);
         setReviewText("");
 
-        await fetchReviews(profile.id);
+        await fetchReviews(profile.id, profile);
       } else {
         alert(data.error || t("reviewFailed"));
       }
@@ -407,8 +527,8 @@ function ContractorDetails({ setPage, currentPage }) {
 
   if (!profile) {
     return (
-      <div style={pageWrapper}>
-        <button onClick={() => setPage("contractors")} style={backButton}>
+      <div className="app-page meetro-readable-page" style={pageWrapper}>
+        <button onClick={returnToBusinessDirectory} style={backButton}>
           ← {t("backToContractors")}
         </button>
 
@@ -423,12 +543,76 @@ function ContractorDetails({ setPage, currentPage }) {
     );
   }
 
+  const profileName =
+    profile.business_name || profile.name || t("contractor");
+  const profileCategory =
+    profile.category ||
+    profile.business_category ||
+    profile.serviceCategory ||
+    "";
+  const profileDomain =
+    profile.serviceDomain ||
+    profile.service_domain ||
+    inferServiceDomain(profileCategory);
+  const fullBusinessAddress =
+    profile.fullAddress ||
+    profile.full_address ||
+    profile.publicAddress ||
+    profile.public_address ||
+    "";
+  const canShowFullAddress =
+    profile.showBusinessAddressPublic === true ||
+    profile.show_business_address_public === true;
+  const serviceArea =
+    canShowFullAddress && fullBusinessAddress
+      ? fullBusinessAddress
+      : profile.serviceArea ||
+        profile.service_area ||
+        profile.location ||
+        profile.city ||
+        profile.primaryCity ||
+        (isSpanish ? "Área de servicio pendiente" : "Service area pending");
+  const description =
+    profile.bio ||
+    profile.description ||
+    profile.business_description ||
+    (isSpanish
+      ? "Este profesional aún no agregó una descripción del negocio."
+      : "This professional has not added a business description yet.");
+  const servicesOffered = getServicesOffered(profile, profileCategory, isSpanish);
+  const availabilitySummary = getAvailabilitySummary(profile, isSpanish);
+  const credentialSummary = getCredentialSummary(profile, isSpanish);
+  const allowedForHomeownerContext = isProfileAllowedForHomeownerContext(profile);
+
+  if (!allowedForHomeownerContext) {
+    return (
+      <div className="app-page meetro-readable-page" style={pageWrapper}>
+        <button onClick={returnToBusinessDirectory} style={backButton}>
+          ← {t("backToContractors")}
+        </button>
+
+        <div style={cardStyle}>
+          <h2 style={sectionTitle}>
+            {isSpanish ? "Perfil no disponible" : "Profile unavailable"}
+          </h2>
+          <p style={mutedText}>
+            {isSpanish
+              ? "Este profesional no coincide con el tipo de servicio de esta solicitud."
+              : "This professional does not match the service type for this request."}
+          </p>
+        </div>
+
+        <BottomNav setPage={setPage} currentPage="home" />
+      </div>
+    );
+  }
+
   if (selectedProject) {
     const selectedImages = getProjectImages(selectedProject);
     const mainProjectImage = activeProjectImage || selectedImages[0] || "";
 
     return (
-      <div style={pageWrapper}>
+      <div className="app-page meetro-readable-page" style={pageWrapper}>
         <button
           onClick={() => {
             setSelectedProject(null);
@@ -508,8 +692,8 @@ function ContractorDetails({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
-      <button onClick={() => setPage("contractors")} style={backButton}>
+    <div className="app-page meetro-readable-page" style={pageWrapper}>
+      <button onClick={returnToBusinessDirectory} style={backButton}>
         ← {t("backToContractors")}
       </button>
 
@@ -517,50 +701,207 @@ function ContractorDetails({ setPage, currentPage }) {
         {profile.image_url || profile.imageUrl || profile.logo ? (
           <img
             src={profile.image_url || profile.imageUrl || profile.logo}
-            alt={profile.business_name || profile.name || "Business"}
+            alt={profileName}
             style={profileImage}
           />
         ) : (
           <div style={imagePlaceholder}>
-            {(profile.business_name || profile.name || "B")
+            {(profileName || "B")
               .charAt(0)
               .toUpperCase()}
           </div>
         )}
 
-        <h1 style={businessTitle}>
-          {profile.business_name || profile.name || t("contractor")}
-        </h1>
+        <BusinessNameTitle name={profileName} />
 
         <p style={categoryStyle}>
-          {profile.category || t("serviceProvider")}
+          {profileCategory || t("serviceProvider")}
+          {profileDomain && (
+            <span style={domainPill}>
+              {profileDomain.replaceAll("_", " ")}
+            </span>
+          )}
         </p>
 
         <p style={locationStyle}>
-          📍 {profile.location || t("locationNotSet")}
+           {serviceArea}
         </p>
 
         <div style={ratingSummary}>
-          <strong style={{ color: "#111" }}>
-            ⭐ {reviewStats?.average_rating || profile.rating || t("noRatingYet")}
-          </strong>
+          {reviewStats?.total_reviews ? (
+            <>
+              <strong style={{ color: "#111" }}>
+                 {reviewStats.average_rating || profile.rating}
+              </strong>
 
-          <span style={{ color: "#666", marginLeft: "8px" }}>
-            ({reviewStats?.total_reviews || 0} {t("reviews")})
-          </span>
+              <span style={{ color: "#666", marginLeft: "8px" }}>
+                ({reviewStats.total_reviews} {t("reviews")})
+              </span>
+            </>
+          ) : (
+            <span style={{ color: "#666", fontWeight: "800" }}>
+              {isSpanish ? "Sin reseñas todavía" : "No reviews yet"}
+            </span>
+          )}
         </div>
 
         <div style={badgeRow}>
           <span style={verifiedBadge}>✓ {t("verified")}</span>
-          <span style={responseBadge}>⚡ {t("fastResponse")}</span>
+          <span style={responseBadge}>{credentialSummary.verified}</span>
+          <span style={credentialSummary.licensed ? responseBadge : mutedBadge}>
+            {credentialSummary.licensed ||
+              (isSpanish ? "Credenciales pendientes" : "Credentials pending")}
+          </span>
 
           {profile.is_featured && (
             <span style={featuredBadge}>{t("featured")}</span>
           )}
         </div>
 
-        <p style={bioStyle}>
-          {profile.bio || "Business description coming soon"}
+        <p style={bioStyle}>{description}</p>
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Vista previa del trabajo" : "Portfolio preview"}
+        </h2>
+
+        {projects[0]?.image_url ? (
+          <div style={portfolioCoverWrap}>
+            <img
+              src={projects[0].image_url}
+              alt={projects[0].title || profileName}
+              style={portfolioCoverImage}
+            />
+          </div>
+        ) : (
+          <div style={mediaPlaceholder}>
+            <span style={mediaPlaceholderIcon}>▻</span>
+            <strong>
+              {isSpanish ? "Medios próximamente" : "Media coming soon"}
+            </strong>
+            <p>
+              {isSpanish
+                ? "Fotos o videos del portafolio aparecerán aquí cuando estén disponibles."
+                : "Portfolio photos or videos will appear here when available."}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Servicios ofrecidos" : "Services offered"}
+        </h2>
+        <div style={serviceChipGrid}>
+          {servicesOffered.map((service) => (
+            <span key={service} style={serviceChip}>
+              {service}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Disponibilidad y confianza" : "Availability & trust"}
+        </h2>
+        <div style={trustGrid}>
+          <TrustItem
+            label={isSpanish ? "Disponibilidad" : "Availability"}
+            value={availabilitySummary}
+          />
+          <TrustItem
+            label={isSpanish ? "Perfil verificado" : "Verified profile"}
+            value={credentialSummary.verified}
+          />
+          <TrustItem
+            label={isSpanish ? "Licencia / seguro" : "Licensed / insured"}
+            value={
+              credentialSummary.licensed ||
+              (isSpanish ? "No agregado todavía" : "Not added yet")
+            }
+          />
+          <TrustItem
+            label={isSpanish ? "Reseñas" : "Reviews"}
+            value={
+              reviewStats?.total_reviews
+                ? `${reviewStats.total_reviews} ${t("reviews")}`
+                : isSpanish
+                ? "Reseñas pendientes"
+                : "Reviews pending"
+            }
+          />
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={sectionTitle}>{t("projectGallery")}</h2>
+
+        {projects.length === 0 && (
+          <p style={mutedText}>{t("noProjectPhotos")}</p>
+        )}
+
+        {projects.map((project) => {
+          const projectImages = getProjectImages(project);
+          const coverImage = projectImages[0];
+
+          return (
+            <div key={project.id} style={portfolioCard}>
+              {coverImage && (
+                <div style={portfolioCoverWrap}>
+                  <img
+                    src={coverImage}
+                    alt={project.title}
+                    style={portfolioCoverImage}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+
+                  {projectImages.length > 1 && (
+                    <span style={portfolioPhotoBadge}>
+                      +{projectImages.length - 1} photos
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div style={portfolioContent}>
+                <span style={portfolioTrustBadge}>
+                  {t("projectGallery")}
+                </span>
+
+                <h3 style={innerTitle}>{project.title}</h3>
+
+                {project.description && (
+                  <p style={innerText}>{project.description}</p>
+                )}
+
+                <button
+                  style={portfolioOpenButton}
+                  onClick={() => {
+                    const projectImages = getProjectImages(project);
+                    setSelectedProject(project);
+                    setActiveProjectImage(projectImages[0] || "");
+                  }}
+                >
+                  {t("viewPortfolioWork")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Opciones existentes" : "Existing contact options"}
+        </h2>
+        <p style={mutedText}>
+          {isSpanish
+            ? "Estas acciones usan los flujos actuales de Meetro."
+            : "These actions use Meetro's existing safe flows."}
         </p>
 
         <button
@@ -619,65 +960,6 @@ function ContractorDetails({ setPage, currentPage }) {
       )}
 
       <div style={cardStyle}>
-        <h2 style={sectionTitle}>{t("projectGallery")}</h2>
-
-        {projects.length === 0 && (
-          <p style={mutedText}>{t("noProjectPhotos")}</p>
-        )}
-
-        {projects.map((project) => {
-          const projectImages = getProjectImages(project);
-          const coverImage = projectImages[0];
-
-          return (
-            <div key={project.id} style={portfolioCard}>
-              {coverImage && (
-                <div style={portfolioCoverWrap}>
-                  <img
-                    src={coverImage}
-                    alt={project.title}
-                    style={portfolioCoverImage}
-                    onError={(event) => {
-                      event.currentTarget.style.display = "none";
-                    }}
-                  />
-
-                  {projectImages.length > 1 && (
-                    <span style={portfolioPhotoBadge}>
-                      +{projectImages.length - 1} photos
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div style={portfolioContent}>
-                <span style={portfolioTrustBadge}>
-                  {t("projectGallery")}
-                </span>
-
-                <h3 style={innerTitle}>{project.title}</h3>
-
-                {project.description && (
-                  <p style={innerText}>{project.description}</p>
-                )}
-
-                <button
-                  style={portfolioOpenButton}
-                  onClick={() => {
-                    const projectImages = getProjectImages(project);
-                    setSelectedProject(project);
-                    setActiveProjectImage(projectImages[0] || "");
-                  }}
-                >
-                  {t("open")} {t("project")}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={cardStyle}>
         <h2 style={sectionTitle}>{t("leaveReview")}</h2>
 
         <div style={starRow}>
@@ -690,7 +972,7 @@ function ContractorDetails({ setPage, currentPage }) {
                 opacity: star <= rating ? 1 : 0.3,
               }}
             >
-              ⭐
+              
             </button>
           ))}
         </div>
@@ -722,18 +1004,36 @@ function ContractorDetails({ setPage, currentPage }) {
       <div style={cardStyle}>
         <h2 style={sectionTitle}>{t("reviews")}</h2>
 
-        {reviews.length === 0 && <p style={mutedText}>{t("noReviewsYet")}</p>}
+        {reviews.length === 0 && (
+          <div style={reviewEmptyCard}>
+            <strong>
+              {isSpanish ? "Sin reseñas todavía" : "No reviews yet"}
+            </strong>
+            <p style={mutedText}>
+              {isSpanish
+                ? "Las reseñas aparecerán después de trabajos completados."
+                : "Reviews will appear after completed jobs."}
+            </p>
+          </div>
+        )}
 
         {reviews.map((review) => (
           <div key={review.id} style={innerCard}>
-            <p style={{ margin: 0 }}>{"⭐".repeat(Number(review.rating))}</p>
+            <p style={{ margin: 0 }}>{"".repeat(Number(review.rating))}</p>
 
             <p style={innerText}>
-              {review.review_text || t("noReviewText")}
+              {review.comment || review.review_text || t("noReviewText")}
             </p>
 
+            {(review.service || review.projectTitle || review.jobTitle) && (
+              <p style={smallText}>
+                {review.service || review.projectTitle || review.jobTitle}
+              </p>
+            )}
+
             <p style={smallText}>
-              {t("by")} {review.reviewer_email || t("meetroUser")}
+              {t("by")}{" "}
+              {review.customerDisplayName || review.reviewerName || t("meetroUser")}
             </p>
           </div>
         ))}
@@ -744,12 +1044,245 @@ function ContractorDetails({ setPage, currentPage }) {
   );
 }
 
+function isProfileAllowedForHomeownerContext(profile = {}) {
+  const contexts = getHomeownerRequestContexts();
+  const profileCategory =
+    profile.category ||
+    profile.business_category ||
+    profile.serviceCategory ||
+    "";
+  const profileDomain =
+    profile.serviceDomain ||
+    profile.service_domain ||
+    inferServiceDomain(profileCategory);
+
+  if (!profileDomain) return false;
+  if (contexts.length === 0) return true;
+
+  return contexts.some((requestContext) =>
+    canProfessionalReceiveRequest(
+      {
+        ...profile,
+        businessCategory: profileCategory,
+        category: profileCategory,
+        serviceCategories:
+          profile.serviceCategories ||
+          profile.service_categories ||
+          profile.services ||
+          [profileCategory],
+      },
+      requestContext
+    )
+  );
+}
+
+function getHomeownerRequestContexts() {
+  let requests = [];
+
+  try {
+    requests = JSON.parse(localStorage.getItem("homeownerRequests") || "[]");
+  } catch {
+    requests = [];
+  }
+
+  const selectedRequestId = String(
+    localStorage.getItem("selectedHomeownerRequestId") || ""
+  );
+
+  const activeRequests = requests.filter((request) => {
+    const status = String(request?.status || "open").toLowerCase();
+    return !["closed", "cancelled"].includes(status);
+  });
+
+  const prioritizedRequests = selectedRequestId
+    ? [
+        ...activeRequests.filter(
+          (request) =>
+            String(request.id || request.requestId || "") === selectedRequestId
+        ),
+        ...activeRequests.filter(
+          (request) =>
+            String(request.id || request.requestId || "") !== selectedRequestId
+        ),
+      ]
+    : activeRequests;
+
+  return prioritizedRequests
+    .map((request) => {
+      const category = inferRequestCategory(request);
+      if (!category) return null;
+
+      return {
+        category,
+        serviceDomain: request.serviceDomain || request.service_domain || "",
+        city: request.city || "",
+        zipCode: request.zipCode || request.zip || "",
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function getServicesOffered(profile = {}, fallbackCategory = "", isSpanish = false) {
+  const storedSpecialties = readStoredArray("businessServiceSpecialties");
+  const profileSpecialties = [
+    ...(Array.isArray(profile.businessServiceSpecialties)
+      ? profile.businessServiceSpecialties
+      : []),
+    ...(Array.isArray(profile.serviceSpecialties)
+      ? profile.serviceSpecialties
+      : []),
+    ...(Array.isArray(profile.service_specialties)
+      ? profile.service_specialties
+      : []),
+    ...(profile.id || profile.name || profile.business_name ? [] : storedSpecialties),
+  ];
+  const normalizedSpecialties = normalizeSelectedSpecialties(profileSpecialties);
+
+  if (normalizedSpecialties.length > 0) {
+    return normalizedSpecialties.map((specialty) =>
+      getProfessionalSpecialtyLabel(specialty, t)
+    ).filter(Boolean);
+  }
+
+  const legacyCategories = [
+    ...(Array.isArray(profile.services) ? profile.services : []),
+    ...(Array.isArray(profile.serviceCategories) ? profile.serviceCategories : []),
+    ...(Array.isArray(profile.service_categories) ? profile.service_categories : []),
+    profile.primaryService,
+    profile.service,
+    fallbackCategory,
+  ].filter(Boolean);
+  const inferredSpecialties = inferProfessionalSpecialtiesFromLegacyCategories(
+    legacyCategories
+  );
+
+  if (inferredSpecialties.length > 0) {
+    return inferredSpecialties.map((specialty) =>
+      getProfessionalSpecialtyLabel(specialty, t)
+    ).filter(Boolean);
+  }
+
+  const readableCategories = [
+    ...new Set(
+      legacyCategories
+        .map((service) => String(service || "").trim())
+        .filter(Boolean)
+        .filter((service) => !service.includes("_"))
+    ),
+  ];
+
+  if (readableCategories.length > 0) return readableCategories;
+
+  return [
+    isSpanish
+      ? "Servicios no listados todavía"
+      : "Services not listed yet",
+  ];
+}
+
+function readStoredArray(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getAvailabilitySummary(profile = {}, isSpanish = false) {
+  const availability = Array.isArray(profile.availability)
+    ? profile.availability
+    : Array.isArray(profile.businessAvailability)
+    ? profile.businessAvailability
+    : [];
+
+  if (profile.availableNow || profile.available_now) {
+    return isSpanish ? "Disponible ahora" : "Available now";
+  }
+
+  if (availability.length > 0) {
+    return availability.join(", ");
+  }
+
+  return isSpanish
+    ? "Disponibilidad no agregada todavía"
+    : "Availability not added yet";
+}
+
+function getCredentialSummary(profile = {}, isSpanish = false) {
+  const verified =
+    profile.verified ||
+    profile.isVerified ||
+    profile.profileVerified ||
+    profile.status === "active";
+  const licensed =
+    profile.licensedInsured ||
+    profile.licensed_insured ||
+    profile.license ||
+    profile.insurance ||
+    "";
+
+  return {
+    verified: verified
+      ? isSpanish
+        ? "Perfil verificado"
+        : "Verified profile"
+      : isSpanish
+      ? "Verificación pendiente"
+      : "Verification pending",
+    licensed: licensed
+      ? isSpanish
+        ? "Licencia / seguro agregado"
+        : "License / insurance added"
+      : "",
+  };
+}
+
+function TrustItem({ label, value }) {
+  return (
+    <div style={trustItem}>
+      <span style={trustLabel}>{label}</span>
+      <strong style={trustValue}>{value}</strong>
+    </div>
+  );
+}
+
+function BusinessNameTitle({ name }) {
+  const displayName = String(name || "").trim();
+  const ampersandIndex = displayName.indexOf("&");
+
+  if (ampersandIndex === -1) {
+    return <h1 style={businessTitle}>{displayName}</h1>;
+  }
+
+  const beforeAmpersand = displayName.slice(0, ampersandIndex).trim();
+  const afterAmpersand = displayName.slice(ampersandIndex + 1).trim();
+
+  return (
+    <h1 style={{ ...businessTitle, ...ampersandBusinessTitle }}>
+      {beforeAmpersand && (
+        <span style={businessTitleLine}>{beforeAmpersand}</span>
+      )}
+      <span style={businessTitleAmpersand}>&</span>
+      {afterAmpersand && (
+        <span style={businessTitleLine}>{afterAmpersand}</span>
+      )}
+    </h1>
+  );
+}
+
 const pageWrapper = {
   background: "#f5f5f7",
-  minHeight: "100vh",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
+  minHeight: "100dvh",
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(120px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   color: "#111",
+  overflowX: "hidden",
 };
 
 const backButton = {
@@ -778,11 +1311,29 @@ const imagePlaceholder = {
 };
 
 const businessTitle = {
-  margin: 0,
-  marginBottom: "8px",
+  margin: "0 auto 8px",
+  maxWidth: "min(100%, 560px)",
   color: "#111",
-  fontSize: "38px",
-  lineHeight: 1.1,
+  fontSize: "clamp(34px, 9vw, 42px)",
+  lineHeight: 1.06,
+  textAlign: "center",
+  overflowWrap: "normal",
+};
+
+const ampersandBusinessTitle = {
+  display: "grid",
+  gap: "2px",
+  justifyItems: "center",
+};
+
+const businessTitleLine = {
+  display: "block",
+};
+
+const businessTitleAmpersand = {
+  display: "block",
+  fontSize: "0.82em",
+  lineHeight: 0.95,
 };
 
 const categoryStyle = {
@@ -790,6 +1341,23 @@ const categoryStyle = {
   color: "#5b3df5",
   fontWeight: "bold",
   fontSize: "18px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const domainPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: "999px",
+  padding: "5px 9px",
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "11px",
+  fontWeight: "900",
+  textTransform: "capitalize",
 };
 
 const locationStyle = {
@@ -828,6 +1396,15 @@ const responseBadge = {
   fontSize: "13px",
 };
 
+const mutedBadge = {
+  background: "#f8fafc",
+  color: "#64748b",
+  padding: "8px 14px",
+  borderRadius: "999px",
+  fontWeight: "bold",
+  fontSize: "13px",
+};
+
 const featuredBadge = {
   background: "#fff7df",
   color: "#c79b00",
@@ -842,6 +1419,81 @@ const bioStyle = {
   lineHeight: 1.6,
   marginTop: "18px",
   fontSize: "16px",
+};
+
+const mediaPlaceholder = {
+  minHeight: "190px",
+  borderRadius: "22px",
+  border: "1px dashed #cbd5e1",
+  background: "linear-gradient(135deg,#f8fafc,#eef2ff)",
+  color: "#475569",
+  display: "grid",
+  placeItems: "center",
+  textAlign: "center",
+  padding: "20px",
+  boxSizing: "border-box",
+};
+
+const mediaPlaceholderIcon = {
+  width: "46px",
+  height: "46px",
+  borderRadius: "999px",
+  background: "rgba(91,61,245,0.12)",
+  color: "#5b3df5",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "18px",
+  fontWeight: "950",
+};
+
+const serviceChipGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const serviceChip = {
+  maxWidth: "100%",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  fontSize: "13px",
+  fontWeight: "900",
+  overflowWrap: "anywhere",
+};
+
+const trustGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+  gap: "10px",
+};
+
+const trustItem = {
+  display: "grid",
+  gap: "6px",
+  padding: "13px",
+  borderRadius: "16px",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  minWidth: 0,
+};
+
+const trustLabel = {
+  color: "#64748b",
+  fontSize: "11px",
+  fontWeight: "900",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const trustValue = {
+  color: "#111827",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
 };
 
 const cardStyle = {
@@ -1044,6 +1696,14 @@ const innerCard = {
   borderRadius: "18px",
   padding: "14px",
   marginTop: "14px",
+};
+
+const reviewEmptyCard = {
+  background: "#fafafa",
+  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
+  padding: "14px",
+  color: "#111827",
 };
 
 const projectImage = {

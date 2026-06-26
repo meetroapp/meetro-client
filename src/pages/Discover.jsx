@@ -5,17 +5,24 @@ import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 import { isProfessionalSession, professionalRoles } from "../utils/session";
+import {
+  getStoredProfessionalMatchProfile,
+  inferRequestCategory,
+  normalizeServiceCategory,
+} from "../utils/professionalRequestMatching";
+import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
 
 function Discover({ setPage, currentPage }) {
-  const discoverMode =
-    localStorage.getItem("activeDiscoverMode") || "businessDirectory";
-
-  const isBusinessDirectory = discoverMode === "businessDirectory";
-
+  const [discoverMode, setDiscoverMode] = useState(
+    localStorage.getItem("activeDiscoverMode") || "businessDirectory"
+  );
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState([]);
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [language, updateLanguage] = useState(getLanguage());
+
+  const isBusinessDirectory = discoverMode === "businessDirectory";
 
   const userRole = localStorage.getItem("userRole") || "standard";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -23,9 +30,12 @@ function Discover({ setPage, currentPage }) {
   const isProfessional =
     isProfessionalSession();
 
-  const normalizedBusinessCategory = businessCategory
-    .toLowerCase()
-    .replace(/\s+/g, "");
+  const professionalMatchProfile = {
+    ...getStoredProfessionalMatchProfile(),
+    businessCategory,
+    category: businessCategory,
+  };
+  const normalizedProfessionalCategory = normalizeServiceCategory(businessCategory);
 
   const categoryScrollRef = useRef(null);
 
@@ -143,6 +153,116 @@ function Discover({ setPage, currentPage }) {
     );
   });
 
+  const visibleBusinesses =
+    !isProfessional && filter !== "all"
+      ? businesses.filter((business) =>
+          canProfessionalSeeLocalLead(
+            {
+              ...business,
+              businessCategory:
+                business.category || business.business_category || "",
+              category: business.category || business.business_category || "",
+            },
+            { category: filter }
+          )
+        )
+      : businesses;
+
+  const marketplaceCategories = [
+    { value: "all", label: t("discoverCategoryAll", language), route: null },
+    { value: "handyman", label: t("handyman", language), route: null },
+    { value: "plumbing", label: t("plumbing", language), route: null },
+    { value: "electrical", label: t("electrical", language), route: null },
+    { value: "painting", label: t("painting", language), route: null },
+    { value: "cleaning", label: t("cleaning", language), route: null },
+    { value: "landscaping", label: t("landscaping", language), route: null },
+    { value: "emergency", label: t("emergency", language), route: "emergency" },
+    { value: "jobsHiring", label: t("jobsHiringTitle", language), route: "jobsHiring" },
+  ];
+
+  function getBusinessDisplayCategory(business = {}) {
+    return (
+      business.category ||
+      business.business_category ||
+      business.serviceCategory ||
+      business.primaryCategory ||
+      t("homeLocalService", language)
+    );
+  }
+
+  function getBusinessServiceArea(business = {}) {
+    return (
+      business.serviceArea ||
+      business.service_area ||
+      business.location ||
+      business.city ||
+      t("homeLocalArea", language)
+    );
+  }
+
+  function businessMatchesCategory(business = {}, categoryValue = "all") {
+    if (categoryValue === "all") return true;
+
+    const normalizedCategory = normalizeServiceCategory(categoryValue);
+    const fields = [
+      business.category,
+      business.business_category,
+      business.serviceCategory,
+      business.primaryCategory,
+      business.specialty,
+      ...(Array.isArray(business.specialties) ? business.specialties : []),
+      ...(Array.isArray(business.serviceSpecialties)
+        ? business.serviceSpecialties
+        : []),
+    ];
+
+    return fields.some(
+      (field) =>
+        normalizeServiceCategory(field) === normalizedCategory ||
+        String(field || "").toLowerCase().includes(String(categoryValue).toLowerCase())
+    );
+  }
+
+  function businessMatchesSearch(business = {}, query = "") {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return true;
+
+    const searchableFields = [
+      business.name,
+      business.business_name,
+      business.category,
+      business.business_category,
+      business.serviceCategory,
+      business.primaryCategory,
+      business.specialty,
+      business.location,
+      business.serviceArea,
+      business.service_area,
+      business.city,
+      business.rating,
+      business.reviewCount,
+      business.availability,
+      business.status,
+      business.bio,
+      business.description,
+      ...(Array.isArray(business.specialties) ? business.specialties : []),
+      ...(Array.isArray(business.serviceSpecialties)
+        ? business.serviceSpecialties
+        : []),
+      ...(Array.isArray(business.serviceCities) ? business.serviceCities : []),
+    ];
+
+    return searchableFields.some((field) =>
+      String(field || "").toLowerCase().includes(normalizedQuery)
+    );
+  }
+
+  const marketplaceBusinesses = visibleBusinesses.filter(
+    (business) =>
+      businessMatchesCategory(business, filter) &&
+      businessMatchesSearch(business, searchQuery)
+  );
+
   function getBusinessStatus(business) {
     return business?.status || business?.businessStatus || "active";
   }
@@ -183,6 +303,7 @@ function Discover({ setPage, currentPage }) {
     { value: "pressureWashing", label: t("pressureWashing") },
     { value: "privateTransportation", label: t("privateTransportation") },
     { value: "realEstate", label: t("realEstate") },
+    { value: "propertyManagement", label: t("propertyManagement") },
     { value: "roofing", label: t("roofing") },
     { value: "tile", label: t("tile") },
     { value: "treeService", label: t("treeService") },
@@ -233,27 +354,26 @@ function Discover({ setPage, currentPage }) {
   }, [language]);
 
   const professionalFilteredPosts = isProfessional
-    ? posts.filter((post) => {
-        const postCategory = String(post.category || "")
-          .toLowerCase()
-          .replace(/\s+/g, "");
-
-        if (!normalizedBusinessCategory) return true;
-
-        return postCategory === normalizedBusinessCategory;
-      })
+    ? posts.filter((post) =>
+        canProfessionalSeeLocalLead(professionalMatchProfile, post)
+      )
     : posts;
 
   const visiblePosts =
     !isProfessional && filter !== "all"
-      ? professionalFilteredPosts.filter((post) => post.category === filter)
+      ? professionalFilteredPosts.filter(
+          (post) =>
+            inferRequestCategory(post) === normalizeServiceCategory(filter)
+        )
       : professionalFilteredPosts;
 
   function selectBusiness(business) {
+    const businessName = business.name || business.business_name || "";
+
     const selectedBusiness = {
-      id: business.id || business.name,
-      business_name: business.name,
-      name: business.name,
+      id: business.id || businessName,
+      business_name: businessName,
+      name: businessName,
       category: business.category || "",
       location: business.location || "",
       bio: business.bio || "",
@@ -271,18 +391,50 @@ function Discover({ setPage, currentPage }) {
 
   function viewBusinessProfile(business) {
     selectBusiness(business);
+    localStorage.setItem("contractorDetailsReturnPage", "discover");
     setPage("contractorDetails");
+  }
+
+  function requestServiceFromBusiness(event, business) {
+    event.stopPropagation();
+
+    if (isPausedBusiness(business)) {
+      alert(t("discoverPausedBusinessMessage", language));
+      return;
+    }
+
+    const selectedBusiness = selectBusiness(business);
+
+    localStorage.setItem("selectedProfessionalId", String(selectedBusiness.id || ""));
+    localStorage.setItem(
+      "selectedProfessionalName",
+      selectedBusiness.business_name || selectedBusiness.name || ""
+    );
+    localStorage.setItem(
+      "selectedProfessionalCategory",
+      selectedBusiness.category || ""
+    );
+    localStorage.setItem(
+      "selectedRequestProfessionalContext",
+      JSON.stringify({
+        professionalId: selectedBusiness.id || "",
+        professionalName:
+          selectedBusiness.business_name || selectedBusiness.name || "",
+        businessName: selectedBusiness.business_name || selectedBusiness.name || "",
+        category: selectedBusiness.category || "",
+        serviceArea: selectedBusiness.location || "",
+        source: "discover",
+      })
+    );
+
+    setPage("upload");
   }
 
   function messageBusiness(event, business) {
     event.stopPropagation();
 
     if (isPausedBusiness(business)) {
-      alert(
-        language === "es"
-          ? "Este negocio está pausado y no acepta nuevas solicitudes en este momento."
-          : "This business is paused and is not accepting new requests right now."
-      );
+      alert(t("discoverPausedBusinessMessage", language));
       return;
     }
 
@@ -355,111 +507,91 @@ function Discover({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
-      <div style={heroCard}>
-        <p style={heroEyebrow}>{t("discover")}</p>
+    <div className="app-page meetro-wide-page" style={pageWrapper}>
+      <header style={compactHeader}>
+        <p style={headerEyebrow}>{t("discoverMarketplaceEyebrow", language)}</p>
+        <h1 style={compactTitle}>{t("discover", language)}</h1>
+        <p style={compactSubtitle}>{t("discoverMarketplaceSubtitle", language)}</p>
+      </header>
 
-        <h1 style={heroTitle}>
-          {isBusinessDirectory ? t("findContractors") : t("localProjectFeed")}
-        </h1>
+      <section style={searchPanel} aria-label={t("discoverSearchLabel", language)}>
+        <div style={searchBox}>
+          <span style={searchIcon} aria-hidden="true">⌕</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t("discoverSearchPlaceholder", language)}
+            style={searchInput}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              style={clearSearchButton}
+              onClick={() => setSearchQuery("")}
+              aria-label={t("discoverClearSearch", language)}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </section>
 
-        <p style={heroText}>
-          {isBusinessDirectory
-            ? t("findContractorsText")
-            : t("discoverSubtitle")}
-        </p>
-
-        {isBusinessDirectory && (
-          <button style={postButton} onClick={() => setPage("upload")}>
-            + {t("postAProject")}
+      <div style={discoverCategoryNav} aria-label={t("discoverCategories", language)}>
+        {marketplaceCategories.map((category) => (
+          <button
+            key={category.value}
+            type="button"
+            style={{
+              ...discoverCategoryButton,
+              ...(filter === category.value ? activeDiscoverCategoryButton : {}),
+            }}
+            onClick={() => {
+              if (category.route) {
+                setPage(category.route);
+                return;
+              }
+              setFilter(category.value);
+            }}
+          >
+            {category.label}
           </button>
-        )}
+        ))}
       </div>
 
-      {!isBusinessDirectory && (
-        <div style={categoryRowWrapper}>
-          <button style={scrollButton} onClick={() => scrollCategories("left")}>
-            ‹
-          </button>
+      <section style={sectionHeader}>
+        <h2 style={sectionTitle}>{t("discoverLocalServices", language)}</h2>
+        <p style={sectionSubtitle}>
+          {t("discoverResultsCount", language).replace(
+            "{count}",
+            marketplaceBusinesses.length
+          )}
+        </p>
+      </section>
 
-          <div ref={categoryScrollRef} style={categoryRow}>
-            {categories.map((category) => {
-              const active =
-                isProfessional && normalizedBusinessCategory
-                  ? category.value.toLowerCase() === normalizedBusinessCategory
-                  : filter === category.value;
-
-              if (isProfessional && normalizedBusinessCategory) {
-                const categoryValue = category.value.toLowerCase();
-
-                if (
-                  category.value !== "all" &&
-                  categoryValue !== normalizedBusinessCategory
-                ) {
-                  return null;
-                }
-              }
-
-              return (
-                <button
-                  key={category.value}
-                  onClick={() => {
-                    if (!isProfessional) setFilter(category.value);
-                  }}
-                  style={{
-                    ...categoryButton,
-                    ...(active ? activeCategoryButton : {}),
-                  }}
-                >
-                  {category.label}
-                </button>
-              );
-            })}
+      <div className="meetro-responsive-grid meetro-grid-2" style={feedList}>
+        {marketplaceBusinesses.length === 0 ? (
+          <div style={emptyCard}>
+            <h2 style={emptyTitle}>{t("discoverNoProsTitle", language)}</h2>
+            <p style={emptyText}>{t("discoverNoProsText", language)}</p>
           </div>
-
-          <button style={scrollButton} onClick={() => scrollCategories("right")}>
-            ›
-          </button>
-        </div>
-      )}
-
-      {isBusinessDirectory ? (
-        <>
-          <div style={directoryHeader}>
-            <h2 style={directoryTitle}>
-              {language === "es" ? "Negocios Cercanos" : "Nearby Businesses"}
-            </h2>
-
-            <p style={directorySubtitle}>
-              {language === "es"
-                ? "Explora negocios locales y profesionales cerca de ti."
-                : "Browse local businesses and professionals near you."}
-            </p>
-          </div>
-
-          <div style={feedList}>
-            {businesses.length === 0 ? (
-              <div style={emptyCard}>
-                <h2 style={emptyTitle}>
-                  {language === "es"
-                    ? "No hay negocios disponibles"
-                    : "No available businesses"}
-                </h2>
-
-                <p style={emptyText}>
-                  {language === "es"
-                    ? "Los negocios activos aparecerán aquí cuando estén disponibles."
-                    : "Active businesses will appear here when available."}
-                </p>
-              </div>
-            ) : (
-              businesses.map((business) => {
+        ) : (
+          marketplaceBusinesses.map((business) => {
                 const businessStatus = getBusinessStatus(business);
                 const paused = businessStatus === "paused";
+                const category = getBusinessDisplayCategory(business);
+                const serviceArea = getBusinessServiceArea(business);
+                const imageSource =
+                  business.image_url ||
+                  business.imageUrl ||
+                  business.coverImage ||
+                  business.cover_image ||
+                  business.logo ||
+                  "";
 
                 return (
                   <div
-                    key={business.id || business.name}
+                    key={business.id || business.name || business.business_name}
                     style={{
                       ...businessDirectoryCard,
                       ...(paused ? pausedBusinessCard : {}),
@@ -467,49 +599,56 @@ function Discover({ setPage, currentPage }) {
                     onClick={() => viewBusinessProfile(business)}
                   >
                     <div style={businessLogoWrap}>
-                      {business.image_url || business.logo || business.imageUrl ? (
+                      {imageSource ? (
                         <img
-                          src={business.image_url || business.logo || business.imageUrl}
-                          alt={business.name}
+                          src={imageSource}
+                          alt={business.name || business.business_name}
                           style={businessLogo}
                         />
                       ) : (
-                        <div style={businessLogoFallback}>🏢</div>
+                        <div style={businessLogoFallback}>
+                          {String(business.name || business.business_name || "M")
+                            .slice(0, 1)
+                            .toUpperCase()}
+                        </div>
                       )}
                     </div>
 
                     <div style={businessCardBody}>
                       <div style={businessCardTop}>
                         <h2 style={businessCardTitle}>
-                          {business.name || t("businessNameNotSet")}
+                          {business.name ||
+                            business.business_name ||
+                            t("businessNameNotSet")}
                         </h2>
 
                         <span style={ratingPill}>
-                          ⭐ {business.rating || "5.0"}
+                          ★ {business.rating || t("discoverRatingPending", language)}
                         </span>
                       </div>
 
-                      <p style={businessCardLocation}>
-                        📍 {business.location || t("locationNotSet")}
+                      <p style={businessCategoryLine}>
+                        {category}
                       </p>
 
                       <div style={businessTrustRow}>
-                        <span style={trustMini}>✓ {t("verified")}</span>
+                        <span style={trustMini}>✓ {t("verified", language)}</span>
 
                         {paused ? (
                           <span style={pausedMini}>
-                            🟡{" "}
-                            {language === "es"
-                              ? "No acepta solicitudes"
-                              : "Not accepting requests"}
+                            {t("discoverNotAcceptingRequests", language)}
                           </span>
                         ) : (
                           <>
-                            <span style={trustMini}>⚡ {t("fastResponse")}</span>
-                            <span style={trustMini}>🚐 {t("dispatchReady")}</span>
+                            <span style={trustMini}>{t("discoverAvailable", language)}</span>
+                            <span style={trustMini}>{t("discoverPortfolio", language)}</span>
                           </>
                         )}
                       </div>
+
+                      <p style={businessCardLocation}>
+                        {serviceArea}
+                      </p>
 
                       <div style={businessActionRow}>
                         <button
@@ -519,7 +658,7 @@ function Discover({ setPage, currentPage }) {
                             viewBusinessProfile(business);
                           }}
                         >
-                          {language === "es" ? "Ver Perfil" : "View Profile"}
+                          {t("homeViewProfile", language)}
                         </button>
 
                         <button
@@ -527,98 +666,19 @@ function Discover({ setPage, currentPage }) {
                             ...businessPrimaryButton,
                             ...(paused ? disabledMessageButton : {}),
                           }}
-                          onClick={(event) => messageBusiness(event, business)}
+                          onClick={(event) => requestServiceFromBusiness(event, business)}
                         >
                           {paused
-                            ? language === "es"
-                              ? "Pausado"
-                              : "Paused"
-                            : t("message")}
+                            ? t("discoverPaused", language)
+                            : t("requestService", language)}
                         </button>
                       </div>
                     </div>
                   </div>
                 );
-              })
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <div style={sectionHeader}>
-            <h2 style={sectionTitle}>
-              {isProfessional ? t("matchingOpenRequests") : t("openRequests")}
-            </h2>
-
-            <p style={sectionSubtitle}>
-              {visiblePosts.length}{" "}
-              {visiblePosts.length === 1
-                ? t("projectAvailable")
-                : t("projectsAvailable")}
-            </p>
-          </div>
-
-          <div style={feedList}>
-            {visiblePosts.length === 0 ? (
-              <div style={emptyCard}>
-                <h2 style={emptyTitle}>{t("noMatchingRequestsYet")}</h2>
-                <p style={emptyText}>{t("newLeadsWillAppearHere")}</p>
-              </div>
-            ) : (
-              visiblePosts.map((post) => (
-                <div key={post.id} style={postCard}>
-                  <img
-                    src={post.image}
-                    alt={post.title}
-                    style={postImage}
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-
-                  <div style={postBody}>
-                    <div style={postTopRow}>
-                      <span style={categoryPill}>
-                        {categories.find((cat) => cat.value === post.category)
-                          ?.label || post.category}
-                      </span>
-
-                      <span style={datePill}>{post.date || t("today")}</span>
-                    </div>
-
-                    <h2 style={postTitle}>{post.title}</h2>
-                    <p style={postDescription}>{post.description}</p>
-
-                    <p style={locationText}>
-                      📍 {post.location || t("localArea")}
-                    </p>
-
-                    <p style={statusText}>
-                      🟢 {post.status || t("openRequest")}
-                    </p>
-
-                    <div style={actionRow}>
-                      <button
-                        style={secondaryButton}
-                        onClick={() => setPage("projectDetails")}
-                      >
-                        {t("viewDetails")}
-                      </button>
-
-                      <button
-                        style={primaryButton}
-                        onClick={() => setPage("messagesInbox")}
-                      >
-                        {t("messageQuote")}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </>
-      )}
+          })
+        )}
+      </div>
 
       <BottomNav setPage={setPage} currentPage="discover" />
     </div>
@@ -627,15 +687,15 @@ function Discover({ setPage, currentPage }) {
 
 const businessDirectoryCard = {
   background: "white",
-  borderRadius: "28px",
-  padding: "22px",
-  marginBottom: "18px",
+  borderRadius: "22px",
+  padding: "14px",
+  marginBottom: "10px",
   display: "grid",
-  gridTemplateColumns: "90px 1fr",
-  gap: "18px",
+  gridTemplateColumns: "62px 1fr",
+  gap: "12px",
   alignItems: "start",
   cursor: "pointer",
-  boxShadow: "0 18px 40px rgba(15,23,42,0.08)",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.07)",
 };
 
 const pausedBusinessCard = {
@@ -644,18 +704,18 @@ const pausedBusinessCard = {
 };
 
 const businessLogoWrap = {
-  width: "86px",
-  height: "86px",
-  borderRadius: "22px",
+  width: "60px",
+  height: "60px",
+  borderRadius: "16px",
   overflow: "hidden",
-  marginTop: "18px",
+  marginTop: "2px",
   background: "#f5f3ff",
 };
 
 const businessCardTitle = {
-  margin: "6px 0",
-  fontSize: "18px",
-  lineHeight: 1.2,
+  margin: "0",
+  fontSize: "16px",
+  lineHeight: 1.15,
   fontWeight: "900",
   color: "#111827",
 };
@@ -673,7 +733,7 @@ const businessLogoFallback = {
   alignItems: "center",
   justifyContent: "center",
   color: "#5b35f5",
-  fontSize: "34px",
+  fontSize: "24px",
   fontWeight: "900",
 };
 
@@ -683,41 +743,50 @@ const businessCardBody = {
 
 const businessCardTop = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "10px",
-  marginBottom: "8px",
-  flexWrap: "wrap",
+  gap: "8px",
+  marginBottom: "4px",
 };
 
 const ratingPill = {
   background: "#fff7df",
   color: "#8a6500",
-  padding: "6px 10px",
+  padding: "4px 8px",
   borderRadius: "999px",
   fontWeight: "900",
-  fontSize: "13px",
+  fontSize: "12px",
+  whiteSpace: "nowrap",
+};
+
+const businessCategoryLine = {
+  margin: "2px 0 6px",
+  color: "#4f46e5",
+  fontSize: "12px",
+  fontWeight: "900",
 };
 
 const businessCardLocation = {
-  margin: "0 0 12px",
+  margin: "6px 0 8px",
   color: "#6b7280",
   fontWeight: "700",
+  fontSize: "12px",
+  lineHeight: 1.25,
 };
 
 const businessTrustRow = {
   display: "flex",
   flexWrap: "wrap",
-  gap: "8px",
-  marginBottom: "14px",
+  gap: "5px",
+  marginBottom: "4px",
 };
 
 const trustMini = {
   background: "#f5f3ff",
   color: "#5b35f5",
-  padding: "7px 10px",
+  padding: "4px 7px",
   borderRadius: "999px",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: "900",
 };
 
@@ -769,13 +838,94 @@ const pageWrapper = {
   margin: "0 auto",
 };
 
+const compactHeader = {
+  textAlign: "left",
+  marginBottom: "16px",
+  maxWidth: "680px",
+};
+
+const headerEyebrow = {
+  margin: "0 0 6px",
+  color: "#5b35f5",
+  fontSize: "12px",
+  fontWeight: "900",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const compactTitle = {
+  margin: "0 0 6px",
+  color: "#111827",
+  fontSize: "34px",
+  lineHeight: 1,
+  fontWeight: "950",
+};
+
+const compactSubtitle = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  fontWeight: "750",
+};
+
+const searchPanel = {
+  margin: "14px 0 12px",
+};
+
+const searchBox = {
+  display: "grid",
+  gridTemplateColumns: "24px 1fr auto",
+  alignItems: "center",
+  gap: "8px",
+  width: "100%",
+  maxWidth: "680px",
+  minHeight: "50px",
+  padding: "0 12px",
+  borderRadius: "18px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 8px 22px rgba(15,23,42,0.06)",
+  boxSizing: "border-box",
+};
+
+const searchIcon = {
+  color: "#5b35f5",
+  fontSize: "18px",
+  fontWeight: "900",
+};
+
+const searchInput = {
+  width: "100%",
+  minWidth: 0,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: "#111827",
+  fontSize: "15px",
+  fontWeight: "750",
+};
+
+const clearSearchButton = {
+  width: "30px",
+  height: "30px",
+  border: "none",
+  borderRadius: "999px",
+  background: "#f1f5f9",
+  color: "#334155",
+  fontSize: "20px",
+  fontWeight: "900",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
 const heroCard = {
   background: "linear-gradient(135deg, #5b35f5, #8257ff)",
-  borderRadius: "28px",
-  padding: "22px 18px",
+  borderRadius: "24px",
+  padding: "18px 16px",
   color: "white",
   textAlign: "center",
-  boxShadow: "0 18px 40px rgba(91, 53, 245, 0.25)",
+  boxShadow: "0 14px 30px rgba(91, 53, 245, 0.22)",
 };
 
 const heroEyebrow = {
@@ -786,30 +936,60 @@ const heroEyebrow = {
 };
 
 const heroTitle = {
-  fontSize: "29px",
+  fontSize: "26px",
   lineHeight: "1.1",
-  margin: "0 0 14px",
-  color: "#0b0b0f",
+  margin: "0 0 8px",
+  color: "white",
   fontWeight: "900",
 };
 
 const heroText = {
-  fontSize: "17px",
-  lineHeight: "1.5",
-  margin: "0 auto 16px",
-  maxWidth: "760px",
-  color: "white",
+  fontSize: "15px",
+  lineHeight: "1.35",
+  margin: "0 auto 12px",
+  maxWidth: "520px",
+  color: "rgba(255,255,255,0.92)",
 };
 
 const postButton = {
   border: "none",
   background: "white",
   color: "#5b35f5",
-  borderRadius: "18px",
-  padding: "14px 22px",
-  fontSize: "16px",
+  borderRadius: "16px",
+  padding: "11px 18px",
+  fontSize: "15px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const discoverCategoryNav = {
+  display: "flex",
+  gap: "10px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  padding: "2px 0 8px",
+  margin: "18px 0 6px",
+};
+
+const discoverCategoryButton = {
+  flex: "0 0 auto",
+  minHeight: "40px",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "999px",
+  padding: "0 14px",
+  fontSize: "13px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  boxShadow: "0 6px 16px rgba(15,23,42,0.05)",
+};
+
+const activeDiscoverCategoryButton = {
+  background: "#5b35f5",
+  borderColor: "#5b35f5",
+  color: "#ffffff",
 };
 
 const categoryRowWrapper = {
@@ -878,8 +1058,8 @@ const sectionSubtitle = {
 };
 
 const feedList = {
-  display: "flex",
-  flexDirection: "column",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
   gap: "20px",
 };
 

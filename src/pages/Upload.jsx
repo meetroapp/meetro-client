@@ -1,21 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
+import { getRequestHelpGuidance } from "../utils/requestHelpGuidance";
+import { buildRequestMatchingFields } from "../utils/requestMatchingFields";
+import {
+  CAMERA_PERMISSION_MESSAGE,
+  createPhotoInputEvent,
+  openJobPhotoPicker,
+} from "../utils/cameraPhotoPicker";
 
 function Upload({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
+  const photoInputRef = useRef(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("handyman");
+  const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [location, setLocation] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
+  const [accessNotes, setAccessNotes] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [projectPhotos, setProjectPhotos] = useState([]);
   const [photoRecords, setPhotoRecords] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -58,6 +69,7 @@ function Upload({ setPage, currentPage }) {
     { value: "pestControl", label: t("pestControl") },
     { value: "moving", label: t("movingCompany") },
     { value: "realEstate", label: t("realEstate") },
+    { value: "propertyManagement", label: t("propertyManagement") },
     { value: "homeHealthCare", label: t("homeHealthCare") },
     { value: "automotiveServices", label: t("automotiveServices") },
     { value: "carDetailing", label: t("carDetailing") },
@@ -67,12 +79,39 @@ function Upload({ setPage, currentPage }) {
     { value: "other", label: t("otherService") },
   ];
 
+  const activeGuidance = getRequestHelpGuidance(category, t);
+
+  function saveHomeownerRequestList(updatedHomeownerRequests) {
+    try {
+      localStorage.setItem(
+        "homeownerRequests",
+        JSON.stringify(updatedHomeownerRequests)
+      );
+
+      localStorage.setItem(
+        "meetroHomeownerRequestsBackup",
+        JSON.stringify(updatedHomeownerRequests)
+      );
+
+      return true;
+    } catch (error) {
+      console.error("Failed to save homeowner request", error);
+      alert(
+        language === "es"
+          ? "No se pudo guardar la solicitud. Intenta quitar una foto o vuelve a intentarlo."
+          : "We could not save this request. Try removing a photo or try again."
+      );
+      return false;
+    }
+  }
+
   async function handleImageUpload(event) {
     try {
       const files = Array.from(event.target.files || []);
 
       if (files.length === 0) return;
 
+      setPhotoError("");
       setUploading(true);
 
       const uploadedUrls = [];
@@ -126,6 +165,18 @@ function Upload({ setPage, currentPage }) {
     }
   }
 
+  async function openRequestPhotoPicker() {
+    setPhotoError("");
+
+    await openJobPhotoPicker({
+      inputRef: photoInputRef,
+      fileNamePrefix: "request-photo",
+      onPhotos: (photos) =>
+        handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+      onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
+    });
+  }
+
   async function handleCreatePost() {
     try {
       if (!title.trim()) {
@@ -133,10 +184,28 @@ function Upload({ setPage, currentPage }) {
         return;
       }
 
+      if (!category) {
+        alert(t("selectServiceCategory"));
+        return;
+      }
+
       setCreating(true);
+
+      const isDirectRequest = localStorage.getItem("directRequestMode") === "true";
+      const directProfessionalName = localStorage.getItem("directRequestProfessionalName") || "";
+      const directProfessionalCategory = localStorage.getItem("directRequestProfessionalCategory") || "";
+      const directConversationId = localStorage.getItem("directRequestProfessionalConversationId") || "";
+      const directRequestSource = localStorage.getItem("directRequestSource") || "";
+      const directRequestId = localStorage.getItem("directRequestId") || "";
 
       const selectedCategory =
         category === "other" ? customCategory.trim() || "other" : category;
+      const requestMatchingFields = buildRequestMatchingFields({
+        title: title.trim(),
+        description: description.trim(),
+        category: selectedCategory,
+        location: location.trim(),
+      });
 
       const result = await authFetch(
         "/posts",
@@ -146,10 +215,19 @@ function Upload({ setPage, currentPage }) {
           title: title.trim(),
           description: description.trim(),
           category: selectedCategory,
+          request_category: requestMatchingFields.requestCategory,
+          service_domain: requestMatchingFields.service_domain,
+          service_specialty: requestMatchingFields.service_specialty,
           location: location.trim(),
+          unit_number: unitNumber.trim(),
+          access_notes: accessNotes.trim(),
           image_url: projectPhotos[0] || imageUrl,
-          post_type: "quote_request",
-          status: "open",
+          post_type: isDirectRequest ? "direct_request" : "quote_request",
+          status: isDirectRequest ? "direct_pending" : "open",
+          direct_request: isDirectRequest,
+          direct_request_source: directRequestSource,
+          direct_professional_name: directProfessionalName,
+          direct_conversation_id: directConversationId,
           }),
         },
         setPage
@@ -167,12 +245,20 @@ function Upload({ setPage, currentPage }) {
         const requestRecord = {
           requestId,
           id: requestId,
+          ownerUserId: localStorage.getItem("userId") || "",
+          ownerEmail: localStorage.getItem("userEmail") || "",
+          createdByUserId: localStorage.getItem("userId") || "",
+          createdByEmail: localStorage.getItem("userEmail") || "",
 
           title: title.trim(),
           description: description.trim(),
 
           category: selectedCategory,
+          ...requestMatchingFields,
           location: location.trim(),
+          fullAddress: location.trim(),
+          unitNumber: unitNumber.trim(),
+          accessNotes: accessNotes.trim(),
 
           photos: projectPhotos.length > 0 ? projectPhotos : imageUrl ? [imageUrl] : [],
           photoRecords: photoRecords.length > 0
@@ -185,7 +271,22 @@ function Upload({ setPage, currentPage }) {
               })),
           image_url: projectPhotos[0] || imageUrl,
 
-          status: "open",
+          status: isDirectRequest ? "direct_pending" : "open",
+          localDemoSafe: true,
+          source: isDirectRequest ? "hire_again_direct_request" : "local_homeowner_request",
+          requestChannel: isDirectRequest ? "direct" : "public",
+          visibility: isDirectRequest ? "direct" : "public",
+          isDirectRequest,
+          directRequest: isDirectRequest,
+          directRequestId: directRequestId || requestId,
+          directRequestSource,
+          selectedProfessional: isDirectRequest ? directProfessionalName : null,
+          assignedProfessionalName: isDirectRequest ? directProfessionalName : "",
+          targetProfessionalName: isDirectRequest ? directProfessionalName : "",
+          targetProfessionalCategory: isDirectRequest ? directProfessionalCategory : "",
+          conversationId: isDirectRequest
+            ? directConversationId || `direct-${requestId}`
+            : "",
 
           projectTimeline: [
             {
@@ -199,7 +300,6 @@ function Upload({ setPage, currentPage }) {
           quotesReceived: [],
           messagesCount: 0,
 
-          selectedProfessional: null,
           invoice: null,
           completionRecord: null,
           review: null,
@@ -209,25 +309,38 @@ function Upload({ setPage, currentPage }) {
 
         const updatedHomeownerRequests = [requestRecord, ...existingRequests];
 
-        localStorage.setItem(
-          "homeownerRequests",
-          JSON.stringify(updatedHomeownerRequests)
-        );
+        if (!saveHomeownerRequestList(updatedHomeownerRequests)) {
+          return;
+        }
 
-        localStorage.setItem(
-          "meetroHomeownerRequestsBackup",
-          JSON.stringify(updatedHomeownerRequests)
-        );
+        if (isDirectRequest) {
+          localStorage.removeItem("directRequestMode");
+          localStorage.removeItem("directRequestSource");
+          localStorage.removeItem("directRequestProfessionalName");
+          localStorage.removeItem("directRequestProfessionalCategory");
+          localStorage.removeItem("directRequestProfessionalConversationId");
+          localStorage.removeItem("directRequestId");
+          localStorage.removeItem("requestProfessionalContext");
+        }
 
-        alert(t("projectPostedSuccess"));
+        alert(
+          isDirectRequest
+            ? (language === "es"
+                ? "Solicitud enviada directamente al profesional."
+                : "Request sent directly to this professional.")
+            : t("projectPostedSuccess")
+        );
 
         setTitle("");
         setDescription("");
-        setCategory("handyman");
+        setCategory("");
         setCustomCategory("");
         setLocation("");
+        setUnitNumber("");
+        setAccessNotes("");
         setImageUrl("");
         setProjectPhotos([]);
+        setPhotoRecords([]);
 
         setPage("home");
       } else {
@@ -246,6 +359,8 @@ function Upload({ setPage, currentPage }) {
       title ||
       description ||
       location ||
+      unitNumber ||
+      accessNotes ||
       imageUrl ||
       projectPhotos.length > 0;
 
@@ -257,9 +372,11 @@ function Upload({ setPage, currentPage }) {
 
     setTitle("");
     setDescription("");
-    setCategory("handyman");
+    setCategory("");
     setCustomCategory("");
     setLocation("");
+    setUnitNumber("");
+    setAccessNotes("");
     setImageUrl("");
     setProjectPhotos([]);
     setPhotoRecords([]);
@@ -282,33 +399,18 @@ function Upload({ setPage, currentPage }) {
       </div>
 
       <div style={tipCard}>
-        <strong>💡 {t("uploadTipTitle")}</strong>
+        <strong> {t("uploadTipTitle")}</strong>
         <p>{t("uploadTipText")}</p>
       </div>
 
       <div style={cardStyle}>
-        <label style={fieldLabel}>{t("projectTitle")}</label>
-        <input
-          placeholder={t("projectTitlePlaceholder")}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={inputStyle}
-        />
-
-        <label style={fieldLabel}>{t("projectDescription")}</label>
-        <textarea
-          placeholder={t("projectDescriptionPlaceholder")}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={textareaStyle}
-        />
-
         <label style={fieldLabel}>{t("categoryExample")}</label>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           style={inputStyle}
         >
+          <option value="">{t("selectServiceCategory")}</option>
           {categories.map((item) => (
             <option key={item.value} value={item.value}>
               {item.label}
@@ -328,7 +430,53 @@ function Upload({ setPage, currentPage }) {
           </>
         )}
 
-        <label style={fieldLabel}>{t("location")}</label>
+        <div style={aiGuidanceCard}>
+          <div style={aiGuidanceHeading}>
+            <span style={aiGuidanceIcon} aria-hidden="true">
+              {category ? "✓" : "?"}
+            </span>
+            <div>
+              <strong style={aiGuidanceTitle}>{activeGuidance.title}</strong>
+              <p style={aiGuidanceText}>{activeGuidance.description}</p>
+            </div>
+          </div>
+
+          <span style={aiGuidanceExamplesLabel}>
+            {t("requestGuidanceWhatToInclude")}
+          </span>
+          <div style={aiGuidanceExamples}>
+            {activeGuidance.examples.map((example) => (
+              <span key={example} style={aiGuidanceExample}>
+                {example}
+              </span>
+            ))}
+          </div>
+
+          <div style={aiGuidanceNextStep}>
+            <strong>{t("requestGuidanceNextStepLabel")}:</strong>{" "}
+            {activeGuidance.nextStep}
+          </div>
+        </div>
+
+        <h2 style={requestDetailsHeading}>{t("requestDetailsHeading")}</h2>
+
+        <label style={fieldLabel}>{t("projectTitle")}</label>
+        <input
+          placeholder={t("projectTitlePlaceholder")}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          style={inputStyle}
+        />
+
+        <label style={fieldLabel}>{t("projectDescription")}</label>
+        <textarea
+          placeholder={t("projectDescriptionPlaceholder")}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          style={textareaStyle}
+        />
+
+        <label style={fieldLabel}>{t("fullServiceAddress")}</label>
         <input
           placeholder={t("locationExample")}
           value={location}
@@ -336,11 +484,32 @@ function Upload({ setPage, currentPage }) {
           style={inputStyle}
         />
 
+        <label style={fieldLabel}>{t("unitNumber")}</label>
+        <input
+          placeholder={t("unitNumberPlaceholder")}
+          value={unitNumber}
+          onChange={(e) => setUnitNumber(e.target.value)}
+          style={inputStyle}
+        />
+
+        {category === "propertyManagement" && (
+          <>
+            <div style={propertyManagementFoundationNote}>
+              {t("propertyManagementIntakeNote")}
+            </div>
+            <label style={fieldLabel}>{t("accessNotes")}</label>
+            <textarea
+              placeholder={t("accessNotesPlaceholder")}
+              value={accessNotes}
+              onChange={(e) => setAccessNotes(e.target.value)}
+              style={textareaStyle}
+            />
+          </>
+        )}
+
         <div style={uploadBox}>
           <button
-            onClick={() =>
-              document.getElementById("postImageInput").click()
-            }
+            onClick={openRequestPhotoPicker}
             style={plusUploadButton}
             type="button"
           >
@@ -354,6 +523,7 @@ function Upload({ setPage, currentPage }) {
           <p style={uploadSubText}>{t("photoHelpsPros")}</p>
 
           <input
+            ref={photoInputRef}
             id="postImageInput"
             type="file"
             accept="image/*"
@@ -363,6 +533,7 @@ function Upload({ setPage, currentPage }) {
           />
 
           {uploading && <p style={uploadingText}>{t("uploadingImage")}</p>}
+          {photoError && <p style={uploadingText}>{photoError}</p>}
         </div>
 
         {projectPhotos.length > 0 && (
@@ -391,7 +562,15 @@ function Upload({ setPage, currentPage }) {
             </div>
 
             <p style={photoCountText}>
-              {projectPhotos.length} {projectPhotos.length === 1 ? "photo" : "photos"} added
+              {language === "es"
+                ? `${projectPhotos.length} ${
+                    projectPhotos.length === 1
+                      ? "foto agregada"
+                      : "fotos agregadas"
+                  }`
+                : `${projectPhotos.length} ${
+                    projectPhotos.length === 1 ? "photo" : "photos"
+                  } added`}
             </p>
           </div>
         )}
@@ -424,9 +603,13 @@ function Upload({ setPage, currentPage }) {
 
 const pageWrapper = {
   background: "linear-gradient(180deg,#f8f7ff 0%,#eef2ff 100%)",
-  minHeight: "100vh",
-  padding: "calc(env(safe-area-inset-top) + 34px) 18px 190px",
+  minHeight: "100dvh",
+  padding:
+    "calc(env(safe-area-inset-top) + 34px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
+  width: "100%",
+  maxWidth: "760px",
+  margin: "0 auto",
 };
 
 const backButton = {
@@ -519,6 +702,107 @@ const textareaStyle = {
   ...inputStyle,
   minHeight: "112px",
   resize: "none",
+};
+
+const propertyManagementFoundationNote = {
+  padding: "13px 14px",
+  borderRadius: "16px",
+  background: "#eff6ff",
+  border: "1px solid #bfdbfe",
+  color: "#1e3a8a",
+  fontSize: "13px",
+  fontWeight: 700,
+  lineHeight: 1.5,
+};
+
+const aiGuidanceCard = {
+  background: "linear-gradient(135deg,#f5f3ff,#eef2ff)",
+  border: "1px solid #ddd6fe",
+  borderRadius: "20px",
+  padding: "16px",
+  margin: "4px 0 8px",
+};
+
+const aiGuidanceHeading = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "11px",
+};
+
+const aiGuidanceIcon = {
+  width: "30px",
+  height: "30px",
+  flexShrink: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "10px",
+  background: "#ffffff",
+  border: "1px solid #ddd6fe",
+  color: "#5b3df5",
+  fontSize: "15px",
+  fontWeight: 950,
+};
+
+const aiGuidanceTitle = {
+  display: "block",
+  color: "#312e81",
+  fontSize: "16px",
+  fontWeight: "900",
+  lineHeight: 1.3,
+  marginBottom: "4px",
+};
+
+const aiGuidanceText = {
+  color: "#4b5563",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  margin: 0,
+};
+
+const aiGuidanceExamplesLabel = {
+  display: "block",
+  margin: "13px 0 7px",
+  color: "#4338ca",
+  fontSize: "11px",
+  fontWeight: 950,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const aiGuidanceExamples = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "7px",
+};
+
+const aiGuidanceExample = {
+  padding: "7px 9px",
+  borderRadius: "11px",
+  background: "#ffffff",
+  border: "1px solid #e0e7ff",
+  color: "#4b5563",
+  fontSize: "12px",
+  lineHeight: 1.3,
+  fontWeight: 700,
+};
+
+const aiGuidanceNextStep = {
+  marginTop: "13px",
+  padding: "10px 11px",
+  borderRadius: "12px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid #ddd6fe",
+  color: "#4338ca",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const requestDetailsHeading = {
+  margin: "8px 0 2px",
+  color: "#111827",
+  fontSize: "18px",
+  lineHeight: 1.3,
+  fontWeight: 950,
 };
 
 const uploadBox = {

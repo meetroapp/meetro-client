@@ -1,3 +1,8 @@
+import {
+  clearAccountWorkflowData,
+  getAccountStorageIdentity,
+} from "./accountStorage.js";
+
 export const professionalRoles = [
   "professional",
   "contractor",
@@ -30,6 +35,7 @@ export const professionalRoles = [
   "pressureWashing",
   "privateTransportation",
   "realEstate",
+  "propertyManagement",
   "roofing",
   "tile",
   "treeService",
@@ -55,6 +61,23 @@ export function isProfessionalUser(user = {}) {
 
 export function saveMeetroSession(data = {}, fallbackEmail = "") {
   const user = data.user || {};
+  const previousIdentity =
+    localStorage.getItem("meetroLastAccountIdentity") ||
+    getAccountStorageIdentity(
+      {
+        id: localStorage.getItem("userId") || "",
+        email: localStorage.getItem("userEmail") || "",
+      }
+    );
+  const nextIdentity = getAccountStorageIdentity(user, fallbackEmail);
+
+  if (
+    nextIdentity &&
+    nextIdentity !== previousIdentity
+  ) {
+    clearAccountWorkflowData();
+  }
+
   const isProfessional = isProfessionalUser(user);
 
   const finalAccountType = isProfessional ? "professional" : "homeowner";
@@ -64,7 +87,7 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
     "personal";
 
   const finalMode =
-    isProfessional && preferredMode === "business" ? "business" : "personal";
+    isProfessional ? "business" : "personal";
   const finalRole = isProfessional
     ? user.business_category ||
       user.businessCategory ||
@@ -91,6 +114,9 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
     "contractorProfileComplete",
     isProfessional ? "true" : "false"
   );
+  if (nextIdentity) {
+    localStorage.setItem("meetroLastAccountIdentity", nextIdentity);
+  }
 
   localStorage.removeItem("pendingLoginData");
 
@@ -104,12 +130,7 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
 }
 
 export function getPostLoginPage(user = {}) {
-  const preferredMode =
-    localStorage.getItem("meetroPreferredAccountMode") ||
-    localStorage.getItem("activeAccountMode") ||
-    "personal";
-
-  if (preferredMode === "business" && isProfessionalUser(user)) {
+  if (isProfessionalUser(user)) {
     return "businessDashboard";
   }
 
@@ -141,7 +162,6 @@ export function isProfessionalSession() {
 
   return (
     storedIsProfessional ||
-    activeAccountMode === "business" ||
     accountType === "business" ||
     accountType === "professional" ||
     isProfessionalUser({
@@ -150,6 +170,67 @@ export function isProfessionalSession() {
       account_type: accountType,
     })
   );
+}
+
+const businessModePages = new Set([
+  "businessDashboard",
+  "professionalOnboarding",
+  "businessLeads",
+  "businessCommandCenter",
+  "businessAvailability",
+  "customerRelationshipsCenter",
+  "assetCenter",
+  "serviceTypesEvaluations",
+  "materialsLibrary",
+  "pricingLibrary",
+  "contractTemplates",
+  "reportsCenter",
+  "permitCenter",
+  "complianceCenter",
+  "businessIntelligence",
+  "businessAnalytics",
+  "quoteRequests",
+  "quoteBuilder",
+  "invoiceBuilder",
+  "contractorDashboard",
+  "workCenter",
+  "emergencyOperationsCenter",
+  "emergencyDispatch",
+  "completionSheet",
+]);
+
+const personalModePages = new Set([
+  "home",
+  "discover",
+  "upload",
+  "myRequests",
+  "assistant",
+  "emergency",
+  "emergencyStatus",
+  "emergencyComplete",
+]);
+
+export function getAccountModeForPage(page = "", fallbackMode = "personal") {
+  if (businessModePages.has(page)) return "business";
+  if (personalModePages.has(page)) return "personal";
+  return fallbackMode === "business" ? "business" : "personal";
+}
+
+export function getDashboardPageForAccountMode(mode) {
+  const activeMode =
+    mode || localStorage.getItem("activeAccountMode") || "personal";
+
+  return activeMode === "business" ? "businessDashboard" : "home";
+}
+
+export function syncAccountModeForPage(page = "") {
+  const storedMode =
+    localStorage.getItem("activeAccountMode") || "personal";
+  const nextMode = getAccountModeForPage(page, storedMode);
+
+  if (nextMode === storedMode) return true;
+
+  return setActiveAccountMode(nextMode);
 }
 
 
@@ -175,6 +256,7 @@ export function setActiveAccountMode(mode = "personal") {
   );
 
   if (normalizedMode === "business") {
+    const storedRole = localStorage.getItem("userRole") || "";
     localStorage.setItem(
       "accountType",
       "professional"
@@ -183,20 +265,23 @@ export function setActiveAccountMode(mode = "personal") {
     localStorage.setItem(
       "userRole",
       localStorage.getItem("businessCategory") ||
-        localStorage.getItem("userRole") ||
+        (storedRole === "homeowner" ? "" : storedRole) ||
         "professional"
     );
   } else {
-    localStorage.setItem(
-      "accountType",
-      isProfessional
-        ? "professional"
-        : "homeowner"
-    );
+    localStorage.setItem("accountType", "homeowner");
+    localStorage.setItem("userRole", "homeowner");
+    localStorage.removeItem("meetroWorkCenterTab");
+    localStorage.removeItem("activeWorkCenterTab");
+    localStorage.removeItem("workCenterScheduleFilter");
+    localStorage.removeItem("conversationReturnSection");
+    localStorage.removeItem("quoteStatusFilter");
   }
 
   window.dispatchEvent(
-    new Event("accountModeChanged")
+    new CustomEvent("accountModeChanged", {
+      detail: { mode: normalizedMode },
+    })
   );
 
   window.dispatchEvent(

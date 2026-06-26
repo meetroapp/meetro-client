@@ -3,6 +3,7 @@ import {
   updateMatchingHomeownerRequests,
   prependProjectTimeline,
 } from "../../utils/workflowTimeline";
+import MeetroIcon from "../MeetroIcon";
 
 function WorkflowMaterialsApprovalCard({
   msg,
@@ -191,21 +192,21 @@ function WorkflowMaterialsApprovalCard({
 
       {msg.status === "materials_approved" && (
         <div style={materialsApprovedNotice}>
-          ✅{" "}
+          <MeetroIcon name="completion" size={16} decorative />{" "}
           {getWorkflowStatusLabel("materials_approved", language)}
         </div>
       )}
 
       {msg.status === "materials_change_requested" && (
         <div style={materialsChangeNotice}>
-          💬{" "}
+          <MeetroIcon name="messages" size={16} decorative />{" "}
           {getWorkflowStatusLabel("materials_change_requested", language)}
         </div>
       )}
 
       {msg.status === "customer_providing_materials" && (
         <div style={materialsCustomerProvidingNotice}>
-          📦{" "}
+          <MeetroIcon name="materials" size={16} decorative />{" "}
           {getWorkflowStatusLabel("customer_providing_materials", language)}
         </div>
       )}

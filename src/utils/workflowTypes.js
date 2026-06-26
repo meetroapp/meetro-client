@@ -1,5 +1,6 @@
 export const WORKFLOW_TYPES = [
   "workflow_change_request",
+  "workflow_quote_sent",
   "workflow_revised_quote",
   "workflow_materials_approval",
   "workflow_invoice_request",
@@ -12,14 +13,15 @@ export function isWorkflowType(type) {
 
 export function getWorkflowIcon(type) {
   const icons = {
-    workflow_change_request: "🔁",
-    workflow_revised_quote: "💰",
-    workflow_materials_approval: "📦",
-    workflow_invoice_request: "🧾",
-    workflow_completion_closeout: "🏁",
+    workflow_change_request: "history",
+    workflow_quote_sent: "quote",
+    workflow_revised_quote: "quote",
+    workflow_materials_approval: "materials",
+    workflow_invoice_request: "quickInvoice",
+    workflow_completion_closeout: "completion",
   };
 
-  return icons[type] || "📌";
+  return icons[type] || "noteText";
 }
 
 export function getWorkflowTitle(type, language = "en") {
@@ -27,6 +29,10 @@ export function getWorkflowTitle(type, language = "en") {
     workflow_change_request: {
       en: "Change Request",
       es: "Solicitud de cambio",
+    },
+    workflow_quote_sent: {
+      en: "Quote Sent",
+      es: "Cotización enviada",
     },
     workflow_revised_quote: {
       en: "Revised Quote",
@@ -52,7 +58,7 @@ export function getWorkflowTitle(type, language = "en") {
 export function getWorkflowMessageProps(msg, language = "en") {
   if (!msg) {
     return {
-      icon: "📌",
+      icon: "noteText",
       title: "",
       subtitle: "",
       workflowType: "",
@@ -86,6 +92,12 @@ export function getWorkflowSubtitle(msg, language = "en") {
     return language === "es"
       ? "Cambio solicitado por el cliente"
       : "Customer requested project change";
+  }
+
+  if (msg.type === "workflow_quote_sent") {
+    return language === "es"
+      ? "Cotización enviada para revisión"
+      : "Quote sent for review";
   }
 
   if (msg.type === "workflow_revised_quote") {

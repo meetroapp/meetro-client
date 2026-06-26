@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage } from "../utils/language";
 
 function Emergency({ setPage }) {
@@ -30,32 +31,32 @@ function Emergency({ setPage }) {
       back: "Back Home",
       services: [
         {
-          icon: "🚰",
+          icon: "plumbing",
           name: "Emergency Plumbing",
           note: "Leaks, clogs, broken pipes",
         },
         {
-          icon: "⚡",
+          icon: "electrical",
           name: "Emergency Electrical",
           note: "Power issues, outlets, breakers",
         },
         {
-          icon: "🏠",
+          icon: "home",
           name: "Roof Leak Repair",
           note: "Storm leaks, roof damage",
         },
         {
-          icon: "🔑",
+          icon: "lock",
           name: "Locksmith",
           note: "Lockouts, rekeys, broken locks",
         },
         {
-          icon: "🌪️",
+          icon: "warning",
           name: "Storm Prep Help",
           note: "Shutters, sandbags, cleanup prep",
         },
         {
-          icon: "🆘",
+          icon: "emergency",
           name: "Other Emergency",
           note: "Describe your issue and connect with available professionals",
         },
@@ -69,32 +70,32 @@ function Emergency({ setPage }) {
       back: "Regresar al Inicio",
       services: [
         {
-          icon: "🚰",
+          icon: "plumbing",
           name: "Plomería de Emergencia",
           note: "Fugas, drenajes tapados, tuberías rotas",
         },
         {
-          icon: "⚡",
+          icon: "electrical",
           name: "Electricista de Emergencia",
           note: "Problemas eléctricos, enchufes, breakers",
         },
         {
-          icon: "🏠",
+          icon: "home",
           name: "Reparación de Techo",
           note: "Goteras, daños por tormenta",
         },
         {
-          icon: "🔑",
+          icon: "lock",
           name: "Cerrajero",
           note: "Cerraduras, llaves, bloqueos",
         },
         {
-          icon: "🌪️",
+          icon: "warning",
           name: "Preparación para Tormentas",
           note: "Shutters, sacos de arena, preparación de limpieza",
         },
         {
-          icon: "🆘",
+          icon: "emergency",
           name: "Otra Emergencia",
           note: "Describe tu problema y conéctate con profesionales disponibles",
         },
@@ -123,20 +124,26 @@ function Emergency({ setPage }) {
     localStorage.removeItem("emergencyEntryNotes");
     localStorage.removeItem("emergencyPetWarning");
     localStorage.removeItem("emergencyUrgency");
+    localStorage.removeItem("emergencyPhotos");
+    localStorage.removeItem("activeEmergencyRequestId");
+    localStorage.removeItem("emergencyRequestId");
+    localStorage.removeItem("emergencyConversationId");
 
     localStorage.setItem("selectedEmergencyService", service.name);
     setPage("emergencyBusinessSelection");
   }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-responsive-page" style={page}>
       <div style={card}>
         <div style={topBar}>
           <button style={backMini} onClick={() => setPage("home")}>
             ←
           </button>
 
-          <div style={pill}>🚨 {t.available}</div>
+          <div style={pill}>
+            <MeetroIcon name="emergency" size={16} decorative /> {t.available}
+          </div>
         </div>
 
         <h1 style={title}>{t.title}</h1>
@@ -146,7 +153,9 @@ function Emergency({ setPage }) {
           {t.services.map((service, index) => (
             <div key={index} style={serviceCard}>
               <div style={serviceTop}>
-                <div style={iconBox}>{service.icon}</div>
+                <div style={iconBox}>
+                  <MeetroIcon name={service.icon} size={30} decorative />
+                </div>
 
                 <div>
                   <strong style={serviceName}>{service.name}</strong>
@@ -175,9 +184,10 @@ function Emergency({ setPage }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "#f5f7fb",
-  padding: "calc(env(safe-area-inset-top) + 64px) 22px 210px",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 

@@ -19,6 +19,7 @@ export function addNotification(notification) {
   const notifications = getNotifications();
 
   const newNotification = {
+    ...notification,
     id: notification.id || `notification-${Date.now()}`,
     type: notification.type || "general",
     title: notification.title || "Notification",

@@ -25,7 +25,7 @@ function Favorites({ setPage, language = "en" }) {
         <p style={subtitle}>{t.subtitle}</p>
 
         <div style={emptyCard}>
-          ⭐
+          
           <p style={{ marginTop: 14 }}>{t.empty}</p>
         </div>
 

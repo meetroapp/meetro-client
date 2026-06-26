@@ -46,7 +46,7 @@ function JobUpdate({ setPage }) {
       <FloatingBackButton onClick={() => setPage(returnPage)} />
 
       <div style={card}>
-        <div style={icon}>📣</div>
+        <div style={icon}></div>
 
         <h1 style={title}>Send Job Update</h1>
         <p style={subtitle}>
@@ -68,7 +68,7 @@ function JobUpdate({ setPage }) {
               setNote("I’m running a little behind schedule and will update you again shortly.");
             }}
           >
-            ⏱ Running late
+             Running late
           </button>
 
           <button
@@ -78,7 +78,7 @@ function JobUpdate({ setPage }) {
               setNote("I’m on the way to your location now.");
             }}
           >
-            🚗 On the way
+             On the way
           </button>
 
           <button
@@ -88,7 +88,7 @@ function JobUpdate({ setPage }) {
               setNote("I have arrived at the job location.");
             }}
           >
-            📍 Arrived
+             Arrived
           </button>
 
           <button
@@ -98,7 +98,7 @@ function JobUpdate({ setPage }) {
               setNote("Work has started. I’ll keep you updated as progress continues.");
             }}
           >
-            🛠 Work started
+             Work started
           </button>
 
           <button
@@ -108,7 +108,7 @@ function JobUpdate({ setPage }) {
               setNote("I need your approval before continuing with the next step.");
             }}
           >
-            ✅ Need approval
+             Need approval
           </button>
 
           <button
@@ -118,7 +118,7 @@ function JobUpdate({ setPage }) {
               setNote("The work has been completed. Please review when you have a chance.");
             }}
           >
-            🎉 Completed
+             Completed
           </button>
         </div>
 
@@ -147,7 +147,8 @@ function JobUpdate({ setPage }) {
 const page = {
   minHeight: "100vh",
   background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
-  padding: "28px 22px 180px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 28px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 

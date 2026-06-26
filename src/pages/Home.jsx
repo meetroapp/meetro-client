@@ -1,23 +1,90 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroDetailsButton from "../components/MeetroDetailsButton";
+import MeetroIcon from "../components/MeetroIcon";
+import SpotlightSlideshow from "../components/SpotlightSlideshow";
+import API_URL from "../api";
+import {
+  getBusinessPortfolioProjectImages,
+  persistBusinessPortfolioProjects,
+  readAllBusinessPortfolioItems,
+} from "../utils/businessPortfolioStorage";
 import { getLanguage, setLanguage, t } from "../utils/language";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
-import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
+import {
+  getHomeownerWorkflowPresentation,
+  getHomeownerLifecycleStage,
+} from "../utils/homeownerLifecycle";
+import { getHomeownerProjectJourney } from "../utils/homeownerProjectJourney";
+import { isConversationUnreadForRole } from "../utils/conversationUnread";
+import { getHomeownerServiceHistory } from "../utils/homeownerServiceHistory";
+import {
+  getStoredProfessionalMatchProfile,
+  canProfessionalReceiveRequest,
+  getRequestMatchSummary,
+} from "../utils/professionalRequestMatching";
+import {
+  canProfessionalSeeLocalLead,
+  getLocalLeadVisibilitySummary,
+} from "../utils/localLeadVisibility";
+import {
+  canProfessionalServeArea,
+  getServiceAreaMatchSummary,
+} from "../utils/serviceAreaMatching";
+import {
+  canProfessionalReceiveLead,
+  getLeadEligibilitySummary,
+} from "../utils/leadEligibility";
+import {
+  attachSpotlightPortfolioMedia,
+  buildSpotlightProfessionalProfile,
+  getEligibleSpotlightBusinesses,
+  getSpotlightAvatarUrl,
+  getSpotlightFeaturedProject,
+  getSpotlightMediaSourceSummary,
+  getSpotlightMediaUrls,
+  getSpotlightMediaForBusiness,
+  getSpotlightRequestContexts,
+  isNoContextSpotlightSafeBusiness,
+} from "../utils/localSpotlightVisibility";
+
+const homeLayoutMediaStyles = `
+  @media (orientation: landscape) and (max-height: 520px) {
+    .home-my-projects-tabs,
+    .home-my-projects-portrait {
+      display: none !important;
+    }
+
+    .home-my-projects-landscape {
+      display: grid !important;
+    }
+  }
+
+  @media (orientation: portrait), (min-height: 521px) {
+    .home-my-projects-landscape {
+      display: none !important;
+    }
+  }
+`;
 
 function Home({ setPage }) {
   const [language, updateLanguage] = useState(getLanguage());
-  const [activeMode, setActiveMode] = useState(
-    localStorage.getItem("activeAccountMode") || "personal"
-  );
+  const [activeMode, setActiveMode] = useState("personal");
+  const [homeView, setHomeView] = useState("landing");
+  const [myProjectsTab, setMyProjectsTab] = useState("active");
+  const [detailsRequest, setDetailsRequest] = useState(null);
+  const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
+  const [spotlightPortfolioRefresh, setSpotlightPortfolioRefresh] = useState(0);
 
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
-  const userName =
-    localStorage.getItem("userName") ||
-    localStorage.getItem("userEmail") ||
-    t("there");
-
+  const professionalMatchProfile = {
+    ...getStoredProfessionalMatchProfile(),
+    businessCategory,
+    category: businessCategory,
+  };
   const hasBusinessAccess =
     isProfessionalSession() ||
     Boolean(businessName) ||
@@ -25,20 +92,21 @@ function Home({ setPage }) {
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
-  const homeownerRequests = JSON.parse(
+  const allHomeownerRequests = JSON.parse(
     localStorage.getItem("homeownerRequests") || "[]"
-  ).filter((request) => request && request.status !== "closed");
+  ).filter((request) => request);
 
-  const activeHomeownerRequests = homeownerRequests.filter(
+  const activeHomeownerRequests = allHomeownerRequests.filter(
     (request) =>
-      request.status !== "completed" &&
       request.status !== "cancelled" &&
       request.status !== "closed"
   );
 
-  const completedHomeownerRequests = homeownerRequests.filter(
+  const closurePendingRequests = allHomeownerRequests.filter(
     (request) => request.status === "completed"
   );
+
+  const historyRequests = getHomeownerServiceHistory();
   const conversationRegistry = JSON.parse(
     localStorage.getItem("meetro_conversation_registry") || "[]"
   );
@@ -47,37 +115,30 @@ function Home({ setPage }) {
     const conversationId =
       conversation?.conversationId || conversation?.id || "";
 
-    return (
-      conversationId &&
-      localStorage.getItem(
-        `meetro_conversation_read_${conversationId}`
-      ) !== "true"
-    );
+    return conversationId && isConversationUnreadForRole(conversationId, "homeowner", conversation.unread);
   });
-
-  const workflowSchedules = JSON.parse(
-    localStorage.getItem("meetro_business_schedule") || "[]"
-  );
-
-  const activeEmergencyStatus =
-    localStorage.getItem("emergencyDispatchStatus") || "";
-
 
   useEffect(() => {
     const handleLanguageChange = () => updateLanguage(getLanguage());
 
     const handleModeChange = () => {
-      setActiveMode(localStorage.getItem("activeAccountMode") || "personal");
+      setActiveMode("personal");
+    };
+    const resetHomeLanding = () => {
+      setHomeView("landing");
     };
 
+    setActiveAccountMode("personal");
     window.addEventListener("languageChanged", handleLanguageChange);
     window.addEventListener("meetro-language-change", handleLanguageChange);
     window.addEventListener("accountModeChanged", handleModeChange);
+    window.addEventListener("meetroHomeResetToLanding", resetHomeLanding);
 
     return () => {
       window.removeEventListener("languageChanged", handleLanguageChange);
       window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("accountModeChanged", handleModeChange);
+      window.removeEventListener("meetroHomeResetToLanding", resetHomeLanding);
     };
   }, []);
 
@@ -94,13 +155,7 @@ function Home({ setPage }) {
       return false;
     }
 
-    return canBusinessSeeCategory(
-      businessCategory,
-      request.category ||
-        request.business_category ||
-        request.serviceCategory ||
-        inferEmergencyCategory(request)
-    );
+    return canProfessionalSeeLocalLead(professionalMatchProfile, request);
   });
 
   const realBusinessLeadCount = String(matchingBusinessLeads.length);
@@ -111,6 +166,42 @@ function Home({ setPage }) {
     updateLanguage(nextLanguage);
   }
 
+  function openWorkConversationForRequest(request = {}) {
+    const requestId = request.requestId || request.id || "";
+    const conversationId =
+      request.conversationId ||
+      request.activeConversationId ||
+      request.projectConversationId ||
+      requestId ||
+      `request-${Date.now()}`;
+    const professionalName =
+      request.selectedProfessional ||
+      request.businessName ||
+      request.professionalName ||
+      "Professional";
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationName", professionalName);
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify({
+        id: conversationId,
+        type: "work",
+        category: "work",
+        businessName: professionalName,
+        projectTitle: request.title || request.category || "Service Request",
+        requestId,
+      })
+    );
+    localStorage.setItem("conversationReturnPage", "home");
+    localStorage.setItem("returnPage", "home");
+    setPage("conversationThread");
+  }
+
   function switchMode(mode) {
     if (mode === "business" && !hasBusinessAccess) {
       setPage("contractorProfile");
@@ -118,26 +209,82 @@ function Home({ setPage }) {
     }
 
     setActiveAccountMode(mode);
-    setActiveMode(mode);
 
     if (mode === "business") {
       setPage("businessDashboard");
+      return;
     }
+
+    setActiveMode("personal");
   }
+
+  function openRequestDetails(request) {
+    setDetailsRequest(request);
+  }
+
+  function openHistoryDetails(request) {
+    setHistoryDetailsRequest(request);
+  }
+
+  function openHomeownerProject(request = {}) {
+    const requestId = request.requestId || request.id || "";
+
+    setActiveAccountMode("personal");
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
+    localStorage.setItem("projectDetailsReturnPage", "home");
+    if (requestId) {
+      localStorage.setItem("selectedPostId", String(requestId));
+    }
+    setPage("projectDetails");
+  }
+
+  const spotlightBusinesses = getLocalSpotlightBusinesses();
+  const spotlightContexts = getSpotlightRequestContexts([], []);
+  const matchedSpotlightBusinesses = getEligibleSpotlightBusinesses(
+    spotlightBusinesses,
+    spotlightContexts
+  );
+  const spotlightDebugSummary = buildLocalServicesSpotlightDebugSummary(
+    spotlightBusinesses,
+    spotlightContexts,
+    matchedSpotlightBusinesses
+  );
+  const showSpotlightDebug = shouldShowLocalServicesSpotlightDebug();
+
+  useEffect(() => {
+    if (!showSpotlightDebug) return;
+    console.info("[Meetro Spotlight Debug]", spotlightDebugSummary);
+  }, [showSpotlightDebug, spotlightDebugSummary.debugKey]);
+
+  useEffect(() => {
+    hydrateSpotlightPortfolioProjects(matchedSpotlightBusinesses, () =>
+      setSpotlightPortfolioRefresh((currentValue) => currentValue + 1)
+    );
+  }, [
+    matchedSpotlightBusinesses
+      .map((business) => getSpotlightContractorId(business))
+      .filter(Boolean)
+      .join("|"),
+    spotlightPortfolioRefresh,
+  ]);
 
   if (isBusinessMode) {
     return (
-      <div style={pageWrapper}>
-        <TopBar language={language} toggleLanguage={toggleLanguage} />
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+        <style>{homeLayoutMediaStyles}</style>
+
+<TopBar language={language} toggleLanguage={toggleLanguage} />
 
         <div style={businessHero}>
           <p style={eyebrow}>{t("businessDashboard")}</p>
 
-          <h1 style={businessTitle}>{t("businessGreeting")}! 👋</h1>
+          <h1 style={businessTitle}>{t("businessGreeting")}</h1>
 
           <p style={businessText}>{t("businessDashboardText")}</p>
 
-          <div style={statsGrid}>
+          <div className="meetro-responsive-grid meetro-grid-4" style={statsGrid}>
             <StatCard title={t("newLeads")} value={realBusinessLeadCount} note={t("live")} />
             <StatCard title={t("messages")} value="5" note={t("unread")} />
             <StatCard title={t("profileViews")} value="32" note={t("thisWeek")} />
@@ -160,16 +307,16 @@ function Home({ setPage }) {
 
         <h2 style={sectionTitle}>{t("businessTools")}</h2>
 
-        <div style={toolGrid}>
+        <div className="meetro-responsive-grid meetro-grid-4" style={toolGrid}>
           <ToolCard
-            icon="📥"
+            icon="opportunities"
             title={t("leads")}
             text={t("openRequests")}
             onClick={() => setPage("businessLeads")}
           />
 
           <ToolCard
-            icon="💬"
+            icon="messages"
             title={t("messages")}
             text={t("customers")}
             onClick={() => setPage("messagesInbox")}
@@ -187,7 +334,7 @@ function Home({ setPage }) {
           />
 
           <ToolCard
-            icon="👤"
+            icon="businessProfile"
             title={t("businessProfile")}
             text={t("manage")}
             onClick={() => setPage("contractorProfile")}
@@ -199,23 +346,304 @@ function Home({ setPage }) {
     );
   }
 
+  if (homeView === "activeRequests") {
+    return (
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+        <style>{homeLayoutMediaStyles}</style>
+        <TopBar language={language} toggleLanguage={toggleLanguage} />
+
+        <button style={backHomeButton} onClick={() => setHomeView("landing")}>
+          ← {t("backToHome", language)}
+        </button>
+
+        <section style={homeWorkflowSection}>
+          <div style={sectionHeader}>
+            <div>
+              <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
+              <h2 style={sectionTitle}>{t("homeActiveRequestsTitle")}</h2>
+            </div>
+          </div>
+
+          {activeHomeownerRequests.length > 0 ? (
+            <div style={activeProjectsCarousel}>
+              {activeHomeownerRequests.map((request) => (
+                <ProjectCard
+                  key={request.requestId || request.id || request.createdAt}
+                  request={request}
+                  language={language}
+                  onClick={() => openHomeownerProject(request)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={emptyCard}>
+              <h3 style={emptyTitle}>{t("homeNoActiveRequestsTitle")}</h3>
+              <p style={mutedText}>{t("homeNoActiveRequestsText")}</p>
+
+              <button style={primaryButton} onClick={() => setPage("upload")}>
+                {t("requestService")}
+              </button>
+            </div>
+          )}
+        </section>
+
+        <BottomNav setPage={setPage} currentPage="home" />
+      </div>
+    );
+  }
+
+  if (homeView === "serviceHistory") {
+    return (
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+        <style>{homeLayoutMediaStyles}</style>
+        <TopBar language={language} toggleLanguage={toggleLanguage} />
+
+        <button style={backHomeButton} onClick={() => setHomeView("landing")}>
+          ← {t("backToHome", language)}
+        </button>
+
+        <section style={homeWorkflowSection}>
+          <div style={sectionHeader}>
+            <div>
+              <p style={sectionEyebrow}>{t("homeHistoryEyebrow")}</p>
+              <h2 style={sectionTitle}>{t("homeServiceHistoryTitle")}</h2>
+              <p style={sectionGuideText}>
+                {t("homeServiceHistoryGuide", language)}
+              </p>
+            </div>
+          </div>
+
+          {historyRequests.length > 0 ? (
+            <div style={projectHistoryList}>
+              {historyRequests
+                .slice()
+                .map((request) => (
+                  <HistoryRequestCard
+                    key={request.requestId || request.id}
+                    request={request}
+                    language={language}
+                    setPage={setPage}
+                    onDetails={openHistoryDetails}
+                  />
+                ))}
+            </div>
+          ) : (
+            <div style={emptyCard}>
+              <h3 style={emptyTitle}>{t("homeNoHistoryTitle")}</h3>
+              <p style={mutedText}>{t("homeNoHistoryText")}</p>
+            </div>
+          )}
+        </section>
+
+        {historyDetailsRequest && (
+          <ServiceHistoryDetailsSheet
+            request={historyDetailsRequest}
+            language={language}
+            onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
+            onMessageProfessional={() => openWorkConversationForRequest(historyDetailsRequest)}
+            onClose={() => setHistoryDetailsRequest(null)}
+          />
+        )}
+
+        <BottomNav setPage={setPage} currentPage="home" />
+      </div>
+    );
+  }
+
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <style>{homeLayoutMediaStyles}</style>
       <TopBar language={language} toggleLanguage={toggleLanguage} />
 
-      <div style={heroCard}>
-        <p style={eyebrow}>{t("home")}</p>
+      <section style={homeWorkflowSection}>
+        <div style={sectionHeader}>
+          <div>
+            <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
+            <h2 style={sectionTitle}>{t("homeMyProjects", language)}</h2>
+            <p style={sectionGuideText}>{t("homeMyProjectsSubtitle", language)}</p>
+          </div>
+        </div>
 
-        <h1 style={heroTitle}>
-          {t("homeGreeting")}, {userName}! 👋
-        </h1>
+        <div className="home-my-projects-tabs" style={segmentedControl}>
+          <button
+            type="button"
+            style={{
+              ...segmentedButton,
+              ...(myProjectsTab === "active" ? segmentedButtonActive : {}),
+            }}
+            onClick={() => setMyProjectsTab("active")}
+          >
+            {t("homeMyProjectsActive", language)}
+          </button>
+          <button
+            type="button"
+            style={{
+              ...segmentedButton,
+              ...(myProjectsTab === "history" ? segmentedButtonActive : {}),
+            }}
+            onClick={() => setMyProjectsTab("history")}
+          >
+            {t("homeMyProjectsHistory", language)}
+          </button>
+        </div>
 
-        <p style={heroText}>{t("homeQuestion")}</p>
+        <div className="home-my-projects-portrait">
+          {myProjectsTab === "active" ? (
+            activeHomeownerRequests.length > 0 ? (
+              <div style={activeProjectsCarousel}>
+                {activeHomeownerRequests.slice(0, 3).map((request) => (
+                  <ProjectCard
+                    key={request.requestId || request.id || request.createdAt}
+                    request={request}
+                    language={language}
+                    onClick={() => openHomeownerProject(request)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={compactEmptyCard}>
+                <strong>{t("homeNoActiveRequestsTitle")}</strong>
+                <span>{t("homeNoActiveRequestsText")}</span>
+              </div>
+            )
+          ) : historyRequests.length > 0 ? (
+            <div style={projectHistoryList}>
+              {historyRequests.slice(0, 3).map((request) => (
+                <HistoryRequestCard
+                  key={request.requestId || request.id}
+                  request={request}
+                  language={language}
+                  setPage={setPage}
+                  onDetails={openHistoryDetails}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={compactEmptyCard}>
+              <strong>{t("homeNoHistoryTitle")}</strong>
+              <span>{t("homeNoHistoryText")}</span>
+            </div>
+          )}
+        </div>
 
-        <button style={mainButton} onClick={() => setPage("upload")}>
-          + {t("postAProject")}
-        </button>
-      </div>
+        <div className="home-my-projects-landscape" style={landscapeProjectsGrid}>
+          <div style={landscapeProjectsPanel}>
+            <h3 style={landscapeProjectsTitle}>{t("homeMyProjectsActive", language)}</h3>
+            {activeHomeownerRequests.length > 0 ? (
+              <div style={landscapeProjectsList}>
+                {activeHomeownerRequests.slice(0, 2).map((request) => (
+                  <ProjectCard
+                    key={request.requestId || request.id || request.createdAt}
+                    request={request}
+                    language={language}
+                    onClick={() => openHomeownerProject(request)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={compactEmptyCard}>
+                <strong>{t("homeNoActiveRequestsTitle")}</strong>
+                <span>{t("homeNoActiveRequestsText")}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={landscapeProjectsPanel}>
+            <h3 style={landscapeProjectsTitle}>{t("homeMyProjectsHistory", language)}</h3>
+            {historyRequests.length > 0 ? (
+              <div style={landscapeProjectsList}>
+                {historyRequests.slice(0, 2).map((request) => (
+                  <HistoryRequestCard
+                    key={request.requestId || request.id}
+                    request={request}
+                    language={language}
+                    setPage={setPage}
+                    onDetails={openHistoryDetails}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={compactEmptyCard}>
+                <strong>{t("homeNoHistoryTitle")}</strong>
+                <span>{t("homeNoHistoryText")}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section style={spotlightSection}>
+        <div style={sectionHeader}>
+          <div>
+            <p style={sectionEyebrow}>
+              {t("homeLocalServicesEyebrow", language)}
+            </p>
+            <h2 style={sectionTitle}>
+              {t("homeLocalServicesSpotlight", language)}
+            </h2>
+            <p style={spotlightSubtitle}>
+              {t("homeLocalServicesSubtitle", language)}
+            </p>
+          </div>
+        </div>
+
+        {matchedSpotlightBusinesses.length > 0 ? (
+          <div style={spotlightRow} aria-label={t("homeLocalServicesSpotlight", language)}>
+            {matchedSpotlightBusinesses.map((business) => (
+              <SpotlightCard
+                key={business.id || business.name || business.business_name}
+                business={business}
+                language={language}
+                onViewProfile={() => {
+                  localStorage.setItem(
+                    "selectedContractor",
+                    JSON.stringify(business)
+                  );
+                  localStorage.setItem("contractorDetailsReturnPage", "home");
+                  setPage("contractorDetails");
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={spotlightEmptyCard}>
+            {t("homeLocalServicesEmpty", language)}
+          </div>
+        )}
+      </section>
+
+      <section style={quickHelpSection}>
+        <div style={sectionHeader}>
+          <div>
+            <p style={sectionEyebrow}>{t("homeownerWorkflowHome")}</p>
+            <h2 style={sectionTitle}>{t("homeHelpToday")}</h2>
+            <p style={sectionGuideText}>{t("homeHelpTodaySubtitle")}</p>
+          </div>
+        </div>
+
+        <div style={helpActionGrid}>
+          <button style={helpActionCard} onClick={() => setPage("upload")}>
+            <span style={helpActionIcon}>
+              <MeetroIcon name="request" size={24} decorative />
+            </span>
+            <strong>{t("requestService")}</strong>
+          </button>
+
+          <button style={helpActionCard} onClick={() => setPage("emergency")}>
+            <span style={{ ...helpActionIcon, ...helpEmergencyIcon }}>
+              <MeetroIcon name="emergency" size={24} decorative />
+            </span>
+            <strong>{t("emergencyHelp")}</strong>
+          </button>
+
+          <button style={helpActionCard} onClick={() => setPage("assistant")}>
+            <span style={helpActionIcon}>
+              <MeetroIcon name="aiHelp" size={24} decorative />
+            </span>
+            <strong>{t("aiHelp")}</strong>
+          </button>
+        </div>
+      </section>
 
       {(() => {
         const emergencyStatus =
@@ -263,7 +691,11 @@ function Home({ setPage }) {
           <div style={activeEmergencyCard}>
             <div style={activeEmergencyTop}>
               <div style={activeEmergencyIcon}>
-                {isCompletedReview ? "⭐" : "🚨"}
+                <MeetroIcon
+                  name={isCompletedReview ? "reviews" : "emergency"}
+                  size={22}
+                  decorative
+                />
               </div>
 
               <div>
@@ -286,11 +718,16 @@ function Home({ setPage }) {
 
             <button
               style={activeEmergencyButton}
-              onClick={() =>
-                isCompletedReview
-                  ? setPage("emergencyComplete")
-                  : setPage("emergencyStatus")
-              }
+              onClick={() => {
+                if (isCompletedReview) {
+                  setPage("emergencyComplete");
+                  return;
+                }
+
+                if (!openActiveEmergencyConversation(setPage, "home")) {
+                  setPage("emergencyStatus");
+                }
+              }}
             >
               {isCompletedReview
                 ? language === "es"
@@ -304,330 +741,53 @@ function Home({ setPage }) {
         );
       })()}
 
-      <section style={ecosystemSection}>
-        <div style={compactHeaderRow}>
-          <div>
-            <p style={eyebrow}>
-              {t("homeJobStatus")}
-            </p>
-            <h2 style={compactSectionTitle}>
-              {t("homeTodaySummary")}
-            </h2>
+      <section style={messagesCompactSection}>
+        <button style={messageFocusCard} onClick={() => setPage("messagesInbox")}>
+          <div style={messageFocusIcon}>
+            <MeetroIcon name="messages" size={24} decorative />
           </div>
-
-          <button style={compactViewButton} onClick={() => setPage("messagesInbox")}>
-            {t("homeViewAll")}
-          </button>
-        </div>
-
-        <div style={compactSummaryGrid}>
-          <div style={compactSummaryCard}>
-            <span style={compactSummaryIcon}>🧰</span>
-            <strong style={compactSummaryValue}>
-              {activeHomeownerRequests.length || 0}
+          <div style={{ flex: 1 }}>
+            <strong style={messageFocusTitle}>
+              {unreadWorkflowMessages.length > 0
+                ? `${unreadWorkflowMessages.length} ${t("homeMessagesCount", language)}`
+                : t("homeMessagesAllCaughtUp")}
             </strong>
-            <p style={compactSummaryLabel}>
-              {t("homeJobs")}
+            <p style={messageFocusText}>
+              {unreadWorkflowMessages.length > 0
+                ? t("homeMessagesNeedAttentionText")
+                : t("homeMessagesAllCaughtUpText")}
             </p>
           </div>
-
-          <div style={compactSummaryCard}>
-            <span style={compactSummaryIcon}>📅</span>
-            <strong style={compactSummaryValue}>
-              {workflowSchedules.length || 0}
-            </strong>
-            <p style={compactSummaryLabel}>
-              {t("homeSchedule")}
-            </p>
-          </div>
-
-          <div style={compactSummaryCard}>
-            <span style={compactSummaryIcon}>🚨</span>
-            <strong style={compactSummaryValue}>
-              {activeEmergencyStatus ? 1 : 0}
-            </strong>
-            <p style={compactSummaryLabel}>
-              {t("homeUrgent")}
-            </p>
-          </div>
-
-          <div style={compactSummaryCard}>
-            <span style={compactSummaryIcon}>💬</span>
-            <strong style={compactSummaryValue}>
-              {unreadWorkflowMessages.length || 0}
-            </strong>
-            <p style={compactSummaryLabel}>
-              {t("homeChat")}
-            </p>
-          </div>
-        </div>
+          <span style={messageOpenText}>
+            {t("homeOpenMessages")}
+          </span>
+        </button>
       </section>
 
-
-
-        <div style={quickGrid}>
-  <QuickCard
-    icon="🔎"
-    title={t("findContractors")}
-    text={t("findContractorsText")}
-    onClick={() => {
-      localStorage.setItem(
-        "activeDiscoverMode",
-        "businessDirectory"
-      );
-
-      setPage("discover");
-    }}
-  />
-
-        <QuickCard
-          icon="📸"
-          title={t("uploadProject")}
-          text={t("uploadProjectText")}
-          onClick={() => setPage("upload")}
+      {detailsRequest && (
+        <ActiveRequestDetailsSheet
+          request={detailsRequest}
+          language={language}
+          onOpenRequest={() => {
+            localStorage.setItem(
+              "selectedHomeownerRequestId",
+              detailsRequest.requestId || detailsRequest.id
+            );
+            setPage("myRequests");
+          }}
+          onMessageProfessional={() => openWorkConversationForRequest(detailsRequest)}
+          onClose={() => setDetailsRequest(null)}
         />
-
-        <QuickCard
-          icon="💬"
-          title={t("messages")}
-          text={t("projectReplies")}
-          onClick={() => setPage("messagesInbox")}
-          />
-
-        <QuickCard
-          icon="🤖"
-          title={t("aiHelp")}
-          text={t("assistantSubtitle")}
-          onClick={() => setPage("assistant")}
-        />
-
-        <QuickCard
-          icon="🚨"
-          title={t("emergencyHelp")}
-          text={t("emergencyHelpText")}
-          onClick={() => setPage("emergency")}
-        />
-      </div>
-
-      <div style={sectionHeader}>
-        <h2 style={sectionTitle}>{t("myActiveProjects")}</h2>
-
-        <button style={textButton} onClick={() => setPage("myRequests")}>
-          {t("viewAll")}
-        </button>
-      </div>
-
-      {activeHomeownerRequests.length > 0 ? (
-        <div style={projectList}>
-          {activeHomeownerRequests.map((request) => (
-            <ProjectCard
-              key={request.requestId || request.id || request.createdAt}
-              request={request}
-              language={language}
-              onClick={() => {
-                localStorage.setItem(
-                  "selectedHomeownerRequestId",
-                  request.requestId || request.id
-                );
-                setPage("myRequests");
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div style={emptyCard}>
-          <h3 style={emptyTitle}>{t("noActiveProjectYet")}</h3>
-          <p style={mutedText}>{t("postFirstProjectText")}</p>
-
-          <button style={primaryButton} onClick={() => setPage("upload")}>
-            {t("postAProject")}
-          </button>
-        </div>
       )}
 
-      {completedHomeownerRequests.length > 0 && (
-        <>
-          <div style={sectionHeader}>
-            <h2 style={sectionTitle}>
-              {language === "es"
-                ? "Historial de Proyectos"
-                : "Project History"}
-            </h2>
-
-            <button
-              style={textButton}
-              onClick={() => setPage("myRequests")}
-            >
-              {t("viewAll")}
-            </button>
-          </div>
-
-          <div style={projectHistoryList}>
-            {completedHomeownerRequests
-              .slice()
-              .reverse()
-              .slice(0, 3)
-              .map((request) => (
-                <div
-                  key={request.requestId || request.id}
-                  style={historyCard}
-                  onClick={() => {
-                    localStorage.setItem(
-                      "lastCompletedProject",
-                      JSON.stringify(request)
-                    );
-
-                    localStorage.setItem(
-                      "completedJobViewMode",
-                      "homeowner"
-                    );
-
-                    setPage("completedJobDetails");
-                  }}
-                >
-                  <div style={historyTop}>
-                    <div>
-                      <div style={historyBadge}>
-                        ✅ {language === "es"
-                          ? "Completado"
-                          : "Completed"}
-                      </div>
-
-                      <h3 style={historyTitle}>
-                        {request.title ||
-                          request.category ||
-                          "Home Project"}
-                      </h3>
-
-                      <p style={historyContractor}>
-                        {request.selectedProfessional ||
-                          request.acceptedQuote?.businessName ||
-                          "Professional"}
-                      </p>
-                    </div>
-
-                    <strong style={historyAmount}>
-                      $
-                      {request.revenue ||
-                        request.acceptedQuote?.amount ||
-                        request.quoteAmount ||
-                        0}
-                    </strong>
-                  </div>
-
-                  <div style={historyBottom}>
-                    <span>
-                      {request.reviewSubmitted
-                        ? `⭐ ${t("reviewSubmitted")}`
-                        : "⭐ Review Pending"}
-                    </span>
-
-                    <button
-                      style={historyButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-
-                        localStorage.setItem(
-                          "selectedHomeownerRequestId",
-                          request.requestId || request.id
-                        );
-
-                        setPage("myRequests");
-                      }}
-                    >
-                      {language === "es"
-                        ? "Ver Proyecto"
-                        : "View Project"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </>
-      )}
-
-      <h2 style={sectionTitle}>{t("recommendedNearYou")}</h2>
-
-  <div style={proList}>
-
-{JSON.parse(
-  localStorage.getItem("meetroBusinesses") || "[]"
-)
-.filter(
-  (business) =>
-    business &&
-    business.name &&
-    business.status !== "closed"
-)
-.map((business) => (
-  <ProCard
-    key={business.id || business.name}
-    name={business.name}
-
-    category={
-      business.category
-        ? business.category
-            .replace(/\b\w/g, (c) => c.toUpperCase())
-        : t("professionalUser")
-    }
-
-    location={
-      business.location ||
-      (language === "es"
-        ? "Ubicación pendiente"
-        : "Location pending")
-    }
-
-    onClick={() => {
-      localStorage.setItem(
-        "selectedContractor",
-        JSON.stringify(business)
-      );
-
-      setPage("contractorDetails");
-    }}
-  />
-))}
-
-{JSON.parse(
-  localStorage.getItem("meetroBusinesses") || "[]"
-)
-.filter(
-  (business) =>
-    business &&
-    business.name &&
-    business.status !== "closed"
-).length === 0 && (
-
-<div style={emptyCard}>
-  <h3 style={emptyTitle}>
-    {language === "es"
-      ? "No hay negocios todavía"
-      : "No businesses yet"}
-  </h3>
-
-  <p style={mutedText}>
-    {language === "es"
-      ? "Los negocios aparecerán aquí cuando creen su perfil."
-      : "Businesses will appear here once profiles are created."}
-  </p>
-</div>
-
-)}
-
-</div>
-
-
-      {hasBusinessAccess && (
-        <div style={modeCard}>
-          <h2 style={sectionTitle}>{t("businessMode")}</h2>
-
-          <p style={mutedText}>{t("professionalAccountText")}</p>
-
-          <button style={primaryButton} onClick={() => switchMode("business")}>
-            {t("switchToBusinessMode")}
-          </button>
-        </div>
+      {historyDetailsRequest && (
+        <ServiceHistoryDetailsSheet
+          request={historyDetailsRequest}
+          language={language}
+          onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
+          onMessageProfessional={() => openWorkConversationForRequest(historyDetailsRequest)}
+          onClose={() => setHistoryDetailsRequest(null)}
+        />
       )}
 
       <BottomNav setPage={setPage} currentPage="home" />
@@ -644,7 +804,7 @@ function TopBar({ language, toggleLanguage }) {
       </div>
 
       <button style={languageButton} onClick={toggleLanguage}>
-        🌐 {t("language")}{" "}
+        <MeetroIcon name="language" size={16} decorative /> {t("language")}{" "}
         <strong>{language === "en" ? t("english") : t("spanish")}</strong>
       </button>
     </div>
@@ -664,17 +824,673 @@ function StatCard({ title, value, note }) {
 function QuickCard({ icon, title, text, onClick }) {
   return (
     <button style={quickCard} onClick={onClick}>
-      <div style={quickIcon}>{icon}</div>
+      <div style={quickIcon}>
+        <MeetroIcon name={icon} size={26} decorative />
+      </div>
       <h3 style={quickTitle}>{title}</h3>
       <p style={quickText}>{text}</p>
     </button>
   );
 }
 
+function getLocalSpotlightBusinesses() {
+  let savedBusinesses = [];
+
+  try {
+    savedBusinesses = JSON.parse(localStorage.getItem("meetroBusinesses") || "[]");
+  } catch {
+    savedBusinesses = [];
+  }
+
+  let contractorProfile = null;
+
+  try {
+    contractorProfile = JSON.parse(localStorage.getItem("contractorProfile") || "null");
+  } catch {
+    contractorProfile = null;
+  }
+
+  const localBusinessName = localStorage.getItem("businessName") || "";
+  const localBusinessCategory = localStorage.getItem("businessCategory") || "";
+  const localBusinessServiceDomain =
+    localStorage.getItem("businessServiceDomain") ||
+    localStorage.getItem("businessDomain") ||
+    "";
+  const localBusinessServiceCategories = readLocalJsonArray(
+    "businessServiceCategories"
+  );
+  const localBusinessServiceSpecialties = readLocalJsonArray(
+    "businessServiceSpecialties"
+  );
+  const localBusinessZipCodes = localStorage.getItem("businessZipCodes") || "";
+  const localBusinessPrimaryCity =
+    localStorage.getItem("businessPrimaryCity") || "";
+  const localBusinessServiceRadius =
+    localStorage.getItem("businessServiceRadius") || "";
+  const localBusinessDemoSafe =
+    localStorage.getItem("businessLocalDemoSafe") === "true" ||
+    localStorage.getItem("localDemoSafe") === "true";
+
+  if (!contractorProfile && localBusinessName) {
+    contractorProfile = {
+      id: localBusinessName,
+      name: localBusinessName,
+      business_name: localBusinessName,
+      category: localBusinessCategory,
+      business_category: localBusinessCategory,
+      imageUrl: localStorage.getItem("businessImageUrl") || "",
+      image_url: localStorage.getItem("businessImageUrl") || "",
+      location: localStorage.getItem("businessLocation") || "",
+      city: localBusinessPrimaryCity,
+      primaryCity: localBusinessPrimaryCity,
+      serviceZipCodes: localBusinessZipCodes,
+      businessZipCodes: localBusinessZipCodes,
+      serviceRadiusMiles: localBusinessServiceRadius,
+      serviceDomain: localBusinessServiceDomain,
+      businessServiceDomain: localBusinessServiceDomain,
+      serviceCategories: localBusinessServiceCategories,
+      businessServiceCategories: localBusinessServiceCategories,
+      serviceSpecialties: localBusinessServiceSpecialties,
+      businessServiceSpecialties: localBusinessServiceSpecialties,
+      localDemoSafe: localBusinessDemoSafe || undefined,
+      rating: localStorage.getItem("businessRating") || "",
+      status: "active",
+      localProfileOwner: true,
+      __spotlightSource: "localStorage",
+    };
+  }
+
+  const portfolioItems = getLocalSpotlightPortfolioItems();
+  const businesses = savedBusinesses.map((business) => ({
+    ...business,
+    __spotlightSource: business.__spotlightSource || "meetroBusinesses",
+  }));
+
+  if (contractorProfile) {
+    businesses.unshift({
+      ...contractorProfile,
+      id:
+        contractorProfile.id ||
+        contractorProfile.name ||
+        contractorProfile.business_name,
+      name:
+        contractorProfile.name ||
+        contractorProfile.business_name ||
+        localBusinessName,
+      business_name:
+        contractorProfile.business_name ||
+        contractorProfile.name ||
+        localBusinessName,
+      category:
+        contractorProfile.category ||
+        contractorProfile.business_category ||
+        localBusinessCategory,
+      business_category:
+        contractorProfile.business_category ||
+        contractorProfile.category ||
+        localBusinessCategory,
+      serviceDomain:
+        contractorProfile.serviceDomain ||
+        contractorProfile.service_domain ||
+        localBusinessServiceDomain,
+      businessServiceDomain:
+        contractorProfile.businessServiceDomain ||
+        contractorProfile.business_service_domain ||
+        localBusinessServiceDomain,
+      serviceCategories:
+        contractorProfile.serviceCategories ||
+        contractorProfile.service_categories ||
+        localBusinessServiceCategories,
+      businessServiceCategories:
+        contractorProfile.businessServiceCategories ||
+        contractorProfile.business_service_categories ||
+        localBusinessServiceCategories,
+      serviceSpecialties:
+        contractorProfile.serviceSpecialties ||
+        contractorProfile.service_specialties ||
+        localBusinessServiceSpecialties,
+      businessServiceSpecialties:
+        contractorProfile.businessServiceSpecialties ||
+        contractorProfile.business_service_specialties ||
+        localBusinessServiceSpecialties,
+      city:
+        contractorProfile.city ||
+        contractorProfile.primaryCity ||
+        localBusinessPrimaryCity,
+      primaryCity:
+        contractorProfile.primaryCity ||
+        contractorProfile.city ||
+        localBusinessPrimaryCity,
+      serviceZipCodes:
+        contractorProfile.serviceZipCodes ||
+        contractorProfile.service_zip_codes ||
+        contractorProfile.businessZipCodes ||
+        localBusinessZipCodes,
+      businessZipCodes:
+        contractorProfile.businessZipCodes ||
+        contractorProfile.business_zip_codes ||
+        contractorProfile.serviceZipCodes ||
+        localBusinessZipCodes,
+      serviceRadiusMiles:
+        contractorProfile.serviceRadiusMiles ||
+        contractorProfile.service_radius_miles ||
+        localBusinessServiceRadius,
+      localDemoSafe:
+        contractorProfile.localDemoSafe ||
+        contractorProfile.demoSafe ||
+        localBusinessDemoSafe ||
+        undefined,
+      localProfileOwner: true,
+      __spotlightSource: contractorProfile.__spotlightSource || "contractorProfile",
+    });
+  }
+
+  const uniqueBusinesses = mergeLocalSpotlightBusinessRecords(businesses);
+
+  return attachSpotlightPortfolioMedia(uniqueBusinesses, portfolioItems);
+}
+
+function getSpotlightContractorId(business = {}) {
+  return String(
+    business.contractorId ||
+      business.contractor_id ||
+      business.businessId ||
+      business.business_id ||
+      business.id ||
+      ""
+  ).trim();
+}
+
+function hasSpotlightProjectPhotos(business = {}) {
+  const projectBuckets = [
+    ...(Array.isArray(business.businessPortfolio) ? business.businessPortfolio : []),
+    ...(Array.isArray(business.business_portfolio) ? business.business_portfolio : []),
+    ...(Array.isArray(business.projects) ? business.projects : []),
+    ...(Array.isArray(business.projectGallery) ? business.projectGallery : []),
+    ...(Array.isArray(business.project_gallery) ? business.project_gallery : []),
+  ];
+
+  return projectBuckets.some(
+    (project) => getBusinessPortfolioProjectImages(project).length > 0
+  );
+}
+
+function getSpotlightPortfolioFetchCache() {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem("meetroSpotlightPortfolioFetchCache") || "{}"
+    );
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setSpotlightPortfolioFetchCache(cache = {}) {
+  try {
+    localStorage.setItem(
+      "meetroSpotlightPortfolioFetchCache",
+      JSON.stringify(cache)
+    );
+  } catch {}
+}
+
+async function hydrateSpotlightPortfolioProjects(
+  businesses = [],
+  onPortfolioHydrated = () => {}
+) {
+  if (!Array.isArray(businesses) || businesses.length === 0) return;
+
+  const cache = getSpotlightPortfolioFetchCache();
+  const now = Date.now();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const businessesToFetch = businesses.filter((business) => {
+    const contractorId = getSpotlightContractorId(business);
+    if (!contractorId || hasSpotlightProjectPhotos(business)) return false;
+
+    const cachedAt = Number(cache[contractorId] || 0);
+    return !cachedAt || now - cachedAt > oneDayMs;
+  });
+
+  if (businessesToFetch.length === 0) return;
+
+  await Promise.all(
+    businessesToFetch.map(async (business) => {
+      const contractorId = getSpotlightContractorId(business);
+      cache[contractorId] = now;
+      setSpotlightPortfolioFetchCache(cache);
+
+      try {
+        const response = await fetch(
+          `${API_URL}/contractor-projects/${encodeURIComponent(contractorId)}`
+        );
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const projects = Array.isArray(data?.projects) ? data.projects : [];
+        if (projects.length === 0) return;
+
+        const normalizedProjects = persistBusinessPortfolioProjects(
+          {
+            ...business,
+            id: contractorId,
+            contractor_id: contractorId,
+            business_name:
+              business.business_name || business.name || business.businessName || "",
+            name: business.name || business.business_name || "",
+          },
+          projects,
+          {
+            fallbackBusinessName:
+              business.name || business.business_name || business.businessName || "",
+          }
+        );
+
+        if (normalizedProjects.length > 0) {
+          onPortfolioHydrated();
+        }
+      } catch (error) {
+        if (localStorage.getItem("meetroSpotlightDebug") === "true") {
+          console.warn("[Meetro Spotlight Portfolio Fetch]", error);
+        }
+      }
+    })
+  );
+}
+
+function getLocalSpotlightBusinessKey(business = {}) {
+  return String(
+    business?.id ||
+      business?.businessId ||
+      business?.business_id ||
+      business?.contractorId ||
+      business?.contractor_id ||
+      business?.name ||
+      business?.business_name ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function mergeArrayField(primaryValue, nextValue) {
+  return [
+    ...(Array.isArray(primaryValue) ? primaryValue : []),
+    ...(Array.isArray(nextValue) ? nextValue : []),
+  ];
+}
+
+function mergeLocalSpotlightBusinessRecords(businesses = []) {
+  const byKey = new Map();
+
+  businesses.forEach((business) => {
+    const key = getLocalSpotlightBusinessKey(business);
+    if (!business || !key || business.status === "closed") return;
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, business);
+      return;
+    }
+
+    byKey.set(key, {
+      ...business,
+      ...existing,
+      businessPortfolio: mergeArrayField(
+        existing.businessPortfolio,
+        business.businessPortfolio
+      ),
+      business_portfolio: mergeArrayField(
+        existing.business_portfolio,
+        business.business_portfolio
+      ),
+      projects: mergeArrayField(existing.projects, business.projects),
+      projectGallery: mergeArrayField(
+        existing.projectGallery,
+        business.projectGallery
+      ),
+      project_gallery: mergeArrayField(
+        existing.project_gallery,
+        business.project_gallery
+      ),
+      portfolio: mergeArrayField(existing.portfolio, business.portfolio),
+      gallery: mergeArrayField(existing.gallery, business.gallery),
+      photos: mergeArrayField(existing.photos, business.photos),
+      portfolioImages: mergeArrayField(
+        existing.portfolioImages,
+        business.portfolioImages
+      ),
+      portfolio_images: mergeArrayField(
+        existing.portfolio_images,
+        business.portfolio_images
+      ),
+      __spotlightFeaturedProject:
+        existing.__spotlightFeaturedProject ||
+        business.__spotlightFeaturedProject,
+      __spotlightSource: [
+        existing.__spotlightSource,
+        business.__spotlightSource,
+      ]
+        .filter(Boolean)
+        .join(" + "),
+    });
+  });
+
+  return Array.from(byKey.values());
+}
+
+function buildLocalServicesSpotlightDebugSummary(
+  businesses = [],
+  requestContexts = [],
+  matchedBusinesses = []
+) {
+  const matchedIds = new Set(
+    matchedBusinesses.map((business) =>
+      String(business.id || business.name || business.business_name || "").toLowerCase()
+    )
+  );
+  const candidateBusinessNames = businesses.map(
+    (business) =>
+      business.name ||
+      business.business_name ||
+      business.businessName ||
+      "Unknown business"
+  );
+  const bgoneRecord =
+    businesses.find((business) =>
+      String(
+        business.name ||
+          business.business_name ||
+          business.businessName ||
+          business.id ||
+          ""
+      )
+        .toLowerCase()
+        .includes("bgone")
+    ) || null;
+  const firstRequestContext = requestContexts[0] || null;
+  const bgoneProfile = bgoneRecord
+    ? buildSpotlightProfessionalProfile(bgoneRecord)
+    : null;
+  const bgoneMediaCount = bgoneRecord
+    ? getSpotlightMediaUrls(bgoneRecord).length
+    : 0;
+  const bgoneMediaSourceSummary = bgoneRecord
+    ? getSpotlightMediaSourceSummary(bgoneRecord)
+    : null;
+  const bgoneRequestMatch =
+    bgoneProfile && firstRequestContext
+      ? getRequestMatchSummary(bgoneProfile, firstRequestContext)
+      : null;
+  const bgoneHasMedia = bgoneMediaCount > 0;
+  const bgonePassesDomainCheck = bgoneProfile?.serviceDomain === "home_services";
+  const bgonePassesSpecialtyCheck = firstRequestContext
+    ? Boolean(bgoneRequestMatch?.checks?.specialtyMatched)
+    : true;
+  const bgonePassesAreaCheck =
+    bgoneProfile && firstRequestContext
+      ? canProfessionalServeArea(bgoneProfile, firstRequestContext)
+      : true;
+  const bgonePassesLeadEligibility =
+    bgoneProfile && firstRequestContext
+      ? canProfessionalReceiveLead(bgoneProfile, firstRequestContext)
+      : true;
+  const bgonePassesNoContextSpotlightRule = bgoneRecord
+    ? isNoContextSpotlightSafeBusiness(bgoneRecord)
+    : false;
+  const bgoneKey = bgoneRecord
+    ? String(
+        bgoneRecord.id ||
+          bgoneRecord.name ||
+          bgoneRecord.business_name ||
+          ""
+      ).toLowerCase()
+    : "";
+
+  return {
+    totalCandidateProfessionals: businesses.length,
+    candidateBusinessNames,
+    requestContextCount: requestContexts.length,
+    requestContextSample: firstRequestContext
+      ? {
+          title: firstRequestContext.title,
+          category: firstRequestContext.category,
+          serviceDomain: firstRequestContext.serviceDomain,
+          serviceSpecialty: firstRequestContext.serviceSpecialty,
+          city: firstRequestContext.city,
+          zipCode: firstRequestContext.zipCode,
+          localDemoSafe: firstRequestContext.localDemoSafe,
+        }
+      : null,
+    bgoneFound: Boolean(bgoneRecord),
+    bgoneSource: bgoneRecord?.__spotlightSource || null,
+    bgonePortfolioSource: bgoneRecord?.__spotlightPortfolioSources || [],
+    bgonePortfolioItemCount: bgoneRecord?.__spotlightPortfolioItemCount || 0,
+    bgoneMediaCount,
+    bgoneMediaSourceSummary,
+    bgoneServiceDomain: bgoneProfile?.serviceDomain || null,
+    bgoneServiceSpecialties: bgoneProfile?.serviceSpecialties || [],
+    bgoneServiceCategories: bgoneProfile?.serviceCategories || [],
+    bgoneLocation: bgoneRecord
+      ? {
+          city: bgoneProfile?.city || "",
+          zip:
+            bgoneProfile?.zip ||
+            bgoneProfile?.serviceZipCodes ||
+            bgoneRecord.zip ||
+            bgoneRecord.zipCode ||
+            "",
+          location: bgoneRecord.location || "",
+          serviceCities: bgoneProfile?.serviceCities || "",
+          serviceZipCodes: bgoneProfile?.serviceZipCodes || "",
+          serviceRadiusMiles:
+            bgoneRecord.serviceRadiusMiles ||
+            bgoneRecord.service_radius_miles ||
+            "",
+        }
+      : null,
+    bgoneSafetyFlags: bgoneRecord
+      ? {
+          demoSafe: Boolean(bgoneRecord.demoSafe),
+          localDemoSafe: Boolean(bgoneRecord.localDemoSafe),
+          isDemo: Boolean(bgoneRecord.isDemo),
+          localProfileOwner: Boolean(bgoneRecord.localProfileOwner),
+        }
+      : null,
+    bgoneEligibility: bgoneRecord
+      ? {
+          candidateFound: true,
+          hasMedia: bgoneHasMedia,
+          passesSpotlightMediaCheck: bgoneHasMedia,
+          passesDomainCheck: bgonePassesDomainCheck,
+          passesSpecialtyCheck: bgonePassesSpecialtyCheck,
+          passesAreaCheck: bgonePassesAreaCheck,
+          passesLeadEligibility: bgonePassesLeadEligibility,
+          passesNoContextSpotlightRule: bgonePassesNoContextSpotlightRule,
+          noRequestContext: !firstRequestContext,
+          noContextSpotlightSafe: bgonePassesNoContextSpotlightRule,
+          requestMatch:
+            bgoneProfile && firstRequestContext
+              ? bgoneRequestMatch
+              : null,
+          canProfessionalReceiveRequest:
+            bgoneProfile && firstRequestContext
+              ? canProfessionalReceiveRequest(bgoneProfile, firstRequestContext)
+              : null,
+          serviceArea:
+            bgoneProfile && firstRequestContext
+              ? getServiceAreaMatchSummary(bgoneProfile, firstRequestContext)
+              : null,
+          canProfessionalServeArea:
+            bgoneProfile && firstRequestContext
+              ? canProfessionalServeArea(bgoneProfile, firstRequestContext)
+              : null,
+          leadEligibility:
+            bgoneProfile && firstRequestContext
+              ? getLeadEligibilitySummary(bgoneProfile, firstRequestContext)
+              : null,
+          canProfessionalReceiveLead:
+            bgoneProfile && firstRequestContext
+              ? canProfessionalReceiveLead(bgoneProfile, firstRequestContext)
+              : null,
+          localVisibilitySummary:
+            bgoneProfile && firstRequestContext
+              ? getLocalLeadVisibilitySummary(bgoneProfile, firstRequestContext)
+              : null,
+          includedInSpotlight: matchedIds.has(bgoneKey),
+          finalIncludedInCards: matchedIds.has(bgoneKey),
+        }
+      : null,
+    finalSpotlightCardCount: matchedBusinesses.length,
+    finalSpotlightBusinessNames: matchedBusinesses.map(
+      (business) =>
+        business.name ||
+        business.business_name ||
+        business.businessName ||
+        "Unknown business"
+    ),
+    debugKey: JSON.stringify({
+      candidates: candidateBusinessNames,
+      contexts: requestContexts.length,
+      cards: matchedBusinesses.map(
+        (business) => business.id || business.name || business.business_name
+      ),
+      bgoneMediaCount,
+      bgoneSource: bgoneRecord?.__spotlightSource || null,
+      bgonePortfolioItemCount: bgoneRecord?.__spotlightPortfolioItemCount || 0,
+    }),
+  };
+}
+
+function shouldShowLocalServicesSpotlightDebug() {
+  if (typeof window === "undefined") return false;
+
+  return localStorage.getItem("meetroSpotlightDebug") === "true";
+}
+
+function getLocalSpotlightPortfolioItems() {
+  return readAllBusinessPortfolioItems();
+}
+
+function readLocalJsonArray(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function SpotlightCard({ business, language, onViewProfile }) {
+  const name =
+    business.name ||
+    business.business_name ||
+    t("homeLocalBusiness", language);
+  const category =
+    business.category ||
+    business.business_category ||
+    t("homeLocalService", language);
+  const description =
+    business.bio ||
+    business.description ||
+    business.businessDescription ||
+    business.business_description ||
+    t("homeSpotlightFallbackDescription", language);
+  const featuredProject = getSpotlightFeaturedProject(business);
+  const featuredProjectTitle =
+    featuredProject?.title ||
+    featuredProject?.name ||
+    featuredProject?.projectTitle ||
+    featuredProject?.project_title ||
+    "";
+  const featuredProjectDescription =
+    featuredProject?.description ||
+    featuredProject?.summary ||
+    featuredProject?.caption ||
+    "";
+  const cardDescription = featuredProjectDescription || description;
+  const servingSince =
+    business.servingSince ||
+    business.serving_since ||
+    business.establishedYear ||
+    business.established_year ||
+    business.foundedYear ||
+    business.founded_year ||
+    business.yearFounded ||
+    business.year_founded ||
+    "";
+  const servingArea =
+    business.servingArea ||
+    business.serving_area ||
+    business.serviceArea ||
+    business.service_area ||
+    business.county ||
+    business.market ||
+    "";
+  const servingLine = servingSince
+    ? t("homeServingLocalAreaSince", language)
+        .replace("{area}", servingArea || t("homeLocalArea", language))
+        .replace("{year}", servingSince)
+    : "";
+  const logoUrl = getSpotlightAvatarUrl(business);
+  const mediaUrls = getSpotlightMediaForBusiness(business);
+  const photoCountLabel =
+    mediaUrls.length === 1
+      ? t("homeOnePhoto", language)
+      : t("homePhotoCount", language).replace("{count}", mediaUrls.length);
+
+  return (
+    <article style={spotlightCard}>
+      <SpotlightSlideshow
+        images={mediaUrls}
+        alt={name}
+        photoCountLabel={photoCountLabel}
+        placeholderLabel={t("homePortfolioPreview", language)}
+        previousLabel={t("homePreviousPhoto", language)}
+        nextLabel={t("homeNextPhoto", language)}
+      />
+
+      <div style={spotlightContent}>
+        <div style={spotlightBusinessRow}>
+          <div style={spotlightLogoWrap}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="" style={spotlightLogoImage} />
+            ) : (
+              <span style={spotlightLogoFallback}>
+                {String(name || "M").charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          <div style={spotlightBusinessText}>
+            <strong style={spotlightName}>{name}</strong>
+            <span style={spotlightCategory}>{category}</span>
+            {servingLine && (
+              <span style={spotlightServingLine}>{servingLine}</span>
+            )}
+          </div>
+        </div>
+
+        {featuredProjectTitle && (
+          <strong style={spotlightProjectTitle}>{featuredProjectTitle}</strong>
+        )}
+
+        <p style={spotlightDescription}>{cardDescription}</p>
+
+        <button type="button" style={spotlightButton} onClick={onViewProfile}>
+          {t("homeViewProfile", language)}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function ToolCard({ icon, title, text, onClick }) {
   return (
     <button style={toolCard} onClick={onClick}>
-      <div style={toolIcon}>{icon}</div>
+      <div style={toolIcon}>
+        <MeetroIcon name={icon} size={28} decorative />
+      </div>
       <h3 style={toolTitle}>{title}</h3>
       <p style={toolText}>{text}</p>
     </button>
@@ -682,161 +1498,541 @@ function ToolCard({ icon, title, text, onClick }) {
 }
 
 function ProjectCard({ request, language, onClick }) {
-  const status = request.status || "pending";
+  const journey = getHomeownerProjectJourney(request, language);
+  const professionalName = journey.professionalName;
 
+  return (
+    <div style={projectCard}>
+      <div style={projectTopRow}>
+        <div style={projectTopMain}>
+          <h3 style={projectTitle}>
+            {request.title ||
+              request.category ||
+              t("homeServiceRequest", language)}
+          </h3>
+          <span style={projectBadge}>{journey.currentTitle}</span>
+        </div>
+      </div>
+
+      <div style={projectStageCompact}>
+        <span style={projectLifecycleLabel}>{t("homeProgress", language)}</span>
+        <div style={projectVisualProgress} aria-label={t("homeProgress", language)}>
+        {journey.stages.map((item) => (
+          <span
+            key={item.key}
+            style={{
+              ...projectProgressDot,
+              ...(item.complete ? projectProgressDotDone : {}),
+              ...(item.current ? projectProgressDotCurrent : {}),
+            }}
+          >
+            {item.complete ? "✓" : item.current ? "●" : ""}
+          </span>
+        ))}
+        </div>
+      </div>
+
+      {professionalName && (
+        <p style={projectProfessionalName}>{professionalName}</p>
+      )}
+
+      <button
+        type="button"
+        style={projectOpenButton}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick?.();
+        }}
+      >
+        <MeetroIcon name="openExternal" size={16} decorative />
+        {t("openProject", language)}
+      </button>
+    </div>
+  );
+}
+
+function ActiveRequestDetailsSheet({
+  request,
+  language,
+  onClose,
+  onOpenRequest,
+  onMessageProfessional,
+}) {
+  const lifecycle = getHomeownerWorkflowPresentation(request, language);
   const createdDate = request.createdAt
     ? new Date(request.createdAt).toLocaleDateString(
+        language === "es" ? "es-US" : "en-US",
+        { month: "short", day: "numeric", year: "numeric" }
+      )
+    : t("homeDatePending", language);
+  const quotesCount = Array.isArray(request.quotesReceived)
+    ? request.quotesReceived.length
+    : request.quotesReceived || 0;
+  const viewsCount = Array.isArray(request.viewedByBusinesses)
+    ? request.viewedByBusinesses.length
+    : request.viewedByBusinesses || 0;
+  const messagesCount = request.messagesCount || 0;
+  const hasMessaging =
+    messagesCount > 0 ||
+    Boolean(
+      request.conversationId ||
+        request.activeConversationId ||
+        request.threadId ||
+        request.selectedProfessional ||
+        request.acceptedQuote
+    );
+  const serviceType =
+    request.serviceType ||
+    request.category ||
+    t("homeService", language);
+
+  return (
+    <div style={detailsSheetOverlay} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("homeRequestDetailsAria", language)}
+        style={detailsSheet}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={detailsSheetHandle}></div>
+        <div style={detailsSheetHeader}>
+          <div>
+            <p style={sectionEyebrow}>
+              {t("homeRequestDetails", language)}
+            </p>
+            <h3 style={detailsSheetTitle}>
+              {request.title ||
+                request.category ||
+                t("homeActiveRequest", language)}
+            </h3>
+          </div>
+
+          <button type="button" style={detailsSheetClose} onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <div style={detailsSheetGrid}>
+          <DetailRow
+            icon="completion"
+            label={t("homeStatus", language)}
+            value={lifecycle.statusLabel}
+          />
+          <DetailRow
+            icon="openExternal"
+            label={t("homeNextAction", language)}
+            value={lifecycle.nextAction}
+          />
+          <DetailRow
+            icon="schedule"
+            label={t("homeCreated", language)}
+            value={createdDate}
+          />
+          <DetailRow
+            icon="noteText"
+            label={t("homeDescription", language)}
+            value={
+              request.description ||
+              t("homeNoExtraDetails", language)
+            }
+          />
+          <DetailRow
+            icon="readOnly"
+            label={t("homeActivity", language)}
+            value={`${viewsCount} ${t("homeViews", language)} · ${messagesCount} ${t(
+              "homeMessagesCount",
+              language
+            )} · ${quotesCount} ${t("homeQuotesCount", language)}`}
+          />
+          <DetailRow
+            icon="serviceTypes"
+            label={t("homeServiceType", language)}
+            value={serviceType}
+          />
+        </div>
+
+        <button type="button" style={detailsPrimaryAction} onClick={onOpenRequest}>
+          {t("homeOpenRequest", language)}
+          <MeetroIcon name="openExternal" size={16} decorative />
+        </button>
+
+        {hasMessaging && (
+          <button
+            type="button"
+            style={detailsSecondaryAction}
+            onClick={onMessageProfessional}
+          >
+            {t("homeMessageProfessional", language)}
+            <MeetroIcon name="messages" size={16} decorative />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ icon, label, value }) {
+  return (
+    <div style={detailsSheetRow}>
+      <span aria-hidden="true" style={detailsSheetRowIcon}>
+        <MeetroIcon name={icon} size={18} decorative />
+      </span>
+      <span style={detailsSheetRowLabel}>{label}</span>
+      <strong style={detailsSheetRowValue}>{value}</strong>
+    </div>
+  );
+}
+
+function openCompletedRecord(request, setPage) {
+  setActiveAccountMode("personal");
+  localStorage.setItem(
+    "selectedHomeownerRequestId",
+    request.requestId || request.id || request.historyId || ""
+  );
+  localStorage.setItem("lastCompletedProject", JSON.stringify(request));
+  localStorage.setItem("completedJobViewMode", "homeownerHistory");
+  localStorage.setItem("completedJobHistoryMode", "true");
+  setPage("completedJobDetails");
+}
+
+function displayText(value, fallback = "") {
+  if (value == null || value === "") return fallback;
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || fallback;
+  if (typeof value === "object") {
+    return value.name || value.title || value.description || value.summary || fallback;
+  }
+
+  return String(value);
+}
+
+function ServiceHistoryDetailsSheet({
+  request = {},
+  language,
+  onClose,
+  onOpenRecord,
+  onMessageProfessional,
+}) {
+  const completedDateSource =
+    request.completedAt || request.closedAt || request.closeDate || "";
+  const completedDateValue = completedDateSource ? new Date(completedDateSource) : null;
+  const completedDate =
+    completedDateValue && !Number.isNaN(completedDateValue.getTime())
+      ? completedDateValue.toLocaleDateString(
         language === "es" ? "es-US" : "en-US",
         { month: "short", day: "numeric", year: "numeric" }
       )
     : language === "es"
     ? "Fecha pendiente"
     : "Date pending";
-
-  const statusLabel =
-    language === "es"
-      ? status
-          .replace("pending", "Esperando cotizaciones")
-          .replace("Awaiting Quotes", "Esperando cotizaciones")
-          .replace("viewed", "Visto por profesionales")
-          .replace("quoted", "Cotización recibida")
-          .replace("messaged", "Mensaje recibido")
-          .replace("accepted", "Profesional aceptado")
-          .replace("scheduled", "Programado")
-          .replace("active", "En progreso")
-      : status
-          .replace("pending", "Awaiting quotes")
-          .replace("Awaiting Quotes", "Awaiting quotes")
-          .replace("viewed", "Viewed by professionals")
-          .replace("quoted", "Quote received")
-          .replace("messaged", "Message received")
-          .replace("accepted", "Professional accepted")
-          .replace("scheduled", "Scheduled")
-          .replace("active", "In progress");
-
-  const viewsCount = Array.isArray(request.viewedByBusinesses)
-    ? request.viewedByBusinesses.length
-    : request.viewedByBusinesses || 0;
-
-  const quotesCount = Array.isArray(request.quotesReceived)
-    ? request.quotesReceived.length
-    : request.quotesReceived || 0;
-
-  const hasNewQuote = quotesCount > 0;
+  const photosCount = [
+    ...(Array.isArray(request.photos) ? request.photos : []),
+    ...(Array.isArray(request.completionPhotos) ? request.completionPhotos : []),
+  ].length;
+  const paymentStatus = String(request.paymentStatus || "").replace(/_/g, " ");
+  const rawFinalAmount = request.finalAmount || request.revenue || request.amount || "";
+  const finalAmount = rawFinalAmount
+    ? String(rawFinalAmount).startsWith("$")
+      ? String(rawFinalAmount)
+      : `$${rawFinalAmount}`
+    : "";
+  const review = request.review || null;
+  const receiptUrl = getHistoryReceiptUrl(request);
+  const professional =
+    request.professionalName ||
+    request.businessName ||
+    request.selectedProfessional ||
+    request.acceptedQuote?.businessName ||
+    request.quote?.businessName ||
+    "";
+  const hasMessaging = Boolean(
+    request.conversationId ||
+      request.threadId ||
+      request.activeConversationId ||
+      request.selectedProfessional ||
+      request.acceptedQuote
+  );
+  const statusText = [
+    t("homeCompleted", language),
+    paymentStatus,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const serviceTitle = displayText(
+    request.title || request.category || request.service,
+    t("homeUnknownService", language)
+  );
 
   return (
-    <button style={projectCard} onClick={onClick}>
-      <div style={projectTopRow}>
-        <div style={{ flex: 1 }}>
-          <div style={projectCategoryTag}>
-            {request.category || (language === "es" ? "Proyecto" : "Project")}
+    <div style={detailsSheetOverlay} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("homeServiceHistoryDetails", language)}
+        style={detailsSheet}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={detailsSheetHandle}></div>
+        <div style={detailsSheetHeader}>
+          <div>
+            <p style={sectionEyebrow}>
+              {t("homeServiceDetails", language)}
+            </p>
+            <h3 style={detailsSheetTitle}>{serviceTitle}</h3>
           </div>
 
-          <h3 style={projectTitle}>
-            {request.title ||
-              request.category ||
-              (language === "es" ? "Proyecto del hogar" : "Home Project")}
-          </h3>
-
-          <p style={projectStatus}>{statusLabel}</p>
+          <button type="button" style={detailsSheetClose} onClick={onClose}>
+            ×
+          </button>
         </div>
 
-        <span style={projectBadge}>
-          <span style={projectBadgeDot}></span>
-          {language === "es" ? "Activo" : "Active"}
-        </span>
-      </div>
-
-      <p style={projectDescription}>
-        {request.description ||
-          (language === "es"
-            ? "Solicitud enviada. Esperando actividad profesional."
-            : "Request posted. Waiting for professional activity.")}
-      </p>
-
-      <div style={projectStats}>
-        <div style={{ ...projectStatChip, ...projectStatViews }}>
-          <span style={projectStatIcon}>👁️</span>
-          <div>
-            <strong style={projectStatNumber}>{viewsCount}</strong>
-            <span style={projectStatLabel}>{language === "es" ? "Vistas" : "Views"}</span>
-          </div>
-        </div>
-
-        <div style={{ ...projectStatChip, ...projectStatMessages }}>
-          <span style={projectStatIcon}>💬</span>
-          <div>
-            <strong style={projectStatNumber}>{request.messagesCount || 0}</strong>
-            <span style={projectStatLabel}>{language === "es" ? "Mensajes" : "Messages"}</span>
-          </div>
-        </div>
-
-        <div
-          style={{
-            ...projectStatChip,
-            ...projectStatQuotes,
-            ...(hasNewQuote ? projectStatQuoteAlert : {}),
-          }}
-        >
-          <span style={projectStatIcon}>💵</span>
-          <div>
-            <strong style={projectStatNumber}>{quotesCount}</strong>
-            <span style={projectStatLabel}>
-              {language === "es" ? "Cotizaciones" : "Quotes"}
-            </span>
-            {hasNewQuote && (
-              <small style={projectQuoteAlertText}>
-                {language === "es" ? "Nueva cotización" : "New quote"}
-              </small>
+        <div style={detailsSheetGrid}>
+          <DetailRow
+            icon="completion"
+            label={t("homeStatus", language)}
+            value={statusText}
+          />
+          <DetailRow
+            icon="schedule"
+            label={t("homeDate", language)}
+            value={completedDate}
+          />
+          <DetailRow
+            icon="payment"
+            label={t("homeAmount", language)}
+            value={finalAmount || t("homeAmountUnavailable", language)}
+          />
+          <DetailRow
+            icon="businessProfile"
+            label={t("homeProfessional", language)}
+            value={displayText(
+              professional,
+              t("homeProfessionalUnavailable", language)
             )}
-          </div>
+          />
+          <DetailRow
+            icon="portfolio"
+            label={t("homePhotos", language)}
+            value={`${photosCount} ${t("homePhotosCount", language)}`}
+          />
+          <DetailRow
+            icon="reviews"
+            label={t("homeReview", language)}
+            value={
+              review
+                ? `${review.rating}/5 · ${review.comment || ""}`
+                : t("homeReviewPending", language)
+            }
+          />
         </div>
-      </div>
 
-      <div style={projectProgressBar}>
-        <div style={projectProgressFill}></div>
-      </div>
+        <button type="button" style={detailsPrimaryAction} onClick={onOpenRecord}>
+          {t("viewDetails", language)}
+          <MeetroIcon name="openExternal" size={16} decorative />
+        </button>
 
-      <div style={projectFooter}>
-        <span style={projectFooterItem}>
-          <span style={projectFooterIcon}>↗</span>
-          {language === "es" ? "Seguimiento activo" : "Tracking active"}
-        </span>
+        {receiptUrl && (
+          <button
+            type="button"
+            style={detailsSecondaryAction}
+            onClick={() => window.open(receiptUrl, "_blank", "noopener,noreferrer")}
+          >
+            {t("viewReceipt", language)}
+            <MeetroIcon name="quickInvoice" size={16} decorative />
+          </button>
+        )}
 
-        <span style={projectFooterItem}>
-          <span style={projectFooterIcon}>📅</span>
-          <span>
-            <strong>{language === "es" ? "Flujo iniciado" : "Workflow started"}</strong>
-            <small style={projectFooterDate}>{createdDate}</small>
-          </span>
-        </span>
+        {hasMessaging && (
+          <button
+            type="button"
+            style={detailsSecondaryAction}
+            onClick={onMessageProfessional}
+          >
+            {t("homeMessageProfessional", language)}
+            <span aria-hidden="true">◌</span>
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
-function ProCard({ name, category, location, onClick }) {
+function HistoryRequestCard({ request, language, setPage, onDetails }) {
+  const lifecycle = getHomeownerLifecycleStage(request, language);
+  const isClosed = request.status === "closed" || lifecycle.key === "history";
+  const completedDate = request.completedAt
+    ? new Date(request.completedAt).toLocaleDateString(
+        language === "es" ? "es-US" : "en-US",
+        { month: "short", day: "numeric", year: "numeric" }
+      )
+    : language === "es"
+    ? "Fecha pendiente"
+    : "Date pending";
+  const amountValue =
+    request.finalAmount ||
+    request.revenue ||
+    request.acceptedQuote?.amount ||
+    request.quoteAmount ||
+    0;
+  const displayAmount = amountValue
+    ? String(amountValue).startsWith("$")
+      ? String(amountValue)
+      : `$${amountValue}`
+    : "";
+  const paymentStatus = String(request.paymentStatus || "").replace(/_/g, " ");
+  const receiptUrl = getHistoryReceiptUrl(request);
+  const review = request.review || null;
+  const professional =
+    request.professionalName ||
+    request.businessName ||
+    request.selectedProfessional ||
+    request.acceptedQuote?.businessName ||
+    request.quote?.businessName ||
+    t("homeProfessionalUnavailable", language);
+  const reviewLabel = review
+    ? `${t("viewReview", language)} · ${review.rating}/5`
+    : t("leaveReview", language);
+
+  return (
+    <div style={historyCard}>
+      <div style={historyTop}>
+        <div>
+          <div style={historyBadge}>
+            <MeetroIcon name={isClosed ? "jobHistory" : "completion"} size={16} decorative />{" "}
+            {isClosed ? t("homeCompleted", language) : lifecycle.stageLabel}
+          </div>
+
+          <h3 style={historyTitle}>
+            {request.title ||
+              request.category ||
+              t("homeCompletedService", language)}
+          </h3>
+
+          <p style={historyContractor}>
+            {professional}
+          </p>
+
+          <p style={historyContractor}>
+            {completedDate} · {paymentStatus || t("homeCompleted", language)}
+          </p>
+
+        </div>
+
+        <strong style={historyAmount}>
+          {displayAmount}
+        </strong>
+
+      </div>
+
+      <div style={historyMetaGrid}>
+        <span style={historyMetaItem}>
+          {t("homeStatus", language)}
+          <strong style={historyMetaValue}>
+            {isClosed ? t("homeCompleted", language) : lifecycle.stageLabel}
+          </strong>
+        </span>
+        <span style={historyMetaItem}>
+          {t("homeReview", language)}
+          <strong style={historyMetaValue}>
+            {review ? `${review.rating}/5` : t("homeReviewPending", language)}
+          </strong>
+        </span>
+      </div>
+
+      <div style={historyBottom}>
+        <button
+          style={historyButton}
+          onClick={(e) => {
+            e.stopPropagation();
+            openCompletedRecord(request, setPage);
+          }}
+        >
+          {t("viewDetails", language)}
+        </button>
+
+        <div style={historySecondaryActions}>
+          {receiptUrl && (
+            <button
+              type="button"
+              style={historySecondaryButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                window.open(receiptUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              {t("viewReceipt", language)}
+            </button>
+          )}
+
+          <button
+            type="button"
+            style={historySecondaryButton}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDetails?.(request);
+            }}
+          >
+            {reviewLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getHistoryReceiptUrl(request = {}) {
+  return (
+    request.receiptUrl ||
+    request.invoiceUrl ||
+    request.receipt?.url ||
+    request.invoice?.url ||
+    request.acceptedQuote?.receiptUrl ||
+    request.quote?.receiptUrl ||
+    ""
+  );
+}
+
+function ProCard({ name, category, location, rating, reviewCount, onClick }) {
   return (
     <button style={proCard} onClick={onClick}>
-      <div style={proAvatar}>🏢</div>
+      <div style={proAvatar}>
+        <MeetroIcon name="businessProfile" size={24} decorative />
+      </div>
 
       <div style={{ flex: 1 }}>
         <h3 style={proName}>{name}</h3>
         <p style={proMeta}>{category}</p>
-        <p style={proMeta}>📍 {location}</p>
+        <p style={proMeta}>
+          <MeetroIcon name="location" size={14} decorative /> {location}
+        </p>
       </div>
 
-      <span style={ratingBadge}>⭐ 4.9</span>
+      <span style={ratingBadge}>
+        {rating ? (
+          <>
+            <MeetroIcon name="reviews" size={14} decorative /> {rating}
+          </>
+        ) : (
+          "No reviews"
+        )}
+        {reviewCount ? ` (${reviewCount})` : ""}
+      </span>
     </button>
   );
 }
 
 const pageWrapper = {
   background: "linear-gradient(to bottom, #f7f7fb 0%, #f2f3f8 100%)",
-  minHeight: "100vh",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 130px",
+  minHeight: "100dvh",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   color: "#111",
+  width: "100%",
+  maxWidth: "920px",
+  minWidth: 0,
+  overflowX: "hidden",
+  margin: "0 auto",
 };
 
 const topBar = {
@@ -886,9 +2082,9 @@ const heroCard = {
   background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
   color: "white",
   borderRadius: "28px",
-  padding: "24px 20px",
-  marginBottom: "14px",
-  boxShadow: "0 16px 34px rgba(91,61,245,0.24)",
+  padding: "26px 22px",
+  marginBottom: "20px",
+  boxShadow: "0 20px 46px rgba(91,61,245,0.22)",
 };
 
 const businessHero = {
@@ -908,8 +2104,9 @@ const eyebrow = {
 
 const heroTitle = {
   margin: "8px 0",
-  fontSize: "25px",
+  fontSize: "clamp(28px, 7vw, 38px)",
   lineHeight: 1.12,
+  letterSpacing: 0,
 };
 
 const businessTitle = {
@@ -1001,9 +2198,12 @@ const activeEmergencyButton = {
 
 const quickGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "10px",
   marginBottom: "18px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const quickCard = {
@@ -1044,8 +2244,300 @@ const quickText = {
 const sectionHeader = {
   display: "flex",
   justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "14px",
+  flexWrap: "wrap",
+  minWidth: 0,
+  marginBottom: "14px",
+};
+
+const homeWorkflowSection = {
+  marginBottom: "24px",
+  padding: "18px",
+  borderRadius: "26px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(226,232,240,0.9)",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
+};
+
+const segmentedControl = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "8px",
+  padding: "4px",
+  borderRadius: "18px",
+  background: "#f1f5f9",
+  marginBottom: "14px",
+};
+
+const segmentedButton = {
+  border: "none",
+  borderRadius: "14px",
+  padding: "11px 12px",
+  background: "transparent",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const segmentedButtonActive = {
+  background: "#5b3df5",
+  color: "#ffffff",
+  boxShadow: "0 8px 18px rgba(91,61,245,0.18)",
+};
+
+const compactEmptyCard = {
+  display: "grid",
+  gap: "5px",
+  padding: "14px",
+  borderRadius: "18px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const quickHelpSection = {
+  marginBottom: "20px",
+  padding: "16px",
+  borderRadius: "24px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(226,232,240,0.9)",
+  boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
+};
+
+const helpActionGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "10px",
+};
+
+const helpActionCard = {
+  minHeight: "92px",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  borderRadius: "18px",
+  padding: "13px 8px",
+  display: "grid",
+  placeItems: "center",
+  gap: "8px",
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+  textAlign: "center",
+};
+
+const helpActionIcon = {
+  width: "42px",
+  height: "42px",
+  borderRadius: "16px",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  display: "grid",
+  placeItems: "center",
+};
+
+const helpEmergencyIcon = {
+  background: "#fef2f2",
+  color: "#dc2626",
+};
+
+const messagesCompactSection = {
+  marginBottom: "20px",
+};
+
+const sectionGuideText = {
+  margin: "5px 0 0",
+  color: "#667085",
+  fontSize: "14px",
+  lineHeight: 1.42,
+  fontWeight: "700",
+};
+
+const spotlightSection = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  marginBottom: "26px",
+  overflow: "visible",
+};
+
+const spotlightRow = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "flex",
+  gap: "14px",
+  overflowX: "auto",
+  overflowY: "hidden",
+  WebkitOverflowScrolling: "touch",
+  overscrollBehaviorX: "contain",
+  scrollbarWidth: "none",
+  scrollSnapType: "x mandatory",
+  padding: "2px 2px 10px",
+  boxSizing: "border-box",
+};
+
+const spotlightEmptyCard = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "16px",
+  borderRadius: "20px",
+  border: "1px solid rgba(226,232,240,0.95)",
+  background: "#ffffff",
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "800",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+};
+
+const spotlightDebugLine = {
+  margin: "8px 0 0",
+  color: "#64748b",
+  fontSize: "11px",
+  fontWeight: "850",
+};
+
+const spotlightSubtitle = {
+  margin: "2px 0 20px",
+  color: "#53617a",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  fontWeight: "650",
+};
+
+const spotlightCard = {
+  width: "82vw",
+  maxWidth: "360px",
+  flex: "0 0 auto",
+  boxSizing: "border-box",
+  scrollSnapAlign: "start",
+  borderRadius: "22px",
+  border: "1px solid rgba(226,232,240,0.95)",
+  background: "#ffffff",
+  boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
+  overflow: "hidden",
+  color: "#111827",
+};
+
+const spotlightContent = {
+  display: "grid",
+  gap: "10px",
+  padding: "11px 14px 15px",
+  minWidth: 0,
+};
+
+const spotlightBusinessRow = {
+  display: "flex",
   alignItems: "center",
-  marginBottom: "12px",
+  gap: "13px",
+  minWidth: 0,
+};
+
+const spotlightLogoWrap = {
+  width: "46px",
+  height: "46px",
+  borderRadius: "50%",
+  overflow: "hidden",
+  background: "#0f172a",
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+  boxShadow: "0 10px 24px rgba(15,23,42,0.18)",
+};
+
+const spotlightLogoImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const spotlightLogoFallback = {
+  color: "#ffffff",
+  fontSize: "22px",
+  fontWeight: "950",
+};
+
+const spotlightBusinessText = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+};
+
+const spotlightName = {
+  color: "#111827",
+  fontSize: "19px",
+  fontWeight: "950",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const spotlightCategory = {
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "850",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  overflowWrap: "anywhere",
+};
+
+const spotlightServingLine = {
+  color: "#53617a",
+  fontSize: "12px",
+  fontWeight: "850",
+  overflowWrap: "anywhere",
+};
+
+const spotlightProjectTitle = {
+  display: "block",
+  margin: "0 0 -4px",
+  color: "#111827",
+  fontSize: "15px",
+  fontWeight: "950",
+  lineHeight: 1.25,
+  overflowWrap: "anywhere",
+};
+
+const spotlightDescription = {
+  margin: 0,
+  color: "#53617a",
+  fontSize: "14px",
+  lineHeight: 1.38,
+  fontWeight: "650",
+  overflowWrap: "anywhere",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+
+const spotlightButton = {
+  width: "100%",
+  minHeight: "46px",
+  border: "0",
+  borderRadius: "13px",
+  background: "#5b3df5",
+  color: "#ffffff",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 12px 28px rgba(91,61,245,0.22)",
+};
+
+const sectionEyebrow = {
+  margin: "0 0 5px",
+  color: "#5b3df5",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
 };
 
 const sectionTitle = {
@@ -1059,6 +2551,21 @@ const textButton = {
   background: "transparent",
   color: "#5b3df5",
   fontWeight: "900",
+  cursor: "pointer",
+  minHeight: "40px",
+  padding: "4px 0",
+  flexShrink: 0,
+};
+
+const backHomeButton = {
+  border: "none",
+  background: "#ffffff",
+  color: "#5b3df5",
+  padding: "12px 14px",
+  borderRadius: "16px",
+  fontWeight: "900",
+  marginBottom: "16px",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
   cursor: "pointer",
 };
 
@@ -1102,21 +2609,173 @@ const secondaryButton = {
   marginTop: "10px",
 };
 
+const heroActionRow = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.25fr) minmax(0, 0.75fr)",
+  gap: "10px",
+  marginTop: "16px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const heroAiButton = {
+  padding: "14px 12px",
+  borderRadius: "18px",
+  border: "1px solid rgba(91,61,245,0.22)",
+  background: "rgba(255,255,255,0.94)",
+  color: "#5b3df5",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 12px 26px rgba(91,61,245,0.12)",
+};
+
+const heroDivider = {
+  height: "1px",
+  margin: "18px 0 14px",
+  background: "rgba(255,255,255,0.24)",
+};
+
+const heroEmergencyButton = {
+  width: "100%",
+  border: "1px solid rgba(255,255,255,0.26)",
+  borderRadius: "22px",
+  padding: "14px",
+  display: "flex",
+  gap: "12px",
+  alignItems: "center",
+  textAlign: "left",
+  background: "rgba(255,255,255,0.14)",
+  color: "white",
+  cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
+};
+
+const heroEmergencyIcon = {
+  width: "46px",
+  height: "46px",
+  borderRadius: "16px",
+  display: "grid",
+  placeItems: "center",
+  background: "linear-gradient(135deg, #dc2626, #fb7185)",
+  fontSize: "24px",
+  flexShrink: 0,
+  boxShadow: "0 12px 22px rgba(220,38,38,0.32)",
+};
+
+const heroEmergencyTextWrap = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+};
+
+const heroEmergencyTitle = {
+  fontSize: "17px",
+  fontWeight: "950",
+};
+
+const heroEmergencyText = {
+  fontSize: "13px",
+  lineHeight: 1.35,
+  color: "rgba(255,255,255,0.88)",
+};
+
+const emergencyHeroCard = {
+  width: "100%",
+  border: "0",
+  textAlign: "left",
+  padding: "18px",
+  borderRadius: "26px",
+  margin: "18px 0 18px",
+  color: "white",
+  background:
+    "linear-gradient(135deg, #dc2626 0%, #ef4444 48%, #fb7185 100%)",
+  boxShadow: "0 22px 46px rgba(220,38,38,0.28)",
+  cursor: "pointer",
+};
+
+const emergencyHeroTop = {
+  display: "flex",
+  gap: "14px",
+  alignItems: "center",
+};
+
+const emergencyHeroIcon = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "18px",
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.18)",
+  fontSize: "27px",
+  flexShrink: 0,
+};
+
+const emergencyHeroTitle = {
+  display: "block",
+  fontSize: "20px",
+  fontWeight: "950",
+  letterSpacing: "-0.4px",
+};
+
+const emergencyHeroText = {
+  margin: "5px 0 0",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  color: "rgba(255,255,255,0.92)",
+};
+
+const emergencyHeroCta = {
+  display: "block",
+  marginTop: "16px",
+  padding: "13px 14px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.95)",
+  color: "#b91c1c",
+  fontSize: "15px",
+  fontWeight: "950",
+  textAlign: "center",
+};
+
 const projectList = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+  gap: "18px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const activeProjectsCarousel = {
+  display: "flex",
+  gap: "14px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  scrollSnapType: "x mandatory",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "2px 2px 10px",
 };
 
 const projectCard = {
-  width: "100%",
+  width: "min(82vw, 100%)",
+  maxWidth: "360px",
+  minWidth: 0,
+  flex: "0 0 auto",
+  scrollSnapAlign: "start",
   textAlign: "left",
-  border: "1px solid rgba(124,58,237,.12)",
-  background: "linear-gradient(135deg,#ffffff,#fcfbff)",
+  border: "1px solid #dfe6f1",
+  background: "#ffffff",
   borderRadius: "20px",
-  padding: "16px",
-  boxShadow: "0 8px 18px rgba(15,23,42,.04)",
-  cursor: "pointer",
+  padding: "18px",
+  boxShadow: "0 12px 30px rgba(15,23,42,.06)",
+  boxSizing: "border-box",
+  overflow: "hidden",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
 const projectTopRow = {
@@ -1125,15 +2784,41 @@ const projectTopRow = {
   alignItems: "flex-start",
   gap: "12px",
   marginBottom: "10px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const projectTopMain = {
+  flex: 1,
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const projectTopActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flexShrink: 0,
 };
 
 const projectTitle = {
-  margin: "12px 0 4px",
-  color: "#111827",
-  fontSize: "17px",
+  margin: "0 0 10px",
+  color: "#050812",
+  fontSize: "20px",
   fontWeight: "950",
-  lineHeight: 1.08,
+  lineHeight: 1.12,
   letterSpacing: "-0.02em",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const projectProfessionalName = {
+  margin: "10px 0 0",
+  color: "#263653",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.35,
 };
 
 const projectStatus = {
@@ -1143,17 +2828,104 @@ const projectStatus = {
   fontWeight: "950",
 };
 
-const projectBadge = {
-  background: "#ecfdf5",
-  color: "#047857",
-  padding: "7px 10px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-  whiteSpace: "nowrap",
+
+const projectStageCompact = {
+  marginTop: 10,
+  padding: "10px 12px",
+  borderRadius: 16,
+  background: "rgba(99, 102, 241, 0.08)",
+  border: "1px solid rgba(99, 102, 241, 0.12)",
+};
+
+const projectVisualProgress = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
+  marginTop: "7px",
+};
+
+const projectProgressDot = {
+  width: "18px",
+  height: "18px",
+  borderRadius: "999px",
+  display: "grid",
+  placeItems: "center",
+  background: "#f8fafc",
+  border: "1px solid #dbe3ef",
+  color: "#94a3b8",
+  fontSize: "8px",
+  fontWeight: "950",
+};
+
+const projectProgressDotDone = {
+  background: "#ecfdf5",
+  borderColor: "#86efac",
+  color: "#047857",
+};
+
+const projectProgressDotCurrent = {
+  background: "#5b3df5",
+  borderColor: "#5b3df5",
+  color: "#ffffff",
+};
+
+const projectLifecycleCompact = {
+  marginTop: 12,
+  padding: "12px 14px",
+  borderRadius: 18,
+  background: "#f7f4ff",
+  border: "1px solid #ddd6fe",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const projectActionSummary = {
+  marginTop: "14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+};
+
+const projectAmount = {
+  color: "#050812",
+  fontSize: "22px",
+  fontWeight: "950",
+  whiteSpace: "nowrap",
+};
+
+const projectMiniMetaRow = {
+  marginTop: 12,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  color: "#64748b",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const projectStageLabel = {
+  display: "block",
+  marginBottom: "3px",
+  color: "#64748b",
+  fontSize: "10px",
+  fontWeight: "950",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const projectBadge = {
+  background: "#ecfdf5",
+  color: "#047857",
+  padding: "6px 9px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "900",
+  display: "inline-flex",
+  alignItems: "center",
+  width: "fit-content",
+  lineHeight: 1.2,
 };
 
 const projectBadgeDot = {
@@ -1181,6 +2953,79 @@ const projectDescription = {
   fontSize: "12px",
   lineHeight: 1.35,
   minHeight: "28px",
+};
+
+const projectLifecycleBox = {
+  marginTop: "10px",
+  padding: "10px 11px",
+  borderRadius: "15px",
+  background: "#f8fafc",
+  border: "1px solid #e0e7ff",
+};
+
+const projectLifecycleLabel = {
+  display: "block",
+  color: "#5b3df5",
+  fontSize: "10px",
+  fontWeight: "950",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  marginBottom: "3px",
+};
+
+const projectLifecycleNext = {
+  display: "block",
+  color: "#17233f",
+  fontSize: "14px",
+  lineHeight: 1.35,
+};
+
+const projectTimelineHint = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "7px",
+  marginTop: "13px",
+};
+
+const projectTimelineStep = {
+  display: "inline-flex",
+  border: "1px solid #e2e8f0",
+  borderRadius: "999px",
+  padding: "6px 8px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "10px",
+  fontWeight: "900",
+};
+
+const projectTimelineStepDone = {
+  borderColor: "#bbf7d0",
+  background: "#f0fdf4",
+  color: "#047857",
+};
+
+const projectTimelineStepCurrent = {
+  borderColor: "#8b7cff",
+  background: "#f7f4ff",
+  color: "#4f28e8",
+};
+
+const projectOpenButton = {
+  marginTop: "14px",
+  border: "none",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "9px",
+  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  color: "#ffffff",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  width: "100%",
 };
 
 const projectStats = {
@@ -1309,6 +3154,166 @@ const projectFooterIcon = {
   flexShrink: 0,
 };
 
+const detailsSheetOverlay = {
+  position: "fixed",
+  inset: 0,
+  width: "100%",
+  maxWidth: "100%",
+  zIndex: 12000,
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "center",
+  padding:
+    "16px max(12px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px))",
+  background: "rgba(15,23,42,0.38)",
+  boxSizing: "border-box",
+  overflowX: "hidden",
+};
+
+const detailsSheet = {
+  width: "100%",
+  maxWidth: "min(520px, 100%)",
+  minWidth: 0,
+  maxHeight: "min(82dvh, 680px)",
+  overflowY: "auto",
+  overflowX: "hidden",
+  WebkitOverflowScrolling: "touch",
+  background: "#ffffff",
+  border: "1px solid rgba(226,232,240,0.95)",
+  borderRadius: "26px 26px 22px 22px",
+  padding: "10px 16px 18px",
+  boxSizing: "border-box",
+  boxShadow: "0 -18px 54px rgba(15,23,42,0.22)",
+  overflowWrap: "anywhere",
+};
+
+const detailsSheetHandle = {
+  width: "44px",
+  height: "5px",
+  borderRadius: "999px",
+  background: "#cbd5e1",
+  margin: "0 auto 14px",
+};
+
+const detailsSheetHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginBottom: "14px",
+};
+
+const detailsSheetTitle = {
+  margin: "2px 0 0",
+  color: "#111827",
+  fontSize: "21px",
+  lineHeight: 1.15,
+};
+
+const detailsSheetClose = {
+  width: "38px",
+  height: "38px",
+  border: "1px solid rgba(148,163,184,0.42)",
+  borderRadius: "50%",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: "24px",
+  fontWeight: 800,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const detailsSheetGrid = {
+  display: "grid",
+  gap: "8px",
+  marginBottom: "12px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const detailsSheetRow = {
+  display: "grid",
+  gridTemplateColumns: "36px minmax(0, 0.74fr) minmax(0, 1.18fr)",
+  alignItems: "center",
+  gap: "10px",
+  minHeight: "58px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  border: "1px solid rgba(226,232,240,0.86)",
+  background: "linear-gradient(135deg,#ffffff,#f8fafc)",
+  color: "#475569",
+  boxSizing: "border-box",
+  minWidth: 0,
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+};
+
+const detailsSheetRowIcon = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "12px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  fontSize: "15px",
+  fontWeight: "950",
+};
+
+const detailsSheetRowLabel = {
+  color: "#334155",
+  fontSize: "14px",
+  fontWeight: "750",
+};
+
+const detailsSheetRowValue = {
+  color: "#1f2937",
+  fontSize: "14px",
+  fontWeight: "900",
+  lineHeight: 1.35,
+  textAlign: "right",
+  overflowWrap: "anywhere",
+  minWidth: 0,
+};
+
+const detailsPrimaryAction = {
+  width: "100%",
+  minHeight: "54px",
+  border: "none",
+  borderRadius: "16px",
+  marginTop: "16px",
+  padding: "0 16px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "12px",
+  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  color: "#ffffff",
+  fontSize: "16px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 14px 30px rgba(91,61,245,0.24)",
+};
+
+const detailsSecondaryAction = {
+  width: "100%",
+  minHeight: "52px",
+  border: "1px solid rgba(91,61,245,0.32)",
+  borderRadius: "16px",
+  marginTop: "12px",
+  padding: "0 16px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "12px",
+  background: "#ffffff",
+  color: "#5b3df5",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
 const projectFooterDate = {
   display: "block",
   marginTop: "2px",
@@ -1321,6 +3326,100 @@ const projectHistoryList = {
   display: "grid",
   gap: "14px",
   marginBottom: "26px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+
+const landscapeProjectsGrid = {
+  display: "none",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+  gap: "14px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const landscapeProjectsPanel = {
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+};
+
+const landscapeProjectsTitle = {
+  margin: "0 0 10px",
+  fontSize: "14px",
+  fontWeight: "950",
+  color: "#0f172a",
+};
+
+const landscapeProjectsList = {
+  display: "grid",
+  gap: "12px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const messageFocusCard = {
+  width: "100%",
+  border: "1px solid rgba(59,130,246,0.16)",
+  borderRadius: "24px",
+  background: "linear-gradient(135deg,#ffffff,#f8fbff)",
+  padding: "18px",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  textAlign: "left",
+  boxShadow: "0 14px 30px rgba(15,23,42,0.07)",
+  cursor: "pointer",
+};
+
+const messageFocusIcon = {
+  width: "46px",
+  height: "46px",
+  borderRadius: "16px",
+  display: "grid",
+  placeItems: "center",
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  fontSize: "22px",
+  flexShrink: 0,
+};
+
+const messageFocusTitle = {
+  display: "block",
+  color: "#111827",
+  fontSize: "16px",
+  fontWeight: "950",
+};
+
+const messageFocusText = {
+  margin: "4px 0 0",
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "650",
+};
+
+const messageOpenText = {
+  color: "#5b3df5",
+  fontSize: "13px",
+  fontWeight: "950",
+  whiteSpace: "nowrap",
+};
+
+const messageFocusBadge = {
+  minWidth: "34px",
+  height: "34px",
+  borderRadius: "999px",
+  display: "grid",
+  placeItems: "center",
+  background: "#5b3df5",
+  color: "white",
+  fontSize: "14px",
+  fontWeight: "950",
 };
 
 const historyCard = {
@@ -1328,15 +3427,23 @@ const historyCard = {
   borderRadius: "24px",
   padding: "18px",
   boxShadow: "0 12px 28px rgba(15,23,42,0.08)",
-  cursor: "pointer",
   display: "grid",
   gap: "14px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
+  overflowWrap: "anywhere",
 };
 
 const historyTop = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "14px",
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) auto",
+  alignItems: "flex-start",
+  gap: "10px",
+  minWidth: 0,
+  maxWidth: "100%",
 };
 
 const historyBadge = {
@@ -1355,6 +3462,8 @@ const historyTitle = {
   fontSize: "18px",
   fontWeight: "900",
   color: "#111827",
+  minWidth: 0,
+  overflowWrap: "anywhere",
 };
 
 const historyContractor = {
@@ -1367,15 +3476,44 @@ const historyAmount = {
   color: "#15803d",
   fontSize: "22px",
   fontWeight: "900",
+  maxWidth: "90px",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  textAlign: "right",
+};
+
+const historyMetaGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "800",
+};
+
+const historyMetaItem = {
+  display: "grid",
+  gap: "4px",
+};
+
+const historyMetaValue = {
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "900",
 };
 
 const historyBottom = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
   color: "#64748b",
   fontWeight: "800",
+  minWidth: 0,
+  maxWidth: "100%",
 };
 
 const historyButton = {
@@ -1384,6 +3522,23 @@ const historyButton = {
   color: "white",
   borderRadius: "14px",
   padding: "10px 14px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const historySecondaryActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  alignItems: "center",
+};
+
+const historySecondaryButton = {
+  border: "1px solid #dbe3ef",
+  background: "#ffffff",
+  color: "#4f46e5",
+  borderRadius: "14px",
+  padding: "10px 12px",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -1449,7 +3604,7 @@ const modeCard = {
 
 const statsGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
   gap: "14px",
   marginTop: "14px",
 };
@@ -1489,6 +3644,8 @@ const sectionHeaderRow = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: "12px",
+  flexWrap: "wrap",
+  minWidth: 0,
   marginBottom: "14px",
 };
 
@@ -1678,8 +3835,11 @@ const ecosystemText = {
 
 const toolGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
   gap: "14px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const toolCard = {

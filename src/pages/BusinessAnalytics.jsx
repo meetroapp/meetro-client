@@ -103,7 +103,7 @@ function BusinessAnalytics({ setPage, currentPage }) {
             <p style={heroSubtitle}>{text.subtitle}</p>
           </div>
 
-          <div style={liveBadge}>🟢 {text.live}</div>
+          <div style={liveBadge}> {text.live}</div>
         </div>
 
         <div style={businessMeta}>
@@ -115,28 +115,28 @@ function BusinessAnalytics({ setPage, currentPage }) {
 
       <div style={statsGrid}>
         <MetricCard
-          icon="👁️"
+          icon=""
           title={text.profileViews}
           value="326"
           note={`+18% ${text.thisWeek}`}
         />
 
         <MetricCard
-          icon="📥"
+          icon=""
           title={text.leadsReceived}
           value="42"
           note={`+9 ${text.thisWeek}`}
         />
 
         <MetricCard
-          icon="⚡"
+          icon=""
           title={text.responseRate}
           value="94%"
           note={text.excellent}
         />
 
         <MetricCard
-          icon="💰"
+          icon=""
           title={text.quoteValue}
           value="$4.8k"
           note={text.thisWeek}
@@ -206,21 +206,21 @@ function BusinessAnalytics({ setPage, currentPage }) {
 
       <div style={insightGrid}>
         <InsightCard
-          icon="👑"
+          icon=""
           title={text.profileStrength}
           value="92%"
           status={text.excellent}
         />
 
         <InsightCard
-          icon="⏱️"
+          icon=""
           title={text.messageSpeed}
           value="8 min"
           status={text.good}
         />
 
         <InsightCard
-          icon="🎯"
+          icon=""
           title={text.closeRate}
           value="38%"
           status={text.improve}
@@ -228,7 +228,7 @@ function BusinessAnalytics({ setPage, currentPage }) {
       </div>
 
       <div style={recommendationCard}>
-        <div style={recommendIcon}>🤖</div>
+        <div style={recommendIcon}>AI</div>
 
         <div>
           <p style={miniLabel}>{text.recommendedAction}</p>

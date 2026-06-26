@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
+import MeetroIcon from "../components/MeetroIcon";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 import { setActiveAccountMode } from "../utils/session";
+import {
+  getProfessionalReviews,
+  getProfessionalReviewStats,
+} from "../utils/reviewStorage";
+import {
+  buildBusinessProfileShare,
+  persistBusinessProfileShareRecord,
+} from "../utils/profileShare";
 
 function ContractorProfile({ setPage, currentPage }) {
+  const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
+  const isBusinessToolsReturn = sharedReturnPage === "businessCommandCenter";
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -23,6 +34,33 @@ function ContractorProfile({ setPage, currentPage }) {
   
   localStorage.getItem("businessCountry") || ""
   );
+  const [streetAddress, setStreetAddress] = useState(
+    localStorage.getItem("businessStreetAddress") || ""
+  );
+  const [addressLine2, setAddressLine2] = useState(
+    localStorage.getItem("businessAddressLine2") || ""
+  );
+  const [businessCity, setBusinessCity] = useState(
+    localStorage.getItem("businessCity") ||
+      localStorage.getItem("businessPrimaryCity") ||
+      ""
+  );
+  const [businessState, setBusinessState] = useState(
+    localStorage.getItem("businessState") || ""
+  );
+  const [businessPostalCode, setBusinessPostalCode] = useState(
+    localStorage.getItem("businessPostalCode") ||
+      localStorage.getItem("businessZipCodes") ||
+      ""
+  );
+  const [serviceArea, setServiceArea] = useState(
+    localStorage.getItem("businessServiceArea") ||
+      localStorage.getItem("meetroServiceAreaNotes") ||
+      ""
+  );
+  const [showBusinessAddressPublic, setShowBusinessAddressPublic] = useState(
+    localStorage.getItem("showBusinessAddressPublic") === "true"
+  );
   
   const [bio, setBio] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -34,6 +72,11 @@ function ContractorProfile({ setPage, currentPage }) {
   const [dispatchReady, setDispatchReady] = useState(
   localStorage.getItem("meetroDispatchReady") === "true"
 );
+  const profileReviews = getProfessionalReviews({
+    professionalId: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
+    professionalName: profile?.business_name || businessName,
+  });
+  const profileReviewStats = getProfessionalReviewStats(profileReviews);
 
   const categories = [
     ["", t("selectBusinessCategory")],
@@ -68,6 +111,7 @@ function ContractorProfile({ setPage, currentPage }) {
     ["pressureWashing", t("pressureWashing")],
     ["privateTransportation", t("privateTransportation")],
     ["realEstate", t("realEstate")],
+    ["propertyManagement", t("propertyManagement")],
     ["roofing", t("roofing")],
     ["tile", t("tile")],
     ["treeService", t("treeService")],
@@ -78,6 +122,20 @@ function ContractorProfile({ setPage, currentPage }) {
     const handleLanguageChange = () => updateLanguage(getLanguage());
     window.addEventListener("languageChanged", handleLanguageChange);
     return () => window.removeEventListener("languageChanged", handleLanguageChange);
+  }, []);
+
+  useEffect(() => {
+    const syncAvailability = () => {
+      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
+    };
+
+    window.addEventListener("meetroAvailabilityChanged", syncAvailability);
+    window.addEventListener("storage", syncAvailability);
+
+    return () => {
+      window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
+      window.removeEventListener("storage", syncAvailability);
+    };
   }, []);
 
   useEffect(() => {
@@ -133,6 +191,22 @@ function ContractorProfile({ setPage, currentPage }) {
         profileData.category || "",
       location:
         profileData.location || "",
+      streetAddress: profileData.streetAddress || profileData.street_address || "",
+      addressLine2: profileData.addressLine2 || profileData.address_line_2 || "",
+      city: profileData.city || profileData.businessCity || profileData.primaryCity || "",
+      state: profileData.state || profileData.stateProvince || profileData.state_province || "",
+      postalCode: profileData.postalCode || profileData.postal_code || profileData.zip || "",
+      country: profileData.country || "",
+      serviceArea: profileData.serviceArea || profileData.service_area || profileData.location || "",
+      showBusinessAddressPublic: Boolean(
+        profileData.showBusinessAddressPublic ||
+          profileData.show_business_address_public
+      ),
+      publicAddress:
+        profileData.publicAddress ||
+        profileData.public_address ||
+        profileData.location ||
+        "",
       bio:
         profileData.bio || "",
       image_url:
@@ -140,7 +214,7 @@ function ContractorProfile({ setPage, currentPage }) {
       logo:
         profileData.image_url || "",
       rating:
-        profileData.rating || "5.0",
+        profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
       status: "active",
     })
   );
@@ -166,9 +240,10 @@ function ContractorProfile({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.profile) {
-        setProfile(data.profile);
-        fillForm(data.profile);
-        unlockBusinessAccess(data.profile);
+        const mergedProfile = mergeStoredAddressFields(data.profile);
+        setProfile(mergedProfile);
+        fillForm(mergedProfile);
+        unlockBusinessAccess(mergedProfile);
       } else {
         setProfile(null);
         lockBusinessAccess();
@@ -186,9 +261,203 @@ function ContractorProfile({ setPage, currentPage }) {
     setBusinessName(existingProfile.business_name || "");
     setCategory(existingProfile.category || "");
     setPhone(existingProfile.phone || "");
-    setLocation(existingProfile.location || "");
+    setStreetAddress(existingProfile.streetAddress || existingProfile.street_address || "");
+    setAddressLine2(existingProfile.addressLine2 || existingProfile.address_line_2 || "");
+    setBusinessCity(
+      existingProfile.city ||
+        existingProfile.businessCity ||
+        existingProfile.primaryCity ||
+        ""
+    );
+    setBusinessState(
+      existingProfile.state ||
+        existingProfile.stateProvince ||
+        existingProfile.state_province ||
+        ""
+    );
+    setBusinessPostalCode(
+      existingProfile.postalCode ||
+        existingProfile.postal_code ||
+        existingProfile.zip ||
+        ""
+    );
+    setCountry(existingProfile.country || localStorage.getItem("businessCountry") || "");
+    setServiceArea(
+      existingProfile.serviceArea ||
+        existingProfile.service_area ||
+        existingProfile.location ||
+        ""
+    );
+    setShowBusinessAddressPublic(
+      existingProfile.showBusinessAddressPublic === true ||
+        existingProfile.show_business_address_public === true
+    );
+    setLocation(existingProfile.location || existingProfile.serviceArea || "");
     setBio(existingProfile.bio || "");
     setImageUrl(existingProfile.image_url || "");
+  }
+
+  function getStoredAddressFields() {
+    const showPublic = localStorage.getItem("showBusinessAddressPublic") === "true";
+    const storedStreetAddress = localStorage.getItem("businessStreetAddress") || "";
+    const storedAddressLine2 = localStorage.getItem("businessAddressLine2") || "";
+    const storedCity =
+      localStorage.getItem("businessCity") ||
+      localStorage.getItem("businessPrimaryCity") ||
+      "";
+    const storedState = localStorage.getItem("businessState") || "";
+    const storedPostalCode =
+      localStorage.getItem("businessPostalCode") ||
+      localStorage.getItem("businessZipCodes") ||
+      "";
+    const storedCountry = localStorage.getItem("businessCountry") || "";
+    const storedServiceArea =
+      localStorage.getItem("businessServiceArea") ||
+      localStorage.getItem("meetroServiceAreaNotes") ||
+      "";
+    const fullAddress = [
+      storedStreetAddress,
+      storedAddressLine2,
+      storedCity,
+      storedState,
+      storedPostalCode,
+      storedCountry,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const publicLocation = showPublic
+      ? fullAddress || storedServiceArea
+      : storedServiceArea;
+
+    return {
+      streetAddress: storedStreetAddress,
+      street_address: storedStreetAddress,
+      addressLine2: storedAddressLine2,
+      address_line_2: storedAddressLine2,
+      city: storedCity,
+      businessCity: storedCity,
+      state: storedState,
+      stateProvince: storedState,
+      state_province: storedState,
+      postalCode: storedPostalCode,
+      postal_code: storedPostalCode,
+      zip: storedPostalCode,
+      country: storedCountry,
+      serviceArea: storedServiceArea,
+      service_area: storedServiceArea,
+      showBusinessAddressPublic: showPublic,
+      show_business_address_public: showPublic,
+      fullAddress,
+      full_address: fullAddress,
+      publicAddress: publicLocation,
+      public_address: publicLocation,
+      location: publicLocation,
+    };
+  }
+
+  function mergeStoredAddressFields(profileData = {}) {
+    const storedAddressFields = getStoredAddressFields();
+    const hasStoredAddress = Boolean(
+      storedAddressFields.city ||
+        storedAddressFields.state ||
+        storedAddressFields.postalCode ||
+        storedAddressFields.country ||
+        storedAddressFields.serviceArea
+    );
+
+    if (!hasStoredAddress) return profileData;
+
+    return {
+      ...storedAddressFields,
+      ...profileData,
+      location:
+        profileData.location ||
+        storedAddressFields.publicAddress ||
+        storedAddressFields.serviceArea ||
+        "",
+      serviceArea:
+        profileData.serviceArea ||
+        profileData.service_area ||
+        storedAddressFields.serviceArea ||
+        "",
+      showBusinessAddressPublic:
+        profileData.showBusinessAddressPublic === true ||
+        profileData.show_business_address_public === true ||
+        storedAddressFields.showBusinessAddressPublic,
+    };
+  }
+
+  function buildFullAddress() {
+    return [
+      streetAddress.trim(),
+      addressLine2.trim(),
+      businessCity.trim(),
+      businessState.trim(),
+      businessPostalCode.trim(),
+      country.trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function buildAddressProfileFields() {
+    const fullAddress = buildFullAddress();
+    const publicLocation = showBusinessAddressPublic
+      ? fullAddress || serviceArea.trim()
+      : serviceArea.trim();
+
+    return {
+      streetAddress: streetAddress.trim(),
+      street_address: streetAddress.trim(),
+      addressLine2: addressLine2.trim(),
+      address_line_2: addressLine2.trim(),
+      city: businessCity.trim(),
+      businessCity: businessCity.trim(),
+      state: businessState.trim(),
+      stateProvince: businessState.trim(),
+      state_province: businessState.trim(),
+      postalCode: businessPostalCode.trim(),
+      postal_code: businessPostalCode.trim(),
+      zip: businessPostalCode.trim(),
+      country: country.trim(),
+      serviceArea: serviceArea.trim(),
+      service_area: serviceArea.trim(),
+      showBusinessAddressPublic,
+      show_business_address_public: showBusinessAddressPublic,
+      fullAddress,
+      full_address: fullAddress,
+      publicAddress: publicLocation,
+      public_address: publicLocation,
+      location: publicLocation,
+    };
+  }
+
+  function persistBusinessAddressFields(fields) {
+    localStorage.setItem("businessStreetAddress", fields.streetAddress || "");
+    localStorage.setItem("businessAddressLine2", fields.addressLine2 || "");
+    localStorage.setItem("businessCity", fields.city || "");
+    localStorage.setItem("businessPrimaryCity", fields.city || "");
+    localStorage.setItem("businessState", fields.stateProvince || fields.state || "");
+    localStorage.setItem("businessPostalCode", fields.postalCode || "");
+    localStorage.setItem("businessZipCodes", fields.postalCode || "");
+    localStorage.setItem("businessCountry", fields.country || "");
+    localStorage.setItem("businessServiceArea", fields.serviceArea || "");
+    localStorage.setItem("meetroServiceAreaNotes", fields.serviceArea || "");
+    localStorage.setItem(
+      "showBusinessAddressPublic",
+      String(Boolean(fields.showBusinessAddressPublic))
+    );
+    localStorage.setItem("businessLocation", fields.location || "");
+  }
+
+  function hasRequiredAddressFields() {
+    return (
+      businessCity.trim() &&
+      businessState.trim() &&
+      businessPostalCode.trim() &&
+      country.trim() &&
+      serviceArea.trim()
+    );
   }
 
   function formatCategory(value) {
@@ -242,12 +511,85 @@ function ContractorProfile({ setPage, currentPage }) {
     category: profileData.category || category,
     phone: profileData.phone || phone,
     location: profileData.location || location,
+    streetAddress: profileData.streetAddress || profileData.street_address || "",
+    addressLine2: profileData.addressLine2 || profileData.address_line_2 || "",
+    city: profileData.city || profileData.businessCity || "",
+    state: profileData.state || profileData.stateProvince || profileData.state_province || "",
+    postalCode: profileData.postalCode || profileData.postal_code || profileData.zip || "",
+    country: profileData.country || "",
+    serviceArea: profileData.serviceArea || profileData.service_area || profileData.location || "",
+    showBusinessAddressPublic: Boolean(
+      profileData.showBusinessAddressPublic ||
+        profileData.show_business_address_public
+    ),
+    publicAddress: profileData.publicAddress || profileData.public_address || profileData.location || "",
     bio: profileData.bio || bio,
     imageUrl: profileData.image_url || imageUrl,
-    rating:
-      localStorage.getItem(
-        "professionalRatingAverage"
-      ) || "5.0",
+    serviceDomain:
+      profileData.serviceDomain ||
+      profileData.service_domain ||
+      localStorage.getItem("businessServiceDomain") ||
+      localStorage.getItem("businessDomain") ||
+      "",
+    businessServiceDomain:
+      profileData.businessServiceDomain ||
+      profileData.business_service_domain ||
+      localStorage.getItem("businessServiceDomain") ||
+      "",
+    serviceCategories:
+      profileData.serviceCategories ||
+      profileData.service_categories ||
+      safeJsonArray("businessServiceCategories"),
+    businessServiceCategories:
+      profileData.businessServiceCategories ||
+      profileData.business_service_categories ||
+      safeJsonArray("businessServiceCategories"),
+    serviceSpecialties:
+      profileData.serviceSpecialties ||
+      profileData.service_specialties ||
+      safeJsonArray("businessServiceSpecialties"),
+    businessServiceSpecialties:
+      profileData.businessServiceSpecialties ||
+      profileData.business_service_specialties ||
+      safeJsonArray("businessServiceSpecialties"),
+    primaryCity:
+      profileData.primaryCity ||
+      profileData.primary_city ||
+      localStorage.getItem("businessPrimaryCity") ||
+      "",
+    city:
+      profileData.city ||
+      profileData.primaryCity ||
+      localStorage.getItem("businessPrimaryCity") ||
+      "",
+    serviceZipCodes:
+      profileData.serviceZipCodes ||
+      profileData.service_zip_codes ||
+      localStorage.getItem("businessZipCodes") ||
+      "",
+    businessZipCodes:
+      profileData.businessZipCodes ||
+      profileData.business_zip_codes ||
+      localStorage.getItem("businessZipCodes") ||
+      "",
+    serviceRadiusMiles:
+      profileData.serviceRadiusMiles ||
+      profileData.service_radius_miles ||
+      localStorage.getItem("businessServiceRadius") ||
+      "",
+    localDemoSafe:
+      profileData.localDemoSafe ||
+      profileData.demoSafe ||
+      localStorage.getItem("businessLocalDemoSafe") === "true" ||
+      undefined,
+    portfolio: profileData.portfolio || [],
+    gallery: profileData.gallery || [],
+    photos: profileData.photos || [],
+    portfolioImages: profileData.portfolioImages || [],
+    businessPortfolio: profileData.businessPortfolio || [],
+    media: profileData.media || [],
+    images: profileData.images || [],
+    rating: profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
   };
 
   const filteredBusinesses =
@@ -263,12 +605,22 @@ function ContractorProfile({ setPage, currentPage }) {
     ])
   );
 }
+
+function safeJsonArray(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
   async function handleCreateProfile() {
     try {
-      if (!businessName.trim() || !category.trim() || !location.trim()) {
+      if (!businessName.trim() || !category.trim() || !hasRequiredAddressFields()) {
         alert(t("completeAllFields"));
         return;
       }
+      const addressFields = buildAddressProfileFields();
 
       const result = await authFetch(
         "/contractor-profiles",
@@ -278,9 +630,10 @@ function ContractorProfile({ setPage, currentPage }) {
             business_name: businessName.trim(),
             category,
             phone,
-            location,
+            location: addressFields.location,
             bio,
             image_url: imageUrl,
+            ...addressFields,
           }),
         },
         setPage
@@ -291,12 +644,14 @@ function ContractorProfile({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.profile) {
+        const savedProfile = { ...data.profile, ...addressFields, phone };
         alert(t("contractorProfileCreated"));
-        setProfile(data.profile);
-        fillForm(data.profile);
-        unlockBusinessAccess(data.profile);
+        setProfile(savedProfile);
+        fillForm(savedProfile);
+        persistBusinessAddressFields(addressFields);
+        unlockBusinessAccess(savedProfile);
       
-        saveBusinessToDirectory(data.profile);
+        saveBusinessToDirectory(savedProfile);
         
         setPage("profile");
       } else {
@@ -315,10 +670,11 @@ function ContractorProfile({ setPage, currentPage }) {
         return;
       }
 
-      if (!businessName.trim() || !category.trim() || !location.trim()) {
+      if (!businessName.trim() || !category.trim() || !hasRequiredAddressFields()) {
         alert(t("completeAllFields"));
         return;
       }
+      const addressFields = buildAddressProfileFields();
 
       const result = await authFetch(
         `/contractor-profiles/${profile.id}`,
@@ -328,9 +684,10 @@ function ContractorProfile({ setPage, currentPage }) {
             business_name: businessName.trim(),
             category,
             phone,
-            location,
+            location: addressFields.location,
             bio,
             image_url: imageUrl,
+            ...addressFields,
           }),
         },
         setPage
@@ -341,12 +698,14 @@ function ContractorProfile({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.profile) {
+        const savedProfile = { ...profile, ...data.profile, ...addressFields, phone };
         alert(t("profileUpdated"));
-        setProfile(data.profile);
-        fillForm(data.profile);
-        unlockBusinessAccess(data.profile);
+        setProfile(savedProfile);
+        fillForm(savedProfile);
+        persistBusinessAddressFields(addressFields);
+        unlockBusinessAccess(savedProfile);
         
-        saveBusinessToDirectory(data.profile);         
+        saveBusinessToDirectory(savedProfile);         
 
         setEditing(false);
       } else {
@@ -362,58 +721,153 @@ function ContractorProfile({ setPage, currentPage }) {
     return <LoadingScreen text={t("loadingContractorProfile")} />;
   }
 
+  const reviewCount = Number(profileReviewStats.totalReviews || 0);
+  const hasReviews = reviewCount > 0;
+  const reviewAverage = hasReviews
+    ? Number(profileReviewStats.averageRating || 0).toFixed(1)
+    : "";
+  const profileDisplayAddress =
+    profile?.showBusinessAddressPublic && profile?.fullAddress
+      ? profile.fullAddress
+      : profile?.serviceArea || profile?.location || "";
+  const profileCompletionPercent = profile ? 92 : 0;
+  const healthItems = [
+    {
+      icon: "profile",
+      label: t("profileComplete"),
+      value: `${profileCompletionPercent}%`,
+    },
+    {
+      icon: "availableNow",
+      label: t("availableNow"),
+      value: availableNow ? t("active") : t("inactive"),
+    },
+    {
+      icon: "portfolio",
+      label: t("portfolioReady"),
+      value: imageUrl || profile?.image_url ? t("ready") : t("preview"),
+    },
+    {
+      icon: "emergency",
+      label: t("emergencyReady"),
+      value: dispatchReady ? t("ready") : t("notSet"),
+    },
+    {
+      icon: "messages",
+      label: t("fastResponse"),
+      value: t("ready"),
+    },
+  ];
+
+  const publicProfileRecord = () => ({
+    id: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
+    name: profile?.business_name || businessName,
+    business_name: profile?.business_name || businessName,
+    category: profile?.category || category,
+    displayCategory: formatCategory(profile?.category || category),
+    location: profileDisplayAddress || serviceArea || location,
+    serviceArea: profile?.serviceArea || serviceArea,
+    phone: profile?.phone || phone,
+    bio: profile?.bio || bio,
+    image_url: profile?.image_url || imageUrl,
+    imageUrl: profile?.image_url || imageUrl,
+    logo: profile?.image_url || imageUrl,
+    rating: profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
+    status: availableNow ? "active" : "preview",
+  });
+
+  const viewPublicProfile = () => {
+    persistBusinessProfileShareRecord(publicProfileRecord());
+    localStorage.setItem("contractorDetailsReturnPage", "contractorProfile");
+    setPage("contractorDetails");
+  };
+
+  const copyProfileLinkToClipboard = async (profileUrl) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(profileUrl);
+      return;
+    }
+
+    const fallbackInput = document.createElement("input");
+    fallbackInput.value = profileUrl;
+    fallbackInput.setAttribute("readonly", "");
+    fallbackInput.style.position = "fixed";
+    fallbackInput.style.opacity = "0";
+    document.body.appendChild(fallbackInput);
+    fallbackInput.select();
+    document.execCommand("copy");
+    document.body.removeChild(fallbackInput);
+  };
+
+  const sharePublicProfile = async () => {
+    const { publicRecord } = persistBusinessProfileShareRecord(publicProfileRecord());
+    const sharePayload = buildBusinessProfileShare(publicRecord, {
+      fallbackTitle: t("businessProfile"),
+      shareIntro: t("publicProfileShareText"),
+    });
+
+    try {
+      if (navigator.share) {
+        await navigator.share(sharePayload);
+        return;
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+    }
+
+    try {
+      await copyProfileLinkToClipboard(sharePayload.url);
+      alert(t("publicProfileLinkCopied"));
+    } catch {
+      window.prompt(t("copyPublicProfileLink"), sharePayload.url);
+    }
+  };
+
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-readable-page" style={pageWrapper}>
            
       <button
   onClick={() => {
+    if (isBusinessToolsReturn) {
+      localStorage.removeItem("meetroSharedPageReturn");
+      setPage("businessCommandCenter");
+      return;
+    }
     setPage("businessDashboard");
   }}
   style={backButton}
 >
-  ← {t("backToDashboard")}
+  ← {isBusinessToolsReturn
+    ? language === "es"
+      ? "Volver a Herramientas"
+      : "Back to Business Tools"
+    : t("backToDashboard")}
 </button>
       
-      <div style={heroCard}>
-        <div style={heroGlow}></div>
+      {!profile && (
+        <div style={heroCard}>
+          <div style={heroGlow}></div>
 
-        <div style={heroTop}>
-          <div>
-            <p style={eyebrow}>{t("businessProfile")}</p>
-            <h1 style={pageTitle}>
-              {profile?.business_name || businessName || t("yourBusiness")}
-            </h1>
-            <p style={pageSubtitle}>
-              Manage your public business profile, logo, contact details, and customer trust signals.
-            </p>
-          </div>
+          <div style={heroTop}>
+            <div>
+              <p style={eyebrow}>{t("businessProfile")}</p>
+              <BusinessNameTitle
+                name={businessName || t("yourBusiness")}
+                variant="hero"
+              />
+              <p style={pageSubtitle}>
+                {t("businessProfilePurpose")}
+              </p>
+            </div>
 
-          <div style={verifiedBadge}>
-            {profile ? `⭐ ${t("verifiedBusiness")}` : "🔒 Setup Required"}
-          </div>
-        </div>
-
-          <div style={heroStats}>
-  <div style={heroStat}>
-    <strong>
-      {localStorage.getItem("professionalRatingAverage") || "4.9"}
-    </strong>
-    <span>
-      ⭐ {localStorage.getItem("professionalReviewCount") || "0"} {t("reviews")}
-    </span>
-  </div>
-
-          <div style={heroStat}>
-            <strong>{profile ? "92%" : "0%"}</strong>
-            <span>{t("profileScore")}</span>
-          </div>
-
-          <div style={heroStat}>
-            <strong>{availableNow ? "ON" : "OFF"}</strong>
-            <span>{t("availableNow")}</span>
+            <div style={verifiedBadge}>
+              {t("setupRequired")}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {!profile && (
         <ProfileForm
@@ -431,6 +885,20 @@ function ContractorProfile({ setPage, currentPage }) {
           setPhone={setPhone}
           location={location}
           setLocation={setLocation}
+          streetAddress={streetAddress}
+          setStreetAddress={setStreetAddress}
+          addressLine2={addressLine2}
+          setAddressLine2={setAddressLine2}
+          businessCity={businessCity}
+          setBusinessCity={setBusinessCity}
+          businessState={businessState}
+          setBusinessState={setBusinessState}
+          businessPostalCode={businessPostalCode}
+          setBusinessPostalCode={setBusinessPostalCode}
+          serviceArea={serviceArea}
+          setServiceArea={setServiceArea}
+          showBusinessAddressPublic={showBusinessAddressPublic}
+          setShowBusinessAddressPublic={setShowBusinessAddressPublic}
           country={country}
           setCountry={setCountry}
           language={language}
@@ -455,19 +923,11 @@ function ContractorProfile({ setPage, currentPage }) {
 
       {profile && !editing && (
         <>
-          <div style={logoGlassCard}>
-            <div style={logoHeaderRow}>
-              <div>
-                <p style={miniLabel}>Business Logo</p>
-                <h2 style={logoCardTitle}>Brand Preview</h2>
-              </div>
-              <button onClick={() => setEditing(true)} style={smallEditButton}>
-                Change
-              </button>
-            </div>
+          <div style={heroCard}>
+            <div style={heroGlow}></div>
 
-            <div style={logoPreviewWrap}>
-              <div style={circleLogoFrame}>
+            <div style={identityHeroLayout}>
+              <div style={heroLogoFrame}>
                 {profile.image_url ? (
                   <img
                     src={profile.image_url}
@@ -475,104 +935,145 @@ function ContractorProfile({ setPage, currentPage }) {
                     style={circleLogoImage}
                   />
                 ) : (
-                  <div style={circleLogoPlaceholder}>🏢</div>
+                  <div style={circleLogoPlaceholder}>
+                    <MeetroIcon name="businessProfile" size={30} decorative />
+                  </div>
                 )}
               </div>
 
-              <div style={logoBusinessInfo}>
-                <h2 style={businessTitle}>
-                  {profile.business_name || t("businessNameNotSet")}
-                </h2>
-                <p style={categoryStyle}>{formatCategory(profile.category)}</p>
-                <p style={locationMini}>📍 {profile.location || t("locationNotSet")}</p>
+              <div style={identityHeroContent}>
+                <p style={eyebrow}>{t("businessProfile")}</p>
+                <BusinessNameTitle
+                  name={profile.business_name || t("businessNameNotSet")}
+                  variant="hero"
+                />
+                <p style={identityHeroMeta}>
+                  {formatCategory(profile.category)}
+                </p>
+                <p style={identityHeroMeta}>
+                  <MeetroIcon name="location" size={14} decorative />{" "}
+                  {profileDisplayAddress || t("locationNotSet")}
+                </p>
+              </div>
+
+              <div style={verifiedBadge}>
+                <MeetroIcon name="verified" size={14} decorative />{" "}
+                {t("verifiedBusiness")}
               </div>
             </div>
           </div>
 
           <div style={glassCard}>
-            <div style={actionRow}>
-              {profile.phone && (
-                <a href={`tel:${profile.phone}`} style={callButton}>
-                  📞 {t("call")}
-                </a>
-              )}
+            <h2 style={compactCardTitle}>{t("businessHealth")}</h2>
+            <div style={businessHealthGrid}>
+              {healthItems.map((item) => (
+                <div key={item.label} style={businessHealthItem}>
+                  <span style={businessHealthIcon}>
+                    <MeetroIcon name={item.icon} size={16} decorative />
+                  </span>
+                  <span style={businessHealthLabel}>{item.label}</span>
+                  <strong style={businessHealthValue}>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
 
-              <button onClick={() => setPage("messagesInbox")} style={messageButton}>
-                💬 {t("messages")}
+          <div style={glassCard}>
+            <h2 style={compactCardTitle}>{t("quickActions")}</h2>
+            <div style={quickActionsGrid}>
+              <button onClick={() => setEditing(true)} style={primaryButton}>
+                {t("editProfile")}
+              </button>
+              <button onClick={viewPublicProfile} style={secondaryActionButton}>
+                {t("viewPublicProfile")}
+              </button>
+              <button onClick={sharePublicProfile} style={secondaryActionButton}>
+                {t("shareProfile")}
               </button>
             </div>
+          </div>
 
-            <div style={statusRow}>
-              <button
-                type="button"
-                onClick={() => {
-  const nextValue = !availableNow;
-  setAvailableNow(nextValue);
-  localStorage.setItem("meetroAvailableNow", String(nextValue));
-  window.dispatchEvent(new Event("meetroAvailabilityChanged"));
-}}
-                style={{
-                  ...statusButton,
-                  background: availableNow
-                    ? "linear-gradient(135deg, #5b3df5, #7b61ff)"
-                    : "rgba(255,255,255,0.7)",
-                  color: availableNow ? "white" : "#333",
-                }}
-              >
-                {availableNow ? "🟢 " : ""}
-                {t("availableNow")}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-  const nextValue = !dispatchReady;
-  setDispatchReady(nextValue);
-  localStorage.setItem("meetroDispatchReady", String(nextValue));
-  window.dispatchEvent(new Event("meetroDispatchReadyChanged"));
-}}
-                style={{
-                  ...statusButton,
-                  background: dispatchReady
-                    ? "linear-gradient(135deg, #5b3df5, #7b61ff)"
-                    : "rgba(255,255,255,0.7)",
-                  color: dispatchReady ? "white" : "#333",
-                }}
-              >
-                🚗 {t("dispatchReady")}
-              </button>
-            </div>
-
-            <div style={infoGrid}>
-              <InfoCard label={`📍 ${t("location")}`} value={profile.location || t("locationNotSet")} />
-              <InfoCard label={`📞 ${t("phone")}`} value={profile.phone || t("phoneNotSet")} />
-            </div>
-
+          <div style={glassCard}>
+            <h2 style={compactCardTitle}>{t("businessInformation")}</h2>
             <div style={bioCard}>
               <h3 style={bioTitle}>{t("aboutBusiness")}</h3>
               <p style={bioStyle}>{profile.bio || t("noBusinessDescription")}</p>
             </div>
 
-            <div style={trustGrid}>
-              <div style={trustCard}>
-                <strong>✅</strong>
-                <span>{t("verifiedProfessional")}</span>
-              </div>
-
-              <div style={trustCard}>
-                <strong>⚡</strong>
-                <span>{t("fastResponse")}</span>
-              </div>
-
-              <div style={trustCard}>
-                <strong>🖼️</strong>
-                <span>{t("portfolioReady")}</span>
-              </div>
+            <div style={infoGrid}>
+              <InfoCard
+                icon="serviceTypes"
+                label={t("category")}
+                value={formatCategory(profile.category)}
+              />
+              <InfoCard
+                icon="location"
+                label={
+                  profile.showBusinessAddressPublic
+                    ? t("businessAddress")
+                    : t("serviceArea")
+                }
+                value={profileDisplayAddress || t("locationNotSet")}
+              />
+              <InfoCard
+                icon="phone"
+                label={t("phone")}
+                value={profile.phone || t("phoneNotSet")}
+              />
+              <InfoCard
+                icon="availability"
+                label={t("businessHours")}
+                value={availableNow ? t("availableNow") : t("notSet")}
+              />
+              <InfoCard
+                icon="verified"
+                label={t("licenseInformation")}
+                value={t("notProvided")}
+              />
             </div>
+          </div>
 
-            <button onClick={() => setEditing(true)} style={primaryButton}>
-              {t("editProfile")}
-            </button>
+          <div style={glassCard}>
+            <div style={bioCard}>
+              <h3 style={bioTitle}>{t("reviews")}</h3>
+              {profileReviews.length === 0 ? (
+                <div style={emptyReviewsCard}>
+                  <strong>{t("noReviewsYet")}</strong>
+                  <p style={bioStyle}>
+                    {t("reviewsAfterCompletedJobs")}
+                  </p>
+                </div>
+              ) : (
+                profileReviews.slice(0, 3).map((item) => (
+                  <div key={item.id} style={reviewPreviewCard}>
+                    <strong>
+                      <MeetroIcon name="reviews" size={16} decorative />{" "}
+                      {Number(item.rating || 0).toFixed(1)}
+                    </strong>
+                    <p style={reviewPreviewText}>
+                      {item.comment || t("noReviewText")}
+                    </p>
+                    <span style={reviewPreviewMeta}>
+                      {item.customerDisplayName ||
+                        (language === "es" ? "Cliente" : "Customer")}
+                      {item.service ? ` • ${item.service}` : ""}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div style={glassCard}>
+            <div style={customerPreviewLauncher}>
+              <div>
+                <h2 style={compactCardTitle}>{t("customerPreview")}</h2>
+                <p style={bioStyle}>{t("customerPreviewHelp")}</p>
+              </div>
+              <button onClick={viewPublicProfile} style={smallEditButton}>
+                {t("viewPublicProfile")} →
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -589,6 +1090,20 @@ function ContractorProfile({ setPage, currentPage }) {
           setPhone={setPhone}
           location={location}
           setLocation={setLocation}
+          streetAddress={streetAddress}
+          setStreetAddress={setStreetAddress}
+          addressLine2={addressLine2}
+          setAddressLine2={setAddressLine2}
+          businessCity={businessCity}
+          setBusinessCity={setBusinessCity}
+          businessState={businessState}
+          setBusinessState={setBusinessState}
+          businessPostalCode={businessPostalCode}
+          setBusinessPostalCode={setBusinessPostalCode}
+          serviceArea={serviceArea}
+          setServiceArea={setServiceArea}
+          showBusinessAddressPublic={showBusinessAddressPublic}
+          setShowBusinessAddressPublic={setShowBusinessAddressPublic}
           country={country}
           setCountry={setCountry}
           language={language}
@@ -627,6 +1142,20 @@ function ProfileForm({
   setPhone,
   location,
   setLocation,
+  streetAddress,
+  setStreetAddress,
+  addressLine2,
+  setAddressLine2,
+  businessCity,
+  setBusinessCity,
+  businessState,
+  setBusinessState,
+  businessPostalCode,
+  setBusinessPostalCode,
+  serviceArea,
+  setServiceArea,
+  showBusinessAddressPublic,
+  setShowBusinessAddressPublic,
   bio, 
   setBio,
   imageUrl,
@@ -652,14 +1181,16 @@ function ProfileForm({
           {imageUrl ? (
             <img src={imageUrl} alt={t("preview")} style={circleLogoImage} />
           ) : (
-            <div style={circleLogoPlaceholder}>🏢</div>
+            <div style={circleLogoPlaceholder}>
+              <MeetroIcon name="businessProfile" size={30} decorative />
+            </div>
           )}
         </div>
 
         <div style={uploadInfo}>
-          <h3 style={uploadTitle}>Business Logo</h3>
+          <h3 style={uploadTitle}>{t("businessLogo")}</h3>
           <p style={uploadSubtext}>
-            Upload a clean square logo or profile image. Meetro will keep it circular and prevent stretching.
+            {t("businessLogoHelp")}
           </p>
 
           <input
@@ -675,12 +1206,12 @@ function ProfileForm({
             onClick={() => document.getElementById(inputId).click()}
             style={uploadButton}
           >
-            {imageUrl ? "Change Logo" : "Upload Logo"}
+            {imageUrl ? t("changeLogo") : t("uploadLogo")}
           </button>
 
           {imageUrl && (
             <button type="button" onClick={() => setImageUrl("")} style={removeButton}>
-              Remove Image
+              {t("removeImage")}
             </button>
           )}
 
@@ -714,47 +1245,95 @@ function ProfileForm({
         style={inputStyle}
       />
 
-<select
-  value={country}
-  onChange={(e) => {
-    setCountry(e.target.value);
-    localStorage.setItem("businessCountry", e.target.value);
-    setLocation("");
-  }}
-  style={inputStyle}
->
-  <option value="">
-    {language === "es" ? "Seleccionar país" : "Select Country"}
-  </option>
-  <option value="US">United States</option>
-  <option value="CA">Canada</option>
-  <option value="MX">Mexico</option>
-  <option value="OTHER">
-    {language === "es" ? "Otro" : "Other"}
-  </option>
-</select>
+      <div style={formSection}>
+        <h3 style={formSectionTitle}>{t("businessAddress")}</h3>
+        <p style={helperText}>{t("businessAddressPrivacyHelp")}</p>
 
-{country && (
-  <textarea
-    placeholder={
-      country === "US"
-        ? "Street address, city, state, ZIP"
-        : country === "CA"
-        ? "Street address, city, province, postal code"
-        : country === "MX"
-        ? "Street address, city, state, postal code"
-        : "Full business address"
-    }
-    value={location}
-    onChange={(e) => setLocation(e.target.value)}
-    style={{
-      ...inputStyle,
-      minHeight: "90px",
-      resize: "vertical",
-      fontFamily: "inherit",
-    }}
-  />
-)}
+        <input
+          placeholder={t("streetAddress")}
+          value={streetAddress}
+          onChange={(e) => setStreetAddress(e.target.value)}
+          style={inputStyle}
+        />
+
+        <input
+          placeholder={t("addressLine2")}
+          value={addressLine2}
+          onChange={(e) => setAddressLine2(e.target.value)}
+          style={inputStyle}
+        />
+
+        <div style={addressGrid}>
+          <input
+            placeholder={t("city")}
+            value={businessCity}
+            onChange={(e) => setBusinessCity(e.target.value)}
+            style={inputStyle}
+          />
+
+          <input
+            placeholder={t("stateProvince")}
+            value={businessState}
+            onChange={(e) => setBusinessState(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={addressGrid}>
+          <input
+            placeholder={t("zipPostalCode")}
+            value={businessPostalCode}
+            onChange={(e) => setBusinessPostalCode(e.target.value)}
+            style={inputStyle}
+          />
+
+          <select
+            value={country}
+            onChange={(e) => {
+              setCountry(e.target.value);
+              localStorage.setItem("businessCountry", e.target.value);
+            }}
+            style={inputStyle}
+          >
+            <option value="">{t("selectCountry")}</option>
+            <option value="US">United States</option>
+            <option value="CA">Canada</option>
+            <option value="MX">Mexico</option>
+            <option value="OTHER">{t("other")}</option>
+          </select>
+        </div>
+
+        <input
+          placeholder={t("serviceArea")}
+          value={serviceArea}
+          onChange={(e) => {
+            setServiceArea(e.target.value);
+            setLocation(e.target.value);
+          }}
+          style={inputStyle}
+        />
+
+        <div style={visibilityToggleCard}>
+          <div>
+            <strong>{t("showBusinessAddressPublicly")}</strong>
+            <p style={visibilityHelpText}>{t("showBusinessAddressPubliclyHelp")}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowBusinessAddressPublic(!showBusinessAddressPublic)}
+            style={{
+              ...toggleButton,
+              marginBottom: 0,
+              background: showBusinessAddressPublic
+                ? "linear-gradient(135deg, #5b3df5, #7b61ff)"
+                : "rgba(255,255,255,0.85)",
+              color: showBusinessAddressPublic ? "white" : "#333",
+            }}
+          >
+            {showBusinessAddressPublic ? t("yes") : t("no")}
+          </button>
+        </div>
+      </div>
 
       <div style={toggleRow}>
         <button
@@ -771,7 +1350,7 @@ function ProfileForm({
             color: availableNow ? "white" : "#333",
           }}
         >
-          {availableNow ? "🟢 " : ""}
+          {availableNow && <MeetroIcon name="availableNow" size={14} decorative />}
           {t("availableNow")}
         </button>
 
@@ -784,7 +1363,7 @@ function ProfileForm({
             color: dispatchReady ? "white" : "#333",
           }}
         >
-          🚗 {t("dispatchReady")}
+          <MeetroIcon name="dispatch" size={14} decorative /> {t("dispatchReady")}
         </button>
       </div>
 
@@ -812,12 +1391,46 @@ function ProfileForm({
   );
 }
 
-function InfoCard({ label, value }) {
+function InfoCard({ label, value, icon }) {
   return (
     <div style={infoCard}>
-      <span style={infoLabel}>{label}</span>
+      <span style={infoLabel}>
+        {icon && <MeetroIcon name={icon} size={14} decorative />}
+        {label}
+      </span>
       <span style={infoValue}>{value}</span>
     </div>
+  );
+}
+
+function BusinessNameTitle({ name, variant = "hero" }) {
+  const displayName = String(name || "").trim();
+  const ampersandIndex = displayName.indexOf("&");
+  const baseStyle = variant === "preview" ? businessTitle : pageTitle;
+  const ampersandStyle =
+    variant === "preview"
+      ? previewAmpersandBusinessTitle
+      : heroAmpersandBusinessTitle;
+
+  if (ampersandIndex === -1) {
+    const Tag = variant === "preview" ? "h2" : "h1";
+    return <Tag style={baseStyle}>{displayName}</Tag>;
+  }
+
+  const beforeAmpersand = displayName.slice(0, ampersandIndex).trim();
+  const afterAmpersand = displayName.slice(ampersandIndex + 1).trim();
+  const Tag = variant === "preview" ? "h2" : "h1";
+
+  return (
+    <Tag style={{ ...baseStyle, ...ampersandStyle }}>
+      {beforeAmpersand && (
+        <span style={businessTitleLine}>{beforeAmpersand}</span>
+      )}
+      <span style={businessTitleAmpersand}>&</span>
+      {afterAmpersand && (
+        <span style={businessTitleLine}>{afterAmpersand}</span>
+      )}
+    </Tag>
   );
 }
 
@@ -825,9 +1438,13 @@ const pageWrapper = {
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 28%), radial-gradient(circle at top right, #ede9ff 0%, transparent 22%), linear-gradient(to bottom, #f8f8fc 0%, #eef0f7 100%)",
   minHeight: "100vh",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   color: "#111",
+  width: "100%",
+  maxWidth: "960px",
+  margin: "0 auto",
 };
 
 const backButton = {
@@ -870,6 +1487,8 @@ const heroTop = {
   position: "relative",
   display: "flex",
   justifyContent: "space-between",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
   gap: "14px",
 };
 
@@ -882,9 +1501,14 @@ const eyebrow = {
 };
 
 const pageTitle = {
-  margin: "10px 0",
-  fontSize: "31px",
+  margin: "10px auto",
+  maxWidth: "min(100%, 560px)",
+  fontSize: "clamp(34px, 9vw, 42px)",
   lineHeight: 1.08,
+  textAlign: "center",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
 };
 
 const pageSubtitle = {
@@ -895,6 +1519,9 @@ const pageSubtitle = {
 };
 
 const verifiedBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
   background: "rgba(255,255,255,0.16)",
   padding: "10px 13px",
   borderRadius: "999px",
@@ -903,6 +1530,43 @@ const verifiedBadge = {
   height: "fit-content",
   whiteSpace: "nowrap",
   border: "1px solid rgba(255,255,255,0.18)",
+};
+
+const identityHeroLayout = {
+  position: "relative",
+  display: "grid",
+  gridTemplateColumns: "88px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "16px",
+};
+
+const heroLogoFrame = {
+  width: "88px",
+  height: "88px",
+  minWidth: "88px",
+  borderRadius: "50%",
+  background: "linear-gradient(145deg, #ffffff, #f0edff)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+  boxShadow: "0 14px 30px rgba(15,23,42,0.18)",
+  border: "4px solid rgba(255,255,255,0.92)",
+};
+
+const identityHeroContent = {
+  minWidth: 0,
+};
+
+const identityHeroMeta = {
+  margin: "7px 0 0",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  flexWrap: "wrap",
+  color: "rgba(255,255,255,0.88)",
+  fontSize: "14px",
+  fontWeight: "850",
 };
 
 const heroStats = {
@@ -964,6 +1628,78 @@ const logoCardTitle = {
   fontSize: "21px",
 };
 
+const compactCardTitle = {
+  margin: "0 0 12px",
+  color: "#111",
+  fontSize: "20px",
+  lineHeight: 1.2,
+};
+
+const businessHealthGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+  gap: "10px",
+};
+
+const businessHealthItem = {
+  minWidth: 0,
+  display: "grid",
+  gap: "5px",
+  padding: "12px",
+  borderRadius: "18px",
+  background: "rgba(246,246,250,0.86)",
+  border: "1px solid rgba(255,255,255,0.9)",
+};
+
+const businessHealthIcon = {
+  width: "30px",
+  height: "30px",
+  borderRadius: "10px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#5b3df5",
+  background: "#f3f0ff",
+};
+
+const businessHealthLabel = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "850",
+};
+
+const businessHealthValue = {
+  color: "#111",
+  fontSize: "14px",
+  lineHeight: 1.25,
+};
+
+const quickActionsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+};
+
+const secondaryActionButton = {
+  width: "100%",
+  padding: "16px",
+  border: "none",
+  borderRadius: "20px",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  fontWeight: "900",
+  fontSize: "15px",
+  cursor: "pointer",
+};
+
+const customerPreviewLauncher = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "14px",
+  flexWrap: "wrap",
+};
+
 const smallEditButton = {
   border: "none",
   background: "#f1edff",
@@ -1019,9 +1755,34 @@ const logoBusinessInfo = {
 
 const businessTitle = {
   margin: 0,
-  fontSize: "25px",
-  lineHeight: 1.12,
+  maxWidth: "100%",
+  fontSize: "clamp(22px, 6vw, 28px)",
+  lineHeight: 1.08,
   color: "#111",
+  textAlign: "center",
+  overflowWrap: "normal",
+};
+
+const heroAmpersandBusinessTitle = {
+  display: "grid",
+  gap: "2px",
+  justifyItems: "center",
+};
+
+const previewAmpersandBusinessTitle = {
+  display: "grid",
+  gap: "1px",
+  justifyItems: "center",
+};
+
+const businessTitleLine = {
+  display: "block",
+};
+
+const businessTitleAmpersand = {
+  display: "block",
+  fontSize: "0.82em",
+  lineHeight: 0.95,
 };
 
 const categoryStyle = {
@@ -1115,6 +1876,57 @@ const inputStyle = {
     "0 4px 12px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.9)",
 };
 
+const formSection = {
+  background: "rgba(246,246,250,0.78)",
+  border: "1px solid rgba(91,61,245,0.08)",
+  borderRadius: "24px",
+  padding: "14px",
+  marginBottom: "14px",
+  boxSizing: "border-box",
+  maxWidth: "100%",
+};
+
+const formSectionTitle = {
+  margin: "0 0 6px",
+  fontSize: "19px",
+  color: "#111",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+};
+
+const helperText = {
+  margin: "0 0 14px",
+  color: "#60677a",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const addressGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+  minWidth: 0,
+};
+
+const visibilityToggleCard = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  alignItems: "center",
+  gap: "12px",
+  background: "rgba(255,255,255,0.82)",
+  border: "1px solid rgba(0,0,0,0.05)",
+  borderRadius: "20px",
+  padding: "12px",
+  color: "#111",
+};
+
+const visibilityHelpText = {
+  margin: "4px 0 0",
+  color: "#60677a",
+  fontSize: "12px",
+  lineHeight: 1.35,
+};
 
 const textareaStyle = {
   ...inputStyle,
@@ -1131,6 +1943,10 @@ const actionRow = {
 };
 
 const callButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
   textDecoration: "none",
   background: "#ecfdf3",
   color: "#027a48",
@@ -1141,6 +1957,10 @@ const callButton = {
 };
 
 const messageButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
   border: "none",
   background: "#eee7ff",
   color: "#5b3df5",
@@ -1158,6 +1978,10 @@ const statusRow = {
 };
 
 const statusButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
   border: "1px solid rgba(0,0,0,0.04)",
   borderRadius: "20px",
   padding: "16px",
@@ -1177,6 +2001,10 @@ const toggleRow = {
 };
 
 const toggleButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
   border: "1px solid rgba(0,0,0,0.04)",
   borderRadius: "20px",
   padding: "16px",
@@ -1204,7 +2032,9 @@ const infoCard = {
 };
 
 const infoLabel = {
-  display: "block",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
   color: "#6b6f80",
   marginBottom: "7px",
   fontWeight: "800",
@@ -1232,6 +2062,39 @@ const bioStyle = {
   margin: 0,
   color: "#555b68",
   lineHeight: 1.65,
+};
+
+const emptyReviewsCard = {
+  display: "grid",
+  gap: "6px",
+  padding: "14px",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(226,232,240,0.9)",
+  color: "#334155",
+};
+
+const reviewPreviewCard = {
+  display: "grid",
+  gap: "6px",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(226,232,240,0.85)",
+  marginTop: "10px",
+};
+
+const reviewPreviewText = {
+  margin: 0,
+  color: "#334155",
+  lineHeight: 1.45,
+  fontWeight: 700,
+};
+
+const reviewPreviewMeta = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 850,
 };
 
 const trustGrid = {

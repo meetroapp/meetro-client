@@ -1,21 +1,39 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
+import { formatScheduleTime } from "../utils/displayTime";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
+import {
+  getHomeownerLifecycleStage,
+  getHomeownerWorkflowPresentation,
+  getHomeownerWorkflowTimeline,
+} from "../utils/homeownerLifecycle";
+import { saveActiveJobSnapshot, saveActiveWorkSnapshot } from "../utils/workCenter";
 
-function PhotoStrip({ request, onPreview }) {
+function PhotoStrip({ request, onPreview, language }) {
   const photos = [
     ...(Array.isArray(request.photos) ? request.photos : []),
     ...(request.image_url ? [request.image_url] : []),
   ].filter(Boolean);
 
   const uniquePhotos = [...new Set(photos)];
+  const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
+  const getPhotoLabel = (index) =>
+    language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
+  const photoCountLabel =
+    uniquePhotos.length === 1
+      ? language === "es"
+        ? "foto"
+        : "photo"
+      : language === "es"
+      ? "fotos"
+      : "photos";
 
   if (uniquePhotos.length === 0) {
     return (
       <div style={galleryEmpty}>
-        <div style={galleryEmptyIcon}>🏠</div>
+        <div style={galleryEmptyIcon}>IMG</div>
         <strong>{t("noPhotosYet")}</strong>
         <span>{t("addPhotosHelp")}</span>
       </div>
@@ -40,7 +58,7 @@ function PhotoStrip({ request, onPreview }) {
             <img src={photo} alt="" style={swipePhotoImage} />
 
             <div style={swipePhotoOverlay}>
-              <span>{index === 0 ? "Main Photo" : `Photo ${index + 1}`}</span>
+              <span>{index === 0 ? mainPhotoLabel : getPhotoLabel(index)}</span>
             </div>
           </button>
         ))}
@@ -48,7 +66,7 @@ function PhotoStrip({ request, onPreview }) {
         {uniquePhotos.length > 4 && (
           <div style={swipeEndCard}>
             <strong>{uniquePhotos.length}</strong>
-            <span>{uniquePhotos.length === 1 ? "photo" : "photos"}</span>
+            <span>{photoCountLabel}</span>
           </div>
         )}
       </div>
@@ -64,6 +82,10 @@ function EditPhotoManager({
   onPreview,
   language,
 }) {
+  const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
+  const getPhotoLabel = (index) =>
+    language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
+
   return (
     <div style={editPhotoManager}>
       <div style={swipeGalleryHeader}>
@@ -79,13 +101,7 @@ function EditPhotoManager({
           onClick={() => document.getElementById("editPhotoInput").click()}
           disabled={uploading}
         >
-          {uploading
-            ? language === "es"
-              ? "Subiendo..."
-              : "Uploading..."
-            : language === "es"
-            ? "+ Agregar fotos"
-            : "+ Add photos"}
+          {uploading ? t("uploading") : t("addPhotos")}
         </button>
       </div>
 
@@ -100,7 +116,7 @@ function EditPhotoManager({
 
       {photos.length === 0 ? (
         <div style={galleryEmpty}>
-          <div style={galleryEmptyIcon}>🏠</div>
+          <div style={galleryEmptyIcon}>IMG</div>
           <strong>{t("noPhotosYet")}</strong>
           <span>
             {language === "es"
@@ -129,7 +145,7 @@ function EditPhotoManager({
               </button>
 
               <span style={swipePhotoOverlay}>
-                {index === 0 ? "Main Photo" : `Photo ${index + 1}`}
+                {index === 0 ? mainPhotoLabel : getPhotoLabel(index)}
               </span>
             </div>
           ))}
@@ -139,14 +155,287 @@ function EditPhotoManager({
   );
 }
 
+function formatQuoteMoney(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "string" && value.trim().startsWith("$")) return value.trim();
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return `$${numeric.toLocaleString("en-US", {
+      minimumFractionDigits: numeric % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  return String(value);
+}
+
+function getQuoteTotal(quote) {
+  return (
+    quote.amount ??
+    quote.total ??
+    quote.totalDue ??
+    quote.totalPrice ??
+    quote.customerTotal ??
+    ""
+  );
+}
+
+function getQuoteDeposit(quote) {
+  return (
+    quote.deposit ??
+    quote.depositAmount ??
+    quote.depositDue ??
+    quote.requiredDeposit ??
+    ""
+  );
+}
+
+function getQuoteStatusLabel(quote, language) {
+  const status = String(quote.status || quote.quoteStatus || "").toLowerCase();
+  if (status === "accepted" || status === "approved") return t("quoteApproved", language);
+  if (status === "revision_requested") return t("quoteRevisionRequested", language);
+  if (status === "draft") return t("quoteDraft", language);
+  if (status === "sent" || status === "pending" || status === "quoted") {
+    return t("quotePendingDecision", language);
+  }
+  return t("quotePendingDecision", language);
+}
+
+function getQuotePhotos(quote) {
+  const values = [
+    quote.photos,
+    quote.images,
+    quote.imageUrls,
+    quote.image_urls,
+    quote.attachments,
+    quote.media,
+    quote.photoUrl,
+    quote.image_url,
+  ];
+
+  return [
+    ...new Set(
+      values
+        .flatMap((value) => (Array.isArray(value) ? value : value ? [value] : []))
+        .map((item) => {
+          if (typeof item === "string") return item;
+          return item?.url || item?.src || item?.imageUrl || item?.image_url || item?.photoUrl || "";
+        })
+        .filter(Boolean)
+    ),
+  ];
+}
+
+function getQuotePdfUrl(quote) {
+  return (
+    quote.pdfUrl ||
+    quote.proposalPdfUrl ||
+    quote.documentUrl ||
+    quote.downloadUrl ||
+    quote.publicPdfUrl ||
+    ""
+  );
+}
+
+function getQuoteScopeText(quote) {
+  return (
+    quote.scopeOfWork ||
+    quote.workToBePerformed ||
+    quote.workSummary ||
+    quote.projectSummary ||
+    quote.description ||
+    quote.summary ||
+    ""
+  );
+}
+
+function getQuoteMaterialsText(quote) {
+  const materialFields =
+    quote.materialsIncluded ||
+    quote.materialsSummary ||
+    quote.materialsDescription ||
+    quote.materialLineItems ||
+    quote.materialItems ||
+    quote.lineItems ||
+    quote.materials;
+
+  if (Array.isArray(materialFields)) {
+    return materialFields
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const description = item.description || item.name || item.title || item.label || "";
+        const amount = item.amount ?? item.total ?? item.price ?? "";
+        return [description, amount !== "" ? formatQuoteMoney(amount) : ""]
+          .filter(Boolean)
+          .join(" · ");
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (typeof materialFields === "number") return formatQuoteMoney(materialFields);
+  return materialFields || "";
+}
+
+function getQuoteNotesText(quote) {
+  return quote.notes || quote.proposalNotes || quote.customerNotes || quote.additionalNotes || "";
+}
+
+function HomeownerWorkflowHub({
+  request,
+  language,
+  linkedAppointment,
+  onOpenConversation,
+  onPrimaryAction,
+  hideCommunicationAction = false,
+}) {
+  const workflow = getHomeownerWorkflowPresentation(request, language);
+  const timeline = getHomeownerWorkflowTimeline(request, language);
+  const hasQuote = Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0;
+  const hasPayment = Boolean(
+    request.paymentStatus ||
+      request.paymentRecord ||
+      request.depositPaid ||
+      request.acceptedQuote
+  );
+  const hasActiveWork = ["accepted", "scheduled", "active", "in_progress", "working", "started", "completed"].includes(
+    String(request.status || "").toLowerCase()
+  );
+  const hasCompletion =
+    String(request.status || "").toLowerCase() === "completed" ||
+    Boolean(request.completionRecord);
+  const visibleSections = [
+    {
+      key: "schedule",
+      label: t("myRequestsScheduleVisit", language),
+      visible: Boolean(linkedAppointment || request.scheduledAt || request.appointmentDate),
+    },
+    {
+      key: "evaluation",
+      label: t("myRequestsEvaluationSummary", language),
+      visible: Boolean(request.evaluationSummary || request.evaluationNotes || request.evaluationCompletedAt),
+    },
+    {
+      key: "quote",
+      label: t("myRequestsQuoteProposal", language),
+      visible: hasQuote,
+    },
+    {
+      key: "payment",
+      label: t("myRequestsPaymentDeposit", language),
+      visible: hasPayment,
+    },
+    {
+      key: "work",
+      label: t("myRequestsActiveWork", language),
+      visible: hasActiveWork,
+    },
+    {
+      key: "completion",
+      label: t("myRequestsCompletion", language),
+      visible: hasCompletion,
+    },
+    {
+      key: "history",
+      label: t("myRequestsServiceHistory", language),
+      visible: Boolean(request.closedAt || request.savedToHistory),
+    },
+  ].filter((section) => section.visible);
+  const primaryIsConversation = workflow.primaryActionKey === "messageProfessional";
+
+  return (
+    <div style={workflowHubCard}>
+      <div style={workflowHubHeader}>
+        <div>
+          <span style={workflowHubEyebrow}>
+            {t("myRequestsWorkflow", language)}
+          </span>
+          <h3 style={workflowHubTitle}>{workflow.statusLabel}</h3>
+        </div>
+        <span style={workflowHubStatusBadge}>{workflow.progressHint}</span>
+      </div>
+
+      <div style={workflowHubNextStep}>
+        <span>{t("myRequestsNextStep", language)}</span>
+        <strong>{workflow.nextAction}</strong>
+      </div>
+
+      <div style={workflowTimelineRow}>
+        {timeline.map((item) => (
+          <span
+            key={item.key}
+            style={{
+              ...workflowTimelinePill,
+              ...(item.done ? workflowTimelinePillDone : {}),
+              ...(item.current ? workflowTimelinePillCurrent : {}),
+            }}
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+
+      {visibleSections.length > 0 && (
+        <div style={workflowSectionList}>
+          {visibleSections.map((section) => (
+            <span key={section.key} style={workflowSectionPill}>
+              {section.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={workflowHubActions}>
+        <button
+          type="button"
+          style={workflowHubPrimaryButton}
+          onClick={() =>
+            primaryIsConversation
+              ? onOpenConversation?.()
+              : onPrimaryAction?.(workflow, request)
+          }
+        >
+          {workflow.primaryActionLabel}
+        </button>
+        {!hideCommunicationAction && !primaryIsConversation && (
+          <button type="button" style={workflowHubSecondaryButton} onClick={onOpenConversation}>
+            {t("myRequestsMessageProfessional", language)}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MyRequests({ setPage }) {
   const language = getLanguage();
 
   const [recoveryTick, setRecoveryTick] = useState(0);
 
-  const requests = JSON.parse(
-    localStorage.getItem("homeownerRequests") || "[]"
-  ).filter((request) => {
+  function readRequestArray(key) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function getDurableHomeownerRequests() {
+    const primaryRequests = readRequestArray("homeownerRequests");
+    if (primaryRequests.length > 0) return primaryRequests;
+
+    const backupRequests = readRequestArray("meetroHomeownerRequestsBackup");
+    if (backupRequests.length > 0) {
+      localStorage.setItem("homeownerRequests", JSON.stringify(backupRequests));
+      return backupRequests;
+    }
+
+    return [];
+  }
+
+  const requests = getDurableHomeownerRequests().filter((request) => {
     if (!request || request.status === "closed") return false;
     const hasId = request.requestId || request.id;
     const hasContent = request.title || request.description || request.service;
@@ -189,7 +478,7 @@ function MyRequests({ setPage }) {
             id: post.id,
             requestId: post.id,
             source: "backend-post-recovery",
-            title: post.title || post.project_title || "Project Request",
+            title: post.title || post.project_title || "Service Request",
             description: post.description || post.project_description || "",
             category: post.category || "handyman",
             location: post.location || "Local Area",
@@ -279,12 +568,12 @@ function MyRequests({ setPage }) {
 
     if (language === "es") {
       return value
-        .replace("pending", "Esperando cotizaciones")
-        .replace("Awaiting Quotes", "Esperando cotizaciones")
+        .replace("pending", "Esperando respuesta profesional")
+        .replace("Awaiting Quotes", "Esperando respuesta profesional")
         .replace("viewed", "Visto por profesionales")
         .replace("quoted", "Cotización recibida")
         .replace("messaged", "Mensaje recibido")
-        .replace("accepted", "Profesional aceptado")
+        .replace("accepted", "Cotización aceptada")
         .replace("scheduled", "Programado")
         .replace("active", "En progreso")
         .replace("completed", "Completado")
@@ -292,12 +581,12 @@ function MyRequests({ setPage }) {
     }
 
     return value
-      .replace("pending", "Awaiting quotes")
-      .replace("Awaiting Quotes", "Awaiting quotes")
+      .replace("pending", "Awaiting professional response")
+      .replace("Awaiting Quotes", "Awaiting professional response")
       .replace("viewed", "Viewed by professionals")
       .replace("quoted", "Quote received")
       .replace("messaged", "Message received")
-      .replace("accepted", "Professional accepted")
+      .replace("accepted", "Quote accepted")
       .replace("scheduled", "Scheduled")
       .replace("active", "In progress")
       .replace("completed", "Completed")
@@ -306,6 +595,471 @@ function MyRequests({ setPage }) {
 
   function getCount(value) {
     return Array.isArray(value) ? value.length : value || 0;
+  }
+
+  function saveHomeownerRequests(updatedRequests, options = {}) {
+    try {
+      localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+      localStorage.setItem(
+        "meetroHomeownerRequestsBackup",
+        JSON.stringify(updatedRequests)
+      );
+
+      const selectedRequestId =
+        options.selectedRequestId || localStorage.getItem("selectedHomeownerRequestId");
+      const selectedRequest = updatedRequests.find(
+        (request) => String(request.requestId || request.id) === String(selectedRequestId)
+      );
+
+      if (selectedRequest) {
+        localStorage.setItem("selectedHomeownerRequest", JSON.stringify(selectedRequest));
+        localStorage.setItem(
+          "selectedHomeownerRequestId",
+          String(selectedRequest.requestId || selectedRequest.id)
+        );
+      }
+
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("meetro-messages-updated"));
+      window.dispatchEvent(new Event("meetro-workcenter-updated"));
+      setRecoveryTick((value) => value + 1);
+      return true;
+    } catch (error) {
+      console.error("Failed to save homeowner requests", error);
+      alert(
+        language === "es"
+          ? "No se pudieron guardar los cambios. Intenta quitar una foto o vuelve a intentarlo."
+          : "We could not save these changes. Try removing a photo or try again."
+      );
+      return false;
+    }
+  }
+
+  function updateQuoteHistories(quoteId, updater) {
+    ["workCenterQuoteHistory", "meetroQuoteHistory", "quoteHistory"].forEach((key) => {
+      try {
+        const savedQuotes = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(savedQuotes)) return;
+
+        const updatedQuotes = savedQuotes.map((savedQuote) =>
+          String(savedQuote.quoteId) === String(quoteId)
+            ? updater(savedQuote)
+            : savedQuote
+        );
+
+        localStorage.setItem(key, JSON.stringify(updatedQuotes));
+      } catch {}
+    });
+  }
+
+  function getBusinessScheduleItems() {
+    try {
+      const savedSchedule = JSON.parse(
+        localStorage.getItem("meetro_business_schedule") || "[]"
+      );
+      return Array.isArray(savedSchedule) ? savedSchedule : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function getAppointmentStatus(appointment = {}) {
+    const rawStatus =
+      appointment.customerConfirmationStatus ||
+      appointment.confirmationStatus ||
+      appointment.workflowStatus ||
+      appointment.status ||
+      "";
+    const normalizedStatus = String(rawStatus).toLowerCase();
+
+    if (
+      normalizedStatus === "confirmed" ||
+      normalizedStatus.includes("appointment_confirmed")
+    ) {
+      return "confirmed";
+    }
+
+    if (
+      normalizedStatus === "change_requested" ||
+      normalizedStatus.includes("change_requested") ||
+      normalizedStatus.includes("reschedule")
+    ) {
+      return "change_requested";
+    }
+
+    if (normalizedStatus.includes("cancel")) {
+      return "cancelled";
+    }
+
+    return "pending_customer_confirmation";
+  }
+
+  function getAppointmentStatusLabel(status) {
+    if (status === "confirmed") {
+      return language === "es" ? "Cita confirmada" : "Appointment confirmed";
+    }
+
+    if (status === "change_requested") {
+      return language === "es"
+        ? "Cambio de horario solicitado"
+        : "Different time requested";
+    }
+
+    if (status === "cancelled") {
+      return language === "es" ? "Cita cancelada" : "Appointment cancelled";
+    }
+
+    return language === "es"
+      ? "Esperando confirmación"
+      : "Waiting for confirmation";
+  }
+
+  function getLinkedAppointment(request) {
+    const requestId = String(request.requestId || request.id || "");
+    const requestConversationId = String(
+      request.conversationId || request.activeConversationId || ""
+    );
+    const requestTitle = String(request.title || request.projectTitle || "").toLowerCase();
+    const requestAppointment =
+      request.linkedAppointment || request.appointment || request.schedule;
+
+    const scheduleItems = getBusinessScheduleItems();
+    const linkedSchedule = scheduleItems.find((item) => {
+      const itemRequestId = String(
+        item.requestId ||
+          item.selectedHomeownerRequestId ||
+          item.quoteRequestId ||
+          item.selectedHomeownerRequest?.requestId ||
+          item.selectedHomeownerRequest?.id ||
+          ""
+      );
+      const itemConversationId = String(
+        item.conversationId ||
+          item.activeConversationId ||
+          item.projectConversationId ||
+          ""
+      );
+      const itemTitle = String(
+        item.requestTitle || item.projectTitle || item.title || ""
+      ).toLowerCase();
+
+      return (
+        (requestId && itemRequestId && itemRequestId === requestId) ||
+        (requestConversationId &&
+          itemConversationId &&
+          itemConversationId === requestConversationId) ||
+        (requestTitle && itemTitle && itemTitle === requestTitle)
+      );
+    });
+
+    return linkedSchedule || requestAppointment || null;
+  }
+
+  function updateConversationScheduleMessage(appointment, confirmationStatus, statusLabel) {
+    const conversationId =
+      appointment.conversationId ||
+      appointment.activeConversationId ||
+      appointment.projectConversationId ||
+      "";
+    if (!conversationId) return;
+
+    try {
+      const storageKey = `meetro_conversation_${conversationId}`;
+      const storedMessages = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (!Array.isArray(storedMessages)) return;
+
+      const updatedAt = new Date().toISOString();
+      const appointmentId = appointment.id || appointment.scheduleId || "";
+      const updatedMessages = storedMessages.map((message) => {
+        const messageAppointmentId =
+          message.schedule?.id || message.scheduleId || message.appointmentId || "";
+        if (
+          message.type !== "schedule" ||
+          (appointmentId && String(messageAppointmentId) !== String(appointmentId))
+        ) {
+          return message;
+        }
+
+        const updatedSchedule = {
+          ...(message.schedule || {}),
+          customerConfirmationStatus: confirmationStatus,
+          confirmationStatus,
+          confirmationStatusLabel: statusLabel,
+          workflowStatus:
+            confirmationStatus === "confirmed"
+              ? "appointment_confirmed"
+              : "appointment_change_requested",
+          confirmedAt:
+            confirmationStatus === "confirmed"
+              ? updatedAt
+              : message.schedule?.confirmedAt,
+          changeRequestedAt:
+            confirmationStatus === "change_requested"
+              ? updatedAt
+              : message.schedule?.changeRequestedAt,
+          updatedAt,
+        };
+
+        return {
+          ...message,
+          customerConfirmationStatus: confirmationStatus,
+          confirmationStatus,
+          status: confirmationStatus,
+          subtitle: `${updatedSchedule.date || ""} • ${
+            formatScheduleTime(updatedSchedule.time || "")
+          } • ${statusLabel}`,
+          text:
+            confirmationStatus === "confirmed"
+              ? language === "es"
+                ? "Cita confirmada. El profesional verá esta actualización."
+                : "Appointment confirmed. The professional will see this update."
+              : language === "es"
+              ? "Solicitaste otro horario. Envía un mensaje con tu disponibilidad."
+              : "You requested a different time. Send a message with your availability.",
+          schedule: updatedSchedule,
+          updatedAt,
+        };
+      });
+
+      localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
+    } catch {}
+  }
+
+  function updateLinkedAppointmentStatus(request, appointment, confirmationStatus) {
+    const statusLabel = getAppointmentStatusLabel(confirmationStatus);
+    const updatedAt = new Date().toISOString();
+    const appointmentId = appointment.id || appointment.scheduleId || "";
+
+    const updateAppointment = (item = {}) => ({
+      ...item,
+      customerConfirmationStatus: confirmationStatus,
+      confirmationStatus,
+      confirmationStatusLabel: statusLabel,
+      workflowStatus:
+        confirmationStatus === "confirmed"
+          ? "appointment_confirmed"
+          : "appointment_change_requested",
+      confirmedAt:
+        confirmationStatus === "confirmed" ? updatedAt : item.confirmedAt,
+      changeRequestedAt:
+        confirmationStatus === "change_requested" ? updatedAt : item.changeRequestedAt,
+      updatedAt,
+    });
+
+    const updatedSchedule = getBusinessScheduleItems().map((item) =>
+      appointmentId && String(item.id) === String(appointmentId)
+        ? updateAppointment(item)
+        : item
+    );
+
+    if (updatedSchedule.length > 0) {
+      localStorage.setItem("meetro_business_schedule", JSON.stringify(updatedSchedule));
+    }
+
+    const requestId = request.requestId || request.id;
+    const updatedAppointment = updateAppointment(appointment);
+    const updatedRequests = requests.map((item) => {
+      const itemId = item.requestId || item.id;
+      if (String(itemId) !== String(requestId)) return item;
+
+      return {
+        ...item,
+        status: ["completed", "cancelled"].includes(item.status)
+          ? item.status
+          : "scheduled",
+        workflowStage:
+          confirmationStatus === "confirmed"
+            ? "scheduled"
+            : item.workflowStage || "scheduling",
+        nextAction:
+          confirmationStatus === "confirmed"
+            ? "evaluation"
+            : "coordinate_schedule",
+        linkedAppointment: updatedAppointment,
+        appointmentStatus: confirmationStatus,
+        appointmentStatusLabel: statusLabel,
+        scheduledAt: item.scheduledAt || updatedAt,
+        conversationId:
+          item.conversationId ||
+          updatedAppointment.conversationId ||
+          updatedAppointment.activeConversationId ||
+          requestId,
+      };
+    });
+
+    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
+
+    updateConversationScheduleMessage(updatedAppointment, confirmationStatus, statusLabel);
+
+    addNotification({
+      type:
+        confirmationStatus === "confirmed"
+          ? "appointment_confirmed"
+          : "appointment_change_requested",
+      title: statusLabel,
+      message:
+        confirmationStatus === "confirmed"
+          ? language === "es"
+            ? "El cliente confirmó la cita."
+            : "The customer confirmed the appointment."
+          : language === "es"
+          ? "El cliente solicitó otro horario."
+          : "The customer requested a different time.",
+      priority: "high",
+      targetRole: "professional",
+      requestId,
+      scheduleId: appointmentId,
+      conversationId:
+        updatedAppointment.conversationId ||
+        updatedAppointment.activeConversationId ||
+        "",
+    });
+
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+    window.dispatchEvent(new Event("meetro-workcenter-updated"));
+
+    if (confirmationStatus === "change_requested") {
+      openRequestConversation(updatedRequests.find(
+        (item) => String(item.requestId || item.id) === String(requestId)
+      ) || request, updatedAppointment);
+    }
+  }
+
+  function stageAcceptedQuoteForWork(request, acceptedQuote) {
+    const requestId = request.requestId || request.id || acceptedQuote.quoteId || "";
+    const quoteId = acceptedQuote.quoteId || acceptedQuote.id || "";
+    const conversationId =
+      acceptedQuote.conversationId ||
+      request.conversationId ||
+      request.activeConversationId ||
+      requestId;
+    const service = request.title || acceptedQuote.projectTitle || acceptedQuote.title || "Approved Service";
+    const location = request.location || acceptedQuote.location || "";
+
+    saveActiveWorkSnapshot({
+      requestId,
+      quoteId,
+      conversationId,
+      status: "accepted",
+      stage: "approved",
+      service,
+      location,
+      type: "quote_approved",
+      source: "my_requests_quote_acceptance",
+    });
+
+    saveActiveJobSnapshot({
+      id: quoteId || requestId,
+      jobId: quoteId || requestId,
+      conversationId,
+      service,
+      location,
+      status: "accepted",
+      customer:
+        request.homeownerName ||
+        request.customerName ||
+        acceptedQuote.homeownerName ||
+        acceptedQuote.customerName ||
+        "Customer",
+    });
+  }
+
+  function openRequestConversation(request, quote = {}) {
+    const requestId = request.requestId || request.id || quote.requestId || "";
+    const conversationId =
+      quote.conversationId ||
+      request.conversationId ||
+      request.activeConversationId ||
+      requestId;
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
+    localStorage.setItem("selectedQuoteRequestId", String(requestId || conversationId));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem(
+      "activeConversationName",
+      quote.businessName || request.selectedProfessional || request.businessName || "Professional"
+    );
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify({
+        id: conversationId,
+        type: "work",
+        category: "work",
+        businessName:
+          quote.businessName || request.selectedProfessional || request.businessName || "Professional",
+        projectTitle: request.title || quote.projectTitle || "Service Request",
+        requestId,
+      })
+    );
+    localStorage.setItem("conversationReturnPage", "myRequests");
+    localStorage.setItem("returnPage", "myRequests");
+    setPage("conversationThread");
+  }
+
+  function openHomeownerWorkflow(request, workflow = {}) {
+    if (!request) return;
+
+    const requestId = request.requestId || request.id || workflow.quote?.requestId || "";
+    const projectId =
+      request.projectId ||
+      request.jobId ||
+      request.activeProjectId ||
+      requestId;
+    const conversationId =
+      request.conversationId ||
+      request.activeConversationId ||
+      request.projectConversationId ||
+      workflow.quote?.conversationId ||
+      requestId;
+    const projectRecord = {
+      ...request,
+      requestId,
+      projectId,
+      conversationId,
+      activeConversationId: conversationId,
+      selectedProfessional:
+        request.selectedProfessional ||
+        workflow.professionalName ||
+        request.businessName ||
+        request.professionalName ||
+        "",
+      workflowFocus: workflow.key || request.workflowStage || request.status || "",
+    };
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId || projectId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(projectRecord));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(projectRecord));
+    localStorage.setItem("selectedQuoteRequestId", String(requestId || projectId));
+    localStorage.setItem("projectDetailsReturnPage", "myRequests");
+    localStorage.setItem("homeownerProjectFocusStage", workflow.key || "");
+
+    saveSelectedActiveProject({
+      id: projectId,
+      requestId,
+      projectId,
+      conversationId,
+      stage: workflow.key || request.workflowStage || request.status || "",
+      professionalName: projectRecord.selectedProfessional,
+      project: projectRecord,
+    });
+
+    if (
+      workflow.key === "completion" ||
+      workflow.key === "history" ||
+      ["completed", "closed", "closure_completed", "work_completed"].includes(
+        String(request.status || "").toLowerCase()
+      )
+    ) {
+      localStorage.setItem("lastCompletedProject", JSON.stringify(projectRecord));
+      localStorage.setItem("completedJobViewMode", "homeowner");
+      setPage("completedJobDetails");
+      return;
+    }
+
+    setPage("projectDetails");
   }
 
   function startEdit(request) {
@@ -321,26 +1075,62 @@ function MyRequests({ setPage }) {
     });
   }
 
+  useEffect(() => {
+    if (localStorage.getItem("meetroOpenHomeownerRequestEdit") !== "true") {
+      return;
+    }
+
+    const selectedRequest = requests.find(
+      (request) =>
+        String(request.requestId || request.id) === String(selectedId)
+    );
+
+    if (
+      !selectedRequest ||
+      ["completed", "cancelled"].includes(selectedRequest.status)
+    ) {
+      return;
+    }
+
+    localStorage.removeItem("meetroOpenHomeownerRequestEdit");
+    startEdit(selectedRequest);
+  }, [requests, selectedId]);
+
   function saveEdit(requestId) {
     const updatedRequests = requests.map((request) => {
       const currentId = request.requestId || request.id;
 
-      if (currentId !== requestId) return request;
+      if (String(currentId) !== String(requestId)) return request;
+
+      const updatedPhotos = [...new Set(editForm.photos)];
 
       return {
         ...request,
         title: editForm.title.trim() || request.title,
         description: editForm.description.trim(),
         location: editForm.location.trim(),
-        photos: [...new Set(editForm.photos)],
-        image_url: [...new Set(editForm.photos)][0] || "",
+        photos: updatedPhotos,
+        photoRecords: updatedPhotos.map((photo) => {
+          const existingRecord = Array.isArray(request.photoRecords)
+            ? request.photoRecords.find((record) => record.url === photo)
+            : null;
+
+          return (
+            existingRecord || {
+              url: photo,
+              tag: "progress",
+              caption: "",
+              createdAt: new Date().toISOString(),
+            }
+          );
+        }),
+        image_url: updatedPhotos[0] || "",
         updatedAt: new Date().toISOString(),
       };
     });
 
-    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
     setEditingId(null);
-    window.location.reload();
   }
 
   async function handleEditPhotoUpload(event) {
@@ -406,7 +1196,7 @@ function MyRequests({ setPage }) {
     const updatedRequests = requests.map((request) => {
       const currentId = request.requestId || request.id;
 
-      if (currentId !== pendingCancelId) return request;
+      if (String(currentId) !== String(pendingCancelId)) return request;
 
       return {
         ...request,
@@ -422,8 +1212,8 @@ function MyRequests({ setPage }) {
           {
             type: "cancelled",
             label: cancellationFeeApplies
-              ? "Project cancelled - cancellation fee may apply"
-              : "Project cancelled",
+              ? "Request cancelled - cancellation fee may apply"
+              : "Request cancelled",
             createdAt: new Date().toISOString(),
             cancellationFeeApplies,
             freeCancelWindowMinutes,
@@ -435,19 +1225,16 @@ function MyRequests({ setPage }) {
       };
     });
 
-    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
+    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
     setEditingId(null);
     setPendingCancelId(null);
-
-    window.dispatchEvent(new Event("storage"));
-    window.location.reload();
   }
 
   function restoreProject(requestId) {
     const updatedRequests = requests.map((request) => {
       const currentId = request.requestId || request.id;
 
-      if (currentId !== requestId) return request;
+      if (String(currentId) !== String(requestId)) return request;
 
       return {
         ...request,
@@ -457,7 +1244,7 @@ function MyRequests({ setPage }) {
         projectTimeline: [
           {
             type: "restored",
-            label: "Project restored",
+            label: "Request restored",
             createdAt: new Date().toISOString(),
           },
           ...(Array.isArray(request.projectTimeline)
@@ -467,8 +1254,7 @@ function MyRequests({ setPage }) {
       };
     });
 
-    localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
-    window.location.reload();
+    saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId });
   }
 
   function getCreatedDate(request) {
@@ -482,218 +1268,460 @@ function MyRequests({ setPage }) {
       : "Date pending";
   }
 
+  function goBackFromRequests() {
+    const returnPage = localStorage.getItem("myRequestsReturnPage");
+
+    if (returnPage === "projectDetails") {
+      localStorage.removeItem("myRequestsReturnPage");
+      setPage("projectDetails");
+      return;
+    }
+
+    setPage("home");
+  }
+
   return (
-    <div style={page}>
-      <button style={backButton} onClick={() => setPage("myRequests")}>
-        ← {t("back") || "Back to Requests"}
+    <div className="app-page meetro-responsive-page" style={page}>
+      <button style={backButton} onClick={goBackFromRequests}>
+        {t("myRequestsBack", language)}
       </button>
 
       <div style={header}>
-        <p style={eyebrow}>
-          {language === "es" ? "Seguimiento de Proyectos" : "Project Tracking"}
-        </p>
-
         <h1 style={title}>
-          {language === "es" ? "Mis Solicitudes" : "My Requests"}
+          {t("myRequestsTitle", language)}
         </h1>
 
         <p style={subtitle}>
-          {language === "es"
-            ? "Rastrea vistas, cotizaciones, mensajes y el progreso de cada proyecto."
-            : "Track views, quotes, messages, and progress for each project."}
+          {t("myRequestsSubtitle", language)}
         </p>
       </div>
 
       {sortedRequests.length === 0 ? (
         <div style={emptyCard}>
-          <div style={emptyIcon}>📋</div>
+          <div style={emptyIcon}>REQ</div>
 
-          <h2>{language === "es" ? "No hay solicitudes todavía" : "No requests yet"}</h2>
+          <h2>{t("myRequestsEmptyTitle", language)}</h2>
 
           <p>
-            {language === "es"
-              ? "Sube un proyecto para empezar a rastrear respuestas de negocios."
-              : "Upload a project to start tracking business responses."}
+            {t("myRequestsEmptyText", language)}
           </p>
 
           <button style={primaryButton} onClick={() => setPage("upload")}>
-            {language === "es" ? "Subir Proyecto" : "Upload Project"}
+            {t("myRequestsRequestHelp", language)}
           </button>
         </div>
       ) : (
-        <div style={list}>
+        <div className="meetro-responsive-grid meetro-grid-2" style={list}>
           {sortedRequests.map((request) => {
             const requestId = request.requestId || request.id;
             const isSelected = requestId === selectedId;
+            const lifecycle = getHomeownerLifecycleStage(request, language);
+            const linkedAppointment = getLinkedAppointment(request);
+            const appointmentStatus = linkedAppointment
+              ? getAppointmentStatus(linkedAppointment)
+              : "";
+            const appointmentStatusLabel = linkedAppointment
+              ? getAppointmentStatusLabel(appointmentStatus)
+              : "";
+            const hasQuoteReview =
+              Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0;
 
             const viewsCount = getCount(request.viewedByBusinesses);
             const quotesCount = getCount(request.quotesReceived);
 
             return (
               <div
+                className={isSelected ? "meetro-selected-card" : ""}
                 style={{
                   ...requestCard,
                   ...(isSelected ? selectedRequestCard : {}),
                 }}
                 key={requestId || request.createdAt}
               >
-                <div style={requestSplit}>
-                  <div style={requestMainPanel}>
-                    <div style={cardPillRow}>
-                      <span style={statusPill}>
-                        {getStatusLabel(request.status)}
-                      </span>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={cardPillRow}>
+                        <span style={statusPill}>{lifecycle.stageLabel}</span>
 
-                      {isSelected && (
-                        <span style={selectedPill}>
-                          {language === "es" ? "Seleccionado" : "Selected"}
-                        </span>
-                      )}
+                        {isSelected && (
+                          <span style={selectedPill}>
+                            {t("myRequestsSelected", language)}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3
+                        style={{
+                          margin: "10px 0 6px",
+                          fontSize: 20,
+                          lineHeight: 1.15,
+                          color: "#111827",
+                        }}
+                      >
+                        {request.title ||
+                          request.category ||
+                          t("myRequestsServiceRequest", language)}
+                      </h3>
+
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#64748b",
+                          fontSize: 14,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {request.category ||
+                          t("myRequestsService", language)}
+                      </p>
                     </div>
-
-                    {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
-                      <EditPhotoManager
-                        photos={editForm.photos}
-                        uploading={uploadingPhotos}
-                        onUpload={handleEditPhotoUpload}
-                        onRemove={removeEditPhoto}
-                        onPreview={setPreviewImage}
-                        language={language}
-                      />
-                    ) : (
-                      <PhotoStrip request={request} onPreview={setPreviewImage} />
-                    )}
-
-                    {Array.isArray(request.projectTimeline) &&
-                      request.projectTimeline.length > 0 && (
-                        <div style={miniTimeline}>
-                          {request.projectTimeline.slice(0, 3).map((event, index) => (
-                            <div
-                              key={`${event.type}-${event.createdAt}-${index}`}
-                              style={miniTimelineItem}
-                            >
-                              <span style={miniTimelineDot}>
-                                {event.type === "created"
-                                  ? "➕"
-                                  : event.type === "cancelled"
-                                  ? "✖"
-                                  : event.type === "restored"
-                                  ? "↩"
-                                  : event.type === "quoteAccepted"
-                                  ? "✅"
-                                  : event.type === "quoteReceived"
-                                  ? "💵"
-                                  : "•"}
-                              </span>
-
-                              <div>
-                                <strong style={miniTimelineLabel}>
-                                  {language === "es"
-                                    ? event.type === "created"
-                                      ? "Proyecto creado"
-                                      : event.type === "cancelled"
-                                      ? "Proyecto cancelado"
-                                      : event.type === "restored"
-                                      ? "Proyecto restaurado"
-                                      : event.type === "quoteAccepted"
-                                      ? "Cotización aceptada"
-                                      : event.type === "quoteReceived"
-                                      ? "Cotización recibida"
-                                      : event.label
-                                    : event.label}
-                                </strong>
-
-                                {event.createdAt && (
-                                  <p style={miniTimelineDate}>
-                                    {new Date(event.createdAt).toLocaleDateString(
-                                      language === "es" ? "es-US" : "en-US",
-                                      {
-                                        month: "short",
-                                        day: "numeric",
-                                      }
-                                    )}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                  </div>
-                </div>
-
-                <div style={metricsGrid}>
-                  <div style={metricBox}>
-                    <strong>{viewsCount}</strong>
-                    <span>{language === "es" ? "Vistas" : "Views"}</span>
                   </div>
 
                   <div
-                    style={
-                      quotesCount > 0 && request.status !== "accepted"
-                        ? quoteAlertMetricBox
-                        : metricBox
-                    }
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 18,
+                      background: "rgba(99, 102, 241, 0.08)",
+                      border: "1px solid rgba(99, 102, 241, 0.12)",
+                    }}
                   >
-                    <strong>{quotesCount}</strong>
-                    <span>{language === "es" ? "Cotizaciones" : "Quotes"}</span>
-                    {quotesCount > 0 && request.status !== "accepted" && (
-                      <small style={quoteAlertText}>
-                        {language === "es" ? "Nueva cotización" : "New quote"}
-                      </small>
-                    )}
+                    <span
+                      style={{
+                        display: "block",
+                        marginBottom: 4,
+                        fontSize: 11,
+                        fontWeight: 900,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#4f46e5",
+                      }}
+                    >
+                      {t("myRequestsNext", language)}
+                    </span>
 
-                    {request.status === "accepted" && (
-                      <small style={acceptedMiniText}>
-                        {language === "es" ? "Profesional seleccionado" : "Professional selected"}
-                      </small>
-                    )}
-                  </div>
-
-                  <div style={metricBox}>
-                    <strong>{request.messagesCount || 0}</strong>
-                    <span>{language === "es" ? "Mensajes" : "Messages"}</span>
-                  </div>
-                </div>
-
-                <div style={timelineBox}>
-                  <div style={timelineDot}></div>
-                  <div>
-                    <strong>
-                      {t("workflowStarted")}
+                    <strong
+                      style={{
+                        display: "block",
+                        color: "#111827",
+                        fontSize: 15,
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {lifecycle.nextStep}
                     </strong>
-                    <p>
-                      {language === "es"
-                        ? "Tu proyecto ya está guardado y listo para vistas, mensajes y cotizaciones."
-                        : "Your project is saved and ready for views, messages, and quotes."}
-                    </p>
                   </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    <span>{viewsCount} {t("myRequestsViews", language)}</span>
+                    <span>{request.messagesCount || 0} {t("myRequestsMessages", language)}</span>
+                    <span>{quotesCount} {t("myRequestsQuotes", language)}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={{
+                      marginTop: 2,
+                      width: "100%",
+                      border: "1px solid rgba(99, 102, 241, 0.18)",
+                      background: isSelected ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
+                      color: "#4f46e5",
+                      borderRadius: 16,
+                      padding: "12px 14px",
+                      fontWeight: 900,
+                      fontSize: 14,
+                    }}
+                    onClick={() => {
+                      if (isSelected) {
+                        localStorage.removeItem("selectedHomeownerRequestId");
+                      } else {
+                        localStorage.setItem("selectedHomeownerRequestId", requestId);
+                      }
+
+                      setRecoveryTick((value) => value + 1);
+                    }}
+                  >
+                    {isSelected
+                      ? language === "es"
+                        ? "Ocultar detalles"
+                        : "Hide Details"
+                      : language === "es"
+                      ? "Ver detalles"
+                      : "View Details"}
+                  </button>
                 </div>
 
-                {request.status === "accepted" && request.acceptedQuote && (
-                  <div style={acceptedNotice}>
+                {isSelected && (
+                  <>
+                    <HomeownerWorkflowHub
+                      request={request}
+                      language={language}
+                      linkedAppointment={linkedAppointment}
+                      onOpenConversation={() => openRequestConversation(request)}
+                      onPrimaryAction={(workflow) =>
+                        openHomeownerWorkflow(request, workflow)
+                      }
+                      hideCommunicationAction={hasQuoteReview}
+                    />
+
+                    <div
+                      style={{
+                        marginTop: 14,
+                        padding: 14,
+                        borderRadius: 20,
+                        background: "#f8fafc",
+                        border: "1px solid rgba(148, 163, 184, 0.18)",
+                      }}
+                    >
+                      <h3
+                        style={{
+                          margin: "0 0 8px",
+                          fontSize: 16,
+                          color: "#111827",
+                        }}
+                      >
+                        {t("myRequestsDetails", language)}
+                      </h3>
+
+                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+                          <input
+                            value={editForm.title}
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                            }
+                            placeholder={t("myRequestsTitlePlaceholder", language)}
+                            style={input}
+                          />
+
+                          <textarea
+                            value={editForm.description}
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder={t("myRequestsDetailsPlaceholder", language)}
+                            style={{ ...textarea, minHeight: 110 }}
+                          />
+
+                          <input
+                            value={editForm.location}
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                location: event.target.value,
+                              }))
+                            }
+                            placeholder={t("myRequestsLocationPlaceholder", language)}
+                            style={input}
+                          />
+                        </div>
+                      ) : (
+                        <p
+                          style={{
+                            margin: "0 0 12px",
+                            color: "#64748b",
+                            fontSize: 14,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {request.description || t("myRequestsNoDetails", language)}
+                        </p>
+                      )}
+
+                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
+                        <EditPhotoManager
+                          photos={editForm.photos}
+                          uploading={uploadingPhotos}
+                          onUpload={handleEditPhotoUpload}
+                          onRemove={removeEditPhoto}
+                          onPreview={setPreviewImage}
+                          language={language}
+                        />
+                      ) : (
+                        <PhotoStrip
+                          request={request}
+                          onPreview={setPreviewImage}
+                          language={language}
+                        />
+                      )}
+                    </div>
+
+	                    {request.status === "accepted" && request.acceptedQuote && (
+	                  <div style={acceptedNotice}>
                     <div style={acceptedCheck}>✓</div>
 
                     <div>
                       <strong style={acceptedNoticeTitle}>
-                        {language === "es"
-                          ? "Cotización aceptada"
-                          : "Quote Accepted"}
+                        {t("myRequestsQuoteAccepted", language)}
                       </strong>
 
                       <p style={acceptedNoticeText}>
-                        {language === "es"
-                          ? `Seleccionaste a ${request.selectedProfessional || "este profesional"} para continuar con este proyecto.`
-                          : `You selected ${request.selectedProfessional || "this professional"} to continue with this project.`}
+                        {t("myRequestsSelectedProfessionalNotice", language).replace(
+                          "{professional}",
+                          request.selectedProfessional ||
+                            t("myRequestsFallbackProfessional", language)
+                        )}
                       </p>
 
                       <div style={acceptedNoticeMeta}>
                         <span>
-                          {language === "es" ? "Total aceptado" : "Accepted total"}
+                          {t("myRequestsAcceptedTotal", language)}
                         </span>
 
                         <strong>${request.acceptedQuote.amount || 0}</strong>
                       </div>
+                    </div>
+	                  </div>
+	                )}
+
+                {linkedAppointment && (
+                  <div style={scheduleSummaryCard}>
+                    <div style={scheduleSummaryHeader}>
+                      <div>
+                        <span style={scheduleSummaryEyebrow}>
+                          {t("myRequestsLinkedAppointment", language)}
+                        </span>
+                        <h3 style={scheduleSummaryTitle}>
+                          {linkedAppointment.title ||
+                            t("myRequestsScheduledEvaluation", language)}
+                        </h3>
+                      </div>
+
+                      <span
+                        style={{
+                          ...scheduleSummaryStatus,
+                          ...(appointmentStatus === "confirmed"
+                            ? scheduleSummaryStatusConfirmed
+                            : appointmentStatus === "change_requested"
+                            ? scheduleSummaryStatusAttention
+                            : {}),
+                        }}
+                      >
+                        {appointmentStatusLabel}
+                      </span>
+                    </div>
+
+                    <div style={scheduleSummaryGrid}>
+                      <div style={scheduleSummaryItem}>
+                        <span>{t("myRequestsDate", language)}</span>
+                        <strong>{linkedAppointment.date || "—"}</strong>
+                      </div>
+
+                      <div style={scheduleSummaryItem}>
+                        <span>{t("myRequestsTime", language)}</span>
+                        <strong>{formatScheduleTime(linkedAppointment.time || "") || "—"}</strong>
+                      </div>
+
+                      <div style={scheduleSummaryItem}>
+                        <span>{t("myRequestsProfessional", language)}</span>
+                        <strong>
+                          {linkedAppointment.businessName ||
+                            request.selectedProfessional ||
+                            request.businessName ||
+                            "Professional"}
+                        </strong>
+                      </div>
+
+                      <div style={scheduleSummaryItem}>
+                        <span>{t("myRequestsLocation", language)}</span>
+                        <strong>
+                          {linkedAppointment.location || request.location || "—"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {linkedAppointment.notes && (
+                      <p style={scheduleSummaryNotes}>{linkedAppointment.notes}</p>
+                    )}
+
+                    <div style={scheduleSummaryActions}>
+                      {appointmentStatus === "pending_customer_confirmation" && (
+                        <>
+                          <button
+                            type="button"
+                            style={scheduleConfirmButton}
+                            onClick={() =>
+                              updateLinkedAppointmentStatus(
+                                request,
+                                linkedAppointment,
+                                "confirmed"
+                              )
+                            }
+                          >
+                            {language === "es"
+                              ? "Confirmar cita"
+                              : "Confirm appointment"}
+                          </button>
+
+                          <button
+                            type="button"
+                            style={scheduleDifferentTimeButton}
+                            onClick={() =>
+                              updateLinkedAppointmentStatus(
+                                request,
+                                linkedAppointment,
+                                "change_requested"
+                              )
+                            }
+                          >
+                            {language === "es"
+                              ? "Pedir otro horario"
+                              : "Request different time"}
+                          </button>
+                        </>
+                      )}
+
+                      {appointmentStatus === "change_requested" && !hasQuoteReview && (
+                        <button
+                          type="button"
+                          style={scheduleDifferentTimeButton}
+                          onClick={() => openRequestConversation(request, linkedAppointment)}
+                        >
+                          {language === "es"
+                            ? "Enviar disponibilidad"
+                            : "Send availability"}
+                        </button>
+                      )}
+
+                      {!hasQuoteReview && (
+                        <button
+                          type="button"
+                          style={scheduleConversationButton}
+                          onClick={() => openRequestConversation(request, linkedAppointment)}
+                        >
+                          {language === "es"
+                            ? "Abrir conversación"
+                            : "Open Conversation"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -702,11 +1730,14 @@ function MyRequests({ setPage }) {
                   request.quotesReceived.length > 0 && (
                     <div style={quoteSection}>
                       <div style={quoteHeader}>
-                        <h3 style={quoteTitle}>
-                          {language === "es"
-                            ? "Cotizaciones Recibidas"
-                            : "Received Quotes"}
-                        </h3>
+                        <div>
+                          <h3 style={quoteTitle}>
+                            {t("quoteReview", language)}
+                          </h3>
+                          <p style={quoteDate}>
+                            {t("quoteReviewSubtitle", language)}
+                          </p>
+                        </div>
 
                         <span style={quoteCountBadge}>
                           {request.quotesReceived.length}
@@ -724,7 +1755,7 @@ function MyRequests({ setPage }) {
                           >
                             {quote.status === "accepted" && (
                               <div style={acceptedQuoteBanner}>
-                                ✓ {language === "es" ? "Cotización seleccionada" : "Selected quote"}
+                                ✓ {t("selectedQuote", language)}
                               </div>
                             )}
 
@@ -742,51 +1773,105 @@ function MyRequests({ setPage }) {
                               </div>
 
                               <div style={quotePrice}>
-                                ${quote.amount || 0}
+                                {formatQuoteMoney(getQuoteTotal(quote))}
                               </div>
                             </div>
 
-                            <div style={quoteDetailsGrid}>
-                              <div style={quoteMiniCard}>
-                                <span>
-                                  {language === "es"
-                                    ? "Mano de obra"
-                                    : "Labor"}
-                                </span>
-
-                                <strong>${quote.labor || 0}</strong>
+                            <div style={quoteReviewSummary}>
+                              <div style={quoteSummaryItem}>
+                                <span>{t("totalPrice", language)}</span>
+                                <strong>{formatQuoteMoney(getQuoteTotal(quote))}</strong>
                               </div>
 
-                              <div style={quoteMiniCard}>
-                                <span>
-                                  {language === "es"
-                                    ? "Materiales"
-                                    : "Materials"}
-                                </span>
-
-                                <strong>${quote.materials || 0}</strong>
+                              <div style={quoteSummaryItem}>
+                                <span>{t("deposit", language)}</span>
+                                <strong>
+                                  {getQuoteDeposit(quote)
+                                    ? formatQuoteMoney(getQuoteDeposit(quote))
+                                    : t("noDepositRequired", language)}
+                                </strong>
                               </div>
 
-                              <div style={quoteMiniCard}>
-                                <span>
-                                  {language === "es"
-                                    ? "Tiempo"
-                                    : "Timeline"}
-                                </span>
+                              <div style={quoteSummaryItem}>
+                                <span>{t("estimatedTimeline", language)}</span>
+                                <strong>{quote.timeline || quote.estimatedTimeline || t("timelinePending", language)}</strong>
+                              </div>
 
-                                <strong>{quote.timeline || "-"}</strong>
+                              <div style={quoteSummaryItem}>
+                                <span>{t("quoteStatus", language)}</span>
+                                <strong>{getQuoteStatusLabel(quote, language)}</strong>
                               </div>
                             </div>
 
-                            <div style={quoteNotes}>
-                              {quote.notes ||
-                                (language === "es"
-                                  ? "Sin notas agregadas."
-                                  : "No notes added.")}
+                            <div style={quoteScopeCard}>
+                              <span style={quoteScopeEyebrow}>
+                                {t("scopeOfWork", language)}
+                              </span>
+
+                              <div style={quoteScopeBlock}>
+                                <strong>{t("workToBePerformed", language)}</strong>
+                                <p>
+                                  {getQuoteScopeText(quote) ||
+                                    quote.notes ||
+                                    t("scopeNotListed", language)}
+                                </p>
+                              </div>
+
+                              <div style={quoteScopeBlock}>
+                                <strong>{t("materialsIncluded", language)}</strong>
+                                <p>
+                                  {getQuoteMaterialsText(quote) ||
+                                    t("materialsNotListed", language)}
+                                </p>
+                              </div>
+
+                              <div style={quoteScopeBlock}>
+                                <strong>{t("quoteNotes", language)}</strong>
+                                <p>
+                                  {getQuoteNotesText(quote) ||
+                                    t("notesNotAdded", language)}
+                                </p>
+                              </div>
                             </div>
+
+                            {getQuotePhotos(quote).length > 0 && (
+                              <div style={quotePhotoSection}>
+                                <div style={swipeGalleryHeader}>
+                                  <strong>
+                                    {t("quotePhotos", language)} ({getQuotePhotos(quote).length})
+                                  </strong>
+                                  <span>{t("tapAnyPhotoToView", language)}</span>
+                                </div>
+
+                                <div style={quotePhotoRow}>
+                                  {getQuotePhotos(quote).map((photo, index) => (
+                                    <button
+                                      type="button"
+                                      key={`${photo}-${index}`}
+                                      style={quotePhotoButton}
+                                      onClick={() => setPreviewImage(photo)}
+                                    >
+                                      <img
+                                        src={photo}
+                                        alt=""
+                                        style={swipePhotoImage}
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
 
                             {!["completed", "cancelled"].includes(request.status) && (
-                            <div style={quoteActionRow}>
+                            <div style={quoteDecisionPanel}>
+                              <button
+                                type="button"
+                                style={quoteMessageButton}
+                                onClick={() => openRequestConversation(request, quote)}
+                              >
+                                {t("messageProfessional", language)}
+                              </button>
+
                               <button
                                 style={
                                   quote.status === "accepted"
@@ -805,62 +1890,66 @@ function MyRequests({ setPage }) {
                                 }}
                               >
                                 {quote.status === "accepted"
-                                  ? language === "es"
-                                    ? "✓ Cotización Seleccionada"
-                                    : "✓ Selected Quote"
-                                  : language === "es"
-                                  ? "Aceptar"
-                                  : "Accept"}
+                                  ? `✓ ${t("quoteApproved", language)}`
+                                  : t("approveQuote", language)}
                               </button>
 
-                              <button
-                                style={
-                                  quote.status === "accepted"
-                                    ? nextStepsButton
-                                    : rejectQuoteButton
-                                }
-                                disabled={false}
-                                onClick={() => {
-                                  if (quote.status === "accepted") {
-                                    localStorage.setItem(
-                                      "selectedConversation",
-                                      JSON.stringify({
-                                        businessName:
-                                          quote.businessName || "Business",
-                                        projectTitle:
-                                          request.title || "Project",
-                                      })
-                                    );
+                              <div style={quoteSecondaryActions}>
+                                <button
+                                  type="button"
+                                  style={quoteSecondaryButton}
+                                  onClick={() => {
+                                    if (quote.status === "accepted") {
+                                      localStorage.setItem(
+                                        "selectedConversation",
+                                        JSON.stringify({
+                                          businessName:
+                                            quote.businessName || "Business",
+                                          projectTitle:
+                                            request.title || "Service",
+                                        })
+                                      );
 
-                                    setNextStepsQuoteId(
-                                      nextStepsQuoteId === quote.quoteId
+                                      setNextStepsQuoteId(
+                                        nextStepsQuoteId === quote.quoteId
+                                          ? null
+                                          : quote.quoteId
+                                      );
+                                      return;
+                                    }
+
+                                    setRevisionQuoteId(
+                                      revisionQuoteId === quote.quoteId
                                         ? null
                                         : quote.quoteId
                                     );
-                                    return;
-                                  }
 
-                                  setRevisionQuoteId(
-                                    revisionQuoteId === quote.quoteId
-                                      ? null
-                                      : quote.quoteId
-                                  );
+                                    setRevisionText(quote.revisionNote || "");
+                                  }}
+                                >
+                                  {quote.status === "accepted"
+                                    ? t("viewNextSteps", language)
+                                    : quote.status === "revision_requested"
+                                    ? t("changesRequested", language)
+                                    : t("requestChanges", language)}
+                                </button>
 
-                                  setRevisionText(quote.revisionNote || "");
-                                }}
-                              >
-                                {quote.status === "accepted"
-                                  ? language === "es"
-                                    ? "Ver Próximos Pasos"
-                                    : "View Next Steps"
-                                  : quote.status === "revision_requested"
-                                  ? language === "es"
-                                    ? "Cambios Solicitados"
-                                    : "Changes Requested"
-                                  : language === "es"
-                                  ? "Solicitar Cambios"
-                                  : "Request Changes"}
-                              </button>
+                                {getQuotePdfUrl(quote) && (
+                                  <button
+                                    type="button"
+                                    style={quoteSecondaryButton}
+                                    onClick={() =>
+                                      window.open(
+                                        getQuotePdfUrl(quote),
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      )
+                                    }
+                                  >
+                                    {t("downloadPdf", language)}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             )}
 
@@ -877,8 +1966,8 @@ function MyRequests({ setPage }) {
 
                                   <p style={acceptConfirmText}>
                                     {language === "es"
-                                      ? "Estás seleccionando este profesional para continuar con tu proyecto."
-                                      : "You are selecting this professional to continue with your project."}
+                                      ? "Estás seleccionando este profesional para continuar con tu servicio."
+                                      : "You are selecting this professional to continue with your service."}
                                   </p>
 
                                   <div style={acceptConfirmSummary}>
@@ -892,10 +1981,11 @@ function MyRequests({ setPage }) {
                                     <button
                                       style={confirmAcceptButton}
                                       onClick={() => {
+                                        const acceptedAt = new Date().toISOString();
                                         const updatedRequests = requests.map((item) => {
                                           const itemId = item.requestId || item.id;
 
-                                          if (itemId !== requestId) return item;
+                                          if (String(itemId) !== String(requestId)) return item;
 
                                           const updatedQuotes = Array.isArray(item.quotesReceived)
                                             ? item.quotesReceived.map((savedQuote) => ({
@@ -904,26 +1994,64 @@ function MyRequests({ setPage }) {
                                                   savedQuote.quoteId === quote.quoteId
                                                     ? "accepted"
                                                     : "not_selected",
+                                                quoteStatus:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? "accepted"
+                                                    : savedQuote.quoteStatus,
+                                                workflowStage:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? "approved"
+                                                    : savedQuote.workflowStage,
+                                                nextAction:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? "move_to_active"
+                                                    : savedQuote.nextAction,
+                                                acceptedAt:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? acceptedAt
+                                                    : savedQuote.acceptedAt,
+                                                acceptedBy:
+                                                  savedQuote.quoteId === quote.quoteId
+                                                    ? "customer"
+                                                    : savedQuote.acceptedBy,
                                               }))
                                             : [];
+
+                                          const acceptedQuote = {
+                                            ...quote,
+                                            status: "accepted",
+                                            quoteStatus: "accepted",
+                                            workflowStage: "approved",
+                                            nextAction: "move_to_active",
+                                            acceptedAt,
+                                            acceptedBy: "customer",
+                                            requestId,
+                                            conversationId:
+                                              quote.conversationId ||
+                                              item.conversationId ||
+                                              requestId,
+                                          };
 
                                           return {
                                             ...item,
                                             status: "accepted",
+                                            workflowStage: "approved",
+                                            nextAction: "move_to_active",
                                             quotesReceived: updatedQuotes,
-                                            acceptedQuote: {
-                                              ...quote,
-                                              status: "accepted",
-                                              acceptedAt: new Date().toISOString(),
-                                            },
+                                            acceptedQuote,
                                             selectedProfessional:
                                               quote.businessName || "Business",
-                                            acceptedAt: new Date().toISOString(),
+                                            acceptedAt,
+                                            acceptedBy: "customer",
+                                            conversationId:
+                                              item.conversationId ||
+                                              quote.conversationId ||
+                                              requestId,
                                             projectTimeline: [
                                               {
                                                 type: "quoteAccepted",
                                                 label: `Quote accepted from ${quote.businessName || "Business"}`,
-                                                createdAt: new Date().toISOString(),
+                                                createdAt: acceptedAt,
                                                 quoteId: quote.quoteId || "",
                                                 amount: quote.amount || "",
                                                 businessName: quote.businessName || "",
@@ -935,10 +2063,32 @@ function MyRequests({ setPage }) {
                                           };
                                         });
 
-                                        localStorage.setItem(
-                                          "homeownerRequests",
-                                          JSON.stringify(updatedRequests)
+                                        const updatedRequest = updatedRequests.find(
+                                          (item) => String(item.requestId || item.id) === String(requestId)
                                         );
+                                        const acceptedQuote =
+                                          updatedRequest?.acceptedQuote || {
+                                            ...quote,
+                                            status: "accepted",
+                                            quoteStatus: "accepted",
+                                            workflowStage: "approved",
+                                            nextAction: "move_to_active",
+                                            acceptedAt,
+                                            acceptedBy: "customer",
+                                            requestId,
+                                            conversationId:
+                                              quote.conversationId ||
+                                              updatedRequest?.conversationId ||
+                                              requestId,
+                                          };
+
+                                        if (
+                                          !saveHomeownerRequests(updatedRequests, {
+                                            selectedRequestId: requestId,
+                                          })
+                                        ) {
+                                          return;
+                                        }
 
                                         addNotification({
                                           type: "quote_accepted",
@@ -956,28 +2106,26 @@ function MyRequests({ setPage }) {
                                           quoteId: quote.quoteId || "",
                                         });
 
-                                        const quoteHistory = JSON.parse(
-                                          localStorage.getItem("workCenterQuoteHistory") || "[]"
-                                        );
+                                        updateQuoteHistories(quote.quoteId, (savedQuote) => ({
+                                          ...savedQuote,
+                                          status: "accepted",
+                                          quoteStatus: "accepted",
+                                          workflowStage: "approved",
+                                          nextAction: "move_to_active",
+                                          acceptedAt,
+                                          acceptedBy: "customer",
+                                          requestId: savedQuote.requestId || requestId,
+                                          conversationId:
+                                            savedQuote.conversationId ||
+                                            acceptedQuote.conversationId ||
+                                            requestId,
+                                        }));
 
-                                        const updatedQuoteHistory = quoteHistory.map((savedQuote) =>
-                                          savedQuote.quoteId === quote.quoteId
-                                            ? {
-                                                ...savedQuote,
-                                                status: "accepted",
-                                                acceptedAt: new Date().toISOString(),
-                                              }
-                                            : savedQuote
-                                        );
-
-                                        localStorage.setItem(
-                                          "workCenterQuoteHistory",
-                                          JSON.stringify(updatedQuoteHistory)
-                                        );
+                                        if (updatedRequest) {
+                                          stageAcceptedQuoteForWork(updatedRequest, acceptedQuote);
+                                        }
 
                                         setAcceptQuoteId(null);
-                                        window.dispatchEvent(new Event("storage"));
-                                        window.location.reload();
                                       }}
                                     >
                                       {language === "es"
@@ -999,12 +2147,12 @@ function MyRequests({ setPage }) {
                             {nextStepsQuoteId === quote.quoteId && (
                               <div style={nextStepsBox}>
                                 <div style={nextStepsHeader}>
-                                  <span style={nextStepsIcon}>✅</span>
+                                  <span style={nextStepsIcon}>OK</span>
                                   <div>
                                     <strong>
                                       {language === "es"
                                         ? "Próximos pasos"
-                                        : "Project Next Steps"}
+                                        : "Service Next Steps"}
                                     </strong>
                                     <p>
                                       {language === "es"
@@ -1032,11 +2180,11 @@ function MyRequests({ setPage }) {
                                   <strong>
                                     {request.status === "scheduled"
                                       ? language === "es"
-                                        ? "Proyecto programado"
-                                        : "Project Scheduled"
+                                        ? "Servicio programado"
+                                        : "Service Scheduled"
                                       : language === "es"
-                                      ? "Proyecto en programación"
-                                      : "Project entering scheduling"}
+                                      ? "Servicio en programación"
+                                      : "Service entering scheduling"}
                                   </strong>
                                 </div>
 
@@ -1048,31 +2196,31 @@ function MyRequests({ setPage }) {
                                         : nextStepItem
                                     }
                                   >
-                                    {request.status === "scheduled" ? "✅" : "1."}{" "}
+                                    {request.status === "scheduled" ? "" : "1."}{" "}
                                     {language === "es"
                                       ? "Confirmar fecha de inicio"
                                       : "Confirm start date"}
                                   </div>
 
                                   <div style={nextStepItem}>
-                                    {request.status === "scheduled" ? "✅" : "2."}{" "}
+                                    {request.status === "scheduled" ? "" : "2."}{" "}
                                     {language === "es"
-                                      ? "Proyecto programado"
-                                      : "Project scheduled"}
+                                      ? "Servicio programado"
+                                      : "Service scheduled"}
                                   </div>
 
                                   <div style={pendingStepItem}>
-                                    ⏳{" "}
+                                    {" "}
                                     {language === "es"
                                       ? "Coordinar materiales y acceso"
                                       : "Coordinate materials and access"}
                                   </div>
 
                                   <div style={pendingStepItem}>
-                                    ⏳{" "}
+                                    {" "}
                                     {language === "es"
-                                      ? "Seguir progreso del proyecto"
-                                      : "Track project progress"}
+                                      ? "Seguir progreso del servicio"
+                                      : "Track service progress"}
                                   </div>
                                 </div>
 
@@ -1083,22 +2231,20 @@ function MyRequests({ setPage }) {
                                       const updatedRequests = requests.map((item) => {
                                         const itemId = item.requestId || item.id;
 
-                                        if (itemId !== requestId) return item;
+                                        if (String(itemId) !== String(requestId)) return item;
 
                                         return {
                                           ...item,
                                           status: "scheduled",
+                                          workflowStage: "scheduled",
+                                          nextAction: "evaluation",
                                           scheduledAt: new Date().toISOString(),
                                         };
                                       });
 
-                                      localStorage.setItem(
-                                        "homeownerRequests",
-                                        JSON.stringify(updatedRequests)
-                                      );
-
-                                      window.dispatchEvent(new Event("storage"));
-                                      window.location.reload();
+                                      saveHomeownerRequests(updatedRequests, {
+                                        selectedRequestId: requestId,
+                                      });
                                     }}
                                   >
                                     {request.status === "scheduled"
@@ -1110,16 +2256,6 @@ function MyRequests({ setPage }) {
                                       : "Coordinate Scheduling"}
                                   </button>
 
-                                  <button
-                                    style={nextSecondaryButton}
-                                    onClick={() => {
-                                      setPage("messagesInbox");
-                                    }}
-                                  >
-                                    {language === "es"
-                                      ? "Mensaje Profesional"
-                                      : "Message Professional"}
-                                  </button>
                                 </div>
                               </div>
                             )}
@@ -1144,11 +2280,12 @@ function MyRequests({ setPage }) {
                                     style={sendRevisionButton}
                                     onClick={() => {
                                       if (!revisionText.trim()) return;
+                                      const revisionRequestedAt = new Date().toISOString();
 
                                       const updatedRequests = requests.map((item) => {
                                         const itemId = item.requestId || item.id;
 
-                                        if (itemId !== requestId) return item;
+                                        if (String(itemId) !== String(requestId)) return item;
 
                                         const updatedQuotes = Array.isArray(item.quotesReceived)
                                           ? item.quotesReceived.map((savedQuote) =>
@@ -1156,8 +2293,15 @@ function MyRequests({ setPage }) {
                                                 ? {
                                                     ...savedQuote,
                                                     status: "revision_requested",
+                                                    quoteStatus: "revision_requested",
                                                     revisionNote: revisionText.trim(),
-                                                    revisionRequestedAt: new Date().toISOString(),
+                                                    revisionRequestedAt,
+                                                    requestId:
+                                                      savedQuote.requestId || requestId,
+                                                    conversationId:
+                                                      savedQuote.conversationId ||
+                                                      item.conversationId ||
+                                                      requestId,
                                                   }
                                                 : savedQuote
                                             )
@@ -1168,34 +2312,30 @@ function MyRequests({ setPage }) {
                                           status: "quoted",
                                           quotesReceived: updatedQuotes,
                                           lastQuoteRevisionNote: revisionText.trim(),
-                                          lastQuoteRevisionAt: new Date().toISOString(),
+                                          lastQuoteRevisionAt: revisionRequestedAt,
                                         };
                                       });
 
-                                      localStorage.setItem(
-                                        "homeownerRequests",
-                                        JSON.stringify(updatedRequests)
-                                      );
+                                      if (
+                                        !saveHomeownerRequests(updatedRequests, {
+                                          selectedRequestId: requestId,
+                                        })
+                                      ) {
+                                        return;
+                                      }
 
-                                      const quoteHistory = JSON.parse(
-                                        localStorage.getItem("workCenterQuoteHistory") || "[]"
-                                      );
-
-                                      const updatedQuoteHistory = quoteHistory.map((savedQuote) =>
-                                        savedQuote.quoteId === quote.quoteId
-                                          ? {
-                                              ...savedQuote,
-                                              status: "revision_requested",
-                                              revisionNote: revisionText.trim(),
-                                              revisionRequestedAt: new Date().toISOString(),
-                                            }
-                                          : savedQuote
-                                      );
-
-                                      localStorage.setItem(
-                                        "workCenterQuoteHistory",
-                                        JSON.stringify(updatedQuoteHistory)
-                                      );
+                                      updateQuoteHistories(quote.quoteId, (savedQuote) => ({
+                                        ...savedQuote,
+                                        status: "revision_requested",
+                                        quoteStatus: "revision_requested",
+                                        revisionNote: revisionText.trim(),
+                                        revisionRequestedAt,
+                                        requestId: savedQuote.requestId || requestId,
+                                        conversationId:
+                                          savedQuote.conversationId ||
+                                          quote.conversationId ||
+                                          requestId,
+                                      }));
 
                                       addNotification({
                                         type: "quote_revision_requested",
@@ -1212,9 +2352,6 @@ function MyRequests({ setPage }) {
 
                                       setRevisionQuoteId(null);
                                       setRevisionText("");
-
-                                      window.dispatchEvent(new Event("storage"));
-                                      window.location.reload();
                                     }}
                                   >
                                     {language === "es"
@@ -1244,19 +2381,19 @@ function MyRequests({ setPage }) {
                   <div style={completedStateBox}>
                     <div>
                       <strong>
-                        🏁 {language === "es"
-                          ? "Proyecto completado"
-                          : "Project completed"}
+                         {language === "es"
+                          ? "Trabajo completado"
+                          : "Work completed"}
                       </strong>
 
                       <p>
                         {request.reviewSubmitted
                           ? language === "es"
-                            ? "Reseña enviada. Este proyecto está guardado en tu historial."
+                            ? "Reseña enviada. Este servicio está guardado en tu historial."
                             : t("reviewSubmittedHistoryText")
                           : language === "es"
-                          ? "Este proyecto está finalizado. Puedes revisar el resumen o dejar una reseña."
-                          : "This project is finalized. You can view the record or leave a review."}
+                          ? "Trabajo completado. El Cierre aún puede estar pendiente. Puedes revisar el registro o dejar una reseña."
+                          : "Work completed. Closure may still be pending. You can view the record or leave a review."}
                       </p>
                     </div>
 
@@ -1303,7 +2440,7 @@ function MyRequests({ setPage }) {
                           setPage("emergencyComplete");
                         }}
                       >
-                        ⭐ {language === "es"
+                         {language === "es"
                           ? "Dejar Reseña"
                           : t("leaveReview")}
                       </button>
@@ -1317,14 +2454,14 @@ function MyRequests({ setPage }) {
                       style={primaryButton}
                       onClick={() => saveEdit(requestId)}
                     >
-                      {language === "es" ? "Guardar Cambios" : "Save Changes"}
+                      {t("myRequestsSaveChanges", language)}
                     </button>
 
                     <button
                       style={secondaryButton}
                       onClick={() => setEditingId(null)}
                     >
-                      {language === "es" ? "Cancelar Edición" : "Cancel Edit"}
+                      {t("myRequestsCancelEdit", language)}
                     </button>
                   </div>
                 ) : (
@@ -1350,14 +2487,19 @@ function MyRequests({ setPage }) {
                             requestId
                           );
 
-                          setPage("changeOrderRequest");
+                          if (request.status === "accepted") {
+                            setPage("changeOrderRequest");
+                            return;
+                          }
+
+                          startEdit(request);
                           return;
                         }}
                       >
                         {request.status === "accepted"
                           ? language === "es"
                             ? "Solicitar Cambio"
-                            : "Request Change Order"
+                            : "Request Service Change"
                           : language === "es"
                           ? "Editar Solicitud"
                           : "Edit Request"}
@@ -1388,9 +2530,9 @@ function MyRequests({ setPage }) {
                               setPage("emergencyComplete");
                             }}
                           >
-                            ⭐ {language === "es"
-                              ? "Dejar Reseña"
-                              : t("leaveReview")}
+                             {language === "es"
+                              ? "Revisar Finalización"
+                              : "Review Completion"}
                           </button>
                         )}
                       </>
@@ -1401,8 +2543,8 @@ function MyRequests({ setPage }) {
                           onClick={() => restoreProject(requestId)}
                         >
                           {language === "es"
-                            ? "Restaurar Proyecto"
-                            : "Restore Project"}
+                            ? "Restaurar Solicitud"
+                            : "Restore Request"}
                         </button>
                       ) : (
                         <button
@@ -1411,15 +2553,17 @@ function MyRequests({ setPage }) {
                         >
                           {language === "es"
                             ? request.status === "accepted"
-                              ? "Cancelar Proyecto"
+                              ? "Cancelar Servicio"
                               : "Cancelar Solicitud"
                             : request.status === "accepted"
-                            ? "Cancel Project"
+                            ? "Cancel Service"
                             : "Cancel Request"}
                         </button>
                       )
                     )}
                   </div>
+                    )}
+                  </>
                 )}
               </div>
             );
@@ -1456,16 +2600,16 @@ function MyRequests({ setPage }) {
       {pendingCancelId && (
         <div style={confirmOverlay}>
           <div style={confirmCard}>
-            <div style={confirmIcon}>⚠️</div>
+            <div style={confirmIcon}>!</div>
 
             <h3 style={confirmTitle}>
               {isAcceptedCancellation
                 ? language === "es"
-                  ? "¿Cancelar proyecto aceptado?"
-                  : "Cancel accepted project?"
+                  ? "¿Cancelar servicio aceptado?"
+                  : "Cancel accepted service?"
                 : language === "es"
-                ? "¿Cancelar este proyecto?"
-                : "Cancel this project?"}
+                ? "¿Cancelar esta solicitud?"
+                : "Cancel this request?"}
             </h3>
 
             <p style={confirmText}>
@@ -1478,8 +2622,8 @@ function MyRequests({ setPage }) {
                   ? `Estás dentro de la ventana gratuita de ${freeCancelWindowMinutes} minutos. Puedes cancelar sin tarifa por ahora.`
                   : `You are within the ${freeCancelWindowMinutes}-minute free cancellation window. You can cancel without a fee for now.`
                 : language === "es"
-                ? "Esta acción ocultará el proyecto de tus proyectos activos y de los leads profesionales."
-                : "This will remove the project from your active projects and hide it from professional leads."}
+                ? "Esta acción ocultará la solicitud de tus solicitudes activas y de las oportunidades profesionales."
+                : "This will remove the request from your active requests and hide it from professional leads."}
             </p>
 
             <div style={confirmActions}>
@@ -1487,14 +2631,14 @@ function MyRequests({ setPage }) {
                 style={confirmKeepButton}
                 onClick={() => setPendingCancelId(null)}
               >
-                {language === "es" ? "Mantener proyecto" : "Keep Project"}
+                {t("myRequestsKeepRequest", language)}
               </button>
 
               <button
                 style={confirmCancelButton}
                 onClick={confirmCancelProject}
               >
-                {language === "es" ? "Sí, cancelar" : "Yes, Cancel"}
+                {t("myRequestsYesCancel", language)}
               </button>
             </div>
           </div>
@@ -1507,10 +2651,14 @@ function MyRequests({ setPage }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
-  padding: "24px 24px 220px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
+  width: "100%",
+  maxWidth: "980px",
+  margin: "0 auto",
 };
 
 const backButton = {
@@ -1563,11 +2711,13 @@ const emptyIcon = {
 };
 
 const list = {
-  maxWidth: "860px",
+  maxWidth: "100%",
   margin: "0 auto",
-  display: "flex",
-  flexDirection: "column",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
   gap: "16px",
+  minWidth: 0,
+  overflowX: "hidden",
 };
 
 const miniTimeline = {
@@ -1619,11 +2769,144 @@ const requestCard = {
   padding: "22px",
   boxShadow: "0 14px 34px rgba(15,23,42,.07)",
   border: "1px solid #eef2ff",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const selectedRequestCard = {
   border: "2px solid #a78bfa",
   boxShadow: "0 18px 42px rgba(91,61,245,.14)",
+};
+
+const workflowHubCard = {
+  marginTop: "14px",
+  padding: "16px",
+  borderRadius: "22px",
+  border: "1px solid #dfe6f1",
+  background: "#ffffff",
+  boxShadow: "0 12px 30px rgba(15,23,42,.06)",
+  display: "grid",
+  gap: "13px",
+};
+
+const workflowHubHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const workflowHubEyebrow = {
+  display: "block",
+  color: "#5b3df5",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  marginBottom: "5px",
+};
+
+const workflowHubTitle = {
+  margin: 0,
+  color: "#050812",
+  fontSize: "20px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+};
+
+const workflowHubStatusBadge = {
+  display: "inline-flex",
+  width: "fit-content",
+  borderRadius: "999px",
+  padding: "6px 9px",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const workflowHubNextStep = {
+  padding: "12px 14px",
+  borderRadius: "18px",
+  background: "#f7f4ff",
+  border: "1px solid #ddd6fe",
+  display: "grid",
+  gap: "4px",
+};
+
+const workflowTimelineRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "7px",
+};
+
+const workflowTimelinePill = {
+  display: "inline-flex",
+  border: "1px solid #e2e8f0",
+  borderRadius: "999px",
+  padding: "6px 8px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "10px",
+  fontWeight: "900",
+};
+
+const workflowTimelinePillDone = {
+  borderColor: "#bbf7d0",
+  background: "#f0fdf4",
+  color: "#047857",
+};
+
+const workflowTimelinePillCurrent = {
+  borderColor: "#8b7cff",
+  background: "#f7f4ff",
+  color: "#4f28e8",
+};
+
+const workflowSectionList = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const workflowSectionPill = {
+  display: "inline-flex",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#334155",
+  fontSize: "12px",
+  fontWeight: "850",
+};
+
+const workflowHubActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "9px",
+};
+
+const workflowHubPrimaryButton = {
+  border: "none",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: "950",
+};
+
+const workflowHubSecondaryButton = {
+  border: "1px solid #dbe3ef",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  background: "#ffffff",
+  color: "#371ce4",
+  fontSize: "14px",
+  fontWeight: "950",
 };
 
 const requestSplit = {
@@ -1636,6 +2919,8 @@ const requestSplit = {
 const requestMainPanel = {
   background: "white",
   borderRadius: "22px",
+  minWidth: 0,
+  maxWidth: "100%",
 };
 
 const requestMediaPanel = {
@@ -1661,6 +2946,8 @@ const cardTop = {
   display: "flex",
   justifyContent: "space-between",
   gap: "16px",
+  flexWrap: "wrap",
+  minWidth: 0,
 };
 
 const cardPillRow = {
@@ -1803,6 +3090,138 @@ const galleryEmptyIcon = {
   fontSize: "34px",
 };
 
+const scheduleSummaryCard = {
+  marginTop: 14,
+  padding: 16,
+  borderRadius: 22,
+  background: "linear-gradient(135deg,#eff6ff,#f8fafc)",
+  border: "1px solid #bfdbfe",
+  boxShadow: "0 12px 28px rgba(37, 99, 235, 0.08)",
+};
+
+const scheduleSummaryHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: 12,
+};
+
+const scheduleSummaryEyebrow = {
+  display: "block",
+  color: "#2563eb",
+  fontSize: 11,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.07em",
+  marginBottom: 4,
+};
+
+const scheduleSummaryTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: 18,
+  lineHeight: 1.2,
+  fontWeight: 950,
+};
+
+const scheduleSummaryStatus = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 999,
+  padding: "7px 10px",
+  background: "#fff7ed",
+  color: "#c2410c",
+  border: "1px solid #fed7aa",
+  fontSize: 12,
+  fontWeight: 950,
+};
+
+const scheduleSummaryStatusConfirmed = {
+  background: "#ecfdf5",
+  color: "#047857",
+  border: "1px solid #bbf7d0",
+};
+
+const scheduleSummaryStatusAttention = {
+  background: "#fef3c7",
+  color: "#92400e",
+  border: "1px solid #fde68a",
+};
+
+const scheduleSummaryGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 10,
+};
+
+const scheduleSummaryItem = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  padding: 12,
+  borderRadius: 16,
+  background: "rgba(255,255,255,0.82)",
+  border: "1px solid rgba(191, 219, 254, 0.72)",
+  color: "#0f172a",
+  fontSize: 13,
+  fontWeight: 900,
+};
+
+const scheduleSummaryNotes = {
+  margin: "12px 0 0",
+  padding: 12,
+  borderRadius: 16,
+  background: "#ffffff",
+  border: "1px solid #dbeafe",
+  color: "#475569",
+  fontSize: 13,
+  lineHeight: 1.45,
+  fontWeight: 700,
+};
+
+const scheduleSummaryActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: 10,
+  marginTop: 12,
+};
+
+const scheduleConfirmButton = {
+  border: "none",
+  borderRadius: 16,
+  padding: "12px 14px",
+  background: "#16a34a",
+  color: "#ffffff",
+  fontSize: 14,
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const scheduleDifferentTimeButton = {
+  border: "1px solid #fed7aa",
+  borderRadius: 16,
+  padding: "12px 14px",
+  background: "#fff7ed",
+  color: "#c2410c",
+  fontSize: 14,
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const scheduleConversationButton = {
+  border: "1px solid #bfdbfe",
+  borderRadius: 16,
+  padding: "12px 14px",
+  background: "#ffffff",
+  color: "#2563eb",
+  fontSize: 14,
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
 const imageModal = {
   position: "fixed",
   inset: 0,
@@ -1823,7 +3242,7 @@ const imagePreviewShell = {
 
 const largePreviewImage = {
   width: "100%",
-  maxWidth: "calc(100vw - 32px)",
+  maxWidth: "calc(100% - 32px)",
   maxHeight: "84vh",
   objectFit: "contain",
   borderRadius: "24px",
@@ -2042,37 +3461,105 @@ const quotePrice = {
   letterSpacing: "-0.03em",
 };
 
-const quoteDetailsGrid = {
+const quoteReviewSummary = {
   display: "grid",
-  gridTemplateColumns: "repeat(3,1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
   gap: "10px",
   marginBottom: "14px",
 };
 
-const quoteMiniCard = {
+const quoteSummaryItem = {
   background: "#f8fafc",
   borderRadius: "16px",
   padding: "12px",
   display: "flex",
   flexDirection: "column",
   gap: "4px",
-  textAlign: "center",
   color: "#111827",
 };
 
-const quoteNotes = {
+const quoteScopeCard = {
   background: "#faf9ff",
+  border: "1px solid #ede9fe",
   borderRadius: "16px",
   padding: "14px",
-  color: "#4b5563",
-  lineHeight: 1.6,
+  marginBottom: "14px",
+  display: "grid",
+  gap: "12px",
+};
+
+const quoteScopeEyebrow = {
+  color: "#5b3df5",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const quoteScopeBlock = {
+  color: "#111827",
+  display: "grid",
+  gap: "5px",
+  lineHeight: 1.5,
+  whiteSpace: "pre-line",
+};
+
+const quotePhotoSection = {
   marginBottom: "14px",
 };
 
-const quoteActionRow = {
+const quotePhotoRow = {
+  display: "flex",
+  gap: "12px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  scrollSnapType: "x mandatory",
+  padding: "2px 2px 8px",
+};
+
+const quotePhotoButton = {
+  position: "relative",
+  width: "132px",
+  height: "112px",
+  flex: "0 0 auto",
+  scrollSnapAlign: "start",
+  border: "none",
+  borderRadius: "16px",
+  overflow: "hidden",
+  padding: 0,
+  background: "#111827",
+  cursor: "pointer",
+};
+
+const quoteDecisionPanel = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
   gap: "10px",
+};
+
+const quoteMessageButton = {
+  border: "1px solid #d8d4fe",
+  background: "#ffffff",
+  color: "#4f28e8",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const quoteSecondaryActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+  gap: "9px",
+};
+
+const quoteSecondaryButton = {
+  border: "1px solid #d8d4fe",
+  background: "#ffffff",
+  color: "#4f28e8",
+  borderRadius: "14px",
+  padding: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const acceptQuoteButton = {
@@ -2321,6 +3808,32 @@ const nextStepsList = {
   gap: "8px",
 };
 
+
+const input = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  borderRadius: 14,
+  padding: "12px 14px",
+  fontSize: 14,
+  color: "#111827",
+  background: "#ffffff",
+  outline: "none",
+};
+
+const textarea = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  borderRadius: 14,
+  padding: "12px 14px",
+  fontSize: 14,
+  color: "#111827",
+  background: "#ffffff",
+  outline: "none",
+  resize: "vertical",
+};
+
 const completedStepItem = {
   background: "#ecfdf5",
   border: "1px solid #86efac",
@@ -2397,8 +3910,10 @@ const editTextarea = {
 
 const actionRow = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
   gap: "10px",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const acceptedStatusPill = {

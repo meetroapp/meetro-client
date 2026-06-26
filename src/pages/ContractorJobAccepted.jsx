@@ -1,4 +1,5 @@
 import BottomNav from "../components/BottomNav";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 
 function ContractorJobAccepted({ setPage, language = "en" }) {
   
@@ -40,7 +41,7 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
         <p style={subtitle}>{t.subtitle}</p>
 
         <div style={jobCard}>
-          <div style={badge}>🚨</div>
+          <div style={badge}></div>
 
           <div>
             <strong style={jobTitle}>{t.job}</strong>
@@ -57,7 +58,13 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
 
         <button
           style={primaryButton}
-          onClick={() => setPage("emergencyDispatch")}
+          onClick={() => {
+            if (
+              !openActiveEmergencyConversation(setPage, "contractorDashboard")
+            ) {
+              setPage("emergencyDispatch");
+            }
+          }}
         >
           {t.dispatch}
         </button>
@@ -82,7 +89,8 @@ const page = {
   minHeight: "100vh",
   background:
     "linear-gradient(160deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
-  padding: "24px 24px 190px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 

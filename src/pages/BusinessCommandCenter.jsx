@@ -1,126 +1,517 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
-import { t } from "../utils/language";
+import MeetroIcon from "../components/MeetroIcon";
+import { getLanguage, t } from "../utils/language";
+import {
+  BUSINESS_TOOL_STATUS,
+  getBusinessToolById,
+  getBusinessToolStatusLabel,
+  getBusinessToolStatusTone,
+} from "../utils/businessToolsRegistry";
+
+const BUSINESS_TOOLS_EXPANDED_KEY = "meetro.businessTools.expandedSections";
+
+function readBusinessToolsExpandedSections() {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(BUSINESS_TOOLS_EXPANDED_KEY) || "{}"
+    );
+
+    return {
+      businessRecords: Boolean(parsed.businessRecords),
+      growth: Boolean(parsed.growth),
+      administration: Boolean(parsed.administration),
+    };
+  } catch {
+    return {
+      businessRecords: false,
+      growth: false,
+      administration: false,
+    };
+  }
+}
 
 function BusinessCommandCenter({ setPage }) {
+  const language = getLanguage();
+  const isSpanish = language === "es";
   const [activeTool, setActiveTool] = useState(
-    localStorage.getItem("meetroCommandTool") || "quotes"
+    localStorage.getItem("meetroCommandTool") || "businessProfile"
+  );
+  const [toolNotice, setToolNotice] = useState("");
+  const [futureTool, setFutureTool] = useState(null);
+  const [expandedSections, setExpandedSections] = useState(() =>
+    readBusinessToolsExpandedSections()
   );
 
-  const tools = [
-    {
-      id: "quotes",
-      icon: "🧾",
-      title: t("quotes"),
-      desc: t("quotesDesc"),
-      badge: t("quotesBadge"),
-    },
-    {
-      id: "jobs",
-      icon: "📂",
-      title: t("projects"),
-      desc: t("projectsDesc"),
-      badge: t("projectsBadge"),
-    },
-    {
-      id: "permits",
-      icon: "🏛️",
-      title: t("permits"),
-      desc: t("permitsDesc"),
-      badge: t("permitsBadge"),
-    },
-    {
-      id: "plans",
-      icon: "📐",
-      title: t("designFiles"),
-      desc: t("designDesc"),
-      badge: t("designBadge"),
-    },
-    {
-      id: "reminders",
-      icon: "⏰",
-      title: t("followUps"),
-      desc: t("remindersDesc"),
-      badge: t("remindersBadge"),
-    },
-    {
-      id: "customers",
-      icon: "👥",
-      title: t("clients"),
-      desc: t("clientsDesc"),
-      badge: t("clientsBadge"),
-    },
-  ];
+  const statusLabel = (toolId, fallbackStatus = BUSINESS_TOOL_STATUS.READY) =>
+    getBusinessToolStatusLabel(
+      getBusinessToolById(toolId)?.status || fallbackStatus,
+      language
+    );
 
-  const active = tools.find((tool) => tool.id === activeTool);
-
-  const workspaceContent = {
-    quotes: {
-      title: t("quoteWorkspaceTitle"),
-      text: t("quoteWorkspaceText"),
-      steps: [
-        t("stepSelectProject"),
-        t("stepAnswerQuestions"),
-        t("stepGenerateQuote"),
-        t("stepSaveToFolder"),
-      ],
+  const toolsById = {
+    businessProfile: {
+      id: "businessProfile",
+      icon: "businessProfile",
+      title: t("businessProfile"),
+      desc: isSpanish
+        ? "Administra nombre, logo, descripcion, categoria y como te ven los clientes."
+        : "Manage your name, logo, description, category, and how customers see you.",
+      badge: statusLabel("businessProfile"),
     },
-    jobs: {
-      title: t("jobsWorkspaceTitle"),
-      text: t("jobsWorkspaceText"),
-      steps: [
-        t("stepPendingQuote"),
-        t("stepApproved"),
-        t("stepInProgress"),
-        t("stepBalanceDue"),
-      ],
+    portfolio: {
+      id: "portfolio",
+      icon: "portfolio",
+      title: isSpanish ? "Portafolio" : "Portfolio",
+      desc: isSpanish
+        ? "Revisa fotos, trabajos mostrados y la carpeta publica de tu negocio."
+        : "Review photos, showcased work, and your public business portfolio.",
+      badge: statusLabel("portfolio"),
     },
-    permits: {
-      title: t("permitsWorkspaceTitle"),
-      text: t("permitsWorkspaceText"),
-      steps: [
-        t("stepProjectType"),
-        t("stepPermitNotes"),
-        t("stepInspectionReminder"),
-        t("stepStatus"),
-      ],
+    availability: {
+      id: "availability",
+      icon: "availability",
+      title: isSpanish ? "Disponibilidad" : "Availability",
+      desc: isSpanish
+        ? "Actualiza disponibilidad, zonas de servicio y preparacion para emergencias."
+        : "Update availability, service areas, and emergency readiness.",
+      badge: statusLabel("availability"),
     },
-    plans: {
-      title: t("plansWorkspaceTitle"),
-      text: t("plansWorkspaceText"),
-      steps: [
-        t("stepUploadPhotos"),
-        t("stepDesignNotes"),
-        t("stepMaterialList"),
-        t("stepSave"),
-      ],
+    quickQuote: {
+      id: "quickQuote",
+      icon: "quickQuote",
+      title: isSpanish ? "Crear cotizacion rapida" : "Quick Quote Builder",
+      desc: isSpanish
+        ? "Crea una cotizacion o propuesta desde Herramientas del negocio."
+        : "Create a quote or proposal from Business Tools.",
+      badge: statusLabel("quickQuote"),
+      featured: true,
     },
-    reminders: {
-      title: t("remindersWorkspaceTitle"),
-      text: t("remindersWorkspaceText"),
-      steps: [
-        t("stepCustomer"),
-        t("stepProject"),
-        t("stepDueDate"),
-        t("stepReminder"),
-      ],
+    quickInvoice: {
+      id: "quickInvoice",
+      icon: "quickInvoice",
+      title: isSpanish ? "Crear factura rapida" : "Quick Invoice Builder",
+      desc: isSpanish
+        ? "Crea una factura o recibo sin abrir un trabajo activo."
+        : "Create an invoice or receipt without opening an active job.",
+      badge: statusLabel("quickInvoice"),
+      featured: true,
     },
     customers: {
-      title: t("customersWorkspaceTitle"),
-      text: t("customersWorkspaceText"),
-      steps: [
-        t("stepCustomer"),
-        t("stepProjects"),
-        t("stepQuotes"),
-        t("stepInvoices"),
-      ],
+      id: "customers",
+      icon: "customerRelationships",
+      title: isSpanish ? "Relaciones con clientes" : "Customer Relationships",
+      desc: isSpanish
+        ? "Consulta personas, comunicacion e historial de relacion."
+        : "View people, communication, and relationship history.",
+      badge: statusLabel("customers"),
+    },
+    serviceEvaluations: {
+      id: "serviceEvaluations",
+      icon: "serviceTypes",
+      title: isSpanish ? "Tipos de servicio y evaluaciones" : "Service Types & Evaluations",
+      desc: isSpanish
+        ? "Consulta servicios, contextos y requisitos de documentacion de evaluacion."
+        : "View services, contexts, and evaluation documentation requirements.",
+      badge: statusLabel("serviceEvaluations"),
+    },
+    materialsLibrary: {
+      id: "materialsLibrary",
+      icon: "materialsLibrary",
+      title: isSpanish ? "Biblioteca de materiales" : "Materials Library",
+      desc: isSpanish
+        ? "Consulta materiales comunes por tipo de servicio."
+        : "View common materials by service type.",
+      badge: statusLabel("materialsLibrary"),
+    },
+    pricingLibrary: {
+      id: "pricingLibrary",
+      icon: "priceBook",
+      title: isSpanish ? "Libro de precios / Biblioteca de precios" : "Price Book / Pricing Library",
+      desc: isSpanish
+        ? "Consulta guias de precios, mano de obra y supuestos de estimacion."
+        : "View pricing guidance, labor assumptions, and estimate notes.",
+      badge: statusLabel("pricingLibrary"),
+    },
+    contractTemplates: {
+      id: "contractTemplates",
+      icon: "contractTemplates",
+      title: isSpanish ? "Plantillas de contrato" : "Contract Templates",
+      desc: isSpanish
+        ? "Consulta tipos de acuerdos y secciones incluidas."
+        : "View agreement types and included sections.",
+      badge: statusLabel("contractTemplates"),
+    },
+    assetCenter: {
+      id: "assetCenter",
+      icon: "assetCenter",
+      title: "Asset Center",
+      desc: isSpanish
+        ? "Consulta continuidad, historial y documentos de activos."
+        : "View asset continuity, history, and documents.",
+      badge: statusLabel("assetCenter"),
+    },
+    hiringCenter: {
+      id: "hiringCenter",
+      icon: "hiringCenter",
+      title: isSpanish ? "Centro de contratación" : "Hiring Center",
+      desc: isSpanish ? "Crea y administra tu equipo." : "Build and manage your team.",
+      badge: statusLabel("hiringCenter", BUSINESS_TOOL_STATUS.PREVIEW),
+    },
+    reportsCenter: {
+      id: "reportsCenter",
+      icon: "reportsCenter",
+      title: isSpanish ? "Centro de reportes" : "Reports Center",
+      desc: isSpanish
+        ? "Consulta tipos de reportes disponibles y futuros."
+        : "View available and future report types.",
+      badge: statusLabel("reportsCenter"),
+    },
+    businessIntelligence: {
+      id: "businessIntelligence",
+      icon: "businessIntelligence",
+      title: isSpanish ? "Inteligencia del negocio" : "Business Intelligence",
+      desc: isSpanish
+        ? "Consulta categorias futuras de insights del negocio."
+        : "View future business insight categories.",
+      badge: statusLabel("businessIntelligence"),
+    },
+    reviews: {
+      id: "reviews",
+      icon: "reviews",
+      title: isSpanish ? "Resenas" : "Reviews",
+      desc: isSpanish
+        ? "Revisa senales de reputacion y preparate para futuras herramientas de resenas."
+        : "Review reputation signals and prepare for future review tools.",
+      badge: statusLabel("reviews", BUSINESS_TOOL_STATUS.COMING_SOON),
+    },
+    subscription: {
+      id: "subscription",
+      icon: "subscription",
+      title: isSpanish ? "Plan y suscripcion" : "Plan & Subscription",
+      desc: isSpanish
+        ? "Revisa opciones futuras de Meetro Pro y soporte del negocio."
+        : "Review future Meetro Pro options and business support.",
+      badge: statusLabel("subscription", BUSINESS_TOOL_STATUS.COMING_SOON),
+    },
+    complianceCenter: {
+      id: "complianceCenter",
+      icon: "complianceCenter",
+      title: isSpanish ? "Centro de cumplimiento" : "Compliance Center",
+      desc: isSpanish
+        ? "Consulta obligaciones, evidencia y requisitos de cierre."
+        : "View obligations, evidence, and closure requirements.",
+      badge: statusLabel("complianceCenter"),
+    },
+    permitCenter: {
+      id: "permitCenter",
+      icon: "permitCenter",
+      title: isSpanish ? "Centro de permisos" : "Permit Center",
+      desc: isSpanish
+        ? "Consulta permisos, inspecciones y dependencias de cierre."
+        : "View permits, inspections, and closure dependencies.",
+      badge: statusLabel("permitCenter"),
+    },
+    legal: {
+      id: "legal",
+      icon: "legal",
+      title: t("legal"),
+      desc: t("legalPurpose"),
+      badge: statusLabel("legal"),
+    },
+    aiHelp: {
+      id: "aiHelp",
+      icon: "aiHelp",
+      title: isSpanish ? "Ayuda IA del negocio" : "AI Business Help",
+      desc: isSpanish
+        ? "Configura preferencias del asistente y revisa soporte IA seguro."
+        : "Manage assistant preferences and review safe AI support.",
+      badge: statusLabel("aiHelp"),
+    },
+    knowledgeBase: {
+      id: "knowledgeBase",
+      icon: "knowledgeBase",
+      title: isSpanish ? "Base de conocimiento" : "Knowledge Base",
+      desc: isSpanish
+        ? "Lugar futuro para guias, ayuda y explicaciones del negocio."
+        : "Future home for business guides, help, and explanations.",
+      badge: statusLabel("knowledgeBase", BUSINESS_TOOL_STATUS.COMING_SOON),
+    },
+    findingsLibrary: {
+      id: "findingsLibrary",
+      icon: "findingsLibrary",
+      title: isSpanish ? "Biblioteca de hallazgos" : "Findings Library",
+      desc: isSpanish
+        ? "Lugar futuro para condiciones, riesgos y servicios recomendados."
+        : "Future home for conditions, risks, and recommended services.",
+      badge: statusLabel("findingsLibrary", BUSINESS_TOOL_STATUS.COMING_SOON),
+    },
+    professionalSetup: {
+      id: "professionalSetup",
+      icon: "professionalSetup",
+      title: t("professionalSetup"),
+      desc: isSpanish
+        ? "Revisa o actualiza la configuración inicial de tu negocio."
+        : "Review or update your initial business setup.",
+      badge: statusLabel("professionalSetup"),
+    },
+    settings: {
+      id: "settings",
+      icon: "settings",
+      title: isSpanish ? "Configuracion" : "Settings",
+      desc: isSpanish
+        ? "Administra idioma, cuenta, modo profesional y preferencias."
+        : "Manage language, account, professional mode, and preferences.",
+      badge: statusLabel("settings"),
     },
   };
 
-  const current = workspaceContent[activeTool];
+  const createToolGroup = ({ id, title, desc, toolIds, collapsible = false }) => ({
+    id,
+    title,
+    desc,
+    collapsible,
+    tools: toolIds.map((toolId) => toolsById[toolId]).filter(Boolean),
+  });
+
+  const toolGroups = [
+    createToolGroup({
+      id: "dailyTools",
+      title: t("businessToolsDailyTools"),
+      desc: t("businessToolsDailyToolsSubtitle"),
+      toolIds: [
+        "businessProfile",
+        "portfolio",
+        "availability",
+        "quickQuote",
+        "quickInvoice",
+        "customers",
+      ],
+    }),
+    createToolGroup({
+      id: "businessRecords",
+      title: t("businessToolsBusinessRecords"),
+      desc: t("businessToolsBusinessRecordsSubtitle"),
+      collapsible: true,
+      toolIds: [
+        "serviceEvaluations",
+        "materialsLibrary",
+        "pricingLibrary",
+        "contractTemplates",
+        "assetCenter",
+      ],
+    }),
+    createToolGroup({
+      id: "growth",
+      title: t("businessToolsGrowth"),
+      desc: t("businessToolsGrowthSubtitle"),
+      collapsible: true,
+      toolIds: [
+        "hiringCenter",
+        "reportsCenter",
+        "businessIntelligence",
+        "reviews",
+        "subscription",
+      ],
+    }),
+    createToolGroup({
+      id: "administration",
+      title: t("businessToolsAdministration"),
+      desc: t("businessToolsAdministrationSubtitle"),
+      collapsible: true,
+      toolIds: [
+        "complianceCenter",
+        "permitCenter",
+        "legal",
+        "aiHelp",
+        "knowledgeBase",
+        "findingsLibrary",
+        "professionalSetup",
+        "settings",
+      ],
+    }),
+  ];
+
+  const selectTool = (toolId) => {
+    localStorage.setItem("meetroCommandTool", toolId);
+    setActiveTool(toolId);
+    setToolNotice("");
+  };
+
+  const toggleSection = (sectionId) => {
+    setExpandedSections((current) => {
+      const next = {
+        ...current,
+        [sectionId]: !current[sectionId],
+      };
+
+      localStorage.setItem(BUSINESS_TOOLS_EXPANDED_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const openFutureTool = (toolId) => {
+    const tool = getBusinessToolById(toolId);
+    setFutureTool({
+      id: toolId,
+      title: tool?.title || toolId,
+      status: tool?.status || BUSINESS_TOOL_STATUS.COMING_SOON,
+      description:
+        {
+          findingsLibrary: isSpanish
+            ? "Administrara condiciones, riesgos, hallazgos y servicios recomendados cuando la administracion del motor de evaluacion este lista."
+            : "Will manage conditions, risks, findings, and recommended services when Evaluation Engine administration is ready.",
+          knowledgeBase: isSpanish
+            ? "Reunira guias de negocio, explicaciones de herramientas y ayuda contextual para profesionales."
+            : "Will collect business guides, tool explanations, and contextual help for professionals.",
+          reviews: isSpanish
+            ? "Mostrara resenas, senales de reputacion y herramientas futuras para responder o analizar comentarios."
+            : "Will show reviews, reputation signals, and future tools for responding to or analyzing feedback.",
+          subscription: isSpanish
+            ? "Mostrara opciones futuras de plan, funciones Pro y soporte del negocio cuando esten listas."
+            : "Will show future plan options, Pro features, and business support when ready.",
+        }[toolId] ||
+        (isSpanish
+          ? "Esta herramienta esta planificada para una version futura."
+          : "This tool is planned for a future version."),
+    });
+    setToolNotice("");
+  };
+
+  const openTool = (toolId) => {
+    selectTool(toolId);
+    setFutureTool(null);
+
+    if (toolId === "businessProfile") {
+      localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
+      setPage("contractorProfile");
+      return;
+    }
+
+    if (toolId === "availability") {
+      setPage("businessAvailability");
+      return;
+    }
+
+    if (toolId === "professionalSetup") {
+      localStorage.setItem("meetroProfessionalOnboardingReturnPage", "businessCommandCenter");
+      setPage("professionalOnboarding");
+      return;
+    }
+
+    if (toolId === "portfolio") {
+      localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
+      setPage("projectGallery");
+      return;
+    }
+
+    if (toolId === "hiringCenter") {
+      setPage("hiringCenter");
+      return;
+    }
+
+    if (toolId === "assetCenter") {
+      setPage("assetCenter");
+      return;
+    }
+
+    if (toolId === "customers") {
+      setPage("customerRelationshipsCenter");
+      return;
+    }
+
+    if (toolId === "serviceEvaluations") {
+      setPage("serviceTypesEvaluations");
+      return;
+    }
+
+    if (toolId === "materialsLibrary") {
+      setPage("materialsLibrary");
+      return;
+    }
+
+    if (toolId === "pricingLibrary") {
+      setPage("pricingLibrary");
+      return;
+    }
+
+    if (toolId === "quickQuote") {
+      localStorage.removeItem("selectedQuoteRequest");
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.setItem("quoteBuilderSource", "business_tools_quick_quote");
+      localStorage.setItem("quoteBuilderReturnPage", "businessCommandCenter");
+      setPage("quoteBuilder");
+      return;
+    }
+
+    if (toolId === "quickInvoice") {
+      localStorage.setItem("invoiceBuilderSource", "business_tools_quick_invoice");
+      localStorage.setItem("invoiceBuilderReturnPage", "businessCommandCenter");
+      setPage("invoiceBuilder");
+      return;
+    }
+
+    if (toolId === "contractTemplates") {
+      setPage("contractTemplates");
+      return;
+    }
+
+    if (toolId === "reportsCenter") {
+      setPage("reportsCenter");
+      return;
+    }
+
+    if (toolId === "permitCenter") {
+      setPage("permitCenter");
+      return;
+    }
+
+    if (toolId === "complianceCenter") {
+      setPage("complianceCenter");
+      return;
+    }
+
+    if (toolId === "businessIntelligence") {
+      setPage("businessIntelligence");
+      return;
+    }
+
+    if (toolId === "settings") {
+      localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
+      localStorage.setItem("activeAccountMode", "business");
+      localStorage.setItem("meetroPreferredAccountMode", "business");
+      setPage("profile");
+      return;
+    }
+
+    if (toolId === "legal") {
+      localStorage.setItem("meetroLegalReturnPage", "businessCommandCenter");
+      localStorage.setItem("meetroSelectedLegalDocument", "terms");
+      setPage("legal");
+      return;
+    }
+
+    if (toolId === "aiHelp") {
+      localStorage.setItem("meetroProfileOpenSection", "ai");
+      localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
+      localStorage.setItem("activeAccountMode", "business");
+      localStorage.setItem("meetroPreferredAccountMode", "business");
+      setPage("profile");
+      return;
+    }
+
+    if (
+      ["reviews", "subscription", "findingsLibrary", "knowledgeBase"].includes(
+        toolId
+      )
+    ) {
+      openFutureTool(toolId);
+      return;
+    }
+  };
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-responsive-page" style={page}>
       <div style={header}>
         <button style={backBtn} onClick={() => setPage("businessDashboard")}>
           ←
@@ -132,99 +523,196 @@ function BusinessCommandCenter({ setPage }) {
         </div>
       </div>
 
-      <div style={trialCard}>
-        <div style={trialBadge}>{t("ccMeetroPro")}</div>
-        <h2 style={trialTitle}>{t("ccSevenDayTrial")}</h2>
-        <p style={trialText}>{t("ccTrialText")}</p>
-        <button style={trialBtn}>{t("ccStartTrial")}</button>
+      <div style={sectionStack}>
+        {toolGroups.map((group) => {
+          const isExpanded =
+            !group.collapsible || Boolean(expandedSections[group.id]);
+
+          return (
+            <section key={group.id} style={toolGroupSection}>
+              {group.collapsible ? (
+                <button
+                  type="button"
+                  style={accordionHeaderButton}
+                  onClick={() => toggleSection(group.id)}
+                  aria-expanded={isExpanded}
+                >
+                  <span style={accordionHeaderCopy}>
+                    <span style={groupTitle}>{group.title}</span>
+                    <span style={groupDesc}>{group.desc}</span>
+                  </span>
+                  <span style={accordionMeta}>
+                    <span style={accordionCount}>
+                      {group.tools.length}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        ...accordionChevron,
+                        transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                      }}
+                    >
+                      ›
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <div style={groupHeader}>
+                  <h2 style={groupTitle}>{group.title}</h2>
+                  <p style={groupDesc}>{group.desc}</p>
+                </div>
+              )}
+
+              {isExpanded && (
+                <div className="meetro-responsive-grid meetro-grid-3" style={toolsGrid}>
+                  {group.tools.map((tool) => (
+                    <button
+                      type="button"
+                      key={tool.id}
+                      className={activeTool === tool.id ? "meetro-selected-card" : ""}
+                      style={{
+                        ...toolCard,
+                        ...(tool.featured ? featuredToolCard : {}),
+                        ...(tool.id === "aiHelp" ? aiToolCard : {}),
+                        ...(activeTool === tool.id ? activeToolCard : {}),
+                      }}
+                      onClick={() => openTool(tool.id)}
+                    >
+                      <div style={toolTop}>
+                        <span style={toolIcon}>
+                          <MeetroIcon name={tool.icon} size={22} decorative />
+                        </span>
+                        <span style={toolMeta}>
+                          <span
+                            style={{
+                              ...toolBadge,
+                              ...toolBadgeTone(
+                                getBusinessToolStatusTone(
+                                  getBusinessToolById(tool.id)?.status
+                                )
+                              ),
+                            }}
+                          >
+                            {tool.badge}
+                          </span>
+                          <span aria-hidden="true" style={toolChevron}>
+                            &gt;
+                          </span>
+                        </span>
+                      </div>
+
+                      <h3 style={toolTitle}>{tool.title}</h3>
+                      <p style={toolDesc}>{tool.desc}</p>
+                      {activeTool === tool.id && (
+                        <span className="meetro-selected-badge">
+                          {isSpanish ? "Seleccionado" : "Selected"}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
 
-      <div style={flowCard}>
-        <strong style={flowTitle}>{t("correctWorkflow")}</strong>
-        <p style={flowText}>{t("correctWorkflowText")}</p>
-      </div>
-
-      <div style={toolsGrid}>
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            style={{
-              ...toolCard,
-              ...(activeTool === tool.id ? activeToolCard : {}),
-            }}
-            onClick={() => {
-              localStorage.setItem("meetroCommandTool", tool.id);
-
-              setActiveTool(tool.id);
-            }}
-          >
-            <div style={toolTop}>
-              <span style={toolIcon}>{tool.icon}</span>
-              <span style={toolBadge}>{tool.badge}</span>
-            </div>
-
-            <h3 style={toolTitle}>{tool.title}</h3>
-            <p style={toolDesc}>{tool.desc}</p>
-          </button>
-        ))}
-      </div>
-
-      <div style={workspace}>
-        <div style={workspaceTop}>
-          <div>
-            <div style={workspaceLabel}>
-              {t("projectFolderModule").toUpperCase()}
-            </div>
-            <h2 style={workspaceTitle}>
-              {active?.icon} {active?.title}
-            </h2>
-          </div>
-
-          <span style={workspacePill}>{t("connected")}</span>
+      {toolNotice && (
+        <div style={noticeCard}>
+          <strong>{t("businessCommandCenter")}</strong>
+          <p>{toolNotice}</p>
         </div>
+      )}
 
-        <p style={workspaceText}>{active?.desc}</p>
-
-        <div style={previewBox}>
-          <strong>{current.title}</strong>
-          <p>{current.text}</p>
-
-          <div style={stepGrid}>
-            {current.steps.map((step, index) => (
-              <div key={step} style={stepCard}>
-                <span style={stepNumber}>{index + 1}</span>
-                <span>{step}</span>
+      {futureTool && (
+        <div style={sheetOverlay} onClick={() => setFutureTool(null)}>
+          <div style={futureSheet} onClick={(event) => event.stopPropagation()}>
+            <div style={sheetHandle}></div>
+            <div style={sheetHeader}>
+              <div>
+                <p style={sheetEyebrow}>
+                  {getBusinessToolStatusLabel(futureTool.status, language)}
+                </p>
+                <h2 style={sheetTitle}>{futureTool.title}</h2>
               </div>
-            ))}
+              <button
+                type="button"
+                style={sheetClose}
+                onClick={() => setFutureTool(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <p style={sheetBody}>{futureTool.description}</p>
+            <div style={futureDetailCard}>
+              <strong>
+                {isSpanish ? "Estado actual" : "Current status"}
+              </strong>
+              <span>
+                {isSpanish
+                  ? "Esta tarjeta no modifica datos ni inicia flujos de trabajo. Esta herramienta esta planificada para una version futura."
+                  : "This card does not modify data or start job workflows. This tool is planned for a future version."}
+              </span>
+            </div>
+            <button
+              type="button"
+              style={sheetPrimaryButton}
+              onClick={() => setFutureTool(null)}
+            >
+              {isSpanish ? "Entendido" : "Got it"}
+            </button>
           </div>
         </div>
-
-        <button
-          style={openBtn}
-          onClick={() =>
-            window.dispatchEvent(
-              new CustomEvent("meetroPremiumNotice", {
-                detail: {
-                  title: `${active?.title} ${t("ccComingSoonTitle")}`,
-                  message: t("ccComingSoonMessage"),
-                  type: "comingSoon",
-                },
-              })
-            )
-          }
-        >
-          {t("ccToolComingSoon")}
-        </button>
-      </div>
+      )}
 
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
     </div>
   );
 }
 
+function toolBadgeTone(tone) {
+  if (tone === "ready") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      border: "1px solid rgba(22,101,52,0.14)",
+    };
+  }
+  if (tone === "readonly") {
+    return {
+      background: "#eef2ff",
+      color: "#3730a3",
+      border: "1px solid rgba(55,48,163,0.14)",
+    };
+  }
+  if (tone === "preview") {
+    return {
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid rgba(154,52,18,0.14)",
+    };
+  }
+
+  return {
+    background: "#f1f5f9",
+    color: "#475569",
+    border: "1px solid rgba(71,85,105,0.14)",
+  };
+}
+
 const page = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   minHeight: "100vh",
-  padding: "22px 18px 95px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 50px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 88px) max(16px, env(safe-area-inset-left, 0px))",
+  overflowX: "hidden",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
+  boxSizing: "border-box",
   background:
     "radial-gradient(circle at top, rgba(91,61,245,0.20), transparent 34%), #f8fafc",
   fontFamily:
@@ -232,10 +720,14 @@ const page = {
 };
 
 const header = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   display: "flex",
   gap: "14px",
   alignItems: "flex-start",
   marginBottom: "18px",
+  boxSizing: "border-box",
 };
 
 const backBtn = {
@@ -251,7 +743,7 @@ const backBtn = {
 
 const title = {
   margin: 0,
-  fontSize: "27px",
+  fontSize: "23px",
   fontWeight: "950",
   color: "#0f172a",
   letterSpacing: "-0.8px",
@@ -262,233 +754,333 @@ const subtitle = {
   fontSize: "14px",
   lineHeight: 1.45,
   color: "#475569",
+  overflowWrap: "anywhere",
 };
 
-const trialCard = {
-  padding: "18px",
-  borderRadius: "26px",
-  background:
-    "linear-gradient(135deg, rgba(91,61,245,0.96), rgba(124,58,237,0.90))",
-  color: "white",
-  boxShadow: "0 22px 50px rgba(91,61,245,0.28)",
-  marginBottom: "14px",
-};
-
-const trialBadge = {
-  display: "inline-block",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  background: "rgba(255,255,255,0.18)",
-  fontSize: "11px",
-  fontWeight: "900",
-  letterSpacing: "0.8px",
-};
-
-const trialTitle = {
-  margin: "12px 0 6px",
-  fontSize: "24px",
-  fontWeight: "950",
-};
-
-const trialText = {
-  margin: 0,
-  fontSize: "14px",
-  lineHeight: 1.5,
-  opacity: 0.92,
-};
-
-const trialBtn = {
-  marginTop: "16px",
+const noticeCard = {
   width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  marginTop: "12px",
   padding: "13px",
   borderRadius: "18px",
-  border: "0",
-  background: "white",
-  color: "#5b3df5",
+  background: "#f8fafc",
+  border: "1px solid #cbd5e1",
+  color: "#334155",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const sectionStack = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gap: "14px",
+  boxSizing: "border-box",
+};
+
+const toolGroupSection = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gap: "10px",
+  boxSizing: "border-box",
+};
+
+const groupHeader = {
+  minWidth: 0,
+  display: "grid",
+  gap: "4px",
+};
+
+const groupTitle = {
+  margin: 0,
   fontSize: "15px",
   fontWeight: "950",
+  color: "#0f172a",
+};
+
+const groupDesc = {
+  margin: 0,
+  fontSize: "12px",
+  lineHeight: 1.4,
+  color: "#64748b",
+  fontWeight: "750",
+  overflowWrap: "anywhere",
+};
+
+const accordionHeaderButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  border: "1px solid rgba(226,232,240,0.92)",
+  borderRadius: "18px",
+  padding: "13px",
+  background: "rgba(255,255,255,0.94)",
+  color: "#0f172a",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  textAlign: "left",
+  fontFamily: "inherit",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
   cursor: "pointer",
 };
 
-const flowCard = {
-  padding: "14px",
-  borderRadius: "22px",
-  background: "rgba(255,255,255,0.92)",
-  border: "1px solid rgba(226,232,240,0.9)",
-  boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
-  marginBottom: "16px",
+const accordionHeaderCopy = {
+  minWidth: 0,
+  display: "grid",
+  gap: "4px",
 };
 
-const flowTitle = {
-  display: "block",
-  fontSize: "14px",
-  color: "#0f172a",
-  marginBottom: "5px",
+const accordionMeta = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  flexShrink: 0,
 };
 
-const flowText = {
-  margin: 0,
-  color: "#475569",
-  fontSize: "13px",
-  lineHeight: 1.45,
+const accordionCount = {
+  minWidth: "28px",
+  height: "28px",
+  padding: "0 8px",
+  borderRadius: "999px",
+  background: "#f3f0ff",
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: "950",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxSizing: "border-box",
+};
+
+const accordionChevron = {
+  color: "#5b3df5",
+  fontSize: "24px",
+  lineHeight: 1,
+  fontWeight: "950",
+  transition: "transform 160ms ease",
 };
 
 const toolsGrid = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
-  gap: "12px",
-  marginBottom: "18px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 148px), 1fr))",
+  gap: "10px",
 };
 
 const toolCard = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   textAlign: "left",
-  padding: "15px",
-  borderRadius: "22px",
+  padding: "12px",
+  borderRadius: "18px",
   border: "1px solid rgba(226,232,240,0.9)",
   background: "rgba(255,255,255,0.92)",
-  boxShadow: "0 14px 30px rgba(15,23,42,0.07)",
+  boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+  color: "#0f172a",
+  fontFamily: "inherit",
   cursor: "pointer",
 };
 
 const activeToolCard = {
   border: "1px solid rgba(91,61,245,0.55)",
-  boxShadow: "0 18px 38px rgba(91,61,245,0.18)",
+  boxShadow: "0 10px 24px rgba(91,61,245,0.12)",
   background:
     "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,243,255,0.95))",
 };
 
+const aiToolCard = {
+  border: "1px solid rgba(124,58,237,0.48)",
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,243,255,0.98))",
+  boxShadow: "0 10px 26px rgba(124,58,237,0.13)",
+};
+
+const featuredToolCard = {
+  border: "1px solid rgba(34,197,94,0.38)",
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,253,244,0.96))",
+  boxShadow: "0 10px 24px rgba(34,197,94,0.10)",
+};
+
 const toolTop = {
+  minWidth: 0,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: "8px",
 };
 
 const toolIcon = {
-  fontSize: "24px",
-};
-
-const toolBadge = {
-  padding: "5px 8px",
-  borderRadius: "999px",
-  background: "#f1f5f9",
-  color: "#475569",
-  fontSize: "10px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "9px",
+  border: "1px solid #cbd5e1",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#111827",
+  background: "#f8fafc",
+  fontSize: "16px",
   fontWeight: "900",
 };
 
+const toolMeta = {
+  minWidth: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  flexShrink: 1,
+};
+
+const toolBadge = {
+  maxWidth: "100%",
+  padding: "5px 8px",
+  borderRadius: "999px",
+  fontSize: "10px",
+  fontWeight: "900",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const toolChevron = {
+  color: "#64748b",
+  fontSize: "18px",
+  fontWeight: "800",
+  lineHeight: 1,
+};
+
 const toolTitle = {
-  margin: "12px 0 6px",
+  margin: "10px 0 5px",
   fontSize: "15px",
   fontWeight: "950",
   color: "#0f172a",
+  overflowWrap: "anywhere",
 };
 
 const toolDesc = {
   margin: 0,
-  fontSize: "12px",
+  fontSize: "11.5px",
   lineHeight: 1.4,
   color: "#475569",
+  overflowWrap: "anywhere",
 };
 
-const workspace = {
-  padding: "18px",
-  borderRadius: "28px",
-  background: "rgba(255,255,255,0.95)",
-  border: "1px solid rgba(226,232,240,0.9)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.08)",
+const sheetOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 14000,
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "center",
+  padding:
+    "16px max(14px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
+  background: "rgba(15,23,42,0.38)",
+  boxSizing: "border-box",
 };
 
-const workspaceTop = {
+const futureSheet = {
+  width: "100%",
+  maxWidth: "520px",
+  background: "#ffffff",
+  borderRadius: "28px 28px 22px 22px",
+  border: "1px solid rgba(226,232,240,0.95)",
+  boxShadow: "0 -18px 56px rgba(15,23,42,0.22)",
+  padding: "10px 16px 18px",
+  boxSizing: "border-box",
+};
+
+const sheetHandle = {
+  width: "44px",
+  height: "5px",
+  borderRadius: "999px",
+  background: "#cbd5e1",
+  margin: "0 auto 14px",
+};
+
+const sheetHeader = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "12px",
   alignItems: "flex-start",
+  gap: "12px",
+  marginBottom: "12px",
 };
 
-const workspaceLabel = {
-  fontSize: "11px",
-  fontWeight: "950",
-  color: "#7c3aed",
-  letterSpacing: "0.7px",
-};
-
-const workspaceTitle = {
-  margin: "6px 0 0",
-  fontSize: "22px",
-  fontWeight: "950",
-  color: "#0f172a",
-};
-
-const workspacePill = {
-  padding: "7px 10px",
-  borderRadius: "999px",
-  background: "rgba(91,61,245,0.10)",
+const sheetEyebrow = {
+  margin: "0 0 5px",
   color: "#5b3df5",
   fontSize: "11px",
   fontWeight: "950",
-  whiteSpace: "nowrap",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
 };
 
-const workspaceText = {
-  margin: "12px 0",
+const sheetTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "21px",
+  lineHeight: 1.15,
+};
+
+const sheetClose = {
+  width: "38px",
+  height: "38px",
+  border: "1px solid rgba(148,163,184,0.42)",
+  borderRadius: "50%",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: "24px",
+  fontWeight: "900",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const sheetBody = {
+  margin: "0 0 12px",
   color: "#475569",
   fontSize: "14px",
   lineHeight: 1.5,
+  fontWeight: "750",
 };
 
-const previewBox = {
-  padding: "14px",
-  borderRadius: "20px",
+const futureDetailCard = {
+  display: "grid",
+  gap: "5px",
+  padding: "12px",
+  borderRadius: "16px",
   background: "#f8fafc",
   border: "1px solid #e2e8f0",
-  color: "#334155",
-  fontSize: "14px",
-  lineHeight: 1.5,
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "750",
 };
 
-const stepGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-  gap: "10px",
-  marginTop: "12px",
-};
-
-const stepCard = {
-  display: "flex",
-  gap: "8px",
-  alignItems: "center",
-  padding: "10px",
-  borderRadius: "16px",
-  background: "white",
-  border: "1px solid #e2e8f0",
-  fontSize: "12px",
-  fontWeight: "800",
-};
-
-const stepNumber = {
-  width: "22px",
-  height: "22px",
-  borderRadius: "999px",
-  display: "grid",
-  placeItems: "center",
-  background: "rgba(91,61,245,0.10)",
-  color: "#5b3df5",
-  fontSize: "12px",
-  fontWeight: "950",
-};
-
-const openBtn = {
-  marginTop: "14px",
+const sheetPrimaryButton = {
   width: "100%",
-  padding: "13px",
-  borderRadius: "18px",
-  border: "0",
+  minHeight: "48px",
+  marginTop: "12px",
+  border: 0,
+  borderRadius: "16px",
   background: "#5b3df5",
-  color: "white",
+  color: "#ffffff",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.25)",
 };
 
 export default BusinessCommandCenter;

@@ -1,83 +1,48 @@
-import WorkflowRenderer from "../WorkflowRenderer";
+import { t } from "../../../utils/language";
+import UniversalDocumentCard from "../../documents/UniversalDocumentCard";
+
+function getRevisedQuoteStatus(msg, language) {
+  const status = msg.status || msg.quoteStatus || "quote_sent";
+
+  if (status === "approved" || status === "accepted") {
+    return t("documentStatusApproved", language);
+  }
+
+  if (status === "change_requested" || status === "revision_requested") {
+    return t("documentStatusRevisionRequested", language);
+  }
+
+  return t("documentStatusAwaitingApproval", language);
+}
 
 function RevisedQuoteWorkflowPresentation({
   msg,
   language,
   workflowRenderProps,
-  styles,
 }) {
-  const {
-    revisedQuoteBody,
-    revisedQuoteHeader,
-    revisedQuoteEyebrow,
-    revisedQuoteTitle,
-    revisedQuoteAmount,
-    revisedQuoteText,
-    revisedQuoteBreakdown,
-    revisedQuoteRow,
-    revisedQuoteNotes,
-    revisedQuoteActions,
-    approveRevisedQuoteButton,
-    requestRevisedQuoteChangeButton,
-    revisedQuoteApproved,
-    revisedQuotePending,
-  } = styles;
+  const title = msg.projectTitle || msg.title || t("project", language);
+  const amount = msg.amount || msg.total || msg.quoteAmount || "";
+  const record = {
+    ...msg,
+    title,
+    projectTitle: title,
+    total: amount,
+    status: getRevisedQuoteStatus(msg, language),
+  };
 
   return (
-    <div style={revisedQuoteBody}>
-      <div style={revisedQuoteHeader}>
-        <div>
-          <p style={revisedQuoteEyebrow}>
-            {language === "es" ? "Cotización revisada" : "Revised Quote"}
-          </p>
-
-          <h3 style={revisedQuoteTitle}>
-            {msg.projectTitle || (language === "es" ? "Proyecto" : "Project")}
-          </h3>
-        </div>
-
-        <div style={revisedQuoteAmount}>
-          ${Number(msg.amount || 0).toFixed(2)}
-        </div>
-      </div>
-
-      <p style={revisedQuoteText}>
-        {msg.text ||
-          (language === "es"
-            ? "El profesional envió una cotización actualizada."
-            : "The professional sent an updated quote.")}
-      </p>
-
-      <div style={revisedQuoteBreakdown}>
-        <div style={revisedQuoteRow}>
-          <span>{language === "es" ? "Mano de obra" : "Labor"}</span>
-          <strong>${Number(msg.labor || 0).toFixed(2)}</strong>
-        </div>
-
-        <div style={revisedQuoteRow}>
-          <span>{language === "es" ? "Materiales" : "Materials"}</span>
-          <strong>${Number(msg.materials || 0).toFixed(2)}</strong>
-        </div>
-
-        <div style={revisedQuoteRow}>
-          <span>{language === "es" ? "Tiempo estimado" : "Timeline"}</span>
-          <strong>{msg.timeline || "Pending"}</strong>
-        </div>
-      </div>
-
-      {msg.notes && <p style={revisedQuoteNotes}>{msg.notes}</p>}
-
-      <WorkflowRenderer
-        {...workflowRenderProps}
-        styles={{
-          revisedQuoteActions,
-          approveRevisedQuoteButton,
-          requestRevisedQuoteChangeButton,
-          revisedQuoteApproved,
-          revisedQuotePending,
-        }}
-      />
-    </div>
+    <UniversalDocumentCard
+      documentType="quote"
+      projectTitle={title}
+      amount={amount}
+      status={getRevisedQuoteStatus(msg, language)}
+      language={language}
+      icon="quote"
+      reviewProjectAction={() => workflowRenderProps.reviewProjectAction?.({
+        ...record,
+        type: "quote",
+      })}
+    />
   );
 }
 

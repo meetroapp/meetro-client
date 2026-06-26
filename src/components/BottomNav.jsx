@@ -6,11 +6,154 @@ import {
   getUnreadNotificationCount,
   saveNotifications,
 } from "../utils/notifications";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
+import { getAccountModeForPage } from "../utils/session";
+import { getUnreadConversationCount } from "../utils/conversationUnread";
+import MeetroIcon from "./MeetroIcon";
+
+function getUnreadMessageCount() {
+  try {
+    const registry = JSON.parse(
+      localStorage.getItem("meetro_conversation_registry") || "[]"
+    );
+
+    if (Array.isArray(registry)) {
+      return getUnreadConversationCount(registry);
+    }
+  } catch {
+    // Fall back to the legacy cached count.
+  }
+
+  return Number(localStorage.getItem("mockUnreadMessages") || 0);
+}
+
+function hasUnreadEmergencyConversation() {
+  try {
+    const registry = JSON.parse(
+      localStorage.getItem("meetro_conversation_registry") || "[]"
+    );
+
+    return registry.some(
+      (item) => item.conversation_type === "emergency" && item.unread
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getWorkCenterAlertDestination() {
+  const notifications = getNotifications().filter(
+    (notice) =>
+      !notice.read &&
+      (notice.targetRole === "professional" || notice.targetRole === "all")
+  );
+
+  let quoteHistory = [];
+  try {
+    quoteHistory = JSON.parse(localStorage.getItem("workCenterQuoteHistory") || "[]");
+  } catch {
+    quoteHistory = [];
+  }
+
+  const hasAcceptedQuote = Array.isArray(quoteHistory) &&
+    quoteHistory.some(
+      (quote) =>
+        !quote.movedToActiveAt &&
+        ["accepted", "approved", "quote_approved"].includes(
+          String(quote.status || quote.quoteStatus || "").toLowerCase()
+        )
+    );
+
+  if (
+    hasAcceptedQuote ||
+    notifications.some((notice) => notice.type === "quote_accepted")
+  ) {
+    return { tab: "quotes", quoteStatusFilter: "accepted" };
+  }
+
+  if (
+    notifications.some((notice) =>
+      ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
+        notice.type
+      )
+    )
+  ) {
+    return { tab: "schedule" };
+  }
+
+  if (
+    notifications.some((notice) =>
+      ["completion_pending", "closure_pending", "completion_confirmed"].includes(
+        notice.type
+      )
+    )
+  ) {
+    return { tab: "completed" };
+  }
+
+  if (
+    notifications.some((notice) =>
+      ["active_work_update", "materials_update", "work_update"].includes(notice.type)
+    )
+  ) {
+    return { tab: "active" };
+  }
+
+  if (
+    notifications.some((notice) =>
+      ["new_lead", "new_opportunity", "quote_request"].includes(notice.type)
+    )
+  ) {
+    return { tab: "pending" };
+  }
+
+  return { tab: "pending" };
+}
+
+function getAcceptedQuoteReadyCount() {
+  try {
+    const quoteHistory = JSON.parse(localStorage.getItem("workCenterQuoteHistory") || "[]");
+    if (!Array.isArray(quoteHistory)) return 0;
+
+    return quoteHistory.filter(
+      (quote) =>
+        !quote.movedToActiveAt &&
+        ["accepted", "approved", "quote_approved"].includes(
+          String(quote.status || quote.quoteStatus || "").toLowerCase()
+        )
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
+function getActiveEmergencyAlertCount() {
+  try {
+    const activeRecord = JSON.parse(
+      localStorage.getItem("activeEmergencyRecord") || "{}"
+    );
+    const status =
+      activeRecord.status ||
+      localStorage.getItem("emergencyDispatchStatus") ||
+      "";
+
+    return ["pending", "accepted", "enroute", "arrived", "started"].includes(
+      String(status).toLowerCase()
+    )
+      ? 1
+      : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function BottomNav({ setPage, currentPage = "" }) {
   const [language, updateLanguage] = useState(getLanguage());
   const [activeMode, setActiveMode] = useState(
-    localStorage.getItem("activeAccountMode") || "personal"
+    getAccountModeForPage(
+      currentPage,
+      localStorage.getItem("activeAccountMode") || "personal"
+    )
   );
   const [notificationTick, setNotificationTick] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -19,7 +162,12 @@ function BottomNav({ setPage, currentPage = "" }) {
   useEffect(() => {
     const syncNav = () => {
       updateLanguage(getLanguage());
-      setActiveMode(localStorage.getItem("activeAccountMode") || "personal");
+      setActiveMode(
+        getAccountModeForPage(
+          currentPage,
+          localStorage.getItem("activeAccountMode") || "personal"
+        )
+      );
       setNotificationTick((tick) => tick + 1);
     };
 
@@ -38,7 +186,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       window.removeEventListener("meetroNotificationsUpdated", syncNav);
       window.removeEventListener("meetro-messages-updated", syncNav);
     };
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     let showListener;
@@ -107,23 +255,23 @@ function BottomNav({ setPage, currentPage = "" }) {
     {
       page: "home",
       aliases: ["home"],
-      icon: "🏠",
+      icon: "home",
       label: t("home"),
       sub: t("dashboard"),
     },
     {
       page: "discover",
       aliases: ["discover"],
-      icon: "🔎",
+      icon: "discover",
       label: t("discover"),
       sub: t("services"),
     },
     {
       page: "upload",
       aliases: ["upload"],
-      icon: "➕",
+      icon: "request",
       label: t("upload"),
-      sub: t("project"),
+      sub: t("request"),
     },
     {
       page: "messagesInbox",
@@ -135,14 +283,14 @@ function BottomNav({ setPage, currentPage = "" }) {
         "conversation",
         "thread",
       ],
-      icon: "💬",
+      icon: "messages",
       label: t("messages"),
       sub: t("chat"),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
-      icon: "👤",
+      icon: "profile",
       label: t("profile"),
       sub: t("account"),
     },
@@ -150,9 +298,9 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   const businessNavItems = [
     {
-       page: "businessDashboard",
+      page: "businessDashboard",
       aliases: ["businessDashboard", "dashboard", "businessHome"],
-      icon: "📊",
+      icon: "businessDashboard",
       label: t("dashboard"),
       sub: t("business"),
     },
@@ -166,7 +314,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         "quoteRequests",
         "contractorRequests",
       ],
-      icon: "📥",
+      icon: "businessLeads",
       label: t("leads"),
       sub: t("openRequests"),
     },
@@ -179,9 +327,9 @@ function BottomNav({ setPage, currentPage = "" }) {
         "schedule",
         "activeJobs",
       ],
-      icon: "🧰",
-      label: "Work Center",
-      sub: "Operations",
+      icon: "workCenter",
+      label: t("workCenter"),
+      sub: t("operations"),
       center: true,
     },
     {
@@ -194,14 +342,14 @@ function BottomNav({ setPage, currentPage = "" }) {
         "conversation",
         "thread",
       ],
-      icon: "💬",
+      icon: "messages",
       label: t("messages"),
       sub: t("customers"),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
-      icon: "👤",
+      icon: "profile",
       label: t("profile"),
       sub: t("account"),
     },
@@ -209,6 +357,12 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   useEffect(() => {
     setKeyboardOpen(false);
+    setActiveMode(
+      getAccountModeForPage(
+        currentPage,
+        localStorage.getItem("activeAccountMode") || "personal"
+      )
+    );
   }, [currentPage]);
 
   const navItems = activeMode === "business" ? businessNavItems : personalNavItems;
@@ -216,7 +370,11 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   const operationsAlertCount =
     activeMode === "business"
-      ? getUnreadNotificationCount("professional")
+      ? Math.max(
+          getUnreadNotificationCount("professional"),
+          getAcceptedQuoteReadyCount(),
+          getActiveEmergencyAlertCount()
+        )
       : 0;
 
   void notificationTick;
@@ -225,9 +383,14 @@ function BottomNav({ setPage, currentPage = "" }) {
     return null;
   }
 
+  const isLandscapeCompact =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(orientation: landscape) and (max-height: 500px)")?.matches;
+
   return (
-    <div style={navWrapper}>
-      <div style={navContainer}>
+    <div className="bottom-nav-dock" style={navDock}>
+      <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
+        <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
         {navItems.map((item) => {
           const active =
   item.page === normalizedPage ||
@@ -243,13 +406,24 @@ function BottomNav({ setPage, currentPage = "" }) {
               : item.aliases?.some((alias) =>
                   ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
                 )
-              ? Number(localStorage.getItem("mockUnreadMessages") || 0)
+              ? getUnreadMessageCount()
               : 0;
 
           const isCenterAction = activeMode === "business" && item.center;
 
           const handleNavPress = () => {
+            if (item.page === "home") {
+              window.dispatchEvent(new Event("meetroHomeResetToLanding"));
+            }
+
             if (item.page === "contractorDashboard") {
+              localStorage.removeItem("meetroWorkCenterTab");
+              localStorage.removeItem("activeWorkCenterTab");
+              localStorage.removeItem("workCenterScheduleFilter");
+              localStorage.removeItem("conversationReturnSection");
+              localStorage.removeItem("quoteStatusFilter");
+              window.dispatchEvent(new Event("meetroWorkCenterResetToLanding"));
+
               const notifications = getNotifications();
 
               saveNotifications(
@@ -262,6 +436,15 @@ function BottomNav({ setPage, currentPage = "" }) {
               );
             }
 
+            if (
+              activeMode === "business" &&
+              item.page === "messagesInbox" &&
+              hasUnreadEmergencyConversation() &&
+              openActiveEmergencyConversation(setPage, normalizedPage)
+            ) {
+              return;
+            }
+
             setKeyboardOpen(false);
             document.activeElement?.blur?.();
             setPage(item.page);
@@ -271,6 +454,7 @@ function BottomNav({ setPage, currentPage = "" }) {
             <button
               key={item.page}
               type="button"
+              className={`bottom-nav-item${active ? " active" : ""}`}
               onPointerDown={(event) => {
                 navTouchStartRef.current = {
                   x: event.clientX || 0,
@@ -301,37 +485,48 @@ function BottomNav({ setPage, currentPage = "" }) {
               }}
               style={{
                 ...navButton,
+                ...(isLandscapeCompact ? navButtonLandscape : {}),
                 ...(isCenterAction ? centerNavButton : {}),
                 ...(active && !isCenterAction ? activeButton : {}),
                 ...(active && isCenterAction ? centerNavButtonActive : {}),
                 ...(isCenterAction && unread > 0 ? centerNavButtonAlert : {}),
+                ...(active && isLandscapeCompact ? activeButtonLandscape : {}),
               }}
             >
               <div
+                className="bottom-nav-icon"
                 style={{
                   ...iconWrap,
+                  ...(isLandscapeCompact ? iconWrapLandscape : {}),
                   ...(isCenterAction ? centerIconWrap : {}),
                   ...(active && !isCenterAction ? activeIconWrap : {}),
                   ...(active && isCenterAction ? centerIconWrapActive : {}),
                   ...(isCenterAction && unread > 0 ? centerIconWrapAlert : {}),
+                  ...(isCenterAction && isLandscapeCompact ? centerIconWrapLandscape : {}),
                   position: "relative",
                 }}
               >
-                <span style={active ? activeIconText : iconText}>{item.icon}</span>
+                <MeetroIcon
+                  name={item.icon}
+                  size={isCenterAction ? 28 : 24}
+                  decorative
+                  style={active ? activeIconText : iconText}
+                />
 
                 {unread > 0 && <div style={badge}>{unread}</div>}
               </div>
 
-              <span style={{ ...label, ...(active ? activeLabel : {}) }}>
+              <span className="bottom-nav-label" style={{ ...label, ...(isLandscapeCompact ? labelLandscape : {}), ...(active ? activeLabel : {}) }}>
                 {item.label}
               </span>
 
-              <span style={{ ...subLabel, ...(active ? activeSubLabel : {}) }}>
+              <span className="bottom-nav-subtitle" style={{ ...subLabel, ...(isLandscapeCompact ? subLabelLandscape : {}), ...(active ? activeSubLabel : {}) }}>
                 {item.sub}
               </span>
             </button>
           );
         })}
+        </div>
       </div>
     </div>
   );
@@ -340,9 +535,9 @@ function BottomNav({ setPage, currentPage = "" }) {
 const centerNavButton = {};
 
 const centerNavButtonActive = {
-  background: "rgba(124,58,237,0.08)",
-  border: "1px solid rgba(124,58,237,0.18)",
-  boxShadow: "0 10px 24px rgba(124,58,237,0.16)",
+  background: "rgba(124,58,237,0.10)",
+  border: "1px solid transparent",
+  boxShadow: "none",
 };
 
 const centerNavButtonAlert = {
@@ -350,20 +545,29 @@ const centerNavButtonAlert = {
 };
 
 const centerIconWrap = {
-  width: "52px",
-  height: "52px",
-  borderRadius: "22px",
-  background: "#f8f7ff",
+  width: "30px",
+  height: "30px",
+  borderRadius: "10px",
+  fontSize: "18px",
+  background: "transparent",
   color: "#5b3df5",
-  border: "1px solid #ede9fe",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.14)",
+  border: "none",
+  boxShadow: "none",
+};
+
+const centerIconWrapLandscape = {
+  width: "24px",
+  height: "24px",
+  borderRadius: "10px",
+  fontSize: "14px",
+  boxShadow: "none",
 };
 
 const centerIconWrapActive = {
-  background: "linear-gradient(135deg, #7c3aed, #8b5cf6)",
-  color: "white",
-  border: "1px solid rgba(124,58,237,0.14)",
-  boxShadow: "0 10px 22px rgba(124,58,237,0.24)",
+  background: "transparent",
+  color: "#4f2df3",
+  border: "none",
+  boxShadow: "none",
 };
 
 const centerIconWrapAlert = {
@@ -373,51 +577,78 @@ const centerIconWrapAlert = {
   boxShadow: "0 10px 24px rgba(249,115,22,0.22)",
 };
 
-const navWrapper = {
+const navDock = {
   position: "fixed",
-  bottom: "0px",
-  left: "0",
-  right: "0",
+  left: 0,
+  right: 0,
+  bottom: 0,
   width: "100%",
-  maxWidth: "460px",
-  margin: "0 auto",
-  zIndex: 2147483000,
-  pointerEvents: "auto",
-  padding: "0 10px calc(4px + env(safe-area-inset-bottom))",
+  maxWidth: "100%",
+  minWidth: 0,
   boxSizing: "border-box",
+  overflowX: "hidden",
+  zIndex: 9999,
+  pointerEvents: "none",
+};
+
+const navWrapper = {
+  pointerEvents: "auto",
+  width: "100%",
+  maxWidth: "100%",
+  margin: 0,
+  display: "flex",
+  alignItems: "stretch",
+  justifyContent: "space-around",
+  padding: "5px 4px calc(5px + env(safe-area-inset-bottom))",
+  boxSizing: "border-box",
+  background: "rgba(255,255,255,0.98)",
+  backdropFilter: "blur(16px)",
+  borderRadius: 0,
+  boxShadow: "0 -1px 8px rgba(15,23,42,0.10)",
+};
+
+const navWrapperLandscape = {
+  ...navWrapper,
+  width: "100%",
+  padding: "3px 4px calc(3px + env(safe-area-inset-bottom))",
 };
 
 const navContainer = {
   touchAction: "manipulation",
   WebkitTransform: "translateZ(0)",
   transform: "translateZ(0)",
-  background: "rgba(255,255,255,0.96)",
-  backdropFilter: "blur(24px)",
-  border: "1px solid rgba(226,232,240,0.95)",
-  borderRadius: "30px",
-  padding: "9px 8px",
-  display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  borderRadius: 0,
+  padding: "0",
+  display: "flex",
   alignItems: "stretch",
-  gap: "4px",
+  justifyContent: "space-around",
+  gap: "0",
   pointerEvents: "auto",
-  boxShadow:
-    "0 18px 48px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.75)",
+  boxSizing: "border-box",
+};
+
+const navContainerLandscape = {
+  ...navContainer,
+  padding: "0",
+  gap: "0",
 };
 
 const navButton = {
-  width: "100%",
+  flex: 1,
   minWidth: 0,
-  minHeight: "68px",
+  minHeight: "50px",
   border: "1px solid transparent",
   background: "transparent",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: "4px",
-  padding: "10px 4px",
-  borderRadius: "24px",
+  gap: "2px",
+  padding: "3px 2px",
+  borderRadius: "10px",
   cursor: "pointer",
   touchAction: "manipulation",
   WebkitTapHighlightColor: "transparent",
@@ -430,32 +661,53 @@ const navButton = {
     "background 180ms ease, box-shadow 180ms ease, border 180ms ease",
 };
 
+const navButtonLandscape = {
+  minHeight: "40px",
+  padding: "2px",
+  borderRadius: "10px",
+};
+
 const activeButton = {
-  background: "#f1edff",
-  border: "1px solid rgba(91,61,245,0.25)",
-  
-  boxShadow:
-    "0 12px 28px rgba(91,61,245,0.22), inset 0 1px 0 rgba(255,255,255,0.85)",
+  minHeight: "50px",
+  padding: "3px 2px",
+  transform: "none",
+  background: "rgba(91,61,245,0.12)",
+  color: "#4f2df3",
+  border: "1px solid transparent",
+  boxShadow: "none",
+};
+
+const activeButtonLandscape = {
+  minHeight: "40px",
+  padding: "2px",
+  transform: "none",
 };
 
 const iconWrap = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "16px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "10px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "18px",
-  background: "#f8fafc",
-  color: "#475569",
+  background: "transparent",
+  color: "#182235",
   transition: "180ms ease",
 };
 
+const iconWrapLandscape = {
+  width: "24px",
+  height: "24px",
+  borderRadius: "10px",
+  fontSize: "14px",
+  boxShadow: "none",
+};
+
 const activeIconWrap = {
-  background: "linear-gradient(135deg, #7c5cff, #5b3df5)",
-  color: "#ffffff",
-  boxShadow:
-    "0 10px 24px rgba(91,61,245,0.35), 0 0 0 5px rgba(91,61,245,0.10)",
+  background: "transparent",
+  color: "#4f2df3",
+  boxShadow: "none",
 };
 
 const iconText = {
@@ -464,7 +716,7 @@ const iconText = {
 
 const activeIconText = {
   lineHeight: 1,
-  transform: "scale(1.08)",
+  transform: "none",
 };
 
 const badge = {
@@ -492,6 +744,11 @@ const label = {
   lineHeight: 1,
 };
 
+const labelLandscape = {
+  fontSize: "10px",
+  lineHeight: 1.05,
+};
+
 const activeLabel = {
   color: "#5b3df5",
 };
@@ -502,6 +759,11 @@ const subLabel = {
   lineHeight: 1.1,
   marginTop: "1px",
   textAlign: "center",
+};
+
+const subLabelLandscape = {
+  fontSize: "8px",
+  lineHeight: 1,
 };
 
 const activeSubLabel = {

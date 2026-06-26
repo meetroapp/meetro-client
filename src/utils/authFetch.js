@@ -12,6 +12,10 @@ export function clearMeetroSession() {
     "isProfessional",
     "hasBusinessProfile",
     "contractorProfileComplete",
+    "businessName",
+    "businessCategory",
+    "activeAccountMode",
+    "firstLogin",
     "pendingLoginData",
   ];
 

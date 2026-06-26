@@ -7,15 +7,27 @@ import { authFetch } from "../utils/authFetch";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 import { isProfessionalSession } from "../utils/session";
+import {
+  getStoredProfessionalMatchProfile,
+} from "../utils/professionalRequestMatching";
+import {
+  canProfessionalSeeLocalLead,
+  getLocalLeadVisibilitySummary,
+} from "../utils/localLeadVisibility";
 
 function BusinessLeads({ setPage, currentPage }) {
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState([]);
   const [language, updateLanguage] = useState(getLanguage());
-  const [activeFilter, setActiveFilter] = useState("newest");
+  const [activeFilter, setActiveFilter] = useState("all");
 
   const businessName = localStorage.getItem("businessName") || "Business";
   const businessCategory = localStorage.getItem("businessCategory") || "";
+  const professionalMatchProfile = {
+    ...getStoredProfessionalMatchProfile(),
+    businessCategory,
+    category: businessCategory,
+  };
 
   const isProfessional =
     isProfessionalSession();
@@ -23,32 +35,16 @@ function BusinessLeads({ setPage, currentPage }) {
   const isSpanish = language === "es";
 
   const text = {
-    availableClients: isSpanish ? "Clientes Disponibles" : "Available Clients",
-    businessLeads: isSpanish ? "Clientes del Negocio" : "Business Leads",
-    nearbyOpportunities: isSpanish
-      ? `Nuevas oportunidades cerca de ti para ${businessName}.`
-      : `New nearby opportunities for ${businessName}.`,
-    live: isSpanish ? "En Vivo" : "Live",
-    new: isSpanish ? "Nuevos" : "New",
-    match: "Match",
-    radius: isSpanish ? "Radio" : "Radius",
-    category: isSpanish ? "Categoría" : "Category",
-    allCategories: isSpanish ? "Todas las categorías" : "All categories",
-    filters: isSpanish ? "Filtros" : "Filters",
-    openRequests: isSpanish ? "Solicitudes Abiertas" : "Open Requests",
-    noLeads: isSpanish ? "No hay clientes todavía" : "No leads yet",
-    noLeadsText: isSpanish
-      ? "Nuevas solicitudes aparecerán aquí cuando coincidan con tu negocio."
-      : "New requests will appear here when they match your business.",
-    verifiedClient: isSpanish ? "Cliente verificado" : "Verified client",
-    unverified: isSpanish ? "Sin verificar" : "Unverified",
-    fastResponse: isSpanish
-      ? "Respuesta rápida recomendada"
-      : "Fast response recommended",
-    viewDetails: isSpanish ? "Revisar trabajo" : "Review Job",
-    sendQuote: isSpanish ? "Contactar / Programar" : "Contact / Schedule",
-    potential: isSpanish ? "Guía de Precio" : "Price Guide",
-    posted: isSpanish ? "Publicado" : "Posted",
+    businessLeads: t("businessLeads"),
+    nearbyOpportunities: t("businessLeadsSubtitle").replace(
+      "{businessName}",
+      businessName
+    ),
+    openRequests: t("openRequests"),
+    noLeads: t("noBusinessLeads"),
+    noLeadsText: t("noBusinessLeadsText"),
+    viewDetails: t("reviewJob"),
+    posted: t("posted"),
     professionalRequired: isSpanish
       ? "Acceso profesional requerido"
       : "Professional Access Required",
@@ -56,10 +52,6 @@ function BusinessLeads({ setPage, currentPage }) {
       ? "Solo cuentas profesionales pueden ver clientes del negocio."
       : "Only professional accounts can view business leads.",
     goToProfile: isSpanish ? "Ir al Perfil" : "Go to Profile",
-    newest: isSpanish ? "Recientes" : "Newest",
-    nearby: isSpanish ? "Cercanos" : "Nearby",
-    highestBudget: isSpanish ? "Mayor Presupuesto" : "Highest Budget",
-    urgent: isSpanish ? "Urgente" : "Urgent",
   };
 
   function categoryLabel(category) {
@@ -82,33 +74,64 @@ function BusinessLeads({ setPage, currentPage }) {
     return categoryMap[category] || category || t("otherService");
   }
 
-  function getUrgencyStyle(urgency) {
-    const value = String(urgency || "").toLowerCase();
-
-    if (value.includes("emergency") || value.includes("urgente")) {
-      return {
-        background: "#fee2e2",
-        color: "#dc2626",
-      };
-    }
-
-    if (value.includes("popular")) {
-      return {
-        background: "#ffedd5",
-        color: "#ea580c",
-      };
-    }
-
-    if (value.includes("open") || value.includes("abierto")) {
-      return {
-        background: "#dbeafe",
-        color: "#2563eb",
-      };
-    }
+  function normalizeLeadCandidate(source = {}) {
+    const photos = Array.isArray(source.photos)
+      ? source.photos
+      : source.image_url
+      ? [source.image_url]
+      : [];
+    const createdAt =
+      source.createdAt ||
+      source.created_at ||
+      source.postedAt ||
+      source.posted_at ||
+      source.date ||
+      "";
 
     return {
-      background: "#dcfce7",
-      color: "#16a34a",
+      ...source,
+      id: source.id || source.requestId || source.postId || `lead-${Date.now()}`,
+      requestId: source.requestId || source.id || "",
+      title: source.title || source.projectTitle || source.service || source.category || t("dashboardNewRequest"),
+      description:
+        source.description ||
+        source.details ||
+        source.notes ||
+        source.projectDescription ||
+        "",
+      category:
+        source.category ||
+        source.requestCategory ||
+        source.request_category ||
+        source.serviceCategory ||
+        "",
+      location:
+        source.fullAddress ||
+        source.location ||
+        source.address ||
+        [source.city, source.state, source.zip || source.zipCode].filter(Boolean).join(", ") ||
+        "Local Area",
+      city: source.city || source.primaryCity || source.primary_city || "",
+      state: source.state || source.province || "",
+      zip: source.zip || source.zipCode || source.zip_code || source.postalCode || source.postal_code || "",
+      latitude: source.latitude ?? source.lat,
+      longitude: source.longitude ?? source.lng,
+      localDemoSafe:
+        source.localDemoSafe === true ||
+        source.demoSafe === true ||
+        source.isDemo === true ||
+        source.source === "local_homeowner_request",
+      fullAddress: source.fullAddress || source.location || source.address || "",
+      unitNumber: source.unitNumber || source.unit_number || "",
+      accessNotes: source.accessNotes || source.access_notes || "",
+      distance: source.distance || "Nearby",
+      posted: source.posted || source.date || (createdAt ? "Today" : "Today"),
+      createdAt,
+      value: source.value || source.budget || source.priceGuide || "$150 - $500",
+      urgency: source.urgency || (isSpanish ? "Nuevo" : "New"),
+      verified: source.verified ?? true,
+      image_url: photos[0] || source.image_url,
+      photos,
     };
   }
 
@@ -142,63 +165,27 @@ function BusinessLeads({ setPage, currentPage }) {
           : data.posts || [];
       }
 
-      const normalizedBusinessCategory = businessCategory
-        .toLowerCase()
-        .replace(/\s+/g, "");
-
-      const categoryGroups = {
-        handyman: [
-          "handyman",
-          "plumbing",
-          "electrical",
-          "drywall",
-          "doorswindows",
-          "carpentry",
-          "painting",
-          "flooring",
-          "tile",
-          "appliancerepair",
-          "contractor",
-          "generalcontractor",
-        ],
-        contractor: [
-          "contractor",
-          "generalcontractor",
-          "drywall",
-          "flooring",
-          "painting",
-          "tile",
-          "carpentry",
-          "doorswindows",
-          "demolition",
-          "concrete",
-        ],
-        cleaning: ["cleaning", "pressurewashing", "junkremoval"],
-      };
-
-      function matchesBusinessCategory(item) {
-        if (!normalizedBusinessCategory) return true;
-
-        const itemCategory = String(item.category || "")
-          .toLowerCase()
-          .replace(/\s+/g, "");
-
-        if (categoryGroups[normalizedBusinessCategory]) {
-          return categoryGroups[normalizedBusinessCategory].includes(
-            itemCategory
-          );
-        }
-
-        return itemCategory === normalizedBusinessCategory;
-      }
-
       const homeownerRequests =
         getStoredHomeownerRequests();
+
+      function isDirectRelationshipRequest(request = {}) {
+        return (
+          request.requestChannel === "direct" ||
+          request.visibility === "direct" ||
+          request.directRequest === true ||
+          request.isDirectRequest === true ||
+          request.source === "hire_again_direct_request"
+        );
+      }
+
+      const publicHomeownerRequests = homeownerRequests.filter(
+        (request) => !isDirectRelationshipRequest(request)
+      );
 
       function isClosedLead(item) {
         const itemId = String(item.id || item.requestId || "");
 
-        return getStoredHomeownerRequests().some((request) => {
+        return publicHomeownerRequests.some((request) => {
           const requestId = String(request.id || request.requestId || "");
 
           const sameId = itemId && requestId && itemId === requestId;
@@ -232,14 +219,14 @@ function BusinessLeads({ setPage, currentPage }) {
       }
 
       const convertedPosts = incomingPosts.map((post) => {
-        const exactIdMatch = getStoredHomeownerRequests().find((request) => {
+        const exactIdMatch = publicHomeownerRequests.find((request) => {
           return (
             String(request.id || request.requestId || "") ===
             String(post.id || "")
           );
         });
 
-        const titleFallbackMatch = getStoredHomeownerRequests().find((request) => {
+        const titleFallbackMatch = publicHomeownerRequests.find((request) => {
           const requestId = String(request.id || request.requestId || "");
           const postId = String(post.id || "");
 
@@ -259,12 +246,67 @@ function BusinessLeads({ setPage, currentPage }) {
           ? post.photos
           : [];
 
-        return {
+        return normalizeLeadCandidate({
           id: post.id,
+          requestId: matchingHomeownerRequest?.requestId || matchingHomeownerRequest?.id || post.id,
           title: post.title,
           description: post.description,
           category: post.category,
-          location: post.location || "Local Area",
+          location:
+            matchingHomeownerRequest?.fullAddress ||
+            matchingHomeownerRequest?.location ||
+            post.fullAddress ||
+            post.location ||
+            "Local Area",
+          city:
+            matchingHomeownerRequest?.city ||
+            matchingHomeownerRequest?.primaryCity ||
+            post.city ||
+            post.primaryCity ||
+            "",
+          zip:
+            matchingHomeownerRequest?.zip ||
+            matchingHomeownerRequest?.zipCode ||
+            matchingHomeownerRequest?.postalCode ||
+            post.zip ||
+            post.zipCode ||
+            post.postalCode ||
+            "",
+          latitude:
+            matchingHomeownerRequest?.latitude ??
+            matchingHomeownerRequest?.lat ??
+            post.latitude ??
+            post.lat,
+          longitude:
+            matchingHomeownerRequest?.longitude ??
+            matchingHomeownerRequest?.lng ??
+            post.longitude ??
+            post.lng,
+          localDemoSafe:
+            matchingHomeownerRequest?.localDemoSafe ||
+            matchingHomeownerRequest?.demoSafe ||
+            matchingHomeownerRequest?.isDemo ||
+            post.localDemoSafe ||
+            post.demoSafe ||
+            post.isDemo,
+          fullAddress:
+            matchingHomeownerRequest?.fullAddress ||
+            matchingHomeownerRequest?.location ||
+            post.fullAddress ||
+            post.location ||
+            "",
+          unitNumber:
+            matchingHomeownerRequest?.unitNumber ||
+            matchingHomeownerRequest?.unit_number ||
+            post.unitNumber ||
+            post.unit_number ||
+            "",
+          accessNotes:
+            matchingHomeownerRequest?.accessNotes ||
+            matchingHomeownerRequest?.access_notes ||
+            post.accessNotes ||
+            post.access_notes ||
+            "",
           distance: "Nearby",
           posted: post.date || "Today",
           value: "$150 - $500",
@@ -275,11 +317,71 @@ function BusinessLeads({ setPage, currentPage }) {
           photos,
           username: post.username,
           email: post.email,
+        });
+      });
+
+      const localLeadCandidates = publicHomeownerRequests.map((request) =>
+        normalizeLeadCandidate({
+          ...request,
+          id: request.id || request.requestId,
+          requestId: request.requestId || request.id,
+          source: request.source || "local_homeowner_request",
+          localDemoSafe: request.localDemoSafe ?? true,
+        })
+      );
+
+      const candidateMap = new Map();
+      [...localLeadCandidates, ...convertedPosts].forEach((lead) => {
+        const key = String(lead.requestId || lead.id || lead.title || "");
+        if (!key) return;
+        if (!candidateMap.has(key)) candidateMap.set(key, lead);
+      });
+      const leadCandidates = Array.from(candidateMap.values());
+
+      const debugRows = leadCandidates.map((lead) => {
+        const summary = getLocalLeadVisibilitySummary(
+          professionalMatchProfile,
+          lead
+        );
+
+        return {
+          requestId: lead.requestId || lead.id,
+          title: lead.title,
+          serviceDomain: lead.serviceDomain || lead.service_domain,
+          category: lead.category,
+          specialty: lead.serviceSpecialty || lead.service_specialty,
+          details: lead.description,
+          city: lead.city,
+          state: lead.state,
+          zip: lead.zip,
+          professionalCategory: professionalMatchProfile.businessCategory,
+          professionalServiceArea:
+            professionalMatchProfile.serviceArea ||
+            professionalMatchProfile.serviceCities ||
+            professionalMatchProfile.serviceZipCodes ||
+            "",
+          matchResult: summary.visible,
+          rejectionReason: summary.visible
+            ? ""
+            : !summary.serviceMatched
+            ? "service_match_failed"
+            : summary.serviceArea?.reason || "lead_eligibility_failed",
+          checks: summary.requestMatch?.checks,
+          area: summary.serviceArea,
         };
       });
 
-      const matchedLeads = convertedPosts
-        .filter(matchesBusinessCategory)
+      if (
+        import.meta.env.DEV ||
+        localStorage.getItem("meetroLeadDebug") === "true"
+      ) {
+        console.table(debugRows);
+      }
+
+      const matchedLeads = leadCandidates
+        .filter((lead) =>
+          canProfessionalSeeLocalLead(professionalMatchProfile, lead)
+        )
         .filter((lead) => !isClosedLead(lead));
 
       setLeads(matchedLeads);
@@ -296,35 +398,26 @@ function BusinessLeads({ setPage, currentPage }) {
 }, [language, businessCategory]);
 
   const getBudgetValue = (lead) => {
-    const raw = String(lead.value || lead.budget || lead.priceGuide || "");
-    const numbers = raw.match(/\d+/g);
+    const numbers = String(
+      lead.value || lead.budget || lead.priceGuide || ""
+    ).match(/\d+/g);
 
-    if (!numbers) return 0;
-
-    return Math.max(...numbers.map((number) => Number(number)));
+    return numbers
+      ? Math.max(...numbers.map((number) => Number(number)))
+      : 0;
   };
 
   const getDistanceValue = (lead) => {
-    const raw = String(lead.distance || "");
-    const match = raw.match(/\d+(\.\d+)?/);
-
+    const match = String(lead.distance || "").match(/\d+(\.\d+)?/);
     return match ? Number(match[0]) : 999;
   };
 
   const getUrgencyValue = (lead) => {
     const value = String(lead.urgency || "").toLowerCase();
 
-    if (
-      value.includes("emergency") ||
-      value.includes("urgent") ||
-      value.includes("urgente")
-    ) {
-      return 3;
-    }
-
+    if (value.includes("emergency") || value.includes("urgent")) return 3;
     if (value.includes("popular")) return 2;
     if (value.includes("open") || value.includes("abierto")) return 1;
-
     return 0;
   };
 
@@ -338,15 +431,18 @@ function BusinessLeads({ setPage, currentPage }) {
       lead.updated_at ||
       lead.id ||
       "";
-
     const time = Date.parse(raw);
 
-    if (!Number.isNaN(time)) return time;
-
-    return Number(String(raw).replace(/\D/g, "")) || 0;
+    return !Number.isNaN(time)
+      ? time
+      : Number(String(raw).replace(/\D/g, "")) || 0;
   };
 
   const visibleLeads = [...leads].sort((a, b) => {
+    if (activeFilter === "all") {
+      return 0;
+    }
+
     if (activeFilter === "highestBudget") {
       return getBudgetValue(b) - getBudgetValue(a);
     }
@@ -368,7 +464,7 @@ function BusinessLeads({ setPage, currentPage }) {
 
   if (!isProfessional) {
     return (
-      <div style={pageWrapper}>
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <div style={{ padding: "20px 20px 0" }}>
   <button
     onClick={() => setPage("businessDashboard")}
@@ -386,7 +482,7 @@ function BusinessLeads({ setPage, currentPage }) {
   </button>
 </div>
           <div style={lockedCard}>
-          <div style={lockedIcon}>🔒</div>
+          <div style={lockedIcon}>LOCK</div>
           <h1 style={lockedTitle}>{text.professionalRequired}</h1>
           <p style={lockedText}>{text.professionalRequiredText}</p>
           <button style={primaryButton} onClick={() => setPage("profile")}>
@@ -403,137 +499,64 @@ function BusinessLeads({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <div style={heroCard}>
-        <div style={heroTopRow}>
-          <div>
-            <p style={eyebrow}>{text.availableClients}</p>
-            <h1 style={heroTitle}>{text.businessLeads}</h1>
-            <p style={heroText}>{text.nearbyOpportunities}</p>
-          </div>
-
-          <div style={liveBadge}>🟢 {text.live}</div>
-        </div>
-
-        <div style={statsGrid}>
-          <div style={statCard}>
-            <strong>{leads.length}</strong>
-            <span>{text.new}</span>
-          </div>
-
-          <div style={statCard}>
-            <strong>92%</strong>
-            <span>{text.match}</span>
-          </div>
-
-          <div style={statCard}>
-            <strong>5 mi</strong>
-            <span>{text.radius}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={filterCard}>
-        <div>
-          <strong style={filterTitle}>{text.category}</strong>
-          <p style={filterText}>
-            {businessCategory ? categoryLabel(businessCategory) : text.allCategories}
-          </p>
-        </div>
-
-        <button style={filterButton}>⚙️ {text.filters}</button>
-      </div>
-
-      <div style={filterChips}>
-        {[
-          ["newest", text.newest],
-          ["nearby", text.nearby],
-          ["highestBudget", text.highestBudget],
-          ["urgent", text.urgent],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setActiveFilter(value)}
-            style={{
-              ...chipButton,
-              ...(activeFilter === value ? activeChipButton : {}),
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <h1 style={heroTitle}>{text.businessLeads}</h1>
+        <p style={heroText}>{text.nearbyOpportunities}</p>
       </div>
 
       <div style={sectionRow}>
         <h2 style={sectionTitle}>{text.openRequests}</h2>
-        <span style={countBadge}>{visibleLeads.length}</span>
+        <div style={sectionControls}>
+          <select
+            value={activeFilter}
+            onChange={(event) => setActiveFilter(event.target.value)}
+            style={sortSelect}
+            aria-label={t("sortLeads")}
+          >
+            <option value="all">{language === "es" ? "Todos" : "All"}</option>
+            <option value="newest">{t("sortNewest")}</option>
+            <option value="nearby">{t("sortNearby")}</option>
+            <option value="highestBudget">{t("sortHighestBudget")}</option>
+            <option value="urgent">{t("sortUrgent")}</option>
+          </select>
+          <span style={countBadge}>{visibleLeads.length}</span>
+        </div>
       </div>
 
       {visibleLeads.length === 0 ? (
         <div style={emptyCard}>
-          <div style={emptyIcon}>📭</div>
+          <div style={emptyIcon}>LEAD</div>
           <h2 style={emptyTitle}>{text.noLeads}</h2>
           <p style={emptyText}>{text.noLeadsText}</p>
         </div>
       ) : (
-        <div style={leadList}>
+        <div className="meetro-responsive-grid meetro-grid-2" style={leadList}>
           {visibleLeads.map((lead) => (
             <div key={lead.id} style={leadCard}>
-              <div style={leadHeader}>
-                <div style={serviceIcon}>
-                  {lead.verified ? "✅" : "🏠"}
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <div style={leadTopLine}>
-                    <span style={categoryPill}>{categoryLabel(lead.category)}</span>
-                    <span
-                      style={{
-                        ...urgencyPill,
-                        ...getUrgencyStyle(lead.urgency),
-                      }}
-                    >
-                      {lead.urgency}
-                    </span>
-                  </div>
-
-                  <h3 style={leadTitle}>{lead.title}</h3>
-                  <p style={leadDescription}>{lead.description}</p>
-                </div>
+              <div style={leadTopLine}>
+                <span style={categoryPill}>{categoryLabel(lead.category)}</span>
+                <span style={postedText}>{text.posted}: {lead.posted}</span>
               </div>
 
-              <div style={infoGrid}>
-                <div style={infoBox}>
-                  <span>📍</span>
-                  <strong>{lead.location}</strong>
-                  <small>{lead.distance}</small>
-                </div>
+              <h3 style={leadTitle}>{lead.title}</h3>
+              <p style={leadDescription}>{lead.description}</p>
+              <div style={leadLocation}>{lead.location}</div>
 
-                <div style={infoBox}>
-                  <span>💰</span>
-                  <strong>{lead.value}</strong>
-                  <small>{text.potential}</small>
+              {(lead.unitNumber || lead.accessNotes) && (
+                <div style={leadExtraInfo}>
+                  {lead.unitNumber && (
+                    <span>{t("unitNumber")}: {lead.unitNumber}</span>
+                  )}
+                  {lead.accessNotes && (
+                    <span>{t("accessNotes")}: {lead.accessNotes}</span>
+                  )}
                 </div>
-
-                <div style={infoBox}>
-                  <span>⏱️</span>
-                  <strong>{lead.posted}</strong>
-                  <small>{text.posted}</small>
-                </div>
-              </div>
-
-              <div style={trustRow}>
-                <span>
-                  {lead.verified
-                    ? `✅ ${text.verifiedClient}`
-                    : `⚠️ ${text.unverified}`}
-                </span>
-                <span>⚡ {text.fastResponse}</span>
-              </div>
+              )}
 
               <div style={actionRow}>
                 <button
-                  style={secondaryButton}
+                  style={primaryActionButton}
                   onClick={() => {
                     // preserved selectedActiveProject
                     localStorage.removeItem("lastCompletedProject");
@@ -560,55 +583,6 @@ function BusinessLeads({ setPage, currentPage }) {
                 >
                   {text.viewDetails}
                 </button>
-
-                <button
-                  style={primaryActionButton}
-                  onClick={() => {
-                    // preserved selectedActiveProject
-                    localStorage.removeItem("lastCompletedProject");
-                    localStorage.removeItem("selectedHomeownerRequestId");
-                    localStorage.removeItem("selectedWorkCenterRequest");
-                    localStorage.removeItem("activeWorkCenterQuoteRequestId");
-
-                    localStorage.setItem("selectedPostId", lead.id);
-
-                    localStorage.setItem(
-                      "selectedQuoteRequest",
-                      JSON.stringify(lead)
-                    );
-
-                    const conversationId =
-                      lead.conversationId ||
-                      lead.requestId ||
-                      lead.id ||
-                      `lead-${Date.now()}`;
-
-                    localStorage.setItem("activeConversationId", String(conversationId));
-
-                    localStorage.setItem(
-                      "activeConversationName",
-                      lead.username || lead.customer || lead.email || "Customer"
-                    );
-
-                    localStorage.setItem("meetroConversationType", "standard");
-                    localStorage.setItem("conversationReturnPage", "businessLeads");
-                    localStorage.setItem("returnPage", "businessLeads");
-
-                    localStorage.setItem(
-                      "leadWorkflowStage",
-                      "customer_contact"
-                    );
-
-                    localStorage.setItem(
-                      "leadWorkflowIntent",
-                      "contact_customer_before_schedule"
-                    );
-
-                    setPage("conversationThread");
-                  }}
-                >
-                  {text.sendQuote}
-                </button>
               </div>
             </div>
           ))}
@@ -624,10 +598,14 @@ const pageWrapper = {
   minHeight: "100vh",
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 32%), linear-gradient(to bottom, #f7f7fb, #eef0f7)",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 130px",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   color: "#111827",
   overflowX: "hidden",
+  width: "100%",
+  maxWidth: "1040px",
+  margin: "0 auto",
 };
 
 const heroCard = {
@@ -637,27 +615,18 @@ const heroCard = {
   color: "white",
   marginBottom: "18px",
   boxShadow: "0 24px 60px rgba(35,54,139,0.32)",
-};
-
-const heroTopRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
-  alignItems: "flex-start",
-};
-
-const eyebrow = {
-  margin: 0,
-  opacity: 0.82,
-  fontWeight: "900",
-  fontSize: "13px",
-  letterSpacing: "0.4px",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const heroTitle = {
-  margin: "9px 0",
-  fontSize: "32px",
+  margin: "0 0 8px",
+  fontSize: "30px",
   lineHeight: 1.05,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
 const heroText = {
@@ -665,99 +634,48 @@ const heroText = {
   lineHeight: 1.5,
   opacity: 0.92,
   fontSize: "16px",
-};
-
-const liveBadge = {
-  background: "rgba(255,255,255,0.15)",
-  border: "1px solid rgba(255,255,255,0.2)",
-  borderRadius: "999px",
-  padding: "10px 14px",
-  fontWeight: "900",
-  whiteSpace: "nowrap",
-};
-
-const statsGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: "10px",
-  marginTop: "22px",
-};
-
-const statCard = {
-  background: "rgba(255,255,255,0.13)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: "20px",
-  padding: "14px 10px",
-  display: "grid",
-  gap: "5px",
-  textAlign: "center",
-};
-
-const filterCard = {
-  background: "white",
-  borderRadius: "24px",
-  padding: "18px",
-  marginBottom: "12px",
-  boxShadow: "0 12px 30px rgba(0,0,0,0.06)",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-};
-
-const filterTitle = {
-  fontSize: "16px",
-};
-
-const filterText = {
-  margin: "4px 0 0",
-  color: "#6b7280",
-  fontWeight: "700",
-};
-
-const filterButton = {
-  border: "none",
-  background: "#f1edff",
-  color: "#5b3df5",
-  borderRadius: "999px",
-  padding: "12px 14px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const filterChips = {
-  display: "flex",
-  gap: "10px",
-  overflowX: "auto",
-  marginBottom: "18px",
-};
-
-const chipButton = {
-  border: "none",
-  background: "white",
-  color: "#5b3df5",
-  borderRadius: "999px",
-  padding: "11px 14px",
-  fontWeight: "900",
-  whiteSpace: "nowrap",
-  cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.05)",
-};
-
-const activeChipButton = {
-  background: "#5b3df5",
-  color: "white",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
 const sectionRow = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   margin: "18px 0 14px",
+  gap: "12px",
+  flexWrap: "wrap",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const sectionTitle = {
   margin: 0,
   fontSize: "28px",
+  minWidth: 0,
+  overflowWrap: "break-word",
+};
+
+const sectionControls = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flex: "0 1 auto",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const sortSelect = {
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  fontSize: "12px",
+  fontWeight: "700",
+  minWidth: 0,
+  maxWidth: "min(220px, 64vw)",
+  boxSizing: "border-box",
 };
 
 const countBadge = {
@@ -770,6 +688,7 @@ const countBadge = {
 
 const leadList = {
   display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
   gap: "16px",
 };
 
@@ -780,24 +699,10 @@ const leadCard = {
   borderRadius: "28px",
   padding: "18px",
   boxShadow: "0 16px 42px rgba(0,0,0,0.08)",
-};
-
-const leadHeader = {
-  display: "flex",
-  gap: "14px",
-  alignItems: "flex-start",
-};
-
-const serviceIcon = {
-  width: "62px",
-  height: "62px",
-  minWidth: "62px",
-  borderRadius: "18px",
-  background: "#f1edff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "27px",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const leadTopLine = {
@@ -805,6 +710,8 @@ const leadTopLine = {
   justifyContent: "space-between",
   gap: "8px",
   marginBottom: "8px",
+  flexWrap: "wrap",
+  minWidth: 0,
 };
 
 const categoryPill = {
@@ -816,66 +723,53 @@ const categoryPill = {
   fontWeight: "900",
 };
 
-const urgencyPill = {
-  borderRadius: "999px",
-  padding: "7px 10px",
+const postedText = {
+  color: "#64748b",
   fontSize: "12px",
-  fontWeight: "900",
+  fontWeight: "700",
+  textAlign: "right",
 };
 
 const leadTitle = {
   margin: "0 0 7px",
   fontSize: "21px",
   lineHeight: 1.15,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
 const leadDescription = {
   margin: 0,
   color: "#6b7280",
   lineHeight: 1.45,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
-const infoGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: "10px",
-  marginTop: "16px",
-};
-
-const infoBox = {
-  background: "#f8f7ff",
-  borderRadius: "18px",
-  padding: "12px 8px",
-  display: "grid",
-  gap: "4px",
-  textAlign: "center",
-};
-
-const trustRow = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "8px",
-  marginTop: "14px",
-  color: "#4b5563",
-  fontSize: "13px",
+const leadLocation = {
+  marginTop: "12px",
+  color: "#334155",
+  fontSize: "14px",
   fontWeight: "800",
+};
+
+const leadExtraInfo = {
+  display: "grid",
+  gap: "6px",
+  marginTop: "10px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "rgba(239,246,255,0.9)",
+  border: "1px solid rgba(147,197,253,0.45)",
+  color: "#1e3a8a",
+  fontSize: "12px",
+  fontWeight: 800,
 };
 
 const actionRow = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
+  gridTemplateColumns: "1fr",
   marginTop: "16px",
-};
-
-const secondaryButton = {
-  border: "none",
-  background: "#f1edff",
-  color: "#5b3df5",
-  borderRadius: "18px",
-  padding: "15px",
-  fontWeight: "900",
-  cursor: "pointer",
 };
 
 const primaryActionButton = {

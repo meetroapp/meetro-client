@@ -226,6 +226,7 @@ function QuoteRequests({ setPage, currentPage }) {
 
   return (
     <div
+      className="app-page meetro-responsive-page"
       style={{
         background: "#f5f5f7",
         minHeight: "100vh",

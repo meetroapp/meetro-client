@@ -17,6 +17,16 @@ function EmergencyBusinessSettings({ setPage }) {
   const [eta, setEta] = useState(
     localStorage.getItem("businessEmergencyEta") || "12"
   );
+  const [businessPhone, setBusinessPhone] = useState(
+    localStorage.getItem("businessPhone") ||
+      localStorage.getItem("contractorPhone") ||
+      ""
+  );
+  const [emergencyPhone, setEmergencyPhone] = useState(
+    localStorage.getItem("businessEmergencyPhone") ||
+      localStorage.getItem("businessPhone") ||
+      ""
+  );
   const [radius, setRadius] = useState(
     localStorage.getItem("businessEmergencyRadius") || "10"
   );
@@ -47,6 +57,8 @@ function EmergencyBusinessSettings({ setPage }) {
       dispatchFee: "Dispatch Fee",
       cancelFee: "Cancellation Fee After Dispatch",
       eta: "Estimated Response Time",
+      businessPhone: "Main Business Phone",
+      emergencyPhone: "Emergency Dispatch Phone",
       radius: "Service Radius",
       terms: "Emergency Service Terms",
       save: "Save Emergency Settings",
@@ -62,6 +74,8 @@ function EmergencyBusinessSettings({ setPage }) {
       dispatchFee: "Tarifa de Despacho",
       cancelFee: "Tarifa de Cancelación Después del Despacho",
       eta: "Tiempo Estimado de Respuesta",
+      businessPhone: "Teléfono Principal del Negocio",
+      emergencyPhone: "Teléfono de Despacho de Emergencia",
       radius: "Radio de Servicio",
       terms: "Reglas del Servicio de Emergencia",
       save: "Guardar Configuración",
@@ -77,6 +91,9 @@ function EmergencyBusinessSettings({ setPage }) {
     localStorage.setItem("businessEmergencyDispatchFee", dispatchFee);
     localStorage.setItem("businessEmergencyCancelFee", cancelFee);
     localStorage.setItem("businessEmergencyEta", eta);
+    localStorage.setItem("businessPhone", businessPhone);
+    localStorage.setItem("contractorPhone", businessPhone);
+    localStorage.setItem("businessEmergencyPhone", emergencyPhone || businessPhone);
     localStorage.setItem("businessEmergencyRadius", radius);
     localStorage.setItem("businessEmergencyTerms", terms);
 
@@ -86,14 +103,14 @@ function EmergencyBusinessSettings({ setPage }) {
   }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-form-page" style={page}>
       <div style={container}>
         <button style={backButton} onClick={() => setPage("businessDashboard")}>
           ←
         </button>
 
         <div style={heroCard}>
-          <div style={heroIcon}>🚨</div>
+          <div style={heroIcon}>SOS</div>
           <h1 style={title}>{t.title}</h1>
           <p style={subtitle}>{t.subtitle}</p>
         </div>
@@ -118,6 +135,8 @@ function EmergencyBusinessSettings({ setPage }) {
           <InputRow label={t.dispatchFee} prefix="$" value={dispatchFee} onChange={setDispatchFee} />
           <InputRow label={t.cancelFee} prefix="$" value={cancelFee} onChange={setCancelFee} />
           <InputRow label={t.eta} suffix={t.minutes} value={eta} onChange={setEta} />
+          <InputRow label={t.businessPhone} value={businessPhone} onChange={setBusinessPhone} />
+          <InputRow label={t.emergencyPhone} value={emergencyPhone} onChange={setEmergencyPhone} />
           <InputRow label={t.radius} suffix={t.miles} value={radius} onChange={setRadius} />
 
           <label style={fieldWrap}>
@@ -162,9 +181,10 @@ function InputRow({ label, value, onChange, prefix, suffix }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "linear-gradient(180deg, #fff1f2 0%, #ffffff 55%, #eef2ff 100%)",
-  padding: "24px 20px 190px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 

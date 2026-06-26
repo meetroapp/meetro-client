@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage } from "../utils/language";
 
 function EmergencyBusinessSelection({ setPage }) {
@@ -27,9 +28,9 @@ function EmergencyBusinessSelection({ setPage }) {
 
   const text = {
     en: {
-      title: "Emergency Help Available",
+      title: "Available Emergency Businesses",
       subtitle:
-        "Available professionals near you are ready to respond.",
+        "Call a nearby business first, confirm availability, then request dispatch tracking.",
       live: "Live Availability",
       active: "Emergency Dispatch Active",
       area: "Serving Cape Coral",
@@ -41,22 +42,24 @@ function EmergencyBusinessSelection({ setPage }) {
       verified: "Verified Emergency Professional",
       accepting: "Accepting Emergency Calls",
       tonight: "Serving Your Area Tonight",
-      request: "Request Emergency Service",
+      callNow: "Call Business",
+      viewProfile: "View Profile",
+      request: "Request Dispatch Tracking",
       rules: "What happens next?",
       step1:
-        "Your request is sent directly to this business.",
+        "Call the business first to explain the emergency.",
       step2:
-        "The professional may begin dispatch immediately after accepting.",
+        "Confirm they are available and ready to come.",
       step3:
-        "You will receive live status updates after dispatch begins.",
+        "Then request dispatch tracking inside Meetro.",
       step4:
-        "Cancellation after dispatch will charge the listed cancellation fee.",
+        "After dispatch begins, you can track route status and receive updates.",
       agree: "I understand the emergency service rules",
     },
     es: {
-      title: "Ayuda de Emergencia Disponible",
+      title: "Negocios de Emergencia Disponibles",
       subtitle:
-        "Profesionales disponibles cerca de ti están listos para responder.",
+        "Llama primero al negocio, confirma disponibilidad y luego solicita seguimiento de despacho.",
       live: "Disponibilidad en Vivo",
       active: "Despacho de Emergencia Activo",
       area: "Sirviendo Cape Coral",
@@ -68,16 +71,18 @@ function EmergencyBusinessSelection({ setPage }) {
       verified: "Profesional de Emergencia Verificado",
       accepting: "Aceptando Llamadas de Emergencia",
       tonight: "Sirviendo Tu Área Esta Noche",
-      request: "Solicitar Servicio de Emergencia",
+      callNow: "Llamar al Negocio",
+      viewProfile: "Ver Perfil",
+      request: "Solicitar Seguimiento",
       rules: "¿Qué sucede después?",
       step1:
-        "Tu solicitud se envía directamente a este negocio.",
+        "Llama primero al negocio para explicar la emergencia.",
       step2:
-        "El profesional puede comenzar el despacho inmediatamente después de aceptar.",
+        "Confirma que están disponibles y listos para ir.",
       step3:
-        "Recibirás actualizaciones en vivo después de iniciar el despacho.",
+        "Luego solicita seguimiento de despacho dentro de Meetro.",
       step4:
-        "Cancelar después del despacho cobrará la tarifa de cancelación indicada.",
+        "Después de iniciar el despacho, podrás ver la ruta y recibir actualizaciones.",
       agree: "Entiendo las reglas del servicio de emergencia",
     },
   };
@@ -89,87 +94,185 @@ function EmergencyBusinessSelection({ setPage }) {
       id: 1,
       name: "Bgone Home Renovation",
       eta: "12",
-      dispatchFee: "$35",
+      dispatchFee: "$95",
       cancellationFee: "$25",
       rating: "4.9",
+      distance: "2.3 mi",
+      phone:
+        localStorage.getItem("businessEmergencyPhone") ||
+        localStorage.getItem("businessPhone") ||
+        localStorage.getItem("contractorPhone") ||
+        "",
     },
     {
       id: 2,
       name: "Rapid Emergency Services",
       eta: "18",
-      dispatchFee: "$40",
+      dispatchFee: "$89",
       cancellationFee: "$30",
       rating: "4.8",
+      distance: "4.1 mi",
+      phone: "",
     },
   ];
 
+  function callBusiness(business) {
+    const phone = String(business.phone || "").trim();
+
+    if (!phone) {
+      alert(
+        language === "es"
+          ? "Este negocio aún no agregó un teléfono de emergencia."
+          : "This business has not added an emergency phone number yet."
+      );
+      return;
+    }
+
+    window.location.href = phone.startsWith("tel:")
+      ? phone
+      : `tel:${phone}`;
+  }
+
+  function viewBusinessProfile(business) {
+    localStorage.setItem("selectedEmergencyBusiness", business.name);
+    localStorage.setItem("selectedContractor", JSON.stringify({
+      name: business.name,
+      business_name: business.name,
+      rating: business.rating,
+      category: selectedService,
+      emergencyDispatch: true,
+    }));
+    localStorage.setItem("contractorDetailsReturnPage", "emergency");
+    setPage("contractorDetails");
+  }
+
   function requestEmergency(business) {
+    const currentUserKey =
+      localStorage.getItem("userId") ||
+      localStorage.getItem("userEmail") ||
+      "guest";
+
+    const emergencyRequestId = `emergency-${currentUserKey}-${Date.now()}`;
+    const emergencyConversationId =
+      `emergency-conversation-${emergencyRequestId}`;
+
+    localStorage.setItem("activeEmergencyRequestId", emergencyRequestId);
+    localStorage.setItem("emergencyRequestId", emergencyRequestId);
+    localStorage.setItem("emergencyConversationId", emergencyConversationId);
+    localStorage.removeItem("emergencyIssue");
+    localStorage.removeItem("emergencyGateCode");
+    localStorage.removeItem("emergencyEntryNotes");
+    localStorage.removeItem("emergencyPetWarning");
+    localStorage.removeItem("emergencyUrgency");
+    localStorage.removeItem("emergencyPhotos");
+
     localStorage.setItem("selectedEmergencyBusiness", business.name);
     localStorage.setItem("businessName", business.name);
+    localStorage.setItem("emergencyBusinessName", business.name);
+    localStorage.setItem("emergencyBusinessPhone", business.phone || "");
     localStorage.setItem("emergencyDispatchFee", business.dispatchFee);
     localStorage.setItem(
       "emergencyCancellationFee",
       business.cancellationFee
     );
 
+    localStorage.setItem(
+      `meetro_emergency_business_${emergencyRequestId}`,
+      JSON.stringify({
+        id: business.id,
+        name: business.name,
+        rating: business.rating,
+        distance: business.distance,
+        eta: business.eta,
+        phone: business.phone || "",
+        dispatchFee: business.dispatchFee,
+        cancellationFee: business.cancellationFee,
+        selectedAt: new Date().toISOString(),
+      })
+    );
+
     setPage("emergencyRequest");
   }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-responsive-page" style={page}>
       <div style={container}>
         <div style={heroCard}>
-          <div style={heroBadge}>🚨</div>
+          <div style={heroBadge}>
+            <MeetroIcon name="emergency" size={38} decorative />
+          </div>
 
           <h1 style={title}>{selectedService}</h1>
 
           <p style={subtitle}>{t.subtitle}</p>
 
           <div style={liveRow}>
-            <div style={livePill}>📍 {t.area}</div>
-            <div style={livePill}>⚡ {t.live}</div>
-            <div style={livePill}>🚐 {t.active}</div>
+            <div style={livePill}><MeetroIcon name="location" size={14} decorative /> {t.area}</div>
+            <div style={livePill}><MeetroIcon name="fastResponse" size={14} decorative /> {t.live}</div>
+            <div style={livePill}><MeetroIcon name="dispatch" size={14} decorative /> {t.active}</div>
           </div>
         </div>
 
         {businesses.map((business) => (
           <div key={business.id} style={businessCard}>
-            <div style={availableBanner}>{t.availableNow}</div>
-
-            <div style={etaBox}>
-              <span style={etaText}>{t.eta}</span>
-              <div style={etaTime}>{business.eta} min</div>
+            <div style={cardTopRow}>
+              <div style={availableBanner}>{t.availableNow}</div>
+              <div style={ratingBadge}>
+                <MeetroIcon name="reviews" size={14} decorative /> {business.rating}
+              </div>
             </div>
 
             <h2 style={businessName}>{business.name}</h2>
+
+            <div style={etaBox}>
+              <div>
+                <span style={etaText}>{t.eta}</span>
+                <div style={etaTime}>{business.eta} min</div>
+              </div>
+
+              <div style={distanceBox}>
+                <MeetroIcon name="location" size={14} decorative /> {business.distance}
+              </div>
+            </div>
 
             <div style={pricingCard}>
               <div style={pricingRow}>
                 <span>{t.dispatchFee}</span>
                 <strong>{business.dispatchFee}</strong>
               </div>
-
-              <div style={pricingDivider}></div>
-
-              <div style={pricingRow}>
-                <span>{t.cancellationFee}</span>
-                <strong>{business.cancellationFee}</strong>
-              </div>
             </div>
 
             <div style={trustSection}>
-              <div style={trustBadge}>✅ {t.verified}</div>
-              <div style={trustBadge}>🚐 {t.accepting}</div>
-              <div style={trustBadge}>📍 {t.tonight}</div>
-              <div style={trustBadge}>⭐ {business.rating} Rating</div>
+              <div style={trustBadge}><MeetroIcon name="verified" size={14} decorative /> {t.verified}</div>
+              <div style={trustBadge}><MeetroIcon name="phone" size={14} decorative /> {t.accepting}</div>
+              <div style={trustBadge}><MeetroIcon name="location" size={14} decorative /> {t.tonight}</div>
             </div>
 
-            <button
-              style={primaryButton}
-              onClick={() => requestEmergency(business)}
-            >
-              {t.request}
-            </button>
+            <div style={actionStack}>
+              <button
+                style={{
+                  ...callButton,
+                  opacity: business.phone ? 1 : 0.65,
+                }}
+                onClick={() => callBusiness(business)}
+              >
+                <MeetroIcon name="phone" size={16} decorative /> {business.phone ? t.callNow : language === "es" ? "Teléfono no agregado" : "Phone Not Added"}
+              </button>
+
+              <button
+                style={profileButton}
+                onClick={() => viewBusinessProfile(business)}
+              >
+                <MeetroIcon name="profile" size={16} decorative /> {t.viewProfile}
+              </button>
+
+              <button
+                style={primaryButton}
+                onClick={() => requestEmergency(business)}
+              >
+                <MeetroIcon name="dispatch" size={16} decorative /> {t.request}
+              </button>
+            </div>
           </div>
         ))}
 
@@ -183,7 +286,9 @@ function EmergencyBusinessSelection({ setPage }) {
             <div style={ruleItem}>4. {t.step4}</div>
           </div>
 
-          <div style={agreementBox}>☑ {t.agree}</div>
+          <div style={agreementBox}>
+            <MeetroIcon name="selected" size={16} decorative /> {t.agree}
+          </div>
         </div>
       </div>
 
@@ -193,10 +298,11 @@ function EmergencyBusinessSelection({ setPage }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background:
     "linear-gradient(180deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
-  padding: "24px 20px 190px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -264,6 +370,23 @@ const businessCard = {
   boxShadow: "0 18px 44px rgba(15,23,42,0.08)",
 };
 
+const cardTopRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  marginBottom: "16px",
+};
+
+const ratingBadge = {
+  background: "#fff7ed",
+  color: "#9a3412",
+  borderRadius: "999px",
+  padding: "8px 12px",
+  fontWeight: "900",
+  fontSize: "12px",
+};
+
 const availableBanner = {
   background: "#dcfce7",
   color: "#166534",
@@ -276,7 +399,20 @@ const availableBanner = {
 };
 
 const etaBox = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "14px",
   marginBottom: "18px",
+};
+
+const distanceBox = {
+  background: "#f8fafc",
+  color: "#334155",
+  borderRadius: "16px",
+  padding: "12px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
 };
 
 const etaText = {
@@ -336,14 +472,44 @@ const trustBadge = {
   fontWeight: "900",
 };
 
-const primaryButton = {
+const actionStack = {
+  display: "grid",
+  gap: "10px",
+};
+
+const callButton = {
   width: "100%",
   padding: "18px",
   borderRadius: "20px",
   border: "none",
-  background: "#5b3df5",
+  background: "linear-gradient(135deg, #ef4444, #dc2626)",
   color: "white",
   fontSize: "16px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxShadow: "0 14px 28px rgba(239,68,68,0.22)",
+};
+
+const profileButton = {
+  width: "100%",
+  padding: "16px",
+  borderRadius: "20px",
+  border: "1px solid rgba(148,163,184,0.24)",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: "15px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const primaryButton = {
+  width: "100%",
+  padding: "16px",
+  borderRadius: "20px",
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  fontSize: "15px",
   fontWeight: "900",
   cursor: "pointer",
 };

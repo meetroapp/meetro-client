@@ -1,5 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { isProfessionalSession } from "./utils/session";
+import {
+  isProfessionalSession,
+  syncAccountModeForPage,
+} from "./utils/session";
+import MeetroAssistant from "./components/MeetroAssistant";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -12,13 +16,13 @@ import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
 import ProjectDetails from "./pages/ProjectDetails";
 import Login from "./pages/Login";
-import Contractors from "./pages/Contractors";
 import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const BusinessDashboard = lazy(() => import("./pages/BusinessDashboard"));
 import ProjectGallery from "./pages/ProjectGallery";
 const MessagesInbox = lazy(() => import("./pages/MessagesInbox"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 import Welcome from "./pages/Welcome";
 import WelcomeIntro from "./pages/WelcomeIntro";
 import Favorites from "./pages/Favorites";
@@ -42,7 +46,24 @@ import QuoteBuilder from "./pages/QuoteBuilder";
 import ChangeOrderRequest from "./pages/ChangeOrderRequest";
 import BusinessAnalytics from "./pages/BusinessAnalytics";
 import BusinessCommandCenter from "./pages/BusinessCommandCenter";
+import ProfessionalOnboarding from "./pages/ProfessionalOnboarding";
+import BusinessAvailability from "./pages/BusinessAvailability";
+import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
+import HiringCenter from "./pages/HiringCenter";
+import AssetCenter from "./pages/AssetCenter";
+import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
+import MaterialsLibrary from "./pages/MaterialsLibrary";
+import PricingLibrary from "./pages/PricingLibrary";
+import ContractTemplates from "./pages/ContractTemplates";
+import ReportsCenter from "./pages/ReportsCenter";
+import PermitCenter from "./pages/PermitCenter";
+import ComplianceCenter from "./pages/ComplianceCenter";
+import BusinessIntelligencePage from "./pages/BusinessIntelligence";
+import JobsHiring from "./pages/JobsHiring";
 import JobUpdate from "./pages/JobUpdate";
+import Legal from "./pages/Legal";
+import MeetroJourney from "./pages/MeetroJourney";
+import MeetroStory from "./pages/MeetroStory";
 
 const PageLoader = () => (
   <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
@@ -58,23 +79,184 @@ function withSuspense(component) {
   );
 }
 
+const assistantEnabledPages = new Set([
+  "home",
+  "discover",
+  "jobsHiring",
+  "upload",
+  "myRequests",
+  "projectDetails",
+  "conversationThread",
+  "messagesInbox",
+  "notifications",
+  "businessDashboard",
+  "contractorDashboard",
+  "workCenter",
+  "businessLeads",
+  "quoteRequests",
+  "quoteBuilder",
+  "projectGallery",
+  "completedJobDetails",
+  "emergency",
+  "emergencyStatus",
+  "emergencyOperationsCenter",
+  "completionSheet",
+  "profile",
+]);
+
+const publicLegalDocumentRoutes = {
+  legal: "terms",
+  terms: "terms",
+  privacy: "privacy",
+  guidelines: "guidelines",
+  emergencyDisclaimer: "emergency",
+  aiDisclaimer: "ai",
+};
+
+const publicMarketingRoutes = new Set(["meetroStory"]);
+
+function withAssistantLayer(component, currentPage, setPage) {
+  if (!assistantEnabledPages.has(currentPage)) {
+    return component;
+  }
+
+  return (
+    <>
+      {component}
+      <MeetroAssistant currentPage={currentPage} setPage={setPage} />
+    </>
+  );
+}
+
 function App() {
   const token = localStorage.getItem("token");
 
  const professionalOnlyPages = [
-  "quoteRequests",
-  "businessDashboard",
-  "businessLeads",
+  "assetCenter",
+  "businessAnalytics",
+  "businessAvailability",
   "businessCommandCenter",
+  "businessDashboard",
+  "businessIntelligence",
+  "businessLeads",
+  "changeOrderRequest",
+  "completionSheet",
+  "complianceCenter",
+  "contractTemplates",
+  "contractorDashboard",
+  "contractorJobAccepted",
+  "customerRelationshipsCenter",
+  "emergencyCompletionActions",
+  "emergencyDispatch",
+  "emergencyOperationsCenter",
+  "invoiceBuilder",
+  "hiringCenter",
+  "jobUpdate",
+  "materialsLibrary",
+  "permitCenter",
+  "pricingLibrary",
+  "professionalOnboarding",
+  "projectGallery",
   "quoteBuilder",
-];  
+  "quoteRequests",
+  "reportsCenter",
+  "serviceTypesEvaluations",
+  "workCenter",
+];
 
-  const getInitialPage = () => {
-    const currentHash =
-      window.location.hash.replace("#", "") || "";
+  const isProfessionalOnlyPage = (targetPage = "") =>
+    professionalOnlyPages.includes(targetPage);
+
+  const isPublicLegalPage = (targetPage = "") =>
+    Boolean(publicLegalDocumentRoutes[targetPage]);
+
+  const isPublicMarketingPage = (targetPage = "") =>
+    publicMarketingRoutes.has(targetPage);
+
+  const getRoutePage = (route = "") => String(route || "").split("?")[0];
+
+  const getHashRoute = () => window.location.hash.replace("#", "") || "";
+
+  const isPublicProfileRoute = (route = "") => {
+    const pageName = getRoutePage(route);
+    const query = String(route || "").includes("?")
+      ? String(route).slice(String(route).indexOf("?") + 1)
+      : "";
+
+    return (
+      pageName === "contractorDetails" &&
+      Boolean(new URLSearchParams(query).get("profileId"))
+    );
+  };
+
+  const getLegalPageForRoute = (targetPage = "") => {
+    const selectedDocument = publicLegalDocumentRoutes[targetPage];
+
+    if (selectedDocument) {
+      localStorage.setItem("meetroSelectedLegalDocument", selectedDocument);
+      return "legal";
+    }
+
+    return targetPage;
+  };
+
+  const getGuardedPage = (targetPage = "") => {
+    if (isPublicLegalPage(targetPage)) {
+      return getLegalPageForRoute(targetPage);
+    }
+
+    if (isPublicMarketingPage(targetPage)) {
+      return targetPage;
+    }
+
+    const hasToken = localStorage.getItem("token");
+
+    if (isProfessionalOnlyPage(targetPage) && !hasToken) {
+      return "login";
+    }
+
+    if (
+      isProfessionalOnlyPage(targetPage) &&
+      (localStorage.getItem("activeAccountMode") || "personal") === "personal"
+    ) {
+      return "home";
+    }
+
+    if (isProfessionalOnlyPage(targetPage) && !isProfessionalSession()) {
+      return "home";
+    }
+
+    return shouldRouteToProfessionalOnboarding(targetPage)
+      ? "professionalOnboarding"
+      : targetPage;
+  };
+
+	  const shouldRouteToProfessionalOnboarding = (targetPage) => {
+	    if (targetPage !== "businessDashboard") return false;
+	    if (!isProfessionalSession()) return false;
+	    if (localStorage.getItem("meetroProfessionalOnboardingCompleted") === "true") return false;
+	    if (localStorage.getItem("meetroProfessionalOnboardingSkipped") === "true") return false;
+	    return true;
+	  };
+	
+	  const getInitialPage = () => {
+    const currentRoute = getHashRoute();
+    const currentHash = getRoutePage(currentRoute);
 
     const hasToken =
       localStorage.getItem("token");
+
+    if (currentHash && isPublicLegalPage(currentHash)) {
+      return getLegalPageForRoute(currentHash);
+    }
+
+    if (currentHash && isPublicMarketingPage(currentHash)) {
+      return currentHash;
+    }
+
+    if (currentRoute && isPublicProfileRoute(currentRoute)) {
+      return "contractorDetails";
+    }
 
     if (!hasToken) {
       return "login";
@@ -87,24 +269,71 @@ function App() {
       return "welcomeIntro";
     }
 
-    if (
-      currentHash &&
-      professionalOnlyPages.includes(currentHash)
-    ) {
-      return currentHash;
+	    if (
+	      currentHash &&
+	      isProfessionalOnlyPage(currentHash)
+	    ) {
+	      return getGuardedPage(currentHash);
     }
 
     if (currentHash) {
       return currentHash;
     }
 
-    return isProfessionalSession()
-      ? "businessDashboard"
-      : "home";
-  };
+	    if (isProfessionalSession()) {
+	      return shouldRouteToProfessionalOnboarding("businessDashboard")
+	        ? "professionalOnboarding"
+	        : "businessDashboard";
+	    }
+	
+	    return "home";
+	  };
 
   const [page, setPageState] = useState(getInitialPage());
 
+  useEffect(() => {
+    syncAccountModeForPage(page);
+  }, [page]);
+
+  useEffect(() => {
+    const handleAccountModeChange = () => {
+      const activeMode =
+        localStorage.getItem("activeAccountMode") || "personal";
+
+      if (
+        activeMode === "personal" &&
+        isProfessionalOnlyPage(page)
+      ) {
+        window.location.hash = "home";
+        setPageState("home");
+      }
+    };
+
+    window.addEventListener("accountModeChanged", handleAccountModeChange);
+
+    return () => {
+      window.removeEventListener("accountModeChanged", handleAccountModeChange);
+    };
+  }, [page]);
+
+  useEffect(() => {
+    const scrollPageToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+
+      document
+        .querySelectorAll(".app-page, .meetro-responsive-page, .meetro-readable-page")
+        .forEach((element) => {
+          element.scrollTop = 0;
+        });
+    };
+
+    requestAnimationFrame(scrollPageToTop);
+    const timer = window.setTimeout(scrollPageToTop, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [page]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -128,20 +357,40 @@ function App() {
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hashPage =
-        window.location.hash.replace("#", "") || "";
+      const hashRoute = getHashRoute();
+      const hashPage = getRoutePage(hashRoute);
 
       const hasToken =
         localStorage.getItem("token");
+
+      if (hashPage && isPublicLegalPage(hashPage)) {
+        const legalPage = getLegalPageForRoute(hashPage);
+        setPageState(legalPage);
+        return;
+      }
+
+      if (hashPage && isPublicMarketingPage(hashPage)) {
+        setPageState(hashPage);
+        return;
+      }
+
+      if (hashRoute && isPublicProfileRoute(hashRoute)) {
+        setPageState("contractorDetails");
+        return;
+      }
 
       if (!hasToken) {
         setPageState("login");
         return;
       }
 
-      if (hashPage) {
-        setPageState(hashPage);
-      }
+	      if (hashPage) {
+	        const guardedPage = getGuardedPage(hashPage);
+	        if (hashRoute === hashPage) {
+	          window.location.hash = guardedPage;
+	        }
+	        setPageState(guardedPage);
+	      }
     };
 
     const handleAuthExpired = () => {
@@ -151,25 +400,46 @@ function App() {
     const handleVisibilityResume = () => {
       const hasToken =
         localStorage.getItem("token");
+      const currentRoute = getHashRoute();
+      const currentHash = getRoutePage(currentRoute);
+
+      if (currentHash && isPublicLegalPage(currentHash)) {
+        const legalPage = getLegalPageForRoute(currentHash);
+        setPageState(legalPage);
+        return;
+      }
+
+      if (currentHash && isPublicMarketingPage(currentHash)) {
+        setPageState(currentHash);
+        return;
+      }
+
+      if (currentRoute && isPublicProfileRoute(currentRoute)) {
+        setPageState("contractorDetails");
+        return;
+      }
 
       if (!hasToken) {
         setPageState("login");
         return;
       }
 
-      const currentHash =
-        window.location.hash.replace("#", "") || "";
-
-      if (currentHash) {
-        setPageState(currentHash);
-      }
+	      if (currentHash) {
+	        const guardedPage = getGuardedPage(currentHash);
+	        if (currentRoute === currentHash) {
+	          window.location.hash = guardedPage;
+	        }
+	        setPageState(guardedPage);
+	      }
     };
 
     const handleNativePageChange = (event) => {
       const nextPage = event?.detail?.page;
 
       if (nextPage) {
-        setPageState(nextPage);
+        const guardedPage = getGuardedPage(nextPage);
+        window.location.hash = guardedPage;
+        setPageState(guardedPage);
       }
     };
 
@@ -220,10 +490,23 @@ function App() {
   
 
   const setPage = (newPage) => {
+    if (isPublicLegalPage(newPage)) {
+      const legalPage = getLegalPageForRoute(newPage);
+      window.location.hash = newPage === "legal" ? "legal" : newPage;
+      setPageState(legalPage);
+      return;
+    }
+
+    if (isPublicMarketingPage(newPage)) {
+      window.location.hash = newPage;
+      setPageState(newPage);
+      return;
+    }
+
     const hasToken = localStorage.getItem("token");
 
     if (
-      professionalOnlyPages.includes(newPage) &&
+      isProfessionalOnlyPage(newPage) &&
       !hasToken
     ) {
       window.location.hash = "login";
@@ -235,7 +518,7 @@ function App() {
       isProfessionalSession();
 
     if (
-      professionalOnlyPages.includes(newPage) &&
+      isProfessionalOnlyPage(newPage) &&
       !latestIsProfessional
     ) {
       window.dispatchEvent(
@@ -252,12 +535,21 @@ function App() {
       return;
     }
 
-    window.location.hash = newPage;
-    setPageState(newPage);
-  };
+	    const finalPage = shouldRouteToProfessionalOnboarding(newPage)
+	      ? "professionalOnboarding"
+	      : newPage;
+	
+	    syncAccountModeForPage(finalPage);
+	    window.location.hash = finalPage;
+	    setPageState(finalPage);
+	  };
 
 if (page === "login") {
   return <Login setPage={setPage} />;
+}
+
+if (page === "legal") {
+  return <Legal setPage={setPage} />;
 }
 
 if (page === "welcome") {
@@ -269,11 +561,11 @@ if (page === "welcomeIntro") {
 }
 
 if (page === "home") {
-  return withSuspense(<Home setPage={setPage} />);
+  return withAssistantLayer(withSuspense(<Home setPage={setPage} />), page, setPage);
 }
 
 if (page === "myRequests") {
-  return <MyRequests setPage={setPage} />;
+  return withAssistantLayer(<MyRequests setPage={setPage} />, page, setPage);
 }
 
 if (page === "assistant") {
@@ -281,15 +573,24 @@ if (page === "assistant") {
 }
 
 if (page === "discover") {
-  return withSuspense(<Discover setPage={setPage} />);
+  return withAssistantLayer(withSuspense(<Discover setPage={setPage} />), page, setPage);
 }
 
 if (page === "upload") {
-  return <Upload setPage={setPage} />;
+  return withAssistantLayer(<Upload setPage={setPage} />, page, setPage);
 }
 
+
 if (page === "profile") {
-  return <Profile setPage={setPage} />;
+  return withAssistantLayer(<Profile setPage={setPage} />, page, setPage);
+}
+
+if (page === "meetroJourney") {
+  return <MeetroJourney setPage={setPage} />;
+}
+
+if (page === "meetroStory") {
+  return <MeetroStory setPage={setPage} />;
 }
 
 if (page === "contractorProfile") {
@@ -305,11 +606,12 @@ if (page === "conversation") {
 }
 
 if (page === "projectDetails") {
-  return <ProjectDetails setPage={setPage} />;
+  return withAssistantLayer(<ProjectDetails setPage={setPage} />, page, setPage);
 }
 
 if (page === "contractors") {
-  return <Contractors setPage={setPage} />;
+  localStorage.setItem("activeDiscoverMode", "businessDirectory");
+  return withSuspense(<Discover setPage={setPage} />);
 }
 
 if (page === "contractorDetails") {
@@ -317,16 +619,28 @@ if (page === "contractorDetails") {
 }
 
 if (page === "quoteRequests") {
-  return <QuoteRequests setPage={setPage} />;
+  return withAssistantLayer(<QuoteRequests setPage={setPage} />, page, setPage);
 }
 
 if (page === "conversationThread") {
-  return withSuspense(<ConversationThread setPage={setPage} />);
+  return withAssistantLayer(
+    withSuspense(<ConversationThread setPage={setPage} />),
+    page,
+    setPage
+  );
 }
 
  
 if (page === "businessDashboard") {
-  return withSuspense(<BusinessDashboard setPage={setPage} />);
+  return withAssistantLayer(
+    withSuspense(<BusinessDashboard setPage={setPage} />),
+    page,
+    setPage
+  );
+}
+
+if (page === "professionalOnboarding") {
+  return <ProfessionalOnboarding setPage={setPage} />;
 }
 
 if (page === "businessAnalytics") {
@@ -334,11 +648,11 @@ if (page === "businessAnalytics") {
 }
 
 if (page === "businessLeads") {
-  return <BusinessLeads setPage={setPage} />;
+  return withAssistantLayer(<BusinessLeads setPage={setPage} />, page, setPage);
 }
 
 if (page === "quoteBuilder") {
-  return <QuoteBuilder setPage={setPage} />;
+  return withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage);
 }
 
 if (page === "changeOrderRequest") {
@@ -349,16 +663,80 @@ if (page === "businessCommandCenter") {
   return <BusinessCommandCenter setPage={setPage} />;
 }
 
+if (page === "businessAvailability") {
+  return <BusinessAvailability setPage={setPage} />;
+}
+
+if (page === "customerRelationshipsCenter") {
+  return <CustomerRelationshipsCenter setPage={setPage} />;
+}
+
+if (page === "hiringCenter") {
+  return <HiringCenter setPage={setPage} />;
+}
+
+if (page === "assetCenter") {
+  return <AssetCenter setPage={setPage} />;
+}
+
+if (page === "serviceTypesEvaluations") {
+  return <ServiceTypesEvaluations setPage={setPage} />;
+}
+
+if (page === "materialsLibrary") {
+  return <MaterialsLibrary setPage={setPage} />;
+}
+
+if (page === "pricingLibrary") {
+  return <PricingLibrary setPage={setPage} />;
+}
+
+if (page === "contractTemplates") {
+  return <ContractTemplates setPage={setPage} />;
+}
+
+if (page === "reportsCenter") {
+  return <ReportsCenter setPage={setPage} />;
+}
+
+if (page === "permitCenter") {
+  return <PermitCenter setPage={setPage} />;
+}
+
+if (page === "complianceCenter") {
+  return <ComplianceCenter setPage={setPage} />;
+}
+
+if (page === "businessIntelligence") {
+  return <BusinessIntelligencePage setPage={setPage} />;
+}
+
+if (page === "jobsHiring") {
+  return withAssistantLayer(<JobsHiring setPage={setPage} />, page, setPage);
+}
+
 if (page === "jobUpdate") {
   return <JobUpdate setPage={setPage} />;
 }
 
 if (page === "projectGallery") {
-  return <ProjectGallery setPage={setPage} />;
+  return withAssistantLayer(<ProjectGallery setPage={setPage} />, page, setPage);
 }
 
 if (page === "messagesInbox") {
-  return withSuspense(<MessagesInbox setPage={setPage} />);
+  return withAssistantLayer(
+    withSuspense(<MessagesInbox setPage={setPage} />),
+    page,
+    setPage
+  );
+}
+
+if (page === "notifications") {
+  return withAssistantLayer(
+    withSuspense(<Notifications setPage={setPage} />),
+    page,
+    setPage
+  );
 }
 
 if (page === "favorites") {
@@ -366,7 +744,7 @@ if (page === "favorites") {
 }
 
 if (page === "emergency") {
-  return <Emergency setPage={setPage} />;
+  return withAssistantLayer(<Emergency setPage={setPage} />, page, setPage);
 }
 
 if (page === "emergencyBusinessSelection") {
@@ -387,7 +765,7 @@ if (page === "emergencyRequest") {
 }
 
 if (page === "emergencyStatus") {
-  return <EmergencyStatus setPage={setPage} />;
+  return withAssistantLayer(<EmergencyStatus setPage={setPage} />, page, setPage);
 }
 
 if (page === "emergencyDispatch") {
@@ -403,11 +781,15 @@ if (page === "invoiceBuilder") {
 }
 
 if (page === "emergencyOperationsCenter") {
-  return <EmergencyOperationsCenter setPage={setPage} />;
+  return withAssistantLayer(
+    <EmergencyOperationsCenter setPage={setPage} />,
+    page,
+    setPage
+  );
 }
 
 if (page === "completionSheet") {
-  return <CompletionSheet setPage={setPage} />;
+  return withAssistantLayer(<CompletionSheet setPage={setPage} />, page, setPage);
 }
 
 if (page === "emergencyChat") {
@@ -419,11 +801,11 @@ if (page === "emergencyComplete") {
 }
 
 if (page === "contractorDashboard" || page === "workCenter") {
-  return <ContractorDashboard setPage={setPage} />;
+  return withAssistantLayer(<ContractorDashboard setPage={setPage} />, page, setPage);
 }
 
 if (page === "completedJobDetails") {
-  return <CompletedJobDetails setPage={setPage} />;
+  return withAssistantLayer(<CompletedJobDetails setPage={setPage} />, page, setPage);
 }
 
 if (page === "contractorJobAccepted") {

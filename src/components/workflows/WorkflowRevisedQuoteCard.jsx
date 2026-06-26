@@ -1,8 +1,11 @@
 import { getWorkflowStatusLabel } from "../../utils/workflowStatus";
+import { t } from "../../utils/language";
 import {
   updateMatchingHomeownerRequests,
   prependProjectTimeline,
 } from "../../utils/workflowTimeline";
+import MeetroIcon from "../MeetroIcon";
+import UniversalDocumentCard from "../documents/UniversalDocumentCard";
 
 function WorkflowRevisedQuoteCard({
   msg,
@@ -10,15 +13,37 @@ function WorkflowRevisedQuoteCard({
   currentViewerRole,
   setMessages,
   setMessageText,
-  styles,
+  reviewProjectAction,
 }) {
-  const {
-    revisedQuoteActions,
-    approveRevisedQuoteButton,
-    requestRevisedQuoteChangeButton,
-    revisedQuoteApproved,
-    revisedQuotePending,
-  } = styles;
+  const title = msg.projectTitle || msg.title || t("project", language);
+  const amount = msg.amount || msg.total || msg.quoteAmount || "";
+  const status =
+    msg.status === "approved" || msg.status === "accepted"
+      ? t("documentStatusApproved", language)
+      : msg.status === "change_requested" || msg.status === "revision_requested"
+      ? t("documentStatusRevisionRequested", language)
+      : t("documentStatusAwaitingApproval", language);
+
+  return (
+    <UniversalDocumentCard
+      documentType="quote"
+      projectTitle={title}
+      amount={amount}
+      status={status}
+      language={language}
+      icon="quote"
+      reviewProjectAction={() =>
+        reviewProjectAction?.({
+          ...msg,
+          title,
+          projectTitle: title,
+          total: amount,
+          status,
+          type: "quote",
+        })
+      }
+    />
+  );
 
   return (
     <>
@@ -135,14 +160,14 @@ function WorkflowRevisedQuoteCard({
 
       {msg.status === "approved" && (
         <div style={revisedQuoteApproved}>
-          ✅{" "}
+          <MeetroIcon name="completion" size={16} decorative />{" "}
           {getWorkflowStatusLabel("approved", language)}
         </div>
       )}
 
       {msg.status === "change_requested" && (
         <div style={revisedQuotePending}>
-          💬{" "}
+          <MeetroIcon name="messages" size={16} decorative />{" "}
           {getWorkflowStatusLabel("change_requested", language)}
         </div>
       )}

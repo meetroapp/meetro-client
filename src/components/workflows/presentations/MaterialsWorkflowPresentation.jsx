@@ -1,4 +1,5 @@
 import WorkflowRenderer from "../WorkflowRenderer";
+import MeetroIcon from "../../MeetroIcon";
 
 function MaterialsWorkflowPresentation({
   msg,
@@ -62,7 +63,7 @@ function MaterialsWorkflowPresentation({
       </p>
 
       <div style={materialsProviderBox}>
-        🛒{" "}
+        <MeetroIcon name="materials" size={16} decorative />{" "}
         {msg.provider ||
           (language === "es"
             ? "El profesional comprará los materiales"

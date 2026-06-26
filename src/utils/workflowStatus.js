@@ -51,14 +51,14 @@ export function getWorkflowStatusLabel(status, language = "en") {
 
 export function getWorkflowTypeIcon(type) {
   const icons = {
-    workflow_change_request: "🔁",
-    workflow_revised_quote: "💰",
-    workflow_materials_approval: "📦",
-    workflow_invoice_request: "🧾",
-    workflow_completion_closeout: "🏁",
+    workflow_change_request: "history",
+    workflow_revised_quote: "quote",
+    workflow_materials_approval: "materials",
+    workflow_invoice_request: "quickInvoice",
+    workflow_completion_closeout: "completion",
   };
 
-  return icons[type] || "📌";
+  return icons[type] || "noteText";
 }
 
 export function isWorkflowMessage(type) {

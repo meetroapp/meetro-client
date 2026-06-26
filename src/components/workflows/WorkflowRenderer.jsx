@@ -3,6 +3,7 @@ import WorkflowCompletionCloseoutCard from "./WorkflowCompletionCloseoutCard";
 import WorkflowInvoiceRequestCard from "./WorkflowInvoiceRequestCard";
 import WorkflowMaterialsApprovalCard from "./WorkflowMaterialsApprovalCard";
 import WorkflowRevisedQuoteCard from "./WorkflowRevisedQuoteCard";
+import WorkflowQuoteSentCard from "./WorkflowQuoteSentCard";
 
 function WorkflowRenderer(props) {
   const { message, msg } = props;
@@ -27,6 +28,9 @@ function WorkflowRenderer(props) {
 
     case "workflow_revised_quote":
       return <WorkflowRevisedQuoteCard {...props} />;
+
+    case "workflow_quote_sent":
+      return <WorkflowQuoteSentCard {...props} />;
 
     default:
       return null;

@@ -1,15 +1,13 @@
 import { getWorkflowStatusLabel } from "../../utils/workflowStatus";
-import {
-  updateMatchingHomeownerRequests,
-  prependProjectTimeline,
-} from "../../utils/workflowTimeline";
+import { t } from "../../utils/language";
+import { shareCompletionRecord as shareCompletionRecordFile } from "../../utils/completionShare";
+import MeetroIcon from "../MeetroIcon";
 
 function WorkflowCompletionCloseoutCard({
   msg,
   language,
   currentViewerRole,
-  setMessages,
-  setMessageText,
+  setPage,
   styles,
 }) {
   const {
@@ -18,143 +16,130 @@ function WorkflowCompletionCloseoutCard({
     closeoutFollowupNotice,
     leaveReviewButton,
   } = styles;
+  const isBusinessViewer = currentViewerRole === "business";
+  const closeoutActionsStyle = {
+    display: "grid",
+    gap: "10px",
+    marginTop: "14px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    width: "100%",
+    minWidth: 0,
+  };
+  const primaryHomeownerAction = {
+    border: "none",
+    borderRadius: "14px",
+    padding: "12px 14px",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+    width: "100%",
+    minWidth: 0,
+  };
+
+  async function shareCompletionRecord(event) {
+    event.stopPropagation();
+    await shareCompletionRecordFile(msg.completion || {
+      title: msg.projectTitle,
+      service: msg.projectTitle,
+    });
+  }
 
   return (
     <div style={closeoutWorkflowBody}>
-      {currentViewerRole !== "business" &&
-        msg.completionStatus !== "confirmed" &&
-        msg.completionStatus !== "followup_requested" && (
-          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-            <button
-              style={{
-                flex: 1,
-                border: "none",
-                borderRadius: 14,
-                padding: "12px 14px",
-                background: "#10b981",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-              onClick={(event) => {
-                event.stopPropagation();
+      {isBusinessViewer ? (
+        <>
+          <div style={closeoutConfirmedNotice}>
+            <MeetroIcon name="completion" size={16} decorative /> {t("completionSaved")} ·{" "}
+            {language === "es"
+              ? "Revisión de cierre pendiente"
+              : "Closure review pending"}
+          </div>
 
-                setMessages((prev) =>
-                  prev.map((item) =>
-                    item.id === msg.id
-                      ? {
-                          ...item,
-                          completionStatus: "confirmed",
-                          text:
-                            language === "es"
-                              ? "El cliente confirmó el cierre del proyecto."
-                              : "Customer confirmed project closeout.",
-                        }
-                      : item
-                  )
-                );
-              }}
+          <div style={closeoutActionsStyle}>
+            <button
+              style={leaveReviewButton}
+              onClick={shareCompletionRecord}
             >
-              {language === "es"
-                ? "Confirmar cierre"
-                : "Confirm Completion"}
+              {t("shareRecord")}
             </button>
 
             <button
-              style={{
-                flex: 1,
-                border: "none",
-                borderRadius: 14,
-                padding: "12px 14px",
-                background: "#f59e0b",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
+              style={leaveReviewButton}
               onClick={(event) => {
                 event.stopPropagation();
-
-                updateMatchingHomeownerRequests(
-                  msg,
-                  (request) =>
-                    prependProjectTimeline(
-                      {
-                        ...request,
-                        status: "closeout_followup_requested",
-                        closeoutFollowupRequested: true,
-                        closeoutFollowupRequestedAt:
-                          new Date().toISOString(),
-                      },
-                      {
-                        type: "closeoutFollowupRequested",
-                        label:
-                          language === "es"
-                            ? "Seguimiento solicitado por el cliente"
-                            : "Follow-up requested by customer",
-                      }
-                    )
-                );
-
-                setMessages((prev) =>
-                  prev.map((item) =>
-                    item.id === msg.id
-                      ? {
-                          ...item,
-                          completionStatus: "followup_requested",
-                          text:
-                            language === "es"
-                              ? "El cliente solicitó seguimiento antes del cierre."
-                              : "Customer requested follow-up before closeout.",
-                        }
-                      : item
-                  )
-                );
-
-                setMessageText(
-                  language === "es"
-                    ? "Tengo una pregunta antes de confirmar el cierre."
-                    : "I have a question before confirming closeout."
-                );
+                localStorage.setItem("completedJobViewMode", "business");
+                setPage("completedJobDetails");
               }}
             >
-              {language === "es"
-                ? "Solicitar seguimiento"
-                : "Request Follow-up"}
+              {t("openCompletedWork")}
+            </button>
+
+            <button
+              style={leaveReviewButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                localStorage.setItem("meetroWorkCenterTab", "completed");
+                setPage("contractorDashboard");
+              }}
+            >
+              {t("backToWorkCenter")}
             </button>
           </div>
-        )}
+        </>
+      ) : (
+        <>
+          <div style={closeoutConfirmedNotice}>
+            <MeetroIcon name="completion" size={16} decorative /> {t("serviceCompleted")} ·{" "}
+            {language === "es"
+              ? "Confirma la finalización; el cierre se revisa por separado"
+              : "Confirm completion; Closure is reviewed separately"}
+          </div>
 
-      {msg.completionStatus === "confirmed" && (
+          <div style={closeoutActionsStyle}>
+            <button
+              style={{
+                ...primaryHomeownerAction,
+                background: "#10b981",
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                localStorage.setItem("completedJobViewMode", "homeowner");
+                setPage("emergencyComplete");
+              }}
+            >
+              {t("leaveReview")}
+            </button>
+
+            <button
+              style={{
+                ...primaryHomeownerAction,
+                background: "#f59e0b",
+              }}
+              onClick={(event) => {
+                shareCompletionRecord(event);
+              }}
+            >
+              {t("shareSaveReceipt")}
+            </button>
+          </div>
+        </>
+      )}
+
+      {!isBusinessViewer && msg.completionStatus === "confirmed" && (
         <div style={closeoutConfirmedNotice}>
-          ✅{" "}
+          <MeetroIcon name="completion" size={16} decorative />{" "}
           {getWorkflowStatusLabel("confirmed", language)} ·{" "}
           {language === "es" ? "Garantía reconocida" : "Warranty acknowledged"}
         </div>
       )}
 
-      {msg.completionStatus === "followup_requested" && (
+      {!isBusinessViewer && msg.completionStatus === "followup_requested" && (
         <div style={closeoutFollowupNotice}>
-          💬{" "}
+          <MeetroIcon name="messages" size={16} decorative />{" "}
           {getWorkflowStatusLabel("followup_requested", language)}
         </div>
       )}
 
-      {msg.completionStatus === "confirmed" && (
-        <button
-          style={leaveReviewButton}
-          onClick={(event) => {
-            event.stopPropagation();
-
-            setMessageText(
-              language === "es"
-                ? "Gracias por el servicio. Quiero dejar una reseña."
-                : "Thank you for the service. I would like to leave a review."
-            );
-          }}
-        >
-          ⭐ {language === "es" ? "Dejar reseña" : "Leave Review"}
-        </button>
-      )}
     </div>
   );
 }

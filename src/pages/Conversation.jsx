@@ -182,7 +182,7 @@ function Conversation({ setPage, currentPage }) {
               cursor: "pointer",
             }}
           >
-            📷
+            
           </button>
 
           <input

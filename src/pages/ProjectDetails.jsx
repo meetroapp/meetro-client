@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
-import SafeBackBar from "../components/SafeBackBar";
 import API_URL from "../api";
-import { t } from "../utils/language";
+import { getLanguage, t } from "../utils/language";
+import { formatMessageTime } from "../utils/displayTime";
+import {
+  getHomeownerProjectJourney,
+  getHomeownerProjectTimelineEvents,
+} from "../utils/homeownerProjectJourney";
 import {
   getActiveJobSnapshot,
   getJobRecord,
   getSelectedActiveProject,
   saveSelectedActiveProject,
 } from "../utils/workCenter";
+import { isProfessionalSession } from "../utils/session";
 
 function ProjectDetails({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -22,18 +27,22 @@ function ProjectDetails({ setPage, currentPage }) {
   const [expandedPhotoIndex, setExpandedPhotoIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(null);
   const [showGalleryGrid, setShowGalleryGrid] = useState(false);
+  const [language, setLanguage] = useState(getLanguage());
 
   const activeProjectData = getSelectedActiveProject();
 
   const projectDetailsReturnPageValue =
     localStorage.getItem("projectDetailsReturnPage") || "";
+  const hasProfessionalAuthority = isProfessionalSession();
 
   const isProfessionalProject =
+    hasProfessionalAuthority &&
     projectDetailsReturnPageValue === "contractorDashboard";
 
   const isBusinessLeadReviewPage =
-    projectDetailsReturnPageValue === "businessLeads" ||
-    projectDetailsReturnPageValue === "businessDashboard";
+    hasProfessionalAuthority &&
+    (projectDetailsReturnPageValue === "businessLeads" ||
+      projectDetailsReturnPageValue === "businessDashboard");
 
   const memoryStats = {
     updates: jobRecords.filter((item) => item.type === "update").length,
@@ -62,6 +71,103 @@ function ProjectDetails({ setPage, currentPage }) {
     : "Open Request";
 
   const latestActivity = jobRecords[0] || null;
+
+  useEffect(() => {
+    const handleLanguageChange = () => setLanguage(getLanguage());
+
+    window.addEventListener("languageChanged", handleLanguageChange);
+    window.addEventListener("meetro-language-change", handleLanguageChange);
+
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+      window.removeEventListener("meetro-language-change", handleLanguageChange);
+    };
+  }, []);
+
+  function openProjectConversation() {
+    if (!post) return;
+
+    const requestId = post.requestId || post.id || "";
+    const conversationId =
+      post.conversationId ||
+      post.activeConversationId ||
+      post.projectConversationId ||
+      requestId ||
+      `request-${Date.now()}`;
+    const professionalName =
+      post.selectedProfessional ||
+      post.businessName ||
+      post.professionalName ||
+      "Professional";
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(post));
+    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationName", professionalName);
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem(
+      "selectedConversation",
+      JSON.stringify({
+        id: conversationId,
+        type: "work",
+        category: "work",
+        businessName: professionalName,
+        projectTitle: post.title || post.category || t("homeServiceRequest", language),
+        requestId,
+      })
+    );
+    localStorage.setItem("conversationReturnPage", "projectDetails");
+    localStorage.setItem("returnPage", "projectDetails");
+    setPage("conversationThread");
+  }
+
+  function handleJourneyPrimaryAction(actionKey) {
+    if (!post) return;
+
+    const requestId = post.requestId || post.id || "";
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(post));
+
+    if (
+      actionKey === "leaveReview" ||
+      actionKey === "reviewCompletion" ||
+      actionKey === "viewRecord"
+    ) {
+      localStorage.setItem("lastCompletedProject", JSON.stringify(post));
+      localStorage.setItem("completedJobViewMode", "homeowner");
+      setPage("completedJobDetails");
+      return;
+    }
+
+    localStorage.setItem("myRequestsReturnPage", "projectDetails");
+    setPage("myRequests");
+  }
+
+  function openRequestEdit() {
+    if (!post) return;
+
+    const requestId = post.requestId || post.id || "";
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
+    localStorage.setItem("meetroOpenHomeownerRequestEdit", "true");
+    setPage("myRequests");
+  }
+
+  function hasApprovedQuote(request = {}) {
+    const status = String(request.status || "").toLowerCase();
+    const quote = request.acceptedQuote ||
+      (Array.isArray(request.quotesReceived) ? request.quotesReceived[0] : null) ||
+      {};
+    const quoteStatus = String(quote.status || quote.quoteStatus || "").toLowerCase();
+
+    return Boolean(
+      request.acceptedQuote ||
+        ["accepted", "approved", "active", "completed", "closed"].includes(status) ||
+        ["accepted", "approved"].includes(quoteStatus)
+    );
+  }
 
   useEffect(() => {
     const loadJobRecords = () => {
@@ -163,7 +269,7 @@ if (data.post) {
   }, []);
 
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-readable-page" style={pageWrapper}>
       <div style={contentWrapper}>
         <button
   onClick={() => {
@@ -185,7 +291,7 @@ if (data.post) {
 
         {!loading && !post && (
           <div style={cardStyle}>
-            <div style={emptyIcon}>📭</div>
+            <div style={emptyIcon}>REQ</div>
 
             <h2 style={emptyTitle}>{t("postNotFound")}</h2>
 
@@ -195,15 +301,39 @@ if (data.post) {
 
         {!loading && post && (
           <div style={cardStyle}>
-            <div style={tagRow}>
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+              <div style={tagRow}>
               {post.category && <span style={tagStyle}>#{post.category}</span>}
 
               {post.location && (
-                <span style={tagStyle}>📍 {post.location}</span>
+                <span style={tagStyle}> {post.location}</span>
               )}
-            </div>
+              </div>
+            )}
 
-            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+            {isBusinessLeadReviewPage ? (
+              <div style={opportunityCompactHeader}>
+                <span style={opportunityCompactEyebrow}>
+                  {t("opportunityHeaderEyebrow", language)}
+                </span>
+                <h1 style={opportunityCompactTitle}>
+                  {post.title || post.service || post.category || t("homeServiceRequest", language)}
+                </h1>
+                <p style={opportunityCompactText}>
+                  {t("opportunityDetailDescription", language)}
+                </p>
+                <div style={opportunityStatusGrid}>
+                  <div style={opportunityStatusItem}>
+                    <span>{t("currentStage", language)}</span>
+                    <strong>{t("opportunityCurrentStage", language)}</strong>
+                  </div>
+                  <div style={opportunityStatusItem}>
+                    <span>{t("wcNextStep", language)}</span>
+                    <strong>{t("opportunityNextStep", language)}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (isProfessionalProject) && (
               <div style={professionalStatusCard}>
                 <div style={professionalStatusIcon}>✓</div>
 
@@ -221,45 +351,58 @@ if (data.post) {
               </div>
             )}
 
-            <h1 style={projectTitle}>
-              {post.title || post.service || post.category || "Project"}
-            </h1>
+            {!isProfessionalProject && !isBusinessLeadReviewPage ? (
+              <HomeownerProjectHeader request={post} language={language} />
+            ) : !isBusinessLeadReviewPage && (
+              <h1 style={projectTitle}>
+                {post.title || post.service || post.category || "Project"}
+              </h1>
+            )}
 
-            <div style={projectLifecycleStrip}>
-              {[
-                { key: "requested", icon: "📨", label: t("requested") },
-                { key: "review", icon: "👀", label: t("reviewContact") },
-                { key: "quote", icon: "🧾", label: t("quoteAfterReview") },
-                { key: "active", icon: "🛠️", label: t("active") },
-                { key: "completed", icon: "✅", label: t("done") },
-              ].map((step) => {
-                const status = String(post.status || "").toLowerCase();
+            {!isProfessionalProject && !isBusinessLeadReviewPage ? (
+              <ProjectJourneyPanel
+                request={post}
+                language={language}
+                onPrimaryAction={handleJourneyPrimaryAction}
+                onMessageProfessional={openProjectConversation}
+              />
+            ) : isProfessionalProject ? (
+              <div style={projectLifecycleStrip}>
+                {[
+                  { key: "requested", label: t("requested") },
+                  { key: "review", label: t("projectReviewContact") },
+                  { key: "quote", label: t("quoteLater") },
+                  { key: "active", label: t("active") },
+                  { key: "completed", label: t("done") },
+                ].map((step) => {
+                  const status = String(post.status || "").toLowerCase();
+                  const currentStep =
+                    status === "completed"
+                      ? "completed"
+                      : status === "active"
+                      ? "active"
+                      : status === "quoted" || status === "quote"
+                      ? "quote"
+                      : status === "new" || status === "requested"
+                      ? "requested"
+                      : "review";
+                  const isActive = currentStep === step.key;
 
-                const activeSteps =
-                  status === "completed"
-                    ? ["requested", "review", "quote", "active", "completed"]
-                    : status === "active"
-                    ? ["requested", "review", "quote", "active"]
-                    : status === "scheduled"
-                    ? ["requested", "review", "quote"]
-                    : ["requested", "review"];
-
-                const isActive = activeSteps.includes(step.key);
-
-                return (
-                  <div
-                    key={step.key}
-                    style={{
-                      ...projectLifecycleStep,
-                      ...(isActive ? projectLifecycleStepActive : {}),
-                    }}
-                  >
-                    <span>{step.icon}</span>
-                    <small>{step.label}</small>
-                  </div>
-                );
-              })}
-            </div>
+                  return (
+                    <div
+                      key={step.key}
+                      style={{
+                        ...projectLifecycleStep,
+                        ...(isActive ? projectLifecycleStepActive : {}),
+                      }}
+                    >
+                      <span style={projectLifecycleDot} />
+                      <small>{step.label}</small>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {(() => {
               const projectPhotos = Array.isArray(post.photos)
@@ -273,54 +416,128 @@ if (data.post) {
 
               const uniquePhotos = [...new Set(allPhotos)];
 
-              if (uniquePhotos.length === 0) return null;
-
               return (
-                <div style={projectPhotoGallery}>
-                  <img
-                    src={selectedPhoto || uniquePhotos[0]}
-                    alt={post.title}
-                    style={projectImage}
-                    onClick={() => {
-                      const activePhoto = selectedPhoto || uniquePhotos[0];
-                      const activeIndex = uniquePhotos.indexOf(activePhoto);
+                <div style={projectInformationCard}>
+                  <strong style={projectInformationTitle}>
+                    {t("requestDetails", language)}
+                  </strong>
 
-                      setExpandedPhotos(uniquePhotos);
-                      setExpandedPhotoIndex(activeIndex >= 0 ? activeIndex : 0);
-                      setExpandedPhoto(activePhoto);
-                    }}
-                  />
+                  {uniquePhotos.length > 0 && (
+                    <div style={projectPhotoGallery}>
+                      <img
+                        src={selectedPhoto || uniquePhotos[0]}
+                        alt={post.title}
+                        style={projectImage}
+                        onClick={() => {
+                          const activePhoto = selectedPhoto || uniquePhotos[0];
+                          const activeIndex = uniquePhotos.indexOf(activePhoto);
 
-                  {uniquePhotos.length > 1 && (
-                    <>
-                      <div style={projectPhotoCountRow}>
-                        <div style={projectPhotoCount}>
-                          📸 {uniquePhotos.length} {uniquePhotos.length === 1 ? t("projectPhoto") : t("projectPhotos")}
-                        </div>
+                          setExpandedPhotos(uniquePhotos);
+                          setExpandedPhotoIndex(activeIndex >= 0 ? activeIndex : 0);
+                          setExpandedPhoto(activePhoto);
+                        }}
+                      />
 
-                        <button
-                          style={viewAllPhotosButton}
-                          onClick={() => {
-                            setExpandedPhotos(uniquePhotos);
-                            setShowGalleryGrid(true);
-                          }}
-                        >
-                          View All
-                        </button>
+                      {uniquePhotos.length > 1 && (
+                        <>
+                          <div style={projectPhotoCountRow}>
+                            <div style={projectPhotoCount}>
+                               {uniquePhotos.length} {uniquePhotos.length === 1 ? t("projectPhoto") : t("projectPhotos")}
+                            </div>
+
+                            <button
+                              style={viewAllPhotosButton}
+                              onClick={() => {
+                                setExpandedPhotos(uniquePhotos);
+                                setShowGalleryGrid(true);
+                              }}
+                            >
+                              View All
+                            </button>
+                          </div>
+
+                          <div style={projectThumbnailRow}>
+                            {uniquePhotos.map((photo, index) => (
+                              <img
+                                key={`${photo}-${index}`}
+                                src={photo}
+                                alt={`Project photo ${index + 1}`}
+                                style={projectThumbnail}
+                                onClick={() => setSelectedPhoto(photo)}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={projectInformationRows}>
+                    <div style={projectInformationRow}>
+                      <span>{t("projectTitle")}</span>
+                      <strong>{post.title || post.service || post.category || "Project"}</strong>
+                    </div>
+                    <div style={projectInformationRow}>
+                      <span>{t("categoryExample")}</span>
+                      <strong>{post.category || t("categoryNotSet")}</strong>
+                    </div>
+                    <div style={projectInformationRow}>
+                      <span>{t("projectScope")}</span>
+                      <strong>
+                        {post.description ||
+                          post.project_description ||
+                          post.details ||
+                          post.notes ||
+                          post.service ||
+                          t("noDescriptionAdded")}
+                      </strong>
+                    </div>
+                    <div style={projectInformationRow}>
+                      <span>{t("fullServiceAddress")}</span>
+                      <strong>{post.fullAddress || post.location || "—"}</strong>
+                    </div>
+                    {(post.unitNumber || post.unit_number) && (
+                      <div style={projectInformationRow}>
+                        <span>{t("unitNumber")}</span>
+                        <strong>{post.unitNumber || post.unit_number}</strong>
                       </div>
-
-                      <div style={projectThumbnailRow}>
-                        {uniquePhotos.map((photo, index) => (
-                          <img
-                            key={`${photo}-${index}`}
-                            src={photo}
-                            alt={`Project photo ${index + 1}`}
-                            style={projectThumbnail}
-                            onClick={() => setSelectedPhoto(photo)}
-                          />
-                        ))}
+                    )}
+                    {(post.accessNotes || post.access_notes) && (
+                      <div style={projectInformationRow}>
+                        <span>{t("accessNotes")}</span>
+                        <strong>{post.accessNotes || post.access_notes}</strong>
                       </div>
-                    </>
+                    )}
+                    <div style={projectInformationRow}>
+                      <span>{t("customer")}</span>
+                      <strong>
+                        {post.username ||
+                          post.customerName ||
+                          post.customer ||
+                          post.email ||
+                          "Meetro user"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {!isProfessionalProject && !isBusinessLeadReviewPage && (
+                    <div style={requestDetailsActionWrap}>
+                      <button
+                        type="button"
+                        style={{
+                          ...requestDetailsActionButton,
+                          ...(hasApprovedQuote(post)
+                            ? requestDetailsActionButtonDisabled
+                            : {}),
+                        }}
+                        disabled={hasApprovedQuote(post)}
+                        onClick={openRequestEdit}
+                      >
+                        {hasApprovedQuote(post)
+                          ? t("requestChange", language)
+                          : t("editRequest", language)}
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -454,48 +671,6 @@ if (data.post) {
               </div>
             )}
 
-            <div style={projectScopeCard}>
-              <div style={projectScopeHeader}>
-                <span>📝</span>
-                <strong>
-                  {language === "es" ? "Alcance del trabajo" : "Project Scope"}
-                </strong>
-              </div>
-
-              <p style={projectScopeText}>
-                {post.description ||
-                  post.project_description ||
-                  post.details ||
-                  post.notes ||
-                  post.service ||
-                  t("noDescriptionAdded")}
-              </p>
-            </div>
-
-            <div style={infoBox}>
-              <div style={infoRow}>
-                <span>👤 Client</span>
-
-                <strong>
-                  {post.username || post.email || "Meetro user"}
-                </strong>
-              </div>
-
-              <div style={infoRow}>
-                <span>📅 Status</span>
-
-                <strong style={{ color: "#16a34a" }}>
-                  {liveProjectStatus}
-                </strong>
-              </div>
-
-              <div style={infoRow}>
-                <span>⚡ Response</span>
-
-                <strong>{t("fastResponse")}</strong>
-              </div>
-            </div>
-
             {isProfessionalProject && post.acceptedQuote && (
               <div style={acceptedQuoteBox}>
                 <span>Accepted Quote</span>
@@ -503,63 +678,121 @@ if (data.post) {
               </div>
             )}
 
-            <div style={aiSummaryBox}>
-              <div style={aiSummaryIcon}>🤖</div>
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+              <div style={projectPrimaryActions}>
+              {(isProfessionalProject || isBusinessLeadReviewPage) && (
+                <p style={contactCustomerHelper}>
+                  {t("contactCustomerArrangeVisitHelper")}
+                </p>
+              )}
+
+              <button
+                onClick={() => {
+                  const conversationId =
+                    post.conversationId ||
+                    post.requestId ||
+                    post.id ||
+                    activeJobSnapshot?.jobId ||
+                    localStorage.getItem("activeJobId") ||
+                    "project-conversation";
+
+                  localStorage.setItem("selectedQuoteRequest", JSON.stringify(post));
+                  localStorage.setItem("selectedPostId", String(post.id || post.requestId || ""));
+                  localStorage.setItem("selectedQuoteRequestId", String(post.id || post.requestId || conversationId));
+                  localStorage.setItem("selectedMessageReceiverId", post.user_id || "");
+                  localStorage.setItem("activeConversationId", String(conversationId));
+                  localStorage.setItem(
+                    "activeConversationName",
+                    post.username || post.customer || post.email || "Customer"
+                  );
+                  localStorage.setItem(
+                    "meetroConversationType",
+                    isProfessionalProject || isBusinessLeadReviewPage
+                      ? "standard"
+                      : "activeJob"
+                  );
+                  localStorage.setItem("conversationReturnPage", "projectDetails");
+                  localStorage.setItem("returnPage", "projectDetails");
+
+                  if (isProfessionalProject || isBusinessLeadReviewPage) {
+                    localStorage.setItem("leadWorkflowStage", "scheduling_discussion");
+                    localStorage.setItem("leadWorkflowIntent", "arrange_visit_or_call");
+                    localStorage.setItem(
+                      "meetroPendingChatPrompt",
+                      "Hi, I reviewed your request. What day/time works best for a visit or call?"
+                    );
+                  }
+
+                  setPage("conversationThread");
+                }}
+                style={messageButton}
+              >
+                 {(isProfessionalProject || isBusinessLeadReviewPage)
+                  ? t("contactCustomerArrangeVisit")
+                  : t("openProjectConversation")}
+              </button>
+            </div>
+            )}
+
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+              <div style={aiSummaryBox}>
+              <div style={aiSummaryIcon}>AI</div>
 
               <div>
-                <strong>AI Project Summary</strong>
+                <strong>AI Service Summary</strong>
 
                 <p>
                   {jobRecords.length === 0
-                    ? "No project memory has been saved yet. Updates, photos, approvals, materials, and payments saved from the conversation will appear here."
-                    : `This project has ${jobRecords.length} saved workflow item${jobRecords.length === 1 ? "" : "s"}: ${memoryStats.photos} photo record${memoryStats.photos === 1 ? "" : "s"}, ${memoryStats.issues} issue${memoryStats.issues === 1 ? "" : "s"}, ${memoryStats.approvals} approval${memoryStats.approvals === 1 ? "" : "s"}, ${memoryStats.payments} payment request${memoryStats.payments === 1 ? "" : "s"}, and ${memoryStats.materials} material note${memoryStats.materials === 1 ? "" : "s"}.`}
+                    ? "No service memory has been saved yet. Updates, photos, approvals, materials, and payments saved from the conversation will appear here."
+                    : `This service has ${jobRecords.length} saved workflow item${jobRecords.length === 1 ? "" : "s"}: ${memoryStats.photos} photo record${memoryStats.photos === 1 ? "" : "s"}, ${memoryStats.issues} issue${memoryStats.issues === 1 ? "" : "s"}, ${memoryStats.approvals} approval${memoryStats.approvals === 1 ? "" : "s"}, ${memoryStats.payments} payment request${memoryStats.payments === 1 ? "" : "s"}, and ${memoryStats.materials} material note${memoryStats.materials === 1 ? "" : "s"}.`}
                 </p>
 
                 {jobRecords.length > 0 && (
                   <div style={statusChipWrap}>
                     {memoryStats.issues > 0 && (
-                      <span style={warningChip}>⚠️ {memoryStats.issues} issue</span>
+                      <span style={warningChip}> {memoryStats.issues} issue</span>
                     )}
 
                     {memoryStats.photos > 0 && (
-                      <span style={infoChip}>📸 {memoryStats.photos} photos</span>
+                      <span style={infoChip}> {memoryStats.photos} photos</span>
                     )}
 
                     {memoryStats.payments > 0 && (
-                      <span style={moneyChip}>💵 payment</span>
+                      <span style={moneyChip}> payment</span>
                     )}
 
                     {memoryStats.materials > 0 && (
-                      <span style={infoChip}>🧰 materials</span>
+                      <span style={infoChip}> materials</span>
                     )}
 
                     {memoryStats.completions > 0 && (
-                      <span style={successChip}>✅ completed</span>
+                      <span style={successChip}> completed</span>
                     )}
                   </div>
                 )}
               </div>
-            </div>
+              </div>
+            )}
 
-            {latestActivity && (
+            {(isProfessionalProject || isBusinessLeadReviewPage) && latestActivity && (
               <div style={latestActivityBox}>
                 <div style={latestActivityLabel}>Latest Activity</div>
 
                 <div style={latestActivityContent}>
                   <div style={latestActivityIcon}>
-                    {latestActivity.type === "approval" && "✅"}
-                    {latestActivity.type === "payment" && "💵"}
-                    {latestActivity.type === "materials" && "🧰"}
-                    {latestActivity.type === "location" && "📍"}
-                    {latestActivity.type === "scan" && "📄"}
-                    {latestActivity.type === "photoWorkflow" && "📸"}
-                    {latestActivity.type === "update" && "📣"}
+                    {latestActivity.type === "approval" && ""}
+                    {latestActivity.type === "payment" && ""}
+                    {latestActivity.type === "materials" && ""}
+                    {latestActivity.type === "location" && ""}
+                    {latestActivity.type === "scan" && ""}
+                    {latestActivity.type === "photoWorkflow" && ""}
+                    {latestActivity.type === "update" && ""}
                   </div>
 
                   <div>
                     <strong>{latestActivity.title}</strong>
                     <p>{latestActivity.subtitle}</p>
-                    <span>{latestActivity.time || "Saved"}</span>
+                    <span>{formatMessageTime(latestActivity.time || "") || "Saved"}</span>
                   </div>
                 </div>
 
@@ -573,9 +806,10 @@ if (data.post) {
               </div>
             )}
 
-            <div style={jobMemoryBox}>
+            {(isProfessionalProject || isBusinessLeadReviewPage) && (
+              <div style={jobMemoryBox}>
               <div style={jobMemoryHeader}>
-                <strong>📁 Project Memory</strong>
+                <strong> Project Memory</strong>
                 <span>{jobRecords.length} saved</span>
               </div>
 
@@ -588,19 +822,19 @@ if (data.post) {
                   {jobRecords.slice(0, 5).map((item) => (
                     <div key={item.id} style={memoryTimelineItem}>
                       <div style={memoryTimelineIcon}>
-                        {item.type === "approval" && "✅"}
-                        {item.type === "payment" && "💵"}
-                        {item.type === "materials" && "🧰"}
-                        {item.type === "location" && "📍"}
-                        {item.type === "scan" && "📄"}
-                        {item.type === "photoWorkflow" && "📸"}
-                        {item.type === "update" && "📣"}
+                        {item.type === "approval" && ""}
+                        {item.type === "payment" && ""}
+                        {item.type === "materials" && ""}
+                        {item.type === "location" && ""}
+                        {item.type === "scan" && ""}
+                        {item.type === "photoWorkflow" && ""}
+                        {item.type === "update" && ""}
                       </div>
 
                       <div style={memoryTimelineBody}>
                         <div style={memoryTimelineTop}>
                           <strong>{item.title}</strong>
-                          <span>{item.time || "Saved"}</span>
+                          <span>{formatMessageTime(item.time || "") || "Saved"}</span>
                         </div>
 
                         <p>{item.subtitle}</p>
@@ -617,70 +851,8 @@ if (data.post) {
                   ))}
                 </div>
               )}
-            </div>
-
-            <div style={projectPrimaryActions}>
-              <button
-                onClick={() => {
-                  localStorage.setItem(
-                    "selectedQuoteRequest",
-                    JSON.stringify(post)
-                  );
-
-                  localStorage.setItem("selectedQuoteRequestId", post.id);
-
-                  localStorage.setItem(
-                    "selectedMessageReceiverId",
-                    post.user_id || ""
-                  );
-
-                  const conversationId =
-                    post.conversationId ||
-                    post.requestId ||
-                    post.id ||
-                    activeJobSnapshot?.jobId ||
-                    localStorage.getItem("activeJobId") ||
-                    "project-conversation";
-
-                  localStorage.setItem("activeConversationId", String(conversationId));
-                  localStorage.setItem(
-                    "activeConversationName",
-                    post.username || post.customer || post.email || "Customer"
-                  );
-                  localStorage.setItem("meetroConversationType", "activeJob");
-                  localStorage.setItem("conversationReturnPage", "projectDetails");
-                  localStorage.setItem("returnPage", "projectDetails");
-
-                  setPage("conversationThread");
-                }}
-                style={messageButton}
-              >
-                💬 {(isProfessionalProject || isBusinessLeadReviewPage)
-                  ? t("contactCustomer")
-                  : t("openProjectConversation")}
-              </button>
-
-              {(isProfessionalProject || isBusinessLeadReviewPage) && post.status !== "active" && post.status !== "completed" && (
-                <button
-                  style={schedulePrimaryButton}
-                  onClick={() => {
-                    localStorage.setItem(
-                      "selectedWorkCenterRequest",
-                      JSON.stringify(post)
-                    );
-
-                    localStorage.setItem("meetroWorkCenterTab", "schedule");
-                    localStorage.setItem("activeWorkCenterTab", "schedule");
-                    localStorage.setItem("leadWorkflowStage", "customer_contact");
-                    localStorage.setItem("leadWorkflowIntent", "schedule_before_quote");
-
-                    setPage("contractorDashboard");
-                  }}
-                >
-                  📅 {t("scheduleVisitCall")}
-                </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {(isProfessionalProject || isBusinessLeadReviewPage) && (
               <div style={projectActionGrid}>
@@ -726,7 +898,7 @@ if (data.post) {
                       window.location.reload();
                     }}
                   >
-                    ▶ {t("activateProject")}
+                     {t("activateProject")}
                   </button>
                 )}
 
@@ -831,7 +1003,7 @@ if (data.post) {
                       window.location.reload();
                     }}
                   >
-                    ✅ Mark Completed
+                     Mark Work Completed
                   </button>
                 )}
               </div>
@@ -840,8 +1012,6 @@ if (data.post) {
 
           </div>
         )}
-
-        <SafeBackBar setPage={setPage} fallback={localStorage.getItem("projectDetailsReturnPage") || "discover"} />
 
         <BottomNav
           setPage={setPage}
@@ -860,32 +1030,146 @@ if (data.post) {
   );
 }
 
+function ProjectJourneyPanel({
+  request,
+  language,
+  onPrimaryAction,
+  onMessageProfessional,
+}) {
+  const journey = getHomeownerProjectJourney(request, language);
+  const timelineEvents = getHomeownerProjectTimelineEvents(request, language);
+  const primaryIsMessage = journey.primaryActionKey === "messageProfessional";
+  const hasConversation = Boolean(
+    request.conversationId ||
+      request.activeConversationId ||
+      request.projectConversationId ||
+      request.threadId ||
+      request.selectedProfessional ||
+      request.businessName ||
+      Number(request.messagesCount || 0) > 0
+  );
+  const communicationLabel = hasConversation
+    ? t("continueConversation", language)
+    : t("messageProfessional", language);
 
-const projectScopeCard = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 20,
-  padding: 18,
-  margin: "18px 0",
-  boxShadow: "0 12px 30px rgba(15, 23, 42, 0.06)",
-};
+  return (
+    <section style={journeyShell} aria-label={t("projectJourney", language)}>
+      <article style={{ ...journeyStageCard, ...journeyStageCardCurrent }}>
+        <span style={journeyCardLabel}>{t("currentStage", language)}</span>
+        <h3 style={journeyCardTitle}>{journey.currentTitle}</h3>
+        <p style={journeyCardText}>{journey.currentSummary}</p>
 
-const projectScopeHeader = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 18,
-  color: "#0f172a",
-  marginBottom: 10,
-};
+        <div style={journeyActionRow}>
+          <button
+            type="button"
+            style={journeyPrimaryButton}
+            onClick={() =>
+              primaryIsMessage
+                ? onMessageProfessional?.()
+                : onPrimaryAction?.(journey.primaryActionKey)
+            }
+          >
+            {primaryIsMessage ? communicationLabel : journey.primaryActionLabel}
+          </button>
+          {!primaryIsMessage && (
+            <button
+              type="button"
+              style={journeySecondaryButton}
+              onClick={onMessageProfessional}
+            >
+              {communicationLabel}
+            </button>
+          )}
+        </div>
+      </article>
 
-const projectScopeText = {
-  margin: 0,
-  fontSize: 16,
-  lineHeight: 1.55,
-  color: "#334155",
-  whiteSpace: "pre-wrap",
-};
+      <div style={journeyProgressBar} aria-label={t("projectTimeline", language)}>
+        {journey.stages.map((stage) => (
+          <div key={stage.key} style={journeyProgressStep}>
+            <span
+              style={{
+                ...journeyProgressDot,
+                ...(stage.complete ? journeyProgressDotDone : {}),
+                ...(stage.current ? journeyProgressDotCurrent : {}),
+              }}
+            >
+              {stage.complete ? "✓" : stage.current ? "●" : ""}
+            </span>
+            <span
+              style={{
+                ...journeyProgressLabel,
+                ...(stage.current ? journeyProgressLabelCurrent : {}),
+              }}
+            >
+              {stage.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={relationshipTimeline}>
+        <h3 style={relationshipTimelineTitle}>
+          {t("relationshipTimeline", language)}
+        </h3>
+
+        {timelineEvents.length > 0 ? (
+          timelineEvents.map((event) => (
+            <div key={`${event.key}-${event.date}`} style={relationshipTimelineItem}>
+              <span style={relationshipTimelineDot}></span>
+              <div>
+                <strong style={relationshipTimelineLabel}>{event.label}</strong>
+                {event.date && (
+                  <span style={relationshipTimelineDate}>
+                    {new Date(event.date).toLocaleDateString(
+                      language === "es" ? "es-US" : "en-US",
+                      { month: "short", day: "numeric", year: "numeric" }
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p style={relationshipTimelineEmpty}>
+            {t("timelineEmpty", language)}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HomeownerProjectHeader({ request = {}, language }) {
+  const journey = getHomeownerProjectJourney(request, language);
+  const professionalName =
+    journey.professionalName ||
+    request.selectedProfessional ||
+    request.businessName ||
+    request.professionalName ||
+    request.acceptedQuote?.businessName ||
+    "";
+
+  return (
+    <header style={homeownerProjectHeader}>
+      <span style={journeyEyebrow}>{t("projectJourney", language)}</span>
+      <h1 style={homeownerProjectTitle}>
+        {request.title ||
+          request.service ||
+          request.category ||
+          t("homeServiceRequest", language)}
+      </h1>
+      <div style={homeownerProjectMetaRow}>
+        <span style={journeyStageBadge}>{journey.currentTitle}</span>
+        {professionalName && (
+          <span style={homeownerProjectProfessional}>
+            {professionalName}
+          </span>
+        )}
+      </div>
+    </header>
+  );
+}
+
 
 const pageWrapper = {
   background:
@@ -899,8 +1183,8 @@ const pageWrapper = {
 const contentWrapper = {
   width: "100%",
   maxWidth: "820px",
-  padding: "18px",
-  paddingBottom: "210px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 18px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -940,6 +1224,69 @@ const professionalStatusIcon = {
   justifyContent: "center",
   fontWeight: "900",
   flexShrink: 0,
+};
+
+const opportunityCompactHeader = {
+  background: "linear-gradient(180deg,#ffffff,#fffaf5)",
+  border: "1px solid #fed7aa",
+  borderRadius: "20px",
+  padding: "14px",
+  marginBottom: "14px",
+  boxShadow: "0 12px 28px rgba(249,115,22,0.08)",
+  textAlign: "left",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const opportunityCompactEyebrow = {
+  display: "block",
+  color: "#ea580c",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  marginBottom: "6px",
+};
+
+const opportunityCompactTitle = {
+  margin: "0 0 6px",
+  color: "#0f172a",
+  fontSize: "24px",
+  lineHeight: 1.12,
+  fontWeight: "950",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const opportunityCompactText = {
+  margin: "0 0 11px",
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "750",
+};
+
+const opportunityStatusGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
+  gap: "8px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const opportunityStatusItem = {
+  display: "grid",
+  gap: "4px",
+  padding: "10px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1px solid #ffedd5",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "850",
 };
 
 
@@ -1205,14 +1552,45 @@ const tagStyle = {
 
 const projectTitle = {
   marginTop: 0,
-  fontSize: "30px",
+  fontSize: "27px",
   lineHeight: "1.06",
   wordBreak: "break-word",
   textAlign: "left",
-  marginBottom: "16px",
+  marginBottom: "12px",
   color: "#111827",
   fontWeight: "950",
   letterSpacing: "-0.03em",
+};
+
+const homeownerProjectHeader = {
+  margin: "0 0 10px",
+  paddingBottom: "10px",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const homeownerProjectTitle = {
+  margin: "5px 0 8px",
+  fontSize: "25px",
+  lineHeight: 1.08,
+  color: "#111827",
+  fontWeight: "950",
+  letterSpacing: "-0.02em",
+  wordBreak: "normal",
+  overflowWrap: "break-word",
+};
+
+const homeownerProjectMetaRow = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const homeownerProjectProfessional = {
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "850",
+  lineHeight: 1.3,
 };
 
 const photoModalOverlay = {
@@ -1296,28 +1674,339 @@ const photoModalImage = {
 const projectLifecycleStrip = {
   display: "grid",
   gridTemplateColumns: "repeat(5, 1fr)",
-  gap: "8px",
-  margin: "0 0 16px",
+  gap: "4px",
+  margin: "0 0 18px",
+  padding: "10px 4px",
+  borderTop: "1px solid #e5e7eb",
+  borderBottom: "1px solid #e5e7eb",
 };
 
 const projectLifecycleStep = {
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-  borderRadius: "16px",
-  padding: "9px 6px",
   display: "grid",
-  gap: "4px",
+  gap: "6px",
   placeItems: "center",
-  color: "#475569",
-  fontWeight: "900",
-  fontSize: "11px",
+  color: "#94a3b8",
+  fontWeight: "700",
+  fontSize: "10px",
+  textAlign: "center",
 };
 
 const projectLifecycleStepActive = {
-  background: "linear-gradient(135deg,#f5f3ff,#ffffff)",
-  border: "1px solid rgba(91,61,245,.18)",
   color: "#5b3df5",
-  boxShadow: "0 6px 14px rgba(91,61,245,.08)",
+  fontWeight: "950",
+};
+
+const projectLifecycleDot = {
+  width: "9px",
+  height: "9px",
+  borderRadius: "50%",
+  background: "currentColor",
+};
+
+const journeyShell = {
+  margin: "0 0 14px",
+  padding: "14px",
+  borderRadius: "24px",
+  background: "linear-gradient(180deg,#ffffff,#f8f7ff)",
+  border: "1px solid #ddd6fe",
+  boxShadow: "0 12px 28px rgba(91, 61, 245, 0.08)",
+  overflow: "hidden",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const journeyHeaderRow = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "10px",
+};
+
+const journeyEyebrow = {
+  display: "block",
+  color: "#5b3df5",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  marginBottom: "4px",
+};
+
+const journeyTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "19px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+};
+
+const journeyStageBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  maxWidth: "100%",
+  borderRadius: "999px",
+  padding: "8px 11px",
+  background: "#f7f4ff",
+  border: "1px solid #c4b5fd",
+  color: "#4f28e8",
+  fontSize: "12px",
+  fontWeight: "950",
+  overflowWrap: "break-word",
+};
+
+const journeyProgressBar = {
+  display: "flex",
+  gap: "7px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  scrollSnapType: "x mandatory",
+  padding: "2px 0 10px",
+  marginBottom: "4px",
+  maxWidth: "100%",
+};
+
+const journeyProgressStep = {
+  flex: "0 0 auto",
+  minWidth: "64px",
+  display: "grid",
+  justifyItems: "center",
+  gap: "5px",
+  scrollSnapAlign: "start",
+};
+
+const journeyProgressDot = {
+  width: "22px",
+  height: "22px",
+  borderRadius: "999px",
+  display: "grid",
+  placeItems: "center",
+  background: "#eef2ff",
+  border: "1px solid #dbeafe",
+  color: "#94a3b8",
+  fontSize: "10px",
+  fontWeight: "950",
+};
+
+const journeyProgressDotDone = {
+  background: "#ecfdf5",
+  borderColor: "#86efac",
+  color: "#047857",
+};
+
+const journeyProgressDotCurrent = {
+  background: "#5b3df5",
+  borderColor: "#5b3df5",
+  color: "#ffffff",
+};
+
+const journeyProgressLabel = {
+  color: "#64748b",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: "900",
+  textAlign: "center",
+  wordBreak: "normal",
+  hyphens: "none",
+};
+
+const journeyProgressLabelCurrent = {
+  color: "#4f28e8",
+};
+
+const journeyCarousel = {
+  display: "flex",
+  gap: "12px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  scrollSnapType: "x mandatory",
+  maxWidth: "100%",
+  padding: "4px 0 12px",
+};
+
+const journeyStageCard = {
+  width: "100%",
+  minHeight: "0",
+  borderRadius: "18px",
+  padding: "14px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.06)",
+  scrollSnapAlign: "start",
+  boxSizing: "border-box",
+};
+
+const journeyStageCardCurrent = {
+  border: "2px solid #8b7cff",
+  background: "linear-gradient(180deg,#ffffff,#f7f4ff)",
+};
+
+const journeyCardLabel = {
+  display: "block",
+  color: "#5b3df5",
+  fontSize: "10px",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  fontWeight: "950",
+  marginBottom: "8px",
+};
+
+const journeyCardTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "20px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+};
+
+const journeyCardText = {
+  margin: "9px 0 0",
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const journeyActionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "8px",
+  marginTop: "12px",
+};
+
+const journeyPrimaryButton = {
+  border: "none",
+  borderRadius: "15px",
+  padding: "12px 14px",
+  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const journeySecondaryButton = {
+  border: "1px solid #ddd6fe",
+  borderRadius: "15px",
+  padding: "11px 14px",
+  background: "#ffffff",
+  color: "#4f28e8",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const relationshipTimeline = {
+  marginTop: "10px",
+  padding: "12px 14px",
+  borderRadius: "18px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+};
+
+const relationshipTimelineTitle = {
+  margin: "0 0 8px",
+  color: "#0f172a",
+  fontSize: "17px",
+  fontWeight: "950",
+};
+
+const relationshipTimelineItem = {
+  display: "grid",
+  gridTemplateColumns: "18px 1fr",
+  gap: "9px",
+  alignItems: "flex-start",
+  padding: "6px 0",
+};
+
+const relationshipTimelineDot = {
+  width: "10px",
+  height: "10px",
+  borderRadius: "999px",
+  background: "#5b3df5",
+  marginTop: "5px",
+};
+
+const relationshipTimelineLabel = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: "900",
+  lineHeight: 1.25,
+};
+
+const relationshipTimelineDate = {
+  display: "block",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "800",
+  marginTop: "3px",
+};
+
+const relationshipTimelineEmpty = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const projectInformationCard = {
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: "20px",
+  padding: "14px",
+  marginBottom: "14px",
+};
+
+const projectInformationTitle = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "18px",
+  marginBottom: "12px",
+};
+
+const projectInformationRows = {
+  display: "grid",
+  gap: "10px",
+};
+
+const requestDetailsActionWrap = {
+  marginTop: "14px",
+  paddingTop: "14px",
+  borderTop: "1px solid #e2e8f0",
+};
+
+const requestDetailsActionButton = {
+  width: "100%",
+  border: "1px solid #ddd6fe",
+  borderRadius: "15px",
+  padding: "12px 14px",
+  background: "#ffffff",
+  color: "#4f28e8",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const requestDetailsActionButtonDisabled = {
+  background: "#f8fafc",
+  borderColor: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
+};
+
+const projectInformationRow = {
+  display: "grid",
+  gridTemplateColumns: "minmax(110px, 0.38fr) 1fr",
+  gap: "12px",
+  alignItems: "start",
+  paddingTop: "10px",
+  borderTop: "1px solid #e2e8f0",
+  color: "#475569",
+  fontSize: "13px",
 };
 
 const projectPhotoGallery = {
@@ -1447,26 +2136,6 @@ const projectDescription = {
   fontWeight: "650",
 };
 
-const infoBox = {
-  background: "linear-gradient(135deg,#f8f7ff,#ffffff)",
-  border: "1px solid rgba(124,58,237,.10)",
-  borderRadius: "18px",
-  padding: "12px",
-  display: "grid",
-  gap: "8px",
-  marginBottom: "14px",
-};
-
-const infoRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "10px",
-  color: "#374151",
-  fontSize: "12px",
-  fontWeight: "800",
-};
-
 const projectActionGrid = {
   display: "grid",
   gap: "12px",
@@ -1520,15 +2189,11 @@ const projectPrimaryActions = {
   marginBottom: "18px",
 };
 
-const schedulePrimaryButton = {
-  border: "none",
-  borderRadius: "22px",
-  padding: "18px 20px",
-  background: "linear-gradient(135deg, #0ea5e9, #2563eb)",
-  color: "white",
-  fontWeight: 900,
-  fontSize: "1rem",
-  boxShadow: "0 14px 28px rgba(37,99,235,0.24)",
+const contactCustomerHelper = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.5,
 };
 
 const messageButton = {

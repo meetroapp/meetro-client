@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
+import { formatMessageTime } from "../utils/displayTime";
 
 function EmergencyChat({ setPage, language = "en" }) {
   const messagesEndRef = useRef(null);
@@ -8,12 +10,7 @@ function EmergencyChat({ setPage, language = "en" }) {
   const entryNotes = localStorage.getItem("emergencyEntryNotes") || "";
   const petWarning = localStorage.getItem("emergencyPetWarning") === "true";
 
-  const getTime = () => {
-    return new Date().toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
+  const getTime = () => formatMessageTime(new Date());
 
   const text = {
     en: {
@@ -194,7 +191,7 @@ function EmergencyChat({ setPage, language = "en" }) {
 
   return (
     <>
-    <div style={page}>
+    <div className="app-page meetro-readable-page" style={page}>
       <style>
         {`
           @keyframes pulseTyping {
@@ -208,7 +205,11 @@ function EmergencyChat({ setPage, language = "en" }) {
       <div style={topBar}>
         <button
           style={backButton}
-          onClick={() => setPage("emergencyDispatch")}
+          onClick={() => {
+            if (!openActiveEmergencyConversation(setPage, "home")) {
+              setPage("emergencyDispatch");
+            }
+          }}
         >
           ←
         </button>
@@ -230,7 +231,7 @@ function EmergencyChat({ setPage, language = "en" }) {
             </div>
 
             <div style={msg.type === "user" ? userMeta : contractorMeta}>
-              {msg.time}
+              {formatMessageTime(msg.time)}
               {msg.type === "user" ? ` • ${t.seen}` : ""}
             </div>
           </div>
@@ -277,7 +278,7 @@ function EmergencyChat({ setPage, language = "en" }) {
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "#f5f7fb",
   display: "flex",
   flexDirection: "column",

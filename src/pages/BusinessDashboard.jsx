@@ -1,11 +1,19 @@
-import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
+import MeetroIcon from "../components/MeetroIcon";
 import { authFetch } from "../utils/authFetch";
 import { getBusinessSchedule, getQuoteHistory } from "../utils/workCenter";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
+import { getNotifications } from "../utils/notifications";
+import {
+  getStoredProfessionalMatchProfile,
+  inferRequestCategory,
+} from "../utils/professionalRequestMatching";
+import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
+import { formatDashboardScheduleItem } from "../utils/businessDashboardScheduleLabels";
 
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
@@ -29,6 +37,11 @@ function BusinessDashboard({ setPage }) {
     profile?.business_category ||
     localStorage.getItem("userRole") ||
     "professional";
+  const professionalMatchProfile = {
+    ...getStoredProfessionalMatchProfile(),
+    businessCategory,
+    category: businessCategory,
+  };
 
   const liveHomeownerRequests = getStoredHomeownerRequests();
 
@@ -44,13 +57,7 @@ function BusinessDashboard({ setPage }) {
         return false;
       }
 
-      return canBusinessSeeCategory(
-        businessCategory,
-        request.category ||
-          request.business_category ||
-          request.serviceCategory ||
-          inferEmergencyCategory(request)
-      );
+      return canProfessionalSeeLocalLead(professionalMatchProfile, request);
     })
     .slice(0, 3);
 
@@ -69,10 +76,7 @@ function BusinessDashboard({ setPage }) {
 
   const formatLeadCategory = (request) =>
     formatCategory(
-      request.category ||
-        request.business_category ||
-        request.serviceCategory ||
-        inferEmergencyCategory(request)
+      inferRequestCategory(request)
     );
 
 
@@ -192,28 +196,45 @@ function BusinessDashboard({ setPage }) {
     return <LoadingScreen text={t("loadingBusinessDashboard")} />;
   }
 
-  const dashboardBusinessCategory =
-    localStorage.getItem("businessCategory") || "";
+  const dashboardEmergencyRecord = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("activeEmergencyRecord") || "{}"
+      );
+    } catch {
+      return {};
+    }
+  })();
 
   const dashboardEmergencyService =
-    localStorage.getItem("selectedEmergencyService") || "";
+    dashboardEmergencyRecord.service ||
+    dashboardEmergencyRecord.title ||
+    localStorage.getItem("selectedEmergencyService") ||
+    "";
 
   const dashboardEmergencyCategory =
     localStorage.getItem("selectedEmergencyCategory") ||
-    inferEmergencyCategory(dashboardEmergencyService);
+    inferRequestCategory({ service: dashboardEmergencyService });
 
-  const canDashboardSeeEmergency = canBusinessSeeCategory(
-    dashboardBusinessCategory,
-    dashboardEmergencyCategory
+  const canDashboardSeeEmergency = canProfessionalSeeLocalLead(
+    professionalMatchProfile,
+    {
+      ...dashboardEmergencyRecord,
+      category: dashboardEmergencyCategory,
+      service: dashboardEmergencyService,
+      type: "emergency",
+      isEmergency: true,
+    }
   );
 
   const dispatchStatus =
+    dashboardEmergencyRecord.status ||
     localStorage.getItem("emergencyDispatchStatus") || "";
 
   const hasActiveEmergency =
     canDashboardSeeEmergency &&
     dashboardEmergencyService &&
-    ["pending", "accepted", "enroute", "arrived", "started"].includes(
+    ["pending", "accepted", "enroute", "arrived", "started", "completed"].includes(
       dispatchStatus
     );
 
@@ -263,28 +284,61 @@ function BusinessDashboard({ setPage }) {
       )
   ).length;
 
+  const scheduleResponseAlertCount = getNotifications().filter(
+    (notice) =>
+      !notice.read &&
+      (notice.targetRole === "professional" || notice.targetRole === "all") &&
+      ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
+        notice.type
+      )
+  ).length;
+
+  function openWorkCenterSection(section, options = {}) {
+    localStorage.setItem("meetroWorkCenterTab", section);
+    localStorage.setItem("activeWorkCenterTab", section);
+
+    if (options.filter) {
+      localStorage.setItem("workCenterScheduleFilter", options.filter);
+    } else if (section === "schedule") {
+      localStorage.removeItem("workCenterScheduleFilter");
+    }
+
+    if (options.quoteStatusFilter) {
+      localStorage.setItem("quoteStatusFilter", options.quoteStatusFilter);
+    }
+
+    setPage("contractorDashboard");
+  }
+
   const unreadMessages = liveUnreadCount ||
     localStorage.getItem("mockStandardUnreadMessages") || "0";
 
-  const text = {
+  const dashboardText = {
     en: {
       dashboard: "Business Dashboard",
-      greeting: "Good morning",
-      subtitle: "Your workday at a glance. Handle what matters first.",
+      subtitle: "Handle what matters first.",
       online: "Online",
       offline: "Offline",
       available: "Available now",
       notAvailable: "Not accepting jobs",
-      emergency: "Emergency",
-      needsAttention: "Needs attention",
-      noEmergency: "No active emergencies",
-      readyDispatch: "Ready to dispatch",
       messages: "Messages",
       unread: "Unread",
       todayJobs: "Today's Jobs",
       activeJobs: "Active Jobs",
       pendingQuotes: "Pending Quotes",
-      todayRevenue: "Today's Revenue",
+      scheduledToday: "Scheduled today",
+      inProgress: "In progress",
+      awaitingResponse: "Awaiting response",
+      businessToolsDescription:
+        "Profile, availability, service areas, portfolio, reviews, settings, and business support.",
+      businessToolsTitle: "Business Tools",
+      businessToolsSubtitle: "Run Your Business",
+      businessToolsFeatures: ["Profile", "Portfolio", "Pricing", "Invoices", "Contracts", "Reports"],
+      openBusinessTools: "Open Business Tools",
+      nextUpToday: "Next Up Today",
+      nextUpDescription: "Visits, jobs, and appointments that move the day forward.",
+      viewFullSchedule: "View full schedule",
+      customerLocation: "Customer location",
       quickActions: "Quick Actions",
       allTools: "All tools",
       workCenter: "Work Center",
@@ -299,22 +353,29 @@ function BusinessDashboard({ setPage }) {
     },
     es: {
       dashboard: "Panel de Negocio",
-      greeting: "Buenos días",
-      subtitle: "Tu día de trabajo en un vistazo. Atiende lo más importante primero.",
+      subtitle: "Atiende primero lo más importante.",
       online: "En línea",
       offline: "Desconectado",
       available: "Disponible ahora",
       notAvailable: "No aceptando trabajos",
-      emergency: "Emergencia",
-      needsAttention: "Necesita atención",
-      noEmergency: "Sin emergencias activas",
-      readyDispatch: "Listo para despacho",
       messages: "Mensajes",
       unread: "Sin leer",
       todayJobs: "Trabajos de hoy",
       activeJobs: "Trabajos activos",
       pendingQuotes: "Cotizaciones pendientes",
-      todayRevenue: "Ingresos de hoy",
+      scheduledToday: "Programados hoy",
+      inProgress: "En progreso",
+      awaitingResponse: "Esperando respuesta",
+      businessToolsDescription:
+        "Perfil, disponibilidad, zonas de servicio, portafolio, reseñas, configuración y soporte del negocio.",
+      businessToolsTitle: "Herramientas del Negocio",
+      businessToolsSubtitle: "Administra tu negocio",
+      businessToolsFeatures: ["Perfil", "Portafolio", "Precios", "Facturas", "Contratos", "Reportes"],
+      openBusinessTools: "Abrir Herramientas",
+      nextUpToday: "Próximo en agenda",
+      nextUpDescription: "Visitas, trabajos y citas que mueven el día.",
+      viewFullSchedule: "Ver agenda",
+      customerLocation: "Ubicación del cliente",
       quickActions: "Acciones Rápidas",
       allTools: "Todas",
       workCenter: "Centro de Trabajo",
@@ -327,10 +388,85 @@ function BusinessDashboard({ setPage }) {
         "Prioridad, acceso ilimitado a oportunidades y visibilidad verificada.",
       upgrade: "Actualizar a Meetro Pro",
     },
-  }[language];
+    fr: {
+      dashboard: "Tableau de bord",
+      subtitle: "Traitez d’abord ce qui compte.",
+      online: "En ligne",
+      offline: "Hors ligne",
+      available: "Disponible maintenant",
+      notAvailable: "N’accepte pas de travaux",
+      messages: "Messages",
+      unread: "Non lus",
+      todayJobs: "Travaux du jour",
+      activeJobs: "Travaux actifs",
+      pendingQuotes: "Devis en attente",
+      scheduledToday: "Planifiés aujourd’hui",
+      inProgress: "En cours",
+      awaitingResponse: "En attente de réponse",
+      businessToolsDescription:
+        "Profil, disponibilité, zones de service, portfolio, avis, paramètres et support professionnel.",
+      businessToolsTitle: "Outils professionnels",
+      businessToolsSubtitle: "Gérer votre activité",
+      businessToolsFeatures: ["Profil", "Portfolio", "Prix", "Factures", "Contrats", "Rapports"],
+      openBusinessTools: "Ouvrir les outils",
+      nextUpToday: "À venir aujourd’hui",
+      nextUpDescription: "Visites, travaux et rendez-vous qui font avancer la journée.",
+      viewFullSchedule: "Voir le calendrier",
+      customerLocation: "Adresse du client",
+      quickActions: "Actions rapides",
+      allTools: "Tous les outils",
+      workCenter: "Centre de travail",
+      workSubtitle: "Travaux actifs, devis et dossiers.",
+      openWorkCenter: "Ouvrir le centre de travail",
+      newLeads: "Nouveaux prospects près de vous",
+      viewAllLeads: "Voir tous les prospects",
+      upgradeTitle: "Débloquez des prospects illimités",
+      upgradeText:
+        "Placement prioritaire, accès illimité aux prospects et visibilité vérifiée.",
+      upgrade: "Passer à Meetro Pro",
+    },
+    "pt-BR": {
+      dashboard: "Painel do negócio",
+      subtitle: "Cuide primeiro do que importa.",
+      online: "Online",
+      offline: "Offline",
+      available: "Disponível agora",
+      notAvailable: "Não aceitando trabalhos",
+      messages: "Mensagens",
+      unread: "Não lidas",
+      todayJobs: "Trabalhos de hoje",
+      activeJobs: "Trabalhos ativos",
+      pendingQuotes: "Orçamentos pendentes",
+      scheduledToday: "Agendados hoje",
+      inProgress: "Em andamento",
+      awaitingResponse: "Aguardando resposta",
+      businessToolsDescription:
+        "Perfil, disponibilidade, áreas atendidas, portfólio, avaliações, configurações e suporte do negócio.",
+      businessToolsTitle: "Ferramentas do negócio",
+      businessToolsSubtitle: "Gerencie seu negócio",
+      businessToolsFeatures: ["Perfil", "Portfólio", "Preços", "Faturas", "Contratos", "Relatórios"],
+      openBusinessTools: "Abrir Ferramentas",
+      nextUpToday: "Próximos de hoje",
+      nextUpDescription: "Visitas, trabalhos e compromissos que movem o dia.",
+      viewFullSchedule: "Ver agenda",
+      customerLocation: "Local do cliente",
+      quickActions: "Ações rápidas",
+      allTools: "Todas as ferramentas",
+      workCenter: "Centro de trabalho",
+      workSubtitle: "Trabalhos ativos, orçamentos e registros.",
+      openWorkCenter: "Abrir Centro de trabalho",
+      newLeads: "Novas oportunidades perto de você",
+      viewAllLeads: "Ver todas",
+      upgradeTitle: "Desbloqueie oportunidades ilimitadas",
+      upgradeText:
+        "Prioridade, acesso ilimitado a oportunidades e visibilidade verificada.",
+      upgrade: "Atualizar para Meetro Pro",
+    },
+  };
+  const text = dashboardText[language] || dashboardText.en;
 
   return (
-    <div style={pageWrapper}>
+    <div className="app-page business-dashboard meetro-wide-page" style={pageWrapper}>
       <style>
         {`
           @keyframes pendingQuotePulse {
@@ -349,208 +485,221 @@ function BusinessDashboard({ setPage }) {
           }
         `}
       </style>
-      <div style={topBar}>
-        <div style={brandWrap}>
-          <span style={brandMain}>Meetro</span>
-          <span style={brandBadge}>Business</span>
+      <section style={dashboardHeaderSection}>
+        <div style={topBar}>
+          <div style={brandWrap}>
+            <span style={brandMain}>Meetro</span>
+            <span style={brandBadge}>Business</span>
+          </div>
+
+          <button
+            onClick={() => {
+              localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
+              setPage("contractorProfile");
+            }}
+            style={profileMini}
+          >
+            {profile?.image_url ? (
+              <img src={profile.image_url} alt={businessName} style={miniAvatar} />
+            ) : (
+              <span style={profileInitial}>
+                {String(businessName || "B").charAt(0).toUpperCase()}
+              </span>
+            )}
+          </button>
         </div>
 
-        <button
-          onClick={() => {
-            localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
-            setPage("contractorProfile");
-          }}
-          style={profileMini}
-        >
-          {profile?.image_url ? (
-            <img src={profile.image_url} alt={businessName} style={miniAvatar} />
-          ) : (
-            <span>👤</span>
-          )}
-        </button>
-      </div>
-
-      <div style={statusStrip}>
-        <button
-          style={statusItem}
-          onClick={() => {
-            const next = !availableNow;
-            localStorage.setItem("meetroAvailableNow", next ? "true" : "false");
-            setAvailableNow(next);
-            window.dispatchEvent(new Event("meetroAvailabilityChanged"));
-          }}
-        >
-          <span style={statusDot(availableNow)}></span>
-          <div>
-            <strong>{availableNow ? text.online : text.offline}</strong>
-            <p>{availableNow ? text.available : text.notAvailable}</p>
-          </div>
-        </button>
-
-        <button
-          style={statusItem}
-          onClick={() => setPage("emergencyOperationsCenter")}
-        >
-          <span style={statusIcon}>🚨</span>
-          <div>
-            <strong>{hasActiveEmergency ? `1 ${text.emergency}` : text.noEmergency}</strong>
-            <p>{hasActiveEmergency ? text.needsAttention : text.readyDispatch}</p>
-          </div>
-        </button>
-
-        <button style={statusItem} onClick={() => setPage("messagesInbox")}>
-          <span style={statusIcon}>💬</span>
-          <div>
-            <strong>{text.messages}</strong>
-            <p>
-              {unreadMessages} {text.unread}
-            </p>
-          </div>
-        </button>
-      </div>
-
-      <section style={heroCard}>
-        <div style={heroHeader}>
-          <div>
-            <p style={eyebrow}>{text.dashboard}</p>
-
-            <h1 style={heroTitle}>
-              {text.greeting}, {businessName}! 👋
-            </h1>
-
-            <p style={heroSubtitle}>{text.subtitle}</p>
-          </div>
-        </div>
-
-        <div style={glanceGrid}>
-          <GlanceItem
-            icon="📅"
-            title={text.todayJobs}
-            value={todayScheduleCount}
-            note={
-              language === "es"
-                ? "Programados"
-                : "Scheduled"
-            }
-          />
-
-          <GlanceItem
-            icon="✅"
-            title={text.activeJobs}
-            value={activeProjectsCount}
-            note={
-              language === "es"
-                ? "En progreso"
-                : "In progress"
-            }
-          />
-
+        {hasActiveEmergency && (
           <div
-            style={
-              quoteResponseAlertCount > 0
-                ? pendingQuoteGlowWrap
-                : {}
+            style={emergencyChatBanner}
+            role="button"
+            tabIndex={0}
+            onClick={() =>
+              openActiveEmergencyConversation(setPage, "businessDashboard")
             }
           >
-            <GlanceItem
-              icon="🧾"
-              title={text.pendingQuotes}
-              value={pendingQuotesCount}
-              note={
-                language === "es"
-                  ? "Esperando respuesta"
-                  : "Awaiting response"
-              }
-            />
+            <div>
+              <strong style={emergencyChatTitle}>
+                <span style={emergencyAlertMark}>!</span>
+                {t("emergencyNeedsAttention")}
+              </strong>
+              <p style={emergencyChatText}>{dashboardEmergencyService}</p>
+            </div>
+
+            <button
+              style={emergencyChatButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                openActiveEmergencyConversation(setPage, "businessDashboard")
+              }}
+            >
+              {t("openEmergencyChat")}
+            </button>
           </div>
+        )}
 
-          <GlanceItem
-            icon="💵"
-            title={text.todayRevenue}
-            value={`$${revenue}`}
-            note={
-              language === "es"
-                ? "Hoy"
-                : "Today"
-            }
-          />
-        </div>
-      </section>
+        <div style={statusStrip}>
+          <button
+            style={statusItem}
+            onClick={() => {
+              const next = !availableNow;
+              localStorage.setItem("meetroAvailableNow", next ? "true" : "false");
+              setAvailableNow(next);
+              window.dispatchEvent(new Event("meetroAvailabilityChanged"));
+            }}
+          >
+            <span style={statusDot(availableNow)}></span>
+            <div>
+              <strong>{availableNow ? text.online : text.offline}</strong>
+              <p>{availableNow ? text.available : text.notAvailable}</p>
+            </div>
+          </button>
 
-      <section style={singleActionSection}>
-        <button
-          style={quoteActionButton}
-          onClick={() => {
-            localStorage.setItem("meetroCommandTool", "quotes");
-            setPage("businessCommandCenter");
-          }}
-        >
-          <div style={quoteActionIcon}>🧾</div>
-
-          <div style={quoteActionContent}>
-            <strong style={{ fontSize: "18px" }}>
-              {language === "es"
-                ? "Centro de Comando Empresarial"
-                : "Business Command Center"}
-            </strong>
-
-            <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
-              {language === "es"
-                ? "Herramientas empresariales con IA para operaciones y flujos futuros."
-                : "AI-powered business tools for future operations workflows."}
+          <button style={statusItem} onClick={() => setPage("messagesInbox")}>
+            <span style={messageIcon} aria-hidden="true">
+              <span style={messageIconLine} />
             </span>
+            <div>
+              <strong>{text.messages}</strong>
+              <p>
+                {unreadMessages} {text.unread}
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <section className="business-dashboard-hero-card" style={heroCard}>
+          <div style={heroHeader}>
+            <div>
+              <h1 style={heroTitle}>{text.dashboard}</h1>
+
+              <p style={heroSubtitle}>{text.subtitle}</p>
+              <p style={businessNameLine}>{businessName}</p>
+            </div>
           </div>
-        </button>
+
+          <div style={todayFocusPanel}>
+            <div style={todayFocusItem}>
+              <span>{language === "es" ? "Enfoque de hoy" : "Today's Focus"}</span>
+              <strong>
+                {todayScheduleCount > 0
+                  ? language === "es"
+                    ? "Atender la agenda"
+                    : "Work the schedule"
+                  : language === "es"
+                  ? "Revisar oportunidades"
+                  : "Review opportunities"}
+              </strong>
+            </div>
+            <div style={todayFocusItem}>
+              <span>{language === "es" ? "Siguiente acción" : "Next Action"}</span>
+              <strong>
+                {pendingQuotesCount > 0
+                  ? language === "es"
+                    ? "Revisar cotizaciones"
+                    : "Review pending quotes"
+                  : language === "es"
+                  ? "Abrir Work Center"
+                  : "Open Work Center"}
+              </strong>
+            </div>
+          </div>
+
+          <div className="business-dashboard-glance-grid" style={glanceGrid}>
+            <div
+              style={
+                scheduleResponseAlertCount > 0
+                  ? pendingQuoteGlowWrap
+                  : {}
+              }
+            >
+              <GlanceItem
+                title={text.todayJobs}
+                value={todayScheduleCount}
+                note={
+                  scheduleResponseAlertCount > 0
+                    ? language === "es"
+                      ? "Respuesta de cita"
+                      : "Appointment response"
+                    : text.scheduledToday
+                }
+                onClick={() => openWorkCenterSection("schedule", { filter: "today" })}
+              />
+            </div>
+
+            <GlanceItem
+              title={text.activeJobs}
+              value={activeProjectsCount}
+              note={text.inProgress}
+              onClick={() => openWorkCenterSection("active")}
+            />
+
+            <div
+              style={
+                quoteResponseAlertCount > 0
+                  ? pendingQuoteGlowWrap
+                  : {}
+              }
+            >
+              <GlanceItem
+                title={text.pendingQuotes}
+                value={pendingQuotesCount}
+                note={text.awaitingResponse}
+                onClick={() =>
+                  openWorkCenterSection("quotes", {
+                    quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
+                  })
+                }
+              />
+            </div>
+          </div>
+        </section>
       </section>
 
       <section style={sectionCard}>
         <div style={sectionTop}>
           <div>
             <h2 style={sectionTitle}>
-              {language === "es" ? "Próximo en agenda" : "Next Up Today"}
+              {text.nextUpToday}
             </h2>
-            <p style={sectionSub}>
-              {language === "es"
-                ? "Visitas, trabajos y citas que mueven el día."
-                : "Visits, jobs, and appointments that move the day forward."}
-            </p>
+            <p style={sectionSub}>{text.nextUpDescription}</p>
           </div>
 
           <button
             style={linkButton}
             onClick={() => {
-              localStorage.setItem("meetroWorkCenterTab", "schedule");
-              setPage("contractorDashboard");
+              openWorkCenterSection("schedule", { filter: "today" });
             }}
           >
-            {language === "es" ? "Ver agenda" : "View full schedule"} →
+            {text.viewFullSchedule} →
           </button>
         </div>
 
         <div style={activeWorkList}>
           {businessSchedule.length > 0 ? (
-            businessSchedule.slice(0, 4).map((item) => (
-              <WorkRow
-                key={item.id}
-                title={item.title}
-                meta={item.location || (language === "es" ? "Ubicación del cliente" : "Customer location")}
-                status={item.status || (language === "es" ? "Programado" : "Scheduled")}
-                time={item.time}
-                onClick={() => setPage("contractorDashboard")}
-              />
-            ))
+            businessSchedule.slice(0, 4).map((item) => {
+              const scheduleItem = formatDashboardScheduleItem(item, language);
+
+              return (
+                <WorkRow
+                  key={item.id}
+                  title={scheduleItem.title}
+                  meta={
+                    scheduleItem.meta ||
+                    text.customerLocation
+                  }
+                  status={scheduleItem.status}
+                  time={scheduleItem.time}
+                  dateLabel={scheduleItem.dateLabel}
+                  onClick={() => openWorkCenterSection("schedule", { filter: "today" })}
+                />
+              );
+            })
           ) : (
             <div style={emptyScheduleCard}>
-              <div style={emptyScheduleIcon}>📅</div>
               <div>
-                <strong>
-                  {language === "es" ? "No hay citas para hoy" : "No appointments scheduled today"}
-                </strong>
-                <p>
-                  {language === "es"
-                    ? "Cuando agregues una visita o trabajo, aparecerá aquí."
-                    : "When you add a visit or job, it will appear here."}
-                </p>
+                <strong>{t("businessNoAppointmentsToday")}</strong>
+                <p>{t("businessNoAppointmentsTodayText")}</p>
               </div>
             </div>
           )}
@@ -561,7 +710,10 @@ function BusinessDashboard({ setPage }) {
         <div style={sectionTop}>
           <h2 style={sectionTitle}>{text.newLeads}</h2>
 
-          <button style={linkButton} onClick={() => setPage("businessLeads")}>
+          <button
+            style={linkButton}
+            onClick={() => openWorkCenterSection("pending")}
+          >
             {text.viewAllLeads} →
           </button>
         </div>
@@ -576,6 +728,7 @@ function BusinessDashboard({ setPage }) {
               location={formatLeadLocation(request)}
               time={request.posted || request.date || t("dashboardRecentlyPosted")}
               setPage={setPage}
+              openWorkCenterSection={openWorkCenterSection}
             />
           ))
         ) : (
@@ -587,16 +740,47 @@ function BusinessDashboard({ setPage }) {
         )}
       </section>
 
-      <section style={upgradeCard}>
-        <div style={upgradeIcon}>👑</div>
+      <section style={singleActionSection}>
+        <button
+          style={quoteActionButton}
+          onClick={() => setPage("businessCommandCenter")}
+        >
+          <div style={quoteActionIcon}>
+            <MeetroIcon name="businessTools" size={34} decorative />
+          </div>
 
+          <div style={quoteActionContent}>
+            <span style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
+
+            <strong style={{ fontSize: "18px" }}>
+              {text.businessToolsTitle}
+            </strong>
+
+            <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
+              {text.businessToolsDescription}
+            </span>
+
+            <div style={businessToolsFeatureList} aria-hidden="true">
+              {text.businessToolsFeatures.map((feature) => (
+                <span key={feature} style={businessToolsFeatureChip}>
+                  {feature}
+                </span>
+              ))}
+            </div>
+
+            <span style={businessToolsCta}>
+              {text.openBusinessTools} →
+            </span>
+          </div>
+        </button>
+      </section>
+
+      <section style={upgradeCard}>
         <div>
           <span style={upgradeBadge}>Founding Pro</span>
           <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
           <p style={upgradeText}>{text.upgradeText}</p>
         </div>
-
-        <button style={upgradeButton}>{text.upgrade}</button>
       </section>
 
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
@@ -604,14 +788,22 @@ function BusinessDashboard({ setPage }) {
   );
 }
 
-function GlanceItem({ icon, title, value, note }) {
+function GlanceItem({ title, value, note, onClick }) {
+  const Component = onClick ? "button" : "div";
+
   return (
-    <div style={glanceItem}>
-      <div style={glanceIcon}>{icon}</div>
+    <Component
+      type={onClick ? "button" : undefined}
+      style={{
+        ...glanceItem,
+        cursor: onClick ? "pointer" : "default",
+      }}
+      onClick={onClick}
+    >
       <span style={glanceTitle}>{title}</span>
       <strong style={glanceValue}>{value}</strong>
       <p style={glanceNote}>{note}</p>
-    </div>
+    </Component>
   );
 }
 
@@ -638,16 +830,16 @@ function WorkMetric({ label, value }) {
   );
 }
 
-function WorkRow({ title, meta, status, time, onClick }) {
+function WorkRow({ title, meta, status, time, dateLabel, onClick }) {
   return (
     <button style={workRow} onClick={onClick}>
       {time ? (
         <div style={scheduleTimeBadge}>
           <strong>{time}</strong>
-          <span>Today</span>
+          <span>{dateLabel}</span>
         </div>
       ) : (
-        <div style={workThumb}>🏠</div>
+        <div style={workThumb}>—</div>
       )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -661,7 +853,7 @@ function WorkRow({ title, meta, status, time, onClick }) {
   );
 }
 
-function LeadCard({ request, category, title, location, time, setPage }) {
+function LeadCard({ request, category, title, location, time, openWorkCenterSection }) {
   return (
     <button
       onClick={() => {
@@ -692,17 +884,16 @@ function LeadCard({ request, category, title, location, time, setPage }) {
 
         localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
         localStorage.setItem("projectDetailsReturnPage", "businessDashboard");
+        localStorage.setItem("selectedWorkCenterRequest", JSON.stringify(lead));
 
         localStorage.setItem("leadWorkflowStage", "project_review");
         localStorage.setItem("leadWorkflowIntent", "review_contact_schedule");
 
-        setPage("projectDetails");
+        openWorkCenterSection("pending");
       }}
       style={leadCard}
     >
-      <div style={leadThumb}>🏠</div>
-
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <span style={leadBadge}>{category}</span>
         <h3 style={leadTitle}>{title}</h3>
         <p style={leadMeta}>{location}</p>
@@ -717,17 +908,32 @@ function LeadCard({ request, category, title, location, time, setPage }) {
 
 
 const pendingQuoteGlowWrap = {
-  borderRadius: "22px",
-  boxShadow: "0 0 24px rgba(251,191,36,0.32)",
+  borderRadius: "20px",
+  padding: "1px",
+  boxShadow: "0 0 18px rgba(251,191,36,0.22)",
   animation: "pendingQuotePulse 2.4s ease-in-out infinite",
 };
 
 const pageWrapper = {
-  minHeight: "100vh",
-  background: "linear-gradient(180deg, #071225 0%, #0b1630 48%, #f5f7fb 48%)",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 150px",
+  minHeight: "100dvh",
+  background: "#f5f7fb",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right)) calc(68px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left))",
   boxSizing: "border-box",
   color: "#111827",
+  maxWidth: "100%",
+  overflowX: "hidden",
+};
+
+const dashboardHeaderSection = {
+  background:
+    "linear-gradient(180deg, #071225 0%, #0b1630 100%)",
+  borderRadius: "32px",
+  padding: "16px",
+  marginBottom: "20px",
+  boxShadow: "0 18px 45px rgba(15,23,42,0.18)",
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const topBar = {
@@ -782,13 +988,19 @@ const miniAvatar = {
   objectFit: "cover",
 };
 
+const profileInitial = {
+  fontSize: "18px",
+  fontWeight: "900",
+  color: "#ffffff",
+};
+
 const statusStrip = {
   background: "rgba(255,255,255,0.08)",
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: "24px",
   padding: "12px",
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "8px",
   marginBottom: "16px",
   color: "white",
@@ -815,19 +1027,37 @@ const statusDot = (active) => ({
   flexShrink: 0,
 });
 
-const statusIcon = {
-  fontSize: "24px",
+const messageIcon = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "9px",
+  border: "1px solid rgba(255,255,255,0.32)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#ffffff",
+  fontSize: "12px",
+  fontWeight: "900",
   flexShrink: 0,
+};
+
+const messageIconLine = {
+  width: "12px",
+  height: "8px",
+  border: "1.5px solid currentColor",
+  borderRadius: "4px",
 };
 
 const heroCard = {
   background: "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06))",
   color: "white",
   borderRadius: "30px",
-  padding: "24px",
-  marginBottom: "16px",
-  boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
+  padding: "20px",
+  marginBottom: 0,
+  boxShadow: "0 14px 34px rgba(0,0,0,0.16)",
   border: "1px solid rgba(255,255,255,0.12)",
+  overflow: "hidden",
+  isolation: "isolate",
 };
 
 const heroHeader = {
@@ -836,15 +1066,8 @@ const heroHeader = {
   alignItems: "flex-start",
 };
 
-const eyebrow = {
-  margin: 0,
-  color: "#c7d2fe",
-  fontWeight: "900",
-  fontSize: "13px",
-};
-
 const heroTitle = {
-  margin: "10px 0 10px",
+  margin: "0 0 8px",
   fontSize: "clamp(25px, 5vw, 34px)",
   lineHeight: 1.12,
   fontWeight: "900",
@@ -852,42 +1075,66 @@ const heroTitle = {
 };
 
 const heroSubtitle = {
-  margin: "0 0 18px",
+  margin: "0 0 5px",
   color: "#aebee3",
   lineHeight: 1.5,
 };
 
-const glanceGrid = {
-  background: "rgba(255,255,255,0.08)",
-  borderRadius: "24px",
-  padding: "14px",
+const businessNameLine = {
+  margin: "0 0 18px",
+  color: "#e2e8f0",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const todayFocusPanel = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
   gap: "10px",
+  padding: "12px",
+  borderRadius: "22px",
+  background: "rgba(255,255,255,0.12)",
+  border: "1px solid rgba(255,255,255,0.16)",
+  marginBottom: "16px",
+};
+
+const todayFocusItem = {
+  display: "grid",
+  gap: "5px",
+  minWidth: 0,
+  color: "#ffffff",
+};
+
+const glanceGrid = {
+  display: "grid",
+  gap: "14px",
 };
 
 const glanceItem = {
-  textAlign: "center",
-  borderRight: "1px solid rgba(255,255,255,0.1)",
-};
-
-const glanceIcon = {
-  fontSize: "24px",
-  marginBottom: "6px",
+  textAlign: "left",
+  background: "#ffffff",
+  border: "1px solid rgba(226,232,240,0.88)",
+  borderRadius: "18px",
+  padding: "14px",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
+  width: "100%",
+  minWidth: 0,
+  fontFamily: "inherit",
+  boxSizing: "border-box",
 };
 
 const glanceTitle = {
   display: "block",
-  fontSize: "12px",
-  color: "#cbd5e1",
+  fontSize: "13px",
+  color: "#475569",
   fontWeight: "800",
 };
 
 const glanceValue = {
   display: "block",
   fontSize: "28px",
-  color: "white",
-  marginTop: "8px",
+  color: "#111827",
+  marginTop: "6px",
 };
 
 const glanceNote = {
@@ -897,59 +1144,105 @@ const glanceNote = {
 };
 
 const singleActionSection = {
-  marginBottom: "14px",
+  marginTop: 0,
+  marginBottom: "20px",
 };
 
 const quoteActionButton = {
   width: "100%",
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "linear-gradient(135deg, #111c36 0%, #172554 100%)",
-  borderRadius: "24px",
-  padding: "20px 22px",
+  border: "1px solid rgba(124,92,255,0.42)",
+  background:
+    "linear-gradient(135deg, #ffffff 0%, #f8f7ff 44%, #eef2ff 100%)",
+  borderRadius: "26px",
+  padding: "20px",
   display: "flex",
   flexDirection: "row",
-  alignItems: "center",
-  gap: "18px",
+  alignItems: "flex-start",
+  gap: "16px",
   cursor: "pointer",
-  color: "white",
-  boxShadow: "0 16px 40px rgba(15,23,42,0.28)",
+  color: "#111827",
+  boxShadow:
+    "0 18px 42px rgba(79,70,229,0.18), 0 1px 0 rgba(255,255,255,0.92) inset",
+  textAlign: "left",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const quoteActionIcon = {
-  width: "56px",
-  height: "56px",
-  borderRadius: "18px",
-  background: "rgba(255,255,255,0.12)",
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "28px",
+  color: "#ffffff",
   flexShrink: 0,
+  boxShadow: "0 14px 26px rgba(79,70,229,0.28)",
 };
 
 
 const quoteActionContent = {
   display: "flex",
   flexDirection: "column",
-  gap: "6px",
+  gap: "8px",
   textAlign: "left",
+  minWidth: 0,
+  flex: 1,
+};
+
+const quoteActionEyebrow = {
+  color: "#4f46e5",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const businessToolsFeatureList = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "6px",
+  marginTop: "2px",
+  maxWidth: "100%",
+};
+
+const businessToolsFeatureChip = {
+  border: "1px solid rgba(79,70,229,0.16)",
+  background: "rgba(255,255,255,0.72)",
+  color: "#4338ca",
+  borderRadius: "999px",
+  padding: "5px 8px",
+  fontSize: "11px",
+  fontWeight: "900",
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+};
+
+const businessToolsCta = {
+  marginTop: "4px",
+  color: "#312e81",
+  fontSize: "14px",
+  fontWeight: "950",
 };
 
 
 const sectionCard = {
   background: "white",
   borderRadius: "26px",
-  padding: "18px",
-  marginBottom: "16px",
+  padding: "20px",
+  marginBottom: "18px",
   border: "1px solid rgba(203,213,225,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.13)",
+  boxShadow: "0 18px 42px rgba(15,23,42,0.10)",
 };
 
 const sectionTop = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
+  flexWrap: "wrap",
+  minWidth: 0,
   marginBottom: "14px",
 };
 
@@ -1050,13 +1343,61 @@ const summaryOpenBtn = {
 const workRow = {
   width: "100%",
   border: "1px solid #eef2f7",
-  background: "white",
-  borderRadius: "18px",
-  padding: "12px",
+  background: "linear-gradient(135deg,#ffffff,#fbfdff)",
+  borderRadius: "20px",
+  padding: "14px",
   display: "flex",
   alignItems: "center",
   gap: "12px",
+  flexWrap: "wrap",
   textAlign: "left",
+  cursor: "pointer",
+};
+
+const emergencyChatBanner = {
+  display: "grid",
+  gap: "14px",
+  marginBottom: "18px",
+  padding: "18px",
+  borderRadius: "24px",
+  background: "linear-gradient(135deg, #991b1b, #ef4444)",
+  color: "#ffffff",
+  boxShadow: "0 18px 38px rgba(220,38,38,0.25)",
+  cursor: "pointer",
+};
+
+const emergencyChatTitle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  fontSize: "19px",
+  fontWeight: "900",
+};
+
+const emergencyAlertMark = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "50%",
+  border: "2px solid rgba(255,255,255,0.9)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const emergencyChatText = {
+  margin: "5px 0 0",
+  opacity: 0.9,
+  fontWeight: "700",
+};
+
+const emergencyChatButton = {
+  minHeight: "48px",
+  border: "none",
+  borderRadius: "16px",
+  background: "#ffffff",
+  color: "#991b1b",
+  fontWeight: "900",
   cursor: "pointer",
 };
 
@@ -1064,11 +1405,13 @@ const workThumb = {
   width: "48px",
   height: "48px",
   borderRadius: "16px",
-  background: "#eef2ff",
+  background: "#f8fafc",
+  border: "1px solid #cbd5e1",
+  color: "#64748b",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "24px",
+  fontSize: "16px",
 };
 
 const emptyScheduleCard = {
@@ -1080,18 +1423,6 @@ const emptyScheduleCard = {
   alignItems: "center",
   gap: "14px",
   color: "#334155",
-};
-
-const emptyScheduleIcon = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
-  background: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "24px",
-  boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
 };
 
 const scheduleTimeBadge = {
@@ -1115,6 +1446,7 @@ const workStatus = {
   borderRadius: "999px",
   fontSize: "12px",
   fontWeight: "900",
+  flexShrink: 0,
 };
 
 const chevron = {
@@ -1136,21 +1468,23 @@ const emptyLeadsState = {
 const leadsCard = {
   background: "white",
   borderRadius: "26px",
-  padding: "18px",
+  padding: "20px",
   marginBottom: "16px",
   border: "1px solid rgba(203,213,225,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.13)",
+  boxShadow: "0 18px 42px rgba(15,23,42,0.10)",
 };
 
 const leadCard = {
   width: "100%",
-  border: "none",
-  background: "white",
+  border: "1px solid #eef2f7",
+  background: "linear-gradient(135deg,#ffffff,#fbfdff)",
+  borderRadius: "20px",
   display: "flex",
   alignItems: "center",
   gap: "14px",
-  padding: "13px 0",
-  borderBottom: "1px solid #eef2f7",
+  flexWrap: "wrap",
+  padding: "14px",
+  marginTop: "10px",
   textAlign: "left",
   cursor: "pointer",
 };
@@ -1206,17 +1540,6 @@ const upgradeCard = {
   boxShadow: "0 18px 40px rgba(91,61,245,0.22)",
 };
 
-const upgradeIcon = {
-  width: "58px",
-  height: "58px",
-  borderRadius: "20px",
-  background: "rgba(255,255,255,0.18)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "28px",
-};
-
 const upgradeBadge = {
   background: "rgba(255,255,255,0.18)",
   padding: "6px 10px",
@@ -1236,18 +1559,6 @@ const upgradeText = {
   lineHeight: 1.45,
   opacity: 0.92,
   fontSize: "14px",
-};
-
-const upgradeButton = {
-  border: "none",
-  background: "white",
-  color: "#5b3df5",
-  padding: "13px 14px",
-  borderRadius: "16px",
-  fontWeight: "900",
-  cursor: "pointer",
-  marginLeft: "auto",
-  whiteSpace: "nowrap",
 };
 
 export default BusinessDashboard;

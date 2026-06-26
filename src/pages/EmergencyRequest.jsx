@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 
 import BottomNav from "../components/BottomNav";
+import { createNotification } from "../utils/meetroNotifications";
+import { buildRequestMatchingFields } from "../utils/requestMatchingFields";
+import {
+  CAMERA_PERMISSION_MESSAGE,
+  createPhotoInputEvent,
+  openJobPhotoPicker,
+} from "../utils/cameraPhotoPicker";
+import { formatMessageTime } from "../utils/displayTime";
 
 function EmergencyRequest({ setPage }) {
   const [language, setLanguage] = useState(
@@ -44,7 +52,17 @@ const selectedService =
     localStorage.getItem("emergencyUrgency") || "urgent"
   );
 
+  const [photos, setPhotos] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("emergencyPhotos") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [photoError, setPhotoError] = useState("");
+
   const sendRequestRef = useRef(null);
+  const photoInputRef = useRef(null);
 
   function scrollToSendRequest() {
     setTimeout(() => {
@@ -103,13 +121,114 @@ const selectedService =
     localStorage.setItem("emergencyUrgency", value);
   }
 
+  function createPhotoThumbnail(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const img = new Image();
+
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxSize = 520;
+          const scale = Math.min(
+            1,
+            maxSize / Math.max(img.width, img.height)
+          );
+
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          resolve(canvas.toDataURL("image/jpeg", 0.58));
+        };
+
+        img.onerror = () => resolve("");
+        img.src = reader.result;
+      };
+
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handlePhotoUpload(event) {
+    const files = Array.from(event.target.files || []);
+
+    if (!files.length) return;
+
+    setPhotoError("");
+    const addedPhotos = await Promise.all(
+      files.slice(0, 4).map(async (file) => ({
+        id: `${Date.now()}-${file.name}`,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        previewUrl: await createPhotoThumbnail(file),
+        addedAt: new Date().toISOString(),
+      }))
+    );
+
+    const nextPhotos = [...photos, ...addedPhotos].slice(0, 6);
+
+    setPhotos(nextPhotos);
+    localStorage.setItem("emergencyPhotos", JSON.stringify(nextPhotos));
+
+    if (event.target) {
+      event.target.value = "";
+    }
+  }
+
+  async function openEmergencyPhotoPicker() {
+    setPhotoError("");
+
+    await openJobPhotoPicker({
+      inputRef: photoInputRef,
+      fileNamePrefix: "emergency-photo",
+      onPhotos: (nativePhotos) =>
+        handlePhotoUpload(createPhotoInputEvent(nativePhotos.map((photo) => photo.file))),
+      onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
+    });
+  }
+
+  function removePhoto(photoId) {
+    const nextPhotos = photos.filter((photo) => photo.id !== photoId);
+    setPhotos(nextPhotos);
+    localStorage.setItem("emergencyPhotos", JSON.stringify(nextPhotos));
+  }
+
   function submitRequest() {
     const currentUserKey =
       localStorage.getItem("userId") ||
       localStorage.getItem("userEmail") ||
       "guest";
 
-    const emergencyConversationId = `emergency-active-request-${currentUserKey}`;
+    const emergencyRequestId =
+      localStorage.getItem("activeEmergencyRequestId") ||
+      localStorage.getItem("emergencyRequestId") ||
+      `emergency-${currentUserKey}-${Date.now()}`;
+
+    const emergencyConversationId =
+      localStorage.getItem("emergencyConversationId") ||
+      `emergency-conversation-${emergencyRequestId}`;
+
+    const selectedEmergencyBusiness =
+      localStorage.getItem("selectedEmergencyBusiness") ||
+      localStorage.getItem("businessName") ||
+      "Emergency Professional";
+
+    const emergencyCustomerName =
+      localStorage.getItem("emergencyCustomerName") ||
+      localStorage.getItem("userName") ||
+      "Homeowner";
+
+    localStorage.setItem("activeEmergencyRequestId", emergencyRequestId);
+    localStorage.setItem("emergencyRequestId", emergencyRequestId);
+    localStorage.setItem("emergencyConversationId", emergencyConversationId);
+    localStorage.setItem("emergencyCustomerName", emergencyCustomerName);
+    localStorage.setItem("emergencyBusinessName", selectedEmergencyBusiness);
 
     localStorage.setItem("emergencyIssue", issue);
     localStorage.setItem("emergencyGateCode", gateCode);
@@ -132,8 +251,18 @@ const selectedService =
         : selectedService.includes("Storm")
         ? "storm"
         : "general";
+    const emergencyMatchingFields = buildRequestMatchingFields({
+      title: selectedService,
+      service: selectedService,
+      category: emergencyCategory,
+      issue,
+      type: "emergency",
+      urgency,
+    });
 
     localStorage.setItem("selectedEmergencyCategory", emergencyCategory);
+    localStorage.setItem("selectedEmergencyDomain", emergencyMatchingFields.serviceDomain);
+    localStorage.setItem("selectedEmergencySpecialty", emergencyMatchingFields.serviceSpecialty);
 
     localStorage.setItem("emergencyDispatchStatus", "pending");
 
@@ -142,47 +271,90 @@ const selectedService =
       selectedService
     );
 
+    const emergencyRecord = {
+      id: emergencyRequestId,
+      conversationId: emergencyConversationId,
+      type: "emergency",
+      title: selectedService,
+      service: selectedService,
+      category: emergencyCategory,
+      ...emergencyMatchingFields,
+      issue,
+      gateCode,
+      entryNotes,
+      petWarning,
+      urgency,
+      photos,
+      customerName: emergencyCustomerName,
+      businessName: selectedEmergencyBusiness,
+      businessPhone: localStorage.getItem("emergencyBusinessPhone") || "",
+      dispatchFee: localStorage.getItem("emergencyDispatchFee") || "",
+      cancellationFee: localStorage.getItem("emergencyCancellationFee") || "",
+      location: localStorage.getItem("emergencyLocation") || "Cape Coral",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
     localStorage.setItem(
-      `meetro_emergency_conversation_meta_${currentUserKey}`,
-      JSON.stringify({
-        id: emergencyConversationId,
-        type: "emergency",
-        title: selectedService,
-        issue,
-        gateCode,
-        entryNotes,
-        petWarning,
-        urgency,
-        location: "Cape Coral",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      })
+      `meetro_emergency_record_${emergencyRequestId}`,
+      JSON.stringify(emergencyRecord)
     );
 
-    const starterMessages = [
-      {
-        id: Date.now(),
-        type: "text",
+    localStorage.setItem(
+      "activeEmergencyRecord",
+      JSON.stringify(emergencyRecord)
+    );
+
+    createNotification({
+      type: "emergency_needs_attention",
+      title: language === "es" ? "Emergencia necesita atención" : "Emergency needs attention",
+      message:
+        language === "es"
+          ? `${emergencyCustomerName} envió una solicitud de emergencia: ${selectedService}.`
+          : `${emergencyCustomerName} sent an emergency request: ${selectedService}.`,
+      role: "professional",
+      requestId: emergencyRequestId,
+      conversationId: emergencyConversationId,
+      emergencyId: emergencyRequestId,
+      dedupeKey: `emergency_needs_attention:${emergencyRequestId}`,
+    });
+
+    localStorage.setItem(
+      `meetro_emergency_conversation_meta_${currentUserKey}`,
+      JSON.stringify(emergencyRecord)
+    );
+
+    const nowTime = formatMessageTime(new Date());
+
+    const emergencyPhotoMessages = photos
+      .filter((photo) => photo.previewUrl)
+      .map((photo, index) => ({
+        id: `emergency-photo-${Date.now()}-${index}`,
+        type: "image",
         sender: "me",
+        senderRole: "homeowner",
+        workflowType: "emergency_photo",
+        emergencyRequestId,
+        emergencyConversationId,
+        title: language === "es" ? "Foto de emergencia" : "Emergency Photo",
+        subtitle: photo.name || "",
         text:
-          issue.trim() ||
-          (language === "es"
-            ? "Solicitud de emergencia enviada."
-            : "Emergency request submitted."),
-        time: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+          language === "es"
+            ? "Foto adjunta a la solicitud de emergencia"
+            : "Photo attached to emergency request",
+        imageUrl: photo.previewUrl,
+        fileName: photo.name,
+        time: nowTime,
         status: "sent",
         seenAt: "",
         unsent: false,
-        createdAt: Date.now(),
-      },
-    ];
+        createdAt: Date.now() + index + 1,
+      }));
 
     localStorage.setItem(
       `meetro_conversation_${emergencyConversationId}`,
-      JSON.stringify(starterMessages)
+      JSON.stringify(emergencyPhotoMessages)
     );
 
     localStorage.setItem(
@@ -190,29 +362,55 @@ const selectedService =
       "false"
     );
 
+    const registry = JSON.parse(
+      localStorage.getItem("meetro_conversation_registry") || "[]"
+    );
+
+    const registryItem = {
+      id: emergencyConversationId,
+      project_title: selectedService,
+      project_description: issue?.trim() || "Emergency request submitted",
+      homeowner_email:
+        localStorage.getItem("userName") ||
+        localStorage.getItem("customerName") ||
+        "Emergency Customer",
+      location:
+        localStorage.getItem("emergencyLocation") ||
+        "Emergency Service Location",
+      requestCategory: emergencyMatchingFields.requestCategory,
+      serviceDomain: emergencyMatchingFields.serviceDomain,
+      serviceSpecialty: emergencyMatchingFields.serviceSpecialty,
+      status: "Emergency Request",
+      unread: true,
+      conversation_type: "emergency",
+      saved_to_history: false,
+      savedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      "meetro_conversation_registry",
+      JSON.stringify([
+        registryItem,
+        ...registry.filter(
+          (item) => String(item.id) !== String(emergencyConversationId)
+        ),
+      ])
+    );
+
+    localStorage.setItem("meetroMessageView", "active");
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+
         window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
 
-    localStorage.removeItem("emergencyIssue");
-    localStorage.removeItem("emergencyGateCode");
-    localStorage.removeItem("emergencyEntryNotes");
-    localStorage.removeItem("emergencyPetWarning");
-    localStorage.removeItem("emergencyUrgency");
-
-    setIssue("");
-    setGateCode("");
-    setEntryNotes("");
-    setPetWarning(false);
-    setUrgency("urgent");
-
     localStorage.setItem("meetroConversationType", "emergency");
-    localStorage.setItem("conversationReturnPage", "home");
+    localStorage.setItem("conversationReturnPage", "emergencyStatus");
     localStorage.setItem("dispatchReturnPage", "conversationThread");
 
     setPage("conversationThread");
   }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-form-page" style={page}>
       <div style={card}>
         <button style={backMini} onClick={() => setPage("emergency")}>
           ←
@@ -270,7 +468,7 @@ const selectedService =
               localStorage.setItem("emergencyPetWarning", nextValue.toString());
             }}
           >
-            {petWarning ? "⚠️ " : "🐶 "}
+            {petWarning ? " " : " "}
             {t.petWarning}
           </button>
         </div>
@@ -313,7 +511,63 @@ const selectedService =
 
         <div style={uploadBox}>
           <strong>{t.upload}</strong>
-          <p>{t.uploadNote}</p>
+          <p>
+            {photos.length
+              ? `${photos.length} ${language === "es" ? "foto(s) agregada(s)" : "photo(s) added"}`
+              : t.uploadNote}
+          </p>
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={handlePhotoUpload}
+          />
+
+          <button
+            type="button"
+            style={uploadButton}
+            onClick={openEmergencyPhotoPicker}
+          >
+             {language === "es" ? "Agregar fotos" : "Add Photos"}
+          </button>
+
+          {photoError && <p style={photoErrorText}>{photoError}</p>}
+
+          {photos.length > 0 && (
+            <div style={photoList}>
+              {photos.map((photo) => (
+                <div key={photo.id} style={photoChip}>
+                  {photo.previewUrl && (
+                    <img
+                      src={photo.previewUrl}
+                      alt={photo.name}
+                      style={photoThumb}
+                    />
+                  )}
+
+                  <div style={photoInfo}>
+                    <strong>{photo.name}</strong>
+                    <span>
+                      {language === "es"
+                        ? "Vista previa adjunta"
+                        : "Preview attached"}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={removePhotoButton}
+                    onClick={() => removePhoto(photo.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div ref={sendRequestRef} style={sendArea}>
@@ -333,9 +587,10 @@ const selectedService =
 }         
 
   const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "#f5f7fb",
-  padding: "24px 24px 210px",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -439,6 +694,71 @@ const urgencyGrid = {
   gap: "10px",
 };
 
+const uploadButton = {
+  marginTop: "14px",
+  width: "100%",
+  padding: "16px",
+  borderRadius: "18px",
+  border: "none",
+  background: "#5b3df5",
+  color: "white",
+  fontSize: "16px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const photoList = {
+  display: "grid",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const photoChip = {
+  display: "grid",
+  gridTemplateColumns: "58px 1fr 32px",
+  alignItems: "center",
+  gap: "10px",
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: "16px",
+  padding: "8px",
+  fontSize: "13px",
+  fontWeight: "800",
+  color: "#334155",
+  textAlign: "left",
+};
+
+const photoThumb = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "14px",
+  objectFit: "cover",
+  background: "#e5e7eb",
+};
+
+const photoInfo = {
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+};
+
+photoInfo.strong = undefined;
+
+const photoInfoText = {};
+
+const removePhotoButton = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "999px",
+  border: "none",
+  background: "#fee2e2",
+  color: "#991b1b",
+  fontSize: "18px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
 const sendArea = {
   scrollMarginBottom: "190px",
   marginTop: "20px",
@@ -473,6 +793,13 @@ const uploadBox = {
   borderRadius: "20px",
   marginBottom: "20px",
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const photoErrorText = {
+  margin: "10px 0 0",
+  color: "#991b1b",
+  fontSize: "13px",
+  fontWeight: "800",
 };
 
 const submitButton = {

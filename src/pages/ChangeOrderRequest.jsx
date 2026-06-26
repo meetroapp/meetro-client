@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import { getLanguage } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { updateRequestById, appendTimelineEvent } from "../utils/workflowTimeline";
+import { formatMessageTime } from "../utils/displayTime";
 import { getJobRecord, saveJobRecord } from "../utils/workCenter";
 
 function ChangeOrderRequest({ setPage }) {
@@ -25,7 +26,7 @@ function ChangeOrderRequest({ setPage }) {
 
   if (!request) {
     return (
-      <div style={page}>
+      <div className="app-page meetro-form-page" style={page}>
       <style>{placeholderStyle}</style>
         <div style={card}>
           <h2>{isSpanish ? "No hay proyecto seleccionado" : "No project selected"}</h2>
@@ -113,8 +114,8 @@ function ChangeOrderRequest({ setPage }) {
               ? "Cambio urgente solicitado"
               : "Urgent change requested"
             : isSpanish
-            ? "Cambio solicitado por el cliente"
-            : "Customer requested project change",
+            ? "¿Qué cambió? por el cliente"
+            : "Customer requested a service change",
 
         text: changeText.trim(),
 
@@ -124,10 +125,7 @@ function ChangeOrderRequest({ setPage }) {
 
         createdAt: new Date().toISOString(),
 
-        time: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        time: formatMessageTime(new Date()),
       };
 
       localStorage.setItem(
@@ -144,21 +142,18 @@ function ChangeOrderRequest({ setPage }) {
         id: `job-record-change-order-${Date.now()}`,
         conversationId,
         jobId: requestId,
-        jobService: request.title || request.service || "Project",
+        jobService: request.title || request.service || "Service",
         customer: request.homeownerName || "Customer",
         type: "change-order",
         workflowType: "changeOrderRequested",
         title: isSpanish
-          ? "Cambio de proyecto solicitado"
-          : "Project change requested",
+          ? "Cambio de servicio solicitado"
+          : "Service change requested",
         subtitle: changeText.trim(),
         text: changeText.trim(),
         urgency,
         status: "pending_professional_review",
-        time: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        time: formatMessageTime(new Date()),
         savedAt: new Date().toISOString(),
         sharedWithHomeowner: true,
       };
@@ -184,7 +179,7 @@ function ChangeOrderRequest({ setPage }) {
 
     addNotification({
       type: "change_order_requested",
-      title: isSpanish ? "Cambio solicitado" : "Change order requested",
+      title: isSpanish ? "¿Qué cambió?" : "Change order requested",
       message: changeText.trim(),
       priority: urgency === "urgent" ? "high" : "normal",
       targetRole: "professional",
@@ -244,16 +239,16 @@ function ChangeOrderRequest({ setPage }) {
   }
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-form-page" style={page}>
       <style>{placeholderStyle}</style>
       <button style={backButton} onClick={() => setPage("myRequests")}>
         ←
       </button>
 
       <div style={heroCard}>
-        <div style={heroIcon}>🔁</div>
+        <div style={heroIcon}>REV</div>
         <p style={eyebrow}>
-          {isSpanish ? "Cambio de proyecto" : "Project Change Order"}
+          {isSpanish ? "Solicitud de cambio de servicio" : "Service Change Request"}
         </p>
         <h1 style={heroTitle}>
           {request.title || request.service || "Project"}
@@ -261,13 +256,13 @@ function ChangeOrderRequest({ setPage }) {
         <p style={heroText}>
           {isSpanish
             ? "Describe el cambio que necesitas para que el profesional pueda revisar el alcance y ajustar la cotización si es necesario."
-            : "Describe what changed so the professional can review the scope and adjust the quote if needed."}
+            : "Tell the professional what changed so they can review the service and update the quote if needed."}
         </p>
       </div>
 
       <div style={card}>
         <h2 style={sectionTitle}>
-          {isSpanish ? "Cambio solicitado" : "Requested Change"}
+          {isSpanish ? "¿Qué cambió?" : "What changed?"}
         </h2>
 
         <textarea
@@ -303,7 +298,7 @@ function ChangeOrderRequest({ setPage }) {
           <p>
             {isSpanish
               ? "Un cambio de alcance puede requerir una cotización revisada antes de continuar."
-              : "A scope change may require a revised quote before the project continues."}
+              : "A service change may require a revised quote before work continues."}
           </p>
         </div>
 
@@ -314,7 +309,7 @@ function ChangeOrderRequest({ setPage }) {
           }}
           onClick={submitChangeOrder}
         >
-          {isSpanish ? "Enviar cambio al profesional" : "Send Change to Professional"}
+          {isSpanish ? "Enviar solicitud de cambio" : "Send Change Request"}
         </button>
       </div>
 
@@ -326,8 +321,12 @@ function ChangeOrderRequest({ setPage }) {
 const page = {
   minHeight: "100vh",
   background: "#f8f7ff",
-  padding: "calc(env(safe-area-inset-top) + 34px) 18px 190px",
+  padding:
+    "calc(env(safe-area-inset-top) + 34px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
+  width: "100%",
+  maxWidth: "760px",
+  margin: "0 auto",
 };
 
 const backButton = {

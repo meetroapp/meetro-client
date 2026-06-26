@@ -1,11 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import API_URL from "../api";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
+import {
+  getBusinessPortfolioProjectImages,
+  persistBusinessPortfolioProjects,
+} from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
+import {
+  getProfessionalReviews,
+  getProfessionalReviewStats,
+} from "../utils/reviewStorage";
+import { persistBusinessProfileShareRecord } from "../utils/profileShare";
+import {
+  CAMERA_PERMISSION_MESSAGE,
+  createPhotoInputEvent,
+  openJobPhotoPicker,
+} from "../utils/cameraPhotoPicker";
 
 function ProjectGallery({ setPage, currentPage }) {
+  const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
+  const isBusinessToolsReturn = sharedReturnPage === "businessCommandCenter";
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,8 +30,11 @@ function ProjectGallery({ setPage, currentPage }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [images, setImages] = useState([]);
+  const projectImageInputRef = useRef(null);
+  const editPortfolioImageInputRef = useRef(null);
 
   const [uploading, setUploading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -67,9 +87,13 @@ function ProjectGallery({ setPage, currentPage }) {
         const projectsData =
           await projectsResponse.json();
 
-        setProjects(
-          projectsData.projects || []
+        const fetchedProjects = projectsData.projects || [];
+        const normalizedProjects = persistPortfolioForSpotlight(
+          profileData.profile,
+          fetchedProjects
         );
+
+        setProjects(normalizedProjects.length > 0 ? normalizedProjects : fetchedProjects);
       }
     } catch (error) {
       console.error(error);
@@ -84,6 +108,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
       if (selectedFiles.length === 0) return;
 
+      setPhotoError("");
       setUploading(true);
 
       const uploadedUrls = [];
@@ -128,6 +153,18 @@ function ProjectGallery({ setPage, currentPage }) {
       setUploading(false);
       event.target.value = "";
     }
+  }
+
+  async function openProjectPhotoPicker() {
+    setPhotoError("");
+
+    await openJobPhotoPicker({
+      inputRef: projectImageInputRef,
+      fileNamePrefix: "portfolio-photo",
+      onPhotos: (photos) =>
+        handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+      onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
+    });
   }
 
   async function handleCreateProject() {
@@ -181,6 +218,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
       if (selectedFiles.length === 0) return;
 
+      setPhotoError("");
       setUploading(true);
 
       const uploadedUrls = [];
@@ -221,6 +259,18 @@ function ProjectGallery({ setPage, currentPage }) {
     }
   }
 
+  async function openEditProjectPhotoPicker() {
+    setPhotoError("");
+
+    await openJobPhotoPicker({
+      inputRef: editPortfolioImageInputRef,
+      fileNamePrefix: "portfolio-edit-photo",
+      onPhotos: (photos) =>
+        handleEditImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+      onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
+    });
+  }
+
   async function handleSaveProjectEdit() {
     if (!editingProject) return;
 
@@ -252,11 +302,12 @@ function ProjectGallery({ setPage, currentPage }) {
         image_urls: editImages,
       };
 
-      setProjects((currentProjects) =>
-        currentProjects.map((project) =>
-          project.id === editingProject.id ? updatedProject : project
-        )
+      const updatedProjects = projects.map((project) =>
+        project.id === editingProject.id ? updatedProject : project
       );
+
+      setProjects(updatedProjects);
+      persistPortfolioForSpotlight(profile, updatedProjects);
 
       setEditingProject(null);
       setEditTitle("");
@@ -273,20 +324,126 @@ function ProjectGallery({ setPage, currentPage }) {
   }
 
   function getProjectImages(project) {
-    if (Array.isArray(project?.image_urls) && project.image_urls.length > 0) {
-      return project.image_urls.filter(Boolean);
-    }
+    return getBusinessPortfolioProjectImages(project);
+  }
 
-    if (typeof project?.image_urls === "string") {
-      try {
-        const parsedImages = JSON.parse(project.image_urls);
-        if (Array.isArray(parsedImages)) {
-          return parsedImages.filter(Boolean);
-        }
-      } catch {}
-    }
+  function persistPortfolioForSpotlight(contractorProfile, profileProjects = []) {
+    if (!contractorProfile || !Array.isArray(profileProjects)) return [];
+    const businessName =
+      contractorProfile.business_name ||
+      contractorProfile.name ||
+      localStorage.getItem("businessName") ||
+      "";
+    const normalizedProjects = persistBusinessPortfolioProjects(
+      contractorProfile,
+      profileProjects,
+      { fallbackBusinessName: businessName }
+    );
 
-    return project?.image_url ? [project.image_url] : [];
+    const businessId = contractorProfile.id || contractorProfile.contractor_id || "";
+
+    try {
+      const businesses = JSON.parse(localStorage.getItem("meetroBusinesses") || "[]");
+      const existingBusinesses = Array.isArray(businesses) ? businesses : [];
+      const existingBusiness = existingBusinesses.find((business) => {
+        const existingId = String(business.id || business.businessId || "");
+        const existingName = String(
+          business.name || business.business_name || ""
+        ).toLowerCase();
+
+        return (
+          (businessId && existingId === String(businessId)) ||
+          (businessName && existingName === String(businessName).toLowerCase())
+        );
+      });
+      const businessRecord = {
+        ...(existingBusiness || {}),
+        id: existingBusiness?.id || businessId || businessName,
+        name: existingBusiness?.name || businessName,
+        business_name: existingBusiness?.business_name || businessName,
+        category:
+          existingBusiness?.category ||
+          contractorProfile.category ||
+          contractorProfile.business_category ||
+          localStorage.getItem("businessCategory") ||
+          "",
+        business_category:
+          existingBusiness?.business_category ||
+          contractorProfile.business_category ||
+          contractorProfile.category ||
+          localStorage.getItem("businessCategory") ||
+          "",
+        serviceDomain:
+          existingBusiness?.serviceDomain ||
+          contractorProfile.serviceDomain ||
+          contractorProfile.service_domain ||
+          localStorage.getItem("businessServiceDomain") ||
+          "",
+        businessServiceDomain:
+          existingBusiness?.businessServiceDomain ||
+          contractorProfile.businessServiceDomain ||
+          contractorProfile.business_service_domain ||
+          localStorage.getItem("businessServiceDomain") ||
+          "",
+        serviceZipCodes:
+          existingBusiness?.serviceZipCodes ||
+          contractorProfile.serviceZipCodes ||
+          localStorage.getItem("businessZipCodes") ||
+          "",
+        businessPortfolio: normalizedProjects,
+        localProfileOwner: true,
+        localDemoSafe:
+          existingBusiness?.localDemoSafe ||
+          contractorProfile.localDemoSafe ||
+          localStorage.getItem("businessLocalDemoSafe") === "true" ||
+          undefined,
+      };
+      const filteredBusinesses = existingBusinesses.filter((business) => {
+        const existingId = String(business.id || business.businessId || "");
+        const existingName = String(
+          business.name || business.business_name || ""
+        ).toLowerCase();
+
+        return !(
+          (businessRecord.id && existingId === String(businessRecord.id)) ||
+          (businessRecord.name &&
+            existingName === String(businessRecord.name).toLowerCase())
+        );
+      });
+
+      localStorage.setItem(
+        "meetroBusinesses",
+        JSON.stringify([businessRecord, ...filteredBusinesses])
+      );
+    } catch {}
+
+    return normalizedProjects;
+  }
+
+  function toggleProjectSpotlight(projectId) {
+    const updatedProjects = projects.map((project) => ({
+      ...project,
+      spotlightFeatured:
+        project.id === projectId ? !project.spotlightFeatured : Boolean(project.spotlightFeatured),
+    }));
+
+    setProjects(updatedProjects);
+    persistPortfolioForSpotlight(profile, updatedProjects);
+  }
+
+  function viewPublicPortfolio() {
+    if (!profile) return;
+
+    persistBusinessProfileShareRecord({
+      ...profile,
+      name: profile.business_name || profile.name || localStorage.getItem("businessName") || "",
+      business_name:
+        profile.business_name || profile.name || localStorage.getItem("businessName") || "",
+      businessPortfolio: projects,
+      projectGallery: projects,
+    });
+    localStorage.setItem("contractorDetailsReturnPage", "projectGallery");
+    setPage("contractorDetails");
   }
 
   if (loading) {
@@ -297,10 +454,64 @@ function ProjectGallery({ setPage, currentPage }) {
     );
   }
 
+  const businessName =
+    profile?.business_name || profile?.name || localStorage.getItem("businessName") || t("portfolio");
+  const projectPhotoCount = projects.reduce(
+    (total, project) => total + getProjectImages(project).length,
+    0
+  );
+  const featuredProjectCount = projects.filter((project) => project.spotlightFeatured).length;
+  const portfolioStatus =
+    projects.length > 0 && projectPhotoCount > 0
+      ? t("portfolioTrustReady")
+      : t("portfolioNeedsPhotos");
+  const portfolioReviews = getProfessionalReviews({
+    professionalId: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
+    professionalName: businessName,
+  });
+  const portfolioReviewStats = getProfessionalReviewStats(portfolioReviews);
+  const mostRecentReview = portfolioReviews[0] || null;
+  const profileYearsServing =
+    profile?.yearsServing ||
+    profile?.years_serving ||
+    profile?.servingSince ||
+    profile?.serving_since ||
+    "";
+  const licensedInsuredValue =
+    profile?.licensedInsured ||
+    profile?.licensed_insured ||
+    profile?.insured ||
+    "";
+  const credentialItems = [
+    {
+      icon: "verified",
+      label: t("verifiedBusiness"),
+      value: profile ? t("ready") : t("notSet"),
+    },
+    {
+      icon: "portfolio",
+      label: t("portfolioReady"),
+      value: projectPhotoCount > 0 ? t("ready") : t("notSet"),
+    },
+    {
+      icon: "verified",
+      label: t("licensedInsured"),
+      value:
+        licensedInsuredValue === true
+          ? t("ready")
+          : licensedInsuredValue || t("notProvided"),
+    },
+    {
+      icon: "history",
+      label: t("yearsServingArea"),
+      value: profileYearsServing || t("notProvided"),
+    },
+  ];
+
   if (editingProject) {
 
     return (
-      <div style={pageWrapper}>
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
         <button
           style={backButton}
           onClick={() => setEditingProject(null)}
@@ -326,15 +537,14 @@ function ProjectGallery({ setPage, currentPage }) {
 
             <button
               style={smallAddPhotoBtn}
-              onClick={() =>
-                document.getElementById("editPortfolioImageInput").click()
-              }
+              onClick={openEditProjectPhotoPicker}
             >
               + {language === "es" ? "Agregar fotos" : "Add Photos"}
             </button>
           </div>
 
           <input
+            ref={editPortfolioImageInputRef}
             id="editPortfolioImageInput"
             type="file"
             accept="image/*"
@@ -342,6 +552,8 @@ function ProjectGallery({ setPage, currentPage }) {
             style={{ display: "none" }}
             onChange={handleEditImageUpload}
           />
+
+          {photoError && <p style={uploadingText}>{photoError}</p>}
 
           {editImages.length > 0 ? (
             <>
@@ -436,7 +648,16 @@ function ProjectGallery({ setPage, currentPage }) {
             style={imagePreviewOverlay}
             onClick={() => setExpandedEditImage("")}
           >
-            <button style={closePreviewBtn}>×</button>
+            <button
+              type="button"
+              style={closePreviewBtn}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpandedEditImage("");
+              }}
+            >
+              ×
+            </button>
 
             <img
               src={expandedEditImage}
@@ -452,58 +673,66 @@ function ProjectGallery({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <button
-        onClick={() =>
-          setPage("businessDashboard")
-        }
+        onClick={() => {
+          if (isBusinessToolsReturn) {
+            localStorage.removeItem("meetroSharedPageReturn");
+            setPage("businessCommandCenter");
+            return;
+          }
+          setPage("businessDashboard");
+        }}
         style={backButton}
       >
-        ← {t("backToDashboard")}
+        ← {isBusinessToolsReturn
+          ? t("backToBusinessTools")
+          : t("backToDashboard")}
       </button>
 
+      <div style={compactHeader}>
+        <div style={compactKicker}>{t("portfolio")}</div>
+        <h1 style={compactTitle}>{t("portfolio")}</h1>
+        <p style={compactSubtitle}>{t("portfolioTrustSubtitle")}</p>
+      </div>
+
       <div style={heroCard}>
-        <div style={heroBadge}>
-          📸 Portfolio Pro
+        <div style={heroTopRow}>
+          <div>
+            <div style={heroBadge}>
+              <MeetroIcon name="portfolio" size={16} decorative />{" "}
+              {portfolioStatus}
+            </div>
+
+            <h2 style={heroTitle}>{businessName}</h2>
+          </div>
+
+          <div style={heroProofStack}>
+            <strong>{projects.length}</strong>
+            <span>{t("projects")}</span>
+          </div>
         </div>
 
-        <h1 style={heroTitle}>
-          {t("projectGallery")}
-        </h1>
-
-        <p style={heroSubtitle}>
-          {t("projectGallerySubtitle")}
-        </p>
+        <p style={heroSubtitle}>{t("portfolioTrustMessage")}</p>
 
         <div style={statsGrid}>
           <div style={statCard}>
-            <div style={statNumber}>
-              {projects.length}
-            </div>
+            <div style={statNumber}>{projectPhotoCount}</div>
+            <div style={statLabel}>{t("photos")}</div>
+          </div>
 
-            <div style={statLabel}>
-              {t("projects")}
-            </div>
+          <div style={statCard}>
+            <div style={statNumber}>{featuredProjectCount}</div>
+            <div style={statLabel}>{t("featuredInSpotlight")}</div>
           </div>
 
           <div style={statCard}>
             <div style={statNumber}>
-              92%
+              {portfolioReviewStats.totalReviews
+                ? Number(portfolioReviewStats.averageRating || 0).toFixed(1)
+                : "—"}
             </div>
-
-            <div style={statLabel}>
-              {t("profile")}
-            </div>
-          </div>
-
-          <div style={statCard}>
-            <div style={statNumber}>
-              ⭐
-            </div>
-
-            <div style={statLabel}>
-              Premium
-            </div>
+            <div style={statLabel}>{t("reviews")}</div>
           </div>
         </div>
       </div>
@@ -531,18 +760,226 @@ function ProjectGallery({ setPage, currentPage }) {
 
       {profile && (
         <>
+          <div style={portfolioActionGrid}>
+            <button
+              style={primaryActionButton}
+              onClick={() => {
+                document.getElementById("portfolioProjectTitleInput")?.focus();
+              }}
+            >
+              <MeetroIcon name="addProject" size={16} decorative />{" "}
+              {t("addProject")}
+            </button>
+
+            <button style={secondaryActionButton} onClick={openProjectPhotoPicker}>
+              <MeetroIcon name="photoCount" size={16} decorative />{" "}
+              {t("addPhotos")}
+            </button>
+
+            <button style={secondaryActionButton} onClick={viewPublicPortfolio}>
+              <MeetroIcon name="preview" size={16} decorative />{" "}
+              {t("viewPublicPortfolio")}
+            </button>
+          </div>
+
+          <section style={contentSection}>
+            <div style={projectsHeader}>
+              <div>
+                <h2 style={galleryTitle}>{t("showcasedProjects")}</h2>
+                <p style={sectionSubtitle}>{t("showcasedProjectsHelp")}</p>
+              </div>
+
+              <div style={projectCount}>
+                {projects.length} {t("total")}
+              </div>
+            </div>
+
+            {projects.length === 0 && (
+              <div style={emptyProjectsCard}>
+                <div style={emptyIcon}>
+                  <MeetroIcon name="portfolio" size={32} decorative />
+                </div>
+
+                <h3 style={emptyProjectsTitle}>{t("portfolioEmptyTrustTitle")}</h3>
+
+                <p style={emptyProjectsText}>{t("portfolioEmptyTrustText")}</p>
+
+                <button
+                  style={primaryButton}
+                  onClick={() =>
+                    document.getElementById("portfolioProjectTitleInput")?.focus()
+                  }
+                >
+                  {t("addFirstProject")}
+                </button>
+              </div>
+            )}
+
+            {projects.map((project) => {
+              const projectImages = getProjectImages(project);
+              const coverImage = projectImages[0];
+              const projectService =
+                project.serviceType ||
+                project.service_type ||
+                project.category ||
+                profile.category ||
+                t("serviceType");
+              const projectLocation =
+                project.location ||
+                project.serviceArea ||
+                project.service_area ||
+                profile.serviceArea ||
+                profile.service_area ||
+                "";
+
+              return (
+                <div
+                  key={project.id}
+                  className={project.spotlightFeatured ? "meetro-selected-card" : ""}
+                  style={{
+                    ...projectCard,
+                    ...(project.spotlightFeatured ? projectCardFeatured : {}),
+                  }}
+                >
+                  {coverImage ? (
+                    <div style={coverImageWrap}>
+                      <img
+                        src={coverImage}
+                        alt={project.title}
+                        style={coverImageStyle}
+                      />
+
+                      {projectImages.length > 1 && (
+                        <span style={photoCountBadge}>
+                          <MeetroIcon name="photoCount" size={14} decorative />
+                          {projectImages.length} {t("photos")}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={missingProjectImage}>
+                      <MeetroIcon name="photoCount" size={24} decorative />
+                      {t("addPhotosFromCompletedJobs")}
+                    </div>
+                  )}
+
+                  <div style={projectContent}>
+                    <div style={projectMetaRow}>
+                      <span style={projectTag}>{projectService}</span>
+                      {projectLocation && (
+                        <span style={projectLocationPill}>{projectLocation}</span>
+                      )}
+                    </div>
+
+                    <h3 style={projectTitle}>{project.title}</h3>
+
+                    <p style={projectDescriptionStyle}>
+                      {project.description || t("portfolioProjectDescriptionFallback")}
+                    </p>
+
+                    <div style={projectReviewProof}>
+                      <MeetroIcon name="reviews" size={16} decorative />{" "}
+                      {mostRecentReview
+                        ? mostRecentReview.comment ||
+                          mostRecentReview.review_text ||
+                          t("reviewProofAvailable")
+                        : t("portfolioReviewProofEmpty")}
+                    </div>
+
+                    <div style={projectButtonRow}>
+                      <button
+                        style={editPortfolioBtn}
+                        onClick={() => {
+                          setEditingProject(project);
+                          setEditTitle(project.title || "");
+                          setEditDescription(project.description || "");
+                          const projectImages = getProjectImages(project);
+                          setEditImages(projectImages);
+                          setActiveEditImage(projectImages[0] || "");
+                        }}
+                      >
+                        <MeetroIcon name="editPortfolio" size={16} decorative />{" "}
+                        {t("editPortfolio")}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={project.spotlightFeatured ? "meetro-selected-card-soft" : ""}
+                        style={{
+                          ...spotlightFeatureBtn,
+                          ...(project.spotlightFeatured
+                            ? spotlightFeatureBtnActive
+                            : null),
+                        }}
+                        onClick={() => toggleProjectSpotlight(project.id)}
+                      >
+                        <MeetroIcon
+                          name={project.spotlightFeatured ? "selected" : "featuredSpotlight"}
+                          size={16}
+                          decorative
+                        />{" "}
+                        {project.spotlightFeatured
+                          ? t("featuredInSpotlight")
+                          : t("useInSpotlight")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+
+          <section style={proofGrid}>
+            <div style={proofCard}>
+              <h2 style={compactSectionTitle}>{t("reviewProof")}</h2>
+              {portfolioReviewStats.totalReviews ? (
+                <>
+                  <div style={reviewScore}>
+                    {Number(portfolioReviewStats.averageRating || 0).toFixed(1)}
+                  </div>
+                  <p style={emptyProjectsText}>
+                    {portfolioReviewStats.totalReviews} {t("reviews")}
+                  </p>
+                  {mostRecentReview && (
+                    <p style={reviewPreview}>
+                      “{mostRecentReview.comment || mostRecentReview.review_text || t("reviewProofAvailable")}”
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p style={emptyProjectsText}>{t("portfolioReviewsEmpty")}</p>
+              )}
+            </div>
+
+            <div style={proofCard}>
+              <h2 style={compactSectionTitle}>{t("credentials")}</h2>
+              <div style={credentialList}>
+                {credentialItems.map((item) => (
+                  <div key={item.label} style={credentialRow}>
+                    <MeetroIcon name={item.icon} size={18} decorative />
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <div style={uploadCard}>
             <div style={sectionHeader}>
               <h2 style={sectionTitle}>
-                ✨ Agregar Proyecto
+                <MeetroIcon name="addProject" size={24} decorative />{" "}
+                {t("addProject")}
               </h2>
 
-              <div style={sectionChip}>
-                Antes / Después
+              <div style={sectionInfoBadge} aria-label={t("projectType")}>
+                <MeetroIcon name="beforeAfter" size={14} decorative />
+                {t("beforeAfterProject")}
               </div>
             </div>
 
             <input
+              id="portfolioProjectTitleInput"
               placeholder={t("projectTitle")}
               value={title}
               onChange={(e) =>
@@ -570,6 +1007,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
             <div style={uploadZone}>
               <input
+                ref={projectImageInputRef}
                 id="projectImageInput"
                 type="file"
                 accept="image/*"
@@ -579,13 +1017,7 @@ function ProjectGallery({ setPage, currentPage }) {
               />
 
               <button
-                onClick={() =>
-                  document
-                    .getElementById(
-                      "projectImageInput"
-                    )
-                    .click()
-                }
+                onClick={openProjectPhotoPicker}
                 style={uploadButton}
               >
                 +
@@ -593,22 +1025,20 @@ function ProjectGallery({ setPage, currentPage }) {
 
               <h3 style={uploadTitle}>
                 {images.length > 0
-                  ? `${images.length} ${language === "es" ? "fotos listas" : "photos ready"}`
-                  : language === "es"
-                  ? "Subir fotos"
-                  : "Upload Photos"}
+                  ? `${images.length} ${t("photosReady")}`
+                  : t("uploadPhotos")}
               </h3>
 
               <p style={uploadText}>
-                Muestra tu mejor trabajo
-                profesional
+                {t("portfolioUploadHelp")}
               </p>
 
               {uploading && (
                 <p style={uploadingText}>
-                  Subiendo imagen...
+                  {t("uploadingPhotos")}
                 </p>
               )}
+              {photoError && <p style={uploadingText}>{photoError}</p>}
             </div>
 
             {images.length > 0 && (
@@ -640,93 +1070,9 @@ function ProjectGallery({ setPage, currentPage }) {
               onClick={handleCreateProject}
               style={publishButton}
             >
-              🚀 Publicar Proyecto
+              <MeetroIcon name="publishProject" size={16} decorative />{" "}
+              {t("publishProject")}
             </button>
-          </div>
-
-          <div style={{ marginTop: "30px" }}>
-            <div style={projectsHeader}>
-              <h2 style={galleryTitle}>
-                Tus Proyectos
-              </h2>
-
-              <div style={projectCount}>
-                {projects.length} Total
-              </div>
-            </div>
-
-            {projects.length === 0 && (
-              <div style={emptyProjectsCard}>
-                <div style={emptyIcon}>
-                  🖼️
-                </div>
-
-                <h3 style={emptyProjectsTitle}>
-                  Tu portafolio está vacío
-                </h3>
-
-                <p style={emptyProjectsText}>
-                  Sube proyectos para generar
-                  más confianza y clientes.
-                </p>
-              </div>
-            )}
-
-            {projects.map((project) => {
-              const projectImages = getProjectImages(project);
-              const coverImage = projectImages[0];
-
-              return (
-                <div
-                  key={project.id}
-                  style={projectCard}
-                >
-                  {coverImage && (
-                    <div style={coverImageWrap}>
-                      <img
-                        src={coverImage}
-                        alt={project.title}
-                        style={coverImageStyle}
-                      />
-
-                      {projectImages.length > 1 && (
-                        <span style={photoCountBadge}>
-                          +{projectImages.length - 1} photos
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div style={projectContent}>
-                    <div style={projectTag}>
-                      {language === "es" ? "Portafolio" : "Portfolio"}
-                    </div>
-
-                    <h3 style={projectTitle}>
-                      {project.title}
-                    </h3>
-
-                    <p style={projectDescriptionStyle}>
-                      {project.description}
-                    </p>
-
-                    <button
-                      style={editPortfolioBtn}
-                      onClick={() => {
-                        setEditingProject(project);
-                        setEditTitle(project.title || "");
-                        setEditDescription(project.description || "");
-                        const projectImages = getProjectImages(project);
-                        setEditImages(projectImages);
-                        setActiveEditImage(projectImages[0] || "");
-                      }}
-                    >
-                      {language === "es" ? "Editar portafolio" : "Edit Portfolio"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </>
       )}
@@ -740,8 +1086,12 @@ function ProjectGallery({ setPage, currentPage }) {
 const pageWrapper = {
   background: "#f5f5f7",
   minHeight: "100vh",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
+  padding:
+    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
+  width: "100%",
+  maxWidth: "1120px",
+  margin: "0 auto",
 };
 
 const backButton = {
@@ -755,11 +1105,39 @@ const backButton = {
   cursor: "pointer",
 };
 
+const compactHeader = {
+  marginBottom: "16px",
+};
+
+const compactKicker = {
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  letterSpacing: "0.8px",
+  marginBottom: "6px",
+};
+
+const compactTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "34px",
+  lineHeight: 1,
+  fontWeight: "950",
+};
+
+const compactSubtitle = {
+  margin: "8px 0 0",
+  color: "#64748b",
+  fontSize: "16px",
+  lineHeight: 1.45,
+};
+
 const heroCard = {
   background:
     "linear-gradient(135deg,#111827 0%,#1e293b 58%,#312e81 100%)",
-  borderRadius: "34px",
-  padding: "34px 24px",
+  borderRadius: "28px",
+  padding: "24px",
   color: "white",
   marginBottom: "24px",
   border: "1px solid rgba(255,255,255,0.10)",
@@ -767,21 +1145,38 @@ const heroCard = {
     "0 16px 38px rgba(15,23,42,0.22)",
 };
 
+const heroTopRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+};
+
+const heroProofStack = {
+  minWidth: "76px",
+  background: "rgba(255,255,255,0.12)",
+  borderRadius: "18px",
+  padding: "12px 10px",
+  textAlign: "center",
+};
+
 const heroBadge = {
   background: "white",
   color: "#5b3df5",
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "800",
-  marginBottom: "20px",
+  marginBottom: "14px",
   boxShadow: "0 8px 18px rgba(91,61,245,0.10)",
 };
 
 const heroTitle = {
-  fontSize: "44px",
+  fontSize: "28px",
   margin: 0,
-  lineHeight: 1,
+  lineHeight: 1.08,
   color: "white",
   textShadow: "0 2px 10px rgba(0,0,0,0.22)",
 };
@@ -791,6 +1186,51 @@ const heroSubtitle = {
   marginTop: "16px",
   lineHeight: 1.6,
   fontSize: "17px",
+};
+
+const portfolioActionGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "10px",
+  marginBottom: "24px",
+};
+
+const primaryActionButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  border: "none",
+  background: "linear-gradient(135deg,#5b3df5,#7b61ff)",
+  color: "white",
+  padding: "14px 16px",
+  borderRadius: "18px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const secondaryActionButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  border: "1px solid #ddd6fe",
+  background: "white",
+  color: "#5b3df5",
+  padding: "14px 16px",
+  borderRadius: "18px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const contentSection = {
+  marginBottom: "24px",
+};
+
+const sectionSubtitle = {
+  margin: "6px 0 0",
+  color: "#64748b",
+  lineHeight: 1.45,
 };
 
 const statsGrid = {
@@ -832,6 +1272,8 @@ const sectionHeader = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: "12px",
+  flexWrap: "wrap",
   marginBottom: "18px",
 };
 
@@ -840,15 +1282,24 @@ const sectionHeader = {
   fontSize: "28px",
   color: "#111827",
   fontWeight: "900",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
 };
 
-const sectionChip = {
-  background: "#f1edff",
-  color: "#5b3df5",
-  padding: "8px 12px",
+const sectionInfoBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  background: "#f8fafc",
+  color: "#475569",
+  padding: "7px 11px",
   borderRadius: "999px",
-  fontWeight: "700",
+  border: "1px solid #e2e8f0",
+  fontWeight: "850",
   fontSize: "12px",
+  cursor: "default",
+  boxShadow: "none",
 };
 
 const inputStyle = {
@@ -937,6 +1388,10 @@ const previewImage = {
 };
 
 const publishButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "7px",
   width: "100%",
   marginTop: "22px",
   padding: "18px",
@@ -990,6 +1445,20 @@ const emptyProjectsText = {
   lineHeight: 1.6,
 };
 
+const missingProjectImage = {
+  minHeight: "190px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
+  padding: "24px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontWeight: "800",
+  textAlign: "center",
+};
+
 const projectCard = {
   background: "white",
   borderRadius: "28px",
@@ -997,6 +1466,11 @@ const projectCard = {
   marginBottom: "22px",
   boxShadow:
     "0 12px 30px rgba(0,0,0,0.06)",
+};
+
+const projectCardFeatured = {
+  border: "2px solid #5b3df5",
+  boxShadow: "0 18px 44px rgba(91,61,245,0.18)",
 };
 
 const editPageCard = {
@@ -1145,6 +1619,9 @@ const photoCountBadge = {
   position: "absolute",
   right: "14px",
   bottom: "14px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
   background: "rgba(15,23,42,0.72)",
   color: "white",
   padding: "8px 12px",
@@ -1152,6 +1629,55 @@ const photoCountBadge = {
   fontSize: "12px",
   fontWeight: "900",
   backdropFilter: "blur(10px)",
+};
+
+const proofGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "14px",
+  marginBottom: "24px",
+};
+
+const proofCard = {
+  background: "white",
+  borderRadius: "24px",
+  padding: "20px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+};
+
+const compactSectionTitle = {
+  margin: "0 0 12px",
+  fontSize: "20px",
+  fontWeight: "950",
+  color: "#111827",
+};
+
+const reviewScore = {
+  fontSize: "34px",
+  fontWeight: "950",
+  color: "#111827",
+  lineHeight: 1,
+};
+
+const reviewPreview = {
+  color: "#334155",
+  lineHeight: 1.5,
+  margin: "12px 0 0",
+};
+
+const credentialList = {
+  display: "grid",
+  gap: "10px",
+};
+
+const credentialRow = {
+  display: "grid",
+  gridTemplateColumns: "20px minmax(0, 1fr) auto",
+  alignItems: "center",
+  gap: "10px",
+  color: "#334155",
+  fontSize: "14px",
 };
 
 const portfolioActions = {
@@ -1183,6 +1709,32 @@ const editPortfolioBtn = {
   fontSize: "13px",
   cursor: "pointer",
   marginTop: "14px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const spotlightFeatureBtn = {
+  width: "auto",
+  alignSelf: "center",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#475569",
+  padding: "10px 18px",
+  borderRadius: "999px",
+  fontWeight: "850",
+  fontSize: "13px",
+  cursor: "pointer",
+  marginTop: "10px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const spotlightFeatureBtnActive = {
+  borderColor: "#5b3df5",
+  background: "#f3f0ff",
+  color: "#5b3df5",
 };
 
 const projectImageGrid = {
@@ -1202,6 +1754,14 @@ const projectContent = {
   padding: "20px",
 };
 
+const projectMetaRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flexWrap: "wrap",
+  marginBottom: "10px",
+};
+
 const projectTag = {
   background: "transparent",
   color: "#475569",
@@ -1217,6 +1777,15 @@ const projectTag = {
   letterSpacing: "0.6px",
 };
 
+const projectLocationPill = {
+  background: "#f1f5f9",
+  color: "#475569",
+  padding: "6px 9px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: "800",
+};
+
 const projectTitle = {
   fontSize: "24px",
   marginBottom: "12px",
@@ -1225,6 +1794,26 @@ const projectTitle = {
 const projectDescriptionStyle = {
   color: "#666",
   lineHeight: 1.7,
+};
+
+const projectReviewProof = {
+  marginTop: "14px",
+  background: "#f8fafc",
+  color: "#475569",
+  borderRadius: "16px",
+  padding: "12px",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "8px",
+  lineHeight: 1.45,
+  fontSize: "14px",
+};
+
+const projectButtonRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
 };
 
 const cardStyle = {

@@ -1,8 +1,11 @@
 import { getWorkflowStatusLabel } from "../../utils/workflowStatus";
+import { t } from "../../utils/language";
 import {
   updateMatchingHomeownerRequests,
   prependProjectTimeline,
 } from "../../utils/workflowTimeline";
+import MeetroIcon from "../MeetroIcon";
+import UniversalDocumentCard from "../documents/UniversalDocumentCard";
 
 function WorkflowInvoiceRequestCard({
   msg,
@@ -10,15 +13,39 @@ function WorkflowInvoiceRequestCard({
   currentViewerRole,
   setMessages,
   setMessageText,
-  styles,
+  reviewProjectAction,
 }) {
-  const {
-    invoiceWorkflowActions,
-    markInvoicePaidButton,
-    invoiceQuestionButton,
-    invoicePaidNotice,
-    invoiceQuestionNotice,
-  } = styles;
+  const title =
+    msg.projectTitle || msg.invoice?.service || msg.title || t("documentInvoice", language);
+  const amount = msg.invoice?.total || msg.total || msg.amount || "";
+  const status =
+    msg.paymentStatus === "paid" || msg.invoice?.status === "paid"
+      ? t("documentStatusPaid", language)
+      : msg.paymentStatus === "question"
+      ? t("documentStatusQuestionSent", language)
+      : t("documentStatusUnpaid", language);
+
+  return (
+    <UniversalDocumentCard
+      documentType="invoice"
+      projectTitle={title}
+      amount={amount}
+      status={status}
+      language={language}
+      icon="quickInvoice"
+      reviewProjectAction={() =>
+        reviewProjectAction?.({
+          ...msg.invoice,
+          ...msg,
+          title,
+          projectTitle: title,
+          total: amount,
+          status,
+          type: "invoice",
+        })
+      }
+    />
+  );
 
   return (
     <>
@@ -141,14 +168,14 @@ function WorkflowInvoiceRequestCard({
 
       {msg.paymentStatus === "paid" && (
         <div style={invoicePaidNotice}>
-          ✅{" "}
+          <MeetroIcon name="payment" size={16} decorative />{" "}
           {getWorkflowStatusLabel("paid", language)}
         </div>
       )}
 
       {msg.paymentStatus === "question" && (
         <div style={invoiceQuestionNotice}>
-          💬{" "}
+          <MeetroIcon name="messages" size={16} decorative />{" "}
           {getWorkflowStatusLabel("question", language)}
         </div>
       )}

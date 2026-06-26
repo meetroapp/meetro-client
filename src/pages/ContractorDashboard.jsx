@@ -1,50 +1,301 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
+import { jsPDF } from "jspdf";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import { t as translate } from "../utils/language";
+import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
+import {
+  CAMERA_PERMISSION_MESSAGE,
+  createPhotoInputEvent,
+  openJobPhotoPicker,
+} from "../utils/cameraPhotoPicker";
 import { getNotifications } from "../utils/notifications";
-import { canBusinessSeeCategory, inferEmergencyCategory } from "../utils/categoryRouting";
+import {
+  getStoredProfessionalMatchProfile,
+  inferRequestCategory,
+} from "../utils/professionalRequestMatching";
+import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
+import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import {
   getActiveJobSnapshot,
   getActiveWorkSnapshot,
   saveActiveWorkSnapshot,
   saveActiveJobSnapshot,
+  getJobRecord,
+  saveJobRecord,
   saveSelectedActiveProject,
 } from "../utils/workCenter";
+import { markConversationUnreadForRecipient } from "../utils/conversationUnread";
+import { getProjectIdentity } from "../utils/projectIdentity";
+import {
+  moveJobToHistory,
+  updateProjectLifecycleState,
+} from "../utils/projectLifecycleSync";
+import {
+  appendProjectTimelineEvent,
+  linkQuoteToProject,
+  linkScheduleToProject,
+} from "../utils/workflowCommands";
+import {
+  cancelAppointmentReminderNotifications,
+  openNotificationSettings,
+  scheduleAppointmentReminderNotifications,
+} from "../utils/appointmentReminders";
+import {
+  getQuoteLinkIdentityWarnings,
+  getQuoteLinkReconciliationReport,
+  getScheduleLinkIdentityWarnings,
+  getScheduleLinkReconciliationReport,
+  getTimelineIdentityWarnings,
+  getTimelineReconciliationReport,
+} from "../utils/workCenterSelectors";
+import {
+  fetchQaWorkflowRecords,
+  hydrateQaWorkflowRecords,
+} from "../utils/qaWorkflowHydration";
+import {
+  getContexts,
+  getServiceTypes,
+  resolveEvaluationTemplate,
+} from "../utils/evaluationTemplateRegistry";
+import {
+  buildVisitEvaluationPayload,
+  canScheduleWork,
+  hasSavedEvaluation,
+  hasPaymentOrDepositEvidence,
+} from "../utils/evaluationWorkflowGates";
+import { normalizeEvaluationFindingsPayload } from "../utils/findingsEngineRegistry";
+import {
+  buildClosureRecord,
+  evaluateWorkCenterClosureReadiness,
+} from "../utils/completionClosureValidation";
+import { setActiveAccountMode } from "../utils/session";
+import { createWorkCenterJobListPresentation } from "../utils/workCenterJobListPresentation";
+import { getEvaluationPanelMode } from "../utils/evaluationPanelMode";
+import {
+  getSupportingRecordActionStyleVariant,
+  getSupportingRecordsDefaultOpen,
+} from "../utils/supportingRecordsPresentation";
+import { getWorkCenterPrimaryCtaLabel } from "../utils/workCenterCtaLabels";
+
+function createBlankScheduleForm(overrides = {}) {
+  return {
+    contextSource: "manual",
+    appointmentType: "walkthrough",
+    title: "",
+    manualCustomerName: "",
+    manualCustomerPhone: "",
+    manualCustomerEmail: "",
+    manualCustomerAddress: "",
+    requestId: "",
+    conversationId: "",
+    quoteId: "",
+    services: [],
+    date: new Date().toISOString().slice(0, 10),
+    time: "12:00",
+    location: "",
+    notes: "",
+    ...overrides,
+  };
+}
+
+function createDefaultWorkAppointmentDraft() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return {
+    date: date.toISOString().slice(0, 10),
+    time: "09:00",
+    notes: "",
+    shareWithCustomer: true,
+  };
+}
+
+function createDefaultPaymentDraft(total = "") {
+  return {
+    amount: total ? String(total) : "",
+    paymentType: "deposit",
+    method: "card",
+    date: new Date().toISOString().slice(0, 10),
+    note: "",
+  };
+}
+
+function createDefaultClosureDraft() {
+  return {
+    notes: "",
+    confirmMoveToHistory: false,
+  };
+}
+
+function createDefaultApprovalDraft() {
+  return {
+    note: "",
+    confirmed: false,
+  };
+}
+
+function getQuoteLaborAmount(quote = {}) {
+  return Number(
+    quote.laborAmount ??
+      quote.pricingBreakdown?.laborAmount ??
+      quote.labor ??
+      0
+  );
+}
+
+function getQuoteMaterialsAmount(quote = {}) {
+  return Number(
+    quote.materialsAmount ??
+      quote.pricingBreakdown?.materialsAmount ??
+      (typeof quote.materials === "number" || typeof quote.materials === "string"
+        ? quote.materials
+        : 0) ??
+      0
+  );
+}
+
+function getQuoteTotalAmount(quote = {}) {
+  return Number(
+    quote.totalAmount ??
+      quote.quoteTotal ??
+      quote.pricingBreakdown?.totalAmount ??
+      quote.amount ??
+      quote.total ??
+      getQuoteLaborAmount(quote) + getQuoteMaterialsAmount(quote)
+  );
+}
+
+function parseMeetroAmount(value) {
+  const cleaned = String(value ?? "").replace(/[$,\s]/g, "").trim();
+  if (!cleaned) return null;
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function getMaterialLineTotal(material = {}) {
+  const quantity = parseMeetroAmount(material.quantity);
+  const unitPrice = parseMeetroAmount(material.unitPrice ?? material.unit);
+
+  if (quantity === null || unitPrice === null) return null;
+  return quantity * unitPrice;
+}
+
+function getEvaluationMaterialsTotal(workItems = []) {
+  return workItems.reduce((total, workItem) => {
+    const materials = Array.isArray(workItem.materials) ? workItem.materials : [];
+    return (
+      total +
+      materials.reduce((materialTotal, material) => {
+        const lineTotal = getMaterialLineTotal(material);
+        return materialTotal + (lineTotal === null ? 0 : lineTotal);
+      }, 0)
+    );
+  }, 0);
+}
+
+function readMeetroJson(key, fallback) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "null");
+    return parsed ?? fallback;
+  } catch (error) {
+    console.warn("Work Center storage read failed.", {
+      key,
+      errorName: error?.name || "Error",
+    });
+    return fallback;
+  }
+}
+
+function readMeetroArray(key) {
+  const value = readMeetroJson(key, []);
+  return Array.isArray(value) ? value : [];
+}
+
+function readMeetroObject(key) {
+  const value = readMeetroJson(key, {});
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
 
 function ContractorDashboard({ setPage, language = "en" }) {
   const activeJobSnapshot = getActiveJobSnapshot();
   const activeWorkSnapshot = getActiveWorkSnapshot();
   const userRole = localStorage.getItem("businessCategory") || "Handyman";
   const [refreshKey, setRefreshKey] = useState(0);
+  const [availableNow, setAvailableNow] = useState(
+    localStorage.getItem("meetroAvailableNow") === "true"
+  );
   const [activeTab, setActiveTab] = useState(
     localStorage.getItem("meetroWorkCenterTab") || "pending"
   );
-  const [completedFilter, setCompletedFilter] = useState("all");
+  const [isWorkCenterSectionOpen, setIsWorkCenterSectionOpen] = useState(
+    Boolean(localStorage.getItem("meetroWorkCenterTab"))
+  );
+  const [viewedOpportunityCount, setViewedOpportunityCount] = useState(() =>
+    Number(localStorage.getItem("meetroViewedOpportunityCount") || "0")
+  );
+  const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
+  const [selectedJobDetailView, setSelectedJobDetailView] = useState("");
+  const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
+  const [isJobHistoryMode, setIsJobHistoryMode] = useState(false);
+  const [jobMenuTab, setJobMenuTab] = useState("current");
+  const [jobActionToast, setJobActionToast] = useState(null);
+  const [scheduleFilter, setScheduleFilter] = useState(
+    localStorage.getItem("workCenterScheduleFilter") || ""
+  );
+  const [activeWorkFilter, setActiveWorkFilter] = useState("all");
+  const dynamicSectionRef = useRef(null);
+  const workCenterPanelRef = useRef(null);
+  const jobScopedDetailRef = useRef(null);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState(null);
-  const [scheduleForm, setScheduleForm] = useState(() => {
-    const selectedLead = JSON.parse(
-      localStorage.getItem("selectedWorkCenterRequest") || "null"
-    );
-
-    return {
-      appointmentType: "walkthrough",
-      title:
-        selectedLead?.title ||
-        selectedLead?.service ||
-        "",
-      date: new Date().toISOString().slice(0, 10),
-      time: "12:00",
-      location:
-        selectedLead?.location ||
-        selectedLead?.address ||
-        "",
-      notes:
-        selectedLead?.description ||
-        "",
-    };
+  const [appointmentReminderNotice, setAppointmentReminderNotice] = useState(null);
+  const [evaluationTarget, setEvaluationTarget] = useState(null);
+  const [evaluationForm, setEvaluationForm] = useState({
+    serviceType: "",
+    context: "",
+    evaluationTemplate: null,
+    templateRequirements: [],
+	    photos: [],
+	    findings: "",
+	    findingRecords: [],
+	    materialsNeeded: "",
+    laborNotes: "",
+    safetyNotes: "",
+    photoNotes: "",
+    notes: "",
+    workItems: [],
+    nextStep: "quote",
+  });
+  const [evaluationSaveNotice, setEvaluationSaveNotice] = useState("");
+  const [evaluationSaveError, setEvaluationSaveError] = useState("");
+  const [evaluationToast, setEvaluationToast] = useState(null);
+  const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
+  const [quoteViewTarget, setQuoteViewTarget] = useState(null);
+  const [jobReportTarget, setJobReportTarget] = useState(null);
+  const [historyActionNotice, setHistoryActionNotice] = useState("");
+  const [scheduleForm, setScheduleForm] = useState(() => createBlankScheduleForm());
+  const [showWorkAppointmentForm, setShowWorkAppointmentForm] = useState(false);
+  const [workAppointmentDraft, setWorkAppointmentDraft] = useState(() =>
+    createDefaultWorkAppointmentDraft()
+  );
+  const [showApprovalConfirmFlow, setShowApprovalConfirmFlow] = useState(false);
+  const [approvalDraft, setApprovalDraft] = useState(() =>
+    createDefaultApprovalDraft()
+  );
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentDraft, setPaymentDraft] = useState(() => createDefaultPaymentDraft());
+  const [showCloseJobForm, setShowCloseJobForm] = useState(false);
+  const [closureDraft, setClosureDraft] = useState(() => createDefaultClosureDraft());
+  const [showProposalSendFlow, setShowProposalSendFlow] = useState(false);
+  const [showReceiptSendFlow, setShowReceiptSendFlow] = useState(false);
+  const [sendFlowDraft, setSendFlowDraft] = useState({
+    method: "meetro_chat",
+    note: "",
   });
 
   const [materialsDraft, setMaterialsDraft] = useState("");
@@ -55,6 +306,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [showManualMaterials, setShowManualMaterials] = useState(false);
   const [isListeningMaterials, setIsListeningMaterials] = useState(false);
+  const [materialsMicError, setMaterialsMicError] = useState("");
+  const [showMaterialsMicSettingsHelp, setShowMaterialsMicSettingsHelp] =
+    useState(false);
+  const [materialsInputMode, setMaterialsInputMode] = useState("type");
   const materialsRecognitionRef = useRef(null);
 
   const [materialForm, setMaterialForm] = useState({
@@ -64,6 +319,203 @@ function ContractorDashboard({ setPage, language = "en" }) {
     status: "needed",
   });
   const activeLanguage = language;
+  const ui = (key) => translate(key, activeLanguage);
+  const isPropertyManagementBusiness =
+    String(userRole).toLowerCase().replace(/[\s_-]/g, "") ===
+    "propertymanagement";
+  const evaluationServiceTypeOptions = getServiceTypes({
+    industry: "handyman",
+    businessType: "handyman",
+  });
+  const evaluationContextOptions = getContexts({ industry: "handyman" });
+
+  const selectedWorkCenterRequest = readMeetroJson(
+    "selectedWorkCenterRequest",
+    null
+  );
+
+  const leadWorkflowStage =
+    localStorage.getItem("leadWorkflowStage") || "";
+
+  const leadWorkflowIntent =
+    localStorage.getItem("leadWorkflowIntent") || "";
+
+  const hasScheduleRequestContext = Boolean(
+    selectedWorkCenterRequest && (leadWorkflowStage || leadWorkflowIntent)
+  );
+
+  useEffect(() => {
+    try {
+      const rawPrefill = localStorage.getItem("meetroAssistantSchedulePrefill");
+      if (!rawPrefill) return;
+
+      const prefill = JSON.parse(rawPrefill);
+      if (!prefill || typeof prefill !== "object") return;
+
+      setActiveTab("schedule");
+      setIsWorkCenterSectionOpen(true);
+      setShowScheduleForm(true);
+      setEditingScheduleId(null);
+      setScheduleForm((current) => ({
+        ...current,
+        appointmentType: prefill.appointmentType || current.appointmentType || "walkthrough",
+        title: prefill.title || current.title || "",
+        manualCustomerName:
+          prefill.customerName ||
+          prefill.manualCustomerName ||
+          current.manualCustomerName ||
+          "",
+        manualCustomerPhone:
+          prefill.phone ||
+          prefill.customerPhone ||
+          prefill.manualCustomerPhone ||
+          current.manualCustomerPhone ||
+          "",
+        manualCustomerEmail:
+          prefill.email ||
+          prefill.customerEmail ||
+          prefill.manualCustomerEmail ||
+          current.manualCustomerEmail ||
+          "",
+        manualCustomerAddress:
+          prefill.address ||
+          prefill.location ||
+          prefill.manualCustomerAddress ||
+          current.manualCustomerAddress ||
+          "",
+        date: prefill.date || current.date || new Date().toISOString().slice(0, 10),
+        time: prefill.time || current.time || "12:00",
+        location: prefill.location || current.location || "",
+        notes: prefill.notes || current.notes || "",
+      }));
+      localStorage.setItem("meetroWorkCenterTab", "schedule");
+      localStorage.setItem("activeWorkCenterTab", "schedule");
+      localStorage.removeItem("meetroAssistantSchedulePrefill");
+    } catch {
+      localStorage.removeItem("meetroAssistantSchedulePrefill");
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncAvailability = () => {
+      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
+    };
+
+    window.addEventListener("meetroAvailabilityChanged", syncAvailability);
+    window.addEventListener("storage", syncAvailability);
+
+    return () => {
+      window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
+      window.removeEventListener("storage", syncAvailability);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("meetroWorkCenterResetToLanding", resetWorkCenterToLanding);
+
+    return () => {
+      window.removeEventListener("meetroWorkCenterResetToLanding", resetWorkCenterToLanding);
+    };
+  }, []);
+
+  useEffect(() => {
+    const isEvaluationSurfaceOpen =
+      Boolean(evaluationTarget) || selectedJobDetailView === "evaluation";
+
+    document.body.classList.toggle(
+      "meetro-evaluation-notes-open",
+      isEvaluationSurfaceOpen
+    );
+
+    return () => {
+      document.body.classList.remove("meetro-evaluation-notes-open");
+    };
+  }, [evaluationTarget, selectedJobDetailView]);
+
+  useEffect(() => {
+    const isDenseScheduleList =
+      isWorkCenterSectionOpen &&
+      activeTab === "schedule" &&
+      !evaluationTarget;
+
+    document.body.classList.toggle(
+      "meetro-work-center-schedule-open",
+      isDenseScheduleList
+    );
+
+    return () => {
+      document.body.classList.remove("meetro-work-center-schedule-open");
+    };
+  }, [activeTab, evaluationTarget, isWorkCenterSectionOpen]);
+
+  useEffect(() => {
+    const returnScheduleId = localStorage.getItem(
+      "quoteBuilderReturnEvaluationScheduleId"
+    );
+    if (!returnScheduleId) return;
+
+    try {
+      const schedule = JSON.parse(
+        localStorage.getItem("meetro_business_schedule") || "[]"
+      );
+      const visit = Array.isArray(schedule)
+        ? schedule.find(
+            (item) =>
+              String(item.id || item.scheduleId || item.visitId || "") ===
+              String(returnScheduleId)
+          )
+        : null;
+
+      if (visit) {
+        setActiveTab("schedule");
+        setIsWorkCenterSectionOpen(true);
+        localStorage.setItem("meetroWorkCenterTab", "schedule");
+        localStorage.setItem("activeWorkCenterTab", "schedule");
+        openVisitDetail(visit);
+      }
+    } catch (error) {
+      console.warn("Could not return to Evaluation Notes.", error);
+    } finally {
+      localStorage.removeItem("quoteBuilderReturnEvaluationScheduleId");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!evaluationToast || evaluationToast.type !== "success") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setEvaluationToast(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [evaluationToast]);
+
+  useEffect(() => {
+    if (!jobActionToast || jobActionToast.type !== "success") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setJobActionToast(null);
+    }, 2800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [jobActionToast]);
+
+  useEffect(() => {
+    if (!selectedWorkCenterJob) return;
+
+    window.setTimeout(() => {
+      const target = workCenterPanelRef.current;
+
+      if (!target) return;
+
+      const y = target.getBoundingClientRect().top + window.pageYOffset - 70;
+
+      window.scrollTo({
+        top: y,
+        behavior: "smooth",
+      });
+    }, 80);
+  }, [selectedWorkCenterJob]);
 
   useEffect(() => {
     function syncEmergency() {
@@ -74,7 +526,150 @@ function ContractorDashboard({ setPage, language = "en" }) {
     window.addEventListener("meetro-active-work-updated", syncEmergency);
     window.addEventListener("storage", syncEmergency);
 
-    return () => {
+    const createQuotePdfDocument = (quote) => {
+    const businessName =
+      quote.businessName ||
+      localStorage.getItem("businessName") ||
+      localStorage.getItem("companyName") ||
+      "Meetro Professional";
+
+    const quoteNumber =
+      quote.quoteNumber ||
+      quote.quote_number ||
+      quote.quoteId ||
+      "Quote";
+
+    const today = quote.createdAt
+      ? new Date(quote.createdAt).toLocaleDateString()
+      : new Date().toLocaleDateString();
+
+    const doc = new jsPDF();
+
+    doc.setFillColor(32, 24, 95);
+    doc.rect(0, 0, 210, 42, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text(businessName, 14, 18);
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, "normal");
+    doc.text(activeLanguage === "es" ? "Cotización Profesional" : "Professional Estimate", 14, 28);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Resumen de Cotización" : "Quote Summary", 14, 56);
+
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    doc.text(`${activeLanguage === "es" ? "Cotización" : "Quote"} #: ${quoteNumber}`, 145, 54);
+    doc.text(`${activeLanguage === "es" ? "Fecha" : "Date"}: ${today}`, 145, 61);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 68, 196, 68);
+
+    doc.setFontSize(12);
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Proyecto" : "Project", 14, 82);
+
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(11);
+    doc.text(doc.splitTextToSize(quote.projectTitle || "Project", 170), 14, 90);
+
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Cliente" : "Customer", 14, 108);
+    doc.setFont(undefined, "normal");
+    doc.text(doc.splitTextToSize(quote.homeownerName || quote.customer || "Customer", 170), 14, 116);
+
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Ubicación" : "Location", 14, 134);
+    doc.setFont(undefined, "normal");
+    doc.text(doc.splitTextToSize(quote.location || "Location pending", 170), 14, 142);
+
+    const tableTop = 174;
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, tableTop - 10, 182, 48, 4, 4, "F");
+
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Precio" : "Pricing", 20, tableTop);
+
+    doc.setFont(undefined, "normal");
+    doc.text(activeLanguage === "es" ? "Mano de obra" : "Labor", 20, tableTop + 12);
+    doc.text(`$${getQuoteLaborAmount(quote).toFixed(2)}`, 165, tableTop + 12, { align: "right" });
+
+    doc.text(activeLanguage === "es" ? "Materiales" : "Materials", 20, tableTop + 24);
+    doc.text(`$${getQuoteMaterialsAmount(quote).toFixed(2)}`, 165, tableTop + 24, { align: "right" });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(20, tableTop + 30, 190, tableTop + 30);
+
+    doc.setFont(undefined, "bold");
+    doc.text("Total", 20, tableTop + 40);
+    doc.text(`$${getQuoteTotalAmount(quote).toFixed(2)}`, 165, tableTop + 40, { align: "right" });
+
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Tiempo estimado" : "Estimated Timeline", 14, 232);
+    doc.setFont(undefined, "normal");
+    doc.text(quote.timeline || "—", 14, 240);
+
+    doc.setFont(undefined, "bold");
+    doc.text(activeLanguage === "es" ? "Notas" : "Notes", 14, 254);
+    doc.setFont(undefined, "normal");
+    doc.text(doc.splitTextToSize(quote.notes || "—", 170), 14, 262);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Powered by Meetro Community", 105, 286, { align: "center" });
+
+    return { doc, quoteNumber };
+  };
+
+  const shareQuotePdfFromHistory = async (quote) => {
+    const { doc, quoteNumber } = createQuotePdfDocument(quote);
+
+    const fileName = `${quoteNumber}-${quote.projectTitle || "quote"}.pdf`.replace(
+      /[^a-z0-9-_\.]/gi,
+      "_"
+    );
+
+    try {
+      const pdfDataUri = doc.output("datauristring");
+      const base64Data = pdfDataUri.split(",")[1];
+
+      const savedFile = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title: `Quote - ${quote.projectTitle || "Project"}`,
+        text:
+          activeLanguage === "es"
+            ? "Adjunto la cotización profesional."
+            : "Attached is the professional quote.",
+        url: savedFile.uri,
+        dialogTitle:
+          activeLanguage === "es"
+            ? "Compartir cotización"
+            : "Share Quote",
+      });
+    } catch (error) {
+      console.error("Native quote share failed:", error);
+      doc.save(fileName);
+    }
+  };
+
+  const printQuotePdfFromHistory = (quote) => {
+    const { doc, quoteNumber } = createQuotePdfDocument(quote);
+    doc.save(`${quoteNumber}-${quote.projectTitle || "quote"}.pdf`.replace(/[^a-z0-9-_\.]/gi, "_"));
+  };
+
+
+  return () => {
       window.removeEventListener(
         "meetroEmergencyConversationUpdated",
         syncEmergency
@@ -139,22 +734,81 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const t = text[language] || text.en;
 
+  const materialsMicBlockedMessage =
+    activeLanguage === "es"
+      ? "El acceso al micrófono está desactivado."
+      : "Microphone access is currently disabled.";
+
+  function showMaterialsMicrophonePermissionCard() {
+    setIsListeningMaterials(false);
+    setMaterialsInputMode("type");
+    setMaterialsMicError(materialsMicBlockedMessage);
+  }
+
+  async function refreshMaterialsMicrophonePermission() {
+    try {
+      if (!navigator.permissions?.query) return;
+
+      const permission = await navigator.permissions.query({
+        name: "microphone",
+      });
+
+      if (permission?.state === "granted") {
+        setMaterialsMicError("");
+        setShowMaterialsMicSettingsHelp(false);
+      }
+    } catch {
+      // Some iOS/WebKit surfaces do not expose microphone permission status.
+    }
+  }
+
+  async function openMaterialsMicrophoneSettings() {
+    setShowMaterialsMicSettingsHelp(true);
+
+    try {
+      const appPlugin = Capacitor?.Plugins?.App;
+
+      if (
+        Capacitor?.isNativePlatform?.() &&
+        typeof appPlugin?.openSettings === "function"
+      ) {
+        await appPlugin.openSettings();
+        return;
+      }
+    } catch {
+      // Fall through to the inline iOS instructions below.
+    }
+  }
+
+  useEffect(() => {
+    const handlePermissionReturn = () => {
+      if (document.visibilityState === "visible") {
+        refreshMaterialsMicrophonePermission();
+      }
+    };
+
+    window.addEventListener("focus", refreshMaterialsMicrophonePermission);
+    document.addEventListener("visibilitychange", handlePermissionReturn);
+
+    return () => {
+      window.removeEventListener("focus", refreshMaterialsMicrophonePermission);
+      document.removeEventListener("visibilitychange", handlePermissionReturn);
+    };
+  }, []);
+
   function toggleMaterialsMic() {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert(
-        activeLanguage === "es"
-          ? "El micrófono no está disponible en este navegador. Intenta con Chrome o Safari."
-          : "Microphone dictation is not available in this browser. Try Chrome or Safari."
-      );
+      showMaterialsMicrophonePermissionCard();
       return;
     }
 
     if (isListeningMaterials && materialsRecognitionRef.current) {
       materialsRecognitionRef.current.stop();
       setIsListeningMaterials(false);
+      setMaterialsInputMode("type");
       return;
     }
 
@@ -165,6 +819,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     recognition.onstart = () => {
       setIsListeningMaterials(true);
+      setMaterialsInputMode("voice");
+      setMaterialsMicError("");
+      setShowMaterialsMicSettingsHelp(false);
     };
 
     recognition.onresult = (event) => {
@@ -178,13 +835,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
     };
 
     recognition.onerror = (event) => {
-      setIsListeningMaterials(false);
+      const blockedErrors = [
+        "not-allowed",
+        "service-not-allowed",
+        "permission-denied",
+        "permission denied",
+        "notallowederror",
+      ];
+      const errorName = String(event?.error || event?.name || "").toLowerCase();
 
-      alert(
-        activeLanguage === "es"
-          ? `Error del micrófono: ${event.error || "permiso denegado"}`
-          : `Microphone error: ${event.error || "permission denied"}`
-      );
+      if (
+        blockedErrors.some((blockedError) => errorName.includes(blockedError))
+      ) {
+        showMaterialsMicrophonePermissionCard();
+        return;
+      }
+
+      showMaterialsMicrophonePermissionCard();
     };
 
     recognition.onend = () => {
@@ -192,7 +859,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     };
 
     materialsRecognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      showMaterialsMicrophonePermissionCard();
+    }
   }
 
   function getActiveWorkContext() {
@@ -235,9 +906,1864 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function openWorkTab(tab) {
+    setSelectedWorkCenterJob(null);
     localStorage.setItem("meetroWorkCenterTab", tab);
     localStorage.setItem("activeWorkCenterTab", tab);
     setActiveTab(tab);
+    if (tab === "pending") {
+      localStorage.setItem("meetroViewedOpportunityCount", String(opportunitiesCount));
+      localStorage.setItem("meetroOpportunitiesViewedAt", new Date().toISOString());
+      setViewedOpportunityCount(opportunitiesCount);
+    }
+    if (tab !== "schedule") {
+      localStorage.removeItem("workCenterScheduleFilter");
+      setScheduleFilter("");
+    } else {
+      setScheduleFilter(localStorage.getItem("workCenterScheduleFilter") || "");
+    }
+    setIsWorkCenterSectionOpen(true);
+
+    window.setTimeout(() => {
+      const target = dynamicSectionRef.current || workCenterPanelRef.current;
+
+      if (!target) return;
+
+      const y =
+        target.getBoundingClientRect().top +
+        window.pageYOffset -
+        70;
+
+      window.scrollTo({
+        top: y,
+        behavior: "smooth",
+      });
+    }, 120);
+  }
+
+  function openWorkCenterJobsPage(mode = "current") {
+    setJobMenuTab(mode);
+    setIsJobHistoryMode(false);
+    setHistoryActionNotice("");
+    openWorkTab(mode === "history" ? "jobHistory" : "currentJobs");
+  }
+
+  function openBusinessLeadOpportunityDetail(request = {}) {
+    const requestId = request.requestId || request.id || "";
+
+    localStorage.removeItem("lastCompletedProject");
+    localStorage.removeItem("selectedHomeownerRequestId");
+    localStorage.removeItem("selectedWorkCenterRequest");
+    localStorage.removeItem("activeWorkCenterQuoteRequestId");
+    localStorage.setItem("leadWorkflowStage", "project_review");
+    localStorage.setItem("leadWorkflowIntent", "review_contact_schedule");
+    localStorage.setItem("selectedPostId", requestId || "");
+    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
+    localStorage.setItem("projectDetailsReturnPage", "businessLeads");
+    localStorage.setItem("meetroViewedOpportunityCount", String(opportunitiesCount));
+    localStorage.setItem("meetroOpportunitiesViewedAt", new Date().toISOString());
+    setViewedOpportunityCount(opportunitiesCount);
+    setPage("projectDetails");
+  }
+
+  function resetWorkCenterToLanding() {
+    localStorage.removeItem("meetroWorkCenterTab");
+    localStorage.removeItem("activeWorkCenterTab");
+    localStorage.removeItem("workCenterScheduleFilter");
+    localStorage.removeItem("conversationReturnSection");
+    localStorage.removeItem("quoteStatusFilter");
+    setSelectedWorkCenterJob(null);
+    setSelectedJobDetailView("");
+    setIsJobHistoryMode(false);
+    setJobMenuTab("current");
+    setHistoryActionNotice("");
+    setScheduleFilter("");
+    setShowScheduleForm(false);
+    setEditingScheduleId(null);
+    setScheduleDeleteTarget(null);
+    setActiveTab("pending");
+    setIsWorkCenterSectionOpen(false);
+  }
+
+  function getScheduleFilter() {
+    return scheduleFilter || localStorage.getItem("workCenterScheduleFilter") || "";
+  }
+
+  const evaluationMeasurementUnits = [
+    { value: "inches", label: activeLanguage === "es" ? "Pulgadas" : "Inches" },
+    { value: "feet", label: activeLanguage === "es" ? "Pies" : "Feet" },
+    { value: "feet_inches", label: activeLanguage === "es" ? "Pies + pulgadas" : "Feet + Inches" },
+    { value: "centimeters", label: activeLanguage === "es" ? "Centímetros" : "Centimeters" },
+    { value: "meters", label: activeLanguage === "es" ? "Metros" : "Meters" },
+    { value: "count", label: activeLanguage === "es" ? "Cantidad" : "Count" },
+    { value: "square_feet", label: activeLanguage === "es" ? "Pies cuadrados" : "Square feet" },
+    { value: "linear_feet", label: activeLanguage === "es" ? "Pies lineales" : "Linear feet" },
+  ];
+
+  function getEvaluationMeasurementUnitLabel(unit = "") {
+    return (
+      evaluationMeasurementUnits.find((option) => option.value === unit)?.label ||
+      unit ||
+      ""
+    );
+  }
+
+  function normalizeEvaluationMeasurement(seed = {}) {
+    const unit = seed.unit || "";
+
+    return {
+      id: seed.id || `measurement-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      label: seed.label || "",
+      value: unit === "feet_inches" ? "" : seed.value || "",
+      unit,
+      feet: seed.feet || "",
+      inches: seed.inches || "",
+      width: seed.width || "",
+      height: seed.height || "",
+      depth: seed.depth || "",
+      quantity: seed.quantity || "",
+      notes: seed.notes || "",
+    };
+  }
+
+  function formatEvaluationMeasurement(measurement = {}) {
+    const unitLabel = getEvaluationMeasurementUnitLabel(measurement.unit);
+    const dimensionParts = [
+      measurement.width ? `${activeLanguage === "es" ? "Ancho" : "Width"} ${measurement.width}` : "",
+      measurement.height ? `${activeLanguage === "es" ? "Alto" : "Height"} ${measurement.height}` : "",
+      measurement.depth ? `${activeLanguage === "es" ? "Profundidad" : "Depth"} ${measurement.depth}` : "",
+    ].filter(Boolean);
+    const measurementValue =
+      measurement.unit === "feet_inches"
+        ? [
+            measurement.feet ? `${measurement.feet} ${activeLanguage === "es" ? "pies" : "ft"}` : "",
+            measurement.inches ? `${measurement.inches} ${activeLanguage === "es" ? "pulg." : "in"}` : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : [measurement.value, unitLabel].filter(Boolean).join(" ");
+
+    return [
+      measurement.label,
+      dimensionParts.length > 0
+        ? `${dimensionParts.join(" × ")}${unitLabel ? ` ${unitLabel}` : ""}`
+        : measurementValue,
+      measurement.quantity ? `${activeLanguage === "es" ? "Cantidad" : "Qty"} ${measurement.quantity}` : "",
+      measurement.notes,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function isDimensionMeasurementUnit(unit = "") {
+    return ["inches", "feet", "feet_inches", "centimeters", "meters"].includes(unit);
+  }
+
+  function autoResizeTextarea(event) {
+    const textarea = event.currentTarget;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 156)}px`;
+  }
+
+  function createEvaluationWorkItem(seed = {}) {
+    return {
+      id: seed.id || `work-item-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: seed.title || "",
+      notes: seed.notes || "",
+      safetyNotes: seed.safetyNotes || "",
+      status: seed.status || "open",
+      priority: seed.priority || "",
+      photos: Array.isArray(seed.photos) ? seed.photos : [],
+      measurements: Array.isArray(seed.measurements)
+        ? seed.measurements.map((measurement) =>
+            normalizeEvaluationMeasurement(measurement)
+          )
+        : [],
+      materials: Array.isArray(seed.materials) ? seed.materials : [],
+    };
+  }
+
+  function sanitizeEvaluationText(value = "") {
+    return String(value || "").slice(0, 5000);
+  }
+
+  function sanitizeEvaluationPhoto(photo = {}) {
+    return {
+      id: sanitizeEvaluationText(photo.id),
+      name: sanitizeEvaluationText(photo.name),
+      addedAt: sanitizeEvaluationText(photo.addedAt),
+      source: sanitizeEvaluationText(photo.source),
+      workItemId: sanitizeEvaluationText(photo.workItemId),
+      workItemTitle: sanitizeEvaluationText(photo.workItemTitle),
+    };
+  }
+
+  function sanitizeEvaluationMaterial(material = {}) {
+    const lineTotal = getMaterialLineTotal(material);
+    return {
+      id: sanitizeEvaluationText(material.id),
+      name: sanitizeEvaluationText(material.name),
+      quantity: sanitizeEvaluationText(material.quantity),
+      unitPrice: sanitizeEvaluationText(material.unitPrice ?? material.unit),
+      lineTotal,
+      provider: sanitizeEvaluationText(material.provider),
+      notes: sanitizeEvaluationText(material.notes),
+    };
+  }
+
+  function sanitizeEvaluationMeasurement(measurement = {}) {
+    return normalizeEvaluationMeasurement({
+      id: sanitizeEvaluationText(measurement.id),
+      label: sanitizeEvaluationText(measurement.label),
+      value: sanitizeEvaluationText(measurement.value),
+      unit: sanitizeEvaluationText(measurement.unit),
+      feet: sanitizeEvaluationText(measurement.feet),
+      inches: sanitizeEvaluationText(measurement.inches),
+      width: sanitizeEvaluationText(measurement.width),
+      height: sanitizeEvaluationText(measurement.height),
+      depth: sanitizeEvaluationText(measurement.depth),
+      quantity: sanitizeEvaluationText(measurement.quantity),
+      notes: sanitizeEvaluationText(measurement.notes),
+    });
+  }
+
+  function sanitizeEvaluationWorkItem(workItem = {}) {
+    const normalized = createEvaluationWorkItem(workItem);
+
+    return {
+      id: sanitizeEvaluationText(normalized.id),
+      title: sanitizeEvaluationText(normalized.title),
+      notes: sanitizeEvaluationText(normalized.notes),
+      safetyNotes: sanitizeEvaluationText(normalized.safetyNotes),
+      status: sanitizeEvaluationText(normalized.status),
+      priority: sanitizeEvaluationText(normalized.priority),
+      photos: (normalized.photos || []).map(sanitizeEvaluationPhoto),
+      measurements: (normalized.measurements || []).map(sanitizeEvaluationMeasurement),
+      materials: (normalized.materials || []).map(sanitizeEvaluationMaterial),
+    };
+  }
+
+  function getEvaluationFindingNotes(savedEvaluation = {}, fallback = "") {
+    if (typeof savedEvaluation.findingsNotes === "string") {
+      return savedEvaluation.findingsNotes;
+    }
+    if (typeof savedEvaluation.findingsText === "string") {
+      return savedEvaluation.findingsText;
+    }
+    if (typeof savedEvaluation.findings === "string") {
+      return savedEvaluation.findings;
+    }
+    return fallback || "";
+  }
+
+  function getEvaluationFindingSeeds(savedEvaluation = {}, record = {}) {
+    if (Array.isArray(savedEvaluation.findings)) return savedEvaluation.findings;
+    if (Array.isArray(savedEvaluation.findingRecords)) {
+      return savedEvaluation.findingRecords;
+    }
+    if (Array.isArray(record.evaluationFindings)) return record.evaluationFindings;
+    if (Array.isArray(record.findings)) return record.findings;
+    return [];
+  }
+
+  function getEvaluationCustomerScope(record = {}) {
+    return (
+      record.customerId ||
+      record.customerUid ||
+      record.manualCustomerContactId ||
+      record.relationshipId ||
+      record.conversationId ||
+      record.projectConversationId ||
+      record.activeConversationId ||
+      record.customerName ||
+      record.homeownerName ||
+      record.customer ||
+      ""
+    );
+  }
+
+  function buildStructuredEvaluationFindings({
+    evaluationId,
+    customerId,
+    requestId,
+    findings,
+  }) {
+    return normalizeEvaluationFindingsPayload({
+      evaluationId,
+      customerId,
+      requestId,
+      findings: Array.isArray(findings) ? findings : [],
+    });
+  }
+
+  function getEvaluationSelectionSeed(record = {}) {
+    const evaluation = record.evaluation || {};
+
+    return {
+      serviceType:
+        evaluation.serviceType ||
+        record.serviceType ||
+        record.evaluationServiceType ||
+        "",
+      context:
+        evaluation.context ||
+        record.context ||
+        record.evaluationContext ||
+        "",
+    };
+  }
+
+  function resolveEvaluationSelection(form = evaluationForm) {
+    const resolution = resolveEvaluationTemplate({
+      serviceType: form.serviceType,
+      context: form.context,
+    });
+
+    return {
+      serviceType: resolution.serviceType,
+      context: resolution.context,
+      evaluationTemplate: resolution.found ? resolution.evaluationTemplate : null,
+      evaluationTemplateMatched: resolution.found,
+      templateRequirements: resolution.found
+        ? [...(resolution.template?.requirements || [])]
+        : [],
+    };
+  }
+
+  function hasEvaluationSelection(form = evaluationForm) {
+    return Boolean(form.serviceType && form.context);
+  }
+
+  function getEvaluationTemplateRequirements(form = evaluationForm) {
+    if (!hasEvaluationSelection(form)) return [];
+    return resolveEvaluationSelection(form).templateRequirements;
+  }
+
+  function buildEvaluationSelectionFields() {
+    const templateRequirements = getEvaluationTemplateRequirements();
+
+    return (
+      <div style={evaluationSelectionPanel}>
+        <label style={evaluationFieldLabel}>
+          {activeLanguage === "es" ? "Tipo de servicio" : "Service Type"}
+        </label>
+        <select
+          style={evaluationSelect}
+          value={evaluationForm.serviceType}
+          onChange={(event) =>
+            setEvaluationForm((current) => {
+              const next = {
+                ...current,
+                serviceType: event.target.value,
+              };
+              return {
+                ...next,
+                evaluationTemplate: resolveEvaluationSelection(next).evaluationTemplate,
+                templateRequirements:
+                  resolveEvaluationSelection(next).templateRequirements,
+              };
+            })
+          }
+        >
+          <option value="">
+            {activeLanguage === "es"
+              ? "Selecciona tipo de servicio"
+              : "Select service type"}
+          </option>
+          {evaluationServiceTypeOptions.map((serviceType) => (
+            <option key={serviceType.id} value={serviceType.id}>
+              {serviceType.label}
+            </option>
+          ))}
+        </select>
+
+        <label style={evaluationFieldLabel}>
+          {activeLanguage === "es" ? "Contexto" : "Context"}
+        </label>
+        <select
+          style={evaluationSelect}
+          value={evaluationForm.context}
+          onChange={(event) =>
+            setEvaluationForm((current) => {
+              const next = {
+                ...current,
+                context: event.target.value,
+              };
+              return {
+                ...next,
+                evaluationTemplate: resolveEvaluationSelection(next).evaluationTemplate,
+                templateRequirements:
+                  resolveEvaluationSelection(next).templateRequirements,
+              };
+            })
+          }
+        >
+          <option value="">
+            {activeLanguage === "es"
+              ? "Selecciona contexto"
+              : "Select context"}
+          </option>
+          {evaluationContextOptions.map((context) => (
+            <option key={context.id} value={context.id}>
+              {context.label}
+            </option>
+          ))}
+        </select>
+
+        {hasEvaluationSelection() && (
+          <p style={evaluationSelectionHint}>
+            {evaluationForm.evaluationTemplate
+              ? activeLanguage === "es"
+                ? `Plantilla: ${evaluationForm.evaluationTemplate}`
+                : `Template: ${evaluationForm.evaluationTemplate}`
+              : activeLanguage === "es"
+                ? "Sin plantilla exacta. Puedes continuar con notas de evaluación."
+                : "No exact template match. You can continue with Evaluation Notes."}
+          </p>
+        )}
+
+        {hasEvaluationSelection() && (
+          <div style={evaluationRequirementPreview}>
+            <strong>
+              {templateRequirements.length > 0
+                ? activeLanguage === "es"
+                  ? "Documentación recomendada para esta evaluación"
+                  : "Recommended documentation for this evaluation"
+                : activeLanguage === "es"
+                  ? "No se encontró una plantilla específica"
+                  : "No specific template found"}
+            </strong>
+            {templateRequirements.length > 0 ? (
+              <ul style={evaluationRequirementList}>
+                {templateRequirements.map((requirement) => (
+                  <li key={requirement}>{requirement}</li>
+                ))}
+              </ul>
+            ) : (
+              <p style={evaluationRequirementEmpty}>
+                {activeLanguage === "es"
+                  ? "Usa notas generales de evaluación."
+                  : "Use general evaluation notes."}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function getEvaluationToastMessage(type, message) {
+    return { type, message, id: `evaluation-toast-${Date.now()}` };
+  }
+
+  function showEvaluationSaveFeedback(type, message) {
+    setEvaluationToast(getEvaluationToastMessage(type, message));
+
+    if (type === "error") {
+      setEvaluationSaveError(message);
+      setEvaluationSaveNotice("");
+      return;
+    }
+
+    setEvaluationSaveNotice(message);
+    setEvaluationSaveError("");
+  }
+
+  function getVisitEvaluationWorkItems(item = {}) {
+    const savedItems =
+      item.evaluation?.workItems ||
+      item.evaluationItems ||
+      item.workItems ||
+      [];
+
+    if (Array.isArray(savedItems) && savedItems.length > 0) {
+      return savedItems.map((workItem) => createEvaluationWorkItem(workItem));
+    }
+
+    if (
+      item.evaluationNotes ||
+      item.evaluationVisitNotes ||
+      item.evaluationFindings ||
+      item.evaluationMaterialsNeeded
+    ) {
+      return [
+        createEvaluationWorkItem({
+          title: item.requestTitle || item.title || "",
+          notes: item.evaluationVisitNotes || item.evaluationNotes || "",
+          safetyNotes: item.evaluationSafetyNotes || "",
+          photos: Array.isArray(item.evaluationPhotos) ? item.evaluationPhotos : [],
+          measurements: item.evaluationFindings
+            ? [
+                {
+                  id: `measurement-${Date.now()}`,
+                  label: activeLanguage === "es" ? "Medidas / hallazgos" : "Measurements / findings",
+                  value: item.evaluationFindings,
+                  unit: "count",
+                  notes: "",
+                },
+              ]
+            : [],
+          materials: item.evaluationMaterialsNeeded
+            ? [
+                {
+                  id: `material-${Date.now()}`,
+                  name: item.evaluationMaterialsNeeded,
+                  quantity: "",
+                  unitPrice: "",
+                  lineTotal: null,
+                  provider: "",
+                  notes: "",
+                },
+              ]
+            : [],
+        }),
+      ];
+    }
+
+    return [createEvaluationWorkItem()];
+  }
+
+  function openVisitDetail(item) {
+    setEvaluationTarget(item);
+    setEvaluationSaveNotice("");
+    setEvaluationSaveError("");
+    const savedEvaluation = item.evaluation || {};
+    const evaluationSelection = getEvaluationSelectionSeed(item);
+    const evaluationTemplate = resolveEvaluationTemplate(evaluationSelection);
+    setEvaluationForm({
+      serviceType: evaluationSelection.serviceType,
+      context: evaluationSelection.context,
+      evaluationTemplate: evaluationTemplate.found
+        ? evaluationTemplate.evaluationTemplate
+        : null,
+      templateRequirements: evaluationTemplate.found
+        ? [...(evaluationTemplate.template?.requirements || [])]
+        : [],
+	      photos: Array.isArray(savedEvaluation.photos) ? savedEvaluation.photos : [],
+	      findings: getEvaluationFindingNotes(
+	        savedEvaluation,
+	        typeof item.evaluationFindings === "string" ? item.evaluationFindings : ""
+	      ),
+	      findingRecords: getEvaluationFindingSeeds(savedEvaluation, item),
+      materialsNeeded:
+        savedEvaluation.materialsNeeded || item.evaluationMaterialsNeeded || "",
+      laborNotes: savedEvaluation.laborNotes || item.evaluationLaborNotes || "",
+      safetyNotes: savedEvaluation.safetyNotes || item.evaluationSafetyNotes || "",
+      photoNotes: savedEvaluation.photoNotes || item.evaluationPhotoNotes || "",
+      notes:
+        savedEvaluation.visitNotes ||
+        item.evaluationVisitNotes ||
+        item.evaluationNotes ||
+        "",
+      workItems: getVisitEvaluationWorkItems(item),
+      nextStep: savedEvaluation.recommendedNextStep || "quote",
+    });
+    setShowScheduleForm(false);
+  }
+
+  function buildEvaluationSummary(form = evaluationForm) {
+    const workItemSections = (form.workItems || [])
+      .filter((workItem) =>
+        [
+          workItem.title,
+          workItem.notes,
+          workItem.safetyNotes,
+          ...(workItem.measurements || []).map((measurement) =>
+            formatEvaluationMeasurement(measurement)
+          ),
+          ...(workItem.materials || []).map((material) =>
+            [
+              material.name,
+              material.quantity,
+              material.unitPrice ?? material.unit,
+              getMaterialLineTotal(material) === null
+                ? ""
+                : `$${getMaterialLineTotal(material).toFixed(2)}`,
+              material.provider,
+              material.notes,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          ),
+        ].some((value) => String(value || "").trim())
+      )
+      .map((workItem, index) => {
+        const lines = [
+          `${activeLanguage === "es" ? "Elemento de trabajo" : "Work Item"} ${index + 1}: ${
+            workItem.title || (activeLanguage === "es" ? "Sin título" : "Untitled")
+          }`,
+        ];
+
+        if (workItem.notes) lines.push(`${activeLanguage === "es" ? "Notas" : "Notes"}: ${workItem.notes}`);
+        if (workItem.safetyNotes) lines.push(`${activeLanguage === "es" ? "Seguridad" : "Safety"}: ${workItem.safetyNotes}`);
+        if (Array.isArray(workItem.photos) && workItem.photos.length > 0) {
+          lines.push(`${activeLanguage === "es" ? "Fotos" : "Photos"}: ${workItem.photos.length}`);
+        }
+        if (Array.isArray(workItem.measurements) && workItem.measurements.length > 0) {
+          lines.push(
+            `${activeLanguage === "es" ? "Medidas" : "Measurements"}: ${workItem.measurements
+              .map((measurement) =>
+                formatEvaluationMeasurement(measurement)
+              )
+              .filter(Boolean)
+              .join("; ")}`
+          );
+        }
+        if (Array.isArray(workItem.materials) && workItem.materials.length > 0) {
+          lines.push(
+            `${activeLanguage === "es" ? "Materiales" : "Materials"}: ${workItem.materials
+              .map((material) =>
+                [
+                  material.name,
+                  material.quantity
+                    ? `${activeLanguage === "es" ? "Cantidad" : "Qty"} ${material.quantity}`
+                    : "",
+                  parseMeetroAmount(material.unitPrice) !== null
+                    ? `${activeLanguage === "es" ? "Precio unitario" : "Unit Price"} $${parseMeetroAmount(material.unitPrice).toFixed(2)}`
+                    : "",
+                  getMaterialLineTotal(material) === null
+                    ? ""
+                    : `${activeLanguage === "es" ? "Total" : "Line Total"} $${getMaterialLineTotal(material).toFixed(2)}`,
+                  material.provider,
+                  material.notes,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              )
+              .filter(Boolean)
+              .join("; ")}`
+          );
+        }
+
+        return lines.join("\n");
+      });
+
+    const sections = [
+      {
+        label: activeLanguage === "es" ? "Notas de visita" : "Visit notes",
+        value: form.notes,
+      },
+      {
+        label: activeLanguage === "es" ? "Medidas / hallazgos" : "Measurements / findings",
+        value: form.findings,
+      },
+      {
+        label: activeLanguage === "es" ? "Materiales / precios" : "Materials / pricing",
+        value: form.materialsNeeded,
+      },
+      {
+        label: activeLanguage === "es" ? "Notas de mano de obra" : "Labor notes",
+        value: form.laborNotes,
+      },
+      {
+        label: activeLanguage === "es" ? "Notas de seguridad" : "Safety notes",
+        value: form.safetyNotes,
+      },
+      {
+        label: activeLanguage === "es" ? "Fotos" : "Photos",
+        value:
+          form.photoNotes ||
+          (Array.isArray(form.photos) && form.photos.length > 0
+            ? `${form.photos.length} ${activeLanguage === "es" ? "foto(s) agregada(s)" : "photo(s) added"}`
+            : ""),
+      },
+    ];
+
+    return sections
+      .filter((section) => String(section.value || "").trim())
+      .map((section) => `${section.label}: ${String(section.value).trim()}`)
+      .concat(workItemSections)
+      .join("\n\n");
+  }
+
+  function addEvaluationPhotos(event) {
+    const files = Array.from(event.target.files || []).slice(0, 8);
+    if (files.length === 0) return;
+
+    Promise.all(
+      files.map(
+        (file, index) =>
+          new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                id: `evaluation-photo-${Date.now()}-${index}`,
+                name: file.name,
+                dataUrl: reader.result,
+                addedAt: new Date().toISOString(),
+              });
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+          })
+      )
+    ).then((photos) => {
+      const nextPhotos = photos.filter(Boolean);
+      if (nextPhotos.length === 0) return;
+      setEvaluationForm((current) => ({
+        ...current,
+        photos: [...(current.photos || []), ...nextPhotos].slice(0, 12),
+      }));
+    });
+
+    event.target.value = "";
+  }
+
+  function removeEvaluationPhoto(photoId) {
+    setEvaluationForm((current) => ({
+      ...current,
+      photos: (current.photos || []).filter((photo) => photo.id !== photoId),
+    }));
+  }
+
+  function updateEvaluationWorkItem(index, patch) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      workItems[index] = {
+        ...createEvaluationWorkItem(workItems[index] || {}),
+        ...patch,
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function addEvaluationWorkItem() {
+    setEvaluationForm((current) => ({
+      ...current,
+      workItems: [...(current.workItems || []), createEvaluationWorkItem()],
+    }));
+  }
+
+  function removeEvaluationWorkItem(index) {
+    setEvaluationForm((current) => {
+      const workItems = (current.workItems || []).filter((_, itemIndex) => itemIndex !== index);
+      return {
+        ...current,
+        workItems: workItems.length > 0 ? workItems : [createEvaluationWorkItem()],
+      };
+    });
+  }
+
+  function addEvaluationWorkItemPhotos(index, event) {
+    const files = Array.from(event.target.files || []).slice(0, 8);
+    if (files.length === 0) return;
+
+    Promise.all(
+      files.map(
+        (file, fileIndex) =>
+          new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                id: `work-item-photo-${Date.now()}-${fileIndex}`,
+                name: file.name,
+                dataUrl: reader.result,
+                addedAt: new Date().toISOString(),
+              });
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+          })
+      )
+    ).then((photos) => {
+      const nextPhotos = photos.filter(Boolean);
+      if (nextPhotos.length === 0) return;
+
+      setEvaluationForm((current) => {
+        const workItems = [...(current.workItems || [])];
+        const currentItem = createEvaluationWorkItem(workItems[index] || {});
+        workItems[index] = {
+          ...currentItem,
+          photos: [...(currentItem.photos || []), ...nextPhotos].slice(0, 12),
+        };
+        return { ...current, workItems };
+      });
+    });
+
+    event.target.value = "";
+  }
+
+  async function openEvaluationWorkItemPhotoPicker(index) {
+    setEvaluationSaveError("");
+
+    await openJobPhotoPicker({
+      fileNamePrefix: "evaluation-photo",
+      onPhotos: (photos) =>
+        addEvaluationWorkItemPhotos(
+          index,
+          createPhotoInputEvent(photos.map((photo) => photo.file))
+        ),
+      onError: (message) =>
+        setEvaluationSaveError(message || CAMERA_PERMISSION_MESSAGE),
+    });
+  }
+
+  function removeEvaluationWorkItemPhoto(itemIndex, photoId) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      workItems[itemIndex] = {
+        ...currentItem,
+        photos: (currentItem.photos || []).filter((photo) => photo.id !== photoId),
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, patch) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      const measurements = [...(currentItem.measurements || [])];
+      measurements[measurementIndex] = {
+        ...normalizeEvaluationMeasurement(measurements[measurementIndex] || {}),
+        ...patch,
+      };
+      workItems[itemIndex] = { ...currentItem, measurements };
+      return { ...current, workItems };
+    });
+  }
+
+  function addEvaluationWorkItemMeasurement(itemIndex) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      workItems[itemIndex] = {
+        ...currentItem,
+        measurements: [
+          ...(currentItem.measurements || []),
+          {
+            ...normalizeEvaluationMeasurement({
+              id: `measurement-${Date.now()}`,
+              unit: "inches",
+            }),
+          },
+        ],
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function removeEvaluationWorkItemMeasurement(itemIndex, measurementIndex) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      workItems[itemIndex] = {
+        ...currentItem,
+        measurements: (currentItem.measurements || []).filter(
+          (_, index) => index !== measurementIndex
+        ),
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function updateEvaluationWorkItemMaterial(itemIndex, materialIndex, patch) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      const materials = [...(currentItem.materials || [])];
+      const currentMaterial = materials[materialIndex] || {};
+      materials[materialIndex] = {
+        id: currentMaterial.id || `material-${Date.now()}`,
+        name: "",
+        quantity: "",
+        unitPrice: "",
+        lineTotal: null,
+        provider: "",
+        notes: "",
+        ...currentMaterial,
+        ...patch,
+      };
+      materials[materialIndex].lineTotal = getMaterialLineTotal(materials[materialIndex]);
+      workItems[itemIndex] = { ...currentItem, materials };
+      return { ...current, workItems };
+    });
+  }
+
+  function addEvaluationWorkItemMaterial(itemIndex) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      workItems[itemIndex] = {
+        ...currentItem,
+        materials: [
+          ...(currentItem.materials || []),
+          {
+            id: `material-${Date.now()}`,
+            name: "",
+            quantity: "",
+            unitPrice: "",
+            lineTotal: null,
+            provider: "",
+            notes: "",
+          },
+        ],
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function removeEvaluationWorkItemMaterial(itemIndex, materialIndex) {
+    setEvaluationForm((current) => {
+      const workItems = [...(current.workItems || [])];
+      const currentItem = createEvaluationWorkItem(workItems[itemIndex] || {});
+      workItems[itemIndex] = {
+        ...currentItem,
+        materials: (currentItem.materials || []).filter(
+          (_, index) => index !== materialIndex
+        ),
+      };
+      return { ...current, workItems };
+    });
+  }
+
+  function hasEvaluationNoteContent(form = evaluationForm) {
+    return Boolean(
+      buildEvaluationSummary(form).trim() ||
+        (form.workItems || []).some((workItem) =>
+          [
+            workItem.title,
+            workItem.notes,
+            workItem.safetyNotes,
+            ...(workItem.photos || []),
+            ...(workItem.measurements || []).map((measurement) =>
+              [measurement.label, measurement.value, measurement.unit, measurement.notes]
+                .filter(Boolean)
+                .join(" ")
+            ),
+            ...(workItem.materials || []).map((material) =>
+              [material.name, material.quantity, material.unit, material.provider, material.notes]
+                .filter(Boolean)
+                .join(" ")
+            ),
+          ].some((value) => String(value || "").trim())
+        )
+    );
+  }
+
+  function getScheduleRecordKey(item = {}) {
+    return (
+      item.conversationId ||
+      item.projectConversationId ||
+      item.requestId ||
+      "schedule"
+    );
+  }
+
+  function hasEvaluationForAppointment(item = {}) {
+    const scheduleId = String(item.id || item.scheduleId || "");
+    if (!scheduleId) return false;
+
+    if (hasSavedEvaluation(item)) return true;
+
+    const records = getJobRecord(getScheduleRecordKey(item));
+    return records.some((record) => {
+      if (record?.type !== "evaluation") return false;
+      return (
+        String(record.visitId || record.appointmentId || record.scheduleId || "") === scheduleId &&
+        Boolean(record.savedAt || record.updatedAt)
+      );
+    });
+  }
+
+  function hasQuoteForAppointment(item = {}) {
+    return Boolean(getQuoteForAppointment(item));
+  }
+
+  function getQuoteForAppointment(item = {}) {
+    const scheduleId = String(item.id || "");
+    const requestId = String(item.requestId || "");
+    const conversationId = String(item.conversationId || item.projectConversationId || "");
+
+    return quoteHistory.find((quote) => {
+      if (scheduleId && String(quote.scheduleId || "") === scheduleId) return true;
+      if (
+        requestId &&
+        String(quote.requestId || quote.projectId || "") === requestId &&
+        quote.source === "schedule_evaluation"
+      ) {
+        return true;
+      }
+      return (
+        conversationId &&
+        String(quote.conversationId || quote.projectConversationId || "") === conversationId &&
+        quote.source === "schedule_evaluation"
+      );
+    }) || null;
+  }
+
+  function getJobWorkspaceCustomer(item = {}) {
+    const customerValue =
+      typeof item.customer === "string" ? item.customer : item.customer?.name;
+
+    return (
+      item.customerName ||
+      item.homeownerName ||
+      customerValue ||
+      (activeLanguage === "es" ? "Cliente" : "Customer")
+    );
+  }
+
+  function getJobWorkspaceAddress(item = {}) {
+    const customerAddress =
+      typeof item.customer === "object" && item.customer !== null
+        ? item.customer.address
+        : "";
+
+    return (
+      item.customerAddress ||
+      item.address ||
+      item.location ||
+      customerAddress ||
+      (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+    );
+  }
+
+  function getJobWorkspaceService(item = {}) {
+    return (
+      item.projectTitle ||
+      item.requestTitle ||
+      item.service ||
+      item.title ||
+      translate("scheduledVisit")
+    );
+  }
+
+  function getJobWorkspaceStatus(item = {}) {
+    const quote = getQuoteForAppointment(item);
+    const quoteStatus = String(
+      quote?.status || quote?.quoteStatus || quote?.workflowStatus || ""
+    ).toLowerCase();
+    const quotePaymentSatisfied = hasPaymentOrDepositEvidence(quote || {});
+    const visitStatus = String(
+      item.customerConfirmationStatus ||
+        item.confirmationStatus ||
+        item.status ||
+        item.workflowStatus ||
+        ""
+    ).toLowerCase();
+
+    if (
+      item.appointmentType === "work_visit" ||
+      item.workflowStage === "work_scheduled" ||
+      visitStatus === "work_scheduled"
+    ) {
+      return activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled";
+    }
+
+    if (["completed", "work_completed"].includes(visitStatus)) {
+      return activeLanguage === "es" ? "Completado" : "Completed";
+    }
+
+    if (
+      ["approved", "accepted", "customer_accepted", "quote_approved"].includes(
+        quoteStatus
+      )
+    ) {
+      return activeLanguage === "es" ? "Aprobado" : "Approved";
+    }
+
+    if (quote) {
+      return activeLanguage === "es" ? "Propuesta enviada" : "Proposal Sent";
+    }
+
+    if (hasEvaluationForAppointment(item)) {
+      return activeLanguage === "es" ? "Listo para propuesta" : "Ready For Proposal";
+    }
+
+    if (isSchedulePast(item)) {
+      return activeLanguage === "es" ? "Visita completada" : "Visit Completed";
+    }
+
+    return activeLanguage === "es" ? "Visita programada" : "Visit Scheduled";
+  }
+
+  function getJobWorkspaceNextStep(item = {}) {
+    const quote = getQuoteForAppointment(item);
+    const quoteStatus = String(
+      quote?.status || quote?.quoteStatus || quote?.workflowStatus || ""
+    ).toLowerCase();
+
+    if (
+      item.appointmentType === "work_visit" ||
+      item.workflowStage === "work_scheduled" ||
+      String(item.status || "").toLowerCase() === "work_scheduled"
+    ) {
+      return activeLanguage === "es" ? "Realiza el trabajo." : "Perform the work.";
+    }
+
+    if (
+      ["approved", "accepted", "customer_accepted", "quote_approved"].includes(
+        quoteStatus
+      ) &&
+      quotePaymentSatisfied
+    ) {
+      return activeLanguage === "es"
+        ? "Programa el trabajo o solicita depósito."
+        : "Schedule work or request a deposit.";
+    }
+
+    if (
+      ["approved", "accepted", "customer_accepted", "quote_approved"].includes(
+        quoteStatus
+      )
+    ) {
+      return activeLanguage === "es"
+        ? "Registra el pago o depósito antes de programar el trabajo."
+        : "Record payment or deposit before scheduling work.";
+    }
+
+    if (quote) {
+      return activeLanguage === "es"
+        ? "Espera aprobación del cliente."
+        : "Await customer approval.";
+    }
+
+    if (hasEvaluationForAppointment(item)) {
+      return activeLanguage === "es"
+        ? "Crea una propuesta para el cliente."
+        : "Create a customer proposal.";
+    }
+
+    if (isSchedulePast(item)) {
+      return activeLanguage === "es"
+        ? "Captura notas de la visita."
+        : "Capture notes from the visit.";
+    }
+
+    return activeLanguage === "es"
+      ? "Asiste a la visita programada."
+      : "Attend the scheduled visit.";
+  }
+
+  function getJobWorkspacePrimaryAction(item = {}) {
+    const quote = getQuoteForAppointment(item);
+    const quoteStatus = String(
+      quote?.status || quote?.quoteStatus || quote?.workflowStatus || ""
+    ).toLowerCase();
+    const quotePaymentSatisfied = hasPaymentOrDepositEvidence(quote || {});
+
+    if (
+      item.appointmentType === "work_visit" ||
+      item.workflowStage === "work_scheduled" ||
+      String(item.status || "").toLowerCase() === "work_scheduled"
+    ) {
+      return {
+        label: activeLanguage === "es" ? "Abrir trabajo activo" : "Open Active Work",
+        onClick: () => {
+          setEvaluationTarget(null);
+          openWorkTab("active");
+        },
+      };
+    }
+
+    if (canScheduleWork({ quote: quote || {} })) {
+      return {
+        label: activeLanguage === "es" ? "Programar trabajo" : "Schedule Work",
+        onClick: () => {
+          setEvaluationTarget(null);
+          setShowScheduleForm(true);
+          setScheduleForm(
+            createBlankScheduleForm({
+              title: getJobWorkspaceService(item),
+              contextSource: "approved_quote_work",
+              appointmentType: "work_visit",
+              requestId: item.requestId || quote?.requestId || "",
+              conversationId:
+                item.conversationId ||
+                item.projectConversationId ||
+                quote?.conversationId ||
+                quote?.projectConversationId ||
+                "",
+              quoteId: quote?.quoteId || quote?.id || "",
+              services: Array.isArray(quote?.workItems)
+                ? quote.workItems
+                    .map((workItem) => workItem.title)
+                    .filter(Boolean)
+                : [getJobWorkspaceService(item)].filter(Boolean),
+              manualCustomerName: getJobWorkspaceCustomer(item),
+              manualCustomerPhone: item.customerPhone || item.phone || "",
+              manualCustomerEmail: item.customerEmail || item.email || "",
+              manualCustomerAddress: getJobWorkspaceAddress(item),
+              location: getJobWorkspaceAddress(item),
+              notes: activeLanguage === "es"
+                ? "Visita de regreso para trabajo aprobado."
+                : "Return visit for approved work.",
+            })
+          );
+        },
+      };
+    }
+
+    if (
+      ["approved", "accepted", "customer_accepted", "quote_approved"].includes(
+        quoteStatus
+      )
+    ) {
+      return {
+        label: activeLanguage === "es" ? "Ver propuesta" : "View Proposal",
+        onClick: () => setQuoteViewTarget(quote),
+      };
+    }
+
+    if (quote) {
+      return {
+        label: activeLanguage === "es" ? "Ver propuesta" : "View Proposal",
+        onClick: () => setQuoteViewTarget(quote),
+      };
+    }
+
+    if (hasEvaluationForAppointment(item)) {
+      return {
+        label: activeLanguage === "es" ? "Crear propuesta" : "Create Proposal",
+        onClick: () => continueEvaluationToQuote(item),
+      };
+    }
+
+    if (isSchedulePast(item)) {
+      return {
+        label: activeLanguage === "es" ? "Agregar notas" : "Add Visit Notes",
+        onClick: () => {
+          const notesSection = document.getElementById("job-evaluation-notes");
+          if (notesSection) {
+            notesSection.open = true;
+            notesSection.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        },
+      };
+    }
+
+    return {
+      label: activeLanguage === "es" ? "Editar visita" : "Edit Visit",
+      onClick: () => startEditScheduleVisit(item),
+    };
+  }
+
+  function getQuoteServiceLines(quote = {}) {
+    const workItems = Array.isArray(quote.workItems)
+      ? quote.workItems
+      : Array.isArray(quote.evaluationItems)
+        ? quote.evaluationItems
+        : [];
+    const services = workItems
+      .map((workItem) => workItem.title || workItem.name)
+      .filter(Boolean);
+
+    return services.length > 0
+      ? services
+      : [
+          quote.projectTitle ||
+            quote.project_title ||
+            quote.title ||
+            quote.service ||
+            "",
+        ].filter(Boolean);
+  }
+
+  function startScheduleWorkFromQuote(quote = {}) {
+    const customerName =
+      quote.homeownerName ||
+      quote.customerName ||
+      quote.customer?.name ||
+      quote.homeowner_email ||
+      quote.homeownerEmail ||
+      "";
+    const address =
+      quote.address ||
+      quote.location ||
+      quote.customerAddress ||
+      quote.customer?.address ||
+      "";
+    const serviceTitle =
+      quote.projectTitle ||
+      quote.project_title ||
+      quote.title ||
+      quote.service ||
+      (activeLanguage === "es" ? "Trabajo aprobado" : "Approved Work");
+
+    setEvaluationTarget(null);
+    setShowScheduleForm(true);
+    setEditingScheduleId(null);
+    setScheduleForm(
+      createBlankScheduleForm({
+        contextSource: "approved_quote_work",
+        appointmentType: "work_visit",
+        title: serviceTitle,
+        manualCustomerName: customerName,
+        manualCustomerPhone: quote.customerPhone || quote.phone || "",
+        manualCustomerEmail: quote.customerEmail || quote.email || "",
+        manualCustomerAddress: address,
+        location: address,
+        requestId: quote.requestId || quote.projectId || quote.id || "",
+        conversationId:
+          quote.conversationId ||
+          quote.projectConversationId ||
+          quote.activeConversationId ||
+          "",
+        quoteId: quote.quoteId || quote.id || "",
+        services: getQuoteServiceLines(quote),
+        notes:
+          activeLanguage === "es"
+            ? "Trabajo aprobado por el cliente. Comparte la fecha y hora programadas."
+            : "Customer-approved work. Share the scheduled work date and time.",
+      })
+    );
+    localStorage.setItem("meetroWorkCenterTab", "schedule");
+    localStorage.setItem("activeWorkCenterTab", "schedule");
+    openWorkTab("schedule");
+  }
+
+  function saveEvaluationRecord(item = evaluationTarget, options = {}) {
+    setEvaluationSaveNotice("");
+    setEvaluationSaveError("");
+    setEvaluationToast(null);
+
+    const scheduleId = String(item?.id || item?.scheduleId || "");
+    if (!item || !scheduleId) {
+      const message =
+        activeLanguage === "es"
+          ? "No se encontró la visita. Vuelve a abrir la visita e inténtalo de nuevo."
+          : "Visit record is missing. Open the visit again and try saving.";
+      console.warn("Evaluation Notes save blocked: missing visit identity.", {
+        hasItem: Boolean(item),
+        scheduleId,
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    const normalizedWorkItems = Array.isArray(evaluationForm.workItems)
+      ? evaluationForm.workItems.map(sanitizeEvaluationWorkItem)
+      : [];
+
+    const evaluationPhotos = Array.isArray(evaluationForm.photos)
+      ? evaluationForm.photos.map(sanitizeEvaluationPhoto)
+      : [];
+
+    try {
+      JSON.stringify({
+        photos: evaluationPhotos,
+        workItems: normalizedWorkItems,
+      });
+    } catch (error) {
+      const message =
+        activeLanguage === "es"
+          ? "No se pudieron preparar las notas de evaluación."
+          : "Evaluation Notes could not be prepared for saving.";
+      console.warn("Evaluation Notes save blocked: unserializable payload.", {
+        scheduleId,
+        error,
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    let schedule = [];
+    try {
+      schedule = JSON.parse(localStorage.getItem("meetro_business_schedule") || "[]");
+    } catch (error) {
+      const message =
+        activeLanguage === "es"
+          ? "No se pudo leer el calendario guardado."
+          : "Saved schedule could not be read.";
+      console.warn("Evaluation Notes save blocked: schedule JSON parse failed.", {
+        scheduleId,
+        error,
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    if (!Array.isArray(schedule)) {
+      const message =
+        activeLanguage === "es"
+          ? "El calendario guardado no tiene un formato válido."
+          : "Saved schedule is not in a valid format.";
+      console.warn("Evaluation Notes save blocked: schedule storage is not an array.", {
+        scheduleId,
+        scheduleType: typeof schedule,
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    const matchingVisit = schedule.find(
+      (visit) => String(visit.id || visit.scheduleId || "") === scheduleId
+    );
+
+    if (!matchingVisit) {
+      const message =
+        activeLanguage === "es"
+          ? "No se pudo encontrar esta visita en el calendario guardado."
+          : "This visit was not found in the saved schedule.";
+      console.warn("Evaluation Notes save blocked: visit not found in schedule.", {
+        scheduleId,
+        availableVisitIds: schedule.map((visit) => visit.id || visit.scheduleId).filter(Boolean),
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    if (!hasEvaluationSelection()) {
+      const message =
+        activeLanguage === "es"
+          ? "Selecciona tipo de servicio y contexto antes de guardar notas de evaluación."
+          : "Select Service Type and Context before saving Evaluation Notes.";
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    const selection = resolveEvaluationSelection(evaluationForm);
+	    const conversationId =
+	      getScheduleRecordKey({ ...matchingVisit, ...item });
+	    const createdAt = new Date().toISOString();
+	    const evaluationId =
+	      item.evaluation?.id || matchingVisit.evaluation?.id || `evaluation-${scheduleId}`;
+	    const customerId = getEvaluationCustomerScope({
+	      ...matchingVisit,
+	      ...item,
+	      conversationId,
+	    });
+	    const requestId = item.requestId || matchingVisit.requestId || "";
+	    const structuredFindings = buildStructuredEvaluationFindings({
+	      evaluationId,
+	      customerId,
+	      requestId,
+	      findings: evaluationForm.findingRecords,
+	    });
+	    const summary = buildEvaluationSummary({
+      ...evaluationForm,
+      photos: evaluationPhotos,
+      workItems: normalizedWorkItems,
+    });
+    const evaluationRecord = buildVisitEvaluationPayload({
+      schedule: matchingVisit,
+      customerId,
+      evaluation: {
+	      id: evaluationId,
+      type: "evaluation",
+      source: "schedule",
+      title: activeLanguage === "es" ? "Evaluación registrada" : "Evaluation recorded",
+      text: summary,
+      notes: summary,
+      serviceType: selection.serviceType,
+      context: selection.context,
+      evaluationTemplate: selection.evaluationTemplate,
+      evaluationTemplateMatched: selection.evaluationTemplateMatched,
+      templateRequirements: selection.templateRequirements,
+      visitNotes: sanitizeEvaluationText(evaluationForm.notes),
+      customerNeeds: sanitizeEvaluationText(evaluationForm.notes),
+	      findings: structuredFindings.findings,
+	      findingsNotes: sanitizeEvaluationText(evaluationForm.findings),
+	      findingsText: sanitizeEvaluationText(evaluationForm.findings),
+	      serviceRecommendations: structuredFindings.serviceRecommendations,
+	      findingsNormalizationErrors: structuredFindings.errors,
+      materialsNeeded: sanitizeEvaluationText(evaluationForm.materialsNeeded),
+      laborNotes: sanitizeEvaluationText(evaluationForm.laborNotes),
+      safetyNotes: sanitizeEvaluationText(evaluationForm.safetyNotes),
+      photoNotes: sanitizeEvaluationText(evaluationForm.photoNotes),
+      photos: evaluationPhotos,
+      workItems: normalizedWorkItems,
+      recommendedNextStep: sanitizeEvaluationText(evaluationForm.nextStep || "quote"),
+      appointmentId: scheduleId,
+      scheduleId,
+      visitId: item.visitId || matchingVisit.visitId || scheduleId,
+	      evaluationId,
+	      customerId,
+	      requestId,
+      conversationId,
+      customer: item.customerName || matchingVisit.customerName || item.homeownerName || "",
+      jobService:
+        item.requestTitle ||
+        matchingVisit.requestTitle ||
+        item.projectTitle ||
+        matchingVisit.projectTitle ||
+        item.title ||
+        matchingVisit.title ||
+        translate("scheduledVisit"),
+      createdAt: matchingVisit.evaluation?.createdAt || createdAt,
+      savedAt: createdAt,
+      updatedAt: createdAt,
+      },
+    });
+
+    let updatedVisit = null;
+    const updatedSchedule = schedule.map((visit) => {
+      if (String(visit.id || visit.scheduleId || "") !== scheduleId) return visit;
+
+      updatedVisit = {
+        ...visit,
+        evaluation: evaluationRecord,
+        serviceType: evaluationRecord.serviceType,
+        context: evaluationRecord.context,
+        evaluationTemplate: evaluationRecord.evaluationTemplate,
+        evaluationTemplateMatched: evaluationRecord.evaluationTemplateMatched,
+        templateRequirements: evaluationRecord.templateRequirements,
+        evaluationServiceType: evaluationRecord.serviceType,
+        evaluationContext: evaluationRecord.context,
+        evaluationItems: evaluationRecord.workItems,
+        workItems: evaluationRecord.workItems,
+        evaluationNotes: summary,
+        evaluationVisitNotes: evaluationRecord.visitNotes,
+	        evaluationFindings: evaluationRecord.findingsNotes,
+	        evaluationStructuredFindings: evaluationRecord.findings,
+	        serviceRecommendations: evaluationRecord.serviceRecommendations,
+        evaluationMaterialsNeeded: evaluationRecord.materialsNeeded,
+        evaluationLaborNotes: evaluationRecord.laborNotes,
+        evaluationSafetyNotes: evaluationRecord.safetyNotes,
+        evaluationPhotoNotes: evaluationRecord.photoNotes,
+        evaluationPhotos: evaluationRecord.photos,
+        evaluationStatus: "saved",
+        evaluationSavedAt: createdAt,
+        nextAction: "create_quote",
+        workflowStage: "evaluation_recorded",
+        workflowStatus: "evaluation_recorded",
+        updatedAt: createdAt,
+      };
+
+      return updatedVisit;
+    });
+
+    try {
+      localStorage.setItem(
+        "meetro_business_schedule",
+        JSON.stringify(updatedSchedule)
+      );
+      if (options.keepOpen && updatedVisit) setEvaluationTarget(updatedVisit);
+      if (!options.silent) {
+        showEvaluationSaveFeedback(
+          "success",
+          activeLanguage === "es"
+            ? "Notas de evaluación guardadas."
+            : "Evaluation Notes saved."
+        );
+      }
+      window.dispatchEvent(new Event("storage"));
+    } catch (error) {
+      const message =
+        activeLanguage === "es"
+          ? "No se pudieron guardar las notas de evaluación."
+          : "Evaluation Notes could not be saved.";
+      console.warn("Evaluation Notes save failed: schedule write failed.", {
+        scheduleId,
+        errorName: error?.name || "Error",
+        message: error?.message || "",
+      });
+      showEvaluationSaveFeedback("error", message);
+      return null;
+    }
+
+    try {
+      const existingRecords = getJobRecord(conversationId);
+      saveJobRecord(conversationId, [evaluationRecord, ...existingRecords]);
+      localStorage.setItem("lastSavedJobRecord", JSON.stringify(evaluationRecord));
+    } catch (error) {
+      console.warn("Evaluation Notes saved, but job record mirror failed.", {
+        scheduleId,
+        conversationId,
+        errorName: error?.name || "Error",
+        message: error?.message || "",
+      });
+    }
+
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+
+    if (!options.keepOpen) {
+      setEvaluationTarget(null);
+    }
+
+    setRefreshKey((prev) => prev + 1);
+    return evaluationRecord;
+  }
+
+  function continueEvaluationToQuote(item = evaluationTarget) {
+    setEvaluationSaveNotice("");
+    setEvaluationSaveError("");
+
+    const scheduleId = String(item?.id || item?.scheduleId || "");
+    if (!item || !scheduleId) {
+      showEvaluationSaveFeedback(
+        "error",
+        activeLanguage === "es"
+          ? "No se encontró la visita. Vuelve a abrir la visita e inténtalo de nuevo."
+          : "Visit record is missing. Open the visit again and try creating a quote."
+      );
+      return;
+    }
+
+    const currentWorkItems = Array.isArray(evaluationForm.workItems)
+      ? evaluationForm.workItems
+      : [];
+    if (currentWorkItems.length === 0) {
+      showEvaluationSaveFeedback(
+        "error",
+        activeLanguage === "es"
+          ? "Agrega al menos un elemento de trabajo antes de crear una cotización."
+          : "Add at least one work item before creating a quote."
+      );
+      return;
+    }
+
+    if (!hasEvaluationNoteContent()) {
+      showEvaluationSaveFeedback(
+        "error",
+        activeLanguage === "es"
+          ? "Agrega notas, fotos, medidas o materiales antes de crear una cotización."
+          : "Add notes, photos, measurements, or materials before creating a quote."
+      );
+      return;
+    }
+
+    const evaluationRecord = saveEvaluationRecord(item, { keepOpen: true, silent: true });
+    if (!evaluationRecord) return;
+    const evaluationSummary = evaluationRecord?.notes || buildEvaluationSummary();
+    const normalizedWorkItems = Array.isArray(evaluationRecord.workItems)
+      ? evaluationRecord.workItems
+      : [];
+    const quoteWorkItems = currentWorkItems.map((workItem) => {
+      const normalized = createEvaluationWorkItem(workItem);
+      return {
+        ...normalized,
+        materials: (normalized.materials || []).map((material) => ({
+          ...material,
+          unitPrice: material.unitPrice ?? material.unit ?? "",
+          lineTotal: getMaterialLineTotal(material),
+        })),
+      };
+    });
+    const materialsTotal = getEvaluationMaterialsTotal(quoteWorkItems);
+    const materialItems = quoteWorkItems.flatMap((workItem) =>
+      (workItem.materials || []).map((material) => ({
+        ...material,
+        workItemId: workItem.id || "",
+        workItemTitle: workItem.title || "",
+        unitPrice: material.unitPrice ?? material.unit ?? "",
+        lineTotal: getMaterialLineTotal(material),
+      }))
+    );
+    const workItemPhotos = quoteWorkItems.flatMap((workItem) =>
+      (workItem.photos || []).map((photo) => ({
+        id: photo.id || "",
+        name: photo.name || "",
+        addedAt: photo.addedAt || "",
+        dataUrl: photo.dataUrl || "",
+        source: "evaluation_work_item",
+        workItemId: workItem.id || "",
+        workItemTitle: workItem.title || "",
+      }))
+    );
+
+    const quoteRequest = {
+      id: item.requestId || item.id || "",
+      requestId: item.requestId || item.id || "",
+      scheduleId,
+      visitId: item.visitId || scheduleId,
+      evaluationId: evaluationRecord.id || "",
+      visitDate: item.date || "",
+      visitTime: item.time || "",
+      conversationId: item.conversationId || item.projectConversationId || "",
+      projectConversationId: item.projectConversationId || item.conversationId || "",
+      title: item.requestTitle || item.projectTitle || item.title || "",
+      service: item.requestTitle || item.projectTitle || item.title || "",
+      description: evaluationSummary || item.notes || "",
+      project_description: evaluationSummary || item.notes || "",
+      scope: evaluationSummary || item.notes || "",
+      location: item.location || "",
+      address: item.customerAddress || item.address || item.location || "",
+      homeownerName: item.customerName || item.homeownerName || item.customer || "",
+      customerName: item.customerName || item.homeownerName || item.customer || "",
+      customer: {
+        name: item.customerName || item.homeownerName || item.customer || "",
+        phone: item.customerPhone || item.phone || "",
+        email: item.customerEmail || item.email || "",
+        address: item.customerAddress || item.address || item.location || "",
+        isMeetroUser: item.isMeetroUser,
+        source: item.source || item.customerSource || "",
+      },
+      customerPhone: item.customerPhone || "",
+      customerEmail: item.customerEmail || "",
+      customerAddress: item.customerAddress || item.location || "",
+      manualCustomerContactId: item.manualCustomerContactId || "",
+      isMeetroUser: item.isMeetroUser,
+      evaluationNotes: evaluationSummary,
+      evaluation: evaluationRecord,
+      serviceType: evaluationRecord.serviceType,
+      context: evaluationRecord.context,
+      evaluationTemplate: evaluationRecord.evaluationTemplate,
+      templateRequirements: evaluationRecord.templateRequirements,
+      customerNeeds: evaluationForm.notes || "",
+      visitNotes: evaluationForm.notes || "",
+      findings: evaluationForm.findings || "",
+      materialsNeeded: evaluationForm.materialsNeeded || "",
+      laborNotes: evaluationForm.laborNotes || "",
+      safetyNotes: evaluationForm.safetyNotes || "",
+      photoNotes: evaluationForm.photoNotes || "",
+      evaluationPhotos: workItemPhotos,
+      photosMetadata: [
+        ...(Array.isArray(evaluationRecord.photos) ? evaluationRecord.photos : []).map(
+          (photo) => ({
+            id: photo.id || "",
+            name: photo.name || "",
+            addedAt: photo.addedAt || "",
+            source: "evaluation",
+          })
+        ),
+        ...workItemPhotos,
+      ],
+      evaluationItems: quoteWorkItems,
+      workItems: quoteWorkItems,
+      materialItems,
+      materialsTotal,
+      calculatedMaterialsTotal: materialsTotal,
+      measurements: quoteWorkItems.flatMap((workItem) =>
+        (workItem.measurements || []).map((measurement) => ({
+          ...measurement,
+          workItemId: workItem.id || "",
+          workItemTitle: workItem.title || "",
+        }))
+      ),
+      materials: materialItems,
+      addPricingRequired: true,
+      source: "schedule_evaluation",
+    };
+
+    try {
+      localStorage.setItem("selectedQuoteRequest", JSON.stringify(quoteRequest));
+      if (quoteRequest.requestId || quoteRequest.id || quoteRequest.scheduleId) {
+        localStorage.setItem(
+          "selectedQuoteRequestId",
+          String(quoteRequest.requestId || quoteRequest.id || quoteRequest.scheduleId)
+        );
+      } else {
+        localStorage.removeItem("selectedQuoteRequestId");
+      }
+      localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      localStorage.setItem("quoteBuilderSource", "schedule_evaluation");
+      localStorage.setItem("quoteBuilderScheduleId", scheduleId);
+      showEvaluationSaveFeedback(
+        "success",
+        activeLanguage === "es"
+          ? "Notas guardadas. Abriendo cotización..."
+          : "Notes saved. Opening quote builder..."
+      );
+      if (typeof setPage !== "function") {
+        throw new Error("Quote Builder navigation is unavailable.");
+      }
+      setEvaluationTarget(null);
+      setPage("quoteBuilder");
+    } catch (error) {
+      console.warn("Could not open Quote Builder after saving notes.", error);
+      showEvaluationSaveFeedback(
+        "error",
+        activeLanguage === "es"
+          ? "Notas guardadas, pero el creador de cotización no se abrió."
+          : "Notes saved, but quote builder did not open."
+      );
+    }
+  }
+
+  function openWorkCenterConversationAction() {
+    const activeContext = getActiveWorkContext();
+    const conversationId =
+      activeContext.conversationId ||
+      localStorage.getItem("activeConversationId") ||
+      localStorage.getItem("selectedQuoteRequestId") ||
+      "";
+
+    setWorkCenterReturn();
+
+    if (conversationId) {
+      localStorage.setItem("activeConversationId", String(conversationId));
+      localStorage.setItem("selectedQuoteRequestId", String(conversationId));
+      localStorage.setItem("conversationReturnPage", "contractorDashboard");
+      localStorage.setItem("meetroConversationType", "standard");
+      setPage("conversationThread");
+      return;
+    }
+
+    setPage("messagesInbox");
+  }
+
+  function getOpenedSectionActions() {
+    if (activeTab === "pending") {
+      return [
+        {
+          label: translate("openConversation"),
+          onClick: openWorkCenterConversationAction,
+        },
+        {
+          label: translate("scheduleEvaluation"),
+          onClick: () => {
+            setShowScheduleForm(true);
+            openWorkTab("schedule");
+          },
+        },
+      ];
+    }
+
+    if (activeTab === "schedule") {
+      return [];
+    }
+
+    if (activeTab === "quotes") {
+      return [
+        {
+          label: translate("openQuotesAction"),
+          onClick: () => openWorkTab("quotes"),
+        },
+      ];
+    }
+
+    if (activeTab === "active" || activeTab === "materials") {
+      return [
+        {
+          label: translate("openActiveWorkAction"),
+          onClick: () => openWorkTab("active"),
+        },
+      ];
+    }
+
+    if (activeTab === "completed") {
+      return [];
+    }
+
+    if (activeTab === "records") {
+      return [
+        {
+          label: translate("openHistoryAction"),
+          onClick: () => openWorkTab("records"),
+        },
+      ];
+    }
+
+    if (activeTab === "revenue") {
+      return [];
+    }
+
+    return [];
+  }
+
+  function returnToWorkCenterDashboard() {
+    setSelectedWorkCenterJob(null);
+    setIsWorkCenterSectionOpen(false);
+
+    window.setTimeout(() => {
+      const target = workCenterPanelRef.current;
+
+      if (!target) return;
+
+      const y =
+        target.getBoundingClientRect().top +
+        window.pageYOffset -
+        70;
+
+      window.scrollTo({
+        top: y,
+        behavior: "smooth",
+      });
+    }, 80);
   }
 
   function getActiveMaterialsKey() {
@@ -515,16 +3041,350 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setRefreshKey((prev) => prev + 1);
   }
 
-  function resetScheduleForm() {
-    setScheduleForm({
-      title: "",
-      date: new Date().toISOString().slice(0, 10),
-      time: "12:00",
-      location: "",
-      notes: "",
+  function getMaterialsShareContext(materials = []) {
+    const activeContext = getActiveWorkContext();
+
+    let selectedRequest = {};
+    try {
+      selectedRequest = JSON.parse(
+        localStorage.getItem("selectedWorkCenterRequest") ||
+          localStorage.getItem("selectedQuoteRequest") ||
+          "{}"
+      );
+    } catch {
+      selectedRequest = {};
+    }
+
+    return {
+      conversationId:
+        activeWorkSnapshot?.conversationId ||
+        localStorage.getItem("activeWorkConversationId") ||
+        activeJobSnapshot?.conversationId ||
+        localStorage.getItem("activeConversationId") ||
+        "",
+      requestId:
+        activeWorkSnapshot?.requestId ||
+        localStorage.getItem("activeWorkRequestId") ||
+        selectedRequest?.requestId ||
+        selectedRequest?.id ||
+        "",
+      service:
+        activeContext.service ||
+        selectedRequest?.title ||
+        selectedRequest?.service ||
+        (activeLanguage === "es" ? "Trabajo activo" : "Active Work"),
+      location:
+        activeContext.location ||
+        selectedRequest?.location ||
+        selectedRequest?.address ||
+        "",
+      customerName:
+        selectedRequest?.homeownerName ||
+        selectedRequest?.customerName ||
+        localStorage.getItem("activeConversationName") ||
+        localStorage.getItem("activeJobCustomer") ||
+        (activeLanguage === "es" ? "Cliente" : "Customer"),
+      customerPhone:
+        selectedRequest?.phone ||
+        selectedRequest?.customerPhone ||
+        selectedRequest?.homeownerPhone ||
+        localStorage.getItem("activeCustomerPhone") ||
+        "",
+      customerEmail:
+        selectedRequest?.email ||
+        selectedRequest?.homeowner_email ||
+        selectedRequest?.customerEmail ||
+        localStorage.getItem("activeCustomerEmail") ||
+        "",
+      count: materials.length,
+    };
+  }
+
+  function getMaterialProviderLabel(provider) {
+    const value = String(provider || "").toLowerCase();
+
+    if (value === "customer" || value === "homeowner") {
+      return activeLanguage === "es" ? "Cliente" : "Customer";
+    }
+
+    if (value === "business" || value === "professional" || value === "pro") {
+      return activeLanguage === "es" ? "Negocio" : "Business";
+    }
+
+    if (value === "supplier") {
+      return activeLanguage === "es" ? "Proveedor" : "Supplier";
+    }
+
+    return provider || (activeLanguage === "es" ? "No especificado" : "Not specified");
+  }
+
+  function getMaterialStatusLabel(status) {
+    const value = String(status || "").toLowerCase();
+
+    if (value === "needed") return activeLanguage === "es" ? "Necesario" : "Needed";
+    if (value === "ordered") return activeLanguage === "es" ? "Ordenado" : "Ordered";
+    if (value === "ready") return activeLanguage === "es" ? "Listo" : "Ready";
+    if (value === "delivered") return activeLanguage === "es" ? "Entregado" : "Delivered";
+
+    return status || (activeLanguage === "es" ? "No especificado" : "Not specified");
+  }
+
+  function buildMaterialsShareText(materials = []) {
+    const context = getMaterialsShareContext(materials);
+    const notProvided = activeLanguage === "es" ? "No asignada" : "Not provided";
+    const lines = materials.flatMap((item, index) => {
+      const materialName = item.title || translate("material");
+      const itemLines = [
+        `${index + 1}. ${materialName}`,
+        `   ${activeLanguage === "es" ? "Cantidad" : "Qty"}: ${item.quantity || "1"}`,
+        `   ${activeLanguage === "es" ? "Estado" : "Status"}: ${getMaterialStatusLabel(item.status)}`,
+        `   ${activeLanguage === "es" ? "Proporcionado por" : "Provided by"}: ${getMaterialProviderLabel(item.provider)}`,
+      ];
+
+      if (item.notes) {
+        itemLines.push(`   ${activeLanguage === "es" ? "Notas" : "Notes"}: ${item.notes}`);
+      }
+
+      return itemLines;
     });
+
+    return [
+      activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+      `${activeLanguage === "es" ? "Trabajo" : "Job"}: ${context.service}`,
+      `${activeLanguage === "es" ? "Ubicación" : "Location"}: ${context.location || notProvided}`,
+      "",
+      activeLanguage === "es" ? "Artículos:" : "Items:",
+      ...lines,
+      "",
+      activeLanguage === "es" ? "Propósito:" : "Purpose:",
+      activeLanguage === "es"
+        ? "Compartido por el profesional para preparar el trabajo."
+        : "Shared by the professional for job preparation.",
+      activeLanguage === "es"
+        ? "Esta lista no solicita aprobación ni cambia el estado del trabajo."
+        : "This list does not request approval or change job status.",
+    ]
+      .join("\n");
+  }
+
+  function recordMaterialsShare(method, materials = []) {
+    const context = getMaterialsShareContext(materials);
+    const conversationId = context.conversationId || context.requestId || "materials";
+    const existingRecords = getJobRecord(conversationId);
+    const now = new Date().toISOString();
+
+    const note = {
+      id: `materials-shared-${Date.now()}`,
+      conversationId,
+      jobId: context.requestId || conversationId,
+      jobService: context.service,
+      customer: context.customerName,
+      type: "materials_shared",
+      workflowType: "materialsListShared",
+      title: activeLanguage === "es" ? "Lista de materiales compartida" : "Materials list shared",
+      subtitle: method,
+      text:
+        activeLanguage === "es"
+          ? `Lista de materiales compartida por ${method}.`
+          : `Materials list shared via ${method}.`,
+      materialCount: materials.length,
+      method,
+      savedAt: now,
+      createdAt: now,
+      sharedWithHomeowner: method === "Meetro Chat",
+      sharedWithBusiness: true,
+    };
+
+    saveJobRecord(conversationId, [note, ...existingRecords]);
+    localStorage.setItem("lastSavedJobRecord", JSON.stringify(note));
+    localStorage.setItem("meetroMaterialsListLastSharedAt", now);
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+  }
+
+  async function copyMaterialsShareText(text) {
+    try {
+      await navigator.clipboard?.writeText(text);
+      alert(
+        activeLanguage === "es"
+          ? "Lista de materiales copiada. Puedes pegarla en Mensajes, Mail, Notas o cualquier app."
+          : "Materials list copied. You can paste it into Messages, Mail, Notes, or any app."
+      );
+    } catch {
+      alert(
+        activeLanguage === "es"
+          ? "No se pudo copiar automáticamente. Copia el texto de la lista manualmente."
+          : "Could not copy automatically. Copy the materials list text manually."
+      );
+    }
+  }
+
+  async function shareMaterialsOutsideMeetro(materials) {
+    if (materials.length === 0) {
+      alert(
+        activeLanguage === "es"
+          ? "Agrega materiales antes de compartir la lista."
+          : "Add materials before sharing the list."
+      );
+      return;
+    }
+
+    const text = buildMaterialsShareText(materials);
+
+    try {
+      if (Share?.share) {
+        await Share.share({
+          title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+          text,
+          dialogTitle:
+            activeLanguage === "es"
+              ? "Compartir lista de materiales"
+              : "Share Materials List",
+        });
+      } else if (navigator.share) {
+        await navigator.share({
+          title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+          text,
+        });
+      } else {
+        await copyMaterialsShareText(text);
+      }
+
+      recordMaterialsShare("Outside Meetro", materials);
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        await copyMaterialsShareText(text);
+        recordMaterialsShare("Outside Meetro", materials);
+      }
+    }
+  }
+
+  function sendMaterialsThroughMeetroChat(materials = []) {
+    const context = getMaterialsShareContext(materials);
+
+    if (materials.length === 0) {
+      alert(
+        activeLanguage === "es"
+          ? "Agrega materiales antes de compartir la lista."
+          : "Add materials before sharing the list."
+      );
+      return;
+    }
+
+    if (!context.conversationId) {
+      alert(
+        activeLanguage === "es"
+          ? "No hay conversación vinculada para enviar esta lista."
+          : "No linked customer conversation found for this materials list."
+      );
+      return;
+    }
+
+    const storageKey = `meetro_conversation_${context.conversationId}`;
+    const existingMessages = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    const materialMessage = {
+      id: `materials-list-${Date.now()}`,
+      sender: "business",
+      role: "business",
+      senderRole: "business",
+      type: "materials-list",
+      workflowType: "materials_list",
+      workflowSource: "materials-center",
+      conversationId: context.conversationId,
+      requestId: context.requestId,
+      title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+      subtitle:
+        activeLanguage === "es"
+          ? "Compartida por el profesional • Para preparar el trabajo"
+          : "Shared by professional • For job preparation",
+      approvalRequired: false,
+      jobService: context.service,
+      jobLocation: context.location,
+      text: buildMaterialsShareText(materials),
+      materials,
+      source: "work_center_materials",
+      deliveryMethod: "meetro_chat",
+      time: formatDisplayScheduleTime(new Date()),
+      createdAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify([...existingMessages, materialMessage])
+    );
+
+    markConversationUnreadForRecipient(context.conversationId, "business", {
+      id: context.conversationId,
+      project_title: context.service,
+      project_description:
+        activeLanguage === "es"
+          ? "Lista de materiales compartida."
+          : "Materials list shared.",
+      homeowner_email: context.customerName,
+      status: activeLanguage === "es" ? "Materiales compartidos" : "Materials shared",
+      conversation_type: "standard",
+    });
+
+    recordMaterialsShare("Meetro Chat", materials);
+    localStorage.setItem("meetroMaterialsListSent", "true");
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+    window.dispatchEvent(new Event("storage"));
+    alert(
+      activeLanguage === "es"
+        ? "Lista de materiales enviada por Meetro Chat."
+        : "Materials list sent through Meetro Chat."
+    );
+  }
+
+  function saveMaterialsListPdf(materials = []) {
+    if (materials.length === 0) {
+      alert(
+        activeLanguage === "es"
+          ? "Agrega materiales antes de crear el PDF."
+          : "Add materials before creating the PDF."
+      );
+      return;
+    }
+
+    const context = getMaterialsShareContext(materials);
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(activeLanguage === "es" ? "Lista de materiales" : "Materials List", 14, 20);
+    doc.setFontSize(11);
+    doc.text(`${activeLanguage === "es" ? "Trabajo" : "Job"}: ${context.service}`, 14, 32);
+    if (context.location) {
+      doc.text(`${activeLanguage === "es" ? "Ubicación" : "Location"}: ${context.location}`, 14, 40);
+    }
+
+    let y = context.location ? 54 : 46;
+    materials.forEach((item, index) => {
+      const line = `${index + 1}. ${item.title || translate("material")} — Qty ${item.quantity || "1"} — ${item.provider || ""} — ${item.status || ""}`;
+      doc.text(doc.splitTextToSize(line, 180), 14, y);
+      y += 10;
+      if (y > 275) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+
+    doc.save(`materials-list-${Date.now()}.pdf`);
+    recordMaterialsShare("PDF / Print", materials);
+  }
+
+  function resetScheduleForm() {
+    setScheduleForm(createBlankScheduleForm());
     setEditingScheduleId(null);
     setShowScheduleForm(false);
+  }
+
+  function getScheduleVisitId(item = {}) {
+    return (
+      item.id ||
+      item.scheduleId ||
+      item.appointmentId ||
+      item.visitId ||
+      item.workAppointmentId ||
+      ""
+    );
   }
 
   function normalizeScheduleTime(value) {
@@ -535,24 +3395,164 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function formatScheduleTime(value) {
     if (!value) return translate("timeTbd");
-    if (value.includes("AM") || value.includes("PM")) return value;
-
-    const [rawHour, minute = "00"] = value.split(":");
-    const hourNumber = Number(rawHour);
-    if (Number.isNaN(hourNumber)) return value;
-
-    const suffix = hourNumber >= 12 ? "PM" : "AM";
-    const hour12 = hourNumber % 12 || 12;
-    return `${hour12}:${minute} ${suffix}`;
+    return formatDisplayScheduleTime(value) || value;
   }
 
-  function getScheduleStatusLabel(status) {
-    const normalized = String(status || "").toLowerCase();
+  function readManualCustomerContacts() {
+    try {
+      const contacts = JSON.parse(
+        localStorage.getItem("meetro_manual_customer_contacts") || "[]"
+      );
+      return Array.isArray(contacts) ? contacts : [];
+    } catch (error) {
+      return [];
+    }
+  }
 
+  function saveManualCustomerContact(contact) {
+    if (!contact?.customerName) return null;
+
+    const contacts = readManualCustomerContacts();
+    const normalizedPhone = String(contact.phone || "").replace(/\D/g, "");
+    const normalizedEmail = String(contact.email || "").trim().toLowerCase();
+    const normalizedName = String(contact.customerName || "").trim().toLowerCase();
+    const normalizedAddress = String(contact.address || "").trim().toLowerCase();
+
+    const existingContact = contacts.find((item) => {
+      const itemPhone = String(item.phone || "").replace(/\D/g, "");
+      const itemEmail = String(item.email || "").trim().toLowerCase();
+      const itemName = String(item.customerName || "").trim().toLowerCase();
+      const itemAddress = String(item.address || "").trim().toLowerCase();
+
+      if (normalizedPhone && itemPhone === normalizedPhone) return true;
+      if (normalizedEmail && itemEmail === normalizedEmail) return true;
+      return (
+        normalizedName &&
+        normalizedAddress &&
+        itemName === normalizedName &&
+        itemAddress === normalizedAddress
+      );
+    });
+
+    const now = new Date().toISOString();
+    const nextContact = {
+      ...(existingContact || {}),
+      ...contact,
+      id: existingContact?.id || contact.id || `manual-customer-${Date.now()}`,
+      source: "manual_customer_entry",
+      isMeetroUser: false,
+      invited: Boolean(existingContact?.invited || contact.invited),
+      createdAt: existingContact?.createdAt || contact.createdAt || now,
+      updatedAt: now,
+    };
+
+    const nextContacts = existingContact
+      ? contacts.map((item) => (item.id === existingContact.id ? nextContact : item))
+      : [nextContact, ...contacts];
+
+    localStorage.setItem(
+      "meetro_manual_customer_contacts",
+      JSON.stringify(nextContacts)
+    );
+
+    return nextContact;
+  }
+
+  function getScheduleStatusLabel(status, item = {}) {
+    const rawStatus =
+      item.customerConfirmationStatus ||
+      item.confirmationStatus ||
+      item.workflowStatus ||
+      status;
+    const normalized = String(rawStatus || "").toLowerCase().replace(/\s+/g, "_");
+
+    if (normalized === "work_scheduled") {
+      return activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled";
+    }
     if (normalized === "completed") return translate("completed");
+    if (
+      normalized === "confirmed" ||
+      normalized === "appointment_confirmed" ||
+      normalized === "customer_confirmed"
+    ) {
+      return translate("appointmentConfirmed");
+    }
+    if (
+      normalized === "change_requested" ||
+      normalized === "appointment_change_requested" ||
+      normalized.includes("reschedule")
+    ) {
+      return translate("appointmentChangeRequested");
+    }
+    if (normalized === "pending_customer_confirmation") {
+      return translate("appointmentPendingConfirmation");
+    }
     if (normalized === "scheduled") return translate("scheduled");
 
-    return status || translate("scheduled");
+    return rawStatus || translate("scheduled");
+  }
+
+  function getScheduleReminderLabels(item = {}) {
+    const labels = [];
+    const appointmentDateTime = new Date(`${item.date || ""} ${item.time || "09:00"}`);
+
+    if (item.reminders?.enabled) {
+      labels.push(activeLanguage === "es" ? "Recordatorio activo" : "Reminder set");
+    }
+
+    if (!Number.isNaN(appointmentDateTime.getTime())) {
+      const now = new Date();
+      const sameDay =
+        appointmentDateTime.getFullYear() === now.getFullYear() &&
+        appointmentDateTime.getMonth() === now.getMonth() &&
+        appointmentDateTime.getDate() === now.getDate();
+      const minutesUntil = (appointmentDateTime.getTime() - now.getTime()) / 60000;
+
+      if (sameDay) labels.push(activeLanguage === "es" ? "Hoy" : "Due today");
+      if (minutesUntil >= 0 && minutesUntil <= 120) {
+        labels.push(activeLanguage === "es" ? "Pronto" : "Starting soon");
+      }
+    }
+
+    return labels;
+  }
+
+  function getScheduleConfirmationState(item = {}) {
+    const rawStatus =
+      item.customerConfirmationStatus ||
+      item.confirmationStatus ||
+      item.workflowStatus ||
+      item.status ||
+      "";
+    const normalized = String(rawStatus).toLowerCase().replace(/\s+/g, "_");
+
+    if (
+      normalized === "confirmed" ||
+      normalized === "appointment_confirmed" ||
+      normalized === "customer_confirmed"
+    ) {
+      return "confirmed";
+    }
+
+    if (
+      normalized === "change_requested" ||
+      normalized === "appointment_change_requested" ||
+      normalized.includes("reschedule")
+    ) {
+      return "change_requested";
+    }
+
+    if (normalized === "pending_customer_confirmation") {
+      return "pending";
+    }
+
+    return normalized || "scheduled";
+  }
+
+  function isSchedulePast(item = {}) {
+    const parsed = new Date(`${item.date || ""} ${item.time || "23:59"}`);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getTime() < Date.now();
   }
 
   function getScheduleAppointmentOptions() {
@@ -582,6 +3582,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
         label: translate("virtualMeeting"),
         title: translate("scheduledVirtualMeeting"),
       },
+      {
+        value: "work_visit",
+        label: activeLanguage === "es" ? "Trabajo programado" : "Scheduled Work",
+        title: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
+      },
     ];
   }
 
@@ -593,40 +3598,185 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
 
-  function saveManualScheduleVisit() {
+  async function saveManualScheduleVisit() {
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
     );
+    const existingVisit = schedule.find(
+      (item) => String(getScheduleVisitId(item)) === String(editingScheduleId)
+    );
+    const selectedScheduleContext =
+      scheduleForm.contextSource === "selected_work_center_request"
+        ? selectedWorkCenterRequest
+        : null;
+    const canUseAmbientConversationContext = Boolean(
+      editingScheduleId ||
+        scheduleForm.contextSource === "conversation" ||
+        scheduleForm.contextSource === "assistant_conversation"
+    );
+    const conversationId =
+      existingVisit?.conversationId ||
+      existingVisit?.projectConversationId ||
+      scheduleForm.conversationId ||
+      selectedScheduleContext?.conversationId ||
+      selectedScheduleContext?.projectConversationId ||
+      (canUseAmbientConversationContext
+        ? localStorage.getItem("activeWorkConversationId") ||
+          localStorage.getItem("activeConversationId")
+        : "") ||
+      "";
+    const requestId =
+      existingVisit?.requestId ||
+      scheduleForm.requestId ||
+      selectedScheduleContext?.requestId ||
+      selectedScheduleContext?.id ||
+      "";
 
     const appointmentMeta = getScheduleAppointmentMeta(
       scheduleForm.appointmentType || "walkthrough"
     );
+    const isWorkSchedule = scheduleForm.appointmentType === "work_visit";
+    const manualCustomerName = String(scheduleForm.manualCustomerName || "").trim();
+    const manualCustomerPhone = String(scheduleForm.manualCustomerPhone || "").trim();
+    const manualCustomerEmail = String(scheduleForm.manualCustomerEmail || "").trim();
+    const manualCustomerAddress = String(
+      scheduleForm.manualCustomerAddress || scheduleForm.location || ""
+    ).trim();
+    const hasManualCustomerEntry = Boolean(
+      manualCustomerName ||
+        manualCustomerPhone ||
+        manualCustomerEmail ||
+        manualCustomerAddress
+    );
+    const isManualOutsideCustomer = hasManualCustomerEntry && !conversationId && !requestId;
+    const manualCustomerContact = hasManualCustomerEntry
+      ? saveManualCustomerContact({
+          id: existingVisit?.manualCustomerContactId || existingVisit?.customer?.id,
+          customerName:
+            manualCustomerName ||
+            existingVisit?.customerName ||
+            selectedScheduleContext?.customerName ||
+            selectedScheduleContext?.homeownerName ||
+            "Customer",
+          phone: manualCustomerPhone || existingVisit?.customerPhone || "",
+          email: manualCustomerEmail || existingVisit?.customerEmail || "",
+          address:
+            manualCustomerAddress ||
+            existingVisit?.customerAddress ||
+            existingVisit?.location ||
+            "",
+          source: "manual_customer_entry",
+          isMeetroUser: false,
+          invited: false,
+        })
+      : null;
 
-    const newVisit = {
+    let newVisit = {
       id: editingScheduleId || `schedule-${Date.now()}`,
       appointmentType: scheduleForm.appointmentType || "walkthrough",
       appointmentLabel: appointmentMeta.label,
-      workflowStage: "scheduling",
-      workflowStatus: appointmentMeta.title,
+      workflowStage: isWorkSchedule ? "work_scheduled" : "scheduling",
+      workflowStatus: isWorkSchedule ? "work_scheduled" : appointmentMeta.title,
       title: scheduleForm.title || appointmentMeta.title || translate("scheduledVisit"),
       date: scheduleForm.date,
       time: normalizeScheduleTime(scheduleForm.time),
-      location: scheduleForm.location || translate("customerLocation"),
+      location:
+        scheduleForm.location ||
+        manualCustomerAddress ||
+        translate("customerLocation"),
       notes: scheduleForm.notes,
       status:
-        schedule.find((item) => item.id === editingScheduleId)?.status ||
-        "scheduled",
+        existingVisit?.status ||
+        (isWorkSchedule ? "work_scheduled" : "scheduled"),
       source:
-        schedule.find((item) => item.id === editingScheduleId)?.source ||
+        existingVisit?.source ||
+        (conversationId ? "meetro_customer" : "") ||
+        (isManualOutsideCustomer ? "manual_customer_entry" : "") ||
         "manual",
+      conversationId,
+      projectConversationId: conversationId,
+      activeConversationId: conversationId,
+      requestId,
+      quoteId: scheduleForm.quoteId || existingVisit?.quoteId || "",
+      services: Array.isArray(scheduleForm.services)
+        ? scheduleForm.services.filter(Boolean)
+        : [],
+      nextAction: isWorkSchedule ? "open_active_work" : existingVisit?.nextAction || "",
+      selectedHomeownerRequestId:
+        existingVisit?.selectedHomeownerRequestId ||
+        localStorage.getItem("selectedHomeownerRequestId") ||
+        "",
+      customerName:
+        manualCustomerContact?.customerName ||
+        manualCustomerName ||
+        existingVisit?.customerName ||
+        selectedScheduleContext?.customerName ||
+        selectedScheduleContext?.homeownerName ||
+        selectedScheduleContext?.homeowner_email ||
+        (canUseAmbientConversationContext
+          ? localStorage.getItem("activeConversationName")
+          : "") ||
+        "Customer",
+      customerPhone:
+        manualCustomerContact?.phone ||
+        manualCustomerPhone ||
+        existingVisit?.customerPhone ||
+        "",
+      customerEmail:
+        manualCustomerContact?.email ||
+        manualCustomerEmail ||
+        existingVisit?.customerEmail ||
+        "",
+      customerAddress:
+        manualCustomerContact?.address ||
+        manualCustomerAddress ||
+        existingVisit?.customerAddress ||
+        "",
+      manualCustomerContactId:
+        manualCustomerContact?.id ||
+        existingVisit?.manualCustomerContactId ||
+        "",
+      customer: manualCustomerContact || existingVisit?.customer || null,
+      isMeetroUser:
+        manualCustomerContact ? false : Boolean(existingVisit?.isMeetroUser || conversationId),
+      invited: Boolean(existingVisit?.invited),
+      requestTitle:
+        existingVisit?.requestTitle ||
+        selectedScheduleContext?.title ||
+        selectedScheduleContext?.service ||
+        selectedScheduleContext?.projectTitle ||
+        scheduleForm.title ||
+        "",
       createdAt:
-        schedule.find((item) => item.id === editingScheduleId)?.createdAt ||
+        existingVisit?.createdAt ||
         new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    const reminderResult = await scheduleAppointmentReminderNotifications(newVisit, {
+      viewerRole: "professional",
+      language: activeLanguage,
+    });
+
+    newVisit = reminderResult.appointment || newVisit;
+
+    if (reminderResult.permissionDenied) {
+      setAppointmentReminderNotice({
+        message:
+          activeLanguage === "es"
+            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
+            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+      });
+    } else {
+      setAppointmentReminderNotice(null);
+    }
+
     const updatedSchedule = editingScheduleId
-      ? schedule.map((item) => (item.id === editingScheduleId ? newVisit : item))
+      ? schedule.map((item) =>
+          String(getScheduleVisitId(item)) === String(editingScheduleId)
+            ? newVisit
+            : item
+        )
       : [newVisit, ...schedule];
 
     localStorage.setItem(
@@ -634,10 +3784,110 @@ function ContractorDashboard({ setPage, language = "en" }) {
       JSON.stringify(updatedSchedule)
     );
 
-    const conversationId =
-      localStorage.getItem("activeWorkConversationId") ||
-      localStorage.getItem("activeConversationId") ||
-      "";
+    if (isWorkSchedule) {
+      const activeWorkId =
+        newVisit.requestId || newVisit.quoteId || newVisit.id || newVisit.conversationId;
+      saveActiveWorkSnapshot({
+        requestId: newVisit.requestId || activeWorkId,
+        quoteId: newVisit.quoteId || "",
+        scheduleId: newVisit.id,
+        conversationId: newVisit.conversationId || "",
+        status: "scheduled",
+        stage: "work_scheduled",
+        service: newVisit.requestTitle || newVisit.title || translate("scheduledVisit"),
+        location: newVisit.location || "",
+        customer: newVisit.customerName || "",
+        type: "work_scheduled",
+        source: "schedule",
+      });
+      saveActiveJobSnapshot({
+        id: activeWorkId,
+        jobId: activeWorkId,
+        quoteId: newVisit.quoteId || "",
+        scheduleId: newVisit.id,
+        conversationId: newVisit.conversationId || "",
+        service: newVisit.requestTitle || newVisit.title || translate("scheduledVisit"),
+        location: newVisit.location || "",
+        status: "scheduled",
+        customer: newVisit.customerName || "",
+      });
+      localStorage.setItem("activeWorkStatus", "scheduled");
+      localStorage.setItem("activeWorkStage", "work_scheduled");
+      localStorage.setItem("activeWorkType", "work_scheduled");
+      localStorage.setItem("activeWorkSource", "schedule");
+      localStorage.setItem("activeWorkScheduleId", newVisit.id);
+      localStorage.setItem("activeWorkConversationId", newVisit.conversationId || "");
+      localStorage.setItem("activeWorkService", newVisit.requestTitle || newVisit.title || "");
+      localStorage.setItem("activeWorkLocation", newVisit.location || "");
+    }
+
+    try {
+      const identityRecord = editingScheduleId
+        ? existingVisit
+        : selectedScheduleContext;
+      const identity = getProjectIdentity({
+        projectId: identityRecord?.projectId,
+        requestId: identityRecord?.requestId,
+        title: identityRecord?.title,
+        name: identityRecord?.name,
+      });
+
+      if (!identity.projectId) {
+        console.warn("Work Center shadow schedule link skipped.", {
+          scheduleId: newVisit.id,
+          warnings: identity.warnings,
+        });
+      } else {
+        const shadowResult = linkScheduleToProject({
+          projectId: identity.projectId,
+          scheduleId: newVisit.id,
+          metadata: {
+            action: editingScheduleId ? "updated" : "created",
+            source: newVisit.source || "manual",
+          },
+        });
+
+        if (!shadowResult.ok || shadowResult.warnings.length > 0) {
+          console.warn(
+            "Work Center shadow schedule link warning.",
+            shadowResult
+          );
+        }
+
+        if (shadowResult.ok && import.meta.env.DEV) {
+          try {
+            const reconciliation = getScheduleLinkReconciliationReport();
+            const identityWarnings = getScheduleLinkIdentityWarnings();
+            const commonIdentityWarnings = Object.entries(
+              identityWarnings.reasonCounts
+            )
+              .sort(([, firstCount], [, secondCount]) =>
+                secondCount - firstCount
+              )
+              .slice(0, 5)
+              .map(([code, count]) => ({ code, count }));
+
+            console.info("Work Center schedule link reconciliation.", {
+              scheduleCount: reconciliation.scheduleCount,
+              uniqueLinkedScheduleCount:
+                reconciliation.uniqueLinkedScheduleCount,
+              missingLinkCount: reconciliation.missingLinkCount,
+              safeIdentityMissingLinkCount:
+                reconciliation.safeIdentityMissingLinkCount,
+              coveragePercentage: reconciliation.coveragePercentage,
+              commonIdentityWarnings,
+            });
+          } catch (error) {
+            console.warn(
+              "Work Center schedule reconciliation logging failed.",
+              error
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Work Center shadow schedule link failed.", error);
+    }
 
     if (!editingScheduleId && conversationId) {
       const storageKey = `meetro_conversation_${conversationId}`;
@@ -645,22 +3895,40 @@ function ContractorDashboard({ setPage, language = "en" }) {
         localStorage.getItem(storageKey) || "[]"
       );
 
+      const serviceLines = Array.isArray(newVisit.services) && newVisit.services.length > 0
+        ? newVisit.services
+        : [newVisit.requestTitle || newVisit.title].filter(Boolean);
+      const customerScheduleTitle = isWorkSchedule
+        ? activeLanguage === "es"
+          ? "Trabajo programado"
+          : "Work Scheduled"
+        : activeLanguage === "es"
+          ? "Cita programada"
+          : "Appointment Scheduled";
+      const displayVisitTime = formatScheduleTime(newVisit.time);
+      const customerScheduleText = isWorkSchedule
+        ? activeLanguage === "es"
+          ? `Trabajo programado para ${newVisit.date} a las ${displayVisitTime}.`
+          : `Work scheduled for ${newVisit.date} at ${displayVisitTime}.`
+        : activeLanguage === "es"
+          ? ` ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} a las ${displayVisitTime}.`
+          : ` ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} at ${displayVisitTime}.`;
+
       const scheduleMessage = {
         id: Date.now(),
         sender: "business",
         role: "business",
         type: "schedule",
         workflowSource: "work-center-schedule",
+        workflowType: isWorkSchedule ? "work_scheduled" : "appointment_scheduled",
         conversationId,
+        title: customerScheduleTitle,
+        subtitle: `${newVisit.date || ""} • ${displayVisitTime} • ${translate("appointmentPendingConfirmation")}`,
         text:
-          activeLanguage === "es"
-            ? `📅 ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} a las ${newVisit.time}.`
-            : `📅 ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} at ${newVisit.time}.`,
+          customerScheduleText,
+        services: serviceLines,
         schedule: newVisit,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        time: formatDisplayScheduleTime(new Date()),
         createdAt: new Date().toISOString(),
       };
 
@@ -677,9 +3945,45 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function startEditScheduleVisit(item) {
-    setEditingScheduleId(item.id);
+    const scheduleId = getScheduleVisitId(item);
+
+    if (!scheduleId) {
+      alert(
+        activeLanguage === "es"
+          ? "Esta visita no tiene un identificador editable. Vuelve a abrir la agenda e inténtalo de nuevo."
+          : "This visit is missing an editable appointment id. Open the schedule again and try editing."
+      );
+      return;
+    }
+
+    setEvaluationTarget(null);
+    setEditingScheduleId(scheduleId);
     setScheduleForm({
+      contextSource: item.conversationId || item.requestId ? "conversation" : "manual",
+      appointmentType: item.appointmentType || "walkthrough",
       title: item.title || "",
+      requestId: item.requestId || "",
+      conversationId: item.conversationId || item.projectConversationId || "",
+      quoteId: item.quoteId || "",
+      services: Array.isArray(item.services) ? item.services.filter(Boolean) : [],
+      manualCustomerName:
+        item.customerName ||
+        item.customer?.customerName ||
+        item.homeownerName ||
+        "",
+      manualCustomerPhone:
+        item.customerPhone ||
+        item.customer?.phone ||
+        "",
+      manualCustomerEmail:
+        item.customerEmail ||
+        item.customer?.email ||
+        "",
+      manualCustomerAddress:
+        item.customerAddress ||
+        item.customer?.address ||
+        item.location ||
+        "",
       date: item.date || new Date().toISOString().slice(0, 10),
       time: item.time && item.time.includes("AM") ? "12:00" : item.time || "12:00",
       location: item.location || "",
@@ -688,14 +3992,103 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setShowScheduleForm(true);
   }
 
+  function appendWorkflowTimelineEvent(event, identityRecord = event) {
+    const timeline = JSON.parse(
+      localStorage.getItem("meetroWorkflowTimeline") || "[]"
+    );
+
+    const nextEvent = {
+      id: event.id || `timeline-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      ...event,
+    };
+
+    localStorage.setItem(
+      "meetroWorkflowTimeline",
+      JSON.stringify([nextEvent, ...timeline])
+    );
+
+    const projectTimeline = JSON.parse(
+      localStorage.getItem("projectTimeline") || "[]"
+    );
+
+    localStorage.setItem(
+      "projectTimeline",
+      JSON.stringify([nextEvent, ...projectTimeline])
+    );
+
+    try {
+      const identity = getProjectIdentity({
+        projectId: identityRecord.projectId,
+        requestId: identityRecord.requestId,
+      });
+
+      if (!identity.projectId) {
+        console.warn("Work Center shadow timeline skipped.", {
+          eventType: event.type || "",
+          warnings: identity.warnings,
+        });
+        return;
+      }
+
+      const shadowResult = appendProjectTimelineEvent({
+        projectId: identity.projectId,
+        event: nextEvent,
+      });
+
+      if (!shadowResult.ok || shadowResult.warnings.length > 0) {
+        console.warn("Work Center shadow timeline warning.", shadowResult);
+      }
+
+      if (shadowResult.ok && import.meta.env.DEV) {
+        try {
+          const reconciliation = getTimelineReconciliationReport();
+          const identityWarnings = getTimelineIdentityWarnings();
+          const commonIdentityWarnings = Object.entries(
+            identityWarnings.reasonCounts
+          )
+            .sort(([, firstCount], [, secondCount]) =>
+              secondCount - firstCount
+            )
+            .slice(0, 5)
+            .map(([code, count]) => ({ code, count }));
+
+          console.info("Work Center timeline reconciliation.", {
+            coveragePercentage: reconciliation.coveragePercentage,
+            legacyCount: reconciliation.legacyEventCount,
+            shadowCount: reconciliation.shadowEventCount,
+            missingShadowCount: reconciliation.missingShadowCount,
+            commonIdentityWarnings,
+          });
+        } catch (error) {
+          console.warn(
+            "Work Center timeline reconciliation logging failed.",
+            error
+          );
+        }
+      }
+    } catch (error) {
+      console.warn("Work Center shadow timeline failed.", error);
+    }
+  }
+
   function markScheduleCompleted(item) {
+    setVisitOutcomeTarget(item);
+  }
+
+  function completeScheduleVisit(item, outcome) {
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
     );
 
     const updatedSchedule = schedule.map((visit) =>
       visit.id === item.id
-        ? { ...visit, status: "Completed", completedAt: new Date().toISOString() }
+        ? {
+            ...visit,
+            status: "Completed",
+            completedAt: new Date().toISOString(),
+            visitOutcome: outcome,
+          }
         : visit
     );
 
@@ -704,10 +4097,268 @@ function ContractorDashboard({ setPage, language = "en" }) {
       JSON.stringify(updatedSchedule)
     );
 
+    appendWorkflowTimelineEvent(
+      {
+        type: "appointment_completed",
+        title:
+          activeLanguage === "es"
+            ? "Visita completada"
+            : "Visit completed",
+        service: item.title || "",
+        location: item.location || "",
+        scheduleId: item.id || "",
+        conversationId:
+          item.projectConversationId ||
+          item.conversationId ||
+          item.requestId ||
+          "",
+        outcome,
+      },
+      item
+    );
+  }
+
+  function applyVisitOutcome(outcome) {
+    if (!visitOutcomeTarget) return;
+
+    const item = visitOutcomeTarget;
+
+    const workflowConversationId =
+      item.projectConversationId ||
+      item.conversationId ||
+      item.requestId ||
+      "";
+
+    const baseRequest = {
+      id: item.requestId || item.id || `request-${Date.now()}`,
+      requestId: item.requestId || item.id || "",
+      scheduleId: item.id || "",
+      title: item.title || translate("scheduledVisit"),
+      service: item.title || translate("scheduledVisit"),
+      description: item.notes || "",
+      location: item.location || "",
+      conversationId: workflowConversationId,
+      projectConversationId: workflowConversationId,
+      workflowSource: "visit_outcome",
+      visitOutcome: outcome,
+      visitOutcomeDate: new Date().toISOString(),
+    };
+
+    localStorage.setItem("selectedWorkCenterRequest", JSON.stringify(baseRequest));
+    localStorage.setItem("projectOutcome", outcome);
+    localStorage.setItem("projectOutcomeDate", new Date().toISOString());
+    localStorage.setItem("projectWorkflowStatus", outcome);
+
+    completeScheduleVisit(item, outcome);
+
+    if (workflowConversationId) {
+      localStorage.setItem("activeConversationId", workflowConversationId);
+      localStorage.setItem("meetroConversationType", "standard");
+    }
+
+    if (outcome === "quote_required") {
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.removeItem("lastManualQuoteNumber");
+      localStorage.setItem("activeWorkCenterQuoteRequestId", baseRequest.requestId || baseRequest.id);
+      localStorage.setItem("workflowSource", "visit_outcome");
+      localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+
+      appendWorkflowTimelineEvent(
+        {
+          type: "quote_required",
+          title:
+            activeLanguage === "es"
+              ? "Cotización requerida"
+              : "Quote required",
+          service: baseRequest.service,
+          location: baseRequest.location,
+          requestId: baseRequest.requestId,
+          conversationId: workflowConversationId,
+        },
+        item
+      );
+
+      setVisitOutcomeTarget(null);
+      setPage("quoteBuilder");
+      return;
+    }
+
+    if (outcome === "start_work_immediately" || outcome === "emergency_dispatch") {
+      const activeStatus =
+        outcome === "emergency_dispatch" ? "on_the_way" : "ready_to_start";
+
+      localStorage.setItem("activeWorkStatus", activeStatus);
+      localStorage.setItem("activeWorkType", item.appointmentType || "scheduled");
+      localStorage.setItem("activeWorkSource", "visit_outcome");
+      localStorage.setItem("activeWorkService", baseRequest.service);
+      localStorage.setItem("activeWorkLocation", baseRequest.location);
+      localStorage.setItem("activeWorkConversationId", workflowConversationId);
+
+      saveActiveWorkSnapshot({
+        id: baseRequest.id,
+        conversationId: workflowConversationId,
+        service: baseRequest.service,
+        location: baseRequest.location,
+        type: item.appointmentType || "scheduled",
+        source: "visit_outcome",
+        status: activeStatus,
+        stage: "active",
+        updatedAt: new Date().toISOString(),
+      });
+
+      saveActiveJobSnapshot({
+        id: baseRequest.id,
+        conversationId: workflowConversationId,
+        service: baseRequest.service,
+        location: baseRequest.location,
+        status: activeStatus,
+        stage: "active",
+        source: "visit_outcome",
+        updatedAt: new Date().toISOString(),
+      });
+
+      appendWorkflowTimelineEvent(
+        {
+          type: outcome,
+          title:
+            outcome === "emergency_dispatch"
+              ? activeLanguage === "es"
+                ? "Despacho de emergencia iniciado"
+                : "Emergency dispatch started"
+              : activeLanguage === "es"
+              ? "Trabajo listo para comenzar"
+              : "Work ready to start",
+          service: baseRequest.service,
+          location: baseRequest.location,
+          requestId: baseRequest.requestId,
+          conversationId: workflowConversationId,
+        },
+        item
+      );
+
+      localStorage.setItem("meetroWorkCenterTab", "active");
+      localStorage.setItem("activeWorkCenterTab", "active");
+
+      setVisitOutcomeTarget(null);
+      openWorkTab("active");
+      setRefreshKey((prev) => prev + 1);
+      return;
+    }
+
+    if (outcome === "need_materials") {
+      const materialsWorkflow = JSON.parse(
+        localStorage.getItem("meetroMaterialsWorkflow") || "[]"
+      );
+
+      const materialsRecord = {
+        id: `materials-${Date.now()}`,
+        requestId: baseRequest.requestId || baseRequest.id,
+        scheduleId: item.id || "",
+        conversationId: workflowConversationId,
+        projectTitle: baseRequest.title,
+        service: baseRequest.service,
+        location: baseRequest.location,
+        status: "needed",
+        provider: "undecided",
+        source: "visit_outcome",
+        createdAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        "meetroMaterialsWorkflow",
+        JSON.stringify([materialsRecord, ...materialsWorkflow])
+      );
+
+      localStorage.setItem("pendingWorkStatus", "waiting_materials");
+      localStorage.setItem("pendingWorkType", item.appointmentType || "scheduled");
+      localStorage.setItem("pendingWorkWorkflowStage", "materials");
+      localStorage.setItem("pendingWorkWorkflowStatus", "waiting_materials");
+      localStorage.setItem("pendingWorkSource", "visit_outcome");
+      localStorage.setItem("pendingWorkService", baseRequest.service);
+      localStorage.setItem("pendingWorkLocation", baseRequest.location);
+      localStorage.setItem("pendingWorkConversationId", workflowConversationId);
+      localStorage.setItem("pendingWorkScheduleId", item.id || "");
+      localStorage.setItem("pendingWorkRequestId", baseRequest.requestId || baseRequest.id);
+      localStorage.setItem("pendingWorkReason", "waiting_materials");
+
+      appendWorkflowTimelineEvent(
+        {
+          type: "materials_needed",
+          title:
+            activeLanguage === "es"
+              ? "Materiales necesarios"
+              : "Materials needed",
+          service: baseRequest.service,
+          location: baseRequest.location,
+          requestId: baseRequest.requestId,
+          conversationId: workflowConversationId,
+        },
+        item
+      );
+
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+
+      setVisitOutcomeTarget(null);
+      openWorkTab("quotes");
+      setRefreshKey((prev) => prev + 1);
+      return;
+    }
+
+    const pendingStatusMap = {
+      waiting_customer_decision: "waiting_customer",
+      follow_up_required: "follow_up_required",
+      not_good_fit: "archived_not_good_fit",
+    };
+
+    const pendingStatus = pendingStatusMap[outcome] || "waiting_customer";
+
+    localStorage.setItem("pendingWorkStatus", pendingStatus);
+    localStorage.setItem("pendingWorkType", item.appointmentType || "scheduled");
+    localStorage.setItem("pendingWorkWorkflowStage", "pending_decision");
+    localStorage.setItem("pendingWorkWorkflowStatus", pendingStatus);
+    localStorage.setItem("pendingWorkSource", "visit_outcome");
+    localStorage.setItem("pendingWorkService", baseRequest.service);
+    localStorage.setItem("pendingWorkLocation", baseRequest.location);
+    localStorage.setItem("pendingWorkConversationId", workflowConversationId);
+    localStorage.setItem("pendingWorkScheduleId", item.id || "");
+    localStorage.setItem("pendingWorkRequestId", baseRequest.requestId || baseRequest.id);
+    localStorage.setItem("pendingWorkReason", outcome);
+
+    appendWorkflowTimelineEvent(
+      {
+        type: outcome,
+        title:
+          outcome === "follow_up_required"
+            ? activeLanguage === "es"
+              ? "Seguimiento requerido"
+              : "Follow up required"
+            : outcome === "not_good_fit"
+            ? activeLanguage === "es"
+              ? "No es buen ajuste"
+              : "Not a good fit"
+            : activeLanguage === "es"
+            ? "Esperando decisión del cliente"
+            : "Waiting customer decision",
+        service: baseRequest.service,
+        location: baseRequest.location,
+        requestId: baseRequest.requestId,
+        conversationId: workflowConversationId,
+      },
+      item
+    );
+
+    localStorage.setItem("meetroWorkCenterTab", "pending");
+    localStorage.setItem("activeWorkCenterTab", "pending");
+
+    setVisitOutcomeTarget(null);
+    openWorkTab("pending");
     setRefreshKey((prev) => prev + 1);
   }
 
-  function confirmDeleteScheduleVisit() {
+  async function confirmDeleteScheduleVisit() {
     if (!scheduleDeleteTarget) return;
 
     const schedule = JSON.parse(
@@ -723,31 +4374,577 @@ function ContractorDashboard({ setPage, language = "en" }) {
       JSON.stringify(updatedSchedule)
     );
 
+    await cancelAppointmentReminderNotifications(scheduleDeleteTarget);
+
     setScheduleDeleteTarget(null);
     setRefreshKey((prev) => prev + 1);
   }
 
+  const activeEmergencyRecord = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("activeEmergencyRecord") || "{}"
+      );
+    } catch {
+      return {};
+    }
+  })();
+
   const selectedService =
-    localStorage.getItem("selectedEmergencyService") || "";
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
+    localStorage.getItem("selectedEmergencyService") ||
+    "";
 
   const dispatchStatus =
+    activeEmergencyRecord.status ||
     localStorage.getItem("emergencyDispatchStatus") || "";
+
+  const hasActiveEmergency =
+    Boolean(dispatchStatus) &&
+    dispatchStatus !== "completed" &&
+    dispatchStatus !== "cancelled" &&
+    dispatchStatus !== "closed" &&
+    dispatchStatus !== "archived";
 
   const storedCompletedJobsCount =
     Number(localStorage.getItem("completedJobsCount") || "0");
 
-  const quoteHistory = JSON.parse(
-    localStorage.getItem("workCenterQuoteHistory") || "[]"
+  const [quoteHistoryVersion, setQuoteHistoryVersion] = useState(0);
+  quoteHistoryVersion;
+
+  const qaWorkflowHydrationAttempted = useRef(false);
+
+  useEffect(() => {
+    if (qaWorkflowHydrationAttempted.current) return undefined;
+    qaWorkflowHydrationAttempted.current = true;
+
+    let cancelled = false;
+
+    async function hydrateStagingQaWorkflows() {
+      const qaWorkflowRecords = await fetchQaWorkflowRecords();
+      if (cancelled || !qaWorkflowRecords) return;
+
+      const result = hydrateQaWorkflowRecords(qaWorkflowRecords);
+      if (!result.hydrated) return;
+
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+      setRefreshKey((key) => key + 1);
+      setQuoteHistoryVersion((version) => version + 1);
+    }
+
+    hydrateStagingQaWorkflows();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState("pending");
+
+  const quoteHistory = readMeetroArray("workCenterQuoteHistory");
+
+  const quoteLifecycleStatuses = [
+    "all",
+    "draft",
+    "sent",
+    "viewed",
+    "accepted",
+    "revision_requested",
+    "declined",
+    "expired",
+    "converted_to_job",
+    "completed",
+  ];
+
+  const quoteStatusLabels = {
+    all: activeLanguage === "es" ? "Todas" : "All",
+    draft: activeLanguage === "es" ? "Borrador" : "Draft",
+    drafts: activeLanguage === "es" ? "Borradores" : "Drafts",
+    pending: activeLanguage === "es" ? "Pendientes" : "Pending",
+    sent: activeLanguage === "es" ? "Enviada" : "Sent",
+    viewed: activeLanguage === "es" ? "Vista" : "Viewed",
+    accepted: activeLanguage === "es" ? "Aceptada" : "Accepted",
+    revision_requested: activeLanguage === "es" ? "Revisión" : "Revision",
+    waiting_approval: activeLanguage === "es" ? "Esperando aprobación" : "Waiting Approval",
+    approved: activeLanguage === "es" ? "Aprobada" : "Approved",
+    paid: activeLanguage === "es" ? "Pagada" : "Paid",
+    declined: activeLanguage === "es" ? "Rechazada" : "Declined",
+    expired: activeLanguage === "es" ? "Expirada" : "Expired",
+    converted_to_job: activeLanguage === "es" ? "Trabajo Activo" : "Active Job",
+    completed: activeLanguage === "es" ? "Completada" : "Completed",
+  };
+
+  function getQuoteDisplayGroup(quote = {}) {
+    const status = normalizeQuoteStatus(quote);
+
+    if (["accepted", "approved", "paid", "converted_to_job", "completed"].includes(status)) {
+      return "accepted";
+    }
+
+    if (["draft", "drafts"].includes(status)) {
+      return "drafts";
+    }
+
+    return "pending";
+  }
+
+  function getQuoteDisplayTime(quote = {}) {
+    const status = normalizeQuoteStatus(quote);
+    const dateValue =
+      quote.sentAt ||
+      quote.updatedAt ||
+      quote.createdAt ||
+      quote.revisionRequestedAt ||
+      "";
+
+    const prefix =
+      status === "draft"
+        ? activeLanguage === "es"
+          ? "Actualizado"
+          : "Updated"
+        : activeLanguage === "es"
+        ? "Enviado"
+        : "Sent";
+
+    if (!dateValue) {
+      return activeLanguage === "es" ? `${prefix} pendiente` : `${prefix} pending`;
+    }
+
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+      return String(dateValue);
+    }
+
+    const daysAgo = Math.floor((Date.now() - date.getTime()) / 86400000);
+    if (daysAgo <= 0) {
+      return activeLanguage === "es" ? `${prefix} hoy` : `${prefix} today`;
+    }
+
+    if (daysAgo === 1) {
+      return activeLanguage === "es" ? `${prefix} ayer` : `${prefix} 1 day ago`;
+    }
+
+    if (daysAgo < 7) {
+      return activeLanguage === "es"
+        ? `${prefix} hace ${daysAgo} días`
+        : `${prefix} ${daysAgo} days ago`;
+    }
+
+    return `${prefix} ${date.toLocaleDateString(activeLanguage === "es" ? "es-US" : "en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}`;
+  }
+
+  function normalizeQuoteStatus(quote) {
+    return quote?.status || quote?.quoteStatus || "draft";
+  }
+
+  function openQuoteBuilderForOperationalQuote(quote = {}) {
+    if (quote.quoteId || quote.id || normalizeQuoteStatus(quote) !== "evaluation_complete") {
+      localStorage.setItem("selectedQuoteForEdit", JSON.stringify(quote));
+    } else {
+      localStorage.removeItem("selectedQuoteForEdit");
+    }
+
+    localStorage.setItem(
+      "selectedWorkCenterRequest",
+      JSON.stringify({
+        requestId: quote.requestId || quote.projectId || quote.id || quote.quoteId || "",
+        id: quote.requestId || quote.projectId || quote.id || quote.quoteId || "",
+        title: quote.projectTitle || quote.title || quote.service || "",
+        description: quote.description || quote.notes || "",
+        homeownerName: quote.homeownerName || quote.customerName || quote.customer || "",
+        customerName: quote.homeownerName || quote.customerName || quote.customer || "",
+        evaluationComplete: true,
+        sourceQuote: quote,
+      })
+    );
+    localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+    localStorage.setItem("meetroWorkCenterTab", "quotes");
+    localStorage.setItem("activeWorkCenterTab", "quotes");
+    setPage("quoteBuilder");
+  }
+
+  function getQuoteWorkflowPresentation(quote = {}) {
+    const status = normalizeQuoteStatus(quote);
+    const statusLabel = quoteStatusLabels[status] || quoteStatusLabels.draft;
+    const makeStatusUpdate = (nextStatus, nextFilter = quoteStatusFilter) => () => {
+      updateQuoteLifecycleStatus(quote.quoteId || quote.id, nextStatus);
+      if (nextFilter) setQuoteStatusFilter(nextFilter);
+    };
+
+    if (["evaluation_complete", "evaluation_completed"].includes(status)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Evaluación completa" : "Evaluation Complete",
+        nextStep: activeLanguage === "es" ? "Crear la propuesta del cliente." : "Create the customer proposal.",
+        actionLabel: activeLanguage === "es" ? "Crear propuesta" : "Create Proposal",
+        onAction: () => openQuoteBuilderForOperationalQuote(quote),
+      };
+    }
+
+    if (["draft", "drafts"].includes(status)) {
+      return {
+        statusLabel,
+        nextStep: activeLanguage === "es" ? "Continúa la propuesta antes de enviarla." : "Continue the proposal before sending.",
+        actionLabel: activeLanguage === "es" ? "Continuar propuesta" : "Continue Proposal",
+        onAction: () => openQuoteBuilderForOperationalQuote(quote),
+      };
+    }
+
+    if (["proposal_ready", "ready", "ready_to_send"].includes(status)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Propuesta lista" : "Proposal Ready",
+        nextStep: activeLanguage === "es" ? "Enviar la propuesta al cliente." : "Send the proposal to the customer.",
+        actionLabel: activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal",
+        onAction: makeStatusUpdate("sent", "pending"),
+      };
+    }
+
+    if (["sent", "viewed", "waiting_approval", "proposal_sent"].includes(status)) {
+      return {
+        statusLabel: status === "waiting_approval" || status === "proposal_sent"
+          ? quoteStatusLabels.waiting_approval
+          : statusLabel,
+        nextStep: activeLanguage === "es" ? "Registrar aprobación cuando el cliente acepte." : "Record approval when the customer accepts.",
+        actionLabel: activeLanguage === "es" ? "Registrar aprobación" : "Record Approval",
+        onAction: makeStatusUpdate("accepted", "accepted"),
+      };
+    }
+
+    if (["accepted", "approved", "quote_approved"].includes(status)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Aprobada" : "Approved",
+        nextStep: activeLanguage === "es" ? "Registrar pago o depósito." : "Record payment or deposit.",
+        actionLabel: activeLanguage === "es" ? "Registrar pago" : "Record Payment",
+        onAction: makeStatusUpdate("paid", "accepted"),
+      };
+    }
+
+    if (["paid", "payment_received", "deposit_received"].includes(status)) {
+      return {
+        statusLabel: quoteStatusLabels.paid,
+        nextStep: activeLanguage === "es" ? "Programar la fecha del trabajo." : "Schedule the work date.",
+        actionLabel: activeLanguage === "es" ? "Programar trabajo" : "Schedule Work",
+        onAction: () => startScheduleWorkFromQuote(quote),
+      };
+    }
+
+    if (status === "revision_requested") {
+      return {
+        statusLabel,
+        nextStep: activeLanguage === "es" ? "Actualizar y volver a enviar la propuesta." : "Update and resend the proposal.",
+        actionLabel: activeLanguage === "es" ? "Continuar propuesta" : "Continue Proposal",
+        onAction: () => openQuoteBuilderForOperationalQuote(quote),
+      };
+    }
+
+    if (status === "converted_to_job") {
+      return {
+        statusLabel,
+        nextStep: activeLanguage === "es" ? "Continuar desde Trabajo activo." : "Continue from Active Work.",
+        actionLabel: activeLanguage === "es" ? "Abrir trabajo activo" : "Open Active Work",
+        onAction: () => openWorkTab("active"),
+      };
+    }
+
+    return {
+      statusLabel,
+      nextStep: getQuoteOperationalNextAction(quote),
+      actionLabel: activeLanguage === "es" ? "Ver detalles" : "View Details",
+      onAction: () => setQuoteViewTarget(quote),
+    };
+  }
+
+  function isExternalQuote(quote) {
+    return (
+      quote?.source === "external" ||
+      quote?.quoteSource === "external" ||
+      quote?.type === "external"
+    );
+  }
+
+  function formatQuoteCurrency(value) {
+    const amount = Number(value || 0);
+    return `$${Number.isFinite(amount) ? amount.toFixed(0) : "0"}`;
+  }
+
+  function getQuoteOperationalNextAction(quote = {}) {
+    const status = normalizeQuoteStatus(quote);
+
+    if (status === "accepted") {
+      return activeLanguage === "es"
+        ? "Programa el trabajo o crea el trabajo activo."
+        : "Schedule work or create the active job.";
+    }
+
+    if (status === "revision_requested") {
+      return activeLanguage === "es"
+        ? "Revisa y envía una cotización actualizada."
+        : "Review and send an updated quote.";
+    }
+
+    if (status === "declined") {
+      return activeLanguage === "es"
+        ? "No hay acción pendiente."
+        : "No pending action.";
+    }
+
+    if (status === "converted_to_job") {
+      return activeLanguage === "es"
+        ? "Continúa este trabajo desde Trabajo activo."
+        : "Continue this job from Active Work.";
+    }
+
+    if (status === "completed") {
+      return activeLanguage === "es"
+        ? "Revisa el registro en historial."
+        : "Review the record in history.";
+    }
+
+    return isExternalQuote(quote)
+      ? activeLanguage === "es"
+        ? "Marca la respuesta manualmente o invita al cliente."
+        : "Mark the response manually or invite the customer."
+      : activeLanguage === "es"
+      ? "Espera la decisión del cliente."
+      : "Wait for the customer decision.";
+  }
+
+  function getActiveJobOperationalNextAction(status) {
+    const normalized = normalizeWorkflowStage(status || "active");
+
+    if (normalized === "on_the_way") {
+      return translate("nextStepArrive");
+    }
+
+    if (normalized === "arrived") {
+      return translate("nextStepBeginWork");
+    }
+
+    if (normalized === "working") {
+      return translate("nextStepContinueWork");
+    }
+
+    if (normalized === "paused_materials") {
+      return translate("nextStepResumeMaterials");
+    }
+
+    if (normalized === "completed") {
+      return activeLanguage === "es"
+        ? "Crea recibo o revisa cierre."
+        : "Create receipt or review closure.";
+    }
+
+    return activeLanguage === "es"
+      ? "Abre detalles para continuar el trabajo."
+      : "Open details to continue the work.";
+  }
+
+  function isMeetroLinkedSchedule(item) {
+    return Boolean(
+      item?.conversationId ||
+        item?.projectConversationId ||
+        item?.activeConversationId ||
+        item?.requestId ||
+        item?.selectedHomeownerRequestId ||
+        item?.source === "meetro_chat" ||
+        item?.workflowSource === "meetro_chat_schedule" ||
+        item?.workflowSource === "meetro_chat_message_schedule"
+    );
+  }
+
+  function getScheduleSourceLabel(item) {
+    if (isMeetroLinkedSchedule(item)) {
+      return activeLanguage === "es"
+        ? "Cita de cliente Meetro"
+        : "Meetro Customer Appointment";
+    }
+
+    if (
+      item?.source === "manual_customer_entry" ||
+      item?.customer?.source === "manual_customer_entry" ||
+      item?.isMeetroUser === false
+    ) {
+      return activeLanguage === "es" ? "Cliente manual" : "Manual Customer";
+    }
+
+    if (item?.source === "manual") {
+      return activeLanguage === "es" ? "Manual" : "Manual";
+    }
+
+    return item?.source || translate("schedule");
+  }
+
+  const quoteFilterTabs = [
+    { key: "pending", label: activeLanguage === "es" ? "Pendientes" : "Pending" },
+    { key: "accepted", label: activeLanguage === "es" ? "Aceptadas" : "Accepted" },
+    { key: "drafts", label: activeLanguage === "es" ? "Borradores" : "Drafts" },
+  ];
+
+  const quoteFilterCounts = quoteFilterTabs.reduce((counts, tab) => {
+    counts[tab.key] = quoteHistory.filter(
+      (quote) => quote && getQuoteDisplayGroup(quote) === tab.key
+    ).length;
+    return counts;
+  }, {});
+
+  const filteredQuoteHistory = quoteHistory.filter(
+    (quote) => quote && getQuoteDisplayGroup(quote) === quoteStatusFilter
   );
 
-  const acceptedQuoteHistoryAlerts = quoteHistory.filter(
-    (quote) =>
+  function updateQuoteLifecycleStatus(quoteId, nextStatus) {
+    const savedQuotes = JSON.parse(
+      localStorage.getItem("workCenterQuoteHistory") ||
+        localStorage.getItem("meetroQuoteHistory") ||
+        localStorage.getItem("quoteHistory") ||
+        "[]"
+    );
+
+    const now = new Date().toISOString();
+
+    const updatedQuotes = savedQuotes.map((quote) => {
+      if (String(quote.quoteId || quote.id || "") !== String(quoteId || "")) return quote;
+
+      const updatedQuote = {
+        ...quote,
+        status: nextStatus,
+        quoteStatus: nextStatus,
+        updatedAt: now,
+      };
+
+      if (nextStatus === "sent") updatedQuote.sentAt = quote.sentAt || now;
+      if (nextStatus === "viewed") updatedQuote.viewedAt = quote.viewedAt || now;
+      if (nextStatus === "accepted") updatedQuote.acceptedAt = quote.acceptedAt || now;
+      if (nextStatus === "paid") updatedQuote.paidAt = quote.paidAt || now;
+      if (nextStatus === "revision_requested") {
+        updatedQuote.revisionRequestedAt = quote.revisionRequestedAt || now;
+      }
+      if (nextStatus === "declined") updatedQuote.declinedAt = quote.declinedAt || now;
+      if (nextStatus === "converted_to_job") {
+        updatedQuote.convertedToJobAt = quote.convertedToJobAt || now;
+
+        const activeJobFromQuote = {
+          ...updatedQuote,
+          jobId: updatedQuote.jobId || `job-${Date.now()}`,
+          source: "quote",
+          type: "quote",
+          status: "active",
+          stage: "active",
+          createdFromQuote: true,
+        };
+
+        localStorage.setItem(
+          "activeJobSnapshot",
+          JSON.stringify(activeJobFromQuote)
+        );
+
+        localStorage.setItem(
+          "activeWorkSnapshot",
+          JSON.stringify(activeJobFromQuote)
+        );
+
+        localStorage.setItem("activeJobStatus", "active");
+        localStorage.setItem("activeWorkStage", "active");
+      }
+      if (nextStatus === "completed") updatedQuote.completedAt = quote.completedAt || now;
+
+      return updatedQuote;
+    });
+
+    localStorage.setItem("workCenterQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("meetroQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("quoteHistory", JSON.stringify(updatedQuotes));
+
+    try {
+      const updatedQuote = updatedQuotes.find(
+        (quote) => String(quote.quoteId || quote.id || "") === String(quoteId || "")
+      );
+      const identity = getProjectIdentity({
+        projectId: updatedQuote?.projectId,
+        requestId: updatedQuote?.requestId,
+        title: updatedQuote?.projectTitle || updatedQuote?.title,
+      });
+
+      if (!identity.projectId) {
+        console.warn("Work Center shadow quote lifecycle link skipped.", {
+          quoteId: quoteId || "",
+          action: nextStatus,
+          warnings: identity.warnings,
+        });
+      } else {
+        const shadowResult = linkQuoteToProject({
+          projectId: identity.projectId,
+          quoteRequestId: updatedQuote?.requestId || "",
+          quoteId: updatedQuote?.quoteId || quoteId || "",
+          metadata: {
+            action: nextStatus,
+            source: "work-center-quote-history",
+          },
+        });
+
+        if (!shadowResult.ok || shadowResult.warnings.length > 0) {
+          console.warn(
+            "Work Center shadow quote lifecycle link warning.",
+            shadowResult
+          );
+        }
+
+        if (shadowResult.ok && import.meta.env.DEV) {
+          try {
+            const reconciliation = getQuoteLinkReconciliationReport();
+            const identityWarnings = getQuoteLinkIdentityWarnings();
+            const commonIdentityWarnings = Object.entries(
+              identityWarnings.reasonCounts
+            )
+              .sort(([, firstCount], [, secondCount]) =>
+                secondCount - firstCount
+              )
+              .slice(0, 5)
+              .map(([code, count]) => ({ code, count }));
+
+            console.info("Work Center quote link reconciliation.", {
+              quoteCount: reconciliation.quoteCount,
+              uniqueLinkedQuoteCount: reconciliation.uniqueLinkedQuoteCount,
+              missingLinkCount: reconciliation.missingLinkCount,
+              safeIdentityMissingLinkCount:
+                reconciliation.safeIdentityMissingLinkCount,
+              coveragePercentage: reconciliation.coveragePercentage,
+              commonIdentityWarnings,
+            });
+          } catch (error) {
+            console.warn(
+              "Work Center quote reconciliation logging failed.",
+              error
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Work Center shadow quote lifecycle link failed.", error);
+    }
+
+    setQuoteHistoryVersion((version) => version + 1);
+  }
+
+
+  const acceptedQuoteReadyItems = quoteHistory.filter((quote) => {
+    if (!quote) return false;
+    const status = normalizeQuoteStatus(quote);
+    return (
       !quote.movedToActiveAt &&
-      quote.status === "accepted"
-  ).length;
+      ["accepted", "approved", "quote_approved"].includes(status)
+    );
+  });
+  const acceptedQuoteHistoryAlerts = acceptedQuoteReadyItems.length;
+  const firstAcceptedQuoteReady = acceptedQuoteReadyItems[0] || null;
 
   const revisionQuoteAlerts = quoteHistory.filter(
     (quote) =>
+      quote &&
       !quote.movedToActiveAt &&
       quote.status === "revision_requested"
   ).length;
@@ -765,6 +4962,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const quoteRevisionNotifications = professionalNotifications.filter(
     (item) => item.type === "quote_revision_requested"
   ).length;
+
+  const scheduleResponseNotifications = professionalNotifications.filter((item) =>
+    ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
+      item.type
+    )
+  );
+
+  const firstScheduleResponseNotification = scheduleResponseNotifications[0];
 
   const totalQuoteAlerts =
     acceptedQuoteHistoryAlerts +
@@ -786,23 +4991,39 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const businessCategory =
     localStorage.getItem("businessCategory") || "";
 
+  const professionalLeadMatchProfile = {
+    ...getStoredProfessionalMatchProfile(),
+    businessCategory,
+    category: businessCategory,
+  };
+
   const emergencyCategory =
     localStorage.getItem("selectedEmergencyCategory") ||
-    inferEmergencyCategory(selectedService);
+    inferRequestCategory({ service: selectedService });
 
   const canBusinessSeeEmergency =
-    canBusinessSeeCategory(businessCategory, emergencyCategory);
+    canProfessionalSeeLocalLead(
+      professionalLeadMatchProfile,
+      {
+        category: emergencyCategory,
+        service: selectedService,
+        type: "emergency",
+        isEmergency: true,
+      }
+    );
+  const hasEmergencyChatWorkflow =
+    selectedService &&
+    canBusinessSeeEmergency &&
+    ["pending", "accepted", "enroute", "arrived", "started", "completed"].includes(
+      dispatchStatus
+    );
 
-  const homeownerRequests = JSON.parse(
-    localStorage.getItem("homeownerRequests") || "[]"
-  );
+  const homeownerRequests = readMeetroArray("homeownerRequests");
 
-  const savedCompletedProjects = JSON.parse(
-    localStorage.getItem("completedProjects") || "[]"
-  );
+  const savedCompletedProjects = readMeetroArray("completedProjects");
 
   const completedHomeownerProjects = homeownerRequests
-    .filter((project) => project.status === "completed")
+    .filter((project) => project && project.status === "completed")
     .map((project) => ({
       ...project,
       revenue:
@@ -813,10 +5034,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       source: "homeownerProject",
     }));
 
-  const completedScheduleProjects = JSON.parse(
-    localStorage.getItem("meetro_business_schedule") || "[]"
-  )
-    .filter((item) => item.status === "Completed")
+  const completedScheduleProjects = readMeetroArray("meetro_business_schedule")
+    .filter((item) => item && item.status === "Completed")
     .map((item) => ({
       title: item.title,
       customer: item.location || "Customer",
@@ -830,21 +5049,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
     ...savedCompletedProjects,
     ...completedHomeownerProjects.filter(
       (project) =>
+        project &&
         !savedCompletedProjects.some(
           (saved) =>
+            saved &&
             (saved.requestId || saved.id) ===
             (project.requestId || project.id)
         )
     ),
-  ];
+  ].filter(Boolean);
 
   const completedProjectsRevenue = completedProjects.reduce(
     (sum, project) =>
       sum +
       Number(
-        project.revenue ||
-          project.acceptedQuote?.amount ||
-          project.quoteAmount ||
+        project?.revenue ||
+          project?.acceptedQuote?.amount ||
+          project?.quoteAmount ||
           0
       ),
     0
@@ -865,13 +5086,44 @@ function ContractorDashboard({ setPage, language = "en" }) {
       ? Math.round(Number(totalJobRevenue) / Number(completedJobsCount))
       : 0;
 
+  function isDirectRelationshipRequest(request = {}) {
+    return (
+      request.requestChannel === "direct" ||
+      request.visibility === "direct" ||
+      request.directRequest === true ||
+      request.isDirectRequest === true ||
+      request.source === "hire_again_direct_request"
+    );
+  }
+
+  function isDirectRequestForThisBusiness(request = {}) {
+    const businessNameValue = String(businessName || "").trim().toLowerCase();
+    const targetName = String(
+      request.targetProfessionalName ||
+        request.assignedProfessionalName ||
+        request.selectedProfessional ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    return Boolean(
+      isDirectRelationshipRequest(request) &&
+        businessNameValue &&
+        targetName &&
+        businessNameValue === targetName
+    );
+  }
+
   const pendingProjectRequests = homeownerRequests.filter(
     (request) =>
       request &&
+      !isDirectRelationshipRequest(request) &&
       request.status !== "cancelled" &&
       request.status !== "completed" &&
       request.status !== "closed" &&
-      request.status !== "declined"
+      request.status !== "declined" &&
+      canProfessionalSeeLocalLead(professionalLeadMatchProfile, request)
   );
 
   const hasPendingRequest =
@@ -882,7 +5134,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const hasJobStatus =
     selectedService &&
     canBusinessSeeEmergency &&
-    ["accepted", "enroute", "arrived", "started", "completed", "cancelled"].includes(
+    ["accepted", "enroute", "arrived", "started"].includes(
       dispatchStatus
     );
 
@@ -904,25 +5156,171 @@ function ContractorDashboard({ setPage, language = "en" }) {
       ]
     : [];
 
+  const missionPendingStatus =
+    localStorage.getItem("pendingWorkStatus") || "";
+
+  const missionChangeOrders = homeownerRequests.flatMap((project) =>
+    (project?.changeOrders || [])
+      .filter((order) => order.status === "pending_professional_review")
+      .map((order) => ({ ...order, project }))
+  );
+
+  const missionActiveContext = getActiveWorkContext();
+  const missionActiveStage = normalizeWorkflowStage(
+    missionActiveContext.stage || missionActiveContext.type
+  );
+  const missionActiveCustomer =
+    missionActiveContext.customerName ||
+    missionActiveContext.homeownerName ||
+    missionActiveContext.customer ||
+    localStorage.getItem("pendingWorkCustomer") ||
+    localStorage.getItem("activeWorkCustomer") ||
+    (activeLanguage === "es" ? "Cliente" : "Customer");
+  const missionActiveService =
+    missionActiveContext.service ||
+    missionActiveContext.title ||
+    missionActiveContext.projectTitle ||
+    localStorage.getItem("pendingWorkService") ||
+    localStorage.getItem("activeWorkService") ||
+    (activeLanguage === "es" ? "Visita de servicio" : "Service Visit");
+  const missionHasCurrentWork =
+    Boolean(missionActiveContext.id || missionActiveContext.service) &&
+    !["completed", "cancelled"].includes(missionActiveStage);
+  const missionActiveConversationId =
+    activeWorkSnapshot?.conversationId ||
+    localStorage.getItem("activeWorkConversationId") ||
+    activeJobSnapshot?.conversationId ||
+    localStorage.getItem("activeConversationId") ||
+    "";
+  const missionMaterialsBlocked =
+    materialsAlertCount > 0 ||
+    missionActiveStage === "paused_materials" ||
+    missionPendingStatus === "waiting_materials";
+
+  const missionSchedule = readMeetroArray("meetro_business_schedule");
+  const missionTodayKey = new Date().toISOString().slice(0, 10);
+  const missionTodaySchedule = missionSchedule
+    .filter(
+      (item) =>
+        item &&
+        item.status !== "Completed" &&
+        (!item.date || item.date === missionTodayKey)
+    )
+    .slice(0, 3);
+  const missionTodayAction = missionTodaySchedule[0] || null;
+  const missionActionQuote =
+    quoteHistory.find(
+      (quote) =>
+        quote &&
+        !quote.movedToActiveAt &&
+        ["accepted", "revision_requested"].includes(
+          normalizeQuoteStatus(quote)
+        )
+    ) || null;
+  const missionHasActiveJob =
+    missionHasCurrentWork &&
+    [
+      "active",
+      "quote_approved",
+      "on_the_way",
+      "arrived",
+      "working",
+      "paused_materials",
+      "waiting_customer",
+    ].includes(missionActiveStage);
+
+  const missionCurrentAction = (() => {
+    if (hasEmergencyChatWorkflow) {
+      return {
+        type: "emergency",
+        status: getStatusLabel(),
+        title: selectedService,
+        meta: translate("emergencyContinuesInChat"),
+        next: translate("openEmergencyChat"),
+        button: translate("openEmergencyChat"),
+      };
+    }
+
+    if (missionHasActiveJob) {
+      return {
+        type: "activeJob",
+        status: getWorkflowStageLabel(missionActiveStage),
+        title:
+          missionActiveContext.service || translate("activeWorkFallback"),
+        meta:
+          missionActiveContext.location || translate("locationPending"),
+        next:
+          missionActiveStage === "paused_materials"
+            ? translate("nextStepResumeMaterials")
+            : missionActiveStage === "arrived"
+            ? translate("nextStepBeginWork")
+            : missionActiveStage === "on_the_way"
+            ? translate("nextStepArrive")
+            : translate("nextStepContinueWork"),
+        button: missionActiveConversationId
+          ? translate("openChat")
+          : translate("openProject"),
+      };
+    }
+
+    if (missionTodayAction) {
+      return {
+        type: "scheduledVisit",
+        status: translate("today"),
+        title: missionTodayAction.title || translate("scheduledVisit"),
+        meta: [
+          formatScheduleTime(missionTodayAction.time),
+          missionTodayAction.location,
+        ]
+          .filter(Boolean)
+          .join(" • "),
+        next: translate("prepareJob"),
+        button: translate("prepareJob"),
+      };
+    }
+
+    if (missionActionQuote) {
+      const quoteStatus = normalizeQuoteStatus(missionActionQuote);
+
+      return {
+        type: "quote",
+        status: quoteStatusLabels[quoteStatus],
+        title:
+          missionActionQuote.projectTitle ||
+          missionActionQuote.project_title ||
+          translate("quotesNeedAction"),
+        meta:
+          missionActionQuote.homeownerName ||
+          missionActionQuote.customer ||
+          "",
+        next: translate("quotesNeedAction"),
+        button:
+          quoteStatus === "revision_requested"
+            ? translate("reviseQuoteAction")
+            : translate("createActiveJobAction"),
+      };
+    }
+
+    if (missionPendingStatus) {
+      return {
+        type: "pendingReview",
+        status: getWorkflowStageLabel("review"),
+        title:
+          localStorage.getItem("pendingWorkService") ||
+          translate("pendingOperationalReview"),
+        meta:
+          localStorage.getItem("pendingWorkLocation") ||
+          translate("pendingOperationalReview"),
+        next: translate("pendingDecisionWarning"),
+        button: translate("openPendingReview"),
+      };
+    }
+
+    return null;
+  })();
+
   function acceptEmergencyRequest() {
-    localStorage.setItem("emergencyDispatchStatus", "accepted");
-    saveActiveJobSnapshot({ status: "accepted" });
-    localStorage.setItem("activeJobStatus", "accepted");
-    localStorage.removeItem("emergencyNeedsReview");
-    localStorage.removeItem("emergencyCompletedAt");
-    localStorage.removeItem("activeCompletionJob");
-
-    localStorage.setItem(
-      "activeProfessionalId",
-      localStorage.getItem("businessName") || "Professional"
-    );
-
-    localStorage.setItem("businessAcceptedEmergency", "true");
-
-    window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
-
-    setWorkCenterReturn();
-setPage("emergencyDispatch");
+    openActiveEmergencyConversation(setPage, "contractorDashboard");
   }
 
   function declineEmergencyRequest() {
@@ -1141,6 +5539,198 @@ setPage("emergencyDispatch");
     });
   }
 
+  function openActiveWorkProject(job = {}) {
+    saveActiveJobContext(job);
+    setWorkCenterReturn();
+
+    localStorage.setItem("selectedPostId", job.id);
+    localStorage.setItem(
+      "selectedQuoteRequest",
+      JSON.stringify(job.project || job)
+    );
+    localStorage.setItem("projectDetailsReturnPage", "contractorDashboard");
+    localStorage.setItem("conversationReturnPage", "projectDetails");
+    localStorage.setItem("activeConversationId", `active-job-${job.id}`);
+    localStorage.setItem("activeConversationName", job.customer || "Customer");
+    localStorage.setItem("meetroConversationType", "activeJob");
+
+    setPage("projectDetails");
+  }
+
+  function setOperationalActiveWorkStatus(job = {}, nextStatus = "active") {
+    const jobId = job.id || job.requestId || job.jobId || `job-${Date.now()}`;
+    const nextStage = normalizeWorkflowStage(nextStatus);
+    const updatedJob = {
+      ...job,
+      id: jobId,
+      status: nextStage,
+      stage: nextStage,
+      service: job.service || job.title || "Active Job",
+      customer: job.customer || job.username || "Customer",
+      location: job.location || job.address || "",
+    };
+
+    saveActiveJobSnapshot(updatedJob);
+    saveActiveWorkSnapshot({
+      ...updatedJob,
+      requestId: job.requestId || jobId,
+      status: nextStage,
+      stage: nextStage,
+      source: job.source || "activeJob",
+    });
+
+    localStorage.setItem("activeJobId", jobId);
+    localStorage.setItem("activeJobStatus", nextStage);
+    localStorage.setItem("activeWorkStatus", nextStage);
+    localStorage.setItem("activeWorkStage", nextStage);
+    localStorage.setItem("activeWorkService", updatedJob.service);
+    localStorage.setItem("activeWorkLocation", updatedJob.location);
+
+    if (job.source === "homeownerProject") {
+      try {
+        const homeownerProjects = JSON.parse(
+          localStorage.getItem("homeownerRequests") || "[]"
+        );
+        const updatedProjects = homeownerProjects.map((project) => {
+          const projectId = project.requestId || project.id;
+          return String(projectId) === String(jobId)
+            ? { ...project, status: nextStage, workStatus: nextStage }
+            : project;
+        });
+        localStorage.setItem("homeownerRequests", JSON.stringify(updatedProjects));
+      } catch {
+        // Snapshot persistence still keeps the active work card usable.
+      }
+    }
+
+    updateProjectLifecycleState(updatedJob, nextStage, {
+      title: updatedJob.title || updatedJob.service,
+      service: updatedJob.service,
+      customerName: updatedJob.customer,
+      customer: updatedJob.customer,
+      location: updatedJob.location,
+      requestId: updatedJob.requestId || jobId,
+      conversationId: updatedJob.conversationId || job.conversationId || "",
+      scheduleId: updatedJob.scheduleId || job.scheduleId || "",
+      statusLabel: getWorkflowStageLabel(nextStage),
+    });
+
+    window.dispatchEvent(new Event("meetro-active-work-updated"));
+    window.dispatchEvent(new Event("storage"));
+    setRefreshKey((prev) => prev + 1);
+  }
+
+  function openReceiptBuilderForOperationalActiveWork(job = {}) {
+    saveActiveJobContext(job);
+    localStorage.setItem("activeJobService", job.service || job.title || translate("scheduledWork"));
+    localStorage.setItem("activeJobLocation", job.location || job.address || "");
+    localStorage.setItem("activeJobCustomer", job.customer || job.username || "");
+    localStorage.setItem("invoiceBuilderReturnPage", "workCenter");
+    localStorage.setItem("meetroWorkCenterTab", "active");
+    localStorage.setItem("activeWorkCenterTab", "active");
+    setPage("invoiceBuilder");
+  }
+
+  function getActiveWorkWorkflowPresentation(job = {}) {
+    const syncedJobStatus =
+      job.source === "homeownerProject"
+        ? localStorage.getItem("activeWorkStatus") ||
+          localStorage.getItem("activeJobStatus") ||
+          job.status
+        : job.status;
+    const normalized = normalizeWorkflowStage(
+      syncedJobStatus || "active"
+    );
+    const currentStatus =
+      normalized === "active"
+        ? activeLanguage === "es"
+          ? "Trabajo programado"
+          : "Work Scheduled"
+        : normalized === "working"
+        ? activeLanguage === "es"
+          ? "En progreso"
+          : "In Progress"
+        : normalized === "completed"
+        ? activeLanguage === "es"
+          ? "Completado"
+          : "Completed"
+        : normalized === "receipt_created"
+        ? activeLanguage === "es"
+          ? "Recibo creado"
+          : "Receipt Created"
+        : getWorkflowStageLabel(normalized);
+
+    if (["scheduled", "active", "quote_approved", "work_scheduled"].includes(normalized)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
+        nextStep: activeLanguage === "es" ? "Marcar en camino cuando salgas." : "Mark on the way when you leave.",
+        actionLabel: activeLanguage === "es" ? "En camino" : "On The Way",
+        onAction: () => setOperationalActiveWorkStatus(job, "on_the_way"),
+      };
+    }
+
+    if (normalized === "on_the_way") {
+      return {
+        statusLabel: currentStatus,
+        nextStep: translate("nextStepArrive"),
+        actionLabel: activeLanguage === "es" ? "Llegué" : "Arrived",
+        onAction: () => setOperationalActiveWorkStatus(job, "arrived"),
+      };
+    }
+
+    if (normalized === "arrived") {
+      return {
+        statusLabel: currentStatus,
+        nextStep: translate("nextStepBeginWork"),
+        actionLabel: activeLanguage === "es" ? "Comenzar trabajo" : "Start Work",
+        onAction: () => setOperationalActiveWorkStatus(job, "working"),
+      };
+    }
+
+    if (["working", "started", "in_progress"].includes(normalized)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "En progreso" : "In Progress",
+        nextStep: activeLanguage === "es" ? "Completar el trabajo cuando esté listo." : "Complete the work when ready.",
+        actionLabel: activeLanguage === "es" ? "Completar trabajo" : "Complete Work",
+        onAction: () => {
+          saveActiveJobContext(job);
+          localStorage.setItem("completionService", job.service || job.title || translate("scheduledWork"));
+          localStorage.setItem("completionLocation", job.location || job.address || "");
+          localStorage.setItem("completionSource", job.source || "active_work");
+          setPage("completionSheet");
+        },
+      };
+    }
+
+    if (["completed", "ready_for_completion"].includes(normalized)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Completado" : "Completed",
+        nextStep: activeLanguage === "es" ? "Crear factura o recibo." : "Create invoice or receipt.",
+        actionLabel: activeLanguage === "es" ? "Crear recibo" : "Create Receipt",
+        onAction: () => openReceiptBuilderForOperationalActiveWork(job),
+      };
+    }
+
+    if (["receipt_created", "invoice_created"].includes(normalized)) {
+      return {
+        statusLabel: activeLanguage === "es" ? "Recibo creado" : "Receipt Created",
+        nextStep: activeLanguage === "es" ? "Cerrar el trabajo y moverlo al historial." : "Close the job and move it to history.",
+        actionLabel: activeLanguage === "es" ? "Cerrar trabajo" : "Close Job",
+        onAction: () => {
+          setOperationalActiveWorkStatus(job, "closed");
+          openWorkTab("completed");
+        },
+      };
+    }
+
+    return {
+      statusLabel: currentStatus,
+      nextStep: getActiveJobOperationalNextAction(normalized),
+      actionLabel: activeLanguage === "es" ? "Ver detalles" : "View Details",
+      onAction: () => openActiveWorkProject(job),
+    };
+  }
+
   function setWorkCenterReturn() {
     localStorage.setItem("previousPage", "contractorDashboard");
     localStorage.setItem("returnPage", "contractorDashboard");
@@ -1149,6 +5739,84 @@ setPage("emergencyDispatch");
     localStorage.setItem("projectDetailsReturnPage", "contractorDashboard");
     localStorage.setItem("completionReturnPage", "contractorDashboard");
     localStorage.setItem("dispatchReturnPage", "contractorDashboard");
+  }
+
+  function openMissionCurrentWork() {
+    if (hasEmergencyChatWorkflow) {
+      openActiveEmergencyConversation(setPage, "contractorDashboard");
+      return;
+    }
+
+    if (missionActiveConversationId) {
+      localStorage.setItem(
+        "activeConversationId",
+        missionActiveConversationId
+      );
+      localStorage.setItem("conversationReturnPage", "contractorDashboard");
+      localStorage.setItem("meetroConversationType", "standard");
+      setPage("conversationThread");
+      return;
+    }
+
+    openWorkTab("active");
+  }
+
+  function prepareMissionScheduleItem(item) {
+    const conversationId =
+      item.projectConversationId ||
+      item.conversationId ||
+      item.requestId ||
+      "";
+
+    localStorage.setItem("pendingWorkStatus", "review");
+    localStorage.setItem("pendingWorkType", item.appointmentType || "scheduled");
+    localStorage.setItem(
+      "pendingWorkWorkflowStage",
+      item.workflowStage || "scheduling"
+    );
+    localStorage.setItem(
+      "pendingWorkWorkflowStatus",
+      item.workflowStatus || item.status || "scheduled"
+    );
+    localStorage.setItem("pendingWorkSource", item.source || "schedule");
+    localStorage.setItem(
+      "pendingWorkService",
+      item.title || translate("scheduledVisit")
+    );
+    localStorage.setItem("pendingWorkLocation", item.location || "");
+    localStorage.setItem("pendingWorkConversationId", conversationId);
+    localStorage.setItem("pendingWorkScheduleId", item.id || "");
+    localStorage.setItem("pendingWorkReason", "schedule_review");
+
+    openWorkTab("pending");
+    setRefreshKey((prev) => prev + 1);
+  }
+
+  function openMissionPriorityAction() {
+    if (!missionCurrentAction) return;
+
+    if (missionCurrentAction.type === "emergency") {
+      openActiveEmergencyConversation(setPage, "contractorDashboard");
+      return;
+    }
+
+    if (missionCurrentAction.type === "activeJob") {
+      openMissionCurrentWork();
+      return;
+    }
+
+    if (missionCurrentAction.type === "scheduledVisit") {
+      prepareMissionScheduleItem(missionTodayAction);
+      return;
+    }
+
+    if (missionCurrentAction.type === "quote") {
+      setQuoteStatusFilter(normalizeQuoteStatus(missionActionQuote));
+      openWorkTab("quotes");
+      return;
+    }
+
+    openWorkTab("pending");
   }
 
   function saveCompletedJobContext(job) {
@@ -1161,8 +5829,3815 @@ setPage("emergencyDispatch");
     localStorage.setItem("completedJobAmount", job[6]);
   }
 
+  const workCenterTodayKey = new Date().toISOString().slice(0, 10);
+  const opportunitiesCount =
+    pendingProjectRequests.length + (hasPendingRequest ? 1 : 0);
+  const hasNewWorkCenterOpportunities =
+    opportunitiesCount > 0 && opportunitiesCount > viewedOpportunityCount;
+  const upcomingScheduleCount = missionSchedule.filter((item) => {
+    const status = String(item?.status || "").toLowerCase();
+    const isFinished = ["completed", "cancelled", "canceled"].includes(status);
+    const isUpcoming = !item?.date || item.date >= workCenterTodayKey;
+
+    return !isFinished && isUpcoming;
+  }).length;
+  const quoteAttentionCount = quoteHistory.filter((quote) => {
+    if (!quote) return false;
+    const status = normalizeQuoteStatus(quote);
+
+    return (
+      !quote.movedToActiveAt &&
+      [
+        "sent",
+        "viewed",
+        "accepted",
+        "approved",
+        "quote_approved",
+        "revision_requested",
+      ].includes(status)
+    );
+  }).length;
+  const activeWorkCount = Math.max(
+    activeJobs.length,
+    missionHasCurrentWork ? 1 : 0,
+    Number(localStorage.getItem("activeJobsCount") || "0")
+  );
+  const savedJobRecordCount = Object.keys(localStorage).filter((key) => {
+    if (!key.startsWith("meetro_job_record_")) return false;
+
+    try {
+      const records = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(records) && records.length > 0;
+    } catch {
+      return false;
+    }
+  }).length;
+  const historyRecordCount = completedProjects.length + savedJobRecordCount;
+  const compactCountBadge = (count, labelKey) =>
+    `${Number(count) || 0} ${translate(labelKey)}`;
+  const closureStatusKeys = [
+    "closureStatusReady",
+    "closureStatusAwaitingCustomer",
+    "closureStatusAwaitingPayment",
+    "closureStatusAwaitingDocumentation",
+    "closureStatusAwaitingCompliance",
+    "closureStatusClosed",
+  ];
+  const hasResolvedStatus = (value) =>
+    ["complete", "completed", "confirmed", "delivered", "paid", "passed", "approved", "resolved", "not_required"].includes(
+      String(value || "").toLowerCase()
+    );
+  const buildClosureReview = (project) => {
+    const rawClosureStatus = String(
+      project?.closureStatus || project?.closure_status || ""
+    ).toLowerCase();
+    const isClosed =
+      Boolean(project?.closedAt || project?.closureDecisionRef) ||
+      rawClosureStatus === "closed";
+    const workResolved = Boolean(
+      project?.completedAt ||
+        project?.completionId ||
+        project?.completionRef ||
+        hasResolvedStatus(project?.status)
+    );
+    const customerResolved = Boolean(
+      project?.customerConfirmed === true ||
+        project?.customerConfirmationRef ||
+        project?.customerConfirmedAt ||
+        hasResolvedStatus(project?.customerConfirmationStatus)
+    );
+    const financialResolved = Boolean(
+      project?.paymentConfirmed === true ||
+        project?.paidAt ||
+        project?.paymentReceiptRef ||
+        hasResolvedStatus(project?.paymentStatus)
+    );
+    const documentationResolved = Boolean(
+      project?.documentationComplete === true ||
+        project?.documentsDeliveredAt ||
+        project?.documentationRef ||
+        (Array.isArray(project?.documentRefs) && project.documentRefs.length > 0)
+    );
+    const complianceResolved = Boolean(
+      project?.complianceComplete === true ||
+        project?.complianceRef ||
+        hasResolvedStatus(project?.complianceStatus) ||
+        hasResolvedStatus(project?.permitStatus) ||
+        hasResolvedStatus(project?.inspectionStatus)
+    );
+
+    const categories = [
+      {
+        key: "work",
+        icon: "activeWork",
+        title: translate("closureCenterCategoryWork"),
+        description: translate("closureCenterCategoryWorkDescription"),
+        resolved: workResolved,
+      },
+      {
+        key: "customer",
+        icon: "customerRelationships",
+        title: translate("closureCenterCategoryCustomer"),
+        description: translate("closureCenterCategoryCustomerDescription"),
+        resolved: customerResolved,
+      },
+      {
+        key: "financial",
+        icon: "payment",
+        title: translate("closureCenterCategoryFinancial"),
+        description: translate("closureCenterCategoryFinancialDescription"),
+        resolved: financialResolved,
+      },
+      {
+        key: "documentation",
+        icon: "reportsCenter",
+        title: translate("closureCenterCategoryDocumentation"),
+        description: translate("closureCenterCategoryDocumentationDescription"),
+        resolved: documentationResolved,
+      },
+      {
+        key: "compliance",
+        icon: "complianceCenter",
+        title: translate("closureCenterCategoryCompliance"),
+        description: translate("closureCenterCategoryComplianceDescription"),
+        resolved: complianceResolved,
+      },
+    ];
+
+    const explicitStatusMap = {
+      ready: "closureStatusReady",
+      ready_for_closure: "closureStatusReady",
+      awaiting_customer: "closureStatusAwaitingCustomer",
+      awaiting_payment: "closureStatusAwaitingPayment",
+      awaiting_documentation: "closureStatusAwaitingDocumentation",
+      awaiting_compliance: "closureStatusAwaitingCompliance",
+      closed: "closureStatusClosed",
+    };
+    let statusKey = explicitStatusMap[rawClosureStatus] || "";
+    if (isClosed) statusKey = "closureStatusClosed";
+    else if (!statusKey && !customerResolved) {
+      statusKey = "closureStatusAwaitingCustomer";
+    } else if (!statusKey && !financialResolved) {
+      statusKey = "closureStatusAwaitingPayment";
+    } else if (!statusKey && !documentationResolved) {
+      statusKey = "closureStatusAwaitingDocumentation";
+    } else if (!statusKey && !complianceResolved) {
+      statusKey = "closureStatusAwaitingCompliance";
+    } else if (!statusKey) {
+      statusKey = "closureStatusReady";
+    }
+
+    return {
+      project,
+      categories,
+      statusKey,
+      resolvedCount: categories.filter((category) => category.resolved).length,
+    };
+  };
+  const closureReviews = completedProjects.map(buildClosureReview);
+  const closureStatusCounts = closureStatusKeys.reduce((counts, statusKey) => {
+    counts[statusKey] = closureReviews.filter(
+      (review) => review.statusKey === statusKey
+    ).length;
+    return counts;
+  }, {});
+  const closureReadyCount = closureStatusCounts.closureStatusReady || 0;
+  const dashboardCustomerLabel = (record, fallback) =>
+    record?.customerName ||
+    record?.homeownerName ||
+    record?.homeowner_email ||
+    record?.customer ||
+    record?.location ||
+    fallback;
+  const firstOpportunity =
+    pendingProjectRequests[0] ||
+    (hasPendingRequest
+      ? {
+          customer: activeLanguage === "es" ? "Cliente de emergencia" : "Emergency customer",
+          title: selectedService,
+        }
+      : null);
+  const firstScheduleItem =
+    missionTodayAction ||
+    missionSchedule.find((item) => {
+      const status = String(item?.status || "").toLowerCase();
+      return !["completed", "cancelled", "canceled"].includes(status);
+    });
+  const firstActiveWorkItem =
+    activeJobs[0] ||
+    (missionHasCurrentWork
+      ? {
+          customer: missionActiveCustomer,
+          title: missionActiveService,
+          status: missionCurrentAction?.status,
+        }
+      : null);
+  const firstClosureReview = closureReviews[0];
+  const firstHistoryRecord = completedProjects[0];
+
+  const getWorkCenterJobCustomer = (record = {}) => {
+    const customerValue =
+      typeof record.customer === "string"
+        ? record.customer
+        : record.customer?.customerName || record.customer?.name;
+
+    return (
+      record.customerName ||
+      record.homeownerName ||
+      record.homeowner_email ||
+      record.homeownerEmail ||
+      customerValue ||
+      record.username ||
+      (activeLanguage === "es" ? "Cliente" : "Customer")
+    );
+  };
+
+  const getWorkCenterJobAddress = (record = {}) => {
+    const customerAddress =
+      typeof record.customer === "object" && record.customer !== null
+        ? record.customer.address
+        : "";
+
+    return (
+      record.address ||
+      record.location ||
+      record.customerAddress ||
+      customerAddress ||
+      (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+    );
+  };
+
+  const getWorkCenterJobTitle = (record = {}) =>
+    record.projectTitle ||
+    record.project_title ||
+    record.requestTitle ||
+    record.service ||
+    record.title ||
+    translate("scheduledVisit");
+
+  const getWorkCenterJobKey = (record = {}) =>
+    String(
+      record.requestId ||
+        record.projectId ||
+        record.id ||
+        record.scheduleId ||
+        record.quoteId ||
+        record.conversationId ||
+        record.projectConversationId ||
+        `${getWorkCenterJobCustomer(record)}-${getWorkCenterJobTitle(record)}`
+    );
+
+  const createWorkCenterJobBase = (record = {}) => ({
+    id: getWorkCenterJobKey(record),
+    customer: getWorkCenterJobCustomer(record),
+    title: getWorkCenterJobTitle(record),
+    address: getWorkCenterJobAddress(record),
+    conversationId: record.conversationId || record.projectConversationId || "",
+    requestId: record.requestId || record.projectId || record.id || "",
+    sourceRecords: [],
+    schedule: null,
+    quote: null,
+    active: null,
+    request: null,
+    history: null,
+  });
+
+  const getScheduleWorkflowRank = (schedule = {}) => {
+    const status = String(
+      schedule.jobStage ||
+        schedule.workStatus ||
+        schedule.status ||
+        schedule.workflowStage ||
+        schedule.workflowStatus ||
+        ""
+    ).toLowerCase();
+    const appointmentType = String(schedule.appointmentType || "").toLowerCase();
+    if (status === "closed") return 90;
+    if (["invoice_sent", "receipt_sent"].includes(status)) return 80;
+    if (["invoice_created", "receipt_created"].includes(status)) return 70;
+    if (["completed", "work_completed"].includes(status)) return 60;
+    if (["working", "arrived", "on_the_way", "en_route", "work_scheduled"].includes(status)) return 50;
+    if (appointmentType === "work" || schedule.workAppointmentId) return 45;
+    if (schedule.paymentReceivedAt || schedule.paymentStatus) return 40;
+    if (hasEvaluationForAppointment(schedule)) return 30;
+    if (appointmentType === "evaluation") return 20;
+    if (status === "scheduled") return 10;
+    return 0;
+  };
+
+  const shouldPreferScheduleRecord = (candidate = {}, current = null) => {
+    if (!current) return true;
+    const candidateRank = getScheduleWorkflowRank(candidate);
+    const currentRank = getScheduleWorkflowRank(current);
+    if (candidateRank !== currentRank) return candidateRank > currentRank;
+    return String(candidate.updatedAt || candidate.createdAt || "").localeCompare(
+      String(current.updatedAt || current.createdAt || "")
+    ) > 0;
+  };
+
+  const mergeWorkCenterJob = (jobs, record, recordType) => {
+    if (!record) return;
+    const key = getWorkCenterJobKey(record);
+    const existing = jobs.get(key) || createWorkCenterJobBase(record);
+    const nextJob = {
+      ...existing,
+      customer: existing.customer || getWorkCenterJobCustomer(record),
+      title:
+        existing.title === translate("scheduledVisit")
+          ? getWorkCenterJobTitle(record)
+          : existing.title || getWorkCenterJobTitle(record),
+      address:
+        existing.address === (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+          ? getWorkCenterJobAddress(record)
+          : existing.address || getWorkCenterJobAddress(record),
+      conversationId:
+        existing.conversationId || record.conversationId || record.projectConversationId || "",
+      requestId:
+        existing.requestId || record.requestId || record.projectId || record.id || "",
+      sourceRecords: [...existing.sourceRecords, { type: recordType, record }],
+    };
+
+    if (recordType === "schedule" && shouldPreferScheduleRecord(record, nextJob.schedule)) {
+      nextJob.schedule = record;
+    }
+    if (recordType === "quote") nextJob.quote = record;
+    if (recordType === "active") nextJob.active = record;
+    if (recordType === "request") nextJob.request = record;
+    if (recordType === "history") {
+      nextJob.history = record;
+      nextJob.schedule = nextJob.schedule || record.schedule || record.visitSchedule || null;
+      nextJob.quote = nextJob.quote || record.quote || record.proposal || null;
+      nextJob.active = nextJob.active || record.activeWork || null;
+      nextJob.request = nextJob.request || record.request || null;
+      nextJob.conversationId =
+        nextJob.conversationId || record.conversationId || record.schedule?.conversationId || "";
+      nextJob.requestId =
+        nextJob.requestId || record.requestId || record.schedule?.requestId || record.quote?.requestId || "";
+    }
+
+    jobs.set(key, nextJob);
+  };
+
+  const SARAH_JOB_STATE_ORDER = [
+    "lead",
+    "visit_scheduled",
+    "evaluation_complete",
+    "quote_created",
+    "proposal_sent",
+    "approved",
+    "payment_received",
+    "work_scheduled",
+    "en_route",
+    "arrived",
+    "working",
+    "completed",
+    "receipt_created",
+    "receipt_sent",
+    "closed",
+  ];
+
+  const SARAH_JOB_STATE_ALIASES = {
+    review: "lead",
+    new_request: "lead",
+    request: "lead",
+    lead: "lead",
+    visit_scheduled: "visit_scheduled",
+    scheduled: "visit_scheduled",
+    visit_confirmed: "visit_scheduled",
+    confirmed: "visit_scheduled",
+    evaluation_ready: "visit_scheduled",
+    evaluation_completed: "evaluation_complete",
+    evaluation_complete: "evaluation_complete",
+    proposal_created: "quote_created",
+    quote_created: "quote_created",
+    quote_ready: "quote_created",
+    proposal_sent: "proposal_sent",
+    quote_sent: "proposal_sent",
+    awaiting_approval: "proposal_sent",
+    approved: "approved",
+    accepted: "approved",
+    payment_needed: "approved",
+    deposit_needed: "approved",
+    payment_received: "payment_received",
+    deposit_received: "payment_received",
+    paid: "payment_received",
+    work_scheduled: "work_scheduled",
+    on_the_way: "en_route",
+    en_route: "en_route",
+    enroute: "en_route",
+    arrived: "arrived",
+    working: "working",
+    started: "working",
+    completed: "completed",
+    work_completed: "completed",
+    invoice_created: "receipt_created",
+    receipt_created: "receipt_created",
+    invoice_sent: "receipt_sent",
+    receipt_sent: "receipt_sent",
+    closed: "closed",
+  };
+
+  const getSarahJobStateDefinitions = () => ({
+    lead: {
+      statusLabel: activeLanguage === "es" ? "Nuevo trabajo" : "New Lead",
+      nextStep: activeLanguage === "es" ? "Programar la primera visita." : "Schedule the first visit.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("schedule_visit", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El profesional está listo para programar una visita."
+          : "The professional is ready to schedule a visit.",
+      timelineEntry: activeLanguage === "es" ? "Primer contacto" : "First contact",
+      toast: activeLanguage === "es" ? "Primer contacto guardado." : "First contact saved.",
+      storageStage: "new_request",
+      primaryActionType: "schedule_visit",
+      tone: { background: "#eef2ff", color: "#4f46e5", border: "#c7d2fe" },
+    },
+    visit_scheduled: {
+      statusLabel: activeLanguage === "es" ? "Visita confirmada" : "Visit Confirmed",
+      nextStep: activeLanguage === "es" ? "Registrar notas de evaluación." : "Record Evaluation Notes.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("start_evaluation", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La visita fue programada."
+          : "The visit has been scheduled.",
+      timelineEntry: activeLanguage === "es" ? "Visita programada" : "Visit scheduled",
+      toast: activeLanguage === "es" ? "Visita programada." : "Visit scheduled.",
+      storageStage: "visit_scheduled",
+      primaryActionType: "start_evaluation",
+      tone: { background: "#eef2ff", color: "#4f46e5", border: "#c7d2fe" },
+    },
+    evaluation_complete: {
+      statusLabel: activeLanguage === "es" ? "Evaluación completada" : "Evaluation Complete",
+      nextStep: activeLanguage === "es" ? "Crear una propuesta para el cliente." : "Create the customer proposal.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("create_proposal", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La evaluación fue completada. La propuesta será preparada."
+          : "The evaluation is complete. The proposal will be prepared.",
+      timelineEntry: activeLanguage === "es" ? "Evaluación completada" : "Evaluation complete",
+      toast: activeLanguage === "es" ? "Evaluación guardada." : "Evaluation saved.",
+      storageStage: "evaluation_completed",
+      primaryActionType: "create_proposal",
+      tone: { background: "#faf5ff", color: "#7e22ce", border: "#e9d5ff" },
+    },
+    quote_created: {
+      statusLabel: activeLanguage === "es" ? "Propuesta creada" : "Proposal Created",
+      nextStep: activeLanguage === "es" ? "Enviar la propuesta al cliente." : "Send the proposal to the customer.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("send_proposal", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La propuesta está lista para revisión."
+          : "The proposal is ready for review.",
+      timelineEntry: activeLanguage === "es" ? "Propuesta creada" : "Proposal created",
+      toast: activeLanguage === "es" ? "Propuesta creada." : "Proposal created.",
+      storageStage: "proposal_created",
+      primaryActionType: "send_proposal",
+      tone: { background: "#faf5ff", color: "#7e22ce", border: "#e9d5ff" },
+    },
+    proposal_sent: {
+      statusLabel:
+        activeLanguage === "es"
+          ? "Esperando aprobación del cliente"
+          : "Waiting for customer approval",
+      nextStep:
+        activeLanguage === "es"
+          ? "El cliente revisa y aprueba la propuesta."
+          : "Customer reviews and approves the proposal.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("open_conversation", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La propuesta fue enviada para revisión."
+          : "The proposal has been sent for review.",
+      timelineEntry: activeLanguage === "es" ? "Propuesta enviada" : "Proposal sent",
+      toast: activeLanguage === "es" ? "Propuesta enviada." : "Proposal sent.",
+      storageStage: "proposal_sent",
+      primaryActionType: "open_conversation",
+      tone: { background: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe" },
+    },
+    approved: {
+      statusLabel: activeLanguage === "es" ? "Aprobado" : "Approved",
+      nextStep: activeLanguage === "es" ? "Registrar pago o depósito." : "Record payment or deposit.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("record_payment", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La propuesta fue aprobada."
+          : "The proposal has been approved.",
+      timelineEntry: activeLanguage === "es" ? "Aprobado" : "Approved",
+      toast: activeLanguage === "es" ? "Aprobación guardada." : "Approval saved.",
+      storageStage: "approved",
+      primaryActionType: "record_payment",
+      tone: { background: "#ecfdf5", color: "#047857", border: "#bbf7d0" },
+    },
+    payment_received: {
+      statusLabel: activeLanguage === "es" ? "Pago recibido" : "Payment Received",
+      nextStep: activeLanguage === "es" ? "Programar la fecha del trabajo." : "Schedule the work date.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("schedule_work", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El pago fue recibido. El trabajo puede programarse."
+          : "Payment has been received. Work can be scheduled.",
+      timelineEntry: activeLanguage === "es" ? "Pago recibido" : "Payment received",
+      toast: activeLanguage === "es" ? "Pago guardado." : "Payment saved.",
+      storageStage: "payment_received",
+      primaryActionType: "schedule_work",
+      tone: { background: "#f0fdfa", color: "#0f766e", border: "#99f6e4" },
+    },
+    work_scheduled: {
+      statusLabel: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
+      nextStep: activeLanguage === "es" ? "Ir en camino cuando sea hora." : "Go on the way when it is time.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("mark_en_route", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El trabajo fue programado."
+          : "The work has been scheduled.",
+      timelineEntry: activeLanguage === "es" ? "Trabajo programado" : "Work scheduled",
+      toast: activeLanguage === "es" ? "Trabajo programado." : "Work scheduled.",
+      storageStage: "work_scheduled",
+      primaryActionType: "mark_en_route",
+      tone: { background: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe" },
+    },
+    en_route: {
+      statusLabel: activeLanguage === "es" ? "En camino" : "On The Way",
+      nextStep: activeLanguage === "es" ? "Marcar llegada al sitio." : "Mark arrived at the site.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("mark_arrived", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El profesional está en camino."
+          : "Professional is on the way.",
+      timelineEntry: activeLanguage === "es" ? "En camino" : "On the way",
+      toast: activeLanguage === "es" ? "En camino guardado." : "On the way saved.",
+      storageStage: "on_the_way",
+      primaryActionType: "mark_arrived",
+      tone: { background: "#eef2ff", color: "#2563eb", border: "#bfdbfe" },
+    },
+    arrived: {
+      statusLabel: activeLanguage === "es" ? "Llegó" : "Arrived",
+      nextStep: activeLanguage === "es" ? "Comenzar el trabajo." : "Start work.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("start_work", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El profesional llegó y comenzará pronto."
+          : "Professional has arrived and will begin shortly.",
+      timelineEntry: activeLanguage === "es" ? "Llegó" : "Arrived",
+      toast: activeLanguage === "es" ? "Llegada guardada." : "Arrived saved.",
+      storageStage: "arrived",
+      primaryActionType: "start_work",
+      tone: { background: "#ecfdf5", color: "#047857", border: "#bbf7d0" },
+    },
+    working: {
+      statusLabel: activeLanguage === "es" ? "Trabajando" : "Working",
+      nextStep: activeLanguage === "es" ? "Finalizar el trabajo cuando esté listo." : "Finish the job when ready.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("complete_work", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El trabajo está en progreso."
+          : "Work is now in progress.",
+      timelineEntry: activeLanguage === "es" ? "Trabajo iniciado" : "Work started",
+      toast: activeLanguage === "es" ? "Trabajo iniciado." : "Work started.",
+      storageStage: "working",
+      primaryActionType: "complete_work",
+      tone: { background: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+    },
+    completed: {
+      statusLabel: activeLanguage === "es" ? "Completado" : "Completed",
+      nextStep: activeLanguage === "es" ? "Crear factura o recibo." : "Create invoice or receipt.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("create_receipt", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El trabajo se completó. La factura o recibo se enviará pronto."
+          : "Work has been completed. Invoice/receipt will be sent shortly.",
+      timelineEntry: activeLanguage === "es" ? "Trabajo completado" : "Work completed",
+      toast: activeLanguage === "es" ? "Trabajo completado." : "Work completed.",
+      storageStage: "completed",
+      primaryActionType: "create_receipt",
+      tone: { background: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+    },
+    receipt_created: {
+      statusLabel: activeLanguage === "es" ? "Recibo listo" : "Receipt Ready",
+      nextStep: activeLanguage === "es" ? "Enviar factura o recibo." : "Send invoice or receipt.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("send_receipt", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La factura o recibo está listo para enviarse."
+          : "Invoice/receipt is ready to send.",
+      timelineEntry: activeLanguage === "es" ? "Recibo creado" : "Receipt created",
+      toast: activeLanguage === "es" ? "Recibo creado." : "Receipt created.",
+      storageStage: "invoice_created",
+      primaryActionType: "send_receipt",
+      tone: { background: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+    },
+    receipt_sent: {
+      statusLabel: activeLanguage === "es" ? "Recibo enviado" : "Invoice / Receipt Sent",
+      nextStep: activeLanguage === "es" ? "Cerrar el trabajo." : "Close the job.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("close_job", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "La factura o recibo fue enviado."
+          : "Invoice/receipt has been sent.",
+      timelineEntry: activeLanguage === "es" ? "Recibo enviado" : "Receipt sent",
+      toast: activeLanguage === "es" ? "Recibo enviado." : "Receipt sent.",
+      storageStage: "invoice_sent",
+      primaryActionType: "close_job",
+      tone: { background: "#f0fdfa", color: "#0f766e", border: "#99f6e4" },
+    },
+    closed: {
+      statusLabel: activeLanguage === "es" ? "Cerrado" : "Closed",
+      nextStep: activeLanguage === "es" ? "Revisar historial del trabajo." : "View the job history.",
+      primaryButton: getWorkCenterPrimaryCtaLabel("view_history", activeLanguage),
+      customerNotification:
+        activeLanguage === "es"
+          ? "El trabajo se completó y cerró. La documentación final está disponible."
+          : "Job has been completed and closed. Final documentation is available.",
+      timelineEntry: activeLanguage === "es" ? "Trabajo cerrado" : "Job closed",
+      toast:
+        activeLanguage === "es"
+          ? "Trabajo cerrado y movido al historial."
+          : "Job closed and moved to Work History.",
+      storageStage: "closed",
+      primaryActionType: "view_history",
+      tone: { background: "#f1f5f9", color: "#475569", border: "#cbd5e1" },
+    },
+  });
+
+  const normalizeSarahJobStateKey = (stage = "") => {
+    const normalized = String(stage || "").trim().toLowerCase();
+    return SARAH_JOB_STATE_ALIASES[normalized] || normalized || "lead";
+  };
+
+  const getSarahJobStateKey = (job = {}) =>
+    normalizeSarahJobStateKey(getWorkCenterJobStage(job));
+
+  const getSarahJobStateDefinition = (jobOrStage = {}) => {
+    const definitions = getSarahJobStateDefinitions();
+    const key =
+      typeof jobOrStage === "string"
+        ? normalizeSarahJobStateKey(jobOrStage)
+        : getSarahJobStateKey(jobOrStage);
+    return definitions[key] || definitions.lead;
+  };
+
+  const getWorkCenterJobStatus = (job = {}) =>
+    getSarahJobStateDefinition(job).statusLabel;
+
+  const getWorkCenterJobNextStep = (job = {}) =>
+    getSarahJobStateDefinition(job).nextStep;
+
+  const getWorkCenterJobPrimaryAction = (job = {}) =>
+    getSarahJobStateDefinition(job).primaryButton;
+
+  const getWorkCenterJobStatusTone = (job = {}) =>
+    getSarahJobStateDefinition(job).tone;
+
+  const resolveCustomerJobWorkflowState = (job = {}) => {
+    const stateKey = getSarahJobStateKey(job);
+    const state = getSarahJobStateDefinition(job);
+    const externalCustomer = isExternalCustomerJob(job);
+    const schedulePending = isCustomerResponsePending(job.schedule || {});
+    const isVisitAwaitingCustomer =
+      stateKey === "visit_scheduled" && schedulePending;
+    const isWorkDateAwaitingCustomer =
+      stateKey === "work_scheduled" && schedulePending;
+    const appointmentSummary = getWorkCenterScheduleSummary(job);
+    const paymentSummary = getWorkCenterPaymentSummary(job);
+    const paymentType = String(
+      job.quote?.paymentType ||
+        job.schedule?.paymentType ||
+        job.quote?.paymentRecord?.paymentType ||
+        job.schedule?.paymentRecord?.paymentType ||
+        ""
+    ).toLowerCase();
+    const photoCount = getWorkCenterJobPhotos(job).length;
+    const services = job.title || getWorkCenterJobTitle(job);
+    const supportingSummary = [];
+
+    if (["visit_scheduled", "work_scheduled", "en_route", "arrived"].includes(stateKey)) {
+      supportingSummary.push({
+        label: activeLanguage === "es" ? "Cita" : "Appointment",
+        value: appointmentSummary,
+      });
+    }
+
+    if (["approved", "payment_received", "completed", "receipt_created", "receipt_sent", "closed"].includes(stateKey)) {
+      supportingSummary.push({
+        label: activeLanguage === "es" ? "Pago" : "Payment",
+        value: paymentSummary,
+      });
+    }
+
+    if (services) {
+      supportingSummary.push({
+        label: activeLanguage === "es" ? "Servicio" : "Service",
+        value: services,
+      });
+    }
+
+    if (photoCount > 0 && ["evaluation_complete", "quote_created", "proposal_sent", "approved", "payment_received", "closed"].includes(stateKey)) {
+      supportingSummary.push({
+        label: activeLanguage === "es" ? "Fotos" : "Photos",
+        value:
+          activeLanguage === "es"
+            ? `${photoCount} guardadas`
+            : `${photoCount} saved`,
+      });
+    }
+
+    return {
+      stateKey,
+      statusLabel:
+        isWorkDateAwaitingCustomer
+          ? activeLanguage === "es"
+            ? "Esperando confirmación de fecha de trabajo"
+            : "Waiting For Work Date Confirmation"
+          : isVisitAwaitingCustomer
+          ? activeLanguage === "es"
+            ? "Esperando confirmación del cliente"
+            : "Waiting For Customer Confirmation"
+          : stateKey === "payment_received" && paymentType === "deposit"
+            ? activeLanguage === "es"
+              ? "Depósito recibido"
+              : "Deposit Received"
+          : stateKey === "payment_received" && paymentType === "full"
+            ? activeLanguage === "es"
+              ? "Pagado completo"
+              : "Paid In Full"
+          : state.statusLabel,
+      nextActionLabel:
+        isVisitAwaitingCustomer || isWorkDateAwaitingCustomer
+          ? externalCustomer
+            ? activeLanguage === "es"
+              ? "Registra la respuesta externa del cliente."
+              : "Record the external customer response."
+            : activeLanguage === "es"
+              ? "El cliente puede confirmar o pedir otro horario en Meetro."
+              : "Customer can confirm or request a different time in Meetro."
+          : state.nextStep,
+      primaryButtonLabel: state.primaryButton,
+      primaryActionType: state.primaryActionType,
+      awaitingCustomerResponse:
+        !externalCustomer && (isVisitAwaitingCustomer || isWorkDateAwaitingCustomer),
+      customerNotification: state.customerNotification,
+      timelineEntry: state.timelineEntry,
+      tone: state.tone,
+      supportingSummary,
+    };
+  };
+
+  const getWorkCenterJobListPresentation = (job = {}) => {
+    const baseState = getSarahJobStateDefinition(job);
+    return createWorkCenterJobListPresentation(resolveCustomerJobWorkflowState(job), {
+      statusLabel: baseState.statusLabel,
+      nextStepLabel: baseState.nextStep,
+    });
+  };
+
+  const getWorkCenterJobProgressItems = (job = {}) => {
+    const stage = String(normalizeSarahJobStateKey(getWorkCenterJobStage(job)) || "").toLowerCase();
+    const statusText = [
+      stage,
+      job.status,
+      job.schedule?.status,
+      job.schedule?.workflowStage,
+      job.quote?.status,
+      job.quote?.workflowStatus,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const hasAny = (...tokens) => tokens.some((token) => statusText.includes(token));
+    const hasSchedule = Boolean(job.schedule) || hasAny("scheduled", "visit");
+    const hasEvaluation =
+      Boolean(job.schedule?.evaluation || job.schedule?.evaluationNotes || job.evaluation) ||
+      hasAny("evaluation", "quote", "proposal", "payment", "work", "closed");
+    const hasQuote = Boolean(job.quote) || hasAny("quote", "proposal", "payment", "work", "closed");
+    const hasWork = Boolean(job.active) || hasAny("work", "active", "completed", "closed");
+
+    return [
+      { label: activeLanguage === "es" ? "Visita" : "Visit", done: hasSchedule },
+      { label: activeLanguage === "es" ? "Evaluación" : "Evaluation", done: hasEvaluation },
+      { label: activeLanguage === "es" ? "Propuesta" : "Proposal", done: hasQuote },
+      { label: activeLanguage === "es" ? "Trabajo" : "Work", done: hasWork },
+    ];
+  };
+
+  const isExternalCustomerJob = (job = {}) => {
+    const conversationId =
+      job.conversationId ||
+      job.schedule?.conversationId ||
+      job.quote?.conversationId ||
+      job.history?.conversationId ||
+      "";
+    const scheduleSource = String(job.schedule?.source || "").toLowerCase();
+    const customer = job.schedule?.customer || job.customer || {};
+    return Boolean(
+      !conversationId ||
+        scheduleSource === "manual_customer_entry" ||
+        scheduleSource === "manual" ||
+        job.schedule?.deliveryMethod === "external_prepared" ||
+        job.quote?.deliveryMethod === "external_prepared" ||
+        job.schedule?.isMeetroUser === false ||
+        customer?.isMeetroUser === false
+    );
+  };
+
+  const isCustomerResponsePending = (record = {}) => {
+    const status = String(
+      record.customerConfirmationStatus ||
+        record.confirmationStatus ||
+        record.customerResponseStatus ||
+        ""
+    ).toLowerCase();
+    return !status || status.includes("pending") || status.includes("waiting");
+  };
+
+  const getExternalCustomerManualActions = (job = {}, workflowState = {}) => {
+    if (!isExternalCustomerJob(job)) return [];
+
+    const stateKey = workflowState.stateKey || getSarahJobStateKey(job);
+    const schedulePending = isCustomerResponsePending(job.schedule || {});
+    const quoteResponse = String(
+      job.quote?.customerResponseStatus || job.quote?.revisionStatus || ""
+    ).toLowerCase();
+
+    if (stateKey === "visit_scheduled" && schedulePending) {
+      return [
+        { type: "visit_confirmed", label: activeLanguage === "es" ? "Marcar visita confirmada" : "Mark Visit Confirmed" },
+        { type: "reschedule_visit", label: activeLanguage === "es" ? "Reprogramar visita" : "Reschedule Visit" },
+        { type: "visit_waiting", label: activeLanguage === "es" ? "Esperando al cliente" : "Waiting For Customer" },
+      ];
+    }
+
+    if (stateKey === "proposal_sent") {
+      return [
+        { type: "proposal_approved", label: activeLanguage === "es" ? "Marcar aprobado" : "Mark Approved" },
+        { type: "proposal_changes_requested", label: activeLanguage === "es" ? "Pidió cambios" : "Requested Changes" },
+        { type: "proposal_waiting", label: activeLanguage === "es" ? "Sigue esperando" : "Still Waiting" },
+      ];
+    }
+
+    if (stateKey === "work_scheduled" && schedulePending) {
+      return [
+        { type: "work_date_confirmed", label: activeLanguage === "es" ? "Confirmar fecha de trabajo" : "Mark Work Date Confirmed" },
+        { type: "reschedule_work", label: activeLanguage === "es" ? "Reprogramar trabajo" : "Reschedule Work" },
+        { type: "work_waiting", label: activeLanguage === "es" ? "Sigue esperando" : "Still Waiting" },
+      ];
+    }
+
+    if (
+      stateKey === "receipt_created" &&
+      job.schedule?.receiptDeliveryStatus === "external_send_prepared"
+    ) {
+      return [
+        { type: "mark_receipt_sent", label: activeLanguage === "es" ? "Marcar recibo enviado externamente" : "Mark Receipt Sent Externally" },
+      ];
+    }
+
+    return [];
+  };
+
+  const hasCustomerJobReachedState = (stateKey = "", targetState = "") => {
+    const currentIndex = SARAH_JOB_STATE_ORDER.indexOf(normalizeSarahJobStateKey(stateKey));
+    const targetIndex = SARAH_JOB_STATE_ORDER.indexOf(normalizeSarahJobStateKey(targetState));
+    return currentIndex >= 0 && targetIndex >= 0 && currentIndex >= targetIndex;
+  };
+
+  const getCustomerJobSupportingLinks = (job = {}, workflowState = {}) => {
+    const stateKey = workflowState.stateKey || getSarahJobStateKey(job);
+    const links = [
+      {
+        label: activeLanguage === "es" ? "Conversación" : "Conversation",
+        view: "conversation",
+      },
+    ];
+
+    if (getWorkCenterJobPhotos(job).length > 0) {
+      links.push({
+        label: activeLanguage === "es" ? "Fotos" : "Photos",
+        view: "photos",
+      });
+    }
+
+    if (job.schedule || hasCustomerJobReachedState(stateKey, "visit_scheduled")) {
+      links.push({
+        label: activeLanguage === "es" ? "Cita" : "Schedule",
+        view: "schedule",
+      });
+    }
+
+    if (hasCustomerJobReachedState(stateKey, "evaluation_complete")) {
+      links.push({
+        label: activeLanguage === "es" ? "Evaluación" : "Evaluation Notes",
+        view: "evaluation",
+      });
+    }
+
+    if (job.quote || hasCustomerJobReachedState(stateKey, "quote_created")) {
+      links.push({
+        label: activeLanguage === "es" ? "Propuesta" : "Proposal",
+        view: "quote",
+      });
+    }
+
+    if (hasCustomerJobReachedState(stateKey, "approved")) {
+      links.push({
+        label: activeLanguage === "es" ? "Pago" : "Payment",
+        view: "payments",
+      });
+    }
+
+    if (hasCustomerJobReachedState(stateKey, "receipt_created")) {
+      links.push({
+        label: activeLanguage === "es" ? "Recibo" : "Receipt",
+        view: "quote",
+      });
+    }
+
+    if (stateKey === "closed" || job.history) {
+      links.push({
+        label: activeLanguage === "es" ? "Historial" : "History",
+        view: "history",
+      });
+    }
+
+    return links;
+  };
+
+  const getWorkCenterPaymentSummary = (job = {}) => {
+    const total = getWorkCenterJobFinalTotal(job);
+    const paymentReceived = Boolean(
+      job.quote?.paymentReceivedAt ||
+        job.quote?.depositPaidAt ||
+        job.quote?.paidAt ||
+        job.schedule?.paymentReceivedAt ||
+        job.history?.payments?.paymentReceivedAt
+    );
+    const paymentLabel = paymentReceived
+      ? activeLanguage === "es"
+        ? "Pagado"
+        : "Paid"
+      : activeLanguage === "es"
+        ? "Pendiente"
+        : "Pending";
+
+    return total > 0 ? `${paymentLabel} • $${total.toFixed(2)}` : paymentLabel;
+  };
+
+  const getWorkCenterScheduleSummary = (job = {}) => {
+    const schedule = job.schedule || job.history?.schedule || job.history?.visitSchedule || {};
+    const date = schedule.date || schedule.workDate || "";
+    const time = schedule.time || schedule.workTime || "";
+    if (!date && !time) return activeLanguage === "es" ? "No programado" : "Not scheduled";
+    return `${date || ""}${date && time ? " • " : ""}${time ? formatScheduleTime(time) : ""}`;
+  };
+
+  const getWorkflowActionMeta = (nextStage = "") => {
+    const customerSent =
+      activeLanguage === "es" ? "Actualización enviada al cliente." : "Customer update sent.";
+    const customerPrepared =
+      activeLanguage === "es" ? "Actualización preparada para el cliente." : "Customer update prepared.";
+
+    const state = getSarahJobStateDefinition(nextStage);
+    return {
+      label: state.timelineEntry || state.statusLabel,
+      toast:
+        state.toast ||
+        (activeLanguage === "es" ? "Estado guardado." : "Status saved."),
+      customerSent,
+      customerPrepared,
+    };
+  };
+
+  const getWorkCenterJobStage = (job = {}) => {
+    const quoteStatus = normalizeQuoteStatus(job.quote || {});
+    const scheduleStatus = String(
+      job.schedule?.jobStage ||
+        job.schedule?.workStatus ||
+        job.schedule?.status ||
+        job.schedule?.workflowStatus ||
+        ""
+    ).toLowerCase();
+    const invoiceStatus = String(job.schedule?.invoiceStatus || job.quote?.invoiceStatus || "").toLowerCase();
+    const isPaid = Boolean(
+      job.schedule?.paymentReceivedAt ||
+        job.quote?.paymentReceivedAt ||
+        job.quote?.depositPaidAt ||
+        job.quote?.paidAt ||
+        job.quote?.paymentStatus === "paid" ||
+        job.quote?.paymentStatus === "deposit_received"
+    );
+
+    if (
+      job.type === "closed_job" ||
+      job.history?.type === "closed_job" ||
+      job.closedAt ||
+      job.closeDate ||
+      job.closureStatus === "closed" ||
+      job.status === "closed" ||
+      job.history?.closedAt ||
+      job.history?.closeDate ||
+      job.history?.closureStatus === "closed" ||
+      job.schedule?.closedAt ||
+      job.schedule?.jobStage === "closed"
+    ) return "closed";
+    if (invoiceStatus === "sent") return "invoice_sent";
+    if (invoiceStatus === "created") return "invoice_created";
+    if (["completed", "work_completed"].includes(scheduleStatus)) return "completed";
+    if (["working", "started"].includes(scheduleStatus)) return "working";
+    if (scheduleStatus === "arrived") return "arrived";
+    if (["on_the_way", "enroute"].includes(scheduleStatus)) return "on_the_way";
+    if (scheduleStatus === "work_scheduled" || job.active) return "work_scheduled";
+    if (isPaid) return "payment_received";
+    if (["accepted", "approved", "quote_approved"].includes(quoteStatus)) return "approved";
+    if (["sent", "viewed"].includes(quoteStatus)) return "proposal_sent";
+    if (job.quote) return "proposal_created";
+    if (job.schedule && hasEvaluationForAppointment(job.schedule)) return "evaluation_completed";
+    if (job.schedule) return "visit_scheduled";
+    if (job.request) return "new_request";
+    return "review";
+  };
+
+  const getWorkCenterJobTimeline = (job = {}) => {
+    const stage = getSarahJobStateKey(job);
+    const definitions = getSarahJobStateDefinitions();
+    const stageIndex = SARAH_JOB_STATE_ORDER.indexOf(stage);
+    const isDone = (stateKey) => {
+      const targetIndex = SARAH_JOB_STATE_ORDER.indexOf(stateKey);
+      if (targetIndex === -1) return false;
+      if (stageIndex === -1) return false;
+      return stageIndex >= targetIndex;
+    };
+
+    return SARAH_JOB_STATE_ORDER.map((stateKey) => {
+      const state = definitions[stateKey];
+      return {
+        key: state.storageStage || stateKey,
+        state: stateKey,
+        label: state.timelineEntry || state.statusLabel,
+        done: isDone(stateKey),
+      };
+    });
+  };
+
+  const getWorkCenterJobSavedTimelineEvents = (job = {}) => {
+    const sources = [
+      job.schedule?.jobTimelineEvents,
+      job.schedule?.timelineEvents,
+      job.history?.jobTimelineEvents,
+      job.history?.timelineEvents,
+    ];
+    const events = sources.find((source) => Array.isArray(source)) || [];
+    return events.filter(Boolean);
+  };
+
+  const formatJobTimelineEventTime = (timestamp) => {
+    if (!timestamp) return activeLanguage === "es" ? "Guardado" : "Saved";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return activeLanguage === "es" ? "Guardado" : "Saved";
+    return formatDateTimeDisplay(timestamp);
+  };
+
+  const getWorkCenterJobWorkItems = (job = {}) => {
+    const schedule = job.schedule || {};
+    const evaluation = schedule.evaluation || {};
+    if (Array.isArray(evaluation.workItems)) return evaluation.workItems;
+    if (Array.isArray(schedule.workItems)) return schedule.workItems;
+    if (Array.isArray(schedule.evaluationItems)) return schedule.evaluationItems;
+    if (Array.isArray(job.quote?.workItems)) return job.quote.workItems;
+    return [];
+  };
+
+  const getWorkCenterJobPhotos = (job = {}) => {
+    const schedulePhotos = Array.isArray(job.schedule?.evaluationPhotos)
+      ? job.schedule.evaluationPhotos
+      : [];
+    const workItemPhotos = getWorkCenterJobWorkItems(job).flatMap((workItem) =>
+      Array.isArray(workItem.photos) ? workItem.photos : []
+    );
+    return [...schedulePhotos, ...workItemPhotos];
+  };
+
+  const getWorkCenterJobMaterials = (job = {}) =>
+    getWorkCenterJobWorkItems(job).flatMap((workItem) =>
+      (Array.isArray(workItem.materials) ? workItem.materials : []).map((material) => ({
+        ...material,
+        workItemTitle: workItem.title || "",
+      }))
+    );
+
+  const getHistoryEvaluation = (job = {}) =>
+    job.history?.evaluation || job.schedule?.evaluation || job.evaluation || {};
+
+  const getHistoryFindings = (job = {}) => {
+    const evaluation = getHistoryEvaluation(job);
+    if (Array.isArray(evaluation.findings)) return evaluation.findings;
+    if (Array.isArray(job.history?.findings)) return job.history.findings;
+    if (Array.isArray(job.schedule?.evaluationStructuredFindings)) {
+      return job.schedule.evaluationStructuredFindings;
+    }
+    return [];
+  };
+
+  const getHistoryServiceRecommendations = (job = {}) => {
+    const evaluation = getHistoryEvaluation(job);
+    if (Array.isArray(evaluation.serviceRecommendations)) {
+      return evaluation.serviceRecommendations;
+    }
+    if (Array.isArray(job.history?.serviceRecommendations)) {
+      return job.history.serviceRecommendations;
+    }
+    if (Array.isArray(job.schedule?.serviceRecommendations)) {
+      return job.schedule.serviceRecommendations;
+    }
+    return [];
+  };
+
+  const getHistoryEvaluationNotes = (job = {}) => {
+    const evaluation = getHistoryEvaluation(job);
+    return (
+      evaluation.notes ||
+      evaluation.visitNotes ||
+      evaluation.findingsNotes ||
+      job.history?.evaluationNotes ||
+      job.schedule?.evaluationNotes ||
+      ""
+    );
+  };
+
+  const getHistoryCompletionNotes = (job = {}) =>
+    job.history?.completion?.notes ||
+    job.history?.completionNotes ||
+    job.schedule?.completionNotes ||
+    "";
+
+  const getHistoryClosureNotes = (job = {}) =>
+    job.history?.closureNotes || job.schedule?.closureNotes || "";
+
+  const getHistoryReceiptSummary = (job = {}) =>
+    job.history?.receipt?.status ||
+    job.history?.invoice?.receipt?.status ||
+    job.schedule?.receipt?.status ||
+    job.schedule?.receiptStatus ||
+    job.schedule?.invoiceStatus ||
+    "";
+
+  const getHistoryDocumentDate = (job = {}) =>
+    job.history?.closeDate ||
+    job.history?.closedAt ||
+    job.schedule?.closedAt ||
+    job.schedule?.date ||
+    "";
+
+  const getHistoryFindingLabel = (finding = {}) => {
+    if (typeof finding === "string") return finding;
+    return finding.title || finding.description || finding.findingType || finding.id || "";
+  };
+
+  const getHistoryServiceRecommendationLabel = (service = {}) => {
+    if (typeof service === "string") return service;
+    return service.title || service.name || service.serviceType || service.id || "";
+  };
+
+  const formatHistoryList = (items = [], getLabel = (item) => item) => {
+    const labels = items.map(getLabel).filter(Boolean);
+    return labels.length > 0 ? labels.join(", ") : "—";
+  };
+
+  const formatHistoryBulletList = (items = [], getLabel = (item) => item) => {
+    const labels = items.map(getLabel).filter(Boolean);
+    return labels.length > 0 ? labels.map((label) => `* ${label}`).join("\n") : "—";
+  };
+
+  const buildJobHistoryReportText = (job = {}) => {
+    const evaluation = getHistoryEvaluation(job);
+    const quote = job.quote || job.history?.quote || job.history?.proposal || {};
+    const findings = getHistoryFindings(job);
+    const serviceRecommendations = getHistoryServiceRecommendations(job);
+    const timeline = getWorkCenterJobSavedTimelineEvents(job)
+      .map((event) => event.label || event.stage)
+      .filter(Boolean)
+      .join(" -> ");
+
+    return [
+      "Meetro Job History Report",
+      "",
+      `Customer: ${job.customer || getWorkCenterJobCustomer(job)}`,
+      `Job: ${job.title || getWorkCenterJobTitle(job)}`,
+      `Address: ${job.address || getWorkCenterJobAddress(job)}`,
+      `Date: ${getHistoryDocumentDate(job) || "—"}`,
+      `Status: Closed`,
+      "",
+      "Evaluation Summary",
+      `Service Type: ${evaluation.serviceType || job.serviceType || "—"}`,
+      `Context: ${evaluation.context || job.context || "—"}`,
+      `Evaluation Notes: ${getHistoryEvaluationNotes(job) || "—"}`,
+      `Template Requirements:\n${formatHistoryBulletList(evaluation.templateRequirements || [])}`,
+      `Photos: ${getWorkCenterJobPhotos(job).length}`,
+      "",
+      "Findings",
+      formatHistoryBulletList(findings, getHistoryFindingLabel),
+      "",
+      "Service Recommendations",
+      formatHistoryBulletList(serviceRecommendations, getHistoryServiceRecommendationLabel),
+      "",
+      `Proposal Summary: ${
+        Object.keys(quote).length > 0
+          ? `$${getQuoteTotalAmount(quote).toFixed(2)}`
+          : "No quote saved for this job."
+      }`,
+      `Payment Summary: ${getWorkCenterPaymentSummary(job)}`,
+      `Invoice / Receipt Summary: ${getHistoryReceiptSummary(job) || "No invoice saved for this job."}`,
+      "",
+      "Completion Summary",
+      `Completion Notes: ${getHistoryCompletionNotes(job) || "—"}`,
+      `Closure Notes: ${getHistoryClosureNotes(job) || "—"}`,
+      `Timeline: ${timeline || "—"}`,
+    ].join("\n");
+  };
+
+  const copyHistoryDocumentText = async (text, successMessage) => {
+    if (!navigator.clipboard?.writeText) {
+      setHistoryActionNotice(text);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setHistoryActionNotice(successMessage);
+    } catch {
+      setHistoryActionNotice(text);
+    }
+  };
+
+  const shareHistoryDocumentText = async ({ title, text }) => {
+    try {
+      await Share.share({
+        title,
+        text,
+        dialogTitle: title,
+      });
+      setHistoryActionNotice(
+        activeLanguage === "es" ? "Documento listo para compartir." : "Document ready to share."
+      );
+      return;
+    } catch {
+      // Fall through to browser share/copy fallback.
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text });
+        setHistoryActionNotice(
+          activeLanguage === "es" ? "Documento listo para compartir." : "Document ready to share."
+        );
+        return;
+      }
+    } catch {
+      // Fall through to copy fallback.
+    }
+
+    await copyHistoryDocumentText(
+      text,
+      activeLanguage === "es"
+        ? "Resumen copiado."
+        : "Summary copied."
+    );
+  };
+
+  const printJobHistoryReport = (job = {}) => {
+    const text = buildJobHistoryReportText(job);
+    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!printWindow) {
+      copyHistoryDocumentText(
+        text,
+        activeLanguage === "es"
+          ? "Resumen copiado para imprimir."
+          : "Summary copied for printing."
+      );
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Meetro Job Report</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; color: #0f172a; }
+            pre { white-space: pre-wrap; line-height: 1.5; font-size: 14px; }
+          </style>
+        </head>
+        <body><pre>${text.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char]))}</pre></body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.setTimeout(() => {
+      printWindow.print();
+    }, 100);
+    printWindow.print();
+  };
+
+  const buildQuoteDocumentText = (quote = {}, label = "Quote / Proposal") =>
+    [
+      `Meetro ${label}`,
+      "",
+      `Customer: ${quote.homeownerName || quote.customerName || quote.customer || "—"}`,
+      `Job: ${quote.projectTitle || quote.title || "—"}`,
+      `Address: ${quote.address || quote.location || "—"}`,
+      `Labor: $${getQuoteLaborAmount(quote).toFixed(2)}`,
+      `Materials: $${getQuoteMaterialsAmount(quote).toFixed(2)}`,
+      `Total: $${getQuoteTotalAmount(quote).toFixed(2)}`,
+      `Timeline: ${quote.timeline || "—"}`,
+      `Notes: ${quote.notes || "—"}`,
+    ].join("\n");
+
+  const getJobDetailViewLabel = (view) => {
+    const labels = {
+      conversation: activeLanguage === "es" ? "Conversación" : "Conversation",
+      photos: activeLanguage === "es" ? "Fotos" : "Photos",
+      evaluation: activeLanguage === "es" ? "Notas de evaluación" : "Evaluation Notes",
+      quote: activeLanguage === "es" ? "Cotización" : "Quote",
+      payments: activeLanguage === "es" ? "Pagos" : "Payments",
+      materials: activeLanguage === "es" ? "Materiales" : "Materials",
+      schedule: activeLanguage === "es" ? "Agenda" : "Schedule",
+      history: activeLanguage === "es" ? "Historial" : "History",
+    };
+    return labels[view] || "";
+  };
+
+  const getScopedIdentityValues = (record = {}) => {
+    const values = [
+      record.jobId,
+      record.id,
+      record.requestId,
+      record.projectId,
+      record.scheduleId,
+      record.visitId,
+      record.quoteId,
+      record.conversationId,
+      record.projectConversationId,
+      record.activeConversationId,
+      record.customerId,
+      record.manualCustomerContactId,
+      record.selectedHomeownerRequestId,
+      record.schedule?.id,
+      record.schedule?.scheduleId,
+      record.quote?.quoteId,
+      record.quote?.id,
+      record.quote?.requestId,
+      record.quote?.scheduleId,
+      record.quote?.conversationId,
+      record.active?.id,
+      record.active?.jobId,
+      record.active?.requestId,
+      record.active?.conversationId,
+      record.history?.id,
+      record.history?.requestId,
+      record.history?.conversationId,
+    ];
+
+    return values
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+  };
+
+  const normalizeScopedText = (value) =>
+    String(value || "").trim().toLowerCase();
+
+  const jobMatchesScopedRecord = (job = {}, record = {}) => {
+    const jobIds = getScopedIdentityValues(job);
+    const recordIds = getScopedIdentityValues(record);
+    const hasIdMatch =
+      jobIds.length > 0 &&
+      recordIds.length > 0 &&
+      jobIds.some((id) => recordIds.includes(id));
+
+    if (hasIdMatch) return true;
+    if (jobIds.length > 0 && recordIds.length > 0) return false;
+
+    const jobCustomer = normalizeScopedText(job.customer || getWorkCenterJobCustomer(job));
+    const recordCustomer = normalizeScopedText(getWorkCenterJobCustomer(record));
+    const jobAddress = normalizeScopedText(job.address || getWorkCenterJobAddress(job));
+    const recordAddress = normalizeScopedText(getWorkCenterJobAddress(record));
+
+    return Boolean(
+      jobCustomer &&
+        recordCustomer &&
+        jobCustomer === recordCustomer &&
+        jobAddress &&
+        recordAddress &&
+        jobAddress === recordAddress
+    );
+  };
+
+  const getScopedJobQuotes = (job = {}) =>
+    quoteHistory.filter((quote) => jobMatchesScopedRecord(job, quote));
+
+  const getScopedJobSchedules = (job = {}) =>
+    missionSchedule.filter((schedule) => jobMatchesScopedRecord(job, schedule));
+
+  const getScopedJobActiveRecords = (job = {}) =>
+    activeJobs.filter((activeJob) => jobMatchesScopedRecord(job, activeJob));
+
+  const getScopedJobHistoryRecords = (job = {}) =>
+    completedProjects.filter((historyRecord) =>
+      jobMatchesScopedRecord(job, historyRecord)
+    );
+
+  const getScopedJobAlerts = (job = {}) =>
+    professionalNotifications.filter((notification) =>
+      jobMatchesScopedRecord(job, notification)
+    );
+
+  const getWorkCenterJobFinalTotal = (job = {}) => {
+    const quote = job.quote || job.history?.quote || job.history?.proposal || {};
+    const historyTotal =
+      job.finalTotal ||
+      job.history?.finalTotal ||
+      job.history?.revenue ||
+      job.history?.quoteAmount ||
+      job.history?.acceptedQuote?.amount;
+    const quoteTotal = quote ? getQuoteTotalAmount(quote) : 0;
+    return Number(historyTotal || quoteTotal || 0);
+  };
+
+  const buildClosedJobHistoryRecord = (job = {}) => {
+    const scopedQuotes = getScopedJobQuotes(job);
+    const scopedSchedules = getScopedJobSchedules(job);
+    const scopedActiveRecords = getScopedJobActiveRecords(job);
+    const scopedHistoryRecords = getScopedJobHistoryRecords(job);
+    const sortedSchedules = [...scopedSchedules].sort(
+      (first, second) => getScheduleWorkflowRank(second) - getScheduleWorkflowRank(first)
+    );
+    const workAppointment =
+      sortedSchedules.find(
+        (schedule) =>
+          String(schedule.appointmentType || "").toLowerCase() === "work" ||
+          Boolean(schedule.workAppointmentId) ||
+          getScheduleWorkflowRank(schedule) >= 45
+      ) || null;
+    const evaluationVisit =
+      sortedSchedules.find(
+        (schedule) =>
+          String(schedule.appointmentType || "").toLowerCase() === "evaluation" ||
+          Boolean(schedule.evaluationVisitId) ||
+          hasEvaluationForAppointment(schedule)
+      ) || null;
+    const schedule = workAppointment || sortedSchedules[0] || job.schedule || job.history?.schedule || {};
+    const quote = scopedQuotes[0] || job.quote || job.history?.quote || job.history?.proposal || {};
+    const activeRecord = scopedActiveRecords[0] || job.active || job.history?.activeWork || null;
+    const previousHistory = scopedHistoryRecords[0] || job.history || {};
+    const closedAt = new Date().toISOString();
+    const hydratedJob = {
+      ...job,
+      schedule,
+      quote,
+      active: activeRecord,
+      history: previousHistory,
+    };
+    const closureRecord =
+      schedule.closureRecord ||
+      previousHistory.closureRecord ||
+      buildClosureRecord({
+        job: hydratedJob,
+        reviewedAt: closedAt,
+        closedAt,
+        notes: schedule.closureNotes || previousHistory.closureNotes || "",
+      });
+
+    return {
+      ...previousHistory,
+      id:
+        previousHistory.id ||
+        job.id ||
+        schedule.id ||
+        schedule.scheduleId ||
+        quote.scheduleId ||
+        quote.requestId ||
+        quote.quoteId ||
+        `closed-job-${Date.now()}`,
+      type: "closed_job",
+      source: "job_workspace",
+      status: "closed",
+      finalStatus: "Closed",
+      closureStatus: "closed",
+      closedAt,
+      closeDate: closedAt,
+      customerName: job.customer || getWorkCenterJobCustomer(schedule) || getWorkCenterJobCustomer(quote),
+      customer: job.customer || getWorkCenterJobCustomer(schedule) || getWorkCenterJobCustomer(quote),
+      address: job.address || getWorkCenterJobAddress(schedule) || getWorkCenterJobAddress(quote),
+      title: job.title || getWorkCenterJobTitle(schedule) || getWorkCenterJobTitle(quote),
+      jobTitle: job.title || getWorkCenterJobTitle(schedule) || getWorkCenterJobTitle(quote),
+      requestId: job.requestId || schedule.requestId || quote.requestId || "",
+      conversationId: job.conversationId || schedule.conversationId || quote.conversationId || "",
+      scheduleId: schedule.id || schedule.scheduleId || quote.scheduleId || "",
+      visitId: schedule.visitId || schedule.id || "",
+      quoteId: quote.quoteId || quote.id || "",
+      schedule,
+      visitSchedule: schedule,
+      schedules: sortedSchedules,
+      evaluationVisit,
+      workAppointment,
+      quote,
+      proposal: quote,
+      activeWork: activeRecord,
+      request: job.request || previousHistory.request || null,
+      evaluation: schedule.evaluation || previousHistory.evaluation || {},
+      evaluationNotes:
+        schedule.evaluationNotes ||
+        schedule.evaluation?.notes ||
+        previousHistory.evaluationNotes ||
+        "",
+      workItems: getWorkCenterJobWorkItems(hydratedJob),
+      photos: [
+        ...getWorkCenterJobPhotos(hydratedJob),
+        ...(Array.isArray(schedule.completionPhotos) ? schedule.completionPhotos : []),
+        ...(Array.isArray(previousHistory.completionPhotos)
+          ? previousHistory.completionPhotos
+          : []),
+      ],
+      measurements: getWorkCenterJobWorkItems(hydratedJob).flatMap((workItem) =>
+        Array.isArray(workItem.measurements) ? workItem.measurements : []
+      ),
+      materials: getWorkCenterJobMaterials(hydratedJob),
+      payments: {
+        paymentStatus: quote.paymentStatus || schedule.paymentStatus || "",
+        paymentReceivedAt:
+          quote.paymentReceivedAt ||
+          quote.depositPaidAt ||
+          quote.paidAt ||
+          schedule.paymentReceivedAt ||
+          "",
+        depositPaidAt: quote.depositPaidAt || "",
+      },
+      invoice: {
+        invoiceStatus: schedule.invoiceStatus || quote.invoiceStatus || "sent",
+        invoiceCreatedAt: schedule.invoiceCreatedAt || quote.invoiceCreatedAt || "",
+        invoiceSentAt: schedule.invoiceSentAt || quote.invoiceSentAt || "",
+        receipt: schedule.receipt || previousHistory.receipt || {},
+      },
+      completion: {
+        completedAt: schedule.completedAt || previousHistory.completedAt || "",
+        notes:
+          schedule.completionNotes ||
+          previousHistory.completionNotes ||
+          previousHistory.notes ||
+          "",
+        photos:
+          schedule.completionPhotos ||
+          previousHistory.completionPhotos ||
+          [],
+      },
+      closureNotes:
+        schedule.closureNotes ||
+        previousHistory.closureNotes ||
+        (activeLanguage === "es"
+          ? "Trabajo cerrado y guardado en historial."
+          : "Job closed and saved to history."),
+      closureRecord,
+      closureObligations:
+        schedule.closureObligations ||
+        previousHistory.closureObligations ||
+        closureRecord.obligations ||
+        [],
+      closureAuthorized:
+        schedule.closureAuthorized ??
+        previousHistory.closureAuthorized ??
+        closureRecord.closureAuthorized,
+      closureReviewedAt:
+        schedule.closureReviewedAt ||
+        previousHistory.closureReviewedAt ||
+        closureRecord.reviewedAt ||
+        "",
+      finalTotal: getWorkCenterJobFinalTotal(hydratedJob),
+      revenue: getWorkCenterJobFinalTotal(hydratedJob),
+      timeline: getWorkCenterJobTimeline({
+        ...hydratedJob,
+        history: { ...previousHistory, closedAt, closureStatus: "closed" },
+      }),
+      fullJob: {
+        ...hydratedJob,
+        closedAt,
+        closureStatus: "closed",
+      },
+    };
+  };
+
+  const saveClosedJobToHistory = (job = {}) => {
+    const closedRecord = buildClosedJobHistoryRecord(job);
+    const savedHistory = readMeetroArray("completedProjects");
+    const withoutDuplicate = savedHistory.filter(
+      (record) => !jobMatchesScopedRecord(job, record)
+    );
+    localStorage.setItem(
+      "completedProjects",
+      JSON.stringify([closedRecord, ...withoutDuplicate])
+    );
+
+    moveJobToHistory(closedRecord, {
+      ...closedRecord,
+      conversationId: closedRecord.conversationId,
+      title: closedRecord.title,
+      service: closedRecord.title,
+      customerName: closedRecord.customerName,
+      closedAt: closedRecord.closedAt,
+      closeDate: closedRecord.closeDate,
+      lastMessage:
+        activeLanguage === "es"
+          ? "Trabajo cerrado y guardado en historial."
+          : "Job closed and saved to history.",
+    });
+
+    if (job.schedule?.id || job.schedule?.scheduleId) {
+      updateWorkCenterJobScheduleRecord(job, {
+        status: "closed",
+        workStatus: "closed",
+        jobStage: "closed",
+        closureStatus: "closed",
+        closedAt: closedRecord.closedAt,
+        closeDate: closedRecord.closeDate,
+      });
+    }
+
+    if (job.quote?.quoteId || job.quote?.id) {
+      updateWorkCenterJobQuoteRecord(job, {
+        closureStatus: "closed",
+        jobClosedAt: closedRecord.closedAt,
+        scheduleId: closedRecord.scheduleId || job.quote?.scheduleId || "",
+        visitId: closedRecord.visitId || job.quote?.visitId || "",
+      });
+    }
+
+    if (
+      activeWorkSnapshot &&
+      Object.keys(activeWorkSnapshot).length > 0 &&
+      jobMatchesScopedRecord(job, activeWorkSnapshot)
+    ) {
+      localStorage.removeItem("activeWorkSnapshot");
+      localStorage.removeItem("activeWorkStatus");
+    }
+
+    if (
+      activeJobSnapshot &&
+      Object.keys(activeJobSnapshot).length > 0 &&
+      jobMatchesScopedRecord(job, activeJobSnapshot)
+    ) {
+      localStorage.removeItem("activeJobSnapshot");
+      localStorage.removeItem("activeJobStatus");
+    }
+
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+    setRefreshKey((key) => key + 1);
+    setSelectedJobDetailView("");
+    setIsJobHistoryMode(true);
+    setJobMenuTab("history");
+    setSelectedWorkCenterJob({
+      ...job,
+      status: "closed",
+      closureStatus: "closed",
+      closedAt: closedRecord.closedAt,
+      history: closedRecord,
+      schedule: closedRecord.schedule,
+      quote: closedRecord.quote,
+      active: closedRecord.activeWork,
+    });
+    return closedRecord;
+  };
+
+  const workCenterJobs = (() => {
+    const jobs = new Map();
+    pendingProjectRequests.forEach((record) => mergeWorkCenterJob(jobs, record, "request"));
+
+    missionSchedule.forEach((record) => mergeWorkCenterJob(jobs, record, "schedule"));
+    quoteHistory.filter(Boolean).forEach((record) => mergeWorkCenterJob(jobs, record, "quote"));
+    activeJobs.forEach((record) => mergeWorkCenterJob(jobs, record, "active"));
+    if (missionHasCurrentWork) {
+      mergeWorkCenterJob(
+        jobs,
+        {
+          id: localStorage.getItem("activeWorkRequestId") || "active-work",
+          customerName: missionActiveCustomer,
+          title: missionActiveService,
+          location: localStorage.getItem("activeWorkLocation") || "",
+          conversationId: missionActiveConversationId,
+          status: localStorage.getItem("activeWorkStatus") || "active",
+        },
+        "active"
+      );
+    }
+    completedProjects.forEach((record) => mergeWorkCenterJob(jobs, record, "history"));
+
+    return Array.from(jobs.values()).sort((first, second) => {
+      const firstDate = first.schedule?.date || first.quote?.updatedAt || first.request?.createdAt || "";
+      const secondDate = second.schedule?.date || second.quote?.updatedAt || second.request?.createdAt || "";
+      return String(secondDate).localeCompare(String(firstDate));
+    });
+  })();
+
+  const workCenterActiveJobs = workCenterJobs.filter(
+    (job) => getWorkCenterJobStage(job) !== "closed"
+  );
+
+  const workCenterHistoryJobs = workCenterJobs.filter(
+    (job) => getWorkCenterJobStage(job) === "closed"
+  );
+
+  const workCenterPrimaryNavigationCards = [
+    {
+      key: "opportunities",
+      icon: "opportunities",
+      title: activeLanguage === "es" ? "Oportunidades" : "Opportunities",
+      purpose:
+        activeLanguage === "es"
+          ? "Nuevas solicitudes y decisiones antes de convertirse en trabajos."
+          : "New leads and pending requests before they become active jobs.",
+      meta:
+        activeLanguage === "es"
+          ? `${opportunitiesCount} nuevas`
+          : `${opportunitiesCount} new`,
+      actionLabel:
+        translate("viewOpportunities"),
+      tone: "#fff7ed",
+      accent: "#ea580c",
+      alert: hasNewWorkCenterOpportunities,
+      onClick: () => openWorkTab("pending"),
+    },
+    {
+      key: "current",
+      icon: "currentJobs",
+      title: activeLanguage === "es" ? "Trabajos actuales" : "Current Jobs",
+      purpose:
+        activeLanguage === "es"
+          ? "Abre trabajos activos y continúa el flujo específico de cada cliente."
+          : "Open active customer jobs and continue each customer-specific workflow.",
+      meta:
+        activeLanguage === "es"
+          ? `${workCenterActiveJobs.length} activos`
+          : `${workCenterActiveJobs.length} active`,
+      actionLabel: activeLanguage === "es" ? "Ver trabajos" : "View Jobs",
+      tone: "#f8fafc",
+      accent: "#334155",
+      onClick: () => openWorkCenterJobsPage("current"),
+    },
+    {
+      key: "schedule",
+      icon: "schedule",
+      title: activeLanguage === "es" ? "Agenda" : "Schedule",
+      purpose:
+        activeLanguage === "es"
+          ? "Dónde vas hoy y qué visitas vienen después."
+          : "Where you are going today and what visits are coming next.",
+      meta:
+        activeLanguage === "es"
+          ? `${upcomingScheduleCount} próximas`
+          : `${upcomingScheduleCount} upcoming`,
+      actionLabel: activeLanguage === "es" ? "Abrir agenda" : "Open Schedule",
+      tone: "#eff6ff",
+      accent: "#2563eb",
+      onClick: () => openWorkTab("schedule"),
+    },
+    {
+      key: "quotes",
+      icon: "quote",
+      title: activeLanguage === "es" ? "Cotizaciones / Propuestas" : "Quotes / Proposals",
+      purpose:
+        activeLanguage === "es"
+          ? "Borradores, propuestas pendientes y cotizaciones aceptadas."
+          : "Drafts, pending proposals, and accepted quotes.",
+      meta:
+        activeLanguage === "es"
+          ? `${quoteHistory.length} registros`
+          : `${quoteHistory.length} records`,
+      actionLabel: activeLanguage === "es" ? "Ver cotizaciones" : "View Quotes",
+      tone: "#f5f3ff",
+      accent: "#7c3aed",
+      onClick: () => openWorkTab("quotes"),
+    },
+    {
+      key: "activeWork",
+      icon: "activeWork",
+      title: activeLanguage === "es" ? "Trabajo activo" : "Active Work",
+      purpose:
+        activeLanguage === "es"
+          ? "Trabajo en sitio, en progreso y listo para actualizar."
+          : "On-site, in-progress, and ready-to-update work.",
+      meta:
+        activeLanguage === "es"
+          ? `${activeJobs.length} activos`
+          : `${activeJobs.length} active`,
+      actionLabel: activeLanguage === "es" ? "Abrir trabajo activo" : "Open Active Work",
+      tone: "#ecfdf5",
+      accent: "#16a34a",
+      onClick: () => openWorkTab("active"),
+    },
+    {
+      key: "history",
+      icon: "jobHistory",
+      title: activeLanguage === "es" ? "Historial" : "Job History",
+      purpose:
+        activeLanguage === "es"
+          ? "Consulta trabajos cerrados y registros históricos de solo lectura."
+          : "Review closed jobs and read-only historical records.",
+      meta:
+        activeLanguage === "es"
+          ? `${workCenterHistoryJobs.length} cerrados`
+          : `${workCenterHistoryJobs.length} closed`,
+      actionLabel: activeLanguage === "es" ? "Ver historial" : "View History",
+      tone: "#eef2ff",
+      accent: "#4f46e5",
+      onClick: () => openWorkCenterJobsPage("history"),
+    },
+    {
+      key: "revenue",
+      icon: "revenue",
+      title: activeLanguage === "es" ? "Ingresos" : "Revenue",
+      purpose:
+        activeLanguage === "es"
+          ? "Dinero pagado, pendiente y por cobrar en todos los trabajos."
+          : "Paid, pending, and outstanding money across jobs.",
+      meta:
+        totalJobRevenue > 0
+          ? `$${Number(totalJobRevenue).toLocaleString()}`
+          : activeLanguage === "es"
+          ? "Listo para revisar"
+          : "Ready to review",
+      actionLabel: activeLanguage === "es" ? "Ver ingresos" : "View Revenue",
+      tone: "#ecfdf5",
+      accent: "#059669",
+      onClick: () => openWorkTab("revenue"),
+    },
+  ];
+
+  const workCenterLandingAlert = hasActiveEmergency
+    ? {
+        type: "emergency",
+        eyebrow:
+          activeLanguage === "es"
+            ? "Acción urgente"
+            : "Urgent action",
+        title:
+          activeLanguage === "es"
+            ? "Emergencia requiere atención"
+            : "Emergency Action Needed",
+        message:
+          activeLanguage === "es"
+            ? "Una emergencia de cliente está activa. Abre el trabajo de emergencia para continuar las actualizaciones de despacho."
+            : "A customer emergency is active. Open the emergency job to continue dispatch updates.",
+        meta:
+          selectedService ||
+          (activeLanguage === "es" ? "Servicio de emergencia" : "Emergency Service"),
+        status: getStatusLabel(),
+        primaryLabel:
+          activeLanguage === "es"
+            ? "Abrir trabajo de emergencia"
+            : "Open Emergency Job",
+        secondaryLabel:
+          activeLanguage === "es"
+            ? "Abrir conversación"
+            : "Open Conversation",
+        onPrimary: () => {
+          setActiveAccountMode("business");
+          localStorage.setItem("dispatchReturnPage", "contractorDashboard");
+          setPage("emergencyDispatch");
+        },
+        onSecondary: () =>
+          openActiveEmergencyConversation(setPage, "contractorDashboard"),
+      }
+    : null;
+
+  const updateWorkCenterJobScheduleRecord = (job = {}, patch = {}) => {
+    if (!job.schedule?.id) return null;
+    const schedule = readMeetroArray("meetro_business_schedule");
+    let updatedRecord = null;
+    const updatedSchedule = schedule.map((item) => {
+      if (String(item.id || item.scheduleId || "") !== String(job.schedule.id || job.schedule.scheduleId || "")) {
+        return item;
+      }
+
+      updatedRecord = {
+        ...item,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      return updatedRecord;
+    });
+
+    localStorage.setItem("meetro_business_schedule", JSON.stringify(updatedSchedule));
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+
+    if (updatedRecord) {
+      setSelectedWorkCenterJob((current) =>
+        current && current.id === job.id
+          ? { ...current, schedule: updatedRecord }
+          : current
+      );
+    }
+
+    return updatedRecord;
+  };
+
+  const updateWorkCenterJobQuoteRecord = (job = {}, patch = {}) => {
+    if (!job.quote?.quoteId && !job.quote?.id) return null;
+    const quoteId = String(job.quote.quoteId || job.quote.id);
+    const savedQuotes = readMeetroArray("workCenterQuoteHistory");
+    let updatedQuote = null;
+    const updatedQuotes = savedQuotes.map((quote) => {
+      if (String(quote.quoteId || quote.id || "") !== quoteId) return quote;
+      updatedQuote = {
+        ...quote,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      return updatedQuote;
+    });
+
+    localStorage.setItem("workCenterQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("meetroQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("quoteHistory", JSON.stringify(updatedQuotes));
+    window.dispatchEvent(new Event("storage"));
+
+    if (updatedQuote) {
+      setSelectedWorkCenterJob((current) =>
+        current && current.id === job.id
+          ? { ...current, quote: updatedQuote }
+          : current
+      );
+    }
+
+    return updatedQuote;
+  };
+
+  const createSarahPageVisitRecord = (job = {}) => {
+    const now = new Date().toISOString();
+    const visitId = `job-visit-${Date.now()}`;
+    const newVisit = {
+      id: visitId,
+      scheduleId: visitId,
+      visitId,
+      source: "job_page_v1",
+      workflowSource: "job_page",
+      appointmentType: "evaluation",
+      appointmentLabel: activeLanguage === "es" ? "Visita de evaluación" : "Evaluation Visit",
+      title: job.title || translate("scheduledVisit"),
+      requestTitle: job.title || translate("scheduledVisit"),
+      customerName: job.customer || "",
+      customerAddress: job.address || "",
+      location: job.address || "",
+      address: job.address || "",
+      services: [job.title || translate("scheduledVisit")].filter(Boolean),
+      requestId: job.requestId || job.request?.id || job.id || "",
+      conversationId: job.conversationId || job.request?.conversationId || "",
+      date: new Date().toISOString().slice(0, 10),
+      time: "09:00",
+      status: "scheduled",
+      workStatus: "scheduled",
+      jobStage: "visit_scheduled",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      createdAt: now,
+      updatedAt: now,
+      ...buildJobTimelinePatch(job, "visit_scheduled"),
+    };
+    const schedule = readMeetroArray("meetro_business_schedule");
+    localStorage.setItem(
+      "meetro_business_schedule",
+      JSON.stringify([newVisit, ...schedule])
+    );
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+    const customerUpdate = createCustomerAppointmentCard(job, newVisit);
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id ? { ...current, schedule: newVisit } : current
+    );
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("visit_scheduled", customerUpdate);
+    return newVisit;
+  };
+
+  const createSarahPageWorkAppointmentRecord = (job = {}) => {
+    const now = new Date().toISOString();
+    const workAppointmentId = `job-work-${Date.now()}`;
+    const evaluationVisit =
+      job.schedule && String(job.schedule.appointmentType || "").toLowerCase() !== "work"
+        ? job.schedule
+        : getScopedJobSchedules(job).find(
+            (schedule) =>
+              String(schedule.appointmentType || "").toLowerCase() === "evaluation" ||
+              hasEvaluationForAppointment(schedule)
+          ) || null;
+    const serviceLines = [job.title || translate("scheduledVisit")].filter(Boolean);
+    const workAppointment = {
+      id: workAppointmentId,
+      scheduleId: workAppointmentId,
+      visitId: workAppointmentId,
+      workAppointmentId,
+      evaluationVisitId:
+        evaluationVisit?.id ||
+        evaluationVisit?.scheduleId ||
+        evaluationVisit?.visitId ||
+        "",
+      parentScheduleId:
+        evaluationVisit?.id ||
+        evaluationVisit?.scheduleId ||
+        evaluationVisit?.visitId ||
+        "",
+      source: "job_page_v1",
+      workflowSource: "job_page_work_appointment",
+      appointmentType: "work",
+      appointmentLabel: activeLanguage === "es" ? "Cita de trabajo" : "Work Appointment",
+      purpose: activeLanguage === "es" ? "Realizar trabajo aprobado" : "Perform approved work",
+      title: job.title || translate("scheduledVisit"),
+      requestTitle: job.title || translate("scheduledVisit"),
+      customerName: job.customer || "",
+      customerAddress: job.address || "",
+      location: job.address || "",
+      address: job.address || "",
+      services: serviceLines,
+      requestId: job.requestId || job.schedule?.requestId || job.quote?.requestId || job.id || "",
+      conversationId: job.conversationId || job.schedule?.conversationId || job.quote?.conversationId || "",
+      quoteId: job.quote?.quoteId || job.quote?.id || job.schedule?.quoteId || "",
+      date: workAppointmentDraft.date,
+      time: normalizeScheduleTime(workAppointmentDraft.time),
+      notes: workAppointmentDraft.notes,
+      shareWithCustomer: Boolean(workAppointmentDraft.shareWithCustomer),
+      status: "work_scheduled",
+      workStatus: "work_scheduled",
+      jobStage: "work_scheduled",
+      workflowStage: "work_scheduled",
+      workflowStatus: "work_scheduled",
+      workScheduledAt: now,
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      evaluationVisit,
+      createdAt: now,
+      updatedAt: now,
+      ...buildJobTimelinePatch({ ...job, schedule: evaluationVisit || job.schedule }, "work_scheduled"),
+    };
+
+    const schedule = readMeetroArray("meetro_business_schedule");
+    localStorage.setItem(
+      "meetro_business_schedule",
+      JSON.stringify([workAppointment, ...schedule])
+    );
+
+    const activeWorkId =
+      workAppointment.requestId ||
+      workAppointment.quoteId ||
+      workAppointment.id ||
+      workAppointment.conversationId;
+    saveActiveWorkSnapshot({
+      requestId: workAppointment.requestId || activeWorkId,
+      quoteId: workAppointment.quoteId || "",
+      scheduleId: workAppointment.id,
+      conversationId: workAppointment.conversationId || "",
+      status: "scheduled",
+      stage: "work_scheduled",
+      service: workAppointment.requestTitle || workAppointment.title || translate("scheduledVisit"),
+      location: workAppointment.location || "",
+      customer: workAppointment.customerName || "",
+      type: "work_scheduled",
+      source: "job_page_work_appointment",
+    });
+    saveActiveJobSnapshot({
+      id: activeWorkId,
+      jobId: activeWorkId,
+      quoteId: workAppointment.quoteId || "",
+      scheduleId: workAppointment.id,
+      conversationId: workAppointment.conversationId || "",
+      service: workAppointment.requestTitle || workAppointment.title || translate("scheduledVisit"),
+      location: workAppointment.location || "",
+      status: "scheduled",
+      customer: workAppointment.customerName || "",
+    });
+    localStorage.setItem("activeWorkStatus", "scheduled");
+    localStorage.setItem("activeWorkStage", "work_scheduled");
+    localStorage.setItem("activeWorkType", "work_scheduled");
+    localStorage.setItem("activeWorkSource", "job_page_work_appointment");
+    localStorage.setItem("activeWorkScheduleId", workAppointment.id);
+    localStorage.setItem("activeWorkConversationId", workAppointment.conversationId || "");
+    localStorage.setItem("activeWorkService", workAppointment.requestTitle || workAppointment.title || "");
+    localStorage.setItem("activeWorkLocation", workAppointment.location || "");
+
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+
+    const customerUpdate = workAppointment.shareWithCustomer
+      ? createCustomerAppointmentCard(job, workAppointment)
+      : null;
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, schedule: workAppointment, active: { status: "scheduled", scheduleId: workAppointment.id } }
+        : current
+    );
+    setShowWorkAppointmentForm(false);
+    setWorkAppointmentDraft(createDefaultWorkAppointmentDraft());
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("work_scheduled", customerUpdate);
+    return workAppointment;
+  };
+
+  const saveManualJobNote = (job = {}, stage = "", label = "") => {
+    if (!job.schedule?.id && !job.schedule?.scheduleId) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
+      ...buildManualJobTimelinePatch(job, stage, label),
+      manualWorkflowNote: label,
+      manualWorkflowStage: stage,
+      manualWorkflowSavedAt: new Date().toISOString(),
+    });
+
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    setJobActionToast({
+      type: "success",
+      message: label,
+    });
+    return updatedRecord;
+  };
+
+  const recordSarahPayment = (job = {}, paymentStatus = "deposit_received", label = "") => {
+    const now = new Date().toISOString();
+    const updatedQuote = updateWorkCenterJobQuoteRecord(job, {
+      paymentStatus,
+      paymentReceivedAt: now,
+      ...(paymentStatus === "paid" ? { paidAt: now } : { depositPaidAt: now }),
+    });
+
+    if (!updatedQuote) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const updatedSchedule = job.schedule
+      ? updateWorkCenterJobScheduleRecord(job, {
+          ...buildManualJobTimelinePatch(
+            { ...job, quote: updatedQuote },
+            "payment_received",
+            label ||
+              (paymentStatus === "paid"
+                ? activeLanguage === "es"
+                  ? "Pago completo registrado manualmente"
+                  : "Full payment recorded manually"
+                : activeLanguage === "es"
+                  ? "Depósito registrado manualmente"
+                  : "Deposit recorded manually")
+          ),
+          paymentStatus,
+          paymentReceivedAt: now,
+        })
+      : null;
+
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, quote: updatedQuote, schedule: updatedSchedule || current.schedule }
+        : current
+    );
+    setRefreshKey((key) => key + 1);
+    setJobActionToast({
+      type: "success",
+      message:
+        label ||
+        (paymentStatus === "paid"
+          ? activeLanguage === "es"
+            ? "Pago completo registrado."
+            : "Full payment recorded."
+          : activeLanguage === "es"
+            ? "Depósito registrado."
+            : "Deposit recorded."),
+    });
+    return updatedQuote;
+  };
+
+  const handleExternalCustomerManualAction = (job = {}, actionType = "") => {
+    if (!job) return;
+
+    if (actionType === "visit_confirmed") {
+      const updatedRecord = appendManualCustomerResponseHistoryNote(
+        job,
+        "visit_confirmed",
+        activeLanguage === "es"
+          ? "Visita confirmada manualmente por el profesional."
+          : "Visit confirmed manually by professional.",
+        {
+          status: "visit_scheduled",
+          workStatus: "visit_scheduled",
+          jobStage: "visit_scheduled",
+          workflowStatus: "visit_scheduled",
+          customerConfirmationStatus: "confirmed",
+          confirmationStatus: "confirmed",
+          customerResponseStatus: "confirmed",
+        }
+      );
+      if (!updatedRecord) showJobActionErrorToast();
+      else {
+        setJobActionToast({
+          type: "success",
+          message:
+            activeLanguage === "es"
+              ? "Visita confirmada."
+              : "Visit confirmed.",
+        });
+      }
+      return;
+    }
+
+    if (actionType === "reschedule_visit") {
+      appendManualCustomerResponseHistoryNote(
+        job,
+        "visit_reschedule_requested",
+        activeLanguage === "es"
+          ? "Reprogramación de visita registrada"
+          : "Visit reschedule recorded",
+        {
+          customerConfirmationStatus: "reschedule_requested",
+          confirmationStatus: "reschedule_requested",
+          customerResponseStatus: "reschedule_requested",
+        }
+      );
+      openJobScopedDetail("schedule", job);
+      return;
+    }
+
+    if (actionType === "visit_waiting") {
+      appendManualCustomerResponseHistoryNote(
+        job,
+        "visit_waiting",
+        activeLanguage === "es"
+          ? "Esperando confirmación del cliente"
+          : "Waiting for customer confirmation",
+        {
+          customerConfirmationStatus: "pending_customer_confirmation",
+          confirmationStatus: "pending_customer_confirmation",
+          customerResponseStatus: "waiting",
+        }
+      );
+      return;
+    }
+
+    if (actionType === "proposal_approved") {
+      const updatedQuote = updateSarahPageQuoteStatus(job, "accepted", "approved");
+      if (updatedQuote) {
+        appendManualCustomerResponseHistoryNote(
+          { ...job, quote: updatedQuote },
+          "proposal_approved",
+          activeLanguage === "es"
+            ? "Propuesta aprobada por cliente externo."
+            : "Proposal approved by external customer.",
+          {
+            proposalCustomerResponseStatus: "approved",
+            customerProposalResponseStatus: "approved",
+          }
+        );
+      }
+      return;
+    }
+
+    if (actionType === "proposal_changes_requested") {
+      const updatedQuote = updateWorkCenterJobQuoteRecord(job, {
+        customerResponseStatus: "changes_requested",
+        revisionStatus: "requested",
+        changesRequestedAt: new Date().toISOString(),
+      });
+      const updatedSchedule = appendManualCustomerResponseHistoryNote(
+        job,
+        "proposal_changes_requested",
+        activeLanguage === "es"
+          ? "Cliente externo pidió cambios a la propuesta."
+          : "External customer requested proposal changes.",
+        {
+          proposalCustomerResponseStatus: "changes_requested",
+          customerProposalResponseStatus: "changes_requested",
+        }
+      );
+      if (!updatedQuote && !updatedSchedule) showJobActionErrorToast();
+      else {
+        setJobActionToast({
+          type: "success",
+          message:
+            activeLanguage === "es"
+              ? "Solicitud de cambios registrada."
+              : "Change request recorded.",
+        });
+      }
+      return;
+    }
+
+    if (actionType === "proposal_waiting") {
+      appendManualCustomerResponseHistoryNote(
+        job,
+        "proposal_waiting",
+        activeLanguage === "es"
+          ? "Propuesta sigue esperando respuesta"
+          : "Proposal still waiting for response",
+        {
+          proposalCustomerResponseStatus: "waiting",
+          customerProposalResponseStatus: "waiting",
+        }
+      );
+      return;
+    }
+
+    if (actionType === "record_deposit") {
+      recordSarahPayment(
+        job,
+        "deposit_received",
+        activeLanguage === "es"
+          ? "Depósito registrado manualmente"
+          : "Deposit recorded manually"
+      );
+      return;
+    }
+
+    if (actionType === "mark_paid_full") {
+      recordSarahPayment(
+        job,
+        "paid",
+        activeLanguage === "es"
+          ? "Pago completo registrado manualmente"
+          : "Full payment recorded manually"
+      );
+      return;
+    }
+
+    if (actionType === "payment_pending") {
+      saveManualJobNote(
+        job,
+        "payment_pending",
+        activeLanguage === "es"
+          ? "Pago pendiente registrado"
+          : "Payment pending recorded"
+      );
+      return;
+    }
+
+    if (actionType === "work_date_confirmed") {
+      const updatedRecord = appendManualCustomerResponseHistoryNote(
+        job,
+        "work_date_confirmed",
+        activeLanguage === "es"
+          ? "Fecha de trabajo confirmada por cliente externo."
+          : "Work date confirmed by external customer.",
+        {
+          status: "work_scheduled",
+          workStatus: "work_scheduled",
+          jobStage: "work_scheduled",
+          workflowStatus: "work_scheduled",
+          customerConfirmationStatus: "confirmed",
+          confirmationStatus: "confirmed",
+          customerResponseStatus: "confirmed",
+        }
+      );
+      if (!updatedRecord) showJobActionErrorToast();
+      else {
+        setJobActionToast({
+          type: "success",
+          message:
+            activeLanguage === "es"
+              ? "Fecha de trabajo confirmada."
+              : "Work date confirmed.",
+        });
+      }
+      return;
+    }
+
+    if (actionType === "reschedule_work") {
+      setShowWorkAppointmentForm(true);
+      appendManualCustomerResponseHistoryNote(
+        job,
+        "work_reschedule_requested",
+        activeLanguage === "es"
+          ? "Reprogramación de trabajo registrada"
+          : "Work reschedule recorded",
+        {
+          customerConfirmationStatus: "reschedule_requested",
+          confirmationStatus: "reschedule_requested",
+          customerResponseStatus: "reschedule_requested",
+        }
+      );
+      return;
+    }
+
+    if (actionType === "work_waiting") {
+      appendManualCustomerResponseHistoryNote(
+        job,
+        "work_waiting",
+        activeLanguage === "es"
+          ? "Fecha de trabajo sigue esperando confirmación"
+          : "Work date still waiting for confirmation",
+        {
+          customerConfirmationStatus: "pending_customer_confirmation",
+          confirmationStatus: "pending_customer_confirmation",
+          customerResponseStatus: "waiting",
+        }
+      );
+      return;
+    }
+
+    if (actionType === "mark_receipt_sent") {
+      const now = new Date().toISOString();
+      const updatedRecord = appendManualCustomerResponseHistoryNote(
+        job,
+        "receipt_sent_externally",
+        activeLanguage === "es"
+          ? "Recibo enviado externamente."
+          : "Receipt sent externally.",
+        {
+          invoiceStatus: "sent",
+          receiptStatus: "sent",
+          invoiceSentAt: now,
+          receiptSentAt: now,
+          receiptSendMethod: "external_share",
+          receiptDeliveryMethod: "external_share",
+        }
+      );
+      if (updatedRecord) {
+        setRefreshKey((key) => key + 1);
+        showJobActionSavedToast("invoice_sent");
+      }
+      return;
+    }
+  };
+
+  const createSarahPageQuoteRecord = (job = {}) => {
+    const now = new Date().toISOString();
+    const quoteId = `job-quote-${Date.now()}`;
+    const quote = {
+      quoteId,
+      id: quoteId,
+      source: "job_page_v1",
+      workflowSource: "job_page",
+      status: "draft",
+      quoteStatus: "draft",
+      projectTitle: job.title || translate("scheduledVisit"),
+      title: job.title || translate("scheduledVisit"),
+      homeownerName: job.customer || "",
+      customerName: job.customer || "",
+      address: job.address || "",
+      location: job.address || "",
+      requestId: job.requestId || job.schedule?.requestId || job.schedule?.id || job.id || "",
+      scheduleId: job.schedule?.id || job.schedule?.scheduleId || "",
+      visitId: job.schedule?.visitId || job.schedule?.id || "",
+      conversationId: job.conversationId || job.schedule?.conversationId || "",
+      laborAmount: "",
+      materialsAmount: "",
+      totalAmount: "",
+      pricingNeedsReview: true,
+      evaluationNotes: job.schedule?.evaluationNotes || job.schedule?.evaluation?.notes || "",
+      workItems: getWorkCenterJobWorkItems(job),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const savedQuotes = readMeetroArray("workCenterQuoteHistory");
+    const updatedQuotes = [quote, ...savedQuotes];
+    localStorage.setItem("workCenterQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("meetroQuoteHistory", JSON.stringify(updatedQuotes));
+    localStorage.setItem("quoteHistory", JSON.stringify(updatedQuotes));
+    const scheduleWithTimeline = updateWorkCenterJobScheduleRecord(job, {
+      ...buildJobTimelinePatch(job, "proposal_created"),
+      quoteId,
+    });
+    window.dispatchEvent(new Event("storage"));
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, quote, schedule: scheduleWithTimeline || current.schedule }
+        : current
+    );
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("proposal_created");
+    return quote;
+  };
+
+  const updateSarahPageQuoteStatus = (job = {}, nextStatus = "", timelineStage = nextStatus) => {
+    const updatedQuote = updateWorkCenterJobQuoteRecord(job, {
+      status: nextStatus,
+      quoteStatus: nextStatus,
+      ...(nextStatus === "sent" ? { sentAt: new Date().toISOString() } : {}),
+      ...(nextStatus === "accepted" ? { acceptedAt: new Date().toISOString() } : {}),
+    });
+    if (!updatedQuote) {
+      showJobActionErrorToast();
+      return null;
+    }
+    const updatedSchedule = job.schedule
+      ? updateWorkCenterJobScheduleRecord(job, {
+          ...buildJobTimelinePatch({ ...job, quote: updatedQuote }, timelineStage),
+          quoteId: updatedQuote.quoteId || updatedQuote.id || "",
+        })
+      : null;
+    const updatedJob = {
+      ...job,
+      quote: updatedQuote,
+      schedule: updatedSchedule || job.schedule,
+    };
+    const customerUpdate = ["proposal_sent", "approved"].includes(timelineStage)
+      ? createCustomerWorkflowUpdate(updatedJob, timelineStage)
+      : null;
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, quote: updatedQuote, schedule: updatedSchedule || current.schedule }
+        : current
+    );
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast(timelineStage, customerUpdate);
+    return updatedQuote;
+  };
+
+  const getCustomerWorkflowUpdateText = (nextStage, job = {}) => {
+    const service = job.title || translate("scheduledVisit");
+    const state = getSarahJobStateDefinition(nextStage);
+    return state.customerNotification || `${service}: ${getWorkCenterJobStatus(job)}`;
+  };
+
+  const createCustomerWorkflowUpdate = (job = {}, nextStage = "") => {
+    const conversationId =
+      job.conversationId ||
+      job.schedule?.conversationId ||
+      job.quote?.conversationId ||
+      job.history?.conversationId ||
+      "";
+    const messageText = getCustomerWorkflowUpdateText(nextStage, job);
+    const updateRecord = {
+      id: `job-status-${nextStage || "update"}-${Date.now()}`,
+      sender: "business",
+      role: "business",
+      senderRole: "business",
+      type: "job-status-update",
+      workflowType: "job_status_update",
+      workflowSource: "job_workspace",
+      deliveryMethod: conversationId ? "meetro_chat" : "external_prepared",
+      conversationId,
+      requestId: job.requestId || job.schedule?.requestId || job.quote?.requestId || "",
+      scheduleId: job.schedule?.id || job.schedule?.scheduleId || "",
+      quoteId: job.quote?.quoteId || job.quote?.id || "",
+      title: getWorkCenterJobStatus({
+        ...job,
+        schedule: {
+          ...(job.schedule || {}),
+          jobStage: nextStage,
+          workStatus: nextStage,
+          status: nextStage,
+        },
+      }),
+      text: messageText,
+      customerName: job.customer || "",
+      service: job.title || "",
+      location: job.address || "",
+      createdAt: new Date().toISOString(),
+      time: formatDisplayScheduleTime(new Date()),
+    };
+
+    if (conversationId) {
+      const storageKey = `meetro_conversation_${conversationId}`;
+      const existingMessages = readMeetroArray(storageKey);
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify([...existingMessages, updateRecord])
+      );
+      markConversationUnreadForRecipient(conversationId, "business", {
+        id: conversationId,
+        conversationId,
+        customerName: job.customer || "",
+        project_description: job.title || "",
+        lastMessage: messageText,
+        requestId: updateRecord.requestId,
+      });
+      window.dispatchEvent(new Event("meetro-messages-updated"));
+    } else {
+      const preparedUpdates = readMeetroArray("meetro_external_customer_updates");
+      localStorage.setItem(
+        "meetro_external_customer_updates",
+        JSON.stringify([updateRecord, ...preparedUpdates])
+      );
+    }
+
+    return updateRecord;
+  };
+
+  const createCustomerAppointmentCard = (job = {}, visit = {}) => {
+    const conversationId =
+      visit.conversationId ||
+      job.conversationId ||
+      job.request?.conversationId ||
+      "";
+    const serviceLines = Array.isArray(visit.services) && visit.services.length > 0
+      ? visit.services
+      : [visit.requestTitle || visit.title || job.title].filter(Boolean);
+    const isWorkAppointment =
+      String(visit.appointmentType || "").toLowerCase() === "work" ||
+      String(visit.workflowStage || visit.jobStage || visit.workStatus || "").toLowerCase() ===
+        "work_scheduled" ||
+      Boolean(visit.workAppointmentId);
+    const formattedTime = formatScheduleTime(visit.time);
+    const appointmentMessage = {
+      id: `appointment-${visit.id || Date.now()}`,
+      sender: "business",
+      role: "business",
+      senderRole: "business",
+      type: "schedule",
+      workflowType: isWorkAppointment ? "work_scheduled" : "appointment_scheduled",
+      workflowSource: isWorkAppointment ? "job_page_work_appointment" : "job_page_schedule_visit",
+      deliveryMethod: conversationId ? "meetro_chat" : "external_prepared",
+      conversationId,
+      requestId: visit.requestId || job.requestId || job.id || "",
+      appointmentId: visit.id || visit.scheduleId || "",
+      scheduleId: visit.id || visit.scheduleId || "",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      title: isWorkAppointment
+        ? activeLanguage === "es"
+          ? "Trabajo programado"
+          : "Work Scheduled"
+        : activeLanguage === "es"
+          ? "Cita programada"
+          : "Appointment Scheduled",
+      subtitle: `${visit.date || ""} • ${formattedTime} • ${translate("appointmentPendingConfirmation")}`,
+      text:
+        isWorkAppointment
+          ? activeLanguage === "es"
+            ? `Trabajo programado para ${visit.date} a las ${formattedTime}. Servicios: ${serviceLines.join(", ")}. Dirección: ${visit.location || job.address || ""}.`
+            : `Work scheduled for ${visit.date} at ${formattedTime}. Services: ${serviceLines.join(", ")}. Address: ${visit.location || job.address || ""}.`
+          : activeLanguage === "es"
+            ? ` Visita de evaluación programada para ${visit.date} a las ${formattedTime}.`
+            : ` Evaluation visit scheduled for ${visit.date} at ${formattedTime}.`,
+      services: serviceLines,
+      schedule: visit,
+      customerName: job.customer || visit.customerName || "",
+      service: job.title || visit.title || "",
+      location: job.address || visit.location || "",
+      createdAt: new Date().toISOString(),
+      time: formatDisplayScheduleTime(new Date()),
+    };
+
+    if (conversationId) {
+      const storageKey = `meetro_conversation_${conversationId}`;
+      const existingMessages = readMeetroArray(storageKey);
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify([...existingMessages, appointmentMessage])
+      );
+      markConversationUnreadForRecipient(conversationId, "business", {
+        id: conversationId,
+        conversationId,
+        customerName: job.customer || visit.customerName || "",
+        project_description: job.title || visit.title || "",
+        lastMessage: appointmentMessage.text,
+        requestId: appointmentMessage.requestId,
+      });
+      window.dispatchEvent(new Event("meetro-messages-updated"));
+    } else {
+      const preparedUpdates = readMeetroArray("meetro_external_customer_updates");
+      localStorage.setItem(
+        "meetro_external_customer_updates",
+        JSON.stringify([appointmentMessage, ...preparedUpdates])
+      );
+    }
+
+    return appointmentMessage;
+  };
+
+  const buildJobTimelinePatch = (job = {}, nextStage = "") => {
+    const meta = getWorkflowActionMeta(nextStage);
+    const timestamp = new Date().toISOString();
+    const existingEvents = getWorkCenterJobSavedTimelineEvents(job);
+    const event = {
+      id: `job-event-${nextStage || "status"}-${Date.now()}`,
+      stage: nextStage,
+      label: meta.label,
+      savedAt: timestamp,
+      timestamp,
+      status: "saved",
+      source: "job_workspace",
+    };
+
+    return {
+      jobTimelineEvents: [...existingEvents, event],
+      timelineEvents: [...existingEvents, event],
+      lastWorkflowEvent: event,
+    };
+  };
+
+  const buildManualJobTimelinePatch = (job = {}, stage = "", label = "") => {
+    const timestamp = new Date().toISOString();
+    const existingEvents = getWorkCenterJobSavedTimelineEvents(job);
+    const event = {
+      id: `manual-job-event-${stage || "note"}-${Date.now()}`,
+      stage,
+      label: label || (activeLanguage === "es" ? "Nota guardada" : "Note saved"),
+      savedAt: timestamp,
+      timestamp,
+      status: "saved",
+      source: "job_workspace_manual_entry",
+    };
+
+    return {
+      jobTimelineEvents: [...existingEvents, event],
+      timelineEvents: [...existingEvents, event],
+      lastWorkflowEvent: event,
+    };
+  };
+
+  const appendManualCustomerResponseHistoryNote = (
+    job = {},
+    stage = "",
+    label = "",
+    patch = {}
+  ) => {
+    const scheduleId = String(job.schedule?.id || job.schedule?.scheduleId || "");
+    if (!scheduleId) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const schedule = readMeetroArray("meetro_business_schedule");
+    let updatedRecord = null;
+    const updatedSchedule = schedule.map((item) => {
+      if (String(item.id || item.scheduleId || "") !== scheduleId) return item;
+
+      const manualPatch = buildManualJobTimelinePatch(
+        { ...job, schedule: item },
+        stage,
+        label
+      );
+      updatedRecord = {
+        ...item,
+        ...manualPatch,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      return updatedRecord;
+    });
+
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    localStorage.setItem("meetro_business_schedule", JSON.stringify(updatedSchedule));
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, schedule: updatedRecord }
+        : current
+    );
+
+    return updatedRecord;
+  };
+
+  const showJobActionSavedToast = (nextStage = "", customerUpdate = null) => {
+    const meta = getWorkflowActionMeta(nextStage);
+    const customerSuffix = customerUpdate
+      ? customerUpdate.deliveryMethod === "meetro_chat"
+        ? meta.customerSent
+        : meta.customerPrepared
+      : "";
+    setJobActionToast({
+      type: "success",
+      message: [meta.toast, customerSuffix].filter(Boolean).join(" "),
+    });
+  };
+
+  const showJobActionErrorToast = () => {
+    setJobActionToast({
+      type: "error",
+      message:
+        activeLanguage === "es"
+          ? "No se pudo guardar el estado. Inténtalo de nuevo."
+          : "Could not save status. Try again.",
+    });
+  };
+
+  const advanceWorkCenterJobSchedule = (job = {}, nextStage = "", patch = {}) => {
+    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
+      ...patch,
+      ...buildJobTimelinePatch(job, nextStage),
+      status: nextStage,
+      workStatus: nextStage,
+      jobStage: nextStage,
+    });
+
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const customerUpdate = createCustomerWorkflowUpdate(
+      {
+        ...job,
+        schedule: updatedRecord,
+      },
+      nextStage
+    );
+    showJobActionSavedToast(nextStage, customerUpdate);
+
+    return updatedRecord;
+  };
+
+  const createProposalFromWorkCenterJob = (job = {}) => {
+    const schedule = job.schedule || {};
+    const evaluation = schedule.evaluation || {};
+    const workItems = Array.isArray(evaluation.workItems)
+      ? evaluation.workItems
+      : Array.isArray(schedule.workItems)
+        ? schedule.workItems
+        : Array.isArray(schedule.evaluationItems)
+          ? schedule.evaluationItems
+          : [];
+    const materialItems = workItems.flatMap((workItem) =>
+      (Array.isArray(workItem.materials) ? workItem.materials : []).map((material) => ({
+        ...material,
+        workItemId: workItem.id || "",
+        workItemTitle: workItem.title || "",
+        lineTotal: getMaterialLineTotal(material),
+      }))
+    );
+
+    localStorage.setItem(
+      "selectedQuoteRequest",
+      JSON.stringify({
+        id: schedule.requestId || schedule.id || job.id || "",
+        requestId: schedule.requestId || job.requestId || "",
+        scheduleId: schedule.id || "",
+        visitId: schedule.visitId || schedule.id || "",
+        evaluationId: evaluation.id || "",
+        conversationId: job.conversationId || schedule.conversationId || "",
+        projectConversationId: job.conversationId || schedule.projectConversationId || "",
+        title: job.title || schedule.title || translate("scheduledVisit"),
+        service: job.title || schedule.title || translate("scheduledVisit"),
+        description: evaluation.notes || schedule.evaluationNotes || schedule.notes || "",
+        project_description: evaluation.notes || schedule.evaluationNotes || schedule.notes || "",
+        scope: evaluation.notes || schedule.evaluationNotes || schedule.notes || "",
+        location: job.address || schedule.location || "",
+        address: job.address || schedule.location || "",
+        homeownerName: job.customer || schedule.customerName || "",
+        customerName: job.customer || schedule.customerName || "",
+        customerPhone: schedule.customerPhone || "",
+        customerEmail: schedule.customerEmail || "",
+        customerAddress: job.address || schedule.customerAddress || schedule.location || "",
+        evaluationNotes: evaluation.notes || schedule.evaluationNotes || "",
+        evaluation,
+        evaluationItems: workItems,
+        workItems,
+        materialItems,
+        materials: materialItems,
+        materialsTotal: getEvaluationMaterialsTotal(workItems),
+        calculatedMaterialsTotal: getEvaluationMaterialsTotal(workItems),
+        addPricingRequired: true,
+        source: "job_workspace",
+      })
+    );
+    localStorage.setItem("quoteBuilderSource", "job_workspace");
+    localStorage.setItem("quoteBuilderScheduleId", schedule.id || "");
+    localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+    localStorage.setItem("workCenterReturnCustomer", job.customer || "");
+    localStorage.setItem("meetroWorkCenterTab", "quotes");
+    localStorage.setItem("activeWorkCenterTab", "quotes");
+    setSelectedWorkCenterJob(null);
+    setPage("quoteBuilder");
+  };
+
+  const openProposalBuilderForWorkCenterJob = (job = {}) => {
+    if (job.quote?.quoteId || job.quote?.id) {
+      localStorage.setItem("selectedQuoteForEdit", JSON.stringify(job.quote));
+      localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+      localStorage.setItem("workCenterReturnCustomer", job.customer || "");
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      setSelectedWorkCenterJob(null);
+      setPage("quoteBuilder");
+      return;
+    }
+
+    createProposalFromWorkCenterJob(job);
+  };
+
+  const openProposalSendFlowForWorkCenterJob = (job = {}) => {
+    setShowApprovalConfirmFlow(false);
+    setShowPaymentForm(false);
+    setShowWorkAppointmentForm(false);
+    setShowCloseJobForm(false);
+    setShowReceiptSendFlow(false);
+    setSendFlowDraft({
+      method:
+        job.conversationId || job.schedule?.conversationId || job.quote?.conversationId
+          ? "meetro_chat"
+          : "external_share",
+      note: "",
+    });
+    setShowProposalSendFlow(true);
+  };
+
+  const confirmProposalSendForWorkCenterJob = (job = {}) => {
+    if (!job.quote) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Crea la propuesta antes de enviarla."
+            : "Create the proposal before sending it.",
+      });
+      return null;
+    }
+
+    const updatedQuote = updateSarahPageQuoteStatus(job, "sent", "proposal_sent");
+    if (!updatedQuote) return null;
+
+    setShowProposalSendFlow(false);
+    setSendFlowDraft({ method: "meetro_chat", note: "" });
+    return updatedQuote;
+  };
+
+  const openPaymentFormForWorkCenterJob = (job = {}) => {
+    setShowApprovalConfirmFlow(false);
+    setShowWorkAppointmentForm(false);
+    setShowCloseJobForm(false);
+    setShowProposalSendFlow(false);
+    setShowReceiptSendFlow(false);
+    setPaymentDraft(
+      createDefaultPaymentDraft(
+        getWorkCenterJobFinalTotal(job) || getQuoteTotalAmount(job.quote || {})
+      )
+    );
+    setShowPaymentForm(true);
+  };
+
+  const openApprovalConfirmationForWorkCenterJob = () => {
+    setShowPaymentForm(false);
+    setShowWorkAppointmentForm(false);
+    setShowProposalSendFlow(false);
+    setShowReceiptSendFlow(false);
+    setShowCloseJobForm(false);
+    setApprovalDraft(createDefaultApprovalDraft());
+    setShowApprovalConfirmFlow(true);
+  };
+
+  const confirmApprovalForWorkCenterJob = (job = {}) => {
+    if (!approvalDraft.confirmed) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Confirma que el cliente aprobó la propuesta."
+            : "Confirm that the customer approved the proposal.",
+      });
+      return null;
+    }
+
+    const updatedQuote = updateSarahPageQuoteStatus(job, "accepted", "approved");
+    if (!updatedQuote) return null;
+
+    if (approvalDraft.note && job.schedule) {
+      updateWorkCenterJobScheduleRecord(job, {
+        approvalNote: approvalDraft.note,
+        approvalConfirmedAt: updatedQuote.acceptedAt || new Date().toISOString(),
+      });
+    }
+
+    setShowApprovalConfirmFlow(false);
+    setApprovalDraft(createDefaultApprovalDraft());
+    return updatedQuote;
+  };
+
+  const savePaymentForWorkCenterJob = (job = {}) => {
+    const amount = parseMeetroAmount(paymentDraft.amount);
+    if (amount === null || amount <= 0) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Agrega un monto válido antes de guardar el pago."
+            : "Add a valid amount before saving the payment.",
+      });
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const paymentStatus =
+      paymentDraft.paymentType === "full" ? "paid" : "deposit_received";
+    const paymentRecord = {
+      amount,
+      paymentType: paymentDraft.paymentType,
+      method: paymentDraft.method,
+      date: paymentDraft.date,
+      note: paymentDraft.note,
+      savedAt: now,
+    };
+    const updatedQuote = updateWorkCenterJobQuoteRecord(job, {
+      paymentStatus,
+      paymentAmount: amount,
+      paymentType: paymentDraft.paymentType,
+      paymentMethod: paymentDraft.method,
+      paymentDate: paymentDraft.date,
+      paymentNote: paymentDraft.note,
+      paymentReceivedAt: now,
+      paymentRecord,
+      ...(paymentStatus === "paid" ? { paidAt: now } : { depositPaidAt: now }),
+    });
+
+    if (!updatedQuote) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const updatedSchedule = job.schedule
+      ? updateWorkCenterJobScheduleRecord(job, {
+          ...buildJobTimelinePatch({ ...job, quote: updatedQuote }, "payment_received"),
+          paymentStatus,
+          paymentAmount: amount,
+          paymentType: paymentDraft.paymentType,
+          paymentMethod: paymentDraft.method,
+          paymentDate: paymentDraft.date,
+          paymentNote: paymentDraft.note,
+          paymentReceivedAt: now,
+          paymentRecord,
+        })
+      : null;
+
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, quote: updatedQuote, schedule: updatedSchedule || current.schedule }
+        : current
+    );
+    setShowPaymentForm(false);
+    setPaymentDraft(createDefaultPaymentDraft());
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("payment_received");
+    return paymentRecord;
+  };
+
+  const openCompletionFormForWorkCenterJob = (job = {}) => {
+    localStorage.setItem("completionService", job.title || translate("scheduledWork"));
+    localStorage.setItem("completionLocation", job.address || "");
+    localStorage.setItem("completionCustomer", job.customer || "");
+    localStorage.setItem("workCenterReturnCustomer", job.customer || "");
+    localStorage.setItem("completionSource", "work_center_job");
+    localStorage.setItem(
+      "completionScheduleId",
+      job.schedule?.id || job.schedule?.scheduleId || ""
+    );
+    localStorage.setItem(
+      "activeConversationId",
+      job.conversationId || job.schedule?.conversationId || job.quote?.conversationId || ""
+    );
+    setPage("completionSheet");
+  };
+
+  const openReceiptBuilderForWorkCenterJob = (job = {}) => {
+    const conversationId =
+      job.conversationId || job.schedule?.conversationId || job.quote?.conversationId || "";
+    if (conversationId) localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("activeJobService", job.title || translate("scheduledWork"));
+    localStorage.setItem("activeJobLocation", job.address || "");
+    localStorage.setItem("activeJobCustomer", job.customer || "");
+    localStorage.setItem("workCenterReturnCustomer", job.customer || "");
+    localStorage.setItem("invoiceBuilderReturnPage", "workCenter");
+    localStorage.setItem(
+      "invoiceBuilderScheduleId",
+      job.schedule?.id || job.schedule?.scheduleId || ""
+    );
+    localStorage.setItem(
+      "invoiceBuilderQuoteId",
+      job.quote?.quoteId || job.quote?.id || job.schedule?.quoteId || ""
+    );
+    setPage("invoiceBuilder");
+  };
+
+  const openReceiptSendFlowForWorkCenterJob = (job = {}) => {
+    setShowApprovalConfirmFlow(false);
+    setShowPaymentForm(false);
+    setShowWorkAppointmentForm(false);
+    setShowCloseJobForm(false);
+    setShowProposalSendFlow(false);
+    setSendFlowDraft({
+      method:
+        job.conversationId || job.schedule?.conversationId || job.quote?.conversationId
+          ? "meetro_chat"
+          : "external_share",
+      note: "",
+    });
+    setShowReceiptSendFlow(true);
+  };
+
+  const confirmReceiptSendForWorkCenterJob = (job = {}) => {
+    if (!job.schedule) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    if (sendFlowDraft.method === "external_share") {
+      const updatedRecord = appendManualCustomerResponseHistoryNote(
+        job,
+        "receipt_external_send_prepared",
+        activeLanguage === "es"
+          ? "Recibo preparado para envío externo."
+          : "Receipt prepared for external sending.",
+        {
+          receiptDeliveryStatus: "external_send_prepared",
+          receiptSendMethod: "external_share",
+          receiptPreparedAt: now,
+        }
+      );
+
+      if (!updatedRecord) return null;
+
+      setShowReceiptSendFlow(false);
+      setSendFlowDraft({ method: "meetro_chat", note: "" });
+      setRefreshKey((key) => key + 1);
+      setJobActionToast({
+        type: "success",
+        message:
+          activeLanguage === "es"
+            ? "Listo para marcar el recibo enviado externamente."
+            : "Ready to mark the receipt sent externally.",
+      });
+      return updatedRecord;
+    }
+
+    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
+      ...buildJobTimelinePatch(job, "invoice_sent"),
+      invoiceStatus: "sent",
+      receiptStatus: "sent",
+      invoiceSentAt: now,
+      receiptSentAt: now,
+      receiptSendMethod: sendFlowDraft.method,
+      receiptSendNote: sendFlowDraft.note,
+    });
+
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    const updatedJob = { ...job, schedule: updatedRecord };
+    const customerUpdate = createCustomerWorkflowUpdate(updatedJob, "invoice_sent");
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, schedule: updatedRecord }
+        : current
+    );
+    setShowReceiptSendFlow(false);
+    setSendFlowDraft({ method: "meetro_chat", note: "" });
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("invoice_sent", customerUpdate);
+    return updatedRecord;
+  };
+
+  const openCloseJobConfirmationForWorkCenterJob = () => {
+    setShowApprovalConfirmFlow(false);
+    setShowPaymentForm(false);
+    setShowWorkAppointmentForm(false);
+    setShowProposalSendFlow(false);
+    setShowReceiptSendFlow(false);
+    setClosureDraft(createDefaultClosureDraft());
+    setShowCloseJobForm(true);
+  };
+
+  const confirmCloseWorkCenterJob = (job = {}) => {
+    const closureReadiness = evaluateWorkCenterClosureReadiness(job);
+
+    if (!closureReadiness.closureReady) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Cierre bloqueado. Las obligaciones pendientes deben satisfacerse antes de cerrar este trabajo."
+            : "Closure blocked. Outstanding obligations must be satisfied before closing this job.",
+      });
+      return null;
+    }
+
+    if (!closureDraft.confirmMoveToHistory) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Confirma mover este trabajo al historial."
+            : "Confirm moving this job to history.",
+      });
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const closureRecord = buildClosureRecord({
+      job,
+      reviewedAt: now,
+      closedAt: now,
+      notes: closureDraft.notes,
+    });
+
+    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
+      ...buildJobTimelinePatch(job, "closed"),
+      status: "closed",
+      workStatus: "closed",
+      jobStage: "closed",
+      closureStatus: "closed",
+      closureNotes: closureDraft.notes,
+      closureRecord,
+      closureObligations: closureRecord.obligations,
+      closureAuthorized: closureRecord.closureAuthorized,
+      closureReviewedAt: closureRecord.reviewedAt,
+      closedAt: now,
+    });
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+    const updatedJob = { ...job, schedule: updatedRecord };
+    const customerUpdate = createCustomerWorkflowUpdate(updatedJob, "closed");
+    const closedRecord = saveClosedJobToHistory(updatedJob);
+    setShowCloseJobForm(false);
+    setClosureDraft(createDefaultClosureDraft());
+    showJobActionSavedToast("closed", customerUpdate);
+    return closedRecord;
+  };
+
+  const openWorkCenterJobPrimaryAction = (job = selectedWorkCenterJob) => {
+    if (!job) return;
+    const stage = getSarahJobStateKey(job);
+
+    if (stage === "lead") {
+      createSarahPageVisitRecord(job);
+      return;
+    }
+
+    if (stage === "visit_scheduled") {
+      if (isCustomerResponsePending(job.schedule || {})) {
+        setJobActionToast({
+          type: "error",
+          message:
+            activeLanguage === "es"
+              ? "Registra la confirmación del cliente antes de iniciar la evaluación."
+              : "Record the customer confirmation before starting evaluation.",
+        });
+        return;
+      }
+      openJobScopedDetail("evaluation", job);
+      return;
+    }
+
+    if (stage === "evaluation_complete") {
+      openProposalBuilderForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "quote_created") {
+      openProposalSendFlowForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "proposal_sent") {
+      openApprovalConfirmationForWorkCenterJob();
+      return;
+    }
+
+    if (stage === "approved") {
+      openPaymentFormForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "payment_received") {
+      setShowPaymentForm(false);
+      setShowProposalSendFlow(false);
+      setShowReceiptSendFlow(false);
+      setShowCloseJobForm(false);
+      setWorkAppointmentDraft(createDefaultWorkAppointmentDraft());
+      setShowWorkAppointmentForm(true);
+      return;
+    }
+
+    if (stage === "work_scheduled") {
+      if (isCustomerResponsePending(job.schedule || {})) {
+        setJobActionToast({
+          type: "error",
+          message:
+            activeLanguage === "es"
+              ? "Registra la confirmación de fecha antes de marcar en camino."
+              : "Record the work date confirmation before marking on the way.",
+        });
+        return;
+      }
+      advanceWorkCenterJobSchedule(job, "on_the_way");
+      return;
+    }
+
+    if (stage === "en_route") {
+      advanceWorkCenterJobSchedule(job, "arrived");
+      return;
+    }
+
+    if (stage === "arrived") {
+      advanceWorkCenterJobSchedule(job, "working");
+      return;
+    }
+
+    if (stage === "working") {
+      openCompletionFormForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "completed") {
+      openReceiptBuilderForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "receipt_created") {
+      openReceiptSendFlowForWorkCenterJob(job);
+      return;
+    }
+
+    if (stage === "receipt_sent") {
+      openCloseJobConfirmationForWorkCenterJob();
+      return;
+    }
+
+    if (stage === "closed") {
+      setIsJobHistoryMode(true);
+      setSelectedJobDetailView("history");
+      return;
+    }
+
+    createSarahPageVisitRecord(job);
+  };
+
+  const seedJobPageEvaluationForm = (job = {}) => {
+    const schedule = job.schedule || {};
+    const savedEvaluation = schedule.evaluation || {};
+    const evaluationSelection = getEvaluationSelectionSeed(schedule);
+    const evaluationTemplate = resolveEvaluationTemplate(evaluationSelection);
+    setEvaluationSaveNotice("");
+    setEvaluationSaveError("");
+    setEvaluationForm({
+      serviceType: evaluationSelection.serviceType,
+      context: evaluationSelection.context,
+      evaluationTemplate: evaluationTemplate.found
+        ? evaluationTemplate.evaluationTemplate
+        : null,
+      templateRequirements: evaluationTemplate.found
+        ? [...(evaluationTemplate.template?.requirements || [])]
+        : [],
+	      photos: Array.isArray(savedEvaluation.photos) ? savedEvaluation.photos : [],
+	      findings: getEvaluationFindingNotes(
+	        savedEvaluation,
+	        typeof schedule.evaluationFindings === "string" ? schedule.evaluationFindings : ""
+	      ),
+	      findingRecords: getEvaluationFindingSeeds(savedEvaluation, schedule),
+      materialsNeeded:
+        savedEvaluation.materialsNeeded || schedule.evaluationMaterialsNeeded || "",
+      laborNotes: savedEvaluation.laborNotes || schedule.evaluationLaborNotes || "",
+      safetyNotes: savedEvaluation.safetyNotes || schedule.evaluationSafetyNotes || "",
+      photoNotes: savedEvaluation.photoNotes || schedule.evaluationPhotoNotes || "",
+      notes:
+        savedEvaluation.visitNotes ||
+        schedule.evaluationVisitNotes ||
+        schedule.evaluationNotes ||
+        "",
+      workItems: getVisitEvaluationWorkItems({
+        ...schedule,
+        title: schedule.title || job.title || "",
+        requestTitle: schedule.requestTitle || job.title || "",
+      }),
+      nextStep: savedEvaluation.recommendedNextStep || "quote",
+    });
+  };
+
+  const saveSarahPageEvaluationNotes = (job = {}) => {
+    if (!job.schedule?.id && !job.schedule?.scheduleId) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    if (!hasEvaluationSelection()) {
+      setJobActionToast({
+        type: "error",
+        message:
+          activeLanguage === "es"
+            ? "Selecciona tipo de servicio y contexto antes de guardar notas de evaluación."
+            : "Select Service Type and Context before saving Evaluation Notes.",
+      });
+      return null;
+    }
+
+    const normalizedWorkItems = Array.isArray(evaluationForm.workItems)
+      ? evaluationForm.workItems.map(sanitizeEvaluationWorkItem)
+      : [];
+    const evaluationPhotos = Array.isArray(evaluationForm.photos)
+      ? evaluationForm.photos.map(sanitizeEvaluationPhoto)
+      : [];
+    const createdAt = new Date().toISOString();
+    const summary = buildEvaluationSummary({
+      ...evaluationForm,
+      photos: evaluationPhotos,
+      workItems: normalizedWorkItems,
+    });
+	    const selection = resolveEvaluationSelection(evaluationForm);
+	    const evaluationId =
+	      job.schedule?.evaluation?.id || `evaluation-${job.schedule?.id || Date.now()}`;
+	    const customerId = getEvaluationCustomerScope({
+	      ...job,
+	      ...(job.schedule || {}),
+	    });
+	    const requestId = job.requestId || job.schedule?.requestId || "";
+	    const structuredFindings = buildStructuredEvaluationFindings({
+	      evaluationId,
+	      customerId,
+	      requestId,
+	      findings: evaluationForm.findingRecords,
+	    });
+	    const evaluationRecord = buildVisitEvaluationPayload({
+	      schedule: job.schedule || {},
+	      customerId,
+	      evaluation: {
+	      id: evaluationId,
+      type: "evaluation",
+      source: "job_page_v1",
+      scheduleId: job.schedule?.id || job.schedule?.scheduleId || "",
+      visitId: job.schedule?.visitId || job.schedule?.id || "",
+	      appointmentId: job.schedule?.id || job.schedule?.scheduleId || "",
+	      evaluationId,
+	      customerId,
+	      requestId,
+      conversationId: job.conversationId || job.schedule?.conversationId || "",
+      notes: summary,
+      serviceType: selection.serviceType,
+      context: selection.context,
+      evaluationTemplate: selection.evaluationTemplate,
+      evaluationTemplateMatched: selection.evaluationTemplateMatched,
+      templateRequirements: selection.templateRequirements,
+      visitNotes: sanitizeEvaluationText(evaluationForm.notes),
+      customerNeeds: sanitizeEvaluationText(evaluationForm.notes),
+	      findings: structuredFindings.findings,
+	      findingsNotes: sanitizeEvaluationText(evaluationForm.findings),
+	      findingsText: sanitizeEvaluationText(evaluationForm.findings),
+	      serviceRecommendations: structuredFindings.serviceRecommendations,
+	      findingsNormalizationErrors: structuredFindings.errors,
+      materialsNeeded: sanitizeEvaluationText(evaluationForm.materialsNeeded),
+      laborNotes: sanitizeEvaluationText(evaluationForm.laborNotes),
+      safetyNotes: sanitizeEvaluationText(evaluationForm.safetyNotes),
+      photoNotes: sanitizeEvaluationText(evaluationForm.photoNotes),
+      photos: evaluationPhotos,
+      workItems: normalizedWorkItems,
+      recommendedNextStep: sanitizeEvaluationText(evaluationForm.nextStep || "quote"),
+      savedAt: createdAt,
+      updatedAt: createdAt,
+	      },
+	    });
+
+    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
+      ...buildJobTimelinePatch(job, "evaluation_completed"),
+      evaluation: evaluationRecord,
+      serviceType: evaluationRecord.serviceType,
+      context: evaluationRecord.context,
+      evaluationTemplate: evaluationRecord.evaluationTemplate,
+      evaluationTemplateMatched: evaluationRecord.evaluationTemplateMatched,
+      templateRequirements: evaluationRecord.templateRequirements,
+      evaluationServiceType: evaluationRecord.serviceType,
+      evaluationContext: evaluationRecord.context,
+      evaluationItems: evaluationRecord.workItems,
+      workItems: evaluationRecord.workItems,
+      evaluationNotes: summary,
+      evaluationVisitNotes: evaluationRecord.visitNotes,
+	      evaluationFindings: evaluationRecord.findingsNotes,
+	      evaluationStructuredFindings: evaluationRecord.findings,
+	      serviceRecommendations: evaluationRecord.serviceRecommendations,
+      evaluationMaterialsNeeded: evaluationRecord.materialsNeeded,
+      evaluationLaborNotes: evaluationRecord.laborNotes,
+      evaluationSafetyNotes: evaluationRecord.safetyNotes,
+      evaluationPhotoNotes: evaluationRecord.photoNotes,
+      evaluationPhotos: evaluationRecord.photos,
+      evaluationStatus: "saved",
+      evaluationSavedAt: createdAt,
+    });
+
+    if (!updatedRecord) {
+      showJobActionErrorToast();
+      return null;
+    }
+
+    setSelectedWorkCenterJob((current) =>
+      current && current.id === job.id
+        ? { ...current, schedule: updatedRecord }
+        : current
+    );
+    if (hasCustomerJobReachedState(getSarahJobStateKey(job), "quote_created")) {
+      setIsEditingCompletedEvaluation(false);
+    }
+    setRefreshKey((key) => key + 1);
+    showJobActionSavedToast("evaluation_completed");
+    return evaluationRecord;
+  };
+
+  const openJobScopedDetail = (view, job = selectedWorkCenterJob) => {
+    if (view === "evaluation") {
+      seedJobPageEvaluationForm(job);
+      setIsEditingCompletedEvaluation(false);
+    } else {
+      setIsEditingCompletedEvaluation(false);
+    }
+    setSelectedJobDetailView((currentView) => (currentView === view ? "" : view));
+    window.setTimeout(() => {
+      jobScopedDetailRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }, 60);
+  };
+
+  const workCenterSections = [
+    {
+      key: "pending",
+      icon: "opportunities",
+      title: translate("workCenterOpportunitiesTitle"),
+      customer: dashboardCustomerLabel(
+        firstOpportunity,
+        activeLanguage === "es" ? "Nuevo cliente" : "New customer"
+      ),
+      status:
+        opportunitiesCount > 0
+          ? activeLanguage === "es"
+            ? "Solicitud nueva"
+            : "New request"
+          : activeLanguage === "es"
+          ? "Sin solicitudes nuevas"
+          : "No new requests",
+      nextStep:
+        opportunitiesCount > 0
+          ? activeLanguage === "es"
+            ? "Contactar o programar visita"
+            : "Contact or schedule visit"
+          : activeLanguage === "es"
+          ? "Esperar nueva solicitud"
+          : "Wait for a new request",
+      primaryAction:
+        activeLanguage === "es" ? "Abrir Oportunidades" : "Open Opportunities",
+      badge: compactCountBadge(
+        opportunitiesCount,
+        "workCenterBadgeNew"
+      ),
+      tone: "#fff7ed",
+      accent: "#ea580c",
+    },
+    {
+      key: "schedule",
+      icon: "schedule",
+      title: translate("workCenterScheduleTitle"),
+      customer: dashboardCustomerLabel(
+        firstScheduleItem,
+        activeLanguage === "es" ? "Cliente programado" : "Scheduled customer"
+      ),
+      status:
+        scheduleResponseNotifications.length > 0
+          ? activeLanguage === "es"
+            ? "Cliente respondió"
+            : "Customer responded"
+          : upcomingScheduleCount > 0
+          ? activeLanguage === "es"
+            ? "Visita programada"
+            : "Visit scheduled"
+          : activeLanguage === "es"
+          ? "Sin visitas próximas"
+          : "No upcoming visits",
+      nextStep:
+        scheduleResponseNotifications.length > 0
+          ? activeLanguage === "es"
+            ? "Revisar respuesta"
+            : "Review response"
+          : upcomingScheduleCount > 0
+          ? activeLanguage === "es"
+            ? "Realizar visita"
+            : "Perform visit"
+          : activeLanguage === "es"
+          ? "Agregar visita"
+          : "Add visit",
+      primaryAction:
+        upcomingScheduleCount > 0 || scheduleResponseNotifications.length > 0
+          ? activeLanguage === "es"
+            ? "Abrir Agenda"
+            : "Open Schedule"
+          : activeLanguage === "es"
+          ? "Agregar Visita"
+          : "Add Visit",
+      badge:
+        scheduleResponseNotifications.length > 0
+          ? activeLanguage === "es"
+            ? `${scheduleResponseNotifications.length} respuesta`
+            : `${scheduleResponseNotifications.length} response`
+          : compactCountBadge(
+              upcomingScheduleCount,
+              "workCenterBadgeUpcoming"
+            ),
+      isPriority: scheduleResponseNotifications.length > 0,
+      tone: "#eff6ff",
+      accent: "#2563eb",
+    },
+    {
+      key: "quotes",
+      icon: "quote",
+      title: translate("workCenterQuotesTitle"),
+      customer: dashboardCustomerLabel(
+        firstAcceptedQuoteReady || quoteHistory[0],
+        activeLanguage === "es" ? "Cliente con propuesta" : "Proposal customer"
+      ),
+      status:
+        acceptedQuoteReadyItems.length > 0
+          ? activeLanguage === "es"
+            ? "Propuesta aprobada"
+            : "Proposal approved"
+          : quoteAttentionCount > 0
+          ? activeLanguage === "es"
+            ? "Propuesta enviada"
+            : "Proposal sent"
+          : activeLanguage === "es"
+          ? "Sin propuestas pendientes"
+          : "No pending proposals",
+      nextStep:
+        acceptedQuoteReadyItems.length > 0
+          ? activeLanguage === "es"
+            ? "Mover a trabajo activo"
+            : "Move to Active Work"
+          : quoteAttentionCount > 0
+          ? activeLanguage === "es"
+            ? "Esperar aprobación"
+            : "Await approval"
+          : activeLanguage === "es"
+          ? "Crear propuesta cuando haya evaluación"
+          : "Create proposal after visit notes",
+      primaryAction:
+        acceptedQuoteReadyItems.length > 0
+          ? activeLanguage === "es"
+            ? "Mover a Trabajo Activo"
+            : "Move to Active Work"
+          : activeLanguage === "es"
+          ? "Abrir Propuestas"
+          : "Open Proposals",
+      badge:
+        acceptedQuoteReadyItems.length > 0
+          ? activeLanguage === "es"
+            ? `${acceptedQuoteReadyItems.length} cotización aceptada lista`
+            : `${acceptedQuoteReadyItems.length} accepted quote ready`
+          : compactCountBadge(
+              quoteAttentionCount,
+              "workCenterBadgeAttention"
+            ),
+      isPriority: acceptedQuoteReadyItems.length > 0,
+      tone: "#f5f3ff",
+      accent: "#7c3aed",
+    },
+    {
+      key: "active",
+      icon: "activeWork",
+      title: translate("workCenterActiveWorkTitle"),
+      customer: dashboardCustomerLabel(
+        firstActiveWorkItem,
+        activeLanguage === "es" ? "Cliente activo" : "Active customer"
+      ),
+      status:
+        activeWorkCount > 0
+          ? activeLanguage === "es"
+            ? "Trabajo activo"
+            : "Active work"
+          : activeLanguage === "es"
+          ? "Sin trabajos activos"
+          : "No active work",
+      nextStep:
+        activeWorkCount > 0
+          ? activeLanguage === "es"
+            ? "Completar el trabajo"
+            : "Complete the work"
+          : activeLanguage === "es"
+          ? "Esperar aprobación"
+          : "Wait for approval",
+      primaryAction:
+        activeLanguage === "es" ? "Abrir Trabajo" : "Open Job",
+      badge: compactCountBadge(
+        activeWorkCount,
+        "workCenterBadgeActive"
+      ),
+      tone: "#f0fdf4",
+      accent: "#16a34a",
+    },
+    {
+      key: "completed",
+      icon: "completion",
+      title: translate("workCenterClosureTitle"),
+      customer: dashboardCustomerLabel(
+        firstClosureReview?.project,
+        activeLanguage === "es" ? "Cliente pendiente" : "Pending customer"
+      ),
+      status:
+        closureReadyCount > 0
+          ? activeLanguage === "es"
+            ? "Listo para cierre"
+            : "Ready for closure"
+          : activeLanguage === "es"
+          ? "Sin cierres listos"
+          : "No closure ready",
+      nextStep:
+        closureReadyCount > 0
+          ? activeLanguage === "es"
+            ? "Verificar obligaciones"
+            : "Verify obligations"
+          : activeLanguage === "es"
+          ? "Completar trabajo primero"
+          : "Complete work first",
+      primaryAction:
+        activeLanguage === "es" ? "Abrir Cierre" : "Open Closure",
+      openedTitle: translate("closureCenterTitle"),
+      openedDescription: translate("closureCenterPurpose"),
+      openedNextStep: translate("closureCenterNextStep"),
+      badge: compactCountBadge(
+        closureReadyCount,
+        "workCenterBadgeReady"
+      ),
+      tone: "#f8fafc",
+      accent: "#475569",
+    },
+    {
+      key: "records",
+      icon: "jobHistory",
+      title: translate("workCenterHistoryTitle"),
+      customer: dashboardCustomerLabel(
+        firstHistoryRecord,
+        activeLanguage === "es" ? "Memoria del cliente" : "Relationship memory"
+      ),
+      status:
+        historyRecordCount > 0
+          ? activeLanguage === "es"
+            ? "Registro guardado"
+            : "Record saved"
+          : activeLanguage === "es"
+          ? "Sin historial todavía"
+          : "No history yet",
+      nextStep:
+        historyRecordCount > 0
+          ? activeLanguage === "es"
+            ? "Usar para servicio futuro"
+            : "Use for future service"
+          : activeLanguage === "es"
+          ? "Cerrar trabajos terminados"
+          : "Close completed work",
+      primaryAction:
+        activeLanguage === "es" ? "Abrir Historial" : "Open History",
+      badge: compactCountBadge(
+        historyRecordCount,
+        "workCenterBadgeRecords"
+      ),
+      tone: "#eef2ff",
+      accent: "#4f46e5",
+    },
+    {
+      key: "revenue",
+      icon: "revenue",
+      title: translate("workCenterRevenueTitle"),
+      customer: activeLanguage === "es" ? "Negocio" : "Business",
+      status:
+        totalJobRevenue > 0
+          ? activeLanguage === "es"
+            ? "Ingresos registrados"
+            : "Revenue recorded"
+          : activeLanguage === "es"
+          ? "Listo para revisar"
+          : "Ready to review",
+      nextStep:
+        activeLanguage === "es"
+          ? "Revisar métricas"
+          : "Review revenue metrics",
+      primaryAction:
+        activeLanguage === "es" ? "Ver Ingresos" : "View Revenue",
+      badge:
+        totalJobRevenue > 0
+          ? `$${Number(totalJobRevenue).toLocaleString()}`
+          : translate("workCenterBadgeReviewPerformance"),
+      tone: "#ecfdf5",
+      accent: "#059669",
+    },
+  ];
+
+  const activeSection =
+    workCenterSections.find((sectionItem) => {
+      if (activeTab === "materials") return sectionItem.key === "active";
+      return sectionItem.key === activeTab;
+    }) || workCenterSections[0];
+  const compactWorkCenterChildTabs = [
+    "pending",
+    "quotes",
+    "active",
+    "schedule",
+    "revenue",
+    "jobHistory",
+  ];
+  const isCompactWorkCenterChildPageOpen =
+    isWorkCenterSectionOpen && compactWorkCenterChildTabs.includes(activeTab);
+
   return (
-    <div style={page}>
+    <div className="app-page contractor-dashboard meetro-wide-page" style={page}>
       <style>
         {`
           .revenue-spark span {
@@ -1173,248 +9648,2342 @@ setPage("emergencyDispatch");
           }
         `}
       </style>
-      <div style={topBar}>
-        <FloatingBackButton onClick={() => setPage("businessDashboard")} />
+      {!isCompactWorkCenterChildPageOpen && (
+        <div style={topBar}>
+          {!isWorkCenterSectionOpen && (
+            <FloatingBackButton onClick={() => setPage("businessDashboard")} />
+          )}
 
-        <div style={availabilityPill}>{translate("activeNow")}</div>
-      </div>
+          <div
+            style={{
+              ...availabilityPill,
+              background: availableNow ? "#10b981" : "#64748b",
+            }}
+          >
+            {availableNow
+              ? translate("activeNow")
+              : activeLanguage === "es"
+              ? "Desconectado"
+              : "Offline"}
+          </div>
+        </div>
+      )}
 
-      <div style={header}>
-        <h1 style={title}>{t.title}</h1>
-        <p style={subtitle}>{t.subtitle}</p>
-      </div>
-
-      <div style={rolePill}>
-        {translate("service")}: {String(userRole).toLowerCase() === "handyman" ? translate("handymanLabel") : userRole}
-      </div>
-
-      <div style={overviewGrid}>
-        <div style={overviewCard}>
-          <div style={overviewIcon}>🚨</div>
-
-          <strong style={overviewTitle}>
-            {translate("liveDispatch")}
-          </strong>
-
-          <p style={overviewText}>
-            {hasJobStatus
-              ? selectedService === "Emergency Plumbing"
-                ? translate("emergencyPlumbing")
-                : selectedService
-              : translate("noActiveService")}
-          </p>
-
-          <div style={miniPill}>
-            {getStatusLabel() || translate("noStatus")}
+      {isWorkCenterSectionOpen && !isCompactWorkCenterChildPageOpen && (
+        <>
+          <div style={header}>
+            <h1 style={title}>{t.title}</h1>
           </div>
 
-          <div style={progressWrap}>
-            <div style={progressDots}>
-              <span style={progressActive}>●</span>
-              <span>────</span>
-              <span>{["accepted","enroute","arrived","started","completed"].includes(dispatchStatus) ? "●" : "○"}</span>
-              <span>────</span>
-              <span>{["arrived","started","completed"].includes(dispatchStatus) ? "●" : "○"}</span>
-              <span>────</span>
-              <span>{["started","completed"].includes(dispatchStatus) ? "●" : "○"}</span>
-              <span>────</span>
-              <span>{["completed"].includes(dispatchStatus) ? "●" : "○"}</span>
-            </div>
-
-            <div style={progressLabels}>
-              <span>{language === "es" ? "Aceptado" : translate("acceptedShort")}</span>
-              <span>{language === "es" ? "En Camino" : translate("enRouteShort")}</span>
-              <span>{language === "es" ? "Llegó" : translate("arrivedShort")}</span>
-              <span>{language === "es" ? "Iniciado" : translate("startedShort")}</span>
-              <span>{language === "es" ? "Completo" : translate("completeShort")}</span>
-            </div>
+          <div style={rolePill}>
+            {translate("businessType")}: {String(userRole).toLowerCase() === "handyman" ? translate("handymanLabel") : userRole}
           </div>
+        </>
+      )}
 
-          {canOpenDispatch && (
+      <div ref={workCenterPanelRef}>
+        {!isWorkCenterSectionOpen ? (
+          <section className="work-center-dashboard" style={workCenterDashboard}>
+            <div className="work-center-dashboard-hero" style={workCenterDashboardIntro}>
+              <span style={workCenterDashboardEyebrow}>
+                {translate("workCenterHeaderEyebrow")}
+              </span>
+              <h2 style={workCenterDashboardTitle}>
+                {translate("workCenterDashboardTitle")}
+              </h2>
+              <p style={workCenterDashboardPurpose}>
+                {translate("workCenterPurposeStatement")}
+              </p>
+              <p style={workCenterDashboardSummary}>
+                {[
+                  `${opportunitiesCount} ${opportunitiesCount === 1 ? translate("newOpportunity") : translate("newOpportunities")}`,
+                  `${workCenterActiveJobs.length} ${workCenterActiveJobs.length === 1 ? translate("activeJob") : translate("activeJobs")}`,
+                  `${upcomingScheduleCount} ${upcomingScheduleCount === 1 ? translate("visitToday") : translate("visitsToday")}`,
+                ].join(" • ")}
+              </p>
+              {isPropertyManagementBusiness && (
+                <p style={propertyManagementWorkCenterFoundationNote}>
+                  {translate("propertyManagementWorkCenterNote")}
+                </p>
+              )}
+            </div>
+
+            {workCenterLandingAlert && (
+              <section style={workCenterAlertGuidanceCard}>
+                <div style={workCenterAlertGuidanceTop}>
+                  <span style={workCenterAlertGuidanceIcon}>!</span>
+                  <div style={workCenterAlertGuidanceText}>
+                    <span style={workCenterAlertGuidanceEyebrow}>
+                      {workCenterLandingAlert.eyebrow}
+                    </span>
+                    <strong style={workCenterAlertGuidanceTitle}>
+                      {workCenterLandingAlert.title}
+                    </strong>
+                    <p style={workCenterAlertGuidanceMessage}>
+                      {workCenterLandingAlert.message}
+                    </p>
+                    <span style={workCenterAlertGuidanceMeta}>
+                      {workCenterLandingAlert.meta} • {workCenterLandingAlert.status}
+                    </span>
+                  </div>
+                </div>
+                <div style={workCenterAlertGuidanceActions}>
+                  <button
+                    type="button"
+                    style={workCenterAlertPrimaryButton}
+                    onClick={workCenterLandingAlert.onPrimary}
+                  >
+                    {workCenterLandingAlert.primaryLabel}
+                  </button>
+                  <button
+                    type="button"
+                    style={workCenterAlertSecondaryButton}
+                    onClick={workCenterLandingAlert.onSecondary}
+                  >
+                    {workCenterLandingAlert.secondaryLabel}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {!selectedWorkCenterJob && (
+            <div style={workCenterPrimaryNavGrid} aria-label="Work Center areas">
+              {workCenterPrimaryNavigationCards.map((card) => (
+                <button
+                  key={card.key}
+                  type="button"
+                  className={activeTab === card.key ? "meetro-selected-card" : ""}
+                  style={{
+                    ...workCenterPrimaryNavCard,
+                    ...(card.alert ? workCenterPrimaryNavCardAlert : {}),
+                    borderColor: card.alert ? "#fb923c" : `${card.accent}24`,
+                  }}
+                  onClick={card.onClick}
+                >
+                  <span
+                    style={{
+                      ...workCenterPrimaryNavIcon,
+                      background: card.tone,
+                      color: card.accent,
+                    }}
+                    aria-hidden="true"
+                  >
+                    <MeetroIcon name={card.icon} size={24} decorative />
+                  </span>
+                  <span style={workCenterPrimaryNavContent}>
+                    <span style={workCenterPrimaryNavTitleRow}>
+                      <strong style={workCenterPrimaryNavTitle}>{card.title}</strong>
+                      <span
+                        style={{
+                          ...workCenterPrimaryNavMeta,
+                          background: card.tone,
+                          color: card.accent,
+                          ...(card.alert ? workCenterPrimaryNavMetaAlert : {}),
+                        }}
+                      >
+                        {card.meta}
+                      </span>
+                    </span>
+                    <span style={workCenterPrimaryNavPurpose}>{card.purpose}</span>
+                    <span style={{ ...workCenterPrimaryNavAction, color: card.accent }}>
+                      {card.actionLabel}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            )}
+
+            {selectedWorkCenterJob ? (() => {
+              const scopedQuotes = getScopedJobQuotes(selectedWorkCenterJob);
+              const scopedSchedules = getScopedJobSchedules(selectedWorkCenterJob);
+              const scopedActiveRecords = getScopedJobActiveRecords(selectedWorkCenterJob);
+              const scopedHistoryRecords = getScopedJobHistoryRecords(selectedWorkCenterJob);
+              const scopedAlerts = getScopedJobAlerts(selectedWorkCenterJob);
+              const primaryScopedQuote = scopedQuotes[0] || selectedWorkCenterJob.quote || null;
+              const primaryScopedSchedule = scopedSchedules[0] || selectedWorkCenterJob.schedule || null;
+              const primaryScopedHistory = scopedHistoryRecords[0] || selectedWorkCenterJob.history || null;
+              const scopedJob = {
+                ...selectedWorkCenterJob,
+                quote: primaryScopedQuote,
+                schedule: primaryScopedSchedule,
+                active: scopedActiveRecords[0] || selectedWorkCenterJob.active || null,
+                history: primaryScopedHistory,
+              };
+              const historyEvaluation = getHistoryEvaluation(scopedJob);
+              const historyFindings = getHistoryFindings(scopedJob);
+              const historyServiceRecommendations =
+                getHistoryServiceRecommendations(scopedJob);
+              const workflowState = resolveCustomerJobWorkflowState(scopedJob);
+              const supportingLinks = getCustomerJobSupportingLinks(scopedJob, workflowState);
+              const externalManualActions = getExternalCustomerManualActions(scopedJob, workflowState);
+              const isProposalSentState = workflowState.stateKey === "proposal_sent";
+              const visibleExternalManualActions = isProposalSentState
+                ? []
+                : externalManualActions;
+              const jobStatusTone = workflowState.tone;
+              const jobDisplayStatus = isJobHistoryMode
+                ? activeLanguage === "es"
+                  ? "Cerrado"
+                  : "Closed"
+                : workflowState.statusLabel;
+              const jobDisplayNextStep = isJobHistoryMode
+                ? activeLanguage === "es"
+                  ? "Revisar el historial completo del trabajo."
+                  : "Review the full job history."
+                : workflowState.nextActionLabel;
+              const currentStateDefinition = getSarahJobStateDefinition(scopedJob);
+              const evaluationPanelMode = getEvaluationPanelMode({
+                workflowState: workflowState.stateKey,
+                hasEvaluation: Boolean(
+                  primaryScopedSchedule && hasEvaluationForAppointment(primaryScopedSchedule)
+                ),
+                isEditing: isEditingCompletedEvaluation,
+              });
+              const supportingRecordsDefaultOpen = getSupportingRecordsDefaultOpen();
+              const supportingRecordActionStyle =
+                getSupportingRecordActionStyleVariant() === "secondary"
+                  ? miniInlineButton
+                  : startScheduleBtn;
+	              const hasOpenWorkflowForm =
+	                showProposalSendFlow ||
+	                showApprovalConfirmFlow ||
+	                showPaymentForm ||
+	                showWorkAppointmentForm ||
+	                showReceiptSendFlow ||
+	                showCloseJobForm;
+	              const hasHistoryReceipt = Boolean(
+	                getHistoryReceiptSummary(scopedJob) ||
+	                  primaryScopedQuote?.invoiceStatus ||
+	                  primaryScopedQuote?.receiptStatus ||
+	                  primaryScopedQuote?.paymentReceivedAt ||
+	                  primaryScopedQuote?.depositPaidAt
+	              );
+              const handleWorkflowPrimaryAction = () => {
+                if (workflowState.primaryActionType === "open_conversation") {
+                  if (scopedJob.conversationId) {
+                    localStorage.setItem("activeConversationId", scopedJob.conversationId);
+                    localStorage.setItem("conversationReturnPage", "workCenter");
+                    localStorage.setItem("conversationReturnSection", "job");
+                    localStorage.setItem("meetroConversationType", "standard");
+                    setPage("conversationThread");
+                    return;
+                  }
+
+                  openJobScopedDetail("conversation", scopedJob);
+                  return;
+                }
+
+                openWorkCenterJobPrimaryAction(scopedJob);
+              };
+
+              return (
+              <div style={jobWorkspacePanel}>
+                <button
+                  type="button"
+                  style={workCenterBackButton}
+	                  onClick={() => {
+	                    setSelectedJobDetailView("");
+	                    setSelectedWorkCenterJob(null);
+	                    const returnTab = isJobHistoryMode ? "jobHistory" : "currentJobs";
+	                    setActiveTab(returnTab);
+	                    setJobMenuTab(isJobHistoryMode ? "history" : "current");
+	                    setIsJobHistoryMode(false);
+	                    setIsWorkCenterSectionOpen(true);
+	                    localStorage.setItem("meetroWorkCenterTab", returnTab);
+	                    localStorage.setItem("activeWorkCenterTab", returnTab);
+	                  }}
+                >
+                  <span aria-hidden="true">‹</span>
+                  {isJobHistoryMode
+                    ? activeLanguage === "es"
+                      ? "Volver al historial"
+                      : "Back to History"
+                    : activeLanguage === "es"
+                      ? "Volver a trabajos"
+                      : "Back to Jobs"}
+                </button>
+
+                <div style={jobWorkflowFirstHero}>
+                  <div style={jobWorkspaceHeaderRow}>
+                    <div>
+                      <span style={jobWorkspaceEyebrow}>
+                        {isJobHistoryMode
+                          ? activeLanguage === "es"
+                            ? "Historial"
+                            : "History"
+                          : activeLanguage === "es"
+                            ? "Trabajo actual"
+                            : "Current Job"}
+                      </span>
+                      <h2 style={visitDetailTitle}>{selectedWorkCenterJob.customer}</h2>
+                      <p style={jobWorkspaceAddress}>{selectedWorkCenterJob.address}</p>
+                      <p style={jobWorkflowServiceSummary}>{selectedWorkCenterJob.title}</p>
+                    </div>
+                    <span
+                      style={{
+                        ...jobWorkspaceStatusPill,
+                        background: jobStatusTone.background,
+                        color: jobStatusTone.color,
+                        borderColor: jobStatusTone.border,
+                      }}
+                    >
+                      {jobDisplayStatus}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      ...jobWorkflowCurrentStepCard,
+                      background: `linear-gradient(135deg, ${jobStatusTone.background}, #ffffff)`,
+                      borderColor: jobStatusTone.border,
+                    }}
+                  >
+                    <span style={{ ...jobWorkflowStepLabel, color: jobStatusTone.color }}>
+                      {activeLanguage === "es" ? "Estado actual" : "Current Status"}
+                    </span>
+                    <strong style={jobWorkflowStepStatus}>{jobDisplayStatus}</strong>
+
+                    {workflowState.supportingSummary.length > 0 && (
+                      <div style={jobWorkflowSummaryStack}>
+                        {workflowState.supportingSummary.map((item) => (
+                          <div key={item.label} style={jobWorkflowContextLine}>
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <span style={jobWorkflowStepLabel}>
+                      {activeLanguage === "es" ? "Siguiente acción" : "Next Action"}
+                    </span>
+                    <strong style={jobWorkflowNextAction}>{jobDisplayNextStep}</strong>
+                    {!isJobHistoryMode &&
+                      visibleExternalManualActions.length > 0 &&
+                      !hasOpenWorkflowForm && (
+                        <div style={jobWorkflowManualActions}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es"
+                              ? "Respuesta externa"
+                              : "External Customer Response"}
+                          </span>
+                          <div style={jobWorkflowManualActionGrid}>
+                            {visibleExternalManualActions.map((action) => (
+                              <button
+                                key={action.type}
+                                type="button"
+                                style={jobWorkflowManualActionButton}
+                                onClick={() =>
+                                  handleExternalCustomerManualAction(scopedJob, action.type)
+                                }
+                              >
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.awaitingCustomerResponse &&
+                      !hasOpenWorkflowForm &&
+                      visibleExternalManualActions.length === 0 && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es"
+                              ? "Respuesta del cliente"
+                              : "Customer Response"}
+                          </span>
+                          <p style={jobWorkspaceDisclosureText}>
+                            {workflowState.nextActionLabel}
+                          </p>
+                          {scopedJob.conversationId && (
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => {
+                                localStorage.setItem("activeConversationId", scopedJob.conversationId);
+                                localStorage.setItem("conversationReturnPage", "workCenter");
+                                localStorage.setItem("conversationReturnSection", "job");
+                                localStorage.setItem("meetroConversationType", "standard");
+                                setPage("conversationThread");
+                              }}
+                            >
+                              {activeLanguage === "es" ? "Abrir conversación" : "Open Conversation"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      !hasOpenWorkflowForm &&
+                      !workflowState.awaitingCustomerResponse &&
+                      visibleExternalManualActions.length === 0 && (
+                      <div style={jobWorkflowActionStack}>
+                        <button
+                          type="button"
+                          style={jobWorkflowPrimaryButton}
+                          onClick={handleWorkflowPrimaryAction}
+                        >
+                          {workflowState.primaryButtonLabel}
+                        </button>
+                        {isProposalSentState && (
+                          <button
+                            type="button"
+                            style={jobWorkflowSecondaryButton}
+                            onClick={openApprovalConfirmationForWorkCenterJob}
+                          >
+                            {activeLanguage === "es"
+                              ? "Registrar aprobación manualmente"
+                              : "Record Approval Manually"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "send_proposal" &&
+                      showProposalSendFlow && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal"}
+                          </span>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Método" : "Method"}
+                            <select
+                              style={input}
+                              value={sendFlowDraft.method}
+                              onChange={(event) =>
+                                setSendFlowDraft((current) => ({
+                                  ...current,
+                                  method: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="meetro_chat">
+                                {activeLanguage === "es" ? "Chat de Meetro" : "Meetro Chat"}
+                              </option>
+                              <option value="external_share">
+                                {activeLanguage === "es" ? "Compartir externamente" : "External Share"}
+                              </option>
+                            </select>
+                          </label>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={sendFlowDraft.note}
+                              placeholder={
+                                activeLanguage === "es"
+                                  ? "Mensaje para acompañar la propuesta."
+                                  : "Message to include with the proposal."
+                              }
+                              onChange={(event) =>
+                                setSendFlowDraft((current) => ({
+                                  ...current,
+                                  note: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => confirmProposalSendForWorkCenterJob(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => setShowProposalSendFlow(false)}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "open_conversation" &&
+                      showApprovalConfirmFlow && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es"
+                              ? "Confirmar aprobación"
+                              : "Confirm Approval"}
+                          </span>
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es"
+                              ? "Guarda la aprobación solo después de recibir confirmación del cliente."
+                              : "Save approval only after the customer has confirmed the proposal."}
+                          </p>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={approvalDraft.note}
+                              placeholder={
+                                activeLanguage === "es"
+                                  ? "Ej. Aprobado por mensaje de texto."
+                                  : "Example: Approved by text message."
+                              }
+                              onChange={(event) =>
+                                setApprovalDraft((current) => ({
+                                  ...current,
+                                  note: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label style={jobWorkflowCheckboxLine}>
+                            <input
+                              type="checkbox"
+                              checked={approvalDraft.confirmed}
+                              onChange={(event) =>
+                                setApprovalDraft((current) => ({
+                                  ...current,
+                                  confirmed: event.target.checked,
+                                }))
+                              }
+                            />
+                            {activeLanguage === "es"
+                              ? "Confirmo que el cliente aprobó la propuesta"
+                              : "I confirm the customer approved the proposal"}
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => confirmApprovalForWorkCenterJob(scopedJob)}
+                            >
+                              {activeLanguage === "es"
+                                ? "Guardar aprobación"
+                                : "Save Approval"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => {
+                                setShowApprovalConfirmFlow(false);
+                                setApprovalDraft(createDefaultApprovalDraft());
+                              }}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "record_payment" &&
+                      showPaymentForm && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es" ? "Pago" : "Payment"}
+                          </span>
+                          <div style={jobWorkflowFormGrid}>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Monto" : "Amount"}
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                style={input}
+                                value={paymentDraft.amount}
+                                onChange={(event) =>
+                                  setPaymentDraft((current) => ({
+                                    ...current,
+                                    amount: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Tipo" : "Type"}
+                              <select
+                                style={input}
+                                value={paymentDraft.paymentType}
+                                onChange={(event) =>
+                                  setPaymentDraft((current) => ({
+                                    ...current,
+                                    paymentType: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="deposit">
+                                  {activeLanguage === "es" ? "Depósito" : "Deposit"}
+                                </option>
+                                <option value="full">
+                                  {activeLanguage === "es" ? "Pago completo" : "Full Payment"}
+                                </option>
+                              </select>
+                            </label>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Método" : "Method"}
+                              <select
+                                style={input}
+                                value={paymentDraft.method}
+                                onChange={(event) =>
+                                  setPaymentDraft((current) => ({
+                                    ...current,
+                                    method: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="card">{activeLanguage === "es" ? "Tarjeta" : "Card"}</option>
+                                <option value="cash">{activeLanguage === "es" ? "Efectivo" : "Cash"}</option>
+                                <option value="check">{activeLanguage === "es" ? "Cheque" : "Check"}</option>
+                                <option value="bank_transfer">
+                                  {activeLanguage === "es" ? "Transferencia" : "Bank Transfer"}
+                                </option>
+                                <option value="other">{activeLanguage === "es" ? "Otro" : "Other"}</option>
+                              </select>
+                            </label>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Fecha" : "Date"}
+                              <input
+                                type="date"
+                                style={input}
+                                value={paymentDraft.date}
+                                onChange={(event) =>
+                                  setPaymentDraft((current) => ({
+                                    ...current,
+                                    date: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Nota" : "Note"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={paymentDraft.note}
+                              onChange={(event) =>
+                                setPaymentDraft((current) => ({
+                                  ...current,
+                                  note: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => savePaymentForWorkCenterJob(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Guardar pago" : "Save Payment"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => setShowPaymentForm(false)}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "schedule_work" &&
+                      showWorkAppointmentForm && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es" ? "Cita de trabajo" : "Work Appointment"}
+                          </span>
+                          <div style={jobWorkflowFormGrid}>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Fecha" : "Date"}
+                              <input
+                                type="date"
+                                style={input}
+                                value={workAppointmentDraft.date}
+                                onChange={(event) =>
+                                  setWorkAppointmentDraft((current) => ({
+                                    ...current,
+                                    date: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label style={jobWorkflowFieldLabel}>
+                              {activeLanguage === "es" ? "Hora" : "Time"}
+                              <input
+                                type="time"
+                                style={input}
+                                value={workAppointmentDraft.time}
+                                onChange={(event) =>
+                                  setWorkAppointmentDraft((current) => ({
+                                    ...current,
+                                    time: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Notas opcionales" : "Optional Notes"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={workAppointmentDraft.notes}
+                              placeholder={
+                                activeLanguage === "es"
+                                  ? "Detalles para recordar antes del trabajo."
+                                  : "Details to remember before the work."
+                              }
+                              onChange={(event) =>
+                                setWorkAppointmentDraft((current) => ({
+                                  ...current,
+                                  notes: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label style={jobWorkflowCheckboxLine}>
+                            <input
+                              type="checkbox"
+                              checked={workAppointmentDraft.shareWithCustomer}
+                              onChange={(event) =>
+                                setWorkAppointmentDraft((current) => ({
+                                  ...current,
+                                  shareWithCustomer: event.target.checked,
+                                }))
+                              }
+                            />
+                            {activeLanguage === "es"
+                              ? "Compartir con el cliente"
+                              : "Share With Customer"}
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => createSarahPageWorkAppointmentRecord(scopedJob)}
+                            >
+                              {activeLanguage === "es"
+                                ? "Crear cita de trabajo"
+                                : "Create Work Appointment"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => setShowWorkAppointmentForm(false)}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "send_receipt" &&
+                      showReceiptSendFlow && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es" ? "Enviar recibo" : "Send Receipt"}
+                          </span>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Método" : "Method"}
+                            <select
+                              style={input}
+                              value={sendFlowDraft.method}
+                              onChange={(event) =>
+                                setSendFlowDraft((current) => ({
+                                  ...current,
+                                  method: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="meetro_chat">
+                                {activeLanguage === "es" ? "Chat de Meetro" : "Meetro Chat"}
+                              </option>
+                              <option value="external_share">
+                                {activeLanguage === "es" ? "Compartir externamente" : "External Share"}
+                              </option>
+                            </select>
+                          </label>
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={sendFlowDraft.note}
+                              placeholder={
+                                activeLanguage === "es"
+                                  ? "Mensaje para acompañar el recibo."
+                                  : "Message to include with the receipt."
+                              }
+                              onChange={(event) =>
+                                setSendFlowDraft((current) => ({
+                                  ...current,
+                                  note: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => confirmReceiptSendForWorkCenterJob(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Enviar recibo" : "Send Receipt"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => setShowReceiptSendFlow(false)}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    {!isJobHistoryMode &&
+                      workflowState.primaryActionType === "close_job" &&
+                      showCloseJobForm && (
+                        <div style={jobWorkflowInlineForm}>
+                          <span style={jobWorkflowStepLabel}>
+                            {activeLanguage === "es" ? "Cerrar trabajo" : "Close Job"}
+                          </span>
+                          {(() => {
+                            const closureReadiness =
+                              evaluateWorkCenterClosureReadiness(scopedJob);
+                            return (
+                              <div style={closureGateCard}>
+                                <strong>
+                                  {activeLanguage === "es"
+                                    ? "Estado de cierre"
+                                    : "Closure Status"}
+                                  :{" "}
+                                  {closureReadiness.closureReady
+                                    ? activeLanguage === "es"
+                                      ? "Elegible"
+                                      : "Eligible"
+                                    : activeLanguage === "es"
+                                      ? "Bloqueado"
+                                      : "Blocked"}
+                                </strong>
+                                {!closureReadiness.closureReady && (
+                                  <p style={jobWorkspaceDisclosureText}>
+                                    {activeLanguage === "es"
+                                      ? "Cierre bloqueado. Las obligaciones pendientes deben satisfacerse antes de cerrar este trabajo."
+                                      : "Closure blocked. Outstanding obligations must be satisfied before closing this job."}
+                                  </p>
+                                )}
+                                <div style={closureGateGrid}>
+                                  <div>
+                                    <span style={jobWorkflowStepLabel}>
+                                      {activeLanguage === "es"
+                                        ? "Obligaciones pendientes"
+                                        : "Outstanding Obligations"}
+                                    </span>
+                                    <ul style={closureGateList}>
+                                      {closureReadiness.outstandingObligations.length > 0
+                                        ? closureReadiness.outstandingObligations.map((obligation) => (
+                                            <li key={obligation.id}>
+                                              {obligation.title || obligation.id}
+                                            </li>
+                                          ))
+                                        : (
+                                            <li>
+                                              {activeLanguage === "es"
+                                                ? "Ninguna"
+                                                : "None"}
+                                            </li>
+                                          )}
+                                    </ul>
+                                  </div>
+                                  <div>
+                                    <span style={jobWorkflowStepLabel}>
+                                      {activeLanguage === "es"
+                                        ? "Obligaciones satisfechas"
+                                        : "Satisfied Obligations"}
+                                    </span>
+                                    <ul style={closureGateList}>
+                                      {closureReadiness.satisfiedObligations.map((obligation) => (
+                                        <li key={obligation.id}>
+                                          {obligation.title || obligation.id}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          <label style={jobWorkflowFieldLabel}>
+                            {activeLanguage === "es" ? "Notas de cierre opcionales" : "Optional Closure Notes"}
+                            <textarea
+                              style={jobWorkflowNotesInput}
+                              value={closureDraft.notes}
+                              onChange={(event) =>
+                                setClosureDraft((current) => ({
+                                  ...current,
+                                  notes: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label style={jobWorkflowCheckboxLine}>
+                            <input
+                              type="checkbox"
+                              checked={closureDraft.confirmMoveToHistory}
+                              onChange={(event) =>
+                                setClosureDraft((current) => ({
+                                  ...current,
+                                  confirmMoveToHistory: event.target.checked,
+                                }))
+                              }
+                            />
+                            {activeLanguage === "es"
+                              ? "Confirmar mover al historial"
+                              : "Confirm Move To History"}
+                          </label>
+                          <div style={jobWorkflowFormActions}>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => confirmCloseWorkCenterJob(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Confirmar cierre" : "Confirm Close Job"}
+                            </button>
+                            <button
+                              type="button"
+                              style={miniInlineButton}
+                              onClick={() => setShowCloseJobForm(false)}
+                            >
+                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+	                  </div>
+
+                  {!isJobHistoryMode && (
+                    <p style={jobWorkflowGpsHint}>
+                      {activeLanguage === "es"
+                        ? "Meetro muestra solo el paso actual. Los registros quedan guardados detrás de este trabajo."
+                        : "Meetro shows only the current step. Records stay saved behind this job."}
+                    </p>
+                  )}
+                </div>
+
+	                {isJobHistoryMode && (
+	                  <div style={jobHistoryReadOnlyPanel}>
+		                    <div style={jobScopedDetailHeader}>
+		                      <strong>
+		                        {activeLanguage === "es"
+		                          ? "Historial del trabajo"
+		                          : "Job History"}
+	                      </strong>
+	                      <span style={jobWorkspaceStatusPill}>
+		                        {activeLanguage === "es" ? "Solo lectura" : "Read-only"}
+		                      </span>
+		                    </div>
+		                    <div style={jobHistoryDocumentActions}>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => setJobReportTarget(scopedJob)}
+		                      >
+		                        {activeLanguage === "es" ? "Ver reporte" : "View Job Report"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => printJobHistoryReport(scopedJob)}
+		                      >
+		                        {activeLanguage === "es" ? "Imprimir reporte" : "Print Job Report"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() =>
+		                          shareHistoryDocumentText({
+		                            title: activeLanguage === "es" ? "Reporte del trabajo" : "Job Report",
+		                            text: buildJobHistoryReportText(scopedJob),
+		                          })
+		                        }
+		                      >
+		                        {activeLanguage === "es" ? "Compartir reporte" : "Share Job Report"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() =>
+		                          copyHistoryDocumentText(
+		                            buildJobHistoryReportText(scopedJob),
+		                            activeLanguage === "es"
+		                              ? "Resumen copiado."
+		                              : "Summary copied."
+		                          )
+		                        }
+		                      >
+		                        {activeLanguage === "es" ? "Copiar resumen" : "Copy Summary"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => {
+		                          if (!primaryScopedQuote) {
+		                            setHistoryActionNotice(
+		                              activeLanguage === "es"
+		                                ? "No hay cotización guardada para este trabajo."
+		                                : "No quote saved for this job."
+		                            );
+		                            return;
+		                          }
+		                          setQuoteViewTarget({
+		                            ...primaryScopedQuote,
+		                            readOnlyHistory: true,
+		                            documentLabel:
+		                              activeLanguage === "es"
+		                                ? "Propuesta"
+		                                : "Quote / Proposal",
+		                          });
+		                        }}
+		                      >
+		                        {activeLanguage === "es" ? "Ver propuesta" : "View Quote / Proposal"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => {
+		                          if (!primaryScopedQuote) {
+		                            setHistoryActionNotice(
+		                              activeLanguage === "es"
+		                                ? "No hay cotización guardada para este trabajo."
+		                                : "No quote saved for this job."
+		                            );
+		                            return;
+		                          }
+		                          shareHistoryDocumentText({
+		                            title:
+		                              activeLanguage === "es"
+		                                ? "Propuesta"
+		                                : "Quote / Proposal",
+		                            text: buildQuoteDocumentText(
+		                              primaryScopedQuote,
+		                              activeLanguage === "es"
+		                                ? "Propuesta"
+		                                : "Quote / Proposal"
+		                            ),
+		                          });
+		                        }}
+		                      >
+		                        {activeLanguage === "es" ? "Compartir propuesta" : "Share Quote / Proposal"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => {
+		                          if (!primaryScopedQuote || !hasHistoryReceipt) {
+		                            setHistoryActionNotice(
+		                              activeLanguage === "es"
+		                                ? "No hay factura guardada para este trabajo."
+		                                : "No invoice saved for this job."
+		                            );
+		                            return;
+		                          }
+		                          setQuoteViewTarget({
+		                            ...primaryScopedQuote,
+		                            readOnlyHistory: true,
+		                            documentLabel:
+		                              activeLanguage === "es"
+		                                ? "Factura / Recibo"
+		                                : "Invoice / Receipt",
+		                          });
+		                        }}
+		                      >
+		                        {activeLanguage === "es" ? "Ver factura" : "View Invoice / Receipt"}
+		                      </button>
+		                      <button
+		                        type="button"
+		                        style={jobHistoryDocumentButton}
+		                        onClick={() => {
+		                          if (!primaryScopedQuote || !hasHistoryReceipt) {
+		                            setHistoryActionNotice(
+		                              activeLanguage === "es"
+		                                ? "No hay factura guardada para este trabajo."
+		                                : "No invoice saved for this job."
+		                            );
+		                            return;
+		                          }
+		                          shareHistoryDocumentText({
+		                            title:
+		                              activeLanguage === "es"
+		                                ? "Factura / Recibo"
+		                                : "Invoice / Receipt",
+		                            text: buildQuoteDocumentText(
+		                              primaryScopedQuote,
+		                              activeLanguage === "es"
+		                                ? "Factura / Recibo"
+		                                : "Invoice / Receipt"
+		                            ),
+		                          });
+		                        }}
+		                      >
+		                        {activeLanguage === "es" ? "Compartir factura" : "Share Invoice / Receipt"}
+		                      </button>
+		                    </div>
+		                    {historyActionNotice && (
+		                      <p style={jobHistoryActionNotice}>{historyActionNotice}</p>
+		                    )}
+		                    <div style={jobHistoryReasoningTrail}>
+		                      <div style={jobHistoryReasoningHeader}>
+		                        <strong>
+		                          {activeLanguage === "es"
+		                            ? "Resumen de evaluación"
+		                            : "Evaluation Summary"}
+		                        </strong>
+		                        <span>
+		                          {activeLanguage === "es"
+		                            ? "Solicitud -> evaluación -> hallazgos -> servicios recomendados"
+		                            : "Request -> Evaluation -> Findings -> Recommended Services"}
+		                        </span>
+		                      </div>
+		                      <div style={jobHistoryReadOnlyGrid}>
+		                        <div style={jobHistoryReadOnlySection}>
+		                          <strong>
+		                            {activeLanguage === "es"
+		                              ? "Tipo de servicio"
+		                              : "Service Type"}
+		                          </strong>
+		                          <span>
+		                            {historyEvaluation.serviceType ||
+		                              scopedJob.serviceType ||
+		                              "—"}
+		                          </span>
+		                        </div>
+		                        <div style={jobHistoryReadOnlySection}>
+		                          <strong>Context</strong>
+		                          <span>
+		                            {historyEvaluation.context ||
+		                              scopedJob.context ||
+		                              "—"}
+		                          </span>
+		                        </div>
+		                        <div style={jobHistoryReadOnlySection}>
+		                          <strong>
+		                            {activeLanguage === "es"
+		                              ? "Notas de evaluación"
+		                              : "Evaluation Notes"}
+		                          </strong>
+		                          <span>{getHistoryEvaluationNotes(scopedJob) || "—"}</span>
+		                        </div>
+		                        <div style={jobHistoryReadOnlySection}>
+		                          <strong>
+		                            {activeLanguage === "es"
+		                              ? "Requisitos esperados"
+		                              : "Template Requirements"}
+		                          </strong>
+		                          <span>
+		                            {formatHistoryList(
+		                              historyEvaluation.templateRequirements || []
+		                            )}
+		                          </span>
+		                        </div>
+		                      </div>
+		                      <div style={jobHistoryRecordSection}>
+		                        <strong>
+		                          {activeLanguage === "es" ? "Hallazgos" : "Findings"}
+		                        </strong>
+		                        {historyFindings.length > 0 ? (
+		                          <ul style={jobHistoryRecordList}>
+		                            {historyFindings.map((finding, index) => (
+		                              <li
+		                                key={
+		                                  finding.id ||
+		                                  finding.findingId ||
+		                                  finding.findingType ||
+		                                  index
+		                                }
+		                              >
+		                                {getHistoryFindingLabel(finding)}
+		                              </li>
+		                            ))}
+		                          </ul>
+		                        ) : (
+		                          <span style={jobHistoryEmptyText}>—</span>
+		                        )}
+		                      </div>
+		                      <div style={jobHistoryRecordSection}>
+		                        <strong>
+		                          {activeLanguage === "es"
+		                            ? "Servicios recomendados"
+		                            : "Recommended Services"}
+		                        </strong>
+		                        {historyServiceRecommendations.length > 0 ? (
+		                          <ul style={jobHistoryRecordList}>
+		                            {historyServiceRecommendations.map((service, index) => (
+		                              <li
+		                                key={
+		                                  service.id ||
+		                                  service.serviceType ||
+		                                  service.title ||
+		                                  index
+		                                }
+		                              >
+		                                {getHistoryServiceRecommendationLabel(service)}
+		                              </li>
+		                            ))}
+		                          </ul>
+		                        ) : (
+		                          <span style={jobHistoryEmptyText}>—</span>
+		                        )}
+		                      </div>
+		                    </div>
+		                    <div style={jobHistoryReadOnlyGrid}>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Cliente" : "Customer"}</strong>
+	                        <span>{selectedWorkCenterJob.customer}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Trabajo" : "Job"}</strong>
+	                        <span>{selectedWorkCenterJob.title}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Fecha" : "Date"}</strong>
+	                        <span>
+	                          {primaryScopedHistory?.closeDate ||
+	                          primaryScopedHistory?.closedAt ||
+	                          primaryScopedSchedule?.closedAt ||
+	                          primaryScopedSchedule?.date ||
+	                          "—"}
+	                        </span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Estado" : "Status"}</strong>
+	                        <span>{activeLanguage === "es" ? "Cerrado" : "Closed"}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Propuesta" : "Proposal / Quote"}</strong>
+	                        <span>
+	                          {primaryScopedQuote
+	                            ? `$${getQuoteTotalAmount(primaryScopedQuote).toFixed(2)}`
+	                            : "—"}
+	                        </span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Fotos" : "Photos"}</strong>
+	                        <span>{getWorkCenterJobPhotos(scopedJob).length}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Pago" : "Payment"}</strong>
+	                        <span>{getWorkCenterPaymentSummary(scopedJob)}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Recibo" : "Receipt"}</strong>
+	                        <span>{getHistoryReceiptSummary(scopedJob) || "—"}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>
+	                          {activeLanguage === "es"
+	                            ? "Notas de finalización"
+	                            : "Completion Notes"}
+	                        </strong>
+	                        <span>{getHistoryCompletionNotes(scopedJob) || "—"}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Cierre" : "Closure Notes"}</strong>
+	                        <span>{getHistoryClosureNotes(scopedJob) || "—"}</span>
+	                      </div>
+	                      <div style={jobHistoryReadOnlySection}>
+	                        <strong>{activeLanguage === "es" ? "Línea de tiempo" : "Timeline"}</strong>
+	                        <span>
+	                          {getWorkCenterJobSavedTimelineEvents(scopedJob).length > 0
+	                            ? getWorkCenterJobSavedTimelineEvents(scopedJob)
+	                                .map((event) => event.label || event.stage)
+	                                .filter(Boolean)
+	                                .join(" → ")
+	                            : "—"}
+	                        </span>
+	                      </div>
+	                    </div>
+	                  </div>
+	                )}
+
+	                {!isJobHistoryMode && (
+	                <details
+                    style={jobSupportingSlimDisclosure}
+                    defaultOpen={supportingRecordsDefaultOpen}
+                  >
+	                  <summary style={jobSupportingSlimSummary}>
+                      <span>{activeLanguage === "es" ? "Registros de apoyo" : "Supporting records"}</span>
+                      <span style={jobSupportingReadOnlyHint}>
+                        {supportingLinks.length} ·{" "}
+                        {activeLanguage === "es" ? "Solo lectura" : "Read-only"}
+                      </span>
+	                  </summary>
+                  <div style={jobSupportingSlimBody}>
+                    <div style={jobSupportingChipRow}>
+                      {supportingLinks.map((detail) => (
+                        <button
+                          type="button"
+                          key={`${detail.view}-${detail.label}`}
+                          className={
+                            selectedJobDetailView === detail.view
+                              ? "meetro-selected-card-soft"
+                              : ""
+                          }
+                          style={{
+                            ...jobSupportingChip,
+                            ...(selectedJobDetailView === detail.view
+                              ? jobSupportingChipActive
+                              : {}),
+                          }}
+                          onClick={() => openJobScopedDetail(detail.view, scopedJob)}
+                        >
+                          {detail.label}
+                        </button>
+                      ))}
+                    </div>
+                    {getWorkCenterJobSavedTimelineEvents(scopedJob).length > 0 && (
+                      <details style={jobSupportingMoreDisclosure}>
+                        <summary style={jobSupportingMoreSummary}>
+                          {activeLanguage === "es" ? "Línea de tiempo guardada" : "Saved timeline"}
+                        </summary>
+                        <div style={jobSavedTimelineList}>
+                          {getWorkCenterJobSavedTimelineEvents(scopedJob).map((event) => (
+                            <div key={event.id || `${event.stage}-${event.timestamp}`} style={jobSavedTimelineItem}>
+                              <span>{event.label || event.stage || currentStateDefinition.timelineEntry}</span>
+                              <small>
+                                {formatJobTimelineEventTime(event.savedAt || event.timestamp)} ·{" "}
+                                {activeLanguage === "es" ? "Guardado" : "Saved"}
+                              </small>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+	                    )}
+	                  </div>
+	                </details>
+	                )}
+
+	                {!isJobHistoryMode && selectedJobDetailView && (
+	                  <div ref={jobScopedDetailRef} style={jobScopedDetailPanel}>
+                    <div style={jobScopedDetailHeader}>
+                      <strong>
+                        {selectedWorkCenterJob.customer} ·{" "}
+                        {getJobDetailViewLabel(selectedJobDetailView)}
+                      </strong>
+                      <button
+                        type="button"
+                        style={miniInlineButton}
+                        onClick={() => {
+                          setIsEditingCompletedEvaluation(false);
+                          setSelectedJobDetailView("");
+                        }}
+                      >
+                        {activeLanguage === "es" ? "Cerrar" : "Close"}
+                      </button>
+                    </div>
+
+                    {selectedJobDetailView === "conversation" && (
+                      <div style={jobScopedDetailBody}>
+                        <p style={jobWorkspaceDisclosureText}>
+                          {selectedWorkCenterJob.conversationId
+                            ? activeLanguage === "es"
+                              ? "Abre solo la conversación de este trabajo."
+                              : "Open this job's conversation only."
+                            : activeLanguage === "es"
+                              ? "Este trabajo aún no tiene conversación vinculada."
+                              : "This job does not have a linked conversation yet."}
+                        </p>
+                        {selectedWorkCenterJob.conversationId && (
+                          <button
+                            type="button"
+                            style={startScheduleBtn}
+                            onClick={() => {
+                              localStorage.setItem("activeConversationId", selectedWorkCenterJob.conversationId);
+                              localStorage.setItem("conversationReturnPage", "workCenter");
+                              localStorage.setItem("conversationReturnSection", "job");
+                              localStorage.setItem("meetroConversationType", "standard");
+                              setPage("conversationThread");
+                            }}
+                          >
+                            {activeLanguage === "es" ? "Abrir conversación" : "Open Conversation"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "quote" && (
+                      <div style={jobScopedDetailBody}>
+                        {primaryScopedQuote ? (
+                          <>
+                            <p style={jobWorkspaceDisclosureText}>
+                              {activeLanguage === "es" ? "Total" : "Total"}:{" "}
+                              <strong>${getQuoteTotalAmount(primaryScopedQuote).toFixed(2)}</strong>
+                            </p>
+                            <button
+                              type="button"
+                              style={supportingRecordActionStyle}
+                              onClick={() => setQuoteViewTarget(primaryScopedQuote)}
+                            >
+                              {activeLanguage === "es" ? "Ver cotización" : "View Quote"}
+                            </button>
+                          </>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es" ? "No hay cotización para este trabajo." : "No quote for this job yet."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "schedule" && (
+                      <div style={jobScopedDetailBody}>
+                        {primaryScopedSchedule ? (
+                          <>
+                            <p style={jobWorkspaceDisclosureText}>
+                              {primaryScopedSchedule.date || "—"} ·{" "}
+                              {formatScheduleTime(primaryScopedSchedule.time)} ·{" "}
+                              {primaryScopedSchedule.location || selectedWorkCenterJob.address}
+                            </p>
+                            {!isJobHistoryMode && (
+                              <button
+                                type="button"
+                                style={supportingRecordActionStyle}
+                                onClick={() => {
+                                  openVisitDetail(primaryScopedSchedule);
+                                  setSelectedJobDetailView("");
+                                  setSelectedWorkCenterJob(null);
+                                  setIsJobHistoryMode(false);
+                                }}
+                              >
+                                {activeLanguage === "es" ? "Ver agenda" : "View Schedule"}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es" ? "No hay agenda para este trabajo." : "No schedule for this job yet."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "photos" && (
+                      <div style={jobScopedDetailBody}>
+                        {getWorkCenterJobPhotos(scopedJob).length > 0 ? (
+                          <div style={evaluationPhotoGrid}>
+                            {getWorkCenterJobPhotos(scopedJob).map((photo, index) => (
+                              <div key={photo.id || index} style={evaluationPhotoCard}>
+                                {photo.dataUrl ? (
+                                  <img
+                                    src={photo.dataUrl}
+                                    alt={photo.name || ""}
+                                    style={evaluationPhotoThumb}
+                                  />
+                                ) : (
+                                  <div style={evaluationPhotoMetadataThumb}>
+                                    <span></span>
+                                    <small>{photo.name || "Photo documented"}</small>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es" ? "No hay fotos para este trabajo." : "No photos for this job yet."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "payments" && (
+                      <div style={jobScopedDetailBody}>
+                        <p style={jobWorkspaceDisclosureText}>
+                          {primaryScopedQuote?.paymentReceivedAt ||
+                          primaryScopedQuote?.depositPaidAt ||
+                          primaryScopedQuote?.paidAt
+                            ? activeLanguage === "es"
+                              ? "Pago registrado para este trabajo."
+                              : "Payment recorded for this job."
+                            : activeLanguage === "es"
+                              ? "No hay pagos registrados para este trabajo."
+                              : "No payments recorded for this job yet."}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "materials" && (
+                      <div style={jobScopedDetailBody}>
+                        {getWorkCenterJobMaterials(scopedJob).length > 0 ? (
+                          <div style={jobScopedList}>
+                            {getWorkCenterJobMaterials(scopedJob).map((material, index) => (
+                              <div key={material.id || index} style={jobScopedListItem}>
+                                <strong>{material.name || material.title || translate("material")}</strong>
+                                <span>
+                                  {activeLanguage === "es" ? "Cantidad" : "Qty"}: {material.quantity || "—"}
+                                </span>
+                                {getMaterialLineTotal(material) !== null && (
+                                  <span>
+                                    {activeLanguage === "es" ? "Total" : "Line Total"}: ${getMaterialLineTotal(material).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es" ? "No hay materiales para este trabajo." : "No materials for this job yet."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "evaluation" && (
+                      <div style={jobScopedDetailBody}>
+                        {primaryScopedSchedule ? (
+                          evaluationPanelMode.readOnly ? (
+                            <>
+                              <div style={jobScopedList}>
+                                <div style={jobScopedListItem}>
+                                  <strong>
+                                    {activeLanguage === "es"
+                                      ? "Resumen de evaluación"
+                                      : "Evaluation Summary"}
+                                  </strong>
+                                  <span>
+                                    {primaryScopedSchedule.evaluation?.visitNotes ||
+                                      primaryScopedSchedule.evaluationNotes ||
+                                      primaryScopedSchedule.evaluation?.notes ||
+                                      (activeLanguage === "es"
+                                        ? "Notas de evaluación guardadas."
+                                        : "Evaluation notes saved.")}
+                                  </span>
+                                </div>
+
+                                <div style={jobScopedListItem}>
+                                  <strong>
+                                    {activeLanguage === "es"
+                                      ? "Tipo de servicio y contexto"
+                                      : "Service Type and Context"}
+                                  </strong>
+                                  <span>
+                                    {activeLanguage === "es" ? "Servicio" : "Service"}:{" "}
+                                    {primaryScopedSchedule.evaluation?.serviceType ||
+                                      primaryScopedSchedule.serviceType ||
+                                      primaryScopedSchedule.evaluationServiceType ||
+                                      "—"}
+                                  </span>
+                                  <span>
+                                    {activeLanguage === "es" ? "Contexto" : "Context"}:{" "}
+                                    {primaryScopedSchedule.evaluation?.context ||
+                                      primaryScopedSchedule.context ||
+                                      primaryScopedSchedule.evaluationContext ||
+                                      "—"}
+                                  </span>
+                                  <span>
+                                    {activeLanguage === "es" ? "Plantilla" : "Template"}:{" "}
+                                    {primaryScopedSchedule.evaluation?.evaluationTemplate ||
+                                      primaryScopedSchedule.evaluationTemplate ||
+                                      (activeLanguage === "es" ? "Sin coincidencia" : "No match")}
+                                  </span>
+                                </div>
+
+                                {(primaryScopedSchedule.evaluation?.templateRequirements ||
+                                  primaryScopedSchedule.templateRequirements ||
+                                  []).length > 0 && (
+                                  <div style={jobScopedListItem}>
+                                    <strong>
+                                      {activeLanguage === "es"
+                                        ? "Documentación esperada"
+                                        : "Expected Documentation"}
+                                    </strong>
+                                    <span>
+                                      {(primaryScopedSchedule.evaluation?.templateRequirements ||
+                                        primaryScopedSchedule.templateRequirements ||
+                                        []).join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {(primaryScopedSchedule.evaluation?.findingsNotes ||
+                                  primaryScopedSchedule.evaluationFindings) && (
+                                  <div style={jobScopedListItem}>
+                                    <strong>
+                                      {activeLanguage === "es" ? "Hallazgos" : "Findings"}
+                                    </strong>
+                                    <span>
+                                      {primaryScopedSchedule.evaluation?.findingsNotes ||
+                                        primaryScopedSchedule.evaluationFindings}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {(primaryScopedSchedule.evaluation?.serviceRecommendations ||
+                                  primaryScopedSchedule.serviceRecommendations ||
+                                  []).length > 0 && (
+                                  <div style={jobScopedListItem}>
+                                    <strong>
+                                      {activeLanguage === "es"
+                                        ? "Servicios recomendados"
+                                        : "Recommended Services"}
+                                    </strong>
+                                    <span>
+                                      {(primaryScopedSchedule.evaluation?.serviceRecommendations ||
+                                        primaryScopedSchedule.serviceRecommendations ||
+                                        [])
+                                        .map((recommendation) =>
+                                          typeof recommendation === "string"
+                                            ? recommendation
+                                            : recommendation.title ||
+                                              recommendation.label ||
+                                              recommendation.service ||
+                                              recommendation.serviceId
+                                        )
+                                        .filter(Boolean)
+                                        .join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div style={jobScopedListItem}>
+                                  <strong>
+                                    {activeLanguage === "es"
+                                      ? "Materiales, fotos y trabajo documentado"
+                                      : "Materials, Photos, and Documented Work"}
+                                  </strong>
+                                  <span>
+                                    {activeLanguage === "es" ? "Materiales" : "Materials"}:{" "}
+                                    {primaryScopedSchedule.evaluation?.materialsNeeded ||
+                                      primaryScopedSchedule.evaluationMaterialsNeeded ||
+                                      (activeLanguage === "es" ? "No indicado" : "Not listed")}
+                                  </span>
+                                  <span>
+                                    {activeLanguage === "es" ? "Elementos" : "Work items"}:{" "}
+                                    {(primaryScopedSchedule.evaluation?.workItems ||
+                                      primaryScopedSchedule.evaluationItems ||
+                                      primaryScopedSchedule.workItems ||
+                                      []).length}
+                                  </span>
+                                  <span>
+                                    {activeLanguage === "es" ? "Fotos" : "Photos"}:{" "}
+                                    {(primaryScopedSchedule.evaluation?.photos ||
+                                      primaryScopedSchedule.evaluationPhotos ||
+                                      []).length}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <p style={jobWorkspaceDisclosureText}>
+                                {activeLanguage === "es"
+                                  ? "La evaluación ya fue guardada y ahora funciona como documentación de apoyo para la propuesta y el trabajo."
+                                  : "This evaluation is saved and now serves as supporting documentation for the proposal and work."}
+                              </p>
+
+                              {evaluationPanelMode.canEdit && (
+                                <button
+                                  type="button"
+                                  style={miniInlineButton}
+                                  onClick={() => setIsEditingCompletedEvaluation(true)}
+                                >
+                                  {activeLanguage === "es"
+                                    ? "Editar evaluación"
+                                    : "Edit Evaluation"}
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                          <>
+                            {buildEvaluationSelectionFields()}
+                            {!hasEvaluationSelection() && (
+                              <p style={jobWorkspaceDisclosureText}>
+                                {activeLanguage === "es"
+                                  ? "Selecciona el tipo de servicio y contexto para abrir las notas de evaluación."
+                                  : "Select Service Type and Context to open Evaluation Notes."}
+                              </p>
+                            )}
+                            {hasEvaluationSelection() && (
+                              <>
+                            <label style={evaluationFieldLabel}>
+                              {activeLanguage === "es" ? "Notas de evaluación" : "Evaluation Notes"}
+                            </label>
+                            <textarea
+                              value={evaluationForm.notes}
+                              style={evaluationTextarea}
+                              placeholder={
+                                activeLanguage === "es"
+                                  ? "Documenta lo que viste, lo que necesita el cliente y lo que sigue."
+                                  : "Document what you saw, what the customer needs, and what happens next."
+                              }
+                              onInput={autoResizeTextarea}
+                              onChange={(event) =>
+                                setEvaluationForm((current) => ({
+                                  ...current,
+                                  notes: event.target.value,
+                                }))
+                              }
+                            />
+
+                            {(evaluationForm.workItems || []).map((workItem, itemIndex) => (
+                              <div key={workItem.id || itemIndex} style={evaluationVisitSection}>
+                                <div style={evaluationVisitSectionHeader}>
+                                  <div>
+                                    <h4 style={evaluationVisitSectionTitle}>
+                                      {activeLanguage === "es" ? "Trabajo documentado" : "Documented Work"}
+                                    </h4>
+                                    <p style={evaluationVisitSectionText}>
+                                      {activeLanguage === "es"
+                                        ? "Fotos, medidas y materiales permanecen ligados a Sarah."
+                                        : "Photos, measurements, and materials stay attached to Sarah."}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <label style={evaluationFieldLabel}>
+                                  {activeLanguage === "es" ? "Servicio / tarea" : "Service / task"}
+                                </label>
+                                <input
+                                  style={input}
+                                  value={workItem.title}
+                                  placeholder={selectedWorkCenterJob.title}
+                                  onChange={(event) =>
+                                    updateEvaluationWorkItem(itemIndex, {
+                                      title: event.target.value,
+                                    })
+                                  }
+                                />
+
+                                <label style={evaluationFieldLabel}>
+                                  {activeLanguage === "es" ? "Fotos" : "Photos"}
+                                </label>
+                                <button
+                                  type="button"
+                                  style={evaluationAddPhotoButton}
+                                  onClick={() => openEvaluationWorkItemPhotoPicker(itemIndex)}
+                                >
+                                  {activeLanguage === "es" ? "+ Agregar fotos" : "+ Add Photos"}
+                                </button>
+                                {(workItem.photos || []).length > 0 ? (
+                                  <div style={evaluationPhotoGrid}>
+                                    {(workItem.photos || []).map((photo) => (
+                                      <div key={photo.id} style={evaluationPhotoCard}>
+                                        {photo.dataUrl ? (
+                                          <img
+                                            src={photo.dataUrl}
+                                            alt={photo.name || ""}
+                                            style={evaluationPhotoThumb}
+                                          />
+                                        ) : (
+                                          <div style={evaluationPhotoMetadataThumb}>
+                                            <span></span>
+                                            <small>{photo.name || "Photo documented"}</small>
+                                          </div>
+                                        )}
+                                        <button
+                                          type="button"
+                                          style={evaluationPhotoRemove}
+                                          onClick={() =>
+                                            removeEvaluationWorkItemPhoto(itemIndex, photo.id)
+                                          }
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={evaluationPhotoEmpty}>
+                                    {activeLanguage === "es"
+                                      ? "Aún no hay fotos."
+                                      : "No photos added yet."}
+                                  </div>
+                                )}
+
+                                <div style={evaluationInlineSectionHeader}>
+                                  <strong>{activeLanguage === "es" ? "Medidas" : "Measurements"}</strong>
+                                  <button
+                                    type="button"
+                                    style={miniInlineButton}
+                                    onClick={() => addEvaluationWorkItemMeasurement(itemIndex)}
+                                  >
+                                    {activeLanguage === "es" ? "+ Medida" : "+ Measurement"}
+                                  </button>
+                                </div>
+                                {(workItem.measurements || []).map((measurement, measurementIndex) => (
+                                  <div key={measurement.id || measurementIndex} style={jobScopedListItem}>
+                                    <input
+                                      style={input}
+                                      value={measurement.label}
+                                      placeholder={activeLanguage === "es" ? "Qué estás midiendo" : "What are you measuring?"}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                          label: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    <select
+                                      style={evaluationSelect}
+                                      value={measurement.unit}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                          unit: event.target.value,
+                                          value: "",
+                                          feet: "",
+                                          inches: "",
+                                        })
+                                      }
+                                    >
+                                      {evaluationMeasurementUnits.map((unitOption) => (
+                                        <option key={unitOption.value} value={unitOption.value}>
+                                          {unitOption.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {measurement.unit === "feet_inches" ? (
+                                      <div style={jobWorkspaceSummaryGrid}>
+                                        <input
+                                          style={input}
+                                          value={measurement.feet}
+                                          placeholder={activeLanguage === "es" ? "Pies" : "Feet"}
+                                          onChange={(event) =>
+                                            updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                              feet: event.target.value,
+                                            })
+                                          }
+                                        />
+                                        <input
+                                          style={input}
+                                          value={measurement.inches}
+                                          placeholder={activeLanguage === "es" ? "Pulgadas" : "Inches"}
+                                          onChange={(event) =>
+                                            updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                              inches: event.target.value,
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    ) : (
+                                      <input
+                                        style={input}
+                                        value={measurement.value}
+                                        placeholder={activeLanguage === "es" ? "Valor" : "Value"}
+                                        onChange={(event) =>
+                                          updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                            value: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    )}
+                                    <input
+                                      style={input}
+                                      value={measurement.quantity}
+                                      placeholder={activeLanguage === "es" ? "Cantidad opcional" : "Quantity optional"}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                          quantity: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      style={inlineCircleDeleteButton}
+                                      onClick={() =>
+                                        removeEvaluationWorkItemMeasurement(itemIndex, measurementIndex)
+                                      }
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+
+                                <div style={evaluationInlineSectionHeader}>
+                                  <strong>{activeLanguage === "es" ? "Materiales" : "Materials"}</strong>
+                                  <button
+                                    type="button"
+                                    style={miniInlineButton}
+                                    onClick={() => addEvaluationWorkItemMaterial(itemIndex)}
+                                  >
+                                    {activeLanguage === "es" ? "+ Material" : "+ Material"}
+                                  </button>
+                                </div>
+                                {(workItem.materials || []).map((material, materialIndex) => (
+                                  <div key={material.id || materialIndex} style={jobScopedListItem}>
+                                    <input
+                                      style={input}
+                                      value={material.name}
+                                      placeholder={activeLanguage === "es" ? "Nombre del material" : "Material name"}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                          name: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    <input
+                                      style={input}
+                                      value={material.quantity}
+                                      placeholder={activeLanguage === "es" ? "Cantidad" : "Quantity"}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                          quantity: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    <input
+                                      style={input}
+                                      value={material.unitPrice}
+                                      placeholder={activeLanguage === "es" ? "Precio unitario" : "Unit Price"}
+                                      onChange={(event) =>
+                                        updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                          unitPrice: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    <span>
+                                      {activeLanguage === "es" ? "Total" : "Line Total"}:{" "}
+                                      {getMaterialLineTotal(material) === null
+                                        ? activeLanguage === "es"
+                                          ? "Revisar"
+                                          : "Needs review"
+                                        : `$${getMaterialLineTotal(material).toFixed(2)}`}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      style={inlineCircleDeleteButton}
+                                      onClick={() =>
+                                        removeEvaluationWorkItemMaterial(itemIndex, materialIndex)
+                                      }
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => saveSarahPageEvaluationNotes(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Guardar notas" : "Save Evaluation Notes"}
+                            </button>
+                              </>
+                            )}
+                          </>
+                          )
+                        ) : (
+                          <>
+                            <p style={jobWorkspaceDisclosureText}>
+                              {activeLanguage === "es"
+                                ? "Programa una visita antes de guardar notas de evaluación."
+                                : "Schedule a visit before saving Evaluation Notes."}
+                            </p>
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => createSarahPageVisitRecord(scopedJob)}
+                            >
+                              {activeLanguage === "es" ? "Programar visita" : "Schedule Visit"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "active" && (
+                      <div style={jobScopedDetailBody}>
+                        {scopedActiveRecords.length > 0 || scopedJob.active ? (
+                          <div style={jobScopedList}>
+                            {(scopedActiveRecords.length > 0
+                              ? scopedActiveRecords
+                              : [scopedJob.active]
+                            ).filter(Boolean).map((activeRecord, index) => (
+                              <div key={activeRecord.id || activeRecord.jobId || index} style={jobScopedListItem}>
+                                <strong>
+                                  {activeRecord.service ||
+                                    activeRecord.title ||
+                                    selectedWorkCenterJob.title}
+                                </strong>
+                                <span>
+                                  {activeLanguage === "es" ? "Estado" : "Status"}:{" "}
+                                  {activeRecord.status || getWorkCenterJobStatus(scopedJob)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es"
+                              ? "No hay trabajo activo para este cliente todavía."
+                              : "No active work for this job yet."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "completion" && (
+                      <div style={jobScopedDetailBody}>
+                        <p style={jobWorkspaceDisclosureText}>
+                          {["completed", "work_completed"].includes(
+                            String(primaryScopedSchedule?.status || primaryScopedSchedule?.workStatus || "").toLowerCase()
+                          )
+                            ? activeLanguage === "es"
+                              ? "Este trabajo está marcado como completado."
+                              : "This job is marked completed."
+                            : activeLanguage === "es"
+                              ? "La finalización de este trabajo aún está pendiente."
+                              : "Completion for this job is still pending."}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "alerts" && (
+                      <div style={jobScopedDetailBody}>
+                        {scopedAlerts.length > 0 ? (
+                          <div style={jobScopedList}>
+                            {scopedAlerts.map((alert, index) => (
+                              <div key={alert.id || index} style={jobScopedListItem}>
+                                <strong>{alert.title || alert.type || "Alert"}</strong>
+                                <span>{alert.message || ""}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={jobWorkspaceDisclosureText}>
+                            {activeLanguage === "es"
+                              ? "No hay alertas para este trabajo."
+                              : "No alerts for this job."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "closure" && (
+                      <div style={jobScopedDetailBody}>
+                        <p style={jobWorkspaceDisclosureText}>
+                          {primaryScopedSchedule?.closedAt || primaryScopedHistory?.closedAt
+                            ? activeLanguage === "es"
+                              ? "Este trabajo está cerrado."
+                              : "This job is closed."
+                            : activeLanguage === "es"
+                              ? "El cierre de este trabajo aún está pendiente."
+                              : "Closure for this job is still pending."}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedJobDetailView === "history" && (
+                      <div style={jobScopedDetailBody}>
+                        <p style={jobWorkspaceDisclosureText}>
+                          {primaryScopedHistory
+                            ? activeLanguage === "es"
+                              ? "Historial guardado para este trabajo."
+                              : "History saved for this job."
+                            : activeLanguage === "es"
+                              ? "El historial de este trabajo aparecerá después del cierre."
+                              : "This job's history appears after closure."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              );
+            })() : null}
+          </section>
+        ) : ["currentJobs", "jobHistory"].includes(activeTab) ? (
+          <section
+            ref={dynamicSectionRef}
+            style={
+              activeTab === "jobHistory"
+                ? section
+                : {
+                    ...workCenterOpenedSection,
+                    borderColor: "#e2e8f0",
+                  }
+            }
+          >
             <button
-              style={miniButton}
-              onClick={() => {
-                const emergencyJob = {
-                  id: "emergency-active-1",
-                  service: selectedService,
-                  status: dispatchStatus,
-                  eta: dispatchStatus === "completed" ? "0" : "12",
-                  customer:
-                    activeLanguage === "es"
-                      ? "Propietario esperando actualización"
-                      : "Homeowner waiting for update",
-                };
-
-                saveActiveJobContext(emergencyJob);
-                setWorkCenterReturn();
-setPage("emergencyDispatch");
-              }}
+              style={workCenterBackButton}
+              onClick={returnToWorkCenterDashboard}
             >
-              {t.openDispatch}
+              <span aria-hidden="true">‹</span>
+              {translate("backToWorkCenter")}
             </button>
-          )}
-        </div>
 
-        <div style={overviewCard}>
-          <div style={overviewIcon}>📊</div>
+            {activeTab === "currentJobs" ? (
+              <>
+                <div style={jobListHeader}>
+                  <div>
+                    <h3 style={jobListTitle}>
+                      {activeLanguage === "es" ? "Trabajos actuales" : "Current Jobs"}
+                    </h3>
+                    <p style={jobListSubtitle}>
+                      {activeLanguage === "es"
+                        ? "Abre un trabajo activo para continuar el flujo del cliente."
+                        : "Open an active job to continue the customer workflow."}
+                    </p>
+                  </div>
+                  <span style={jobCountPill}>{workCenterActiveJobs.length}</span>
+                </div>
 
-          <strong style={overviewTitle}>
-            {translate("workSummary")}
-          </strong>
+                <div style={jobListGrid}>
+                  {workCenterActiveJobs.length > 0 ? (
+                    workCenterActiveJobs.map((job) => {
+                      const jobListPresentation = getWorkCenterJobListPresentation(job);
 
-          <p style={overviewText}>
-            {(completedJobsCount)}
-            {" "}
-            {translate("completedJobs")}
-          </p>
+                      return (
+                        <button
+                          key={job.id}
+                          type="button"
+                          style={jobListCard}
+                          onClick={() => {
+                            setSelectedJobDetailView("");
+                            setIsJobHistoryMode(false);
+	                            setJobMenuTab("current");
+	                            setHistoryActionNotice("");
+	                            setSelectedWorkCenterJob(job);
+	                            setIsWorkCenterSectionOpen(false);
+	                          }}
+                        >
+                          <span style={jobListCardMain}>
+                            <strong style={jobListCustomer}>{job.customer}</strong>
+                            <span style={jobListMeta}>{job.address}</span>
+                            <span style={jobListMeta}>{job.title}</span>
+                            <span style={jobListStatus}>
+                              {activeLanguage === "es" ? "Estado" : "Status"}:{" "}
+                              {jobListPresentation.statusLabel}
+                            </span>
+                            <span style={jobListNextStep}>
+                              {activeLanguage === "es" ? "Siguiente paso" : "Next Step"}:{" "}
+                              {jobListPresentation.nextStepLabel}
+                            </span>
+                            <span style={jobProgressChecklist} aria-label={activeLanguage === "es" ? "Progreso del trabajo" : "Job progress"}>
+                              {getWorkCenterJobProgressItems(job).map((item) => (
+                                <span
+                                  key={item.label}
+                                  style={{
+                                    ...jobProgressItem,
+                                    ...(item.done ? jobProgressItemDone : {}),
+                                  }}
+                                >
+                                  <span aria-hidden="true">{item.done ? "✓" : "•"}</span>
+                                  {item.label}
+                                </span>
+                              ))}
+                            </span>
+                          </span>
+                          <span style={jobListAction}>
+                            {activeLanguage === "es" ? "Detalles del trabajo" : "Job Details"}
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div style={jobListEmpty}>
+                      {activeLanguage === "es"
+                        ? "Los trabajos actuales aparecerán aquí."
+                        : "Current jobs will appear here."}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={workCenterChildHeader}>
+                  <h2 style={workCenterChildTitle}>
+                    {ui("workCenterHistoryTitle")}
+                  </h2>
+                  <p style={workCenterChildSummary}>
+                    {workCenterHistoryJobs.length > 0
+                      ? `${workCenterHistoryJobs.length} ${ui("workCenterChildHistorySummary")}`
+                      : ui("workCenterChildHistoryEmptySummary")}
+                  </p>
+                </div>
 
-          <p style={overviewText}>
-            ${(totalJobRevenue)}
-            {" "}
-            {translate("weeklyRevenue")}
-          </p>
+                <div style={jobListGrid}>
+                  {workCenterHistoryJobs.length > 0 ? (
+                    workCenterHistoryJobs.map((job) => (
+                      <button
+                        key={`history-${job.id}`}
+                        type="button"
+                        style={jobListCard}
+                        onClick={() => {
+                          setSelectedJobDetailView("");
+                          setIsJobHistoryMode(true);
+	                          setJobMenuTab("history");
+	                          setHistoryActionNotice("");
+	                          setSelectedWorkCenterJob(job);
+	                          setIsWorkCenterSectionOpen(false);
+	                        }}
+                      >
+                        <span style={jobListCardMain}>
+                          <strong style={jobListCustomer}>{job.customer}</strong>
+                          <span style={jobListMeta}>{job.title}</span>
+                          <span style={jobListMeta}>{job.address}</span>
+	                          <span style={jobListStatus}>
+	                            {activeLanguage === "es" ? "Estado final" : "Final status"}:{" "}
+	                            {activeLanguage === "es" ? "Cerrado" : "Closed"}
+	                          </span>
+	                          <span style={jobListNextStep}>
+	                            {activeLanguage === "es" ? "Total final" : "Final total"}:{" "}
+	                            ${getWorkCenterJobFinalTotal(job).toFixed(2)}
+	                          </span>
+	                          <span style={jobListMeta}>
+	                            {activeLanguage === "es" ? "Fecha de cierre" : "Close date"}:{" "}
+	                            {job.history?.closeDate || job.history?.closedAt || job.schedule?.closedAt
+	                              ? new Date(
+	                                  job.history?.closeDate ||
+	                                    job.history?.closedAt ||
+	                                    job.schedule?.closedAt
+	                                ).toLocaleDateString()
+	                              : "—"}
+	                          </span>
+	                        </span>
+                        <span style={jobListAction}>
+                          {activeLanguage === "es" ? "Ver historial" : "View Job History"}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div style={jobListEmpty}>
+                      {activeLanguage === "es"
+                        ? "Los trabajos cerrados aparecerán aquí."
+                        : "Closed jobs will appear here."}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        ) : activeTab === "schedule" ? (
+          <div ref={dynamicSectionRef} style={scheduleOpenedPage}>
+            <button
+              style={workCenterBackButton}
+              onClick={returnToWorkCenterDashboard}
+            >
+              <span aria-hidden="true">‹</span>
+              {translate("backToWorkCenter")}
+            </button>
+            <h2 style={workCenterChildTitle}>
+              {ui("workCenterScheduleTitle")}
+            </h2>
+            <p style={workCenterChildSummary}>
+              {upcomingScheduleCount > 0
+                ? `${upcomingScheduleCount} ${ui("workCenterChildScheduleSummary")}`
+                : ui("workCenterChildScheduleEmptySummary")}
+            </p>
+          </div>
+        ) : ["pending", "quotes", "active", "revenue", "completed"].includes(activeTab) ? null : (
+          <section
+            ref={dynamicSectionRef}
+            style={{
+              ...workCenterOpenedSection,
+              borderColor: `${activeSection.accent}2f`,
+            }}
+          >
+            <button
+              style={workCenterBackButton}
+              onClick={returnToWorkCenterDashboard}
+            >
+              <span aria-hidden="true">‹</span>
+              {translate("backToWorkCenter")}
+            </button>
 
-          <p style={overviewText}>
-            {hasJobStatus ? "1" : "0"}
-            {" "}
-            {translate("activeJobsCount")}
-          </p>
-        </div>
+            <div style={workCenterOpenedSectionHeading}>
+              <span
+                style={{
+                  ...workCenterOpenedSectionIcon,
+                  background: activeSection.tone,
+                  color: activeSection.accent,
+                }}
+              >
+                <MeetroIcon
+                  name={activeTab === "materials" ? "materials" : activeSection.icon}
+                  size={28}
+                  decorative
+                />
+              </span>
+              <div>
+                <span style={workCenterOpenedSectionEyebrow}>
+                  {translate("workCenterWorkflowArea")}
+                </span>
+                <h2 style={workCenterOpenedSectionTitle}>
+                  {activeTab === "materials"
+                    ? translate("workTabMaterials")
+                    : activeSection.openedTitle || activeSection.title}
+                </h2>
+                <p style={workCenterOpenedSectionDescription}>
+                  {activeTab === "materials"
+                    ? translate("workGuidanceMaterials")
+                    : activeSection.openedDescription ||
+                      activeSection.description}
+                </p>
+                <div
+                  style={{
+                    ...workCenterOpenedSectionNextStep,
+                    background: activeSection.tone,
+                    borderColor: `${activeSection.accent}24`,
+                  }}
+                >
+                  <span
+                    style={{
+                      ...workCenterOpenedSectionNextStepLabel,
+                      color: activeSection.accent,
+                    }}
+                  >
+                    {translate("workCenterNextStepLabel")}
+                  </span>
+                  <strong style={workCenterOpenedSectionNextStepText}>
+                    {activeSection.openedNextStep || activeSection.nextStep}
+                  </strong>
+                </div>
+                <div style={workCenterOpenedSectionActions}>
+                  {getOpenedSectionActions().map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      style={{
+                        ...workCenterOpenedSectionActionButton,
+                        background: activeSection.accent,
+                      }}
+                      onClick={action.onClick}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {["active", "materials"].includes(activeTab) && (
+              <div style={workCenterSubNavigation}>
+                <button
+                  style={
+                    activeTab === "active"
+                      ? workCenterSubNavigationActive
+                      : workCenterSubNavigationButton
+                  }
+                  onClick={() => openWorkTab("active")}
+                >
+                  {translate("workCenterActiveWorkTitle")}
+                </button>
+                <button
+                  style={
+                    activeTab === "materials"
+                      ? workCenterSubNavigationActive
+                      : workCenterSubNavigationButton
+                  }
+                  onClick={() => openWorkTab("materials")}
+                >
+                  {translate("workTabMaterials")}
+                  {materialsAlertCount > 0 && (
+                    <span style={quoteAlertBadge}>{materialsAlertCount}</span>
+                  )}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
-      <div style={workTabs}>
-        <button
-          style={activeTab === "schedule" ? workTabActive : workTab}
-          onClick={() => openWorkTab("schedule")}
-        >
-          1. {translate("workStageSchedule")}
-        </button>
-
-        <button
-          style={{
-            ...(activeTab === "pending" ? workTabActive : workTab),
-            ...(pendingAlertsCount > 0 && activeTab !== "pending"
-              ? operationalAlertTab
-              : {}),
-          }}
-          onClick={() => openWorkTab("pending")}
-        >
-          <span>2. {translate("workStagePending")}</span>
-
-          {pendingAlertsCount > 0 && (
-            <span style={quoteAlertBadge}>
-              {pendingAlertsCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          style={{
-            ...(activeTab === "quotes" ? workTabActive : workTab),
-            ...(totalQuoteAlerts > 0 && activeTab !== "quotes"
-              ? quoteAlertTab
-              : {}),
-          }}
-          onClick={() => openWorkTab("quotes")}
-        >
-          <span>3. {translate("workStageQuotesMaterials")}</span>
-
-          {totalQuoteAlerts > 0 && (
-            <span style={quoteAlertBadge}>
-              {totalQuoteAlerts}
-            </span>
-          )}
-        </button>
-
-        <button
-          style={{
-            ...(activeTab === "active" ? workTabActive : workTab),
-            ...(activeJobsAlertCount > 0 && activeTab !== "active"
-              ? operationalLiveTab
-              : {}),
-          }}
-          onClick={() => openWorkTab("active")}
-        >
-          <span>4. {translate("workStageActive")}</span>
-
-          {activeJobsAlertCount > 0 && (
-            <span style={liveTabBadge}>
-              LIVE
-            </span>
-          )}
-        </button>
-
-        <button
-          style={activeTab === "completed" ? workTabActive : workTab}
-          onClick={() => openWorkTab("completed")}
-        >
-          5. {translate("workStageCompleted")}
-        </button>
-
-        <button
-          style={{
-            ...(activeTab === "materials" ? workTabActive : workTab),
-            ...(materialsAlertCount > 0 && activeTab !== "materials"
-              ? materialsAlertTab
-              : {}),
-          }}
-          onClick={() => openWorkTab("materials")}
-        >
-          <span>📦 {translate("workStageMaterials")}</span>
-
-          {materialsAlertCount > 0 && (
-            <span style={quoteAlertBadge}>
-              {materialsAlertCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          style={activeTab === "records" ? workTabActive : workTab}
-          onClick={() => openWorkTab("records")}
-        >
-          🗂️ {activeLanguage === "es"
-            ? "Cronología"
-            : translate("workStageTimeline")}
-        </button>
-
-        <button
-          style={activeTab === "revenue" ? workTabActive : workTab}
-          onClick={() => openWorkTab("revenue")}
-        >
-          💰 {translate("workStageRevenue")}
-        </button>
-      </div>
-
-      <div style={activeTab === "revenue" ? tabNoticeHidden : tabNotice}>
-        {activeTab === "schedule" &&
-          translate("workGuidanceSchedule")}
-
-        {activeTab === "pending" &&
-          translate("workGuidancePending")}
-
-        {activeTab === "active" &&
-          translate("workGuidanceActive")}
-
-        {activeTab === "completed" &&
-          translate("workGuidanceCompleted")}
-
-        {activeTab === "quotes" &&
-          translate("workGuidanceQuotes")}
-
-        {activeTab === "materials" &&
-          translate("workGuidanceMaterials")}
-
-        {activeTab === "records" &&
-          (activeLanguage === "es"
-            ? "Historial operativo permanente de proyectos, materiales, cambios y documentación."
-            : "Permanent operating history for projects, materials, changes, and documentation.")}
-
-        {activeTab === "revenue" &&
-          translate("workGuidanceRevenue")}
-      </div>
-
-      {["pending", "active", "materials", "records", "quotes"].includes(activeTab) && (() => {
+      {isWorkCenterSectionOpen && (
+        <>
+      {["materials", "records"].includes(activeTab) && (() => {
         const activeContext = getActiveWorkContext();
 
         if (!activeContext.id && !activeContext.service) return null;
@@ -1423,7 +11992,21 @@ setPage("emergencyDispatch");
           <div style={activeProjectContextCard}>
             <div>
               <span style={activeProjectContextLabel}>
-                {activeLanguage === "es" ? "Proyecto activo" : "Active Project"}
+                {activeTab === "records"
+                  ? activeLanguage === "es"
+                    ? "Contexto de la relación"
+                    : "Relationship Context"
+                  : activeTab === "quotes"
+                  ? activeLanguage === "es"
+                    ? "Contexto de cotización"
+                    : "Quote Context"
+                  : activeTab === "pending"
+                  ? activeLanguage === "es"
+                    ? "Contexto de solicitud"
+                    : "Request Context"
+                  : activeLanguage === "es"
+                  ? "Contexto de trabajo activo"
+                  : "Active Work Context"}
               </span>
 
               <h3 style={activeProjectContextTitle}>
@@ -1447,39 +12030,765 @@ setPage("emergencyDispatch");
       })()}
 
       {activeTab === "schedule" && (
-        <div style={section}>
-          <div style={sectionHeaderRow}>
-            <h2 style={sectionTitle}>
-              {translate("workSchedule")}
-            </h2>
+        <div style={scheduleContentSection}>
+          <div style={scheduleCompactHeader}>
+            <div>
+              <h2 style={scheduleCompactTitle}>
+                {translate("workSchedule")}
+              </h2>
+              <p style={scheduleCompactPurpose}>
+                {activeLanguage === "es"
+                  ? "Agrega y administra visitas de clientes."
+                  : "Add and manage customer visits."}
+              </p>
+            </div>
 
             <button
-              style={smallPrimaryButton}
+              style={schedulePrimaryAction}
               onClick={() => {
                 if (showScheduleForm) {
                   resetScheduleForm();
                 } else {
+                  setScheduleForm(createBlankScheduleForm());
+                  setEditingScheduleId(null);
                   setShowScheduleForm(true);
                 }
               }}
             >
               {showScheduleForm
                 ? translate("closeForm")
-                : `+ ${translate("addAppointment")}`}
+                : activeLanguage === "es"
+                ? "+ Agregar visita"
+                : "+ Add Visit"}
             </button>
           </div>
 
-          {showScheduleForm && (
+          {appointmentReminderNotice && (
+            <div style={appointmentReminderNoticeCard}>
+              <div>
+                <strong>
+                  {activeLanguage === "es"
+                    ? "Notificaciones necesarias"
+                    : "Notifications Needed"}
+                </strong>
+                <p>{appointmentReminderNotice.message}</p>
+              </div>
+
+              <div style={appointmentReminderNoticeActions}>
+                <button
+                  type="button"
+                  style={appointmentReminderSettingsButton}
+                  onClick={openNotificationSettings}
+                >
+                  {activeLanguage === "es" ? "Abrir Configuración" : "Open Settings"}
+                </button>
+                <button
+                  type="button"
+                  style={appointmentReminderContinueButton}
+                  onClick={() => setAppointmentReminderNotice(null)}
+                >
+                  {activeLanguage === "es"
+                    ? "Continuar sin recordatorios"
+                    : "Continue Without Reminders"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {evaluationTarget && (() => {
+            const jobWorkspaceAction = getJobWorkspacePrimaryAction(evaluationTarget);
+            const linkedJobQuote = getQuoteForAppointment(evaluationTarget);
+            const jobWorkItems = Array.isArray(evaluationForm.workItems)
+              ? evaluationForm.workItems
+              : [];
+            const jobPhotosCount = jobWorkItems.reduce(
+              (total, workItem) =>
+                total + (Array.isArray(workItem.photos) ? workItem.photos.length : 0),
+              0
+            );
+            const jobMeasurementsCount = jobWorkItems.reduce(
+              (total, workItem) =>
+                total +
+                (Array.isArray(workItem.measurements)
+                  ? workItem.measurements.length
+                  : 0),
+              0
+            );
+            const jobMaterialsCount = jobWorkItems.reduce(
+              (total, workItem) =>
+                total +
+                (Array.isArray(workItem.materials) ? workItem.materials.length : 0),
+              0
+            );
+
+            return (
+            <div style={visitDetailPage}>
+              <button
+                type="button"
+                style={workCenterBackButton}
+                onClick={() => setEvaluationTarget(null)}
+              >
+                <span aria-hidden="true">‹</span>
+                {activeLanguage === "es" ? "Volver a Agenda" : "Back to Schedule"}
+              </button>
+
+              <div style={jobWorkspaceHero}>
+                <div style={jobWorkspaceHeaderRow}>
+                  <div>
+                    <span style={jobWorkspaceEyebrow}>
+                      {activeLanguage === "es" ? "Espacio de trabajo" : "Job Workspace"}
+                    </span>
+                    <h2 style={visitDetailTitle}>
+                      {getJobWorkspaceCustomer(evaluationTarget)}
+                    </h2>
+                    <p style={jobWorkspaceAddress}>
+                      {getJobWorkspaceAddress(evaluationTarget)}
+                    </p>
+                  </div>
+                  <span style={jobWorkspaceStatusPill}>
+                    {getJobWorkspaceStatus(evaluationTarget)}
+                  </span>
+                </div>
+
+                <div style={jobWorkspaceNextStepCard}>
+                  <span>{activeLanguage === "es" ? "Siguiente paso" : "Next Step"}</span>
+                  <strong>{getJobWorkspaceNextStep(evaluationTarget)}</strong>
+                  <button
+                    type="button"
+                    style={startScheduleBtn}
+                    onClick={jobWorkspaceAction.onClick}
+                  >
+                    {jobWorkspaceAction.label}
+                  </button>
+                </div>
+
+                <div style={jobWorkspaceSummaryGrid}>
+                  <div style={visitDetailMetaCell}>
+                    <span>{activeLanguage === "es" ? "Servicio" : "Services Summary"}</span>
+                    <strong>{getJobWorkspaceService(evaluationTarget)}</strong>
+                  </div>
+                  <div style={visitDetailMetaCell}>
+                    <span>{activeLanguage === "es" ? "Fecha y hora" : "Date & time"}</span>
+                    <strong>
+                      {evaluationTarget.date || translate("today")} ·{" "}
+                      {formatScheduleTime(evaluationTarget.time)}
+                    </strong>
+                  </div>
+                </div>
+                {evaluationTarget.notes && (
+                  <p style={visitDetailNotes}>{evaluationTarget.notes}</p>
+                )}
+                <div style={jobWorkspaceActionRow}>
+                  {evaluationTarget.conversationId && (
+                    <button
+                      type="button"
+                      style={secondaryScheduleBtn}
+                      onClick={() => {
+                        localStorage.setItem("activeConversationId", evaluationTarget.conversationId);
+                        localStorage.setItem("meetroConversationType", "standard");
+                        localStorage.setItem("conversationReturnPage", "workCenter");
+                        localStorage.setItem("returnPage", "workCenter");
+                        localStorage.setItem("conversationReturnSection", "schedule");
+                        setPage("conversationThread");
+                      }}
+                    >
+                      {activeLanguage === "es" ? "Abrir conversación" : "Open Conversation"}
+                    </button>
+                  )}
+                  {linkedJobQuote && (
+                    <button
+                      type="button"
+                      style={secondaryScheduleBtn}
+                      onClick={() => setQuoteViewTarget(linkedJobQuote)}
+                    >
+                      {activeLanguage === "es" ? "Ver propuesta" : "View Proposal"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(evaluationSaveNotice || evaluationSaveError) && (
+                <div
+                  role={evaluationSaveError ? "alert" : "status"}
+                  style={
+                    evaluationSaveError
+                      ? evaluationSaveErrorCard
+                      : evaluationSaveNoticeCard
+                  }
+                >
+                  {evaluationSaveError || evaluationSaveNotice}
+                </div>
+              )}
+
+              <div style={jobWorkspaceDisclosureStack}>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Fotos" : "Photos"}</span>
+                    <small>{jobPhotosCount}</small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {jobPhotosCount > 0
+                      ? activeLanguage === "es"
+                        ? `${jobPhotosCount} foto(s) documentadas en la visita.`
+                        : `${jobPhotosCount} photo(s) documented from the visit.`
+                      : activeLanguage === "es"
+                        ? "No hay fotos documentadas todavía."
+                        : "No photos documented yet."}
+                  </p>
+                </details>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Propuesta" : "Proposal"}</span>
+                    <small>
+                      {linkedJobQuote
+                        ? getJobWorkspaceStatus(evaluationTarget)
+                        : activeLanguage === "es"
+                          ? "Pendiente"
+                          : "Pending"}
+                    </small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {linkedJobQuote
+                      ? activeLanguage === "es"
+                        ? "La propuesta está vinculada a esta visita."
+                        : "The proposal is linked to this visit."
+                      : activeLanguage === "es"
+                        ? "Crea una propuesta cuando las notas estén listas."
+                        : "Create a proposal when the visit notes are ready."}
+                  </p>
+                </details>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Materiales" : "Materials"}</span>
+                    <small>{jobMaterialsCount}</small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {activeLanguage === "es"
+                      ? `Total de materiales: $${getEvaluationMaterialsTotal(jobWorkItems).toFixed(2)}`
+                      : `Materials total: $${getEvaluationMaterialsTotal(jobWorkItems).toFixed(2)}`}
+                  </p>
+                </details>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Medidas" : "Measurements"}</span>
+                    <small>{jobMeasurementsCount}</small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {jobMeasurementsCount > 0
+                      ? activeLanguage === "es"
+                        ? "Las medidas están guardadas en las notas de la visita."
+                        : "Measurements are saved in the visit notes."
+                      : activeLanguage === "es"
+                        ? "No hay medidas guardadas todavía."
+                        : "No measurements saved yet."}
+                  </p>
+                </details>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Historial de pagos" : "Payment History"}</span>
+                    <small>{activeLanguage === "es" ? "Sin cambios" : "None"}</small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {activeLanguage === "es"
+                      ? "Los pagos aparecerán aquí cuando estén registrados."
+                      : "Payments will appear here when they are recorded."}
+                  </p>
+                </details>
+                <details style={jobWorkspaceDisclosure}>
+                  <summary style={jobWorkspaceSummary}>
+                    <span>{activeLanguage === "es" ? "Historial del trabajo" : "Job History"}</span>
+                    <small>{activeLanguage === "es" ? "Local" : "Local"}</small>
+                  </summary>
+                  <p style={jobWorkspaceDisclosureText}>
+                    {activeLanguage === "es"
+                      ? "Las notas, propuestas y cambios guardados forman el historial del trabajo."
+                      : "Saved notes, proposals, and updates become the job history."}
+                  </p>
+                </details>
+              </div>
+
+              <details id="job-evaluation-notes" style={jobWorkspaceDisclosure}>
+                <summary style={jobWorkspaceSummary}>
+                  <span>{activeLanguage === "es" ? "Notas de la visita" : "Evaluation Notes"}</span>
+                  <small>{activeLanguage === "es" ? "Editar" : "Edit"}</small>
+                </summary>
+                <div style={visitEvaluationHeader}>
+                  <div>
+                    <h3 style={visitEvaluationTitle}>
+                      {activeLanguage === "es" ? "Notas de la visita" : "Evaluation Notes"}
+                    </h3>
+                    <p style={visitEvaluationHelp}>
+                      {activeLanguage === "es"
+                        ? "Registra observaciones, hallazgos, medidas, fotos y servicios recomendados de esta visita."
+                        : "Record observations, findings, measurements, photos, and recommended services from this visit."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    style={secondaryScheduleBtn}
+                    onClick={addEvaluationWorkItem}
+                  >
+                    + {activeLanguage === "es" ? "Elemento" : "Work Item"}
+                  </button>
+                </div>
+
+                {buildEvaluationSelectionFields()}
+                {!hasEvaluationSelection() && (
+                  <p style={jobWorkspaceDisclosureText}>
+                    {activeLanguage === "es"
+                      ? "Selecciona el tipo de servicio y contexto para abrir las notas de evaluación."
+                      : "Select Service Type and Context to open Evaluation Notes."}
+                  </p>
+                )}
+                {hasEvaluationSelection() && (
+                  <>
+              <div style={visitWorkItemList}>
+                {(evaluationForm.workItems || []).map((workItem, itemIndex) => (
+                  <div key={workItem.id || itemIndex} style={visitWorkItemCard}>
+                    <div style={visitWorkItemHeader}>
+                      <strong>
+                        {activeLanguage === "es" ? "Elemento de trabajo" : "Work Item"}{" "}
+                        {itemIndex + 1}
+                      </strong>
+                      {(evaluationForm.workItems || []).length > 1 && (
+                        <button
+                          type="button"
+                          style={inlineCircleDeleteButton}
+                          aria-label={
+                            activeLanguage === "es"
+                              ? "Eliminar elemento"
+                              : "Delete work item"
+                          }
+                          onClick={() => removeEvaluationWorkItem(itemIndex)}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+
+                    <input
+                      style={scheduleInput}
+                      value={workItem.title}
+                      onChange={(event) =>
+                        updateEvaluationWorkItem(itemIndex, { title: event.target.value })
+                      }
+                      placeholder={
+                        activeLanguage === "es"
+                          ? "Título del elemento"
+                          : "Item title"
+                      }
+                    />
+
+                    <div style={evaluationVisitSection}>
+                      <div style={evaluationVisitSectionHeader}>
+                        <h4 style={evaluationVisitSectionTitle}>
+                          {activeLanguage === "es" ? "Fotos" : "Photos"}
+                        </h4>
+                        <button
+                          type="button"
+                          style={evaluationAddPhotoButton}
+                          onClick={() => openEvaluationWorkItemPhotoPicker(itemIndex)}
+                        >
+                          + {activeLanguage === "es" ? "Agregar foto" : "Add Photo"}
+                        </button>
+                      </div>
+                      {workItem.photos?.length > 0 ? (
+                        <div style={evaluationPhotoGrid}>
+                          {workItem.photos.map((photo) => (
+                            <div key={photo.id} style={evaluationPhotoCard}>
+                              {photo.dataUrl ? (
+                                <img
+                                  src={photo.dataUrl}
+                                  alt={photo.name || ""}
+                                  style={evaluationPhotoThumb}
+                                />
+                              ) : (
+                                <div style={evaluationPhotoMetadataThumb}>
+                                  <span></span>
+                                  <small>{photo.name || "Photo saved"}</small>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                style={evaluationPhotoRemove}
+                                onClick={() => removeEvaluationWorkItemPhoto(itemIndex, photo.id)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={evaluationPhotoEmpty}>
+                          {activeLanguage === "es" ? "No hay fotos todavía." : "No photos yet."}
+                        </div>
+                      )}
+                    </div>
+
+                    <textarea
+                      style={evaluationTextarea}
+                      value={workItem.notes}
+                      onInput={autoResizeTextarea}
+                      onFocus={autoResizeTextarea}
+                      onChange={(event) => {
+                        autoResizeTextarea(event);
+                        updateEvaluationWorkItem(itemIndex, { notes: event.target.value });
+                      }}
+                      placeholder={
+                        activeLanguage === "es"
+                          ? "Notas del elemento..."
+                          : "Work item notes..."
+                      }
+                    />
+
+                    <div style={visitNestedSection}>
+                      <div style={visitNestedHeader}>
+                        <strong>{activeLanguage === "es" ? "Medidas" : "Measurements"}</strong>
+                        <button
+                          type="button"
+                          style={miniInlineButton}
+                          onClick={() => addEvaluationWorkItemMeasurement(itemIndex)}
+                        >
+                          + {activeLanguage === "es" ? "Medida" : "Measurement"}
+                        </button>
+                      </div>
+                      {(workItem.measurements || []).map((measurement, measurementIndex) => (
+                        <div
+                          key={measurement.id || measurementIndex}
+                          style={visitMeasurementGrid}
+                        >
+                          <input
+                            style={scheduleInput}
+                            value={measurement.label || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                label: event.target.value,
+                              })
+                            }
+                            placeholder={
+                              activeLanguage === "es"
+                                ? "¿Qué estás midiendo?"
+                                : "What are you measuring?"
+                            }
+                          />
+                          <select
+                            style={scheduleInput}
+                            value={measurement.unit || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                unit: event.target.value,
+                                value:
+                                  event.target.value === "feet_inches"
+                                    ? ""
+                                    : measurement.value || "",
+                                feet:
+                                  event.target.value === "feet_inches"
+                                    ? measurement.feet || ""
+                                    : "",
+                                inches:
+                                  event.target.value === "feet_inches"
+                                    ? measurement.inches || ""
+                                    : "",
+                                width: isDimensionMeasurementUnit(event.target.value)
+                                  ? measurement.width || ""
+                                  : "",
+                                height: isDimensionMeasurementUnit(event.target.value)
+                                  ? measurement.height || ""
+                                  : "",
+                                depth: isDimensionMeasurementUnit(event.target.value)
+                                  ? measurement.depth || ""
+                                  : "",
+                              })
+                            }
+                          >
+                            <option value="">
+                              {activeLanguage === "es"
+                                ? "Tipo de medida"
+                                : "Measurement type"}
+                            </option>
+                            {evaluationMeasurementUnits.map((unitOption) => (
+                              <option key={unitOption.value} value={unitOption.value}>
+                                {unitOption.label}
+                              </option>
+                            ))}
+                          </select>
+                          {measurement.unit === "feet_inches" ? (
+                            <>
+                              <input
+                                style={scheduleInput}
+                                value={measurement.feet || ""}
+                                onChange={(event) =>
+                                  updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                    feet: event.target.value,
+                                    value: "",
+                                  })
+                                }
+                                placeholder={activeLanguage === "es" ? "Pies" : "Feet"}
+                              />
+                              <input
+                                style={scheduleInput}
+                                value={measurement.inches || ""}
+                                onChange={(event) =>
+                                  updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                    inches: event.target.value,
+                                    value: "",
+                                  })
+                                }
+                                placeholder={activeLanguage === "es" ? "Pulgadas" : "Inches"}
+                              />
+                            </>
+                          ) : isDimensionMeasurementUnit(measurement.unit) ? (
+                            <>
+                              <input
+                                style={scheduleInput}
+                                value={measurement.width || ""}
+                                onChange={(event) =>
+                                  updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                    width: event.target.value,
+                                    value: "",
+                                  })
+                                }
+                                placeholder={activeLanguage === "es" ? "Ancho" : "Width"}
+                              />
+                              <input
+                                style={scheduleInput}
+                                value={measurement.height || ""}
+                                onChange={(event) =>
+                                  updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                    height: event.target.value,
+                                    value: "",
+                                  })
+                                }
+                                placeholder={activeLanguage === "es" ? "Alto" : "Height"}
+                              />
+                              <input
+                                style={scheduleInput}
+                                value={measurement.depth || ""}
+                                onChange={(event) =>
+                                  updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                    depth: event.target.value,
+                                    value: "",
+                                  })
+                                }
+                                placeholder={
+                                  activeLanguage === "es"
+                                    ? "Profundidad opcional"
+                                    : "Depth optional"
+                                }
+                              />
+                            </>
+                          ) : (
+                            <input
+                              style={scheduleInput}
+                              value={measurement.value || ""}
+                              onChange={(event) =>
+                                updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                  value: event.target.value,
+                                  feet: "",
+                                  inches: "",
+                                  width: "",
+                                  height: "",
+                                  depth: "",
+                                })
+                              }
+                              placeholder={activeLanguage === "es" ? "Valor" : "Value"}
+                            />
+                          )}
+                          <input
+                            style={scheduleInput}
+                            value={measurement.quantity || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                quantity: event.target.value,
+                              })
+                            }
+                            placeholder={
+                              activeLanguage === "es"
+                                ? "Cantidad opcional"
+                                : "Quantity optional"
+                            }
+                          />
+                          <input
+                            style={scheduleInput}
+                            value={measurement.notes || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
+                                notes: event.target.value,
+                              })
+                            }
+                            placeholder={activeLanguage === "es" ? "Notas" : "Notes"}
+                          />
+                          <button
+                            type="button"
+                            style={inlineCircleDeleteButton}
+                            aria-label={
+                              activeLanguage === "es"
+                                ? "Eliminar medida"
+                                : "Delete measurement"
+                            }
+                            onClick={() =>
+                              removeEvaluationWorkItemMeasurement(itemIndex, measurementIndex)
+                            }
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={visitNestedSection}>
+                      <div style={visitNestedHeader}>
+                        <strong>{activeLanguage === "es" ? "Materiales" : "Materials"}</strong>
+                        <button
+                          type="button"
+                          style={miniInlineButton}
+                          onClick={() => addEvaluationWorkItemMaterial(itemIndex)}
+                        >
+                          + {activeLanguage === "es" ? "Material" : "Material"}
+                        </button>
+                      </div>
+                      {(workItem.materials || []).map((material, materialIndex) => (
+                        <div key={material.id || materialIndex} style={visitNestedGrid}>
+                          <input
+                            style={scheduleInput}
+                            value={material.name || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                name: event.target.value,
+                              })
+                            }
+                            placeholder={activeLanguage === "es" ? "Material" : "Material"}
+                          />
+                          <input
+                            style={scheduleInput}
+                            value={material.quantity || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                quantity: event.target.value,
+                              })
+                            }
+                            placeholder={activeLanguage === "es" ? "Cantidad" : "Qty"}
+                          />
+                          <input
+                            style={scheduleInput}
+                            inputMode="decimal"
+                            value={material.unitPrice ?? material.unit ?? ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                unitPrice: event.target.value,
+                              })
+                            }
+                            placeholder={activeLanguage === "es" ? "Precio unitario" : "Unit Price"}
+                          />
+                          <input
+                            style={scheduleInput}
+                            value={material.provider || ""}
+                            onChange={(event) =>
+                              updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
+                                provider: event.target.value,
+                              })
+                            }
+                            placeholder={activeLanguage === "es" ? "Proveedor" : "Provider"}
+                          />
+                          <div style={materialLineTotalPill}>
+                            {activeLanguage === "es" ? "Total" : "Line Total"}:{" "}
+                            {getMaterialLineTotal(material) === null
+                              ? translate("needsReview")
+                              : `$${getMaterialLineTotal(material).toFixed(2)}`}
+                          </div>
+                          <button
+                            type="button"
+                            style={inlineCircleDeleteButton}
+                            aria-label={
+                              activeLanguage === "es"
+                                ? "Eliminar material"
+                                : "Delete material"
+                            }
+                            onClick={() =>
+                              removeEvaluationWorkItemMaterial(itemIndex, materialIndex)
+                            }
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                      {(workItem.materials || []).length > 0 && (
+                        <div style={materialsTotalSummary}>
+                          {activeLanguage === "es" ? "Total de materiales" : "Materials Total"}:{" "}
+                          <strong>
+                            ${getEvaluationMaterialsTotal([workItem]).toFixed(2)}
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+
+                    <textarea
+                      style={evaluationCompactTextarea}
+                      value={workItem.safetyNotes}
+                      onInput={autoResizeTextarea}
+                      onFocus={autoResizeTextarea}
+                      onChange={(event) => {
+                        autoResizeTextarea(event);
+                        updateEvaluationWorkItem(itemIndex, {
+                          safetyNotes: event.target.value,
+                        });
+                      }}
+                      placeholder={
+                        activeLanguage === "es"
+                          ? "Notas de seguridad opcionales..."
+                          : "Optional safety notes..."
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+                  </>
+                )}
+              </details>
+
+              <div style={visitDetailActions}>
+                <button
+                  type="button"
+                  style={secondaryScheduleBtn}
+                  onClick={() => saveEvaluationRecord(evaluationTarget, { keepOpen: true })}
+                >
+                  {activeLanguage === "es" ? "Guardar evaluación" : "Save Evaluation"}
+                </button>
+                {!hasEvaluationForAppointment(evaluationTarget) && (
+                  <p style={{ ...jobWorkspaceDisclosureText, gridColumn: "1 / -1" }}>
+                    {activeLanguage === "es"
+                      ? "Registra notas de evaluación antes de crear una propuesta."
+                      : "Record Evaluation Notes before creating a proposal."}
+                  </p>
+                )}
+                {hasEvaluationForAppointment(evaluationTarget) && (
+                  <button
+                    type="button"
+                    style={{
+                      ...startScheduleBtn,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => continueEvaluationToQuote(evaluationTarget)}
+                  >
+                    {activeLanguage === "es"
+                      ? "Crear cotización"
+                      : "Create Proposal"}
+                  </button>
+                )}
+              </div>
+            </div>
+            );
+          })()}
+
+          {!evaluationTarget && showScheduleForm && (
             <div style={scheduleFormCard}>
               <select
                 style={scheduleInput}
                 value={scheduleForm.appointmentType || "walkthrough"}
                 onChange={(e) => {
-                  const nextMeta = getScheduleAppointmentMeta(e.target.value);
                   setScheduleForm({
                     ...scheduleForm,
                     appointmentType: e.target.value,
-                    title: scheduleForm.title || nextMeta.title,
                   });
                 }}
               >
@@ -1492,12 +12801,104 @@ setPage("emergencyDispatch");
 
               <input
                 style={scheduleInput}
-                placeholder={translate("appointmentTitle")}
+                placeholder={
+                  activeLanguage === "es"
+                    ? "¿Para qué es esta visita?"
+                    : "What is this visit for?"
+                }
                 value={scheduleForm.title}
                 onChange={(e) =>
                   setScheduleForm({ ...scheduleForm, title: e.target.value })
                 }
               />
+
+              <div style={manualCustomerFieldsCard}>
+                <div>
+                  <strong>
+                    {activeLanguage === "es"
+                      ? "Cliente existente o externo"
+                      : "Existing or outside customer"}
+                  </strong>
+                  <p style={manualScheduleNoticeText}>
+                    {activeLanguage === "es"
+                      ? "Programa una visita aunque el cliente todavía no tenga cuenta de Meetro."
+                      : "Schedule a visit even if the customer does not have a Meetro account yet."}
+                  </p>
+                </div>
+
+                <input
+                  style={scheduleInput}
+                  placeholder={
+                    activeLanguage === "es"
+                      ? "Nombre del cliente"
+                      : "Customer name"
+                  }
+                  value={scheduleForm.manualCustomerName || ""}
+                  onChange={(e) =>
+                    setScheduleForm({
+                      ...scheduleForm,
+                      manualCustomerName: e.target.value,
+                    })
+                  }
+                />
+
+                <div style={scheduleFormGrid}>
+                  <input
+                    style={scheduleInput}
+                    placeholder={
+                      activeLanguage === "es"
+                        ? "Teléfono"
+                        : "Phone number"
+                    }
+                    value={scheduleForm.manualCustomerPhone || ""}
+                    onChange={(e) =>
+                      setScheduleForm({
+                        ...scheduleForm,
+                        manualCustomerPhone: e.target.value,
+                      })
+                    }
+                  />
+
+                  <input
+                    style={scheduleInput}
+                    placeholder={
+                      activeLanguage === "es"
+                        ? "Email opcional"
+                        : "Email optional"
+                    }
+                    value={scheduleForm.manualCustomerEmail || ""}
+                    onChange={(e) =>
+                      setScheduleForm({
+                        ...scheduleForm,
+                        manualCustomerEmail: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <input
+                  style={scheduleInput}
+                  placeholder={
+                    activeLanguage === "es"
+                      ? "Dirección o ubicación"
+                      : "Address or location"
+                  }
+                  value={scheduleForm.manualCustomerAddress || ""}
+                  onChange={(e) =>
+                    setScheduleForm({
+                      ...scheduleForm,
+                      manualCustomerAddress: e.target.value,
+                      location: e.target.value,
+                    })
+                  }
+                />
+
+                <div style={manualCustomerInviteNotice}>
+                  {activeLanguage === "es"
+                    ? "Invitación de cliente próximamente. Puedes guardar la visita ahora."
+                    : "Customer invite coming soon. You can save the visit now."}
+                </div>
+              </div>
 
               <div style={scheduleFormGrid}>
                 <input
@@ -1530,7 +12931,11 @@ setPage("emergencyDispatch");
 
               <textarea
                 style={scheduleTextarea}
-                placeholder={translate("scheduleNotes")}
+                placeholder={
+                  activeLanguage === "es"
+                    ? "Agrega algo para recordar antes de la visita."
+                    : "Add anything to remember before the visit."
+                }
                 value={scheduleForm.notes}
                 onChange={(e) =>
                   setScheduleForm({ ...scheduleForm, notes: e.target.value })
@@ -1559,169 +12964,575 @@ setPage("emergencyDispatch");
             </div>
           )}
 
-          {(() => {
-            const scheduleItems = JSON.parse(
+          {!evaluationTarget && (() => {
+            const rawScheduleItems = JSON.parse(
               localStorage.getItem("meetro_business_schedule") || "[]"
             );
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const isTodayFilter = getScheduleFilter() === "today";
+            const scheduleItems = isTodayFilter
+              ? [...rawScheduleItems].sort((first, second) => {
+                  const firstIsToday = first?.date === todayKey ? 0 : 1;
+                  const secondIsToday = second?.date === todayKey ? 0 : 1;
+                  return firstIsToday - secondIsToday;
+                })
+              : rawScheduleItems;
+            const upcomingVisits = scheduleItems.filter(
+              (item) => !isSchedulePast(item)
+            );
+            const evaluationNeededItems = scheduleItems.filter(
+              (item) => isSchedulePast(item) && !hasEvaluationForAppointment(item)
+            );
+            const quoteNeededItems = scheduleItems.filter(
+              (item) =>
+                hasEvaluationForAppointment(item) &&
+                !hasQuoteForAppointment(item)
+            );
+            const scheduledFollowUpItems = scheduleItems.filter((item) => {
+              const isUpcoming = upcomingVisits.some(
+                (visit) => String(visit.id) === String(item.id)
+              );
+              const needsEvaluation = evaluationNeededItems.some(
+                (visit) => String(visit.id) === String(item.id)
+              );
+              const needsQuote = quoteNeededItems.some(
+                (visit) => String(visit.id) === String(item.id)
+              );
+              return !isUpcoming && !needsEvaluation && !needsQuote;
+            });
+            const scheduleGroups = [
+              {
+                key: "upcoming",
+                title: activeLanguage === "es" ? "Próximas visitas" : "Upcoming Visits",
+                empty:
+                  activeLanguage === "es"
+                    ? "No hay visitas próximas."
+                    : "No upcoming visits.",
+                items: upcomingVisits,
+              },
+              {
+                key: "evaluation",
+                title: activeLanguage === "es" ? "Visitas confirmadas" : "Confirmed Visits",
+                empty:
+                  activeLanguage === "es"
+                    ? "Las visitas confirmadas o pasadas aparecerán aquí."
+                    : "Confirmed or past visits will appear here.",
+                items: evaluationNeededItems,
+              },
+              {
+                key: "quote",
+                title: activeLanguage === "es" ? "Seguimiento de visita" : "Visit Follow-Up",
+                empty:
+                  activeLanguage === "es"
+                    ? "Las visitas listas para el siguiente paso aparecerán aquí."
+                    : "Visits ready for the next step will appear here.",
+                items: quoteNeededItems,
+              },
+            ];
+            const scheduleNextStepText =
+              scheduleItems.length === 0
+                ? activeLanguage === "es"
+                  ? "Agrega una visita para empezar a programar el trabajo."
+                  : "Add a visit to start scheduling work."
+                : upcomingVisits.length > 0
+                ? activeLanguage === "es"
+                  ? "Asiste a la visita programada."
+                  : "Attend the scheduled visit."
+                : evaluationNeededItems.length > 0
+                ? activeLanguage === "es"
+                  ? "Captura las notas de evaluación de la visita."
+                  : "Capture evaluation notes from the visit."
+                : quoteNeededItems.length > 0
+                ? activeLanguage === "es"
+                  ? "Crea una cotización desde las notas de la visita."
+                  : "Create a quote from the visit notes."
+                : activeLanguage === "es"
+                ? "Revisa las visitas guardadas o agrega una nueva visita."
+                : "Review saved visits or add a new visit.";
+            const renderScheduleCard = (item, groupKey) => (
+              (() => {
+                const linkedQuote = getQuoteForAppointment(item);
+                const hasEvaluation = hasEvaluationForAppointment(item);
+                const visitDateKey = item.date || "";
+                const isTodayOrPastVisit = Boolean(
+                  visitDateKey && visitDateKey <= todayKey
+                );
+                const isWorkSchedule =
+                  item.appointmentType === "work_visit" ||
+                  item.workflowStage === "work_scheduled" ||
+                  item.status === "work_scheduled";
+                const primaryAction = "open_visit";
+                const customerLabel =
+                  item.customerName ||
+                  item.homeownerName ||
+                  (typeof item.customer === "string"
+                    ? item.customer
+                    : item.customer?.customerName || item.customer?.name) ||
+                  (activeLanguage === "es" ? "Cliente" : "Customer");
 
-            return scheduleItems.length === 0 ? (
-              <div style={emptyCard}>
-                <div style={emptyIcon}>📅</div>
+                return (
+              <div key={`${groupKey}-${item.id}`} style={jobCard}>
+                <div style={scheduleCardTop}>
+                  <div style={scheduleTimeBlock}>
+                    <strong>{formatScheduleTime(item.time)}</strong>
+                    <span>{item.date || translate("today")}</span>
+                  </div>
 
-                <strong>
-                  {activeLanguage === "es"
-                    ? translate("noScheduledVisits")
-                    : translate("noScheduledVisits")}
-                </strong>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong>{item.title}</strong>
+                    <p style={jobMeta}>
+                      {customerLabel}
+                    </p>
+                    {isWorkSchedule && (
+                      <p style={jobMeta}>
+                        <strong>
+                          {activeLanguage === "es" ? "Siguiente paso" : "Next Step"}:
+                        </strong>{" "}
+                        {activeLanguage === "es" ? "Realiza el trabajo." : "Perform Work"}
+                      </p>
+                    )}
+                    <p style={jobMeta}>
+                      {item.requestTitle ||
+                        item.projectTitle ||
+                        item.service ||
+                        item.appointmentLabel ||
+                        translate("scheduledVisit")}
+                    </p>
+                    <p style={jobMeta}>
+                      {item.location || "Customer location"}
+                    </p>
 
-                <p style={emptyText}>
-                  {activeLanguage === "es"
-                    ? translate("scheduledVisitsFromChat")
-                    : translate("scheduledVisitsFromChat")}
-                </p>
-              </div>
-            ) : (
-              <div style={activeJobsList}>
-                {scheduleItems.map((item) => (
-                  <div key={item.id} style={jobCard}>
-                    <div style={scheduleCardTop}>
-                      <div style={scheduleTimeBlock}>
-                        <strong>{formatScheduleTime(item.time)}</strong>
-                        <span>{item.date || translate("today")}</span>
+                    {(item.customerPhone || item.customerEmail) && (
+                      <p style={jobMeta}>
+                        {[item.customerPhone, item.customerEmail]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </p>
+                    )}
+
+                    {item.notes && <p style={jobMeta}>{item.notes}</p>}
+
+                    <div style={scheduleSourceRow}>
+                      <span style={sourcePill}>
+                        {getScheduleSourceLabel(item)}
+                      </span>
+
+                      <span style={item.status === "Completed" ? completedPill : statusPill}>
+                        {getScheduleStatusLabel(item.status, item)}
+                      </span>
+                    </div>
+
+                    {getScheduleReminderLabels(item).length > 0 && (
+                      <div style={scheduleReminderRow}>
+                        {getScheduleReminderLabels(item).map((label) => (
+                          <span key={label} style={scheduleReminderPill}>
+                            {label}
+                          </span>
+                        ))}
                       </div>
+                    )}
 
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <strong>{item.title}</strong>
-                        <p style={jobMeta}>
-                          {item.location || "Customer location"}
-                        </p>
-
-                        {item.notes && <p style={jobMeta}>{item.notes}</p>}
-
-                        <div style={scheduleSourceRow}>
-                          <span style={sourcePill}>
-                            {item.source === "chat-message"
-                              ? activeLanguage === "es"
-                                ? "Desde chat"
-                                : "From Chat"
-                              : item.source === "manual"
-                              ? activeLanguage === "es"
-                                ? "Manual"
-                                : "Manual"
-                              : item.source || translate("schedule")}
-                          </span>
-
-                          <span style={item.status === "Completed" ? completedPill : statusPill}>
-                            {getScheduleStatusLabel(item.status)}
-                          </span>
+                    {!isMeetroLinkedSchedule(item) && (
+                      <div style={manualScheduleCardNotice}>
+                        <div>
+                           {activeLanguage === "es"
+                            ? "Cliente manual: no tiene chat, registros automáticos, AI ni flujo completo hasta convertirlo en proyecto Meetro."
+                            : translate("manualCustomerWarning")}
                         </div>
 
-                        {(!item.conversationId && !item.requestId && !item.projectConversationId) && (
-                          <div style={manualScheduleCardNotice}>
-                            <div>
-                              ⚠️ {activeLanguage === "es"
-                                ? "Cliente manual: no tiene chat, registros automáticos, AI ni flujo completo hasta convertirlo en proyecto Meetro."
-                                : translate("manualCustomerWarning")}
-                            </div>
-
-                            <button
-                              style={manualScheduleHelpButton}
-                              onClick={() => {
-                                localStorage.setItem(
-                                  "selectedManualScheduleCustomer",
-                                  JSON.stringify(item)
-                                );
-
-                                alert(
-                                  activeLanguage === "es"
-                                    ? translate("manualCustomerConnectSteps")
-                                    : translate("manualCustomerConnectSteps")
-                                );
-                              }}
-                            >
-                              {translate("manualCustomerHowToConnect")}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={scheduleCardActions}>
-                      {item.conversationId && (
                         <button
-                          style={secondaryScheduleBtn}
+                          style={manualScheduleHelpButton}
                           onClick={() => {
-                            localStorage.setItem("activeConversationId", item.conversationId);
-                            localStorage.setItem("meetroConversationType", "standard");
-                            setPage("conversationThread");
+                            localStorage.setItem(
+                              "selectedManualScheduleCustomer",
+                              JSON.stringify(item)
+                            );
+
+                            alert(
+                              activeLanguage === "es"
+                                ? translate("manualCustomerConnectSteps")
+                                : translate("manualCustomerConnectSteps")
+                            );
                           }}
                         >
-                          {translate("openChat")}
+                          {translate("manualCustomerHowToConnect")}
                         </button>
-                      )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                      <button
-                        style={secondaryScheduleBtn}
-                        onClick={() => startEditScheduleVisit(item)}
-                      >
-                        {translate("edit")}
-                      </button>
+                <div style={scheduleCardActions}>
+                  {item.conversationId && (
+                    <button
+                      style={secondaryScheduleBtn}
+                      onClick={() => {
+                        localStorage.setItem("activeConversationId", item.conversationId);
+                        localStorage.setItem("meetroConversationType", "standard");
+                        localStorage.setItem("conversationReturnPage", "workCenter");
+                        localStorage.setItem("returnPage", "workCenter");
+                        localStorage.setItem("conversationReturnSection", "schedule");
+                        setPage("conversationThread");
+                      }}
+                    >
+                      {translate("openChat")}
+                    </button>
+                  )}
 
-                      {item.status !== "Completed" && (
-                        <>
-                          <button
-                            style={startScheduleBtn}
-                            onClick={() => {
-                              const workflowConversationId =
-                                item.projectConversationId ||
-                                item.conversationId ||
-                                item.requestId ||
-                                "";
+                  {getScheduleConfirmationState(item) === "pending" && (
+                    <span style={waitingConfirmationPill}>
+                      {activeLanguage === "es"
+                        ? "Esperando confirmación"
+                        : "Waiting for confirmation"}
+                    </span>
+                  )}
 
-                              localStorage.setItem("pendingWorkStatus", "review");
-                              localStorage.setItem("pendingWorkType", item.appointmentType || "scheduled");
-                              localStorage.setItem("pendingWorkWorkflowStage", item.workflowStage || "scheduling");
-                              localStorage.setItem("pendingWorkWorkflowStatus", item.workflowStatus || item.status || "scheduled");
-                              localStorage.setItem("pendingWorkSource", item.source || "schedule");
-                              localStorage.setItem("pendingWorkService", item.title || translate("scheduledVisit"));
-                              localStorage.setItem("pendingWorkLocation", item.location || "");
-                              localStorage.setItem("pendingWorkConversationId", workflowConversationId);
-                              localStorage.setItem("pendingWorkScheduleId", item.id || "");
-                              localStorage.setItem("pendingWorkReason", "schedule_review");
+                  {primaryAction === "open_visit" && (
+                    <button
+                      style={startScheduleBtn}
+                      onClick={() =>
+                        isWorkSchedule ? openWorkTab("active") : openVisitDetail(item)
+                      }
+                    >
+                      {isWorkSchedule
+                        ? activeLanguage === "es"
+                          ? "Abrir trabajo activo"
+                          : "Open Active Work"
+                        : activeLanguage === "es"
+                          ? "Abrir visita"
+                          : "Open Visit"}
+                    </button>
+                  )}
 
-                              if (workflowConversationId) {
-                                localStorage.setItem("activeConversationId", workflowConversationId);
-                                localStorage.setItem("meetroConversationType", "standard");
-                              }
+                  {linkedQuote && (
+                    <button
+                      style={secondaryScheduleBtn}
+                      onClick={() => setQuoteViewTarget(linkedQuote)}
+                    >
+                      {activeLanguage === "es" ? "Ver cotización" : "View Quote"}
+                    </button>
+                  )}
 
-                              openWorkTab("pending");
-                              setRefreshKey((prev) => prev + 1);
-                            }}
-                          >
-                            {activeLanguage === "es" ? "Preparar trabajo" : "Prepare Job"}
-                          </button>
+                  <button
+                    style={secondaryScheduleBtn}
+                    onClick={() => startEditScheduleVisit(item)}
+                  >
+                    {activeLanguage === "es" ? "Editar visita" : "Edit Visit"}
+                  </button>
 
-                          <button
-                            style={completeScheduleBtn}
-                            onClick={() => markScheduleCompleted(item)}
-                          >
-                            {translate("markVisitDone")}
-                          </button>
-                        </>
-                      )}
+                  <button
+                    style={deleteScheduleBtn}
+                    onClick={() => setScheduleDeleteTarget(item)}
+                  >
+                    {translate("delete")}
+                  </button>
+                </div>
+              </div>
+                );
+              })()
+            );
 
-                      <button
-                        style={deleteScheduleBtn}
-                        onClick={() => setScheduleDeleteTarget(item)}
-                      >
-                        {translate("delete")}
-                      </button>
+            return (
+              <>
+              {isTodayFilter && rawScheduleItems.length > 0 && (
+                <div style={scheduleFilterNotice}>
+                  {activeLanguage === "es"
+                    ? "Citas programadas de hoy"
+                    : "Today's scheduled jobs"}
+                </div>
+              )}
+
+              <div style={scheduleNextStepNotice}>
+                <strong>
+                  {activeLanguage === "es" ? "Siguiente paso" : "Next step"}:
+                </strong>{" "}
+                {scheduleNextStepText}
+              </div>
+
+              {scheduleItems.length === 0 ? (
+              hasScheduleRequestContext ? (
+                <div style={jobCard}>
+                  <div style={scheduleCardTop}>
+                    <div style={scheduleTimeBlock}>
+                      <strong></strong>
+                      <span>
+                        {activeLanguage === "es"
+                          ? "Listo"
+                          : "Ready"}
+                      </span>
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong>
+                        {activeLanguage === "es"
+                          ? "Listo para programar"
+                          : "Ready to Schedule"}
+                      </strong>
+
+                      <p style={jobMeta}>
+                        {selectedWorkCenterRequest.title ||
+                          selectedWorkCenterRequest.service ||
+                          selectedWorkCenterRequest.projectTitle ||
+                          (activeLanguage === "es"
+                            ? "Solicitud del cliente"
+                            : "Customer request")}
+                      </p>
+
+                      <p style={jobMeta}>
+                        {selectedWorkCenterRequest.description ||
+                          selectedWorkCenterRequest.project_description ||
+                          selectedWorkCenterRequest.details ||
+                          selectedWorkCenterRequest.notes ||
+                          selectedWorkCenterRequest.location ||
+                          ""}
+                      </p>
+
+                      <div style={scheduleSourceRow}>
+                        <span style={sourcePill}>
+                          {leadWorkflowIntent === "schedule_before_quote"
+                            ? activeLanguage === "es"
+                              ? "Antes de cotización"
+                              : "Before Quote"
+                            : activeLanguage === "es"
+                            ? "Flujo de cliente"
+                            : "Customer Flow"}
+                        </span>
+
+                        <span style={statusPill}>
+                          {leadWorkflowStage === "customer_contact"
+                            ? activeLanguage === "es"
+                              ? "Contacto iniciado"
+                              : "Customer Contact"
+                            : activeLanguage === "es"
+                            ? "Pendiente"
+                            : "Pending"}
+                        </span>
+                      </div>
                     </div>
                   </div>
+
+                  <div style={scheduleCardActions}>
+                    <button
+                      style={startScheduleBtn}
+                      onClick={() => {
+                        setScheduleForm({
+                          contextSource: "selected_work_center_request",
+                          appointmentType: "walkthrough",
+                          title:
+                            selectedWorkCenterRequest.title ||
+                            selectedWorkCenterRequest.service ||
+                            selectedWorkCenterRequest.projectTitle ||
+                            "",
+                          manualCustomerName:
+                            selectedWorkCenterRequest.customerName ||
+                            selectedWorkCenterRequest.homeownerName ||
+                            selectedWorkCenterRequest.customer ||
+                            "",
+                          manualCustomerPhone:
+                            selectedWorkCenterRequest.phone ||
+                            selectedWorkCenterRequest.customerPhone ||
+                            "",
+                          manualCustomerEmail:
+                            selectedWorkCenterRequest.email ||
+                            selectedWorkCenterRequest.homeowner_email ||
+                            selectedWorkCenterRequest.customerEmail ||
+                            "",
+                          manualCustomerAddress:
+                            selectedWorkCenterRequest.location ||
+                            selectedWorkCenterRequest.address ||
+                            "",
+                          date: new Date().toISOString().slice(0, 10),
+                          time: "12:00",
+                          location:
+                            selectedWorkCenterRequest.location ||
+                            selectedWorkCenterRequest.address ||
+                            "",
+                          notes:
+                            selectedWorkCenterRequest.description ||
+                            selectedWorkCenterRequest.project_description ||
+                            selectedWorkCenterRequest.details ||
+                            selectedWorkCenterRequest.notes ||
+                            "",
+                        });
+                        setShowScheduleForm(true);
+                      }}
+                    >
+                      {activeLanguage === "es"
+                        ? "Agregar visita"
+                        : "Add Visit"}
+                    </button>
+
+                    <button
+                      style={secondaryScheduleBtn}
+                      onClick={() => {
+                        const conversationId =
+                          selectedWorkCenterRequest.conversationId ||
+                          selectedWorkCenterRequest.projectConversationId ||
+                          selectedWorkCenterRequest.requestId ||
+                          selectedWorkCenterRequest.id ||
+                          "";
+
+                        if (conversationId) {
+                          localStorage.setItem("activeConversationId", conversationId);
+                          localStorage.setItem("meetroConversationType", "standard");
+                          localStorage.setItem("conversationReturnPage", "workCenter");
+                          localStorage.setItem("returnPage", "workCenter");
+                          setPage("conversationThread");
+                        }
+                      }}
+                    >
+                      {translate("openChat")}
+                    </button>
+
+                    <button
+                      style={secondaryScheduleBtn}
+                      onClick={() => setPage("businessLeads")}
+                    >
+                      {activeLanguage === "es"
+                        ? "Volver a leads"
+                        : "Back to Leads"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={emptyCard}>
+                  <div style={emptyIcon}>CAL</div>
+
+                  <strong>
+                    {activeLanguage === "es"
+                      ? translate("noScheduledVisits")
+                      : translate("noScheduledVisits")}
+                  </strong>
+
+                  <p style={emptyText}>
+                    {activeLanguage === "es"
+                      ? translate("scheduledVisitsFromChat")
+                      : translate("scheduledVisitsFromChat")}
+                  </p>
+                </div>
+              )
+            ) : (
+              <div style={scheduleWorkflowStack}>
+                {scheduleGroups.map((group) => (
+                  <div key={group.key} style={scheduleWorkflowSection}>
+                    <div style={scheduleWorkflowHeader}>
+                      <h3 style={scheduleWorkflowTitle}>{group.title}</h3>
+                      <span style={scheduleWorkflowCount}>
+                        {group.items.length}
+                      </span>
+                    </div>
+
+                    {group.items.length > 0 ? (
+                      <div style={activeJobsList}>
+                        {group.items.map((item) =>
+                          renderScheduleCard(item, group.key)
+                        )}
+                      </div>
+                    ) : (
+                      <div style={scheduleWorkflowEmpty}>{group.empty}</div>
+                    )}
+                  </div>
                 ))}
+
+                {scheduledFollowUpItems.length > 0 && (
+                  <div style={scheduleWorkflowSection}>
+                    <div style={scheduleWorkflowHeader}>
+                      <h3 style={scheduleWorkflowTitle}>
+                        {activeLanguage === "es"
+                          ? "Visitas registradas"
+                          : "Scheduled Visit Records"}
+                      </h3>
+                      <span style={scheduleWorkflowCount}>
+                        {scheduledFollowUpItems.length}
+                      </span>
+                    </div>
+
+                    <div style={activeJobsList}>
+                      {scheduledFollowUpItems.map((item) =>
+                        renderScheduleCard(item, "records")
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+            )}
+              </>
             );
           })()}
+
+          {visitOutcomeTarget && (
+            <div style={confirmOverlay}>
+              <div style={confirmCard}>
+                <h3>
+                  {translate("evaluationOutcomeTitle")}
+                </h3>
+
+                <p>
+                  {translate("evaluationOutcomeInstruction")}
+                </p>
+
+                <div style={visitOutcomeGrid}>
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("quote_required")}
+                  >
+                     {translate("evaluationQuoteRequired")}
+                  </button>
+
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("start_work_immediately")}
+                  >
+                     {translate("customerApprovedStartWork")}
+                  </button>
+
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("need_materials")}
+                  >
+                     {activeLanguage === "es" ? "Necesita materiales" : "Need Materials"}
+                  </button>
+
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("waiting_customer_decision")}
+                  >
+                     {activeLanguage === "es" ? "Esperando al cliente" : "Waiting Customer Decision"}
+                  </button>
+
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("follow_up_required")}
+                  >
+                     {activeLanguage === "es" ? "Requiere seguimiento" : "Follow Up Required"}
+                  </button>
+
+                  <button
+                    style={visitOutcomeButton}
+                    onClick={() => applyVisitOutcome("emergency_dispatch")}
+                  >
+                     {activeLanguage === "es" ? "Despacho de emergencia" : "Emergency Dispatch"}
+                  </button>
+
+                  <button
+                    style={visitOutcomeDangerButton}
+                    onClick={() => applyVisitOutcome("not_good_fit")}
+                  >
+                     {activeLanguage === "es" ? "No es buen ajuste" : "Not A Good Fit"}
+                  </button>
+                </div>
+
+                <div style={confirmActions}>
+                  <button
+                    style={secondaryScheduleBtn}
+                    onClick={() => setVisitOutcomeTarget(null)}
+                  >
+                    {translate("cancel")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {scheduleDeleteTarget && (
             <div style={confirmOverlay}>
@@ -1759,9 +13570,27 @@ setPage("emergencyDispatch");
 
       {activeTab === "pending" && (
       <div style={section}>
-        <h2 style={sectionTitle}>
-          {translate("pendingDecisions")}
-        </h2>
+        <div ref={dynamicSectionRef} style={opportunitiesCompactHeader}>
+          <button
+            style={workCenterBackButton}
+            onClick={returnToWorkCenterDashboard}
+          >
+            <span aria-hidden="true">‹</span>
+            {translate("backToWorkCenter")}
+          </button>
+          <h2 style={opportunitiesCompactTitle}>
+            {translate("workCenterOpportunitiesTitle")}
+          </h2>
+          <p style={opportunitiesCompactSummary}>
+            {opportunitiesCount > 0
+              ? `${opportunitiesCount} ${
+                  opportunitiesCount === 1
+                    ? translate("newOpportunity")
+                    : translate("newOpportunities")
+                } • ${translate("awaitingReview")}`
+              : translate("noNewOpportunities")}
+          </p>
+        </div>
 
         {(() => {
           const pendingWorkStatus = localStorage.getItem("pendingWorkStatus") || "";
@@ -1775,7 +13604,7 @@ setPage("emergencyDispatch");
           return (
             <div style={pendingReviewCard}>
               <div style={pendingReviewTop}>
-                <div style={pendingReviewIcon}>🧭</div>
+                <div style={pendingReviewIcon}>REV</div>
 
                 <div>
                   <strong style={pendingReviewTitle}>
@@ -1790,7 +13619,7 @@ setPage("emergencyDispatch");
 
                   {pendingWorkLocation && (
                     <p style={pendingReviewLocation}>
-                      📍 {pendingWorkLocation}
+                       {pendingWorkLocation}
                     </p>
                   )}
                 </div>
@@ -1810,7 +13639,7 @@ setPage("emergencyDispatch");
                       setPage("conversationThread");
                     }}
                   >
-                    💬 {activeLanguage === "es" ? "Abrir chat" : "Open Chat"}
+                     {activeLanguage === "es" ? "Abrir chat" : "Open Chat"}
                   </button>
                 )}
 
@@ -1821,7 +13650,7 @@ setPage("emergencyDispatch");
                     openWorkTab("quotes");
                   }}
                 >
-                  🧾 {translate("createQuote")}
+                   {translate("quoteAfterEvaluation")}
                 </button>
 
                 <button
@@ -1872,16 +13701,18 @@ setPage("emergencyDispatch");
                     setRefreshKey((prev) => prev + 1);
                   }}
                 >
-                  ✅ {translate("moveToActiveJob")}
+                   {translate("moveToActiveJob")}
                 </button>
               </div>
             </div>
           );
         })()}
 
-        {!hasPendingRequest && !localStorage.getItem("pendingWorkStatus") ? (
+        {!hasPendingRequest &&
+        pendingProjectRequests.length === 0 &&
+        !localStorage.getItem("pendingWorkStatus") ? (
           <div style={emptyCard}>
-            <div style={emptyIcon}>📭</div>
+            <div style={emptyIcon}>LEAD</div>
 
             <strong>
               {activeLanguage === "es"
@@ -1900,51 +13731,117 @@ setPage("emergencyDispatch");
                 style={emptyActionButton}
                 onClick={() => setPage("businessLeads")}
               >
-                📥 {activeLanguage === "es" ? "Ver oportunidades" : "View leads"}
+                 {activeLanguage === "es" ? "Ver oportunidades" : "View leads"}
               </button>
 
               <button
                 style={emptyActionButton}
                 onClick={() => setPage("emergencyBusinessSettings")}
               >
-                🚨 {activeLanguage === "es" ? "Configurar emergencia" : "Emergency settings"}
+                 {activeLanguage === "es" ? "Configurar emergencia" : "Emergency settings"}
               </button>
             </div>
           </div>
         ) : (
-          <div style={requestCard}>
-            <div style={liveBadge}>🔴 LIVE EMERGENCY REQUEST</div>
+          <div style={activeJobList}>
+            {pendingProjectRequests.map((request) => {
+              const requestId = request.requestId || request.id;
+              const title =
+                request.title ||
+                request.projectTitle ||
+                request.category ||
+                (activeLanguage === "es" ? "Solicitud de servicio" : "Service Request");
+              const details =
+                request.description ||
+                request.details ||
+                request.notes ||
+                (activeLanguage === "es"
+                  ? "Revisa los detalles antes de responder."
+                  : "Review the details before responding.");
 
-            <div style={requestTop}>
-              <div style={emergencyBadge}>🚨</div>
+              return (
+                <div
+                  key={requestId || title}
+                  style={{ ...requestCard, ...requestCardOpportunityAlert }}
+                >
+                  <div style={requestTop}>
+                    <div style={requestIcon}>
+                      <MeetroIcon name="opportunities" size={24} decorative />
+                    </div>
 
-              <div style={{ flex: 1 }}>
-                <strong style={requestTitle}>{selectedService === "Emergency Plumbing" ? translate("emergencyPlumbing") : selectedService}</strong>
-                <p style={requestLocation}>{t.location}</p>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={requestTitle}>{title}</strong>
+                      <p style={requestLocation}>
+                        {request.location ||
+                          request.fullAddress ||
+                          request.city ||
+                          (activeLanguage === "es" ? "Área local" : "Local Area")}
+                      </p>
 
-                <div style={requestMeta}>
-                  <span>⚡ {getStatusLabel()}</span>
-                  <span>•</span>
-                  <span>🏠 {t.homeowner}</span>
+                      <div style={requestMeta}>
+                        <span style={opportunityStatusChip}>
+                          <span style={opportunityStatusDot} aria-hidden="true" />
+                          {translate("newOpportunity")}
+                        </span>
+                        <span style={requestServiceMeta}>
+                          {request.category ||
+                            request.requestCategory ||
+                            (activeLanguage === "es" ? "Servicio" : "Service")}
+                        </span>
+                      </div>
+
+                      <div style={requestTimer}>{details}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ ...buttonGrid, gridTemplateColumns: "1fr" }}>
+                    <button
+                      style={acceptButton}
+                      onClick={() => openBusinessLeadOpportunityDetail(request)}
+                    >
+                      {translate("viewOpportunity")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {hasPendingRequest && (
+              <div style={requestCard}>
+                <div style={liveBadge}> LIVE EMERGENCY REQUEST</div>
+
+                <div style={requestTop}>
+                  <div style={emergencyBadge}></div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={requestTitle}>{selectedService === "Emergency Plumbing" ? translate("emergencyPlumbing") : selectedService}</strong>
+                    <p style={requestLocation}>{t.location}</p>
+
+                    <div style={requestMeta}>
+                      <span> {getStatusLabel()}</span>
+                      <span>•</span>
+                      <span> {t.homeowner}</span>
+                    </div>
+
+                    <div style={requestTimer}>
+                       {activeLanguage === "es"
+                        ? "Respuesta recomendada: menos de 2 min"
+                        : "Recommended response: under 2 min"}
+                    </div>
+                  </div>
                 </div>
 
-                <div style={requestTimer}>
-                  ⏱ {activeLanguage === "es"
-                    ? "Respuesta recomendada: menos de 2 min"
-                    : "Recommended response: under 2 min"}
+                <div style={buttonGrid}>
+                  <button style={acceptButton} onClick={acceptEmergencyRequest}>
+                    {translate("openEmergencyChat")}
+                  </button>
+
+                  <button style={declineButton} onClick={declineEmergencyRequest}>
+                    {t.decline}
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div style={buttonGrid}>
-              <button style={acceptButton} onClick={acceptEmergencyRequest}>
-                {t.accept}
-              </button>
-
-              <button style={declineButton} onClick={declineEmergencyRequest}>
-                {t.decline}
-              </button>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -1952,7 +13849,24 @@ setPage("emergencyDispatch");
 
       {activeTab === "active" && (
         <div style={section}>
-          <h2 style={sectionTitle}>{translate("activeJobs")}</h2>
+          <button
+            style={workCenterBackButton}
+            onClick={returnToWorkCenterDashboard}
+          >
+            <span aria-hidden="true">‹</span>
+            {translate("backToWorkCenter")}
+          </button>
+
+          <div style={workCenterChildHeader}>
+              <h2 style={workCenterChildTitle}>
+                {ui("workCenterActiveWorkTitle")}
+              </h2>
+              <p style={workCenterChildSummary}>
+                {activeJobs.length > 0
+                  ? `${activeJobs.length} ${ui("workCenterChildActiveSummary")}`
+                  : ui("workCenterChildActiveEmptySummary")}
+              </p>
+          </div>
 
           {(() => {
             const homeownerProjects = JSON.parse(
@@ -1978,7 +13892,11 @@ setPage("emergencyDispatch");
                 (job) => job.status !== "completed"
               ),
               ...activeJobs.filter(
-                (job) => job.status !== "completed"
+                (job) =>
+                  job.status !== "completed" &&
+                  job.status !== "cancelled" &&
+                  job.status !== "canceled" &&
+                  Boolean(job.service)
               ),
             ];
 
@@ -1994,6 +13912,37 @@ setPage("emergencyDispatch");
                 }))
             );
 
+            const getActiveWorkCardStatus = (job = {}) => {
+              const syncedJobStatus =
+                job.source === "homeownerProject"
+                  ? localStorage.getItem("activeWorkStatus") ||
+                    localStorage.getItem("activeJobStatus") ||
+                    job.status
+                  : job.status;
+
+              return syncedJobStatus === "working"
+                ? "started"
+                : syncedJobStatus === "on_the_way"
+                ? "enroute"
+                : syncedJobStatus;
+            };
+
+            const visibleCombinedActiveJobs = combinedActiveJobs.filter((job) => {
+              if (activeWorkFilter === "all") return true;
+              const status = String(getActiveWorkCardStatus(job) || "").toLowerCase();
+              if (activeWorkFilter === "on_site") {
+                return ["arrived", "started", "working", "in_progress"].some((token) =>
+                  status.includes(token)
+                );
+              }
+              if (activeWorkFilter === "in_progress") {
+                return ["started", "working", "in_progress", "active"].some((token) =>
+                  status.includes(token)
+                );
+              }
+              return true;
+            });
+
             const universalActiveWork = {
               status: activeWorkSnapshot?.status || localStorage.getItem("activeWorkStatus") || "",
               type: activeWorkSnapshot?.type || localStorage.getItem("activeWorkType") || "",
@@ -2006,22 +13955,73 @@ setPage("emergencyDispatch");
                 localStorage.getItem("activeWorkStage") || "working",
             };
 
+            const universalActiveWorkVisible =
+              !hasActiveEmergency &&
+              universalActiveWork.status &&
+              !["completed", "cancelled", "canceled", "closed"].includes(
+                String(universalActiveWork.status || "").toLowerCase()
+              ) &&
+              (universalActiveWork.service || universalActiveWork.location);
+
+            const activeWorkMatchesFilter = (job) => {
+              if (activeWorkFilter === "all") return true;
+              const status = String(getActiveWorkCardStatus(job) || "").toLowerCase();
+              if (activeWorkFilter === "on_site") {
+                return ["arrived", "started", "working", "in_progress"].some((token) =>
+                  status.includes(token)
+                );
+              }
+              if (activeWorkFilter === "in_progress") {
+                return ["started", "working", "in_progress", "active"].some((token) =>
+                  status.includes(token)
+                );
+              }
+              return true;
+            };
+
+            const universalActiveWorkCountsAsInProgress = Boolean(universalActiveWorkVisible);
+            const activeWorkFilterOptions = [
+              {
+                key: "all",
+                label: ui("wcFilterAll"),
+                count: combinedActiveJobs.length + (universalActiveWorkVisible ? 1 : 0),
+              },
+              {
+                key: "on_site",
+                label: ui("wcFilterOnSite"),
+                count:
+                  combinedActiveJobs.filter((job) => {
+                    const status = String(getActiveWorkCardStatus(job) || "").toLowerCase();
+                    return ["arrived", "started", "working", "in_progress"].some((token) =>
+                      status.includes(token)
+                    );
+                  }).length + (universalActiveWorkCountsAsInProgress ? 1 : 0),
+              },
+              {
+                key: "in_progress",
+                label: ui("wcFilterInProgress"),
+                count:
+                  combinedActiveJobs.filter((job) => {
+                    const status = String(getActiveWorkCardStatus(job) || "").toLowerCase();
+                    return ["started", "working", "in_progress", "active"].some((token) =>
+                      status.includes(token)
+                    );
+                  }).length + (universalActiveWorkCountsAsInProgress ? 1 : 0),
+              },
+            ];
+
             return combinedActiveJobs.length === 0 &&
               (!universalActiveWork.status ||
                 universalActiveWork.status === "completed") ? (
             <div style={emptyCard}>
-              <div style={emptyIcon}>🛠️</div>
+              <div style={emptyIcon}>JOB</div>
 
               <strong>
-                {activeLanguage === "es"
-                  ? "No hay trabajos activos ahora."
-                  : "No active jobs right now."}
+                {ui("wcNoActiveWorkTitle")}
               </strong>
 
               <p style={emptyText}>
-                {activeLanguage === "es"
-                  ? "Cuando aceptes una solicitud o programes un trabajo, aparecerá aquí."
-                  : "Accepted requests, scheduled jobs, and live dispatches will appear here."}
+                {ui("wcNoActiveWorkText")}
               </p>
 
               <div style={emptyActionGrid}>
@@ -2029,19 +14029,35 @@ setPage("emergencyDispatch");
                   style={emptyActionButton}
                   onClick={() => openWorkTab("pending")}
                 >
-                  📥 {activeLanguage === "es" ? "Ver pendientes" : "Check pending"}
+                   {ui("wcCheckPending")}
                 </button>
 
                 <button
                   style={emptyActionButton}
                   onClick={() => setPage("businessLeads")}
                 >
-                  🔎 {activeLanguage === "es" ? "Buscar oportunidades" : "Find leads"}
+                   {ui("wcFindLeads")}
                 </button>
               </div>
             </div>
           ) : (
             <div style={activeJobList}>
+              <div style={activeWorkFilterRow} aria-label={ui("wcActiveWorkFilters")}>
+                {activeWorkFilterOptions.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    style={{
+                      ...activeWorkFilterChip,
+                      ...(activeWorkFilter === filter.key ? activeWorkFilterChipActive : {}),
+                    }}
+                    onClick={() => setActiveWorkFilter(filter.key)}
+                  >
+                    {filter.label} ({filter.count})
+                  </button>
+                ))}
+              </div>
+
               {pendingChangeOrders.length > 0 && (
                 <div style={changeOrderAlertWrap}>
                   {pendingChangeOrders.map((order) => (
@@ -2049,7 +14065,7 @@ setPage("emergencyDispatch");
                       <div style={changeOrderAlertTop}>
                         <div>
                           <span style={changeOrderBadge}>
-                            🔁 {activeLanguage === "es"
+                             {activeLanguage === "es"
                               ? "Cambio solicitado"
                               : "Change Order Requested"}
                           </span>
@@ -2088,7 +14104,7 @@ setPage("emergencyDispatch");
                       </div>
 
                       <div style={changeOrderNotice}>
-                        ⚠️ {activeLanguage === "es"
+                         {activeLanguage === "es"
                           ? "El proyecto puede requerir precio y cronograma actualizado."
                           : "Project may require revised pricing and timeline."}
                       </div>
@@ -2105,7 +14121,7 @@ setPage("emergencyDispatch");
                             setPage("quoteBuilder");
                           }}
                         >
-                          🧾 {activeLanguage === "es"
+                           {activeLanguage === "es"
                             ? "Revisar cambio"
                             : "Review Change"}
                         </button>
@@ -2139,13 +14155,13 @@ setPage("emergencyDispatch");
 
                             localStorage.setItem(
                               "conversationBusinessName",
-                              order.projectTitle || "Project Change"
+                              order.projectTitle || "Service Change"
                             );
 
                             setPage("conversationThread");
                           }}
                         >
-                          💬 {activeLanguage === "es"
+                           {activeLanguage === "es"
                             ? "Mensaje"
                             : "Message"}
                         </button>
@@ -2155,8 +14171,12 @@ setPage("emergencyDispatch");
                 </div>
               )}
 
-              {universalActiveWork.status &&
-                universalActiveWork.status !== "completed" && (
+              {!hasActiveEmergency &&
+                universalActiveWork.status &&
+                !["completed", "cancelled", "canceled", "closed"].includes(
+                  String(universalActiveWork.status || "").toLowerCase()
+                ) &&
+                (universalActiveWork.service || universalActiveWork.location) && (
                 <div style={activeJobPanel}>
                   <div style={activeJobTop}>
                     <div>
@@ -2223,21 +14243,24 @@ setPage("emergencyDispatch");
                     <button
                       style={{
                         ...stageButton,
-                        ...(universalActiveWork.stage === "onTheWay"
+                        ...(universalActiveWork.stage === "on_the_way"
                           ? activeStageButton
                           : {}),
                       }}
                       onClick={() => {
                         saveActiveWorkSnapshot({
-                          stage: "onTheWay",
+                          stage: "on_the_way",
+                          status: "on_the_way",
                         });
 
-                        localStorage.setItem("activeWorkStage", "onTheWay");
+                        localStorage.setItem("activeWorkStage", "on_the_way");
+                        localStorage.setItem("activeWorkStatus", "on_the_way");
+                        localStorage.setItem("activeJobStatus", "on_the_way");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
                       }}
                     >
-                      🚗 {getWorkflowStageLabel("on_the_way")}
+                       {getWorkflowStageLabel("on_the_way")}
                     </button>
 
                     {universalActiveWork.stage === "pausedMaterials" && (
@@ -2260,7 +14283,7 @@ setPage("emergencyDispatch");
                           setRefreshKey((prev) => prev + 1);
                         }}
                       >
-                        ▶️ {translate("resumeWork")}
+                         {translate("resumeWork")}
                       </button>
                     )}
 
@@ -2277,11 +14300,13 @@ setPage("emergencyDispatch");
                         });
 
                         localStorage.setItem("activeWorkStage", "arrived");
+                        localStorage.setItem("activeWorkStatus", "arrived");
+                        localStorage.setItem("activeJobStatus", "arrived");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
                       }}
                     >
-                      📍 {getWorkflowStageLabel("arrived")}
+                       {getWorkflowStageLabel("arrived")}
                     </button>
 
                     <button
@@ -2297,11 +14322,13 @@ setPage("emergencyDispatch");
                         });
 
                         localStorage.setItem("activeWorkStage", "working");
+                          localStorage.setItem("activeWorkStatus", "working");
+                          localStorage.setItem("activeJobStatus", "working");
                         localStorage.removeItem("activeWorkPauseReason");
                         setRefreshKey((prev) => prev + 1);
                       }}
                     >
-                      🛠️ {getWorkflowStageLabel("working")}
+                       {getWorkflowStageLabel("working")}
                     </button>
 
                     <button
@@ -2322,7 +14349,7 @@ setPage("emergencyDispatch");
                         setRefreshKey((prev) => prev + 1);
                       }}
                     >
-                      ⏸ {translate("pauseForMaterials")}
+                       {translate("pauseForMaterials")}
                     </button>
                   </div>
 
@@ -2331,7 +14358,7 @@ setPage("emergencyDispatch");
                       style={secondaryActionButton}
                       onClick={() => openWorkTab("materials")}
                     >
-                      📦 {translate("workTabMaterials")}
+                       {translate("workTabMaterials")}
                     </button>
 
                     {universalActiveWork.conversationId && (
@@ -2351,7 +14378,7 @@ setPage("emergencyDispatch");
                           setPage("conversationThread");
                         }}
                       >
-                        💬 {activeLanguage === "es"
+                         {activeLanguage === "es"
                           ? "Abrir chat"
                           : translate("openChat")}
                       </button>
@@ -2380,216 +14407,116 @@ setPage("emergencyDispatch");
                         setPage("completionSheet");
                       }}
                     >
-                      🧾 {activeLanguage === "es"
-                        ? "Crear cierre"
-                        : translate("createCompletion")}
+                       {translate("createCompletion")}
                     </button>
                   </div>
                 </div>
               )}
 
-              {combinedActiveJobs.map((job) => (
+              {visibleCombinedActiveJobs.length === 0 && activeWorkFilter !== "all" && (
+                <div style={jobListEmpty}>
+                  {ui("wcNoActiveWorkFilter")}
+                </div>
+              )}
+
+              {visibleCombinedActiveJobs.map((job) => {
+                const normalizedSyncedStatus = getActiveWorkCardStatus(job);
+                const activeWorkTitle =
+                  job.service === "Emergency Plumbing"
+                    ? translate("emergencyPlumbing")
+                    : job.service || ui("wcProject");
+                const activeWorkCustomer =
+                  job.customer || ui("wcCustomer");
+                const activeWorkStatusLabel = getWorkflowStageLabel(
+                  normalizedSyncedStatus || "active"
+                );
+                const activeWorkTask = getActiveJobOperationalNextAction(
+                  normalizedSyncedStatus
+                );
+                const activeWorkIsOnSite = ["arrived", "started", "working", "in_progress"].some(
+                  (token) => String(normalizedSyncedStatus || "").toLowerCase().includes(token)
+                );
+                const activeWorkLocationState = activeWorkIsOnSite
+                  ? ui("wcFilterOnSite")
+                  : activeWorkStatusLabel;
+                const activeWorkStartTime =
+                  job.project?.scheduledTime ||
+                  job.project?.time ||
+                  job.time ||
+                  job.startTime ||
+                  job.eta ||
+                  "";
+                const activeWorkStartLabel = activeWorkStartTime
+                  ? String(activeWorkStartTime).toLowerCase().includes("min")
+                    ? activeWorkStartTime
+                    : formatScheduleTime(activeWorkStartTime)
+                  : ui("wcStartPending");
+                const activeWorkWorkflow = getActiveWorkWorkflowPresentation({
+                  ...job,
+                  status: normalizedSyncedStatus,
+                });
+
+                return (
                 <div style={activeJobPanel} key={job.id}>
-                  <div style={activeJobTop}>
-                    <div>
-                      <span style={activeJobBadge}>
-                        {job.status === "completed"
-                          ? translate("completed")
-                          : activeLanguage === "es"
-                          ? "Trabajo Activo"
-                          : translate("workStageActive")}
-                      </span>
-
-                      <h3 style={activeJobTitle}>
-                        {job.service === "Emergency Plumbing"
-                          ? translate("emergencyPlumbing")
-                          : job.service}
-                      </h3>
-
-                      <p style={activeJobSub}>{job.customer}</p>
-
-                      <div style={jobActivityNote}>
-                        {job.source === "homeownerProject"
-                          ? translate("workflowNoteReview")
-                          : getWorkflowActivityNote(job.status || "active")}
-                      </div>
+                  <div style={activeWorkCardTop}>
+                    <div style={activeWorkCardIdentity}>
+                      <h3 style={activeJobTitle}>{activeWorkTitle}</h3>
+                      <p style={activeJobSub}>{activeWorkCustomer}</p>
                     </div>
-
-                    <div style={activeEtaBox}>
-                      {job.source === "homeownerProject" ? (
-                        <>
-                          <strong>
-                            {getWorkflowStageLabel(job.status || "active")}
-                          </strong>
-
-                          <span>
-                            {activeLanguage === "es"
-                              ? "Estado"
-                              : "Status"}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <strong>{job.eta}</strong>
-                          <span>min ETA</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={activityChipRow}>
-                    <span style={activityChip}>
-                      💬 {activeLanguage === "es" ? "Cliente esperando" : "Customer waiting"}
-                    </span>
-
-                    <span style={activityChip}>
-                      📷 {activeLanguage === "es" ? "Fotos listas" : "Photos ready"}
-                    </span>
-
-                    <span style={priorityChip}>
-                      ⚡ {activeLanguage === "es" ? "Prioridad" : "Priority"}
-                    </span>
-                  </div>
-
-                  <div style={activeTimeline}>
-                    <div style={activeTimelineStep}>
-                      <span>✓</span>
-                      {getWorkflowStageLabel("active")}
-                    </div>
-
-                    <div style={activeTimelineStep}>
-                      <span>{["enroute","arrived","started","completed"].includes(job.status) ? "✓" : "○"}</span>
-                      {getWorkflowStageLabel("on_the_way")}
-                    </div>
-
-                    <div style={activeTimelineStep}>
-                      <span>{["arrived","started","completed"].includes(job.status) ? "✓" : "○"}</span>
-                      {getWorkflowStageLabel("arrived")}
-                    </div>
-
-                    <div style={activeTimelineStep}>
-                      <span>{["started","completed"].includes(job.status) ? "✓" : "○"}</span>
-                      {getWorkflowStageLabel("working")}
-                    </div>
-
-                    <div style={activeTimelineStep}>
-                      <span>{job.status === "completed" ? "✓" : "○"}</span>
-                      {getWorkflowStageLabel("completed")}
-                    </div>
-                  </div>
-
-                  <div style={activeActions}>
-                    {["accepted", "enroute", "arrived", "started"].includes(job.status) && (
-                      <button
-                        style={dispatchButton}
-                        onClick={() => {
-saveActiveJobContext(job);
-setWorkCenterReturn();
-setPage("emergencyDispatch");
-}}
-                      >
-                        {t.openDispatch}
-                      </button>
-                    )}
 
                     <button
-                      style={secondaryActionButton}
-                      onClick={() => {
-                        saveActiveJobContext(job);
-                        setWorkCenterReturn();
-
-                        saveSelectedActiveProject({
-                          ...job,
-                          source: job.source || "activeJob",
-                          project: job.project || job,
-                        });
-
-                        localStorage.setItem("selectedPostId", job.id);
-                        localStorage.setItem(
-                          "selectedQuoteRequest",
-                          JSON.stringify(job.project || job)
-                        );
-                        localStorage.setItem(
-                          "projectDetailsReturnPage",
-                          "contractorDashboard"
-                        );
-                        localStorage.setItem(
-                          "conversationReturnPage",
-                          "projectDetails"
-                        );
-                        localStorage.setItem(
-                          "activeConversationId",
-                          `active-job-${job.id}`
-                        );
-                        localStorage.setItem(
-                          "activeConversationName",
-                          job.customer || "Customer"
-                        );
-                        localStorage.setItem(
-                          "meetroConversationType",
-                          "activeJob"
-                        );
-
-                        setPage("projectDetails");
-                      }}
+                      type="button"
+                      aria-label={ui("wcViewProjectAria")}
+                      style={quoteChevronButton}
+                      onClick={() => openActiveWorkProject(job)}
                     >
-                      <div>
-                        <div>
-                          {activeLanguage === "es"
-                            ? "Abrir Proyecto"
-                            : "Open Project"}
-                        </div>
-                        <div style={actionSubtext}>
-                          {activeLanguage === "es"
-                            ? "Ver conversación, fotos, pagos y progreso"
-                            : "View conversation, photos, payments and progress"}
-                        </div>
-                      </div>
+                      ›
                     </button>
+                  </div>
 
+                  <div style={workflowCardSummary}>
+                    <div style={workflowSummaryItem}>
+                      <span style={workflowSummaryLabel}>
+                        {ui("wcCurrentStatus")}
+                      </span>
+                      <strong style={workflowSummaryValue}>
+                        {activeWorkWorkflow.statusLabel}
+                      </strong>
+                    </div>
+                    <div style={workflowSummaryItem}>
+                      <span style={workflowSummaryLabel}>
+                        {ui("wcNextStep")}
+                      </span>
+                      <strong style={workflowSummaryValue}>
+                        {activeWorkWorkflow.nextStep}
+                      </strong>
+                    </div>
                     <button
-                      style={secondaryActionButton}
-                      onClick={() => {
-                        if (job.source === "homeownerProject") {
-                          setWorkCenterReturn();
-                          saveSelectedActiveProject(job);
-
-                          localStorage.setItem(
-                            "selectedPostId",
-                            job.id
-                          );
-
-                          localStorage.setItem(
-                            "selectedQuoteRequest",
-                            JSON.stringify(job.project || job)
-                          );
-
-                          localStorage.setItem(
-                            "projectDetailsReturnPage",
-                            "contractorDashboard"
-                          );
-
-                          setWorkCenterReturn();
-setPage("projectDetails");
-                          return;
-                        }
-
-                        saveActiveJobContext(job);
-                        setWorkCenterReturn();
-setPage("emergencyDispatch");
-                      }}
+                      type="button"
+                      style={workflowPrimaryActionButton}
+                      onClick={activeWorkWorkflow.onAction}
                     >
-                      {job.source === "homeownerProject"
-                        ? activeLanguage === "es"
-                          ? "Abrir Proyecto"
-                          : "Open Project"
-                        : activeLanguage === "es"
-                        ? "Ruta"
-                        : "Route"}
+                      {activeWorkWorkflow.actionLabel}
+                    </button>
+                  </div>
+
+                  <div style={activeWorkDivider} />
+
+                  <div style={activeWorkFooterRow}>
+                    <span>
+                      {ui("wcStart")} {activeWorkStartLabel}
+                    </span>
+                    <button
+                      type="button"
+                      style={quoteInlineDetailsButton}
+                      onClick={() => openActiveWorkProject(job)}
+                    >
+                      {ui("wcViewProject")}
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           );
           })()}
@@ -2597,193 +14524,216 @@ setPage("emergencyDispatch");
       )}
 
       {activeTab === "completed" && (
-        <div style={section}>
-          <h2 style={sectionTitle}>
-            {activeLanguage === "es" ? "Trabajos Completados" : "Completed Work"}
-          </h2>
+        <div style={closureCenterSection}>
+          <button
+            style={workCenterBackButton}
+            onClick={returnToWorkCenterDashboard}
+          >
+            <span aria-hidden="true">‹</span>
+            {translate("backToWorkCenter")}
+          </button>
 
-          <div style={completedSummaryGrid}>
-            <div style={completedSummaryCard}>
-              <span>{activeLanguage === "es" ? "Total" : "Total"}</span>
-              <strong>{completedJobsCount}</strong>
-            </div>
-
-            <div style={completedSummaryCard}>
-              <span>{activeLanguage === "es" ? "Este Mes" : "This Month"}</span>
-              <strong>{completedProjects.length}</strong>
-            </div>
-
-            <div style={completedSummaryCard}>
-              <span>{translate("workTabRevenue")}</span>
-              <strong>${totalJobRevenue}</strong>
-            </div>
-
-            <div style={completedSummaryCard}>
-              <span>{activeLanguage === "es" ? "Promedio" : "Average"}</span>
-              <strong>${averageJobValue}</strong>
-            </div>
+          <div style={workCenterChildHeader}>
+            <h2 style={workCenterChildTitle}>
+              {translate("closureCenterTitle")}
+            </h2>
+            <p style={workCenterChildSummary}>
+              {closureReviews.length > 0
+                ? `${closureReviews.length} ${translate("closureCenterReviewTitle")}`
+                : translate("closureCenterNoRecords")}
+            </p>
           </div>
 
-          <div style={historyFilters}>
-            <button
-              style={completedFilter === "all" ? historyFilterActive : historyFilterButton}
-              onClick={() => setCompletedFilter("all")}
-            >
-              {activeLanguage === "es" ? "Todo" : "All"}
-            </button>
+          {isPropertyManagementBusiness && (
+            <div style={propertyManagementClosureFoundationNote}>
+              {translate("propertyManagementClosureNote")}
+            </div>
+          )}
 
-            <button
-              style={completedFilter === "month" ? historyFilterActive : historyFilterButton}
-              onClick={() => setCompletedFilter("month")}
-            >
-              {activeLanguage === "es" ? "Mes" : "Month"}
-            </button>
-
-            <button
-              style={completedFilter === "week" ? historyFilterActive : historyFilterButton}
-              onClick={() => setCompletedFilter("week")}
-            >
-              {activeLanguage === "es" ? "Semana" : "Week"}
-            </button>
-
-            <button
-              style={completedFilter === "today" ? historyFilterActive : historyFilterButton}
-              onClick={() => setCompletedFilter("today")}
-            >
-              {translate("today")}
-            </button>
+          <div style={closureStatusGrid}>
+            {closureStatusKeys.map((statusKey) => (
+              <div style={closureStatusSummaryCard} key={statusKey}>
+                <strong style={closureStatusSummaryCount}>
+                  {closureStatusCounts[statusKey] || 0}
+                </strong>
+                <span style={closureStatusSummaryLabel}>
+                  {translate(statusKey)}
+                </span>
+              </div>
+            ))}
           </div>
 
-          <div style={historyList}>
-            {completedProjects.length === 0 ? (
+          <div style={closureReviewHeader}>
+            <h2 style={sectionTitle}>
+              {translate("closureCenterReviewTitle")}
+            </h2>
+            <p style={closureReviewDescription}>
+              {translate("closureCenterReviewDescription")}
+            </p>
+          </div>
+
+          <div style={closureReviewList}>
+            {closureReviews.length === 0 ? (
               <div style={emptyCard}>
-                <div style={emptyIcon}>📁</div>
+                <div style={emptyIcon}>OK</div>
 
                 <strong>
-                  {activeLanguage === "es"
-                    ? "No hay proyectos completados todavía."
-                    : "No completed projects yet."}
+                  {translate("closureCenterNoRecords")}
                 </strong>
               </div>
             ) : (
-              completedProjects.map((project, index) => {
+              closureReviews.map((review, index) => {
+                const { project } = review;
                 const completedDate = project.completedAt
                   ? new Date(project.completedAt)
-                  : new Date();
+                  : null;
 
                 return (
                   <div
-                    style={historyListCard}
-                    key={index}
-                    onClick={() => {
-                      localStorage.setItem(
-                        "lastCompletedProject",
-                        JSON.stringify(project)
-                      );
-
-                      localStorage.setItem(
-                        "completedJobViewMode",
-                        "business"
-                      );
-
-                      setWorkCenterReturn();
-setPage("completedJobDetails");
-                    }}
+                    style={closureProjectCard}
+                    key={project.id || project.completionId || project.requestId || index}
                   >
-                    <div style={historySmallIcon}>
-                      {project.category === "HVAC"
-                        ? "▤"
-                        : project.category === "Handyman"
-                        ? "⌁"
-                        : "✓"}
-                    </div>
-
-                    <div style={historyMain}>
-                      <span style={historyType}>
-                        {project.category || "Project"}
-                      </span>
-
-                      <strong style={historyTitle}>
-                        {project.title ||
-                          project.service ||
-                          "Completed Project"}
-                      </strong>
-
-                      <p style={historyMeta}>
-                        {project.homeownerName ||
-                          project.username ||
-                          "Homeowner"}
-                      </p>
-                    </div>
-
-                    <div style={historyDetails}>
-                      <span>
-                        📍 {project.location || "Cape Coral, FL"}
-                      </span>
-
-                      <span>
-                        📅{" "}
-                        {completedDate.toLocaleDateString()}
-                      </span>
-
-                      <span>
-                        ⏰{" "}
-                        {completedDate.toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                    <div style={closureProjectHeader}>
+                      <div style={closureProjectIdentity}>
+                        <span style={closureProjectIcon}>✓</span>
+                        <div>
+                          <strong style={closureProjectTitle}>
+                            {project.title ||
+                              project.service ||
+                              (activeLanguage === "es"
+                                ? "Trabajo completado"
+                                : "Completed work")}
+                          </strong>
+                          <span style={closureProjectMeta}>
+                            {project.customer ||
+                              project.homeownerName ||
+                              project.username ||
+                              (activeLanguage === "es" ? "Cliente" : "Customer")}
+                            {completedDate
+                              ? ` · ${completedDate.toLocaleDateString()}`
+                              : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          ...closureStatusBadge,
+                          ...(review.statusKey === "closureStatusClosed"
+                            ? closureStatusBadgeClosed
+                            : review.statusKey === "closureStatusReady"
+                            ? closureStatusBadgeReady
+                            : closureStatusBadgePending),
+                        }}
+                      >
+                        {translate(review.statusKey)}
                       </span>
                     </div>
 
-                    <div style={historyRight}>
-                      <strong>
-                        +${project.revenue || 0}
-                      </strong>
-
-                      <span style={historyStatusMini}>
-                        ✅ {translate("completed")}
-                      </span>
+                    <div style={closureCategoryGrid}>
+                      {review.categories.map((category) => (
+                        <div style={closureCategoryCard} key={category.key}>
+                          <span style={closureCategoryIcon}>
+                            <MeetroIcon name={category.icon} size={18} decorative />
+                          </span>
+                          <div style={closureCategoryContent}>
+                            <strong style={closureCategoryTitle}>
+                              {category.title}
+                            </strong>
+                            <span style={closureCategoryDescription}>
+                              {category.description}
+                            </span>
+                          </div>
+                          <span
+                            style={
+                              category.resolved
+                                ? closureCategoryResolved
+                                : closureCategoryPending
+                            }
+                          >
+                            {category.resolved
+                              ? translate("closureCenterEvidenceAvailable")
+                              : translate("closureCenterNeedsReview")}
+                          </span>
+                        </div>
+                      ))}
                     </div>
 
-                    <div style={historyArrow}>›</div>
+                    <button
+                      type="button"
+                      style={closureOpenRecordButton}
+                      onClick={() => {
+                        localStorage.setItem(
+                          "lastCompletedProject",
+                          JSON.stringify(project)
+                        );
+                        localStorage.setItem(
+                          "completedJobViewMode",
+                          "business"
+                        );
+                        setWorkCenterReturn();
+                        setPage("completedJobDetails");
+                      }}
+                    >
+                      {translate("closureCenterOpenRecord")}
+                      <span aria-hidden="true">›</span>
+                    </button>
                   </div>
                 );
               })
             )}
           </div>
-
-          <p style={historyCount}>
-            {activeLanguage === "es"
-              ? "Mostrando 1–6 de 24 trabajos"
-              : "Showing 1–6 of 24 jobs"}
-          </p>
-
-          <button style={loadMoreButton}>
-            {activeLanguage === "es" ? "Cargar Más" : "Load More"}
-          </button>
         </div>
       )}
 
       {activeTab === "quotes" && (
         <div style={section}>
-          <h2 style={sectionTitle}>
-            {activeLanguage === "es" ? "Historial de Cotizaciones" : "Quote History"}
-          </h2>
+          <button
+            style={workCenterBackButton}
+            onClick={returnToWorkCenterDashboard}
+          >
+            <span aria-hidden="true">‹</span>
+            {translate("backToWorkCenter")}
+          </button>
 
-          {quoteHistory.length === 0 ? (
+          <div style={workCenterChildHeader}>
+              <h2 style={workCenterChildTitle}>
+                {ui("workCenterQuotesTitle")}
+              </h2>
+              <p style={workCenterChildSummary}>
+                {quoteHistory.length > 0
+                  ? `${quoteHistory.length} ${ui("workCenterChildQuotesSummary")}`
+                  : ui("workCenterChildQuotesEmptySummary")}
+              </p>
+          </div>
+
+          <div style={quoteStatusFilterRow} aria-label={ui("wcQuoteFilters")}>
+            {quoteFilterTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setQuoteStatusFilter(tab.key)}
+                style={{
+                  ...quoteStatusFilterButton,
+                  ...(quoteStatusFilter === tab.key
+                    ? quoteStatusFilterButtonActive
+                    : {}),
+                }}
+              >
+                {tab.label} ({quoteFilterCounts[tab.key] || 0})
+              </button>
+            ))}
+          </div>
+
+          {filteredQuoteHistory.length === 0 ? (
             <div style={emptyCard}>
-              <div style={emptyIcon}>💵</div>
+              <div style={emptyIcon}>QUOTE</div>
 
               <strong>
-                {activeLanguage === "es"
-                  ? "No hay cotizaciones enviadas todavía."
-                  : "No sent quotes yet."}
+                {ui("wcNoQuotesTitle")}
               </strong>
 
               <p style={emptyText}>
-                {activeLanguage === "es"
-                  ? "Las cotizaciones enviadas aparecerán aquí con su estado, precio e historial."
-                  : "Sent quotes will appear here with their status, price, and history."}
+                {ui("wcNoQuotesText")}
               </p>
 
               <div style={emptyActionGrid}>
@@ -2791,89 +14741,163 @@ setPage("completedJobDetails");
                   style={emptyActionButton}
                   onClick={() => setPage("businessLeads")}
                 >
-                  📥 {activeLanguage === "es" ? "Ver oportunidades" : "View leads"}
+                   {ui("wcViewLeads")}
                 </button>
 
                 <button
                   style={emptyActionButton}
                   onClick={() => {
-                    localStorage.setItem("meetroCommandTool", "quotes");
-                    setPage("businessCommandCenter");
+                    localStorage.removeItem("selectedQuoteForEdit");
+                    localStorage.removeItem("lastManualQuoteNumber");
+                    localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+                    localStorage.setItem("meetroWorkCenterTab", "quotes");
+                    localStorage.setItem("activeWorkCenterTab", "quotes");
+                    setPage("quoteBuilder");
                   }}
                 >
-                  🧾 {translate("createQuote")}
+                   {translate("quoteAfterEvaluation")}
                 </button>
               </div>
             </div>
           ) : (
             <div style={quoteHistoryList}>
-              {quoteHistory.map((quote) => (
+              {filteredQuoteHistory.map((quote) => {
+                const quoteWorkflow = getQuoteWorkflowPresentation(quote);
+
+                return (
                 <div style={quoteHistoryCard} key={quote.quoteId}>
                   <div style={quoteHistoryTop}>
-                    <div>
-                      <span
-                        style={{
-                          ...quoteStatusPill,
-                          ...(quote.status === "revision_requested"
-                            ? revisionRequestedPill
-                            : {}),
-                          ...(quote.status === "accepted"
-                            ? acceptedQuotePill
-                            : {}),
-                          ...(quote.status === "active"
-                            ? activeQuotePill
-                            : {}),
-                        }}
-                      >
-                        {quote.status === "revision_requested"
-                          ? activeLanguage === "es"
-                            ? "Cambios solicitados"
-                            : "Revision requested"
-                          : quote.status === "accepted"
-                          ? activeLanguage === "es"
-                            ? "Cotización aceptada"
-                            : "Quote accepted"
-                          : quote.status === "active"
-                          ? activeLanguage === "es"
-                            ? "Movida a trabajo activo"
-                            : "Moved to active job"
-                          : quote.status || "sent"}
-                      </span>
-
+                    <div style={quoteCardIdentity}>
                       <h3 style={quoteHistoryTitle}>
                         {quote.projectTitle ||
-                          (activeLanguage === "es" ? "Proyecto" : "Project")}
+                          ui("wcProject")}
                       </h3>
 
                       <p style={quoteHistoryMeta}>
                         {quote.homeownerName ||
-                          (activeLanguage === "es" ? "Cliente" : "Homeowner")}
+                          ui("wcHomeowner")}
                       </p>
                     </div>
 
-                    <strong style={quoteAmount}>
-                      ${quote.amount || 0}
-                    </strong>
+                    <button
+                      type="button"
+                      aria-label={ui("wcViewQuoteDetailsAria")}
+                      style={quoteChevronButton}
+                      onClick={() => setQuoteViewTarget(quote)}
+                    >
+                      ›
+                    </button>
                   </div>
 
-                  <p style={quoteHistoryText}>
-                    {quote.notes ||
-                      (activeLanguage === "es"
-                        ? "Sin notas agregadas."
-                        : "No notes added.")}
-                  </p>
+                  <div style={quoteCardAmountRow}>
+                    <strong style={quoteAmount}>
+                      {formatQuoteCurrency(getQuoteTotalAmount(quote))}
+                    </strong>
+                    <span
+                      style={{
+                        ...quoteLifecycleBadge,
+                        ...(normalizeQuoteStatus(quote) === "accepted" || normalizeQuoteStatus(quote) === "approved"
+                          ? quoteLifecycleBadgeAccepted
+                          : {}),
+                        ...(normalizeQuoteStatus(quote) === "revision_requested"
+                          ? quoteLifecycleBadgeRevision
+                          : {}),
+                        ...(normalizeQuoteStatus(quote) === "declined"
+                          ? quoteLifecycleBadgeDeclined
+                          : {}),
+                        ...(normalizeQuoteStatus(quote) === "converted_to_job"
+                          ? quoteLifecycleBadgeActive
+                          : {}),
+                        ...(normalizeQuoteStatus(quote) === "completed"
+                          ? quoteLifecycleBadgeCompleted
+                          : {}),
+                      }}
+                    >
+                      {quoteWorkflow.statusLabel}
+                    </span>
+                  </div>
 
-                  {quote.status === "accepted" && (
+                  <div style={workflowCardSummary}>
+                    <div style={workflowSummaryItem}>
+                      <span style={workflowSummaryLabel}>
+                        {ui("wcCurrentStatus")}
+                      </span>
+                      <strong style={workflowSummaryValue}>
+                        {quoteWorkflow.statusLabel}
+                      </strong>
+                    </div>
+                    <div style={workflowSummaryItem}>
+                      <span style={workflowSummaryLabel}>
+                        {ui("wcNextStep")}
+                      </span>
+                      <strong style={workflowSummaryValue}>
+                        {quoteWorkflow.nextStep}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      style={workflowPrimaryActionButton}
+                      onClick={quoteWorkflow.onAction}
+                    >
+                      {quoteWorkflow.actionLabel}
+                    </button>
+                  </div>
+
+                  <div style={quoteCardFooterRow}>
+                    <span>{getQuoteDisplayTime(quote)}</span>
+                    <button
+                      type="button"
+                      style={quoteInlineDetailsButton}
+                      onClick={() => setQuoteViewTarget(quote)}
+                    >
+                      {ui("wcViewDetails")}
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  </div>
+
+                  {normalizeQuoteStatus(quote) === "accepted" && (
                     <div style={acceptedQuoteAlertCard}>
                       <strong>
-                        🎉 {activeLanguage === "es"
-                          ? "El cliente aceptó esta cotización"
-                          : "Customer accepted this quote"}
+                         {activeLanguage === "es"
+                          ? "Cotización aceptada"
+                          : "Quote Accepted"}
                       </strong>
 
                       <p>
-                        {translate("nextStepAcceptedQuote")}
+                        {activeLanguage === "es"
+                          ? "Elige el próximo paso para continuar este trabajo."
+                          : "Choose the next step to continue this job."}
                       </p>
+
+                      <div style={acceptedQuoteNextStepGrid}>
+                        <button
+                          style={acceptedQuoteSecondaryButton}
+                          onClick={() => startScheduleWorkFromQuote(quote)}
+                        >
+                           {activeLanguage === "es" ? "Programar" : "Schedule"}
+                        </button>
+
+                        <button
+                          style={acceptedQuoteSecondaryButton}
+                          onClick={() => {
+                            const inviteText = activeLanguage === "es"
+                              ? "Te invito a continuar este proyecto en Meetro para mensajes, programación y seguimiento del trabajo."
+                              : "I’m inviting you to continue this project in Meetro for messages, scheduling, and job progress.";
+
+                            if (navigator.share) {
+                              navigator.share({
+                                title: "Meetro",
+                                text: inviteText,
+                              });
+                            } else {
+                              navigator.clipboard?.writeText(inviteText);
+                              alert(activeLanguage === "es" ? "Invitación copiada." : "Invitation copied.");
+                            }
+                          }}
+                        >
+                           {activeLanguage === "es" ? "Invitar" : "Invite"}
+                        </button>
+                      </div>
 
                       <button
                         style={moveToActiveButton}
@@ -2936,6 +14960,8 @@ setPage("completedJobDetails");
 
                           localStorage.setItem("activeWorkStatus", "active");
                           localStorage.setItem("activeWorkStage", "working");
+                          localStorage.setItem("activeWorkStatus", "working");
+                          localStorage.setItem("activeJobStatus", "working");
                           localStorage.setItem("activeWorkType", "quote_approved");
                           localStorage.setItem("activeWorkSource", "quote");
                           localStorage.setItem("activeWorkRequestId", activeQuoteProjectId);
@@ -3011,7 +15037,7 @@ setPage("completedJobDetails");
                           setRefreshKey((prev) => prev + 1);
                         }}
                       >
-                        🛠️ {translate("goToActiveJobs")}
+                         {activeLanguage === "es" ? "Crear Trabajo Activo" : "Create Active Job"}
                       </button>
                     </div>
                   )}
@@ -3067,46 +15093,293 @@ setPage("completedJobDetails");
                     </div>
                   )}
 
-                  <div style={quoteHistoryFooter}>
-                    <span>
-                      📅{" "}
-                      {quote.createdAt
-                        ? new Date(quote.createdAt).toLocaleDateString(
-                            activeLanguage === "es" ? "es-US" : "en-US",
-                            { month: "short", day: "numeric", year: "numeric" }
-                          )
-                        : activeLanguage === "es"
-                        ? "Fecha pendiente"
-                        : "Date pending"}
+                  {isExternalQuote(quote) && normalizeQuoteStatus(quote) === "sent" && (
+                    <span style={externalQuoteChip}>
+                      {activeLanguage === "es" ? "Cliente externo" : "External Customer"}
                     </span>
+                  )}
 
-                    <span>
-                      {activeLanguage === "es" ? "Estado" : "Status"}:{" "}
-                      {quote.status || "sent"}
-                    </span>
-                  </div>
+                  {isExternalQuote(quote) && normalizeQuoteStatus(quote) === "sent" && (
+                    <div style={externalQuoteActions}>
+                      <button
+                        type="button"
+                        style={externalAcceptButton}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          updateQuoteLifecycleStatus(quote.quoteId, "accepted");
+                          localStorage.setItem("quoteStatusFilter", "accepted");
+                          setQuoteStatusFilter("accepted");
+
+                          window.setTimeout(() => {
+                            const target = workCenterPanelRef.current;
+                            if (!target) return;
+
+                            const y =
+                              target.getBoundingClientRect().top +
+                              window.pageYOffset -
+                              70;
+
+                            window.scrollTo({
+                              top: y,
+                              behavior: "smooth",
+                            });
+                          }, 180);
+                        }}
+                      >
+                         {activeLanguage === "es" ? "Cliente aceptó" : "Customer Accepted"}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={externalRevisionButton}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          updateQuoteLifecycleStatus(quote.quoteId, "revision_requested");
+                        }}
+                      >
+                         {activeLanguage === "es" ? "Necesita revisión" : "Needs Revision"}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={externalDeclineButton}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          updateQuoteLifecycleStatus(quote.quoteId, "declined");
+                        }}
+                      >
+                        ✕ {activeLanguage === "es" ? "Cliente rechazó" : "Customer Declined"}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={externalInviteButton}
+                        onClick={() => {
+                          const inviteText = activeLanguage === "es"
+                            ? "Te invito a continuar este proyecto en Meetro para revisar la cotización, mensajes y seguimiento del trabajo."
+                            : "I’m inviting you to continue this project in Meetro so you can review the quote, messages, and job progress.";
+
+                          if (navigator.share) {
+                            navigator.share({
+                              title: "Meetro",
+                              text: inviteText,
+                            });
+                          } else {
+                            navigator.clipboard?.writeText(inviteText);
+                            alert(activeLanguage === "es" ? "Invitación copiada." : "Invitation copied.");
+                          }
+                        }}
+                      >
+                         {activeLanguage === "es" ? "Invitar a Meetro" : "Invite to Meetro"}
+                      </button>
+                    </div>
+                  )}
+
+                  {normalizeQuoteStatus(quote) === "accepted" && (
+                    <div style={quoteHistoryActions}>
+                      <button
+                        type="button"
+                        style={quoteMiniStatusButtonActive}
+                        onClick={() =>
+                          updateQuoteLifecycleStatus(quote.quoteId, "converted_to_job")
+                        }
+                      >
+                         {activeLanguage === "es" ? "Crear Trabajo" : "Create Job"}
+                      </button>
+                    </div>
+                  )}
+
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
+
+          <button
+            type="button"
+            style={workCenterFullWidthPrimaryButton}
+            onClick={() => {
+              localStorage.removeItem("selectedQuoteForEdit");
+              localStorage.removeItem("lastManualQuoteNumber");
+              localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+              localStorage.setItem("meetroWorkCenterTab", "quotes");
+              localStorage.setItem("activeWorkCenterTab", "quotes");
+              setPage("quoteBuilder");
+            }}
+          >
+            <span aria-hidden="true">+</span>
+            {activeLanguage === "es" ? "Nueva cotización" : "New Quote"}
+          </button>
         </div>
       )}
 
 
-      {activeTab === "materials" && (
+	      {quoteViewTarget && (
+	        <div style={quoteViewOverlay}>
+          <div style={quoteViewCard}>
+	            <div style={quoteViewHeader}>
+	              <div>
+	                <p style={quoteViewEyebrow}>
+	                  {quoteViewTarget.documentLabel ||
+	                    (activeLanguage === "es" ? "Vista de cotización" : "Quote Preview")}
+	                </p>
+                <h2 style={quoteViewTitle}>
+                  {quoteViewTarget.quoteNumber ||
+                    quoteViewTarget.quote_number ||
+                    quoteViewTarget.manualQuoteNumber ||
+                    quoteViewTarget.quoteId ||
+                    "Quote"}
+                </h2>
+              </div>
+
+              <button
+                style={quoteViewCloseButton}
+                onClick={() => setQuoteViewTarget(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={quoteViewHero}>
+              <strong>
+                {quoteViewTarget.projectTitle ||
+                  (activeLanguage === "es" ? "Proyecto" : "Project")}
+              </strong>
+              <span>
+                {quoteViewTarget.homeownerName ||
+                  quoteViewTarget.customer ||
+                  (activeLanguage === "es" ? "Cliente" : "Customer")}
+              </span>
+            </div>
+
+            <div style={quoteViewSection}>
+              <div style={quoteViewRow}>
+                <span>{activeLanguage === "es" ? "Mano de obra" : "Labor"}</span>
+                <strong>${getQuoteLaborAmount(quoteViewTarget).toFixed(2)}</strong>
+              </div>
+
+              <div style={quoteViewRow}>
+                <span>{activeLanguage === "es" ? "Materiales" : "Materials"}</span>
+                <strong>${getQuoteMaterialsAmount(quoteViewTarget).toFixed(2)}</strong>
+              </div>
+
+              <div style={quoteViewTotalRow}>
+                <span>Total</span>
+                <strong>${getQuoteTotalAmount(quoteViewTarget).toFixed(2)}</strong>
+              </div>
+            </div>
+
+            <div style={quoteViewInfoBlock}>
+              <strong>{activeLanguage === "es" ? "Tiempo estimado" : "Estimated Timeline"}</strong>
+              <p>{quoteViewTarget.timeline || "—"}</p>
+            </div>
+
+            <div style={quoteViewInfoBlock}>
+              <strong>{activeLanguage === "es" ? "Notas" : "Notes"}</strong>
+              <p>{quoteViewTarget.notes || "—"}</p>
+            </div>
+
+	            {!quoteViewTarget.readOnlyHistory && (
+	              <div style={quoteViewActions}>
+	                <button
+	                  style={quoteViewPrimaryButton}
+	                  onClick={() => {
+	                    localStorage.setItem("selectedQuoteForEdit", JSON.stringify(quoteViewTarget));
+	                    localStorage.setItem("quoteBuilderReturnPage", "workCenter");
+	                    localStorage.setItem("meetroWorkCenterTab", "quotes");
+	                    localStorage.setItem("activeWorkCenterTab", "quotes");
+	                    setQuoteViewTarget(null);
+	                    setPage("quoteBuilder");
+	                  }}
+	                >
+	                   {activeLanguage === "es" ? "Editar" : "Edit"}
+	                </button>
+	              </div>
+	            )}
+	          </div>
+	        </div>
+	      )}
+
+	      {jobReportTarget && (
+	        <div style={quoteViewOverlay}>
+	          <div style={jobReportCard}>
+	            <div style={quoteViewHeader}>
+	              <div>
+	                <p style={quoteViewEyebrow}>
+	                  {activeLanguage === "es" ? "Reporte del trabajo" : "Job Report"}
+	                </p>
+	                <h2 style={quoteViewTitle}>
+	                  {jobReportTarget.title || getWorkCenterJobTitle(jobReportTarget)}
+	                </h2>
+	              </div>
+	              <button
+	                type="button"
+	                style={quoteViewCloseButton}
+	                onClick={() => setJobReportTarget(null)}
+	              >
+	                ✕
+	              </button>
+	            </div>
+
+	            <pre style={jobReportText}>{buildJobHistoryReportText(jobReportTarget)}</pre>
+
+	            <div style={jobHistoryDocumentActions}>
+	              <button
+	                type="button"
+	                style={jobHistoryDocumentButton}
+	                onClick={() => printJobHistoryReport(jobReportTarget)}
+	              >
+	                {activeLanguage === "es" ? "Imprimir" : "Print"}
+	              </button>
+	              <button
+	                type="button"
+	                style={jobHistoryDocumentButton}
+	                onClick={() =>
+	                  shareHistoryDocumentText({
+	                    title: activeLanguage === "es" ? "Reporte del trabajo" : "Job Report",
+	                    text: buildJobHistoryReportText(jobReportTarget),
+	                  })
+	                }
+	              >
+	                {activeLanguage === "es" ? "Compartir" : "Share"}
+	              </button>
+	              <button
+	                type="button"
+	                style={jobHistoryDocumentButton}
+	                onClick={() =>
+	                  copyHistoryDocumentText(
+	                    buildJobHistoryReportText(jobReportTarget),
+	                    activeLanguage === "es"
+	                      ? "Resumen copiado."
+	                      : "Summary copied."
+	                  )
+	                }
+	              >
+	                {activeLanguage === "es" ? "Copiar resumen" : "Copy Summary"}
+	              </button>
+	            </div>
+	          </div>
+	        </div>
+	      )}
+
+	      {activeTab === "materials" && (
         <div style={materialsPageShell}>
           <div style={materialsHero}>
-            <div style={materialsHeroIcon}>📦</div>
+            <div style={materialsHeroIcon}>MAT</div>
             <h2 style={materialsHeroTitle}>
               {translate("materialsCenter")}
             </h2>
             <p style={materialsHeroText}>
               {activeLanguage === "es"
-                ? "Solicita materiales, pausa trabajos y controla lo que falta."
-                : "Request materials, pause jobs, and track what you need."}
+                ? "Organiza materiales para trabajo activo. Envía listas por Meetro Chat o compártelas fuera de Meetro cuando ayude a preparar el trabajo."
+                : "Organize materials for active work. Send lists through Meetro Chat or share them outside Meetro when it helps prepare the job."}
             </p>
           </div>
           <div style={materialsAssistantCard}>
+            <div style={materialsSectionEyebrow}>
+              {activeLanguage === "es" ? "Agregar materiales" : "Add Materials"}
+            </div>
+
             <div style={materialsVoiceHeader}>
               <button
                 type="button"
@@ -3123,114 +15396,140 @@ setPage("completedJobDetails");
                     : "Dictate materials"
                 }
               >
-                {isListeningMaterials ? "🔴" : "🎙️"}
+                {isListeningMaterials ? "" : ""}
               </button>
 
               <div>
                 <h3 style={materialsVoiceTitle}>
-                  {translate("speakOrTypeMaterials")}
+                  {activeLanguage === "es"
+                    ? "Dicta, escribe o agrega manualmente"
+                    : "Speak, type, or add manually"}
                 </h3>
+
+                <p style={materialsModeHint}>
+                  {activeLanguage === "es"
+                    ? "Elige el método que funcione mejor. Si el micrófono está bloqueado, escribir sigue funcionando."
+                    : "Choose the method that works best. If microphone access is blocked, typing still works."}
+                </p>
               </div>
             </div>
 
-            <p style={emptyText}>
-              {translate("materialsAssistantDescription")}
-            </p>
-
-            <textarea
-              value={materialsDraft}
-              onChange={(e) => setMaterialsDraft(e.target.value)}
-              style={textarea}
-              placeholder={
-                translate("materialsPlaceholder")
-              }
-            />
-
-            <div style={materialsActionRow}>
+            <div style={materialsInputModeRow}>
               <button
-                style={generateMaterialsButton}
-                onClick={generateMaterialsSuggestion}
+                type="button"
+                style={
+                  materialsInputMode === "voice"
+                    ? materialsInputModeButtonActive
+                    : materialsInputModeButton
+                }
+                onClick={toggleMaterialsMic}
               >
-                🪄 {translate("generateMaterialsList")}
+                 {activeLanguage === "es" ? "Dictar" : "Speak Materials"}
+              </button>
+
+              <button
+                type="button"
+                style={
+                  materialsInputMode === "type"
+                    ? materialsInputModeButtonActive
+                    : materialsInputModeButton
+                }
+                onClick={() => {
+                  if (isListeningMaterials && materialsRecognitionRef.current) {
+                    materialsRecognitionRef.current.stop();
+                  }
+                  setIsListeningMaterials(false);
+                  setMaterialsInputMode("type");
+                }}
+              >
+                 {activeLanguage === "es" ? "Escribir" : "Type Materials"}
+              </button>
+
+              <button
+                type="button"
+                style={
+                  showManualMaterials
+                    ? materialsInputModeButtonActive
+                    : materialsInputModeButton
+                }
+                onClick={() => setShowManualMaterials((prev) => !prev)}
+              >
+                ＋ {translate("manualAdd")}
               </button>
             </div>
 
-            {materialsAiSuggestion && (
-              <div style={aiBox}>
+            {materialsMicError && (
+              <div style={materialsMicErrorBox}>
                 <strong>
                   {activeLanguage === "es"
-                    ? "Sugerencia AI"
-                    : "AI Suggested Materials"}
+                    ? "Se necesita acceso al micrófono"
+                    : "Microphone Access Needed"}
                 </strong>
 
-                <pre style={materialsPreview}>
-                  {materialsAiSuggestion}
-                </pre>
-              </div>
-            )}
-
-            {materialsCatalogMatches.length > 0 && (
-              <div style={catalogMatchesWrap}>
-                <strong style={catalogMatchesTitle}>
+                <p>
                   {activeLanguage === "es"
-                    ? "Coincidencias del catálogo"
-                    : "Catalog Matches"}
-                </strong>
+                    ? "Meetro puede usar voz para crear rápidamente listas de materiales, notas y futuras actualizaciones de trabajo."
+                    : "Meetro can use voice to quickly create materials lists, notes, and future job updates."}
+                </p>
 
-                <div style={catalogMatchesGrid}>
-                  {materialsCatalogMatches.map((material) => (
-                    <div key={material.id} style={catalogMatchCard}>
-                      <strong style={catalogMatchName}>{material.title}</strong>
+                <p>{materialsMicError}</p>
 
-                      <p style={catalogMatchMeta}>
-                        {material.category} • {material.country}
-                        {material.estimatedPrice
-                          ? ` • $${material.estimatedPrice}`
-                          : ""}
-                      </p>
+                {showMaterialsMicSettingsHelp && (
+                  <div style={permissionInstructionsBox}>
+                    <strong>
+                      {activeLanguage === "es"
+                        ? "Para activarlo en iPhone:"
+                        : "To enable it on iPhone:"}
+                    </strong>
+                    <span>
+                      {activeLanguage === "es"
+                        ? "Ajustes → Meetro → Micrófono → Permitir"
+                        : "Settings → Meetro → Microphone → Allow"}
+                    </span>
+                  </div>
+                )}
 
-                      <p style={catalogMatchSupplier}>
-                        {material.supplier ||
-                          (activeLanguage === "es"
-                            ? "Proveedor no confirmado"
-                            : "Supplier not confirmed")}
-                      </p>
+                <div style={materialsMicErrorActions}>
+                  <button
+                    type="button"
+                    style={materialsMicRetryButton}
+                    onClick={openMaterialsMicrophoneSettings}
+                  >
+                    {activeLanguage === "es" ? "Abrir ajustes" : "Open Settings"}
+                  </button>
 
-                      <button
-                        style={catalogAddButton}
-                        onClick={() => addCatalogMaterialToProject(material)}
-                      >
-                        ➕ {activeLanguage === "es" ? "Agregar" : "Add"}
-                      </button>
-                    </div>
-                  ))}
+                  <button
+                    type="button"
+                    style={materialsMicSecondaryButton}
+                    onClick={() => {
+                      if (isListeningMaterials && materialsRecognitionRef.current) {
+                        materialsRecognitionRef.current.stop();
+                      }
+                      setIsListeningMaterials(false);
+                      setMaterialsInputMode("type");
+                      setMaterialsMicError("");
+                      setShowMaterialsMicSettingsHelp(false);
+                    }}
+                  >
+                    {activeLanguage === "es" ? "Escribir" : "Type Instead"}
+                  </button>
                 </div>
               </div>
             )}
 
-          </div>
-
-          <div style={materialsManualBar}>
-            <button
-              style={materialsManualToggle}
-              onClick={() => setShowManualMaterials((prev) => !prev)}
-            >
-              <span style={manualAddIcon}>＋</span>
-
-              <span style={manualAddText}>
-                <strong>
-                  {translate("manualAdd")}
-                </strong>
-
-                <small>
-                  {translate("manualAddSubtitle")}
-                </small>
-              </span>
-
-              <span style={manualChevron}>
-                {showManualMaterials ? "⌃" : "⌄"}
-              </span>
-            </button>
+            <textarea
+              value={materialsDraft}
+              onChange={(e) => {
+                setMaterialsInputMode("type");
+                setMaterialsDraft(e.target.value);
+              }}
+              style={materialsDraftTextarea}
+              placeholder={
+                activeLanguage === "es"
+                  ? "Ejemplo: tubo PVC, silicona, llave de paso..."
+                  : "Example: PVC pipe, silicone, shutoff valve..."
+              }
+            />
 
             {showManualMaterials && (
               <div style={materialsFormInner}>
@@ -3331,7 +15630,7 @@ setPage("completedJobDetails");
 
                 <div style={emptyActionGrid}>
                   <button style={emptyActionButton} onClick={saveMaterialItem}>
-                    📦 {editingMaterial
+                     {editingMaterial
                       ? translate("updateMaterial")
                       : translate("saveMaterial")}
                   </button>
@@ -3362,11 +15661,74 @@ setPage("completedJobDetails");
                       setRefreshKey((prev) => prev + 1);
                     }}
                   >
-                    ⏸ {translate("pauseJob")}
+                     {translate("pauseJob")}
                   </button>
                 </div>
               </div>
             )}
+
+            <div style={materialsActionRow}>
+              <button
+                style={generateMaterialsButton}
+                onClick={generateMaterialsSuggestion}
+              >
+                 {translate("generateMaterialsList")}
+              </button>
+            </div>
+
+            {materialsAiSuggestion && (
+              <div style={aiBox}>
+                <strong>
+                  {activeLanguage === "es"
+                    ? "Sugerencia AI"
+                    : "AI Suggested Materials"}
+                </strong>
+
+                <pre style={materialsPreview}>
+                  {materialsAiSuggestion}
+                </pre>
+              </div>
+            )}
+
+            {materialsCatalogMatches.length > 0 && (
+              <div style={catalogMatchesWrap}>
+                <strong style={catalogMatchesTitle}>
+                  {activeLanguage === "es"
+                    ? "Coincidencias del catálogo"
+                    : "Catalog Matches"}
+                </strong>
+
+                <div style={catalogMatchesGrid}>
+                  {materialsCatalogMatches.map((material) => (
+                    <div key={material.id} style={catalogMatchCard}>
+                      <strong style={catalogMatchName}>{material.title}</strong>
+
+                      <p style={catalogMatchMeta}>
+                        {material.category} • {material.country}
+                        {material.estimatedPrice
+                          ? ` • $${material.estimatedPrice}`
+                          : ""}
+                      </p>
+
+                      <p style={catalogMatchSupplier}>
+                        {material.supplier ||
+                          (activeLanguage === "es"
+                            ? "Proveedor no confirmado"
+                            : "Supplier not confirmed")}
+                      </p>
+
+                      <button
+                        style={catalogAddButton}
+                        onClick={() => addCatalogMaterialToProject(material)}
+                      >
+                         {activeLanguage === "es" ? "Agregar" : "Add"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
 
             {(() => {
@@ -3387,8 +15749,17 @@ setPage("completedJobDetails");
               const receivedCount = materials.filter(
                 (item) => item.status === "received"
               ).length;
+              const activityContext = getMaterialsShareContext(materials);
+              const materialsActivity = getJobRecord(
+                activityContext.conversationId ||
+                  activityContext.requestId ||
+                  "materials"
+              )
+                .filter((record) => record.type === "materials_shared")
+                .slice(0, 3);
 
               return (
+                <>
                 <div style={materialsListPanel}>
                   <div style={materialsListHeader}>
                     <div>
@@ -3413,100 +15784,21 @@ setPage("completedJobDetails");
                         onChange={(e) => setMaterialsSearch(e.target.value)}
                         placeholder={translate("searchMaterials")}
                       />
-
-                      <button
-                        style={
-                          materials.length === 0
-                            ? sendMaterialsDisabledButton
-                            : sendMaterialsButton
-                        }
-                        onClick={() => {
-                          const conversationId =
-                            localStorage.getItem("activeWorkConversationId") ||
-                            localStorage.getItem("activeConversationId") ||
-                            "";
-
-                          if (materials.length === 0) {
-                            alert(
-                              activeLanguage === "es"
-                                ? "Agrega materiales antes de enviar la lista."
-                                : "Add materials before sending the list."
-                            );
-                            return;
-                          }
-
-                          if (!conversationId) {
-                            alert(
-                              activeLanguage === "es"
-                                ? "No hay conversación vinculada para enviar esta lista."
-                                : "No linked customer conversation found for this materials list."
-                            );
-                            return;
-                          }
-
-                          const storageKey = `meetro_conversation_${conversationId}`;
-                          const existingMessages = JSON.parse(
-                            localStorage.getItem(storageKey) || "[]"
-                          );
-
-                          const listText = materials
-                            .map(
-                              (item) =>
-                                `• ${item.title} — Qty ${item.quantity} — ${item.provider} — ${item.status}`
-                            )
-                            .join("\n");
-
-                          const materialMessage = {
-                            id: Date.now(),
-                            sender: "business",
-                            role: "business",
-                            type: "materials-list",
-                            workflowSource: "materials-center",
-                            conversationId,
-                            approvalRequired: materials.some(
-                              (item) => item.provider === "approval"
-                            ),
-                            jobService:
-                              localStorage.getItem("activeWorkService") || "",
-                            jobLocation:
-                              localStorage.getItem("activeWorkLocation") || "",
-                            text:
-                              activeLanguage === "es"
-                                ? `📦 Lista de materiales:\n${listText}`
-                                : `📦 Materials list:\n${listText}`,
-                            materials,
-                            time: new Date().toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }),
-                            createdAt: new Date().toISOString(),
-                          };
-
-                          localStorage.setItem(
-                            storageKey,
-                            JSON.stringify([...existingMessages, materialMessage])
-                          );
-
-                          window.dispatchEvent(
-                            new Event("meetro-messages-updated")
-                          );
-
-                          localStorage.setItem("meetroMaterialsListSent", "true");
-                          alert(
-                            activeLanguage === "es"
-                              ? "Lista de materiales enviada al cliente."
-                              : "Materials list sent to customer."
-                          );
-                        }}
-                      >
-                        📩 {translate("sendToCustomer")}
-                      </button>
                     </div>
                   </div>
 
                   {materials.length === 0 ? (
                     <div style={materialsEmptyBox}>
-                      {translate("noMaterialsSaved")}
+                      <strong>
+                        {activeLanguage === "es"
+                          ? "Aún no se agregaron materiales"
+                          : "No materials added yet"}
+                      </strong>
+                      <span>
+                        {activeLanguage === "es"
+                          ? "Agrega materiales arriba o genera una lista."
+                          : "Add materials above or generate a list."}
+                      </span>
                     </div>
                   ) : (
                     <div style={materialsCardsWrap}>
@@ -3515,14 +15807,14 @@ setPage("completedJobDetails");
                         const lowerTitle = title.toLowerCase();
 
                         const icon = lowerTitle.includes("pipe")
-                          ? "🔩"
+                          ? ""
                           : lowerTitle.includes("cement")
-                          ? "🧴"
+                          ? ""
                           : lowerTitle.includes("tape")
-                          ? "🌀"
+                          ? ""
                           : lowerTitle.includes("elbow")
-                          ? "↪️"
-                          : "📦";
+                          ? ""
+                          : "";
 
                         const providerLabel =
                           item.provider === "customer"
@@ -3553,12 +15845,12 @@ setPage("completedJobDetails");
                                   </span>
 
                                   <span>
-                                    {item.provider === "customer" ? "👤 " : "🏢 "}
+                                    {item.provider === "customer" ? " " : " "}
                                     {providerLabel}
                                   </span>
 
                                   <span>
-                                    📅 {item.createdAt
+                                     {item.createdAt
                                       ? new Date(item.createdAt).toLocaleDateString()
                                       : translate("today")}
                                   </span>
@@ -3601,7 +15893,7 @@ setPage("completedJobDetails");
                                     setShowManualMaterials(true);
                                   }}
                                 >
-                                  ✏️ {translate("edit")}
+                                   {translate("edit")}
                                 </button>
 
                                 {item.status !== "received" ? (
@@ -3640,10 +15932,10 @@ setPage("completedJobDetails");
                                   style={materialDeleteButton}
                                   onClick={() => {
                                     setMaterialDeleteTarget(item);
-                                  }}
-                                >
-                                  🗑️
-                                </button>
+                                }}
+                              >
+
+                              </button>
                               </div>
                             </div>
                           </div>
@@ -3722,6 +16014,8 @@ setPage("completedJobDetails");
                           });
 
                           localStorage.setItem("activeWorkStage", "working");
+                          localStorage.setItem("activeWorkStatus", "working");
+                          localStorage.setItem("activeJobStatus", "working");
                           localStorage.removeItem("activeWorkPauseReason");
 
                           window.dispatchEvent(
@@ -3734,15 +16028,94 @@ setPage("completedJobDetails");
                       >
                         {neededCount === 0
                           ? activeLanguage === "es"
-                            ? "▶️ Materiales listos — reanudar"
-                            : "▶️ All Materials Ready — Resume Job"
+                            ? " Materiales listos — reanudar"
+                            : " All Materials Ready — Resume Job"
                           : activeLanguage === "es"
-                          ? `⏳ Esperando ${neededCount} materiales`
-                          : `⏳ Waiting on ${neededCount} materials`}
+                          ? ` Esperando ${neededCount} materiales`
+                          : ` Waiting on ${neededCount} materials`}
                       </button>
                     </div>
                   )}
                 </div>
+                <div style={materialsSharePanel}>
+                  <div>
+                    <strong>
+                      {activeLanguage === "es"
+                        ? "Compartir lista de materiales"
+                        : "Share Materials List"}
+                    </strong>
+                    <p style={materialsShareHelp}>
+                      {materials.length === 0
+                        ? activeLanguage === "es"
+                          ? "Agrega materiales antes de compartir."
+                          : "Add materials before sharing."
+                        : activeLanguage === "es"
+                        ? "Envía dentro de Meetro o comparte fuera de Meetro para preparar el trabajo. Esto no pide aprobación ni cambia el estado del trabajo."
+                        : "Send inside Meetro or share outside Meetro for job preparation. This does not request approval or change job status."}
+                    </p>
+                  </div>
+
+                  <div style={materialsShareGrid}>
+                    <button
+                      type="button"
+                      style={
+                        materials.length === 0
+                          ? sendMaterialsDisabledButton
+                          : sendMaterialsButton
+                      }
+                      disabled={materials.length === 0}
+                      onClick={() => sendMaterialsThroughMeetroChat(materials)}
+                    >
+                       {activeLanguage === "es" ? "Enviar por Meetro Chat" : "Send Through Meetro Chat"}
+                    </button>
+
+                    <button
+                      type="button"
+                      style={materials.length === 0 ? materialsShareOptionButtonDisabled : materialsShareOptionButton}
+                      disabled={materials.length === 0}
+                      onClick={() => shareMaterialsOutsideMeetro(materials)}
+                    >
+                       {activeLanguage === "es" ? "Compartir fuera de Meetro" : "Share Outside Meetro"}
+                    </button>
+                  </div>
+
+                  <p style={materialsShareHelp}>
+                    {activeLanguage === "es"
+                      ? "Usa Mensajes, Mail, Notas, AirDrop o cualquier app para enviar la lista a clientes, trabajadores o proveedores."
+                      : "Use Messages, Mail, Notes, AirDrop, or any app to send the list to customers, workers, or suppliers."}
+                  </p>
+                </div>
+
+                <div style={materialsActivityPanel}>
+                  <strong>
+                    {activeLanguage === "es"
+                      ? "Actividad reciente de materiales"
+                      : "Recent Materials Activity"}
+                  </strong>
+
+                  {materialsActivity.length === 0 ? (
+                    <p style={materialsShareHelp}>
+                      {activeLanguage === "es"
+                        ? "La actividad de materiales compartidos aparecerá aquí."
+                        : "Shared materials activity will appear here."}
+                    </p>
+                  ) : (
+                    <div style={materialsActivityList}>
+                      {materialsActivity.map((activity) => (
+                        <div key={activity.id} style={materialsActivityItem}>
+                          <span>{activity.title}</span>
+                          <small>
+                            {activity.method || activity.subtitle} •{" "}
+                            {activity.savedAt
+                              ? new Date(activity.savedAt).toLocaleDateString()
+                              : translate("today")}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                </>
               );
             })()}
         </div>
@@ -3751,13 +16124,11 @@ setPage("completedJobDetails");
       {activeTab === "records" && (
         <div style={section}>
           <h2 style={sectionTitle}>
-            {activeLanguage === "es" ? "Registros de Proyecto" : "Project Records"}
+            {translate("relationshipHistoryTitle")}
           </h2>
 
           <p style={recordsIntroText}>
-            {activeLanguage === "es"
-              ? "Cada cliente o proyecto guarda su historial operativo: cambios, materiales, fotos, aprobaciones, cotizaciones y eventos importantes."
-              : "Each customer or project keeps its operating history: changes, materials, photos, approvals, quotes, and important events."}
+            {translate("relationshipHistoryDescription")}
           </p>
 
           {(() => {
@@ -3791,18 +16162,14 @@ setPage("completedJobDetails");
             if (recordGroups.length === 0) {
               return (
                 <div style={emptyCard}>
-                  <div style={emptyIcon}>🗂️</div>
+                  <div style={emptyIcon}>REC</div>
 
                   <strong>
-                    {activeLanguage === "es"
-                      ? "No hay registros de proyecto todavía."
-                      : "No project records yet."}
+                    {translate("relationshipHistoryEmpty")}
                   </strong>
 
                   <p style={emptyText}>
-                    {activeLanguage === "es"
-                      ? "Los cambios de proyecto, materiales, fotos, aprobaciones y documentos importantes aparecerán aquí automáticamente."
-                      : "Project changes, materials, photos, approvals, and important documents will appear here automatically."}
+                    {translate("relationshipHistoryEmptyDescription")}
                   </p>
                 </div>
               );
@@ -3813,7 +16180,7 @@ setPage("completedJobDetails");
                 {recordGroups.map((group) => (
                   <div style={projectRecordCard} key={group.conversationId}>
                     <div style={projectRecordTop}>
-                      <div style={projectRecordIcon}>🗂️</div>
+                      <div style={projectRecordIcon}>REC</div>
 
                       <div>
                         <h3 style={projectRecordTitle}>{group.customer}</h3>
@@ -3826,13 +16193,13 @@ setPage("completedJobDetails");
 
                     <div style={projectRecordStats}>
                       <span>
-                        📌 {group.count}{" "}
+                         {group.count}{" "}
                         {activeLanguage === "es" ? "registros" : "records"}
                       </span>
 
                       {group.lastUpdate && (
                         <span>
-                          🕒{" "}
+                          {" "}
                           {new Date(group.lastUpdate).toLocaleDateString()}
                         </span>
                       )}
@@ -3910,7 +16277,7 @@ setPage("completedJobDetails");
                           setPage("conversationThread");
                         }}
                       >
-                        📁 {activeLanguage === "es"
+                         {activeLanguage === "es"
                           ? "Abrir registro"
                           : "Open Record"}
                       </button>
@@ -3951,7 +16318,7 @@ setPage("completedJobDetails");
                           setPage("conversationThread");
                         }}
                       >
-                        💬 {activeLanguage === "es"
+                         {activeLanguage === "es"
                           ? "Chat"
                           : "Chat"}
                       </button>
@@ -3964,119 +16331,192 @@ setPage("completedJobDetails");
         </div>
       )}
 
-      {activeTab === "revenue" && (
+      {activeTab === "timeline" && (
         <div style={section}>
-          <h2 style={sectionTitle}>
-            {translate("workTabRevenue")}
-          </h2>
+          <div style={sectionHeaderRow}>
+            <h2 style={sectionTitle}>
+              {activeLanguage === "es" ? "Línea de tiempo" : "Workflow Timeline"}
+            </h2>
+          </div>
+
+          {(() => {
+            const workflowTimeline = JSON.parse(
+              localStorage.getItem("meetroWorkflowTimeline") || "[]"
+            );
+
+            const projectTimeline = JSON.parse(
+              localStorage.getItem("projectTimeline") || "[]"
+            );
+
+            const timelineItems = [...workflowTimeline, ...projectTimeline]
+              .filter((item, index, self) => {
+                const key = item.id || `${item.type}-${item.createdAt}-${item.title}`;
+                return index === self.findIndex((entry) => {
+                  const entryKey =
+                    entry.id || `${entry.type}-${entry.createdAt}-${entry.title}`;
+                  return entryKey === key;
+                });
+              })
+              .sort((a, b) => {
+                return new Date(b.createdAt || b.savedAt || 0) - new Date(a.createdAt || a.savedAt || 0);
+              });
+
+            return timelineItems.length === 0 ? (
+              <div style={emptyCard}>
+                <div style={emptyIcon}>TIME</div>
+
+                <strong>
+                  {activeLanguage === "es"
+                    ? "No hay eventos todavía"
+                    : "No timeline events yet"}
+                </strong>
+
+                <p style={emptyText}>
+                  {activeLanguage === "es"
+                    ? "Las citas, visitas, cotizaciones, materiales y trabajos aparecerán aquí."
+                    : "Appointments, visits, quotes, materials, and work updates will appear here."}
+                </p>
+              </div>
+            ) : (
+              <div style={workflowTimelineList}>
+                {timelineItems.map((item) => (
+                  <div key={item.id || `${item.type}-${item.createdAt}`} style={workflowTimelineItem}>
+                    <div style={workflowTimelineDot}>
+                      {item.type === "appointment_completed"
+                        ? "OK"
+                        : item.type === "quote_required"
+                        ? "$"
+                        : item.type === "materials_needed"
+                        ? "MAT"
+                        : item.type === "start_work_immediately"
+                        ? "JOB"
+                        : item.type === "emergency_dispatch"
+                        ? "SOS"
+                        : item.type === "follow_up_required"
+                        ? "CALL"
+                        : item.type === "waiting_customer_decision"
+                        ? "WAIT"
+                        : "EVT"}
+                    </div>
+
+                    <div style={workflowTimelineContent}>
+                      <strong>
+                        {item.title ||
+                          (activeLanguage === "es"
+                            ? "Evento de trabajo"
+                            : "Workflow Event")}
+                      </strong>
+
+                      {(item.service || item.location) && (
+                        <p style={jobMeta}>
+                          {[item.service, item.location].filter(Boolean).join(" • ")}
+                        </p>
+                      )}
+
+                      {item.createdAt && (
+                        <small style={workflowTimelineDate}>
+                          {new Date(item.createdAt).toLocaleString(
+                            activeLanguage === "es" ? "es-US" : "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {activeTab === "revenue" && (
+        <div ref={dynamicSectionRef} style={section}>
+          <button
+            style={workCenterBackButton}
+            onClick={returnToWorkCenterDashboard}
+          >
+            <span aria-hidden="true">‹</span>
+            {translate("backToWorkCenter")}
+          </button>
+
+          <div style={workCenterChildHeader}>
+            <h2 style={workCenterChildTitle}>
+              {ui("workCenterRevenueTitle")}
+            </h2>
+            <p style={workCenterChildSummary}>
+              {ui("workCenterChildRevenueSummary")}
+            </p>
+          </div>
 
           <div style={revenueCard}>
-            <div style={revenueHeroGrid}>
-              <div style={revenueHeroCardBlue}>
-                <div style={revenueHeroContent}>
-                  <div style={revenueIconTile}>$</div>
-
-                  <div>
-                    <span style={revenueLabel}>
-                      {activeLanguage === "es" ? "Esta Semana" : "This Week"}
-                    </span>
-                    <strong style={revenueHeroBig}>${totalJobRevenue}</strong>
-
-                    <div style={revenueTrend}>
-                      ↑ +0%
-                    </div>
-                  </div>
-                </div>
-
-                <div style={revenueSubText}>
-{activeLanguage==="es"
-?"Comparado con la semana pasada"
-:`${completedJobsCount} jobs • Avg $${averageJobValue}`}
-</div>
-              </div>
-
-              <div style={revenueHeroCardPurple}>
-                <div style={revenueHeroContent}>
-                  <div style={revenueIconTile}>↗</div>
-
-                  <div>
-                    <span style={revenueLabel}>
-                      {activeLanguage === "es" ? "Este Mes" : "This Month"}
-                    </span>
-                    <strong style={revenueHeroBig}>${totalJobRevenue}</strong>
-
-                    <div style={revenueTrend}>
-                      ↑ +0%
-                    </div>
-                  </div>
-                </div>
-
-                <div style={revenueSubText}>
-{activeLanguage==="es"
-?"Comparado con la semana pasada"
-:`${quoteHistory.length} quotes • ${completedJobsCount} completed`}
-</div>
-              </div>
-            </div>
-
             <div style={revenueGrid}>
               <div style={revenueMiniCard}>
-                <div style={revenueIconTile}>✓</div>
                 <div>
                   <span style={revenueLabel}>
-                    {activeLanguage === "es" ? "Trabajos Completados" : "Completed Jobs"}
+                    {ui("wcThisWeek")}
+                  </span>
+                  <strong style={revenueBig}>
+                    ${Number(totalJobRevenue || 0).toLocaleString()}
+                  </strong>
+                  <div style={miniSub}>
+                    {`${completedJobsCount} ${ui("wcJobs")}`}
+                  </div>
+                </div>
+              </div>
+
+              <div style={revenueMiniCard}>
+                <div>
+                  <span style={revenueLabel}>
+                    {ui("wcThisMonth")}
+                  </span>
+                  <strong style={revenueBig}>
+                    ${Number(totalJobRevenue || 0).toLocaleString()}
+                  </strong>
+                  <div style={miniSub}>
+                    {`${quoteHistory.length} ${ui("wcQuotes")}`}
+                  </div>
+                </div>
+              </div>
+
+              <div style={revenueMiniCard}>
+                <div>
+                  <span style={revenueLabel}>
+                    {ui("wcCompletedJobs")}
                   </span>
                   <strong style={revenueBig}>{completedJobsCount}</strong>
-                <div style={miniSub}>total</div>
-                </div>
-              </div>
-
-              <div style={revenueMiniCard}>
-                <div style={revenueIconTile}>◈</div>
-                <div>
-                  <span style={revenueLabel}>
-                    {activeLanguage === "es" ? "Valor Promedio" : "Average Job"}
-                  </span>
-                  <strong style={revenueBig}>${averageJobValue}</strong>
                   <div style={miniSub}>
-                    {activeLanguage==="es"?"valor promedio":"avg value"}
+                    {`${ui("wcAvg")} $${averageJobValue}`}
                   </div>
                 </div>
               </div>
 
               <div style={revenueMiniCard}>
-                <div style={revenueIconTile}>↑</div>
                 <div>
                   <span style={revenueLabel}>
-                    {activeLanguage === "es" ? "Ganancia Estimada" : "Estimated Profit"}
-                  </span>
-                  <strong style={revenueBig}>${Math.round(Number(totalJobRevenue) * 0.7)}</strong>
-                  <div style={miniSub}>
-                    {activeLanguage==="es"?"ganancia estimada":"est. profit"}
-                  </div>
-                </div>
-              </div>
-
-              <div style={revenueMiniCard}>
-                <div style={revenueIconTile}>⧉</div>
-                <div>
-                  <span style={revenueLabel}>
-                    {activeLanguage === "es" ? "Cotizaciones Pendientes" : "Pending Quotes"}
+                    {ui("wcPendingRevenue")}
                   </span>
                   <strong style={revenueBig}>
                     {totalQuoteAlerts > 0 ? totalQuoteAlerts : 0}
                   </strong>
                   <div style={miniSub}>
                     {totalQuoteAlerts > 0
-                      ? activeLanguage === "es"
-                        ? "requieren atención"
-                        : "need attention"
-                      : activeLanguage==="es"
-                      ? "abiertas"
-                      : "open"}
+                      ? ui("wcNeedAttention")
+                      : ui("wcOpen")}
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div style={revenueCompactNote}>
+              <span>
+                {ui("wcRevenueNote")}
+              </span>
             </div>
           </div>
         </div>
@@ -4131,6 +16571,36 @@ setPage("completedJobDetails");
           </div>
         </div>
       )}
+        </>
+      )}
+
+      {evaluationToast && (
+        <div
+          role={evaluationToast.type === "error" ? "alert" : "status"}
+          style={{
+            ...evaluationBottomToast,
+            ...(evaluationToast.type === "error"
+              ? evaluationBottomToastError
+              : {}),
+          }}
+        >
+          {evaluationToast.message}
+        </div>
+      )}
+
+      {jobActionToast && (
+        <div
+          role={jobActionToast.type === "error" ? "alert" : "status"}
+          style={{
+            ...evaluationBottomToast,
+            ...(jobActionToast.type === "error"
+              ? evaluationBottomToastError
+              : {}),
+          }}
+        >
+          {jobActionToast.message}
+        </div>
+      )}
 
       <BottomNav setPage={setPage} currentPage="contractorDashboard" />
     </div>
@@ -4138,9 +16608,10 @@ setPage("completedJobDetails");
 }
 
 const page = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
-  padding: "72px 11px 260px",
+  padding:
+    "72px max(16px, env(safe-area-inset-right)) calc(68px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   boxSizing: "border-box",
   overflowX: "hidden",
 };
@@ -4148,7 +16619,7 @@ const page = {
 const topBar = {
   display: "flex",
   justifyContent: "flex-end",
-  alignItems: "center",
+  alignItems: "flex-start",
   width: "100%",
   marginBottom: "11px",
   paddingTop: "18px",
@@ -4204,26 +16675,363 @@ const rolePill = {
   boxShadow: "0 8px 10px rgba(0,0,0,0.05)",
 };
 
+const missionControl = {
+  display: "grid",
+  gap: "14px",
+  margin: "10px 0 18px",
+};
+
+const missionSection = {
+  background: "rgba(255,255,255,0.96)",
+  border: "1px solid rgba(148,163,184,0.20)",
+  borderRadius: "24px",
+  padding: "16px",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.07)",
+};
+
+const missionSectionHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "12px",
+};
+
+const missionEyebrow = {
+  display: "block",
+  color: "#7c3aed",
+  fontSize: "10px",
+  fontWeight: 950,
+  letterSpacing: "0.12em",
+  marginBottom: "4px",
+};
+
+const missionSectionTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: 950,
+};
+
+const missionAttentionGrid = {
+  display: "grid",
+  gap: "9px",
+};
+
+const missionAlertCard = {
+  width: "100%",
+  border: "1px solid rgba(245,158,11,0.24)",
+  borderRadius: "18px",
+  padding: "12px",
+  background: "linear-gradient(135deg, #fffbeb, #ffffff)",
+  display: "grid",
+  gridTemplateColumns: "40px minmax(0, 1fr) 20px",
+  alignItems: "center",
+  gap: "10px",
+  color: "#0f172a",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const missionClearCard = {
+  ...missionAlertCard,
+  border: "1px solid rgba(34,197,94,0.20)",
+  background: "linear-gradient(135deg, #f0fdf4, #ffffff)",
+};
+
+const missionAlertIcon = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "19px",
+  boxShadow: "0 6px 16px rgba(15,23,42,0.08)",
+};
+
+const missionAlertContent = {
+  minWidth: 0,
+  display: "grid",
+  gap: "3px",
+};
+
+const missionArrow = {
+  color: "#7c3aed",
+  fontSize: "24px",
+  fontWeight: 900,
+};
+
+const missionCurrentCard = {
+  borderRadius: "22px",
+  padding: "16px",
+  background: "linear-gradient(135deg, #1e1b4b, #5b3df5)",
+  color: "#ffffff",
+  boxShadow: "0 18px 38px rgba(91,61,245,0.22)",
+};
+
+const missionCurrentTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+};
+
+const missionCurrentStatus = {
+  display: "inline-flex",
+  padding: "6px 9px",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.15)",
+  fontSize: "11px",
+  fontWeight: 900,
+};
+
+const missionCurrentTitle = {
+  margin: "10px 0 4px",
+  fontSize: "21px",
+  fontWeight: 950,
+};
+
+const missionCurrentMeta = {
+  margin: 0,
+  color: "rgba(255,255,255,0.78)",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const missionNextAction = {
+  display: "grid",
+  gap: "3px",
+  margin: "14px 0",
+  padding: "11px 12px",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.10)",
+  fontSize: "13px",
+};
+
+const missionPrimaryButton = {
+  width: "100%",
+  minHeight: "46px",
+  border: "none",
+  borderRadius: "15px",
+  background: "#ffffff",
+  color: "#4338ca",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const missionTextButton = {
+  border: "none",
+  background: "transparent",
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const missionTodayList = {
+  display: "grid",
+  gap: "9px",
+};
+
+const missionTodayCard = {
+  display: "grid",
+  gridTemplateColumns: "64px minmax(0, 1fr) auto",
+  alignItems: "center",
+  gap: "10px",
+  padding: "11px",
+  borderRadius: "18px",
+  border: "1px solid rgba(37,99,235,0.16)",
+  background: "linear-gradient(135deg, #eff6ff, #ffffff)",
+};
+
+const missionTimeBlock = {
+  display: "grid",
+  gap: "2px",
+  color: "#1d4ed8",
+  fontSize: "12px",
+};
+
+const missionTodayContent = {
+  minWidth: 0,
+  display: "grid",
+  gap: "3px",
+  color: "#0f172a",
+};
+
+const missionPrepareButton = {
+  minHeight: "40px",
+  border: "none",
+  borderRadius: "13px",
+  padding: "8px 10px",
+  background: "#2563eb",
+  color: "#ffffff",
+  fontSize: "11px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const missionEmptyCard = {
+  display: "grid",
+  gap: "4px",
+  padding: "14px",
+  borderRadius: "18px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "13px",
+};
+
 
 
 const overviewGrid = {
-display:"grid",
-gridTemplateColumns:"1fr 1fr",
-gap:"10px",
-maxWidth:"900px",
-margin:"0 auto 11px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+  margin: "18px 0 20px",
+};
+
+const emergencyChatBanner = {
+  display: "grid",
+  gap: "14px",
+  marginTop: "16px",
+  padding: "18px",
+  borderRadius: "24px",
+  background: "linear-gradient(135deg, #991b1b, #ef4444)",
+  color: "#ffffff",
+  boxShadow: "0 18px 38px rgba(220,38,38,0.24)",
+  cursor: "pointer",
+};
+
+const emergencyChatBannerTitle = {
+  display: "block",
+  fontSize: "19px",
+  fontWeight: "900",
+};
+
+const emergencyChatBannerText = {
+  margin: "5px 0 0",
+  opacity: 0.9,
+  fontWeight: "700",
+};
+
+const emergencyChatBannerButton = {
+  minHeight: "48px",
+  border: "none",
+  borderRadius: "16px",
+  background: "#ffffff",
+  color: "#991b1b",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const overviewCard = {
-background:"white",
-borderRadius:"10px",
-padding:"11px",
-boxShadow:"0 10px 11px rgba(0,0,0,0.055)",
+  background: "linear-gradient(135deg, #ffffff, #f8fbff)",
+  borderRadius: "18px",
+  padding: "13px",
+  boxShadow: "0 14px 30px rgba(15,23,42,0.08)",
+  border: "1px solid rgba(91,61,245,0.10)",
 };
 
-const overviewIcon={
-fontSize:"10px",
-marginBottom:"10px",
+const dispatchOverviewCard = {
+  background: "linear-gradient(135deg, #f8fbff, #ffffff)",
+  borderRadius: "26px",
+  padding: "22px 18px 24px",
+  boxShadow: "0 18px 42px rgba(15,23,42,0.08)",
+  border: "1px solid rgba(148,163,184,0.24)",
+  position: "relative",
+  overflow: "hidden",
+  minHeight: "250px",
+};
+
+const dispatchOverviewIcon = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "16px",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "19px",
+  marginBottom: "10px",
+  background: "linear-gradient(135deg, #ef4444, #f97316)",
+  color: "#ffffff",
+  boxShadow: "0 10px 22px rgba(239,68,68,0.25)",
+};
+
+const summaryOverviewCard = {
+  background: "linear-gradient(135deg, #ffffff, #f8fafc)",
+  borderRadius: "22px",
+  padding: "10px 14px",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+  border: "1px solid rgba(148,163,184,0.18)",
+  minHeight: "140px",
+};
+
+
+const summaryTopRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "18px",
+};
+
+const summaryEyebrow = {
+  fontSize: "12px",
+  fontWeight: 900,
+  letterSpacing: "1.5px",
+  color: "#7c3aed",
+  marginBottom: "4px",
+};
+
+const summaryMainTitle = {
+  fontSize: "32px",
+  fontWeight: 900,
+  color: "#0f172a",
+};
+
+const summaryActionButton = {
+  border: "1px solid rgba(124,58,237,0.20)",
+  background: "#ffffff",
+  color: "#7c3aed",
+  borderRadius: "999px",
+  padding: "12px 24px",
+  fontWeight: 800,
+  fontSize: "16px",
+  cursor: "pointer",
+};
+
+const summaryStatsRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+};
+
+const summaryStat = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  color: "#475569",
+};
+
+const summaryOverviewIcon = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "18px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "26px",
+  marginBottom: "6px",
+  background: "linear-gradient(135deg, #e0f2fe, #dbeafe)",
+};
+
+const overviewIcon = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "17px",
+  marginBottom: "10px",
+  background: "linear-gradient(135deg, #fee2e2, #fff7ed)",
+  boxShadow: "inset 0 0 0 1px rgba(248,113,113,0.16)",
 };
 
 const overviewTitle={
@@ -4262,9 +17070,241 @@ cursor:"pointer",
 
 
 
+const quoteStatusFilterRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "8px",
+  overflowX: "auto",
+  padding: "2px 0 8px",
+  marginBottom: "2px",
+};
+
+const quoteStatusFilterButton = {
+  minHeight: "44px",
+  border: "1px solid #dbe3ef",
+  background: "#ffffff",
+  color: "#263653",
+  borderRadius: "14px",
+  padding: "10px 8px",
+  fontSize: "14px",
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  boxShadow: "0 6px 14px rgba(15,23,42,0.03)",
+};
+
+const quoteStatusFilterButtonActive = {
+  background: "#f7f4ff",
+  color: "#4f28e8",
+  border: "1px solid #8b7cff",
+  boxShadow: "0 10px 22px rgba(91,61,245,0.12)",
+};
+
+const quoteLifecycleBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  alignSelf: "flex-start",
+  borderRadius: "999px",
+  padding: "5px 8px",
+  fontSize: "12px",
+  fontWeight: 900,
+  background: "#fef3c7",
+  color: "#b45309",
+  border: "1px solid rgba(245,158,11,0.22)",
+  marginBottom: "0",
+};
+
+const quoteLifecycleBadgeAccepted = {
+  background: "#dcfce7",
+  color: "#166534",
+  border: "1px solid rgba(34,197,94,0.22)",
+};
+
+const quoteLifecycleBadgeRevision = {
+  background: "#fff7ed",
+  color: "#9a3412",
+  border: "1px solid rgba(249,115,22,0.22)",
+};
+
+const quoteLifecycleBadgeDeclined = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  border: "1px solid rgba(239,68,68,0.22)",
+};
+
+const quoteLifecycleBadgeActive = {
+  background: "#ecfdf5",
+  color: "#047857",
+  border: "1px solid rgba(16,185,129,0.22)",
+};
+
+const quoteLifecycleBadgeCompleted = {
+  background: "#f1f5f9",
+  color: "#334155",
+  border: "1px solid rgba(100,116,139,0.20)",
+};
+
+const quoteLifecycleActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  marginTop: "12px",
+  marginBottom: "12px",
+};
+
+const quoteMiniStatusButton = {
+  border: "1px solid rgba(148,163,184,0.24)",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "999px",
+  padding: "8px 11px",
+  fontSize: "12px",
+  fontWeight: 850,
+  cursor: "pointer",
+};
+
+const quoteMiniStatusButtonActive = {
+  border: "1px solid rgba(16,185,129,0.28)",
+  background: "linear-gradient(135deg, #10b981, #059669)",
+  color: "#ffffff",
+  borderRadius: "999px",
+  padding: "8px 11px",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+  boxShadow: "0 10px 22px rgba(16,185,129,0.22)",
+};
+
+const externalQuoteChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  alignSelf: "flex-start",
+  borderRadius: "999px",
+  padding: "6px 10px",
+  fontSize: "12px",
+  fontWeight: 900,
+  background: "#fef3c7",
+  color: "#92400e",
+  border: "1px solid rgba(245,158,11,0.24)",
+  marginBottom: "4px",
+};
+
+const externalQuoteActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  margin: "10px 0 12px",
+};
+
+const externalAcceptButton = {
+  border: "none",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  background: "linear-gradient(135deg, #10b981, #059669)",
+  color: "#ffffff",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const externalRevisionButton = {
+  border: "1px solid rgba(249,115,22,0.28)",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  background: "#fff7ed",
+  color: "#9a3412",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const externalDeclineButton = {
+  border: "1px solid rgba(239,68,68,0.24)",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  background: "#ffffff",
+  color: "#991b1b",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const externalInviteButton = {
+  border: "1px solid rgba(91,61,245,0.22)",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  background: "#ffffff",
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const acceptedQuoteNextStepGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+  margin: "12px 0",
+};
+
+const acceptedQuoteSecondaryButton = {
+  border: "1px solid rgba(91,61,245,0.20)",
+  borderRadius: "16px",
+  padding: "12px 10px",
+  background: "#ffffff",
+  color: "#5b3df5",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const quoteDecisionState = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  margin: "12px 0",
+  padding: "12px 14px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  border: "1px solid rgba(148,163,184,0.20)",
+  color: "#334155",
+};
+
+const operationalSummaryGrid = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+  gap: "8px",
+  margin: "10px 0",
+};
+
+const operationalSummaryItem = {
+  minWidth: 0,
+  display: "grid",
+  gap: "4px",
+  padding: "10px 11px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid rgba(148,163,184,0.20)",
+  color: "#334155",
+  fontSize: "12px",
+  lineHeight: 1.35,
+};
+
+const operationalSummaryItemWide = {
+  ...operationalSummaryItem,
+  gridColumn: "1 / -1",
+};
+
 const quoteHistoryList = {
   display: "grid",
-  gap: "14px",
+  gap: "16px",
+  paddingBottom: "8px",
 };
 
 
@@ -4285,7 +17325,7 @@ const acceptedQuoteAlertCard = {
   background: "linear-gradient(135deg,#ecfdf5,#ffffff)",
   border: "1px solid rgba(34,197,94,.18)",
   borderRadius: "22px",
-  padding: "18px",
+  padding: "16px",
   boxShadow: "0 14px 28px rgba(34,197,94,.10)",
 };
 
@@ -4330,11 +17370,12 @@ const reviseQuoteButton = {
 };
 
 const quoteHistoryCard = {
-  background: "linear-gradient(135deg,#ffffff,#fcfbff)",
-  borderRadius: "24px",
+  background: "#ffffff",
+  borderRadius: "18px",
   padding: "18px",
-  boxShadow: "0 14px 34px rgba(15,23,42,.06)",
-  border: "1px solid rgba(91,61,245,.08)",
+  overflow: "hidden",
+  boxShadow: "0 12px 30px rgba(15,23,42,.05)",
+  border: "1px solid #dfe6f1",
 };
 
 const quoteHistoryTop = {
@@ -4344,9 +17385,105 @@ const quoteHistoryTop = {
   alignItems: "flex-start",
 };
 
-const quoteStatusPill = {
+const quoteCardIdentity = {
+  minWidth: 0,
+  display: "grid",
+  gap: "5px",
+};
+
+const quoteChevronButton = {
+  width: "34px",
+  height: "34px",
+  border: "none",
+  background: "transparent",
+  color: "#17233f",
+  fontSize: "31px",
+  fontWeight: 500,
+  lineHeight: 1,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const quoteCardAmountRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  margin: "20px 0 18px",
+};
+
+const workflowCardSummary = {
+  display: "grid",
+  gap: "10px",
+  margin: "4px 0 16px",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+};
+
+const workflowSummaryItem = {
+  display: "grid",
+  gap: "4px",
+};
+
+const workflowSummaryLabel = {
+  color: "#64748b",
+  fontSize: "11px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const workflowSummaryValue = {
+  color: "#0f172a",
+  fontSize: "15px",
+  lineHeight: 1.35,
+  fontWeight: "950",
+};
+
+const workflowPrimaryActionButton = {
+  width: "100%",
+  minHeight: "48px",
+  border: "none",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  color: "#ffffff",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 12px 22px rgba(91,61,245,0.18)",
+};
+
+const quoteCardFooterRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  color: "#263653",
+  fontSize: "14px",
+  fontWeight: "850",
+};
+
+const quoteInlineDetailsButton = {
+  border: "none",
+  background: "transparent",
+  color: "#371ce4",
   display: "inline-flex",
   alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+  padding: "4px 0",
+  whiteSpace: "nowrap",
+};
+
+const quoteStatusPill = {
+  display: "inline-flex",
+  alignItems: "flex-start",
   background: "#ecfdf5",
   color: "#047857",
   padding: "7px 12px",
@@ -4358,39 +17495,1018 @@ const quoteStatusPill = {
 };
 
 const quoteHistoryTitle = {
-  margin: "10px 0 4px",
-  fontSize: "17px",
+  margin: "0 0 3px",
+  fontSize: "21px",
   fontWeight: "950",
-  color: "#111827",
-  lineHeight: 1.08,
+  color: "#050812",
+  lineHeight: 1.12,
 };
 
 const quoteHistoryMeta = {
   margin: 0,
-  color: "#475569",
+  color: "#263653",
   fontWeight: "800",
-  fontSize: "13px",
+  fontSize: "15px",
 };
 
 const quoteAmount = {
-  fontSize: "20px",
+  fontSize: "25px",
   fontWeight: "950",
-  color: "#5b3df5",
+  color: "#050812",
   letterSpacing: "-0.02em",
 };
 
 const quoteHistoryText = {
-  marginTop: "14px",
+  marginTop: "10px",
   color: "#475569",
-  lineHeight: 1.55,
+  lineHeight: 1.35,
   fontWeight: "700",
+  fontSize: "13px",
+};
+
+const workCenterDashboard = {
+  margin: "8px 0 14px",
+};
+
+const workCenterDashboardIntro = {
+  background: "#ffffff",
+  border: "1px solid rgba(124,58,237,0.12)",
+  borderRadius: "18px",
+  padding: "14px 15px",
+  color: "#111827",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  marginBottom: "10px",
+};
+
+const workCenterDashboardEyebrow = {
+  display: "block",
+  fontSize: "11px",
+  fontWeight: 950,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "#5b3df5",
+  marginBottom: "5px",
+};
+
+const workCenterDashboardTitle = {
+  margin: "0 0 5px",
+  fontSize: "24px",
+  lineHeight: 1.15,
+  fontWeight: 950,
+  color: "#0f172a",
+};
+
+const workCenterDashboardPurpose = {
+  margin: 0,
+  maxWidth: "520px",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: 650,
+  color: "#475569",
+};
+
+const workCenterDashboardSummary = {
+  margin: "8px 0 0",
+  color: "#334155",
+  fontSize: "12px",
+  lineHeight: 1.3,
+  fontWeight: 900,
+};
+
+const propertyManagementWorkCenterFoundationNote = {
+  maxWidth: "620px",
+  margin: "12px 0 0",
+  padding: "11px 13px",
+  border: "1px solid rgba(255,255,255,0.72)",
+  borderRadius: "14px",
+  background: "rgba(255,255,255,0.14)",
+  color: "#ffffff",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  fontWeight: 750,
+};
+
+const workCenterDashboardGrid = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+  gap: "10px",
+};
+
+const workCenterPrimaryNavGrid = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+  gap: "12px",
+  margin: "0 0 18px",
+};
+
+const workCenterPrimaryNavCard = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  border: "1px solid #e2e8f0",
+  borderRadius: "20px",
+  background: "#ffffff",
+  padding: "15px",
+  display: "grid",
+  gridTemplateColumns: "40px minmax(0, 1fr)",
+  gap: "10px",
+  alignItems: "start",
+  textAlign: "left",
+  color: "#0f172a",
+  cursor: "pointer",
+  boxShadow: "0 14px 30px rgba(15,23,42,0.07)",
+};
+
+const workCenterPrimaryNavCardAlert = {
+  background: "linear-gradient(135deg,#fff7ed,#ffffff)",
+  boxShadow: "0 0 0 1px rgba(251,146,60,0.22), 0 18px 44px rgba(249,115,22,0.18)",
+  borderLeft: "4px solid #f97316",
+};
+
+const workCenterPrimaryNavIcon = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "18px",
+  fontWeight: 950,
+};
+
+const workCenterPrimaryNavContent = {
+  minWidth: 0,
+  display: "grid",
+  gap: "6px",
+};
+
+const workCenterPrimaryNavTitleRow = {
+  minWidth: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const workCenterPrimaryNavTitle = {
+  minWidth: 0,
+  fontSize: "15px",
+  lineHeight: 1.2,
+  fontWeight: 950,
+};
+
+const workCenterPrimaryNavMeta = {
+  flexShrink: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  padding: "4px 7px",
+  borderRadius: "999px",
+  fontSize: "10px",
+  fontWeight: 950,
+};
+
+const workCenterPrimaryNavMetaAlert = {
+  background: "#ffedd5",
+  color: "#c2410c",
+  boxShadow: "0 0 0 4px rgba(251,146,60,0.16)",
+  animation: "meetro-assistant-soft-pulse 1.8s ease-in-out infinite",
+};
+
+const workCenterPrimaryNavPurpose = {
+  color: "#475569",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 750,
+};
+
+const workCenterPrimaryNavAction = {
+  width: "fit-content",
+  maxWidth: "100%",
+  fontSize: "12px",
+  lineHeight: 1.25,
+  fontWeight: 950,
+};
+
+const workCenterAlertGuidanceCard = {
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+  display: "grid",
+  gap: "12px",
+  margin: "0 0 12px",
+  padding: "14px",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg, #fff7ed, #ffffff)",
+  border: "1px solid rgba(239, 68, 68, 0.28)",
+  boxShadow:
+    "0 0 0 3px rgba(239, 68, 68, 0.08), 0 16px 34px rgba(127, 29, 29, 0.12)",
+  overflow: "hidden",
+};
+
+const workCenterAlertGuidanceTop = {
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "40px minmax(0, 1fr)",
+  gap: "10px",
+  alignItems: "start",
+};
+
+const workCenterAlertGuidanceIcon = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  background: "#ef4444",
+  color: "#ffffff",
+  fontSize: "22px",
+  fontWeight: 950,
+};
+
+const workCenterAlertGuidanceText = {
+  minWidth: 0,
+  display: "grid",
+  gap: "4px",
+};
+
+const workCenterAlertGuidanceEyebrow = {
+  color: "#b91c1c",
+  fontSize: "11px",
+  fontWeight: 950,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const workCenterAlertGuidanceTitle = {
+  color: "#111827",
+  fontSize: "17px",
+  lineHeight: 1.18,
+  fontWeight: 950,
+};
+
+const workCenterAlertGuidanceMessage = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 750,
+};
+
+const workCenterAlertGuidanceMeta = {
+  color: "#7f1d1d",
+  fontSize: "12px",
+  lineHeight: 1.3,
+  fontWeight: 900,
+};
+
+const workCenterAlertGuidanceActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "8px",
+};
+
+const workCenterAlertPrimaryButton = {
+  minHeight: "44px",
+  border: "none",
+  borderRadius: "14px",
+  background: "#ef4444",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const workCenterAlertSecondaryButton = {
+  ...workCenterAlertPrimaryButton,
+  background: "#ffffff",
+  color: "#b91c1c",
+  border: "1px solid rgba(239, 68, 68, 0.24)",
+};
+
+const workCenterPriorityAlertCard = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: "10px",
+  margin: "0 0 12px",
+  padding: "14px",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg,#ecfdf5,#ffffff)",
+  border: "1px solid rgba(34,197,94,0.34)",
+  boxShadow: "0 0 0 3px rgba(34,197,94,0.10), 0 18px 40px rgba(34,197,94,0.14)",
+};
+
+const workCenterPriorityAlertCopy = {
+  display: "grid",
+  gap: "6px",
+};
+
+const workCenterPriorityAlertEyebrow = {
+  color: "#15803d",
+  fontSize: "11px",
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const workCenterPriorityAlertActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+};
+
+const workCenterPriorityPrimaryButton = {
+  border: "none",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  background: "linear-gradient(135deg,#22c55e,#16a34a)",
+  color: "#ffffff",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const workCenterPrioritySecondaryButton = {
+  border: "1px solid rgba(34,197,94,0.28)",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  background: "#ffffff",
+  color: "#15803d",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const workCenterDashboardCard = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  minHeight: "124px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "20px",
+  background: "#ffffff",
+  padding: "13px",
+  display: "grid",
+  gridTemplateColumns: "42px minmax(0, 1fr) 18px",
+  alignItems: "center",
+  gap: "10px",
+  textAlign: "left",
+  color: "#0f172a",
+  cursor: "pointer",
+  boxShadow: "0 12px 30px rgba(15,23,42,0.07)",
+};
+
+const workCenterDashboardCardPriority = {
+  borderColor: "rgba(34,197,94,0.45)",
+  background: "linear-gradient(135deg,#ecfdf5,#ffffff)",
+  boxShadow: "0 0 0 3px rgba(34,197,94,0.12), 0 18px 38px rgba(34,197,94,0.18)",
+};
+
+const workCenterDashboardIcon = {
+  width: "42px",
+  height: "42px",
+  borderRadius: "15px",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "20px",
+};
+
+const workCenterDashboardCardContent = {
+  minWidth: 0,
+  display: "grid",
+  gap: "5px",
+};
+
+const workCenterDashboardCardTitleRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const workCenterDashboardCardTitle = {
+  fontSize: "16px",
+  lineHeight: 1.15,
+  fontWeight: 950,
+};
+
+const workCenterDashboardBadge = {
+  flexShrink: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  padding: "4px 7px",
+  borderRadius: "999px",
+  fontSize: "10px",
+  fontWeight: 950,
+};
+
+const workCenterDashboardDescription = {
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: 650,
+};
+
+const workCenterDashboardMetaLabel = {
+  color: "#0f172a",
+  fontWeight: 950,
+};
+
+const workCenterDashboardNextStep = {
+  color: "#64748b",
+  fontSize: "11px",
+  lineHeight: 1.3,
+  fontWeight: 800,
+};
+
+const workCenterDashboardPrimaryAction = {
+  width: "fit-content",
+  maxWidth: "100%",
+  marginTop: "2px",
+  padding: "6px 9px",
+  borderRadius: "999px",
+  background: "#f8fafc",
+  color: "#111827",
+  border: "1px solid #e2e8f0",
+  fontSize: "11px",
+  fontWeight: 950,
+};
+
+const workCenterDashboardChevron = {
+  color: "#64748b",
+  fontSize: "22px",
+  fontWeight: 500,
+};
+
+const workCenterOpenedSection = {
+  margin: "12px 0 14px",
+  padding: "17px 17px calc(68px + env(safe-area-inset-bottom))",
+  borderRadius: "24px",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  scrollMarginTop: "76px",
+};
+
+const scheduleOpenedPage = {
+  margin: "12px 0 6px",
+};
+
+const workCenterBackButton = {
+  border: "none",
+  background: "#f1f5f9",
+  color: "#334155",
+  borderRadius: "999px",
+  padding: "9px 13px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+  marginBottom: "10px",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  whiteSpace: "normal",
+  overflowWrap: "break-word",
+};
+
+const opportunitiesCompactHeader = {
+  margin: "0 0 8px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const opportunitiesCompactTitle = {
+  margin: "0 0 4px",
+  color: "#0f172a",
+  fontSize: "26px",
+  lineHeight: 1.12,
+  fontWeight: 950,
+  letterSpacing: "-0.01em",
+};
+
+const opportunitiesCompactSummary = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: 850,
+};
+
+const workCenterChildHeader = {
+  ...opportunitiesCompactHeader,
+};
+
+const workCenterChildTitle = {
+  ...opportunitiesCompactTitle,
+};
+
+const workCenterChildSummary = {
+  ...opportunitiesCompactSummary,
+};
+
+const workCenterOpenedSectionHeading = {
+  display: "grid",
+  gridTemplateColumns: "54px minmax(0, 1fr)",
+  alignItems: "start",
+  gap: "13px",
+};
+
+const workCenterOpenedSectionIcon = {
+  width: "54px",
+  height: "54px",
+  borderRadius: "18px",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "24px",
+};
+
+const workCenterOpenedSectionEyebrow = {
+  display: "block",
+  color: "#7c3aed",
+  fontSize: "10px",
+  fontWeight: 950,
+  letterSpacing: "0.11em",
+  textTransform: "uppercase",
+  marginBottom: "4px",
+};
+
+const workCenterOpenedSectionTitle = {
+  margin: "0 0 5px",
+  color: "#0f172a",
+  fontSize: "24px",
+  lineHeight: 1.15,
+  fontWeight: 950,
+};
+
+const workCenterOpenedSectionDescription = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "15px",
+  lineHeight: 1.55,
+  fontWeight: 650,
+};
+
+const workCenterOpenedSectionNextStep = {
+  marginTop: "14px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  padding: "12px 14px",
+  display: "grid",
+  gap: "4px",
+};
+
+const workCenterOpenedSectionNextStepLabel = {
+  fontSize: "10px",
+  fontWeight: 950,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+};
+
+const workCenterOpenedSectionNextStepText = {
+  color: "#1e293b",
   fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: 900,
+};
+
+const workCenterOpenedSectionActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const workCenterOpenedSectionActionButton = {
+  border: "none",
+  borderRadius: "14px",
+  color: "#ffffff",
+  padding: "11px 14px",
+  fontSize: "13px",
+  fontWeight: 950,
+  cursor: "pointer",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.14)",
+};
+
+const workCenterSubNavigation = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+  marginTop: "18px",
+  paddingTop: "16px",
+  borderTop: "1px solid #e2e8f0",
+};
+
+const workCenterSubNavigationButton = {
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#475569",
+  borderRadius: "999px",
+  padding: "9px 13px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
+  fontSize: "12px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const workCenterSubNavigationActive = {
+  ...workCenterSubNavigationButton,
+  background: "#ede9fe",
+  borderColor: "#8b5cf6",
+  color: "#5b21b6",
+};
+
+const workCenterControlPanel = {
+  background: "linear-gradient(135deg, #fbfaff, #ffffff)",
+  borderRadius: "24px",
+  padding: "16px",
+  boxShadow: "0 18px 45px rgba(91, 61, 245, 0.10)",
+  border: "1px solid rgba(124,58,237,0.14)",
+  marginBottom: "16px",
+};
+
+const workCenterSectionHeader = {
+  marginBottom: "10px",
+};
+
+const workCenterSectionTitle = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "16px",
+  fontWeight: 900,
+};
+
+const workCenterSectionSubtitle = {
+  margin: "4px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const workflowRail = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(86px, 1fr))",
+  gap: "8px",
+  overflowX: "auto",
+  paddingBottom: "12px",
+  marginBottom: "16px",
+};
+
+const workflowStep = {
+  border: "1px solid #e2e8f0",
+  background: "linear-gradient(135deg, #ffffff, #f8fafc)",
+  color: "#334155",
+  borderRadius: "18px",
+  padding: "11px 10px",
+  display: "grid",
+  gap: "5px",
+  justifyItems: "center",
+  alignItems: "center",
+  fontWeight: 900,
+  fontSize: "12px",
+  minHeight: "66px",
+  whiteSpace: "nowrap",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+};
+
+const workflowStepActive = {
+  ...workflowStep,
+  background: "linear-gradient(135deg, #5b3df5, #7c3aed)",
+  color: "#ffffff",
+  border: "1px solid #6d5dfc",
+  boxShadow: "0 14px 30px rgba(91, 61, 245, 0.28)",
+};
+
+const workflowStepNumber = {
+  width: "24px",
+  height: "24px",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.22)",
+  display: "grid",
+  placeItems: "center",
+  fontSize: "12px",
+  fontWeight: 900,
+};
+
+const businessToolsGrid = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const businessTool = {
+  border: "1px solid #dbeafe",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "999px",
+  padding: "8px 11px",
+  fontWeight: 800,
+  fontSize: "12px",
+  minHeight: "36px",
+  boxShadow: "0 4px 10px rgba(37,99,235,0.04)",
+};
+
+const businessToolActive = {
+  ...businessTool,
+  background: "#f0ecff",
+  border: "1px solid #7c3aed",
+  color: "#4c1d95",
+  boxShadow: "0 6px 14px rgba(124, 58, 237, 0.10)",
+};
+
+const dynamicSectionCard = {
+  background: "linear-gradient(135deg, #ffffff, #f4f1ff)",
+  scrollMarginTop: "92px",
+  border: "1px solid rgba(124,58,237,0.16)",
+  borderRadius: "16px",
+  padding: "10px",
+  margin: "10px 0",
+  boxShadow: "0 7px 17px rgba(91,61,245,0.10)",
+};
+
+const dynamicSectionSchedule = {
+  background: "linear-gradient(135deg, #eff6ff, #ffffff)",
+  border: "1px solid rgba(37,99,235,0.20)",
+  boxShadow: "0 14px 34px rgba(37,99,235,0.10)",
+};
+
+const dynamicSectionPending = {
+  background: "linear-gradient(135deg, #fff7ed, #ffffff)",
+  border: "1px solid rgba(249,115,22,0.22)",
+  boxShadow: "0 14px 34px rgba(249,115,22,0.10)",
+};
+
+const dynamicSectionQuotes = {
+  background: "linear-gradient(135deg, #f5f3ff, #ffffff)",
+  border: "1px solid rgba(124,58,237,0.22)",
+  boxShadow: "0 14px 34px rgba(124,58,237,0.12)",
+};
+
+const dynamicSectionActive = {
+  background: "linear-gradient(135deg, #f0fdf4, #ffffff)",
+  border: "1px solid rgba(34,197,94,0.22)",
+  boxShadow: "0 14px 34px rgba(34,197,94,0.10)",
+};
+
+const dynamicSectionCompleted = {
+  background: "linear-gradient(135deg, #f8fafc, #ffffff)",
+  border: "1px solid rgba(100,116,139,0.18)",
+  boxShadow: "0 14px 34px rgba(100,116,139,0.08)",
+};
+
+const dynamicSectionMaterials = {
+  background: "linear-gradient(135deg, #fffbeb, #ffffff)",
+  border: "1px solid rgba(245,158,11,0.25)",
+  boxShadow: "0 14px 34px rgba(245,158,11,0.12)",
+};
+
+const dynamicSectionRecords = {
+  background: "linear-gradient(135deg, #eef2ff, #ffffff)",
+  border: "1px solid rgba(99,102,241,0.20)",
+  boxShadow: "0 14px 34px rgba(99,102,241,0.10)",
+};
+
+const dynamicSectionRevenue = {
+  background: "linear-gradient(135deg, #ecfdf5, #ffffff)",
+  border: "1px solid rgba(16,185,129,0.24)",
+  boxShadow: "0 14px 34px rgba(16,185,129,0.12)",
+};
+
+const dispatchBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "7px 11px",
+  borderRadius: "999px",
+  background: "linear-gradient(135deg, #e0f2fe, #eef2ff)",
+  color: "#334155",
+  fontSize: "11px",
+  fontWeight: 950,
+  marginBottom: "10px",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.08)",
+};
+
+const dynamicSectionEyebrow = {
+  margin: 0,
+  color: "#6d5dfc",
+  fontSize: "11px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const dynamicSectionTitle = {
+  margin: "6px 0 6px",
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: 950,
+};
+
+const dynamicSectionText = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "12px",
+  lineHeight: 1.45,
+  fontWeight: 500,
+};
+
+const quoteViewOverlay = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10000,
+  background: "rgba(15, 23, 42, 0.5)",
+  backdropFilter: "blur(8px)",
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  padding: "calc(env(safe-area-inset-top, 0px) + 78px) 18px calc(env(safe-area-inset-bottom, 0px) + 105px)",
+  overflow: "hidden",
+  overscrollBehavior: "none",
+  touchAction: "none",
+};
+
+const quoteViewCard = {
+  width: "min(350px, calc(100% - 42px))",
+  height: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 250px)",
+  maxHeight: "calc(100dvh - 250px)",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
+  background: "#ffffff",
+  borderRadius: "26px",
+  padding: "20px 20px 80px",
+  boxShadow: "0 24px 70px rgba(15, 23, 42, 0.3)",
+};
+
+const jobReportCard = {
+  ...quoteViewCard,
+  width: "min(520px, calc(100% - 36px))",
+};
+
+const jobReportText = {
+  whiteSpace: "pre-wrap",
+  margin: "0 0 14px",
+  padding: "14px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#0f172a",
+  fontSize: "13px",
+  lineHeight: 1.55,
+  fontFamily: "inherit",
+};
+
+const quoteViewHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginBottom: "12px",
+};
+
+const quoteViewEyebrow = {
+  margin: 0,
+  color: "#6d5dfc",
+  fontSize: "12px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const quoteViewTitle = {
+  margin: "0",
+  fontSize: "22px",
+  color: "#0f172a",
+};
+
+const quoteViewCloseButton = {
+  border: "none",
+  background: "#eef2ff",
+  color: "#4338ca",
+  borderRadius: "14px",
+  width: "44px",
+  height: "44px",
+  fontWeight: 900,
+  fontSize: "20px",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const quoteViewHero = {
+  background: "linear-gradient(135deg, #20185f, #6537ff)",
+  minHeight: "82px",
+  maxHeight: "105px",
+  justifyContent: "center",
+  textAlign: "center",
+  color: "#ffffff",
+  borderRadius: "20px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 95px) 18px calc(env(safe-area-inset-bottom, 0px) + 135px)",
+  overflowY: "auto",
+  display: "grid",
+  gap: "8px",
+  marginBottom: "10px",
+};
+
+const quoteViewSection = {
+  background: "#f8fafc",
+  borderRadius: "18px",
+  padding: "12px",
+  display: "grid",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const quoteViewRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  color: "#334155",
+};
+
+const quoteViewTotalRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  borderTop: "1px solid #cbd5e1",
+  paddingTop: "10px",
+  fontSize: "18px",
+  color: "#0f172a",
+  fontWeight: 900,
+};
+
+const quoteViewInfoBlock = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  padding: "12px",
+  marginBottom: "12px",
+  color: "#334155",
+};
+
+const quoteViewActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const quoteViewPrimaryButton = {
+  border: "none",
+  background: "#5b3df5",
+  color: "#ffffff",
+  borderRadius: "16px",
+  padding: "13px",
+  fontWeight: 900,
+};
+
+const quoteViewSecondaryButton = {
+  border: "1px solid #dbeafe",
+  background: "#f8fafc",
+  color: "#0f172a",
+  borderRadius: "16px",
+  padding: "13px",
+  fontWeight: 900,
+};
+
+const quoteHistoryActions = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "7px",
+  marginTop: "10px",
+  marginBottom: "9px",
+};
+
+const quoteHistoryActionButton = {
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  background: "#f8fafc",
+  color: "#0f172a",
+  borderRadius: "14px",
+  padding: "10px 8px",
+  fontSize: "13px",
+  fontWeight: 850,
 };
 
 const quoteHistoryFooter = {
   borderTop: "1px solid #eef2f7",
-  paddingTop: "12px",
-  marginTop: "14px",
+  paddingTop: "10px",
+  marginTop: "10px",
   display: "flex",
   justifyContent: "space-between",
   gap: "10px",
@@ -4403,7 +18519,7 @@ const quoteHistoryFooter = {
 const workTabs = {
   display: "flex",
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   gap: "10px",
   background: "white",
@@ -4415,24 +18531,24 @@ const workTabs = {
 
 
 const operationalAlertTab = {
-  border: "1px solid #fed7aa",
-  background: "#fff7ed",
-  color: "#c2410c",
-  boxShadow: "0 10px 22px rgba(249,115,22,0.12)",
+  border: "1px solid #fb923c",
+  background: "linear-gradient(135deg, #fff7ed, #fed7aa)",
+  color: "#9a3412",
+  boxShadow: "0 12px 26px rgba(249,115,22,0.22)",
 };
 
 const operationalLiveTab = {
-  border: "1px solid #bbf7d0",
-  background: "#f0fdf4",
-  color: "#15803d",
-  boxShadow: "0 10px 22px rgba(34,197,94,0.12)",
+  border: "1px solid #22c55e",
+  background: "linear-gradient(135deg, #dcfce7, #f0fdf4)",
+  color: "#166534",
+  boxShadow: "0 12px 26px rgba(34,197,94,0.22)",
 };
 
 const materialsAlertTab = {
-  border: "1px solid #fde68a",
+  border: "1px solid #f59e0b",
   background: "#fffbeb",
-  color: "#b45309",
-  boxShadow: "0 10px 22px rgba(245,158,11,0.12)",
+  color: "#92400e",
+  boxShadow: "0 6px 14px rgba(245,158,11,0.12)",
 };
 
 const liveTabBadge = {
@@ -4446,16 +18562,16 @@ const liveTabBadge = {
 };
 
 const quoteAlertTab = {
-  background: "#fff7ed",
-  color: "#c2410c",
-  boxShadow:
-    "0 0 0 2px rgba(249,115,22,0.18), 0 12px 26px rgba(249,115,22,0.18)",
+  border: "1px solid #818cf8",
+  background: "linear-gradient(135deg, #eef2ff, #f5f3ff)",
+  color: "#3730a3",
+  boxShadow: "0 12px 26px rgba(99,102,241,0.24)",
 };
 
 const quoteAlertBadge = {
   marginLeft: "8px",
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   minWidth: "22px",
   height: "22px",
@@ -4498,7 +18614,7 @@ const workCenterAlertBanner = {
   color: "#7c2d12",
   padding: "14px",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
   textAlign: "left",
   margin: "14px 0",
@@ -4513,7 +18629,7 @@ const workCenterAlertIcon = {
   background: "#fed7aa",
   color: "#c2410c",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "21px",
   flexShrink: 0,
@@ -4529,7 +18645,7 @@ const workTab = {
   fontSize: "14px",
   minWidth: "108px",
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   gap: "7px",
   cursor: "pointer",
@@ -4546,7 +18662,7 @@ const workTabActive = {
   fontSize: "14px",
   minWidth: "108px",
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   gap: "7px",
   cursor: "pointer",
@@ -4559,7 +18675,7 @@ const workTabActive = {
 const sectionHeaderRow = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "9px",
   marginBottom: "10px",
 };
@@ -4575,8 +18691,111 @@ const smallPrimaryButton = {
   whiteSpace: "nowrap",
 };
 
+const scheduleContentSection = {
+  marginBottom: "36px",
+  display: "grid",
+  gap: "12px",
+  paddingBottom: "calc(128px + env(safe-area-inset-bottom))",
+  scrollPaddingBottom: "calc(150px + env(safe-area-inset-bottom))",
+};
+
+const scheduleCompactHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  flexWrap: "wrap",
+  padding: "4px 0 2px",
+};
+
+const scheduleCompactTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "24px",
+  lineHeight: 1.1,
+  fontWeight: "950",
+};
+
+const scheduleCompactPurpose = {
+  margin: "6px 0 0",
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.35,
+  fontWeight: "750",
+};
+
+const schedulePrimaryAction = {
+  ...smallPrimaryButton,
+  padding: "11px 15px",
+  boxShadow: "0 12px 26px rgba(91,61,245,0.22)",
+};
 
 
+
+
+const visitOutcomeGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  marginTop: "16px",
+};
+
+const visitOutcomeButton = {
+  width: "100%",
+  border: "1px solid rgba(15, 23, 42, 0.12)",
+  borderRadius: "16px",
+  padding: "14px 16px",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontWeight: 800,
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const visitOutcomeDangerButton = {
+  ...visitOutcomeButton,
+  border: "1px solid rgba(239, 68, 68, 0.25)",
+  background: "rgba(254, 242, 242, 0.95)",
+  color: "#991b1b",
+};
+
+const workflowTimelineList = {
+  display: "grid",
+  gap: "12px",
+};
+
+const workflowTimelineItem = {
+  display: "flex",
+  gap: "12px",
+  alignItems: "flex-start",
+  background: "#ffffff",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "18px",
+  padding: "14px",
+  boxShadow: "0 10px 26px rgba(15, 23, 42, 0.06)",
+};
+
+const workflowTimelineDot = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const workflowTimelineContent = {
+  flex: 1,
+  minWidth: 0,
+};
+
+const workflowTimelineDate = {
+  display: "block",
+  marginTop: "6px",
+  color: "#64748b",
+};
 
 const manualScheduleHelpButton = {
   marginTop: "10px",
@@ -4618,6 +18837,25 @@ const manualScheduleNoticeText = {
   fontSize: "13px",
 };
 
+const manualCustomerFieldsCard = {
+  display: "grid",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "16px",
+  border: "1px solid rgba(124, 58, 237, 0.16)",
+  background: "linear-gradient(135deg, #ffffff, #f8f5ff)",
+};
+
+const manualCustomerInviteNotice = {
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.35,
+};
+
 const scheduleFormCard = {
   background: "#f8fafc",
   border: "1px solid #e5e7eb",
@@ -4632,6 +18870,66 @@ const scheduleFormGrid = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: "10px",
+};
+
+const scheduleWorkflowStack = {
+  display: "grid",
+  gap: "14px",
+};
+
+const scheduleWorkflowSection = {
+  display: "grid",
+  gap: "10px",
+};
+
+const scheduleWorkflowHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+};
+
+const scheduleWorkflowTitle = {
+  margin: 0,
+  fontSize: "17px",
+  lineHeight: 1.15,
+  color: "#0f172a",
+};
+
+const scheduleWorkflowCount = {
+  minWidth: "30px",
+  height: "30px",
+  borderRadius: "999px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#eef2ff",
+  color: "#4f46e5",
+  fontWeight: "900",
+  fontSize: "13px",
+};
+
+const scheduleWorkflowEmpty = {
+  border: "1px dashed #cbd5e1",
+  borderRadius: "16px",
+  padding: "12px",
+  color: "#64748b",
+  background: "#f8fafc",
+  fontWeight: "700",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const scheduleNextStepNotice = {
+  margin: "0 0 12px",
+  padding: "11px 12px",
+  borderRadius: "14px",
+  background: "#f5f3ff",
+  color: "#4c1d95",
+  border: "1px solid rgba(124, 58, 237, 0.18)",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.4,
 };
 
 const scheduleInput = {
@@ -4694,6 +18992,86 @@ const sourcePill = {
   fontWeight: "800",
 };
 
+const scheduleReminderRow = {
+  display: "flex",
+  gap: "7px",
+  flexWrap: "wrap",
+  marginTop: "8px",
+};
+
+const scheduleReminderPill = {
+  background: "#ecfeff",
+  color: "#0e7490",
+  border: "1px solid #a5f3fc",
+  borderRadius: "999px",
+  padding: "5px 8px",
+  fontSize: "11px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
+};
+
+const scheduleFilterNotice = {
+  margin: "0 0 12px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  border: "1px solid #bfdbfe",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const waitingConfirmationPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "999px",
+  padding: "10px 12px",
+  background: "#fff7ed",
+  color: "#9a3412",
+  border: "1px solid #fed7aa",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const appointmentReminderNoticeCard = {
+  margin: "0 0 14px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid #fde68a",
+  background: "#fffbeb",
+  color: "#92400e",
+  display: "grid",
+  gap: "10px",
+  boxSizing: "border-box",
+};
+
+const appointmentReminderNoticeActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "8px",
+};
+
+const appointmentReminderSettingsButton = {
+  border: "none",
+  borderRadius: "14px",
+  padding: "11px 12px",
+  background: "#7c3aed",
+  color: "#ffffff",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const appointmentReminderContinueButton = {
+  border: "1px solid #fbbf24",
+  borderRadius: "14px",
+  padding: "11px 12px",
+  background: "#ffffff",
+  color: "#92400e",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
 const completedPill = {
   background: "#dcfce7",
   color: "#15803d",
@@ -4752,24 +19130,1359 @@ const deleteScheduleBtn = {
   cursor: "pointer",
 };
 
+const inlineCircleDeleteButton = {
+  width: "30px",
+  height: "30px",
+  minWidth: "30px",
+  border: "none",
+  borderRadius: "999px",
+  background: "rgba(15, 23, 42, 0.78)",
+  color: "#ffffff",
+  fontSize: "20px",
+  lineHeight: 1,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  justifySelf: "end",
+};
+
 const confirmOverlay = {
   position: "fixed",
   inset: 0,
   background: "rgba(15,23,42,0.35)",
-  zIndex: 200,
+  zIndex: 10020,
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
-  padding: "11px",
+  padding:
+    "max(24px, calc(env(safe-area-inset-top, 0px) + 24px)) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 24px) max(16px, env(safe-area-inset-left, 0px))",
+  boxSizing: "border-box",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
 };
 
 const confirmCard = {
   width: "100%",
   maxWidth: "360px",
+  maxHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 72px)",
+  overflowY: "auto",
   background: "white",
-  borderRadius: "10px",
-  padding: "11px",
+  borderRadius: "18px",
+  padding: "16px",
   boxShadow: "0 10px 45px rgba(15,23,42,0.22)",
+};
+
+const evaluationModalCard = {
+  ...confirmCard,
+  maxWidth: "460px",
+  borderRadius: "20px",
+  padding: "16px",
+  display: "grid",
+  gap: "12px",
+};
+
+const evaluationModalTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "22px",
+  fontWeight: "950",
+};
+
+const evaluationModalText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const evaluationVisitContext = {
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const evaluationVisitSection = {
+  display: "grid",
+  gap: "10px",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "18px",
+  padding: "12px",
+  background: "#ffffff",
+};
+
+const evaluationVisitSectionHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const evaluationInlineSectionHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginTop: "8px",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: "950",
+};
+
+const evaluationVisitSectionTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "16px",
+  fontWeight: "950",
+};
+
+const evaluationVisitSectionText = {
+  margin: "4px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "700",
+  lineHeight: 1.35,
+};
+
+const evaluationAddPhotoButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  borderRadius: "999px",
+  background: "#5b3df5",
+  color: "#ffffff",
+  padding: "10px 14px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const evaluationPhotoGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(74px, 1fr))",
+  gap: "10px",
+};
+
+const evaluationPhotoCard = {
+  position: "relative",
+  borderRadius: "14px",
+  overflow: "hidden",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  aspectRatio: "1 / 1",
+};
+
+const evaluationPhotoThumb = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const evaluationPhotoMetadataThumb = {
+  width: "100%",
+  height: "100%",
+  display: "grid",
+  placeItems: "center",
+  alignContent: "center",
+  gap: "4px",
+  padding: "8px",
+  textAlign: "center",
+  color: "#475569",
+  fontSize: "18px",
+  fontWeight: "900",
+};
+
+const evaluationPhotoRemove = {
+  position: "absolute",
+  top: "6px",
+  right: "6px",
+  width: "26px",
+  height: "26px",
+  border: "none",
+  borderRadius: "999px",
+  background: "rgba(15, 23, 42, 0.78)",
+  color: "#ffffff",
+  fontSize: "18px",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const evaluationPhotoEmpty = {
+  border: "1px dashed #cbd5e1",
+  borderRadius: "14px",
+  padding: "12px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const evaluationFieldLabel = {
+  margin: "4px 0 -6px",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const evaluationTextarea = {
+  width: "100%",
+  minHeight: "156px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "16px",
+  padding: "12px",
+  fontFamily: "inherit",
+  fontSize: "16px",
+  lineHeight: 1.45,
+  resize: "vertical",
+  overflow: "hidden",
+  fieldSizing: "content",
+  boxSizing: "border-box",
+};
+
+const evaluationCompactTextarea = {
+  ...evaluationTextarea,
+  minHeight: "82px",
+};
+
+const visitDetailPage = {
+  display: "grid",
+  gap: "14px",
+  paddingTop: "max(12px, env(safe-area-inset-top))",
+  paddingBottom: "calc(160px + env(safe-area-inset-bottom))",
+  scrollPaddingBottom: "calc(190px + env(safe-area-inset-bottom))",
+};
+
+const visitDetailHero = {
+  display: "grid",
+  gap: "12px",
+  padding: "16px",
+  borderRadius: "22px",
+  border: "1px solid rgba(124, 58, 237, 0.16)",
+  background: "linear-gradient(135deg, #ffffff, #f8f5ff)",
+  boxShadow: "0 14px 34px rgba(91, 61, 245, 0.10)",
+};
+
+const jobWorkspaceHero = {
+  ...visitDetailHero,
+  background: "linear-gradient(135deg, #ffffff, #f8fafc)",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
+};
+
+const jobWorkflowFirstHero = {
+  ...jobWorkspaceHero,
+  gap: "16px",
+  border: "1px solid rgba(124, 58, 237, 0.18)",
+  boxShadow: "0 18px 42px rgba(91, 61, 245, 0.10)",
+};
+
+const jobWorkflowServiceSummary = {
+  margin: "8px 0 0",
+  color: "#0f172a",
+  fontSize: "15px",
+  fontWeight: "900",
+  lineHeight: 1.35,
+};
+
+const jobWorkflowCurrentStepCard = {
+  display: "grid",
+  gap: "12px",
+  padding: "18px",
+  borderRadius: "22px",
+  border: "2px solid rgba(124, 58, 237, 0.18)",
+  background: "linear-gradient(135deg, #f5f3ff, #ffffff 72%)",
+  color: "#0f172a",
+  boxShadow: "0 16px 34px rgba(91, 61, 245, 0.08)",
+};
+
+const jobWorkflowPrimaryButton = {
+  ...startScheduleBtn,
+  justifySelf: "start",
+  width: "min(100%, 360px)",
+  minWidth: 0,
+  maxWidth: "100%",
+  borderRadius: "16px",
+  boxShadow: "0 12px 26px rgba(91, 61, 245, 0.18)",
+};
+
+const jobWorkflowActionStack = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "10px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const jobWorkflowSecondaryButton = {
+  border: "1px solid #c4b5fd",
+  background: "#ffffff",
+  color: "#5b21b6",
+  borderRadius: "9px",
+  padding: "8px 9px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const jobWorkflowStepLabel = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "950",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const jobWorkflowStepStatus = {
+  color: "#0f172a",
+  fontSize: "28px",
+  lineHeight: 1.05,
+  fontWeight: "1000",
+};
+
+const jobWorkflowNextAction = {
+  color: "#1e293b",
+  fontSize: "18px",
+  lineHeight: 1.25,
+  fontWeight: "950",
+};
+
+const jobWorkflowSummaryStack = {
+  display: "grid",
+  gap: "9px",
+  padding: "4px 0",
+};
+
+const jobWorkflowContextLine = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  flexWrap: "wrap",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "rgba(255, 255, 255, 0.86)",
+  border: "1px solid rgba(226, 232, 240, 0.9)",
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "850",
+};
+
+const jobWorkflowInlineForm = {
+  display: "grid",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "rgba(255, 255, 255, 0.82)",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+};
+
+const jobWorkflowFormGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: "10px",
+};
+
+const jobWorkflowFieldLabel = {
+  display: "grid",
+  gap: "6px",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const jobWorkflowNotesInput = {
+  width: "100%",
+  border: "1px solid #dbe4f0",
+  borderRadius: "14px",
+  padding: "12px",
+  fontSize: "14px",
+  color: "#0f172a",
+  background: "#ffffff",
+  outline: "none",
+  boxSizing: "border-box",
+  minHeight: "76px",
+  resize: "vertical",
+};
+
+const jobWorkflowCheckboxLine = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const jobWorkflowFormActions = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const jobWorkflowManualActions = {
+  display: "grid",
+  gap: "9px",
+  padding: "14px",
+  borderRadius: "16px",
+  background: "rgba(255, 255, 255, 0.82)",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+};
+
+const jobWorkflowManualActionGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+  gap: "8px",
+};
+
+const jobWorkflowManualActionButton = {
+  border: "1px solid #c4b5fd",
+  borderRadius: "14px",
+  background: "#ffffff",
+  color: "#5b21b6",
+  padding: "11px 12px",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const jobWorkflowGpsHint = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "750",
+};
+
+const jobWorkspaceHeaderRow = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const jobWorkspaceEyebrow = {
+  display: "inline-flex",
+  marginBottom: "6px",
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const jobWorkspaceAddress = {
+  margin: "6px 0 0",
+  color: "#475569",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.35,
+};
+
+const jobWorkspaceStatusPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "999px",
+  padding: "8px 12px",
+  background: "#eef2ff",
+  color: "#4f46e5",
+  border: "1px solid #c7d2fe",
+  fontSize: "12px",
+  fontWeight: "950",
+  whiteSpace: "nowrap",
+};
+
+const jobWorkspaceNextStepCard = {
+  display: "grid",
+  gap: "8px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(124, 58, 237, 0.18)",
+  background: "linear-gradient(135deg, #f5f3ff, #eef2ff)",
+  color: "#312e81",
+};
+
+const jobWorkspaceSummaryGrid = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+};
+
+const jobWorkspaceFactCard = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "5px",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "#ffffff",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: 850,
+};
+
+const jobWorkspaceActionRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const jobWorkspaceDisclosureStack = {
+  display: "grid",
+  gap: "10px",
+};
+
+const jobWorkspaceDisclosure = {
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "18px",
+  background: "#ffffff",
+  boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
+  overflow: "hidden",
+};
+
+const jobWorkspaceSummary = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  padding: "14px",
+  cursor: "pointer",
+  color: "#0f172a",
+  fontSize: "15px",
+  fontWeight: "950",
+  listStyle: "none",
+};
+
+const jobWorkspaceDisclosureText = {
+  margin: 0,
+  padding: "0 14px 14px",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.45,
+};
+
+const jobSupportingDetailsPanel = {
+  display: "grid",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "18px",
+  background: "#ffffff",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
+};
+
+const jobSupportingDetailsHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: "900",
+};
+
+const jobSupportingChipRow = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+};
+
+const jobSupportingChip = {
+  border: "1px solid #dbe4f0",
+  borderRadius: "999px",
+  background: "#f8fafc",
+  color: "#334155",
+  padding: "9px 12px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const jobSupportingChipActive = {
+  background: "#f5f3ff",
+  border: "1px solid #c4b5fd",
+  color: "#5b21b6",
+};
+
+const jobSupportingMoreDisclosure = {
+  display: "grid",
+  gap: "8px",
+};
+
+const jobSupportingMoreSummary = {
+  width: "fit-content",
+  border: "1px solid #dbe4f0",
+  borderRadius: "999px",
+  background: "#ffffff",
+  color: "#475569",
+  padding: "8px 12px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  listStyle: "none",
+};
+
+const jobSupportingSlimDisclosure = {
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "16px",
+  background: "#ffffff",
+  overflow: "hidden",
+};
+
+const jobSupportingSlimSummary = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  padding: "12px 14px",
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+  listStyle: "none",
+};
+
+const jobSupportingReadOnlyHint = {
+  color: "#94a3b8",
+  fontSize: "11px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
+};
+
+const jobSupportingSlimBody = {
+  display: "grid",
+  gap: "10px",
+  padding: "0 12px 12px",
+};
+
+const jobDetailCompactGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+  padding: "0 14px 14px",
+};
+
+const jobDetailCompactItem = {
+  display: "grid",
+  gap: "4px",
+  padding: "11px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "850",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const jobDetailCompactItemActive = {
+  background: "#f5f3ff",
+  border: "1px solid #c4b5fd",
+  color: "#4c1d95",
+};
+
+const jobScopedDetailPanel = {
+  display: "grid",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "20px",
+  background: "#ffffff",
+  border: "1px solid rgba(124, 58, 237, 0.18)",
+  boxShadow: "0 12px 28px rgba(91, 61, 245, 0.08)",
+};
+
+const jobScopedDetailHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+  color: "#0f172a",
+};
+
+const jobScopedDetailBody = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+};
+
+const jobScopedList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+};
+
+const jobScopedListItem = {
+  display: "grid",
+  gap: "4px",
+  padding: "11px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const jobHistoryReadOnlyPanel = {
+  display: "grid",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "20px",
+  background: "#ffffff",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.06)",
+};
+
+const jobHistoryDocumentActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 145px), 1fr))",
+  gap: "8px",
+};
+
+const jobHistoryDocumentButton = {
+  width: "100%",
+  minHeight: "44px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "14px",
+  background: "#ffffff",
+  color: "#334155",
+  padding: "10px 11px",
+  fontSize: "12px",
+  fontWeight: "950",
+  cursor: "pointer",
+  textAlign: "center",
+};
+
+const jobHistoryActionNotice = {
+  margin: 0,
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.4,
+  whiteSpace: "pre-wrap",
+};
+
+const jobHistoryReasoningTrail = {
+  display: "grid",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "18px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+};
+
+const jobHistoryReasoningHeader = {
+  display: "grid",
+  gap: "4px",
+  color: "#0f172a",
+  fontSize: "13px",
+  fontWeight: "950",
+};
+
+const jobHistoryRecordSection = {
+  display: "grid",
+  gap: "7px",
+  padding: "11px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "850",
+  lineHeight: 1.4,
+};
+
+const jobHistoryRecordList = {
+  margin: 0,
+  paddingLeft: "18px",
+  display: "grid",
+  gap: "5px",
+};
+
+const jobHistoryEmptyText = {
+  color: "#64748b",
+};
+
+const jobHistoryReadOnlyGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+  gap: "10px",
+};
+
+const jobHistoryReadOnlySection = {
+  display: "grid",
+  gap: "5px",
+  padding: "11px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
+};
+
+const jobWorkspacePanel = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "16px",
+  paddingBottom: "calc(140px + env(safe-area-inset-bottom))",
+  scrollPaddingBottom: "calc(164px + env(safe-area-inset-bottom))",
+};
+
+const jobTimeline = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+  padding: "12px",
+  borderRadius: "18px",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  background: "#ffffff",
+};
+
+const jobTimelineStep = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: "999px",
+  padding: "7px 10px",
+  background: "#f8fafc",
+  color: "#64748b",
+  border: "1px solid #e2e8f0",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const jobTimelineStepDone = {
+  ...jobTimelineStep,
+  background: "#ecfdf5",
+  color: "#047857",
+  border: "1px solid #bbf7d0",
+};
+
+const jobSavedTimelinePanel = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "9px",
+  padding: "12px",
+  borderRadius: "18px",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: "900",
+};
+
+const jobSavedTimelineList = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+};
+
+const jobSavedTimelineItem = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+  padding: "10px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "850",
+};
+
+const jobListHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "20px",
+  background: "#ffffff",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
+};
+
+const jobMenuTabRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "8px",
+  padding: "6px",
+  borderRadius: "18px",
+  background: "#eef2f7",
+  border: "1px solid #e2e8f0",
+};
+
+const jobMenuTabButton = {
+  border: "1px solid transparent",
+  borderRadius: "14px",
+  background: "transparent",
+  color: "#475569",
+  minHeight: "44px",
+  padding: "10px 12px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const jobMenuTabButtonActive = {
+  background: "#ffffff",
+  border: "1px solid #cbd5e1",
+  color: "#0f172a",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
+};
+
+const jobMenuTabCount = {
+  minWidth: "24px",
+  height: "24px",
+  borderRadius: "999px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#f5f3ff",
+  color: "#6d28d9",
+  fontSize: "12px",
+  fontWeight: "950",
+};
+
+const jobListTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "22px",
+  fontWeight: "950",
+};
+
+const jobListSubtitle = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.45,
+};
+
+const jobCountPill = {
+  minWidth: "36px",
+  height: "36px",
+  borderRadius: "999px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#f5f3ff",
+  color: "#6d28d9",
+  fontWeight: "950",
+};
+
+const jobListGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+};
+
+const jobListCard = {
+  width: "100%",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  background: "#ffffff",
+  borderRadius: "22px",
+  padding: "15px",
+  textAlign: "left",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  cursor: "pointer",
+  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.06)",
+};
+
+const jobListCardMain = {
+  minWidth: 0,
+  display: "grid",
+  gap: "6px",
+};
+
+const jobListCustomer = {
+  color: "#0f172a",
+  fontSize: "19px",
+  lineHeight: 1.1,
+  fontWeight: "950",
+};
+
+const jobListMeta = {
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "750",
+};
+
+const jobListStatus = {
+  width: "fit-content",
+  maxWidth: "100%",
+  color: "#4c1d95",
+  background: "#f5f3ff",
+  border: "1px solid #ddd6fe",
+  borderRadius: "999px",
+  padding: "7px 10px",
+  fontSize: "13px",
+  fontWeight: "900",
+  lineHeight: 1.25,
+};
+
+const jobListNextStep = {
+  color: "#5b3df5",
+  fontSize: "13px",
+  fontWeight: "950",
+  lineHeight: 1.35,
+};
+
+const jobListAction = {
+  justifySelf: "start",
+  borderRadius: "14px",
+  padding: "11px 14px",
+  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "950",
+  whiteSpace: "nowrap",
+};
+
+const jobProgressChecklist = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "7px",
+  marginTop: "5px",
+};
+
+const jobProgressItem = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
+  borderRadius: "999px",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  color: "#64748b",
+  padding: "6px 9px",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const jobProgressItemDone = {
+  borderColor: "#c4b5fd",
+  background: "#f5f3ff",
+  color: "#5b3df5",
+};
+
+const jobListEmpty = {
+  border: "1px dashed #cbd5e1",
+  borderRadius: "20px",
+  padding: "18px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.45,
+};
+
+const workflowShortcutDisclosure = {
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "20px",
+  background: "#ffffff",
+  padding: "12px",
+};
+
+const workflowShortcutSummary = {
+  cursor: "pointer",
+  color: "#475569",
+  fontSize: "14px",
+  fontWeight: "950",
+  padding: "2px 2px 12px",
+};
+
+const visitDetailTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "24px",
+  lineHeight: 1.12,
+  fontWeight: "950",
+};
+
+const visitDetailMetaGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+};
+
+const visitDetailMetaCell = {
+  display: "grid",
+  gap: "4px",
+  padding: "10px",
+  borderRadius: "15px",
+  background: "rgba(255, 255, 255, 0.78)",
+  border: "1px solid rgba(226, 232, 240, 0.9)",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "800",
+};
+
+const visitDetailNotes = {
+  margin: 0,
+  padding: "12px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const visitEvaluationHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  flexWrap: "wrap",
+  padding: "14px",
+  borderRadius: "20px",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+};
+
+const visitEvaluationTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: "950",
+};
+
+const visitEvaluationHelp = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const evaluationSaveNoticeCard = {
+  padding: "12px 14px",
+  borderRadius: "16px",
+  border: "1px solid rgba(34, 197, 94, 0.28)",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: "14px",
+  fontWeight: "900",
+  boxShadow: "0 10px 24px rgba(16, 185, 129, 0.12)",
+};
+
+const evaluationSaveErrorCard = {
+  ...evaluationSaveNoticeCard,
+  border: "1px solid rgba(239, 68, 68, 0.28)",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  boxShadow: "0 10px 24px rgba(239, 68, 68, 0.12)",
+};
+
+const evaluationBottomToast = {
+  position: "fixed",
+  left: "50%",
+  bottom: "calc(174px + env(safe-area-inset-bottom))",
+  transform: "translateX(-50%)",
+  zIndex: 10050,
+  width: "min(420px, calc(100% - 28px))",
+  padding: "12px 14px",
+  borderRadius: "16px",
+  border: "1px solid rgba(34, 197, 94, 0.28)",
+  background: "rgba(236, 253, 245, 0.98)",
+  color: "#047857",
+  fontSize: "14px",
+  fontWeight: "950",
+  textAlign: "center",
+  boxShadow: "0 18px 42px rgba(15, 23, 42, 0.18)",
+  pointerEvents: "none",
+};
+
+const evaluationBottomToastError = {
+  border: "1px solid rgba(239, 68, 68, 0.3)",
+  background: "rgba(254, 242, 242, 0.98)",
+  color: "#b91c1c",
+};
+
+const visitWorkItemList = {
+  display: "grid",
+  gap: "12px",
+};
+
+const visitWorkItemCard = {
+  display: "grid",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "22px",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  background: "#ffffff",
+  boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
+};
+
+const visitWorkItemHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+};
+
+const visitNestedSection = {
+  display: "grid",
+  gap: "9px",
+  padding: "10px",
+  borderRadius: "16px",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+};
+
+const visitNestedHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "8px",
+  flexWrap: "wrap",
+  color: "#0f172a",
+};
+
+const visitNestedGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr)) auto auto",
+  gap: "8px",
+  alignItems: "center",
+};
+
+const materialLineTotalPill = {
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "12px",
+  padding: "9px 10px",
+  fontSize: "12px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
+};
+
+const materialsTotalSummary = {
+  justifySelf: "end",
+  borderRadius: "14px",
+  background: "#eef2ff",
+  color: "#4f46e5",
+  padding: "10px 12px",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const visitMeasurementGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr)) auto",
+  gap: "8px",
+  alignItems: "center",
+};
+
+const miniInlineButton = {
+  border: "1px solid #c7d2fe",
+  background: "#eef2ff",
+  color: "#4f46e5",
+  borderRadius: "999px",
+  padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const visitDetailActions = {
+  position: "sticky",
+  bottom: "calc(116px + env(safe-area-inset-bottom))",
+  zIndex: 80,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "10px",
+  padding: "12px 12px calc(12px + env(safe-area-inset-bottom))",
+  borderRadius: "20px",
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  background: "rgba(255,255,255,0.96)",
+  backdropFilter: "blur(14px)",
+  boxShadow: "0 14px 34px rgba(15,23,42,0.12)",
+  pointerEvents: "auto",
+};
+
+const evaluationSelect = {
+  width: "100%",
+  border: "1px solid #cbd5e1",
+  borderRadius: "16px",
+  padding: "12px",
+  fontFamily: "inherit",
+  fontSize: "15px",
+  background: "#ffffff",
+  boxSizing: "border-box",
+};
+
+const evaluationSelectionPanel = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "10px",
+  padding: "12px",
+  border: "1px solid #dbeafe",
+  borderRadius: "18px",
+  background: "#eff6ff",
+};
+
+const evaluationSelectionHint = {
+  gridColumn: "1 / -1",
+  margin: 0,
+  color: "#1e40af",
+  fontSize: "12px",
+  fontWeight: "800",
+};
+
+const evaluationRequirementPreview = {
+  gridColumn: "1 / -1",
+  display: "grid",
+  gap: "8px",
+  padding: "10px",
+  borderRadius: "14px",
+  border: "1px solid #bfdbfe",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontSize: "13px",
+};
+
+const evaluationRequirementList = {
+  margin: 0,
+  paddingLeft: "18px",
+  display: "grid",
+  gap: "4px",
+  color: "#334155",
+};
+
+const evaluationRequirementEmpty = {
+  margin: 0,
+  color: "#475569",
+  fontWeight: "700",
 };
 
 const confirmActions = {
@@ -4835,23 +20548,89 @@ const tabNotice = {
 };
 
 const section = {
-  marginBottom: "36px",
+  marginBottom: "calc(88px + env(safe-area-inset-bottom, 0px))",
+  display: "grid",
+  gap: "12px",
+};
+
+const closureCenterSection = {
+  ...section,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowX: "hidden",
+  boxSizing: "border-box",
 };
 
 const sectionTitle = {
-  fontSize: "12px",
-  fontWeight: "900",
-  textAlign: "center",
-  marginBottom: "9px",
+  fontSize: "22px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+  textAlign: "left",
+  margin: 0,
   color: "#111827",
+};
+
+const sectionSubtitle = {
+  margin: "6px 0 0",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: "750",
+  lineHeight: 1.45,
+};
+
+const workCenterListHeaderRow = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const workCenterPageTitleBar = {
+  display: "flex",
+  justifyContent: "center",
+  textAlign: "center",
+  width: "100%",
+};
+
+const purpleCompactButton = {
+  border: "none",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 12px 22px rgba(91,61,245,0.18)",
+};
+
+const workCenterFullWidthPrimaryButton = {
+  width: "100%",
+  minHeight: "58px",
+  border: "none",
+  borderRadius: "18px",
+  padding: "15px 18px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
+  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  color: "#ffffff",
+  fontSize: "18px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 16px 30px rgba(91,61,245,0.22)",
 };
 
 const emptyCard = {
   background: "white",
-  borderRadius: "9px",
-  padding: "9px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "22px",
+  padding: "18px",
   textAlign: "center",
-  boxShadow: "0 10px 10px rgba(0,0,0,0.05)",
+  boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
 };
 
 const emptyIcon = {
@@ -4869,7 +20648,7 @@ const emptyText = {
 
 const emptyActionGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
   gap: "8px",
   marginTop: "10px",
 };
@@ -4891,15 +20670,16 @@ const pendingReviewCard = {
   background: "linear-gradient(135deg,#eef2ff,#ffffff)",
   border: "1px solid rgba(124,58,237,0.16)",
   borderRadius: "24px",
-  padding: "18px",
-  marginBottom: "16px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 95px) 18px calc(env(safe-area-inset-bottom, 0px) + 135px)",
+  overflowY: "auto",
+  marginBottom: "10px",
   boxShadow: "0 12px 30px rgba(124,58,237,0.10)",
 };
 
 const pendingReviewTop = {
   display: "flex",
   gap: "12px",
-  alignItems: "center",
+  alignItems: "flex-start",
 };
 
 const pendingReviewIcon = {
@@ -4908,9 +20688,9 @@ const pendingReviewIcon = {
   borderRadius: "18px",
   background: "#ede9fe",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
-  fontSize: "24px",
+  fontSize: "22px",
 };
 
 const pendingReviewTitle = {
@@ -4920,13 +20700,13 @@ const pendingReviewTitle = {
 };
 
 const pendingReviewMeta = {
-  margin: "4px 0 0",
+  margin: "0",
   color: "#475569",
   fontWeight: "800",
 };
 
 const pendingReviewLocation = {
-  margin: "4px 0 0",
+  margin: "0",
   color: "#475569",
   fontWeight: "700",
 };
@@ -4973,6 +20753,16 @@ const requestCard = {
   borderRadius: "11px",
   padding: "9px",
   boxShadow: "0 10px 33px rgba(0,0,0,0.08)",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const requestCardOpportunityAlert = {
+  border: "1px solid #fed7aa",
+  borderLeft: "4px solid #f97316",
+  boxShadow: "0 0 0 1px rgba(251,146,60,0.12), 0 14px 34px rgba(249,115,22,0.14)",
 };
 
 const liveBadge = {
@@ -4999,9 +20789,21 @@ const emergencyBadge = {
   borderRadius: "10px",
   background: "#fee2e2",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "12px",
+  flexShrink: 0,
+};
+
+const requestIcon = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "10px",
+  background: "#ede9ff",
+  color: "#5b3df5",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   flexShrink: 0,
 };
 
@@ -5011,6 +20813,8 @@ const requestTitle = {
   fontWeight: "900",
   color: "#111827",
   marginBottom: "6px",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
 };
 
 const requestLocation = {
@@ -5023,9 +20827,37 @@ const requestMeta = {
   display: "flex",
   gap: "8px",
   flexWrap: "wrap",
+  alignItems: "center",
   color: "#6b7280",
   fontSize: "12px",
   fontWeight: "700",
+};
+
+const opportunityStatusChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "6px 9px",
+  borderRadius: "999px",
+  background: "#ffedd5",
+  color: "#c2410c",
+  border: "1px solid #fed7aa",
+  fontSize: "12px",
+  fontWeight: 950,
+};
+
+const opportunityStatusDot = {
+  width: "8px",
+  height: "8px",
+  borderRadius: "999px",
+  background: "#f97316",
+  boxShadow: "0 0 0 3px rgba(249,115,22,0.16)",
+};
+
+const requestServiceMeta = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 850,
 };
 
 
@@ -5073,64 +20905,117 @@ const declineButton = {
 const activeJobList = {
 display:"flex",
 flexDirection:"column",
-gap:"10px",
+gap:"16px",
 };
 
 const activeJobPanel = {
 background:"white",
-borderRadius:"10px",
-padding:"9px",
-boxShadow:"0 9px 28px rgba(15,23,42,0.055)",
-border:"1px solid #e5e7eb",
+borderRadius:"18px",
+padding:"18px",
+boxShadow:"0 12px 30px rgba(15,23,42,0.05)",
+border:"1px solid #dfe6f1",
+};
+
+const activeWorkCardTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+};
+
+const activeWorkCardIdentity = {
+  minWidth: 0,
+  display: "grid",
+  gap: "5px",
+};
+
+const activeWorkStatusStack = {
+  display: "grid",
+  gap: "11px",
+  marginTop: "14px",
+};
+
+const activeWorkTaskText = {
+  color: "#050812",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  fontWeight: "950",
+};
+
+const activeWorkLocationText = {
+  color: "#050812",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  fontWeight: "950",
+};
+
+const activeWorkDivider = {
+  height: "1px",
+  background: "#e3e8f0",
+  margin: "18px 0 12px",
+};
+
+const activeWorkFooterRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  color: "#263653",
+  fontSize: "14px",
+  fontWeight: "850",
 };
 
 const activeJobTop = {
 display:"flex",
 justifyContent:"space-between",
 alignItems:"flex-start",
-gap:"9px",
-marginBottom:"10px",
+gap:"12px",
+marginBottom:"12px",
+flexWrap:"wrap",
 };
 
 const scheduledJobBadge = {
   background: "#dcfce7",
   color: "#15803d",
   borderRadius: "999px",
-  padding: "10px 10px",
-  fontWeight: "800",
-  fontSize: "15px",
+  padding: "7px 10px",
+  fontWeight: "900",
+  fontSize: "11px",
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
 };
 
 const activeJobBadge = {
 display:"inline-flex",
-padding:"6px 10px",
+padding:"7px 10px",
 borderRadius:"999px",
 background:"#dcfce7",
 color:"#15803d",
 fontWeight:"900",
-fontSize:"9px",
-marginBottom:"8px",
+fontSize:"12px",
+marginBottom:"0",
+width:"fit-content",
 };
 
 const activeJobTitle = {
 fontSize:"21px",
-fontWeight:"900",
+fontWeight:"950",
 margin:"0 0 5px",
-color:"#111827",
+color:"#050812",
+lineHeight:1.15,
 };
 
 const activeJobSub = {
 margin:0,
-color:"#64748b",
-fontWeight:"700",
+color:"#263653",
+fontSize:"15px",
+fontWeight:"800",
 };
 
 const jobActivityNote = {
   marginTop: "8px",
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   background: "#f8fafc",
   color: "#475569",
   border: "1px solid #e2e8f0",
@@ -5143,7 +21028,7 @@ const jobActivityNote = {
 
 
 const activeEtaBox = {
-  minWidth: "74px",
+  minWidth: "84px",
   background: "linear-gradient(135deg,#f5f3ff,#eef2ff)",
   border: "1px solid rgba(91,61,245,.10)",
   borderRadius: "14px",
@@ -5162,7 +21047,7 @@ const activeTimeline = {
   gridTemplateColumns: "repeat(5,auto)",
   gap: "7px",
   marginBottom: "10px",
-  alignItems: "center",
+  alignItems: "flex-start",
 };
 
 
@@ -5196,7 +21081,7 @@ fontWeight:"900",
 
 const activeTimelineStep = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   gap: "5px",
   background: "#f8fafc",
@@ -5211,8 +21096,38 @@ const activeTimelineStep = {
 
 const activeActions = {
 display:"grid",
-gridTemplateColumns:"1fr 1fr",
+gridTemplateColumns:"repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
 gap:"9px",
+};
+
+const activeWorkFilterRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "8px",
+  overflowX: "auto",
+  padding: "2px 0 2px",
+  WebkitOverflowScrolling: "touch",
+};
+
+const activeWorkFilterChip = {
+  minHeight: "44px",
+  border: "1px solid #dbe3ef",
+  background: "#ffffff",
+  color: "#263653",
+  borderRadius: "14px",
+  padding: "10px 8px",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  boxShadow: "0 6px 14px rgba(15,23,42,0.03)",
+};
+
+const activeWorkFilterChipActive = {
+  borderColor: "#8b7cff",
+  background: "#f7f4ff",
+  color: "#4f28e8",
+  boxShadow: "0 8px 18px rgba(91,61,245,0.12)",
 };
 
 const secondaryActionButton = {
@@ -5267,7 +21182,7 @@ const activeCard = {
 
 const activeHeader = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "10px",
   marginBottom: "10px",
 };
@@ -5341,6 +21256,357 @@ color:"#6b7280",
 
 const progressActive = {
 color:"#10b981",
+};
+
+const closurePrincipleCard = {
+  maxWidth: "900px",
+  margin: "0 auto 18px",
+  padding: "18px",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "14px",
+  background: "linear-gradient(135deg, #eff6ff, #ffffff)",
+  border: "1px solid #bfdbfe",
+  borderRadius: "20px",
+  boxShadow: "0 12px 28px rgba(37, 99, 235, 0.08)",
+};
+
+const closurePrincipleIcon = {
+  width: "42px",
+  height: "42px",
+  flexShrink: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "14px",
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  fontSize: "20px",
+  fontWeight: 950,
+};
+
+const closurePrincipleTitle = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "17px",
+  fontWeight: 950,
+};
+
+const closurePrincipleText = {
+  margin: "6px 0 0",
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.55,
+  fontWeight: 650,
+};
+
+const propertyManagementClosureFoundationNote = {
+  maxWidth: "900px",
+  margin: "-8px auto 18px",
+  padding: "14px 16px",
+  border: "1px solid #bbf7d0",
+  borderRadius: "17px",
+  background: "#f0fdf4",
+  color: "#166534",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  fontWeight: 750,
+};
+
+const closureStatusGrid = {
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto 24px",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 132px), 1fr))",
+  gap: "10px",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const closureStatusSummaryCard = {
+  minHeight: "92px",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  gap: "5px",
+  padding: "14px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "18px",
+  boxShadow: "0 9px 22px rgba(15, 23, 42, 0.05)",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
+  overflowWrap: "break-word",
+};
+
+const closureStatusSummaryCount = {
+  color: "#0f172a",
+  fontSize: "24px",
+  lineHeight: 1,
+  fontWeight: 950,
+};
+
+const closureStatusSummaryLabel = {
+  color: "#64748b",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 850,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureReviewHeader = {
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto 14px",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const closureReviewDescription = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.5,
+  fontWeight: 650,
+  maxWidth: "100%",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureReviewList = {
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto",
+  display: "grid",
+  gap: "16px",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const closureProjectCard = {
+  padding: "18px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "22px",
+  boxShadow: "0 14px 34px rgba(15, 23, 42, 0.07)",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const closureProjectHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+  flexWrap: "wrap",
+  marginBottom: "16px",
+};
+
+const closureProjectIdentity = {
+  display: "flex",
+  alignItems: "center",
+  gap: "11px",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const closureProjectIcon = {
+  width: "42px",
+  height: "42px",
+  flexShrink: 0,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "14px",
+  background: "#f1f5f9",
+  color: "#475569",
+  fontSize: "18px",
+  fontWeight: 950,
+};
+
+const closureProjectTitle = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  fontWeight: 950,
+  maxWidth: "100%",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureProjectMeta = {
+  display: "block",
+  marginTop: "4px",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 700,
+  maxWidth: "100%",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureStatusBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  maxWidth: "100%",
+  minHeight: "30px",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  border: "1px solid transparent",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: 950,
+  whiteSpace: "normal",
+  overflowWrap: "break-word",
+};
+
+const closureStatusBadgeReady = {
+  background: "#ecfdf5",
+  borderColor: "#a7f3d0",
+  color: "#047857",
+};
+
+const closureStatusBadgePending = {
+  background: "#fff7ed",
+  borderColor: "#fed7aa",
+  color: "#c2410c",
+};
+
+const closureStatusBadgeClosed = {
+  background: "#f1f5f9",
+  borderColor: "#cbd5e1",
+  color: "#475569",
+};
+
+const closureCategoryGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+  gap: "10px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const closureCategoryCard = {
+  minHeight: "82px",
+  padding: "12px",
+  display: "grid",
+  gridTemplateColumns: "34px minmax(0, 1fr)",
+  gap: "10px",
+  alignItems: "start",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const closureCategoryIcon = {
+  width: "34px",
+  height: "34px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "11px",
+  background: "#ffffff",
+  fontSize: "16px",
+};
+
+const closureCategoryContent = {
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const closureCategoryTitle = {
+  display: "block",
+  color: "#0f172a",
+  fontSize: "13px",
+  fontWeight: 950,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureCategoryDescription = {
+  display: "block",
+  marginTop: "3px",
+  color: "#64748b",
+  fontSize: "11px",
+  lineHeight: 1.4,
+  fontWeight: 650,
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+const closureCategoryResolved = {
+  gridColumn: "2",
+  justifySelf: "start",
+  marginTop: "5px",
+  color: "#047857",
+  fontSize: "11px",
+  fontWeight: 900,
+  maxWidth: "100%",
+  overflowWrap: "break-word",
+};
+
+const closureCategoryPending = {
+  ...closureCategoryResolved,
+  color: "#c2410c",
+};
+
+const closureGateCard = {
+  display: "grid",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "16px",
+  border: "1px solid #fed7aa",
+  background: "#fff7ed",
+};
+
+const closureGateGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+  gap: "10px",
+};
+
+const closureGateList = {
+  margin: "6px 0 0",
+  paddingLeft: "18px",
+  color: "#334155",
+  fontSize: "12px",
+  fontWeight: 800,
+  lineHeight: 1.45,
+};
+
+const closureOpenRecordButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  minHeight: "46px",
+  marginTop: "14px",
+  padding: "11px 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "14px",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+  boxSizing: "border-box",
+  whiteSpace: "normal",
+  overflowWrap: "break-word",
 };
 
 
@@ -5593,7 +21859,7 @@ const projectRecordCard = {
 const projectRecordTop = {
   display: "flex",
   gap: "12px",
-  alignItems: "center",
+  alignItems: "flex-start",
   minHeight: "54px",
 };
 
@@ -5604,7 +21870,7 @@ const projectRecordIcon = {
   background: "linear-gradient(135deg,#f3f0ff,#faf7ff)",
   border: "1px solid rgba(124,58,237,0.12)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "22px",
   flexShrink: 0,
@@ -5720,7 +21986,7 @@ const revenueIconTile = {
   borderRadius: "10px",
   background:"rgba(255,255,255,.92)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "12px",
   boxShadow:"0 8px 10px rgba(0,0,0,.08)",
@@ -5746,7 +22012,7 @@ color:"#64748b",
 
 const revenueTrend = {
   display: "inline-flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   marginTop: "4px",
   padding: "7px 10px",
@@ -5771,33 +22037,33 @@ const revenueFakeLine = {
 const revenueGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(2, 1fr)",
-  gap: "9px",
+  gap: "10px",
 };
 
 const revenueMiniCard = {
-  background:"#F8FAFC",
+  background: "#ffffff",
   border: "1px solid rgba(226,232,240,0.92)",
-  borderRadius: "28px",
-  padding: "9px",
-  boxShadow: "0 10px 11px rgba(15,23,42,0.06)",
-  minHeight: "120px",
+  borderRadius: "16px",
+  padding: "13px",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+  minHeight: "92px",
   display: "flex",
-  alignItems: "center",
-  gap: "10px",
+  alignItems: "flex-start",
+  gap: "8px",
 };
 
 const revenueBig = {
   display: "block",
-  fontSize: "29px",
+  fontSize: "23px",
   fontWeight: "900",
   color: "#111827",
-  lineHeight: 1,
-  marginTop: "8px",
+  lineHeight: 1.05,
+  marginTop: "7px",
 };
 
 const miniSub={
-marginTop:"6px",
-fontSize: "15px",
+marginTop:"7px",
+fontSize: "12px",
 fontWeight:"700",
 color:"#64748b",
 };
@@ -5806,34 +22072,56 @@ const revenueLabel = {
   display: "block",
   color: "#1f2937",
   fontWeight: "900",
-  fontSize: "12px",
+  fontSize: "11px",
+  lineHeight: 1.25,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
 };
 
 const revenueCard = {
   background:"rgba(255,255,255,.92)",
-  borderRadius: "9px",
-  padding: "10px",
-  boxShadow: "0 10px 36px rgba(15,23,42,0.06)",
+  border: "1px solid rgba(226,232,240,0.9)",
+  borderRadius: "18px",
+  padding: "12px",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
 };
 
+const revenueCompactNote = {
+  marginTop: "12px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid rgba(226,232,240,0.9)",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "700",
+  lineHeight: 1.35,
+};
 
 
 
 const materialsToolbar = {
-  display: "flex",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "10px",
-  alignItems: "center",
-  flexWrap: "wrap",
+  alignItems: "flex-start",
+  boxSizing: "border-box",
 };
 
 const materialsSearchBox = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   border: "1px solid #ddd6fe",
   borderRadius: "16px",
   padding: "13px 16px",
   color: "#475569",
   fontWeight: "800",
   background: "#faf7ff",
-  minWidth: "240px",
   fontSize: "15px",
 };
 
@@ -5866,7 +22154,7 @@ const materialMainInfo = {
 
 const materialMetaRow = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "8px",
   flexWrap: "wrap",
   marginTop: "8px",
@@ -5884,19 +22172,27 @@ const materialMetaPill = {
 
 const materialStatusColumn = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
   flexWrap: "wrap",
   justifyContent: "flex-end",
 };
 
 const materialsCardsWrap = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
   gap: "12px",
+  boxSizing: "border-box",
 };
 
 const materialCompactCard = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   borderRadius: "18px",
   background: "#ffffff",
   border: "1px solid #EDE9FE",
@@ -5972,7 +22268,7 @@ const materialCard = {
 
 const materialCardTop = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
   width: "100%",
   minWidth: 0,
@@ -5983,7 +22279,7 @@ const materialTableRow = {
   display: "grid",
   gridTemplateColumns: "2.1fr .6fr 1.1fr .9fr .9fr 1.45fr",
   gap: "10px",
-  alignItems: "center",
+  alignItems: "flex-start",
   padding: "14px",
   borderTop: "1px solid #eef2f7",
   background: "linear-gradient(180deg,#ffffff,#fbfdff)",
@@ -5991,7 +22287,7 @@ const materialTableRow = {
 
 const materialNameCell = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "9px",
 };
 
@@ -6002,7 +22298,7 @@ const materialThumb = {
   background: "#fbfaff",
   border: "1px solid rgba(124, 58, 237, 0.18)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "18px",
   flexShrink: 0,
@@ -6013,7 +22309,7 @@ const materialMainName = {
 };
 
 const materialSubText = {
-  margin: "4px 0 0",
+  margin: "0",
   color: "#475569",
   fontSize: "12px",
   fontWeight: "800",
@@ -6022,7 +22318,7 @@ const materialSubText = {
 const materialActionGroup = {
   display: "flex",
   gap: "8px",
-  alignItems: "center",
+  alignItems: "flex-start",
   flexWrap: "wrap",
 };
 
@@ -6065,7 +22361,7 @@ const compactMaterialActionButton = {
   width: "42px",
   height: "42px",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   cursor: "pointer",
   fontSize: "16px",
@@ -6080,7 +22376,7 @@ const compactReceivedButton = {
   width: "42px",
   height: "42px",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   cursor: "pointer",
   fontSize: "16px",
@@ -6095,7 +22391,7 @@ const compactDeleteButton = {
   width: "42px",
   height: "42px",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   cursor: "pointer",
   fontSize: "16px",
@@ -6125,7 +22421,7 @@ const materialsSummaryPanel = {
   display: "grid",
   gridTemplateColumns: "1.35fr 1fr 1fr",
   gap: "16px",
-  alignItems: "center",
+  alignItems: "flex-start",
   marginTop: "16px",
   background: "linear-gradient(135deg,#ffffff,#faf7ff)",
   border: "1px solid rgba(124,58,237,.12)",
@@ -6194,17 +22490,21 @@ const resumeDisabledButton = {
 
 const activeProjectContextCard = {
   margin: "0 0 16px",
-  padding: "16px 18px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 12px) 14px 14px",
   borderRadius: "24px",
   background: "linear-gradient(135deg,#ffffff,#f8f5ff)",
   border: "1px solid rgba(124,58,237,.14)",
   boxShadow: "0 14px 34px rgba(15,23,42,.06)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "space-between",
   gap: "14px",
   position: "relative",
   overflow: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const activeProjectContextLabel = {
@@ -6247,15 +22547,22 @@ const activeProjectContextStatus = {
 
 const materialsPageShell = {
   maxWidth: "1120px",
+  width: "100%",
   margin: "0 auto",
   display: "grid",
   gap: "16px",
-  paddingBottom: "120px",
+  paddingBottom: "calc(68px + env(safe-area-inset-bottom))",
+  overflowX: "hidden",
+  boxSizing: "border-box",
 };
 
 const materialsHero = {
   textAlign: "center",
   marginBottom: "4px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const materialsHeroIcon = {
@@ -6278,12 +22585,33 @@ const materialsHeroText = {
   lineHeight: 1.35,
 };
 
+const materialsSectionEyebrow = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "fit-content",
+  maxWidth: "100%",
+  borderRadius: "999px",
+  padding: "7px 11px",
+  marginBottom: "12px",
+  background: "#f5f3ff",
+  color: "#6d28d9",
+  border: "1px solid #ddd6fe",
+  fontSize: "12px",
+  fontWeight: 1000,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
 
 const materialsVoiceHeader = {
   display: "flex",
-  alignItems: "center",
-  gap: "22px",
-  marginBottom: "10px",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginBottom: "12px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const materialsMicCircle = {
@@ -6293,7 +22621,7 @@ const materialsMicCircle = {
   background: "linear-gradient(180deg,#ede9fe,#f5f3ff)",
   color: "#6d28d9",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "48px",
   boxShadow: "0 14px 34px rgba(109,40,217,.16)",
@@ -6301,9 +22629,104 @@ const materialsMicCircle = {
 
 const materialsVoiceTitle = {
   margin: 0,
-  fontSize: "24px",
+  fontSize: "20px",
   fontWeight: "1000",
   color: "#0f172a",
+};
+
+const materialsModeHint = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: 750,
+};
+
+const materialsInputModeRow = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "8px",
+  margin: "12px 0",
+  boxSizing: "border-box",
+};
+
+const materialsInputModeButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "14px",
+  padding: "11px 12px",
+  fontSize: "13px",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const materialsInputModeButtonActive = {
+  ...materialsInputModeButton,
+  border: "1px solid #c4b5fd",
+  background: "#f5f3ff",
+  color: "#5b3df5",
+};
+
+const materialsMicErrorBox = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  border: "1px solid #fed7aa",
+  borderRadius: "16px",
+  padding: "12px",
+  background: "#fff7ed",
+  color: "#9a3412",
+  display: "grid",
+  gap: "8px",
+  textAlign: "left",
+  margin: "10px 0",
+};
+
+const permissionInstructionsBox = {
+  display: "grid",
+  gap: "4px",
+  padding: "10px",
+  borderRadius: "12px",
+  background: "#ffffff",
+  border: "1px solid #fdba74",
+  color: "#9a3412",
+  fontSize: "13px",
+  fontWeight: 850,
+};
+
+const materialsMicErrorActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+  gap: "8px",
+};
+
+const materialsMicSecondaryButton = {
+  border: "1px solid #fdba74",
+  background: "#ffffff",
+  color: "#9a3412",
+  borderRadius: "12px",
+  padding: "10px 12px",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const materialsMicRetryButton = {
+  border: "none",
+  background: "#f97316",
+  color: "#ffffff",
+  borderRadius: "12px",
+  padding: "10px 12px",
+  fontWeight: 950,
+  cursor: "pointer",
 };
 
 const catalogMatchesWrap = {
@@ -6370,15 +22793,18 @@ const catalogAddButton = {
 };
 
 const generateMaterialsButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   border: "none",
   background: "linear-gradient(135deg,#7c3aed,#5b3df5)",
   color: "white",
   borderRadius: "16px",
-  padding: "18px 34px",
+  padding: "14px 18px",
   fontWeight: "1000",
   cursor: "pointer",
-  fontSize: "18px",
-  minWidth: "320px",
+  fontSize: "16px",
   boxShadow: "0 16px 38px rgba(91,61,245,.24)",
 };
 
@@ -6395,7 +22821,7 @@ const materialsManualToggle = {
   border: "none",
   background: "white",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "14px",
   padding: "18px 20px",
   cursor: "pointer",
@@ -6411,7 +22837,7 @@ const manualAddIcon = {
   border: "1px dashed #7c3aed",
   color: "#5b3df5",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "28px",
   fontWeight: "900",
@@ -6420,20 +22846,27 @@ const manualAddIcon = {
 
 const manualAddText = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "8px",
   color: "#0f172a",
 };
 
 const manualChevron = {
   marginLeft: "auto",
-  fontSize: "24px",
+  fontSize: "22px",
   color: "#475569",
 };
 
 const materialsFormInner = {
-  borderTop: "1px solid #eef2f7",
-  padding: "18px 20px 20px",
+  border: "1px solid #eef2f7",
+  borderRadius: "18px",
+  padding: "14px",
+  marginTop: "10px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  background: "#fbfdff",
 };
 
 const pauseMaterialsButton = {
@@ -6449,8 +22882,9 @@ const pauseMaterialsButton = {
 
 
 const materialsFloatingMic = {
-  width: "88px",
-  height: "88px",
+  width: "48px",
+  minWidth: "48px",
+  height: "48px",
   borderRadius: "999px",
   border: "none",
   background: "linear-gradient(180deg,#f5f3ff,#ede9fe)",
@@ -6458,7 +22892,7 @@ const materialsFloatingMic = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "44px",
+  fontSize: "22px",
   cursor: "pointer",
   boxShadow: "0 10px 28px rgba(124,58,237,.10)",
 };
@@ -6475,14 +22909,21 @@ const materialsMicCircleActive = {
 };
 
 const materialsActionRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-start",
-  gap: "18px",
-  marginTop: "20px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  marginTop: "12px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const micMiniButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   border: "none",
   background: "linear-gradient(135deg,#7c3aed,#5b3df5)",
   color: "white",
@@ -6491,7 +22932,6 @@ const micMiniButton = {
   fontWeight: "1000",
   cursor: "pointer",
   fontSize: "18px",
-  minWidth: "190px",
   boxShadow: "0 14px 34px rgba(91,61,245,.20)",
 };
 
@@ -6505,10 +22945,15 @@ const materialsMicHint = {
 
 const materialsAssistantCard = {
   background: "white",
-  borderRadius: "26px",
-  padding: "28px",
+  borderRadius: "22px",
+  padding: "18px",
   border: "1px solid #ddd6fe",
   boxShadow: "0 18px 48px rgba(91,61,245,.08)",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const materialsFormCard = {
@@ -6529,7 +22974,8 @@ const materialsSubTitle = {
 const materialsListPanel = {
   width: "100%",
   maxWidth: "100%",
-  overflow: "hidden",
+  minWidth: 0,
+  overflowX: "hidden",
   background: "white",
   border: "1px solid #ddd6fe",
   borderRadius: "22px",
@@ -6540,15 +22986,23 @@ const materialsListPanel = {
 };
 
 const materialsListHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "9px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  alignItems: "flex-start",
+  gap: "12px",
   marginBottom: "10px",
+  boxSizing: "border-box",
 };
 
 
 const sendMaterialsDisabledButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   border: "1px solid #e5e7eb",
   background: "#f1f5f9",
   color: "#475569",
@@ -6559,6 +23013,10 @@ const sendMaterialsDisabledButton = {
 };
 
 const sendMaterialsButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
   border: "1px solid #c4b5fd",
   background: "#f5f3ff",
   color: "#5b3df5",
@@ -6569,13 +23027,104 @@ const sendMaterialsButton = {
   fontSize: "15px",
 };
 
+const materialsSharePanel = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
+  margin: "12px 0 14px",
+  padding: "14px",
+  border: "1px solid rgba(91,61,245,0.16)",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg,#ffffff,#f8fafc)",
+  display: "grid",
+  gap: "12px",
+};
+
+const materialsShareHelp = {
+  margin: "5px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 700,
+};
+
+const materialsShareGrid = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
+  gap: "9px",
+  boxSizing: "border-box",
+};
+
+const materialsShareOptionButton = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  border: "1px solid rgba(148,163,184,0.28)",
+  background: "#ffffff",
+  color: "#334155",
+  borderRadius: "14px",
+  padding: "12px 13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const materialsShareOptionButtonDisabled = {
+  ...materialsShareOptionButton,
+  background: "#f8fafc",
+  color: "#94a3b8",
+  cursor: "not-allowed",
+};
+
 const materialsEmptyBox = {
+  display: "grid",
+  gap: "4px",
   background: "#f8fafc",
   border: "1px dashed #cbd5e1",
-  borderRadius: "9px",
-  padding: "10px",
+  borderRadius: "14px",
+  padding: "12px",
   color: "#475569",
   fontWeight: "800",
+  textAlign: "left",
+  fontSize: "14px",
+};
+
+const materialsActivityPanel = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
+  border: "1px solid #e5e7eb",
+  borderRadius: "20px",
+  padding: "14px",
+  background: "#ffffff",
+  boxShadow: "0 10px 24px rgba(15,23,42,.04)",
+  display: "grid",
+  gap: "10px",
+  textAlign: "left",
+};
+
+const materialsActivityList = {
+  display: "grid",
+  gap: "8px",
+};
+
+const materialsActivityItem = {
+  display: "grid",
+  gap: "3px",
+  padding: "10px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid #eef2f7",
+  color: "#334155",
+  fontWeight: 850,
 };
 
 const materialsRows = {
@@ -6585,7 +23134,7 @@ const materialsRows = {
 
 const materialRow = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "9px",
   border: "1px solid #eef2f7",
   borderRadius: "9px",
@@ -6599,7 +23148,7 @@ const materialIcon = {
   borderRadius: "10px",
   background: "#f1f5f9",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
   fontSize: "12px",
 };
@@ -6664,7 +23213,8 @@ const textarea = {
   minHeight: "110px",
   border: "1px solid #c4b5fd",
   borderRadius: "18px",
-  padding: "18px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 95px) 18px calc(env(safe-area-inset-bottom, 0px) + 135px)",
+  overflowY: "auto",
   fontSize: "18px",
   outline: "none",
   resize: "vertical",
@@ -6672,6 +23222,25 @@ const textarea = {
   color: "#0f172a",
   boxSizing: "border-box",
   marginTop: "14px",
+};
+
+const materialsDraftTextarea = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  minHeight: "92px",
+  border: "1px solid #c4b5fd",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  overflowY: "auto",
+  fontSize: "16px",
+  lineHeight: 1.35,
+  outline: "none",
+  resize: "vertical",
+  background: "#fff",
+  color: "#0f172a",
+  boxSizing: "border-box",
+  marginTop: "10px",
 };
 
 const aiBox = {
@@ -6693,10 +23262,12 @@ const materialsPreview = {
 
 const formGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
   gap: "9px",
   width: "100%",
   marginTop: "10px",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const field = {
@@ -6718,7 +23289,7 @@ const input = {
 
 const stageActions = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
   gap: "8px",
   marginTop: "9px",
 };
@@ -6802,7 +23373,8 @@ const changeOrderAlertWrap = {
 const changeOrderAlertCard = {
   background: "linear-gradient(135deg,#fff7ed,#ffffff)",
   borderRadius: "24px",
-  padding: "18px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 95px) 18px calc(env(safe-area-inset-bottom, 0px) + 135px)",
+  overflowY: "auto",
   border: "1px solid rgba(251,146,60,0.22)",
   boxShadow: "0 10px 30px rgba(251,146,60,0.12)",
 };
