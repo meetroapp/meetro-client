@@ -10,6 +10,7 @@ import {
 } from "../utils/language";
 import { saveMeetroSession, getPostLoginPage, isProfessionalUser } from "../utils/session";
 import { buildPasswordResetRequest } from "../utils/passwordReset";
+import MeetroIcon from "../components/MeetroIcon";
 
 function Login({ setPage }) {
   const [mode, setMode] = useState(
@@ -20,6 +21,7 @@ function Login({ setPage }) {
   const [professionalCategory, setProfessionalCategory] = useState("contractor");
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -319,6 +321,56 @@ function checkIsProfessional(user = {}) {
     return result;
   }
 
+  function persistHomeownerMobileNumber() {
+    if (accountType === "professional") return;
+
+    const nextPhone = mobileNumber.trim();
+    const nextName = name.trim();
+    const nextEmail = email.trim();
+    const scopedKeys = [nextName, nextEmail]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!nextPhone) return;
+
+    localStorage.setItem("meetroHomeownerPrivatePhone", nextPhone);
+    localStorage.setItem("homeownerPrivatePhone", nextPhone);
+    scopedKeys.forEach((key) => {
+      localStorage.setItem(`meetroHomeownerPrivatePhone:${key}`, nextPhone);
+    });
+    localStorage.setItem("meetroHomeownerPrivatePhoneOwnerName", nextName);
+    localStorage.setItem("meetroHomeownerPrivatePhoneOwnerEmail", nextEmail);
+  }
+
+  function clearNewHomeownerRelationshipState() {
+    if (accountType === "professional") return;
+
+    [
+      "activeConversationId",
+      "activeConversationName",
+      "conversationBusinessName",
+      "conversationReturnPage",
+      "directRequestConversationId",
+      "directRequestId",
+      "directRequestMode",
+      "directRequestProfessionalCategory",
+      "directRequestProfessionalConversationId",
+      "directRequestProfessionalName",
+      "directRequestSource",
+      "homeownerRequests",
+      "completedProjects",
+      "requestProfessionalContext",
+      "selectedConversation",
+      "selectedHomeownerRequest",
+      "selectedHomeownerRequestId",
+      "selectedProfessionalCategory",
+      "selectedProfessionalId",
+      "selectedProfessionalName",
+      "selectedQuoteRequest",
+      "selectedQuoteRequestId",
+    ].forEach((key) => localStorage.removeItem(key));
+  }
+
   function routeUser(data) {
     const page = getPostLoginPage(data.user || {});
     setPage(page);
@@ -351,6 +403,8 @@ function checkIsProfessional(user = {}) {
               name: name.trim(),
               email: email.trim(),
               password,
+              mobile_number:
+                accountType === "professional" ? "" : mobileNumber.trim(),
               role:
                 accountType === "professional"
                   ? professionalCategory
@@ -411,6 +465,10 @@ function checkIsProfessional(user = {}) {
     }
 
     saveUserData(pendingData);
+    if (localStorage.getItem("firstLogin") === "true") {
+      clearNewHomeownerRelationshipState();
+    }
+    persistHomeownerMobileNumber();
     localStorage.removeItem("pendingLoginData");
     setTwoFactorStep(false);
     setTwoFactorCode("");
@@ -691,6 +749,24 @@ routeUser(pendingData);
                     </option>
                   ))}
                 </select>
+              </>
+            )}
+
+            {accountType !== "professional" && (
+              <>
+                <input
+                  style={input}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder={t("homeownerMobileNumber", normalizedLanguage)}
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                />
+                <p style={fieldHelperText}>
+                  <MeetroIcon name="privacy" size={14} decorative />
+                  {t("homeownerMobilePrivacyNotice", normalizedLanguage)}
+                </p>
               </>
             )}
           </>
@@ -1087,6 +1163,17 @@ const input = {
   outline: "none",
   marginBottom: "14px",
   background: "white",
+};
+
+const fieldHelperText = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "6px",
+  margin: "-8px 0 14px",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "750",
 };
 
 const hiddenInput = {

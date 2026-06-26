@@ -4,6 +4,7 @@ import {
   syncAccountModeForPage,
 } from "./utils/session";
 import MeetroAssistant from "./components/MeetroAssistant";
+import GuideOverlay from "./components/GuideOverlay";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -116,14 +117,22 @@ const publicLegalDocumentRoutes = {
 const publicMarketingRoutes = new Set(["meetroStory"]);
 
 function withAssistantLayer(component, currentPage, setPage) {
-  if (!assistantEnabledPages.has(currentPage)) {
-    return component;
-  }
-
   return (
     <>
       {component}
-      <MeetroAssistant currentPage={currentPage} setPage={setPage} />
+      {assistantEnabledPages.has(currentPage) && (
+        <MeetroAssistant currentPage={currentPage} setPage={setPage} />
+      )}
+      <GuideOverlay currentPage={currentPage} setPage={setPage} />
+    </>
+  );
+}
+
+function withGuideLayer(component, currentPage, setPage) {
+  return (
+    <>
+      {component}
+      <GuideOverlay currentPage={currentPage} setPage={setPage} />
     </>
   );
 }
@@ -569,7 +578,7 @@ if (page === "myRequests") {
 }
 
 if (page === "assistant") {
-  return <Assistant setPage={setPage} />;
+  return withGuideLayer(<Assistant setPage={setPage} />, page, setPage);
 }
 
 if (page === "discover") {
@@ -660,7 +669,7 @@ if (page === "changeOrderRequest") {
 }
 
 if (page === "businessCommandCenter") {
-  return <BusinessCommandCenter setPage={setPage} />;
+  return withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage);
 }
 
 if (page === "businessAvailability") {
@@ -777,7 +786,7 @@ if (page === "emergencyCompletionActions") {
 }
 
 if (page === "invoiceBuilder") {
-  return <InvoiceBuilder setPage={setPage} />;
+  return withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage);
 }
 
 if (page === "emergencyOperationsCenter") {

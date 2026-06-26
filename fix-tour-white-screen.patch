@@ -1,0 +1,38 @@
+diff --git a/src/components/GuideOverlay.jsx b/src/components/GuideOverlay.jsx
+--- a/src/components/GuideOverlay.jsx
++++ b/src/components/GuideOverlay.jsx
+@@
++const getSafeTourExitRoute = ({ role, accountMode }) => {
++  const isProfessional =
++    role === "professional" ||
++    accountMode === "professional" ||
++    accountMode === "business";
++
++  return isProfessional ? "/business-dashboard" : "/home";
++};
++
+@@
+-const finishTour = () => {
+-  localStorage.setItem(storageKey, "true");
+-  onClose?.();
+-};
++const finishTour = () => {
++  const safeRoute = getSafeTourExitRoute({ role, accountMode });
++
++  try {
++    if (storageKey) {
++      localStorage.setItem(storageKey, "true");
++    }
++  } catch {}
++
++  if (typeof onClose === "function") {
++    onClose();
++  }
++
++  window.location.assign(safeRoute);
++};
+@@
+-<button onClick={goToNextStep}>
++<button onClick={isLastStep ? finishTour : goToNextStep}>
+   {isLastStep ? "Done" : "Next"}
+ </button>

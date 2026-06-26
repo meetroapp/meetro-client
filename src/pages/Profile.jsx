@@ -27,6 +27,10 @@ function Profile({ setPage, currentPage }) {
   const [personalInfoForm, setPersonalInfoForm] = useState({
     name: localStorage.getItem("userName") || "",
     email: localStorage.getItem("userEmail") || "",
+    phone:
+      localStorage.getItem("meetroHomeownerPrivatePhone") ||
+      localStorage.getItem("homeownerPrivatePhone") ||
+      "",
   });
   const [activeSection, setActiveSection] = useState(
     localStorage.getItem("meetroProfileOpenSection") || "account"
@@ -274,6 +278,11 @@ function Profile({ setPage, currentPage }) {
         localStorage.getItem("businessName") ||
         "",
       email: user?.email || localStorage.getItem("userEmail") || "",
+      phone:
+        localStorage.getItem("meetroHomeownerPrivatePhone") ||
+        localStorage.getItem("homeownerPrivatePhone") ||
+        user?.phone ||
+        "",
     });
     setPersonalInfoOpen(true);
   }
@@ -281,6 +290,17 @@ function Profile({ setPage, currentPage }) {
   function savePersonalInfo() {
     const nextName = personalInfoForm.name.trim();
     const nextEmail = personalInfoForm.email.trim();
+    const nextPhone = personalInfoForm.phone.trim();
+    const previousPhoneOwnerKeys = [
+      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerName"),
+      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerEmail"),
+    ]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+
+    previousPhoneOwnerKeys.forEach((key) => {
+      localStorage.removeItem(`meetroHomeownerPrivatePhone:${key}`);
+    });
 
     if (nextName) {
       localStorage.setItem("userName", nextName);
@@ -290,13 +310,106 @@ function Profile({ setPage, currentPage }) {
       localStorage.setItem("userEmail", nextEmail);
     }
 
+    if (nextPhone) {
+      localStorage.setItem("meetroHomeownerPrivatePhone", nextPhone);
+      localStorage.setItem("homeownerPrivatePhone", nextPhone);
+      if (nextName) {
+        localStorage.setItem(
+          `meetroHomeownerPrivatePhone:${nextName.trim().toLowerCase()}`,
+          nextPhone
+        );
+      }
+      if (nextEmail) {
+        localStorage.setItem(
+          `meetroHomeownerPrivatePhone:${nextEmail.trim().toLowerCase()}`,
+          nextPhone
+        );
+      }
+      localStorage.setItem("meetroHomeownerPrivatePhoneOwnerName", nextName);
+      localStorage.setItem("meetroHomeownerPrivatePhoneOwnerEmail", nextEmail);
+    } else {
+      localStorage.removeItem("meetroHomeownerPrivatePhone");
+      localStorage.removeItem("homeownerPrivatePhone");
+      if (nextName) {
+        localStorage.removeItem(
+          `meetroHomeownerPrivatePhone:${nextName.trim().toLowerCase()}`
+        );
+      }
+      if (nextEmail) {
+        localStorage.removeItem(
+          `meetroHomeownerPrivatePhone:${nextEmail.trim().toLowerCase()}`
+        );
+      }
+      localStorage.removeItem("meetroHomeownerPrivatePhoneOwnerName");
+      localStorage.removeItem("meetroHomeownerPrivatePhoneOwnerEmail");
+    }
+
     setUser((currentUser) => ({
       ...(currentUser || {}),
       ...(nextName ? { name: nextName } : {}),
       ...(nextEmail ? { email: nextEmail } : {}),
+      phone: nextPhone,
     }));
     setProfileNotice(t("personalInformationSaved"));
     setPersonalInfoOpen(false);
+  }
+
+  function renderPersonalInfoFields() {
+    return (
+      <>
+        <label style={feedbackLabel}>
+          {t("name")}
+          <input
+            style={personalInfoInput}
+            value={personalInfoForm.name}
+            onChange={(event) =>
+              setPersonalInfoForm((current) => ({
+                ...current,
+                name: event.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label style={feedbackLabel}>
+          {t("email")}
+          <input
+            type="email"
+            style={personalInfoInput}
+            value={personalInfoForm.email}
+            onChange={(event) =>
+              setPersonalInfoForm((current) => ({
+                ...current,
+                email: event.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label style={feedbackLabel}>
+          {t("homeownerMobileNumber")}
+          <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            style={personalInfoInput}
+            value={personalInfoForm.phone}
+            onChange={(event) =>
+              setPersonalInfoForm((current) => ({
+                ...current,
+                phone: event.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <p style={privatePhoneHelpText}>
+          <MeetroIcon name="privacy" size={14} decorative />
+          {t("homeownerMobilePrivacyNotice")}
+        </p>
+        <p style={assistantSettingHelp}>{t("personalInformationHelp")}</p>
+      </>
+    );
   }
 
   function openProfessionalPage(pageName) {
@@ -323,6 +436,17 @@ function Profile({ setPage, currentPage }) {
     localStorage.setItem("meetroSelectedLegalDocument", documentId);
     localStorage.setItem("meetroLegalReturnPage", "profile");
     setPage("legal");
+  }
+
+  function startMeetroTour() {
+    window.dispatchEvent(
+      new CustomEvent("meetroStartTour", {
+        detail: {
+          tourType: isBusinessMode ? "professional" : "homeowner",
+          manual: true,
+        },
+      })
+    );
   }
 
   function readLocalQueue(key) {
@@ -866,6 +990,13 @@ function Profile({ setPage, currentPage }) {
 
         <SettingsGroup title={t("support")} icon="help">
           <SettingRow
+            icon="aiHelp"
+            label={t("startMeetroTour")}
+            value={t("open")}
+            onClick={startMeetroTour}
+          />
+
+          <SettingRow
             icon="requestDetails"
             label={t("help")}
             value={t("open")}
@@ -941,36 +1072,7 @@ function Profile({ setPage, currentPage }) {
               </div>
 
               <div style={personalInfoFormStyle}>
-                <label style={feedbackLabel}>
-                  {t("name")}
-                  <input
-                    style={personalInfoInput}
-                    value={personalInfoForm.name}
-                    onChange={(event) =>
-                      setPersonalInfoForm((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <label style={feedbackLabel}>
-                  {t("email")}
-                  <input
-                    type="email"
-                    style={personalInfoInput}
-                    value={personalInfoForm.email}
-                    onChange={(event) =>
-                      setPersonalInfoForm((current) => ({
-                        ...current,
-                        email: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <p style={assistantSettingHelp}>{t("personalInformationHelp")}</p>
+                {renderPersonalInfoFields()}
 
                 <div style={personalInfoButtonRow}>
                   <button
@@ -1224,6 +1326,13 @@ function Profile({ setPage, currentPage }) {
 
       <SettingsGroup title={t("support")} icon="help">
         <SettingRow
+          icon="aiHelp"
+          label={t("startMeetroTour")}
+          value={t("open")}
+          onClick={startMeetroTour}
+        />
+
+        <SettingRow
           icon="requestDetails"
           label={t("help")}
           value={t("open")}
@@ -1331,36 +1440,7 @@ function Profile({ setPage, currentPage }) {
             </div>
 
             <div style={personalInfoFormStyle}>
-              <label style={feedbackLabel}>
-                {t("name")}
-                <input
-                  style={personalInfoInput}
-                  value={personalInfoForm.name}
-                  onChange={(event) =>
-                    setPersonalInfoForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label style={feedbackLabel}>
-                {t("email")}
-                <input
-                  type="email"
-                  style={personalInfoInput}
-                  value={personalInfoForm.email}
-                  onChange={(event) =>
-                    setPersonalInfoForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <p style={assistantSettingHelp}>{t("personalInformationHelp")}</p>
+              {renderPersonalInfoFields()}
 
               <div style={personalInfoButtonRow}>
                 <button
@@ -2200,6 +2280,13 @@ const assistantSettingHelp = {
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "700",
+};
+
+const privatePhoneHelpText = {
+  ...assistantSettingHelp,
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "6px",
 };
 
 const testFlightCard = {

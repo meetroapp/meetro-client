@@ -1225,12 +1225,93 @@ useEffect(() => {
     localStorage.getItem("contractorPhone") ||
     "";
 
+  const normalizeContactKey = (value) => String(value || "").trim().toLowerCase();
+
+  const readScopedHomeownerPrivatePhone = () => {
+    const customerKeys = [
+      conversationCustomerIdentity.name,
+      requestCustomerIdentity.name,
+      resolvedCustomerIdentity.name,
+      conversationRegistryItem?.homeowner_email,
+      conversationRegistryItem?.customerEmail,
+      conversationMeta?.homeowner_email,
+      conversationMeta?.customerEmail,
+      conversationLinkedSelectedConversation?.homeowner_email,
+      conversationLinkedSelectedConversation?.customerEmail,
+      conversationLinkedQuoteRequest?.homeowner_email,
+      conversationLinkedQuoteRequest?.customerEmail,
+      conversationLinkedHomeownerRequest?.homeowner_email,
+      conversationLinkedHomeownerRequest?.customerEmail,
+    ]
+      .map(normalizeContactKey)
+      .filter(Boolean);
+
+    const scopedPhone = customerKeys
+      .map((key) => localStorage.getItem(`meetroHomeownerPrivatePhone:${key}`))
+      .find((phone) => String(phone || "").trim());
+
+    if (scopedPhone) return scopedPhone;
+
+    const ownerKeys = [
+      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerName"),
+      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerEmail"),
+    ]
+      .map(normalizeContactKey)
+      .filter(Boolean);
+
+    const ownerMatchesConversation = ownerKeys.some((key) =>
+      customerKeys.includes(key)
+    );
+
+    return ownerMatchesConversation
+      ? localStorage.getItem("meetroHomeownerPrivatePhone") ||
+          localStorage.getItem("homeownerPrivatePhone") ||
+          ""
+      : "";
+  };
+
+  const customerCallPhone = firstIdentityValue(
+    conversationRegistryItem?.customerPhone,
+    conversationRegistryItem?.homeownerPhone,
+    conversationMeta?.customerPhone,
+    conversationMeta?.homeownerPhone,
+    conversationLinkedSelectedConversation?.customerPhone,
+    conversationLinkedSelectedConversation?.homeownerPhone,
+    conversationLinkedQuoteRequest?.customerPhone,
+    conversationLinkedQuoteRequest?.homeownerPhone,
+    conversationLinkedHomeownerRequest?.customerPhone,
+    conversationLinkedHomeownerRequest?.homeownerPhone,
+    activeJobSnapshot?.conversationId === conversationId
+      ? activeJobSnapshot?.customerPhone
+      : "",
+    readScopedHomeownerPrivatePhone()
+  );
+
+  const businessCallPhone = firstIdentityValue(
+    activeEmergencyRecord.businessPhone,
+    conversationRegistryItem?.businessPhone,
+    conversationRegistryItem?.providerPhone,
+    conversationMeta?.businessPhone,
+    conversationMeta?.providerPhone,
+    conversationLinkedSelectedConversation?.businessPhone,
+    conversationLinkedSelectedConversation?.providerPhone,
+    conversationLinkedQuoteRequest?.businessPhone,
+    conversationLinkedQuoteRequest?.providerPhone,
+    conversationLinkedHomeownerRequest?.businessPhone,
+    conversationLinkedHomeownerRequest?.providerPhone,
+    localStorage.getItem("conversationBusinessPhone"),
+    localStorage.getItem("businessPhone"),
+    localStorage.getItem("contractorPhone")
+  );
+
   const activeCallPhone = isEmergencyThread
     ? emergencyBusinessPhone
-    : localStorage.getItem("conversationBusinessPhone") ||
-      localStorage.getItem("businessPhone") ||
-      localStorage.getItem("contractorPhone") ||
-      "";
+    : isHiringThread
+    ? ""
+    : currentViewerRole === "business"
+    ? customerCallPhone
+    : businessCallPhone;
+  const hasActiveCallPhone = Boolean(String(activeCallPhone || "").trim());
 
   function callActiveContact() {
     const phoneNumber = String(activeCallPhone || "").trim();
@@ -1247,6 +1328,16 @@ useEffect(() => {
     window.location.href = phoneNumber.startsWith("tel:")
       ? phoneNumber
       : `tel:${phoneNumber}`;
+  }
+
+  function openRelationshipDetails() {
+    setShowCallMenu(false);
+    setShowThreadMenu(false);
+    setShowAttachMenu(false);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+    setShowJobRecords(false);
+    setShowProfileCard(true);
   }
 
   const activeRole =
@@ -3579,18 +3670,20 @@ const handleImageUpload = (event) => {
             </div>
           </button>
 
-          <button
-            style={{ ...headerBtn, ...(showCallMenu ? activeHeaderBtn : {}) }}
-            onClick={() => {
-              setShowThreadMenu(false);
-              setShowAttachMenu(false);
-              setActiveMessageId(null);
-              setShowMobileSheet(false);
-              setShowCallMenu((prev) => !prev);
-            }}
-          >
-            <IconPhone />
-          </button>
+          {hasActiveCallPhone && (
+            <button
+              style={{ ...headerBtn, ...(showCallMenu ? activeHeaderBtn : {}) }}
+              onClick={() => {
+                setShowThreadMenu(false);
+                setShowAttachMenu(false);
+                setActiveMessageId(null);
+                setShowMobileSheet(false);
+                setShowCallMenu((prev) => !prev);
+              }}
+            >
+              <IconPhone />
+            </button>
+          )}
 
           <button
             style={{ ...headerBtn, ...(showThreadMenu ? activeHeaderBtn : {}) }}
@@ -3686,15 +3779,17 @@ const handleImageUpload = (event) => {
               </div>
 
               <div style={profileActionRow}>
-                <button
-                  style={profilePrimaryAction}
-                  onClick={() => {
-                    setShowProfileCard(false);
-                    callActiveContact();
-                  }}
-                >
-                   {language === "es" ? "Llamar" : "Call"}
-                </button>
+                {hasActiveCallPhone && (
+                  <button
+                    style={profilePrimaryAction}
+                    onClick={() => {
+                      setShowProfileCard(false);
+                      callActiveContact();
+                    }}
+                  >
+                     {language === "es" ? "Llamar" : "Call"}
+                  </button>
+                )}
 
                 <button
                   style={profileSecondaryAction}
@@ -3724,7 +3819,7 @@ const handleImageUpload = (event) => {
               {language === "es" ? "Llamar" : "Call"}
             </button>
 
-            <button style={callMenuBtn} onClick={() => setShowCallMenu(false)}>
+            <button style={callMenuBtn} onClick={openRelationshipDetails}>
               {language === "es" ? "Detalles" : "Details"}
             </button>
           </div>
@@ -3749,15 +3844,17 @@ const handleImageUpload = (event) => {
                 {language === "es" ? "Detalles del proyecto" : "Project Details"}
               </button>
 
-              <button
-                style={threadMenuBtn}
-                onClick={() => {
-                  setShowThreadMenu(false);
-                  callActiveContact();
-                }}
-              >
-                {language === "es" ? "Cliente" : "Customer"}
-              </button>
+              {hasActiveCallPhone && (
+                <button
+                  style={threadMenuBtn}
+                  onClick={() => {
+                    setShowThreadMenu(false);
+                    callActiveContact();
+                  }}
+                >
+                  {language === "es" ? "Cliente" : "Customer"}
+                </button>
+              )}
 
               <button
                 style={threadMenuBtn}

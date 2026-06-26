@@ -17,6 +17,10 @@ import {
   readStoredAiButtonPosition,
   writeStoredAiButtonPosition,
 } from "../utils/aiButtonPosition";
+import {
+  getFieldAssistantPromptChips,
+  getFieldProductivityResponse,
+} from "../utils/fieldProductivityAssistant";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 
@@ -1586,6 +1590,13 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
   );
   if (requestGuidance) return requestGuidance;
 
+  const fieldProductivity = getFieldProductivityResponse({
+    question,
+    currentPage,
+    language,
+  });
+  if (fieldProductivity) return fieldProductivity;
+
   const actionResponse = detectAssistantActionIntent(question, roleMode, language);
   if (actionResponse) return actionResponse;
 
@@ -2102,21 +2113,41 @@ function hasDeniedSpeechPermission(permissions = {}) {
 }
 
 function hasGrantedSpeechPermission(permissions = {}) {
-  const values = Object.values(permissions);
-  return (
-    values.length > 0 &&
-    values.every((value) =>
-      ["granted", "authorized"].includes(String(value || "").toLowerCase())
-    )
+  const speechPermission =
+    permissions.speechRecognition ??
+    permissions.speech ??
+    permissions.recognition ??
+    permissions.microphone;
+  return ["granted", "authorized"].includes(
+    String(speechPermission || "").toLowerCase()
   );
 }
 
 function extractNativeSpeechTranscript(result = {}) {
-  const matches = result.matches || result.value || result.results || result.transcripts || [];
+  if (typeof result === "string") return result.trim();
+
+  const matches =
+    result.matches ||
+    result.value ||
+    result.results ||
+    result.transcripts ||
+    result.transcript ||
+    result.words ||
+    [];
 
   if (Array.isArray(matches)) {
-    return String(matches[0] || "").trim();
+    const firstMatch = matches.find((match) => String(match || "").trim());
+    if (typeof firstMatch === "string") return firstMatch.trim();
+    if (firstMatch?.transcript) return String(firstMatch.transcript).trim();
+    if (firstMatch?.text) return String(firstMatch.text).trim();
+    if (firstMatch?.value) return String(firstMatch.value).trim();
   }
+
+  if (matches && typeof matches === "object") {
+    return extractNativeSpeechTranscript(matches);
+  }
+
+  if (result.result) return extractNativeSpeechTranscript(result.result);
 
   return String(matches || result.transcript || "").trim();
 }
@@ -2146,6 +2177,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [voiceAnswer, setVoiceAnswer] = useState("");
   const [voiceIntent, setVoiceIntent] = useState("");
   const [voiceActions, setVoiceActions] = useState([]);
+  const [voiceStatusChip, setVoiceStatusChip] = useState(null);
   const [voiceError, setVoiceError] = useState("");
   const [readAloud, setReadAloud] = useState(false);
   const [assistantSpeaking, setAssistantSpeaking] = useState(false);
@@ -2158,6 +2190,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const voiceThinkingTimerRef = useRef(null);
   const assistantCloseTimerRef = useRef(null);
   const browserSpeechRecognitionRef = useRef(null);
+  const latestNativeTranscriptRef = useRef("");
+  const nativeTranscriptProcessedRef = useRef(false);
+  const nativeSpeechTimeoutRef = useRef(null);
   const language = getLanguage();
   const copy = assistantCopy[language] || assistantCopy.en;
   const guide = useMemo(
@@ -2184,6 +2219,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     : isBusinessMode
     ? copy.professionalVoiceTips
     : copy.homeownerVoiceTips;
+  const fieldPromptChips = getFieldAssistantPromptChips({
+    currentPage,
+    language,
+  });
   const notificationRole = isBusinessMode ? "professional" : "homeowner";
   const unreadNotificationCount = getMeetroUnreadNotificationCount(notificationRole);
   const isEmergencyContext = isEmergencyAssistantContext(currentPage);
@@ -2227,6 +2266,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       }
       if (assistantCloseTimerRef.current) {
         window.clearTimeout(assistantCloseTimerRef.current);
+      }
+      if (nativeSpeechTimeoutRef.current) {
+        window.clearTimeout(nativeSpeechTimeoutRef.current);
       }
       try {
         browserSpeechRecognitionRef.current?.abort?.();
@@ -2468,6 +2510,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceAnswer(response.answer);
     setVoiceIntent(response.intent);
     setVoiceActions(Array.isArray(response.actions) ? response.actions : []);
+    setVoiceStatusChip(response.statusChip || null);
     setVoiceError("");
 
     saveVoiceHistory({
@@ -2494,9 +2537,35 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     lastInputModeRef.current = "typed";
   }
 
+  function clearNativeSpeechTimeout() {
+    if (nativeSpeechTimeoutRef.current) {
+      window.clearTimeout(nativeSpeechTimeoutRef.current);
+      nativeSpeechTimeoutRef.current = null;
+    }
+  }
+
+  function processLatestNativeTranscript(reason = "native_end") {
+    if (nativeTranscriptProcessedRef.current) return false;
+
+    const transcript = String(latestNativeTranscriptRef.current || "").trim();
+    if (!transcript) return false;
+
+    nativeTranscriptProcessedRef.current = true;
+    clearNativeSpeechTimeout();
+    console.log("Native speech transcript", transcript);
+    console.log("Native speech completion", reason);
+    setVoiceTranscript(transcript);
+    processVoiceQuestion(transcript, { inputMode: "voice" });
+    setVoiceListening(false);
+    return true;
+  }
+
   async function startNativeVoiceInput() {
     stopAssistantVoiceResponse();
     lastInputModeRef.current = "voice";
+    latestNativeTranscriptRef.current = "";
+    nativeTranscriptProcessedRef.current = false;
+    clearNativeSpeechTimeout();
 
     if (!Capacitor.isNativePlatform?.()) return false;
 
@@ -2504,6 +2573,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
     try {
       const availability = await NativeSpeechRecognition.available?.();
+      console.log("Native speech available", availability);
       const isAvailable =
         availability?.available ??
         availability?.speechRecognition ??
@@ -2514,22 +2584,28 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
       const currentPermissions =
         (await NativeSpeechRecognition.checkPermissions?.().catch(() => null)) || {};
+      console.log("Native speech permission result", currentPermissions);
 
       if (!hasGrantedSpeechPermission(currentPermissions)) {
         if (hasDeniedSpeechPermission(currentPermissions)) {
+          setVoiceListening(false);
           setVoiceError(copy.voiceUnsupported);
           setVoiceAnswer("");
           setVoiceActions([]);
+          setVoiceStatusChip(null);
           return true;
         }
 
         const requestedPermissions =
           (await NativeSpeechRecognition.requestPermissions?.().catch(() => null)) || {};
+        console.log("Native speech permission result", requestedPermissions);
 
         if (!hasGrantedSpeechPermission(requestedPermissions)) {
+          setVoiceListening(false);
           setVoiceError(copy.voiceUnsupported);
           setVoiceAnswer("");
           setVoiceActions([]);
+          setVoiceStatusChip(null);
           return true;
         }
       }
@@ -2541,9 +2617,29 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         "partialResults",
         (data) => {
           const transcript = extractNativeSpeechTranscript(data);
-          if (transcript) setVoiceTranscript(transcript);
+          if (transcript) {
+            console.log("Native speech transcript", transcript);
+            latestNativeTranscriptRef.current = transcript;
+            setVoiceTranscript(transcript);
+          }
         }
       );
+
+      nativeSpeechTimeoutRef.current = window.setTimeout(async () => {
+        if (processLatestNativeTranscript("native_timeout")) {
+          await stopNativeSpeechRecognitionQuietly();
+          return;
+        }
+
+        nativeTranscriptProcessedRef.current = true;
+        setVoiceListening(false);
+        setVoiceError(
+          language === "es"
+            ? "No pude escuchar claramente. Toca una pregunta abajo o intenta de nuevo."
+            : "I could not hear that clearly. Tap a question below or try again."
+        );
+        await stopNativeSpeechRecognitionQuietly();
+      }, 7000);
 
       const result = await NativeSpeechRecognition.start({
         language: language === "es" ? "es-US" : "en-US",
@@ -2558,8 +2654,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       const transcript = extractNativeSpeechTranscript(result);
 
       if (transcript) {
-        processVoiceQuestion(transcript, { inputMode: "voice" });
+        console.log("Native speech transcript", transcript);
+        latestNativeTranscriptRef.current = transcript;
+        setVoiceTranscript(transcript);
+        processLatestNativeTranscript("native_final");
+      } else if (processLatestNativeTranscript("native_end")) {
+        // Latest partial result was enough to answer.
       } else {
+        console.log("Native speech error", "empty transcript", result);
         setVoiceError(
           language === "es"
             ? "No pude escuchar claramente. Toca una pregunta abajo o intenta de nuevo."
@@ -2569,11 +2671,16 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
       return true;
     } catch (error) {
+      console.log("Native speech error", error);
+      if (nativeTranscriptProcessedRef.current) return true;
+      if (processLatestNativeTranscript("native_error")) return true;
       if (isNativeSpeechUnavailable(error)) return false;
 
+      setVoiceListening(false);
       setVoiceError(copy.voiceUnsupported);
       setVoiceAnswer("");
       setVoiceActions([]);
+      setVoiceStatusChip(null);
       saveVoiceHistory({
         id: `voice-${Date.now()}`,
         question: "",
@@ -2589,6 +2696,8 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       });
       return true;
     } finally {
+      clearNativeSpeechTimeout();
+      processLatestNativeTranscript("native_finished");
       setVoiceListening(false);
       await stopNativeSpeechRecognitionQuietly();
       try {
@@ -2598,9 +2707,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   async function startVoiceInput() {
+    console.log("Meetro mic tapped");
     stopAssistantVoiceResponse();
     lastInputModeRef.current = "voice";
-
+    latestNativeTranscriptRef.current = "";
+    nativeTranscriptProcessedRef.current = false;
+    clearNativeSpeechTimeout();
+    setVoiceListening(true);
+    setVoiceError("");
     const usedNativeSpeech = await startNativeVoiceInput();
     if (usedNativeSpeech) return;
 
@@ -2608,9 +2722,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      setVoiceListening(false);
       setVoiceError(copy.voiceUnsupported);
       setVoiceAnswer("");
       setVoiceActions([]);
+      setVoiceStatusChip(null);
       saveVoiceHistory({
         id: `voice-${Date.now()}`,
         question: "",
@@ -2803,6 +2919,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceAnswer("");
     setVoiceIntent("");
     setVoiceActions([]);
+    setVoiceStatusChip(null);
     setVoiceError("");
     setVoiceResponseUnavailable(false);
     lastInputModeRef.current = "typed";
@@ -3004,6 +3121,27 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                 </div>
               </div>
 
+              {fieldPromptChips.length > 0 && (
+                <div style={fieldPromptSection}>
+                  <div style={fieldPromptGrid}>
+                    {fieldPromptChips.map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        style={fieldPromptChip}
+                        onClick={() =>
+                          processVoiceQuestion(chip.prompt, {
+                            inputMode: chip.inputMode || "typed",
+                          })
+                        }
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {voiceAnswer && (
                 <div style={voiceAnswerBox}>
                   <div style={voiceAnswerHeader}>
@@ -3042,7 +3180,21 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                   {voiceResponseUnavailable && (
                     <p style={voiceErrorText}>{t("voiceResponseUnavailable")}</p>
                   )}
-                  {voiceIntent && <span style={voiceIntentPill}>{voiceIntent}</span>}
+                  <div style={voiceMetaRow}>
+                    {voiceStatusChip && (
+                      <span
+                        style={{
+                          ...workflowStatusChip,
+                          ...(workflowStatusChipStyles[voiceStatusChip.level] ||
+                            workflowStatusChipStyles.yellow),
+                        }}
+                      >
+                        <span style={workflowStatusDot} />
+                        {voiceStatusChip.label}
+                      </span>
+                    )}
+                    {voiceIntent && <span style={voiceIntentPill}>{voiceIntent}</span>}
+                  </div>
 
                   {voiceActions.length > 0 && (
                     <div style={voiceActionGrid}>
@@ -3671,6 +3823,34 @@ const voiceTipsGrid = {
   gap: 7,
 };
 
+const fieldPromptSection = {
+  marginTop: 13,
+  paddingTop: 12,
+  borderTop: "1px solid rgba(186, 230, 253, 0.72)",
+};
+
+const fieldPromptGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 7,
+  maxWidth: "100%",
+};
+
+const fieldPromptChip = {
+  maxWidth: "100%",
+  border: "1px solid #c4b5fd",
+  background: "#f5f3ff",
+  color: "#4c1d95",
+  borderRadius: 999,
+  padding: "8px 10px",
+  fontSize: 12,
+  lineHeight: 1.15,
+  fontWeight: 950,
+  cursor: "pointer",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+};
+
 const voiceTipChip = {
   maxWidth: "100%",
   border: "1px solid #bae6fd",
@@ -3782,13 +3962,58 @@ const voiceAnswerText = {
 
 const voiceIntentPill = {
   display: "inline-flex",
-  marginTop: 8,
   padding: "5px 8px",
   borderRadius: 999,
   background: "#dcfce7",
   color: "#166534",
   fontSize: 11,
   fontWeight: 950,
+};
+
+const voiceMetaRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 7,
+  marginTop: 8,
+};
+
+const workflowStatusChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "5px 8px",
+  borderRadius: 999,
+  border: "1px solid transparent",
+  fontSize: 11,
+  lineHeight: 1.1,
+  fontWeight: 950,
+};
+
+const workflowStatusDot = {
+  width: 7,
+  height: 7,
+  borderRadius: "50%",
+  background: "currentColor",
+  flex: "0 0 auto",
+};
+
+const workflowStatusChipStyles = {
+  green: {
+    background: "#dcfce7",
+    borderColor: "#86efac",
+    color: "#166534",
+  },
+  yellow: {
+    background: "#fef3c7",
+    borderColor: "#fcd34d",
+    color: "#92400e",
+  },
+  red: {
+    background: "#fee2e2",
+    borderColor: "#fca5a5",
+    color: "#991b1b",
+  },
 };
 
 const voiceActionGrid = {
