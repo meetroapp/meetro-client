@@ -98,6 +98,15 @@ function EmergencyCompletionActions({ setPage }) {
   };
 
   function saveToHistory() {
+    const emergencyConversationId =
+      activeEmergencyRecord.conversationId ||
+      activeEmergencyRecord.emergencyConversationId ||
+      localStorage.getItem("emergencyConversationId") ||
+      localStorage.getItem("activeConversationId") ||
+      activeEmergencyRecord.id ||
+      localStorage.getItem("emergencyRequestId") ||
+      "emergency-active";
+
     localStorage.setItem("emergencySavedToHistory", "true");
     localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
     saveActiveJobSnapshot({
@@ -128,14 +137,8 @@ function EmergencyCompletionActions({ setPage }) {
     window.dispatchEvent(new Event("meetro-messages-updated"));
 
     localStorage.setItem("meetroConversationType", "emergency");
-    localStorage.setItem(
-      "activeConversationId",
-      activeEmergencyRecord.conversationId ||
-        activeEmergencyRecord.emergencyConversationId ||
-        localStorage.getItem("emergencyConversationId") ||
-        localStorage.getItem("activeConversationId") ||
-        ""
-    );
+    localStorage.setItem("activeConversationId", String(emergencyConversationId));
+    localStorage.setItem("emergencyConversationId", String(emergencyConversationId));
     localStorage.setItem("conversationReturnPage", "emergencyComplete");
     setPage("conversationThread");
   }
