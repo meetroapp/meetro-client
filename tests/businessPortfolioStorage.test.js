@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   BUSINESS_PORTFOLIO_STORAGE_KEY,
@@ -10,6 +11,8 @@ import {
   readAllBusinessPortfolioItems,
   readBusinessPortfolioStorage,
 } from "../src/utils/businessPortfolioStorage.js";
+import { getBusinessPortfolioProofProjection } from "../src/utils/businessPortfolioProof.js";
+import { saveProfessionalReview } from "../src/utils/reviewStorage.js";
 
 function createMemoryStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -137,6 +140,79 @@ test("preserves Spotlight feature preference when portfolio projects refresh", (
   assert.equal(readBusinessPortfolioStorage(storage)[0].spotlightFeatured, true);
 });
 
+test("portfolio proof projection counts only public-safe portfolio projects", () => {
+  const proof = getBusinessPortfolioProofProjection(
+    {
+      id: "business-1",
+      businessName: "Proof Business",
+      businessPortfolio: [
+        {
+          id: "public-1",
+          title: "Kitchen Remodel",
+          image_urls: ["https://example.com/kitchen-1.jpg"],
+          spotlightFeatured: true,
+        },
+        {
+          id: "private-1",
+          title: "Private Job",
+          image_urls: ["https://example.com/private.jpg"],
+          private: true,
+        },
+        {
+          id: "draft-1",
+          title: "Draft Job",
+          image_urls: ["https://example.com/draft.jpg"],
+          status: "draft",
+        },
+      ],
+      portfolioImages: ["https://example.com/standalone.jpg"],
+    },
+    { storage: createMemoryStorage() }
+  );
+
+  assert.equal(proof.projectCount, 1);
+  assert.equal(proof.featuredProjectCount, 1);
+  assert.equal(proof.featuredProject.title, "Kitchen Remodel");
+  assert.deepEqual(proof.mediaUrls, [
+    "https://example.com/kitchen-1.jpg",
+    "https://example.com/standalone.jpg",
+  ]);
+});
+
+test("portfolio proof projection includes grounded review stats", () => {
+  const storage = createMemoryStorage();
+  saveProfessionalReview(
+    {
+      professionalId: "business-review",
+      professionalName: "Review Business",
+      rating: 5,
+      comment: "Great work.",
+      jobId: "job-1",
+    },
+    storage
+  );
+
+  const proof = getBusinessPortfolioProofProjection(
+    {
+      id: "business-review",
+      businessName: "Review Business",
+      businessPortfolio: [
+        {
+          id: "public-1",
+          title: "Door Repair",
+          image_url: "https://example.com/door.jpg",
+        },
+      ],
+    },
+    { storage }
+  );
+
+  assert.equal(proof.projectCount, 1);
+  assert.equal(proof.reviewCount, 1);
+  assert.equal(proof.averageRating, "5.0");
+  assert.equal(proof.mostRecentReview.comment, "Great work.");
+});
+
 test("creates a stable local project id when backend id is missing", () => {
   assert.equal(
     getBusinessPortfolioProjectStableId(
@@ -204,4 +280,17 @@ test("reads shared portfolio buckets with source labels for Spotlight", () => {
       __spotlightPortfolioSource: "contractorProjects",
     },
   ]);
+});
+
+test("portfolio public surfaces use the shared proof projection", () => {
+  const files = [
+    "src/pages/ProjectGallery.jsx",
+    "src/pages/ContractorDetails.jsx",
+    "src/pages/Home.jsx",
+  ];
+
+  files.forEach((file) => {
+    const source = fs.readFileSync(file, "utf8");
+    assert.match(source, /getBusinessPortfolioProofProjection/);
+  });
 });

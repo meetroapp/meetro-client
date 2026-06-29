@@ -25,10 +25,12 @@ function createStorage(initial = {}) {
   };
 }
 
-test("recognizes completed and closure-completed service statuses", () => {
-  assert.equal(isClosedServiceStatus("completed"), true);
+test("recognizes closure-completed service statuses without treating completion as history", () => {
+  assert.equal(isClosedServiceStatus("completed"), false);
+  assert.equal(isClosedServiceStatus("complete"), false);
   assert.equal(isClosedServiceStatus("closed"), true);
   assert.equal(isClosedServiceStatus("closure_completed"), true);
+  assert.equal(isClosedServiceStatus("history"), true);
   assert.equal(isClosedServiceStatus("active"), false);
 });
 
@@ -149,4 +151,3 @@ test("dedupes completedProjects over duplicate homeownerRequests", () => {
   assert.equal(history.length, 1);
   assert.equal(history[0].title, "Closed Job");
 });
-

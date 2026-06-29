@@ -57,8 +57,17 @@ const requiredCommonKeys = [
   "businessHealth",
   "quickActions",
   "businessInformation",
+  "customerTrust",
   "customerPreview",
   "customerPreviewHelp",
+  "businessAvailability",
+  "currentlyAvailable",
+  "currentlyInactive",
+  "setAvailable",
+  "setUnavailable",
+  "unavailable",
+  "receiveNewCustomerRequests",
+  "pauseNewCustomerRequests",
   "viewPublicProfile",
   "shareProfile",
   "publicProfileShareText",
@@ -67,7 +76,19 @@ const requiredCommonKeys = [
   "profileComplete",
   "emergencyReady",
   "businessHours",
+  "businessHoursHelp",
+  "businessHoursPlaceholder",
+  "addBusinessHours",
+  "editBusinessInformation",
   "licenseInformation",
+  "licenseInformationHelp",
+  "addLicenseInformation",
+  "licenseNumber",
+  "licenseState",
+  "licenseType",
+  "licenseExpiration",
+  "verificationDetails",
+  "reviewVerification",
   "notProvided",
   "portfolioTrustSubtitle",
   "showcasedProjects",
@@ -145,10 +166,13 @@ test("known high-risk labels are not mixed between English and Spanish", () => {
   assert.equal(translations.es.saveInvoice, "Guardar factura");
   assert.equal(translations.en.downloadSavePdf, "Download / Save PDF");
   assert.equal(translations.es.downloadSavePdf, "Descargar / guardar PDF");
-  assert.equal(translations.en.reviewsAfterCompletedJobs, "Reviews will appear after completed jobs.");
+  assert.equal(
+    translations.en.reviewsAfterCompletedJobs,
+    "Your first customer reviews will appear after completed jobs."
+  );
   assert.equal(
     translations.es.reviewsAfterCompletedJobs,
-    "Las reseñas aparecerán después de trabajos completados."
+    "Tus primeras reseñas de clientes aparecerán después de trabajos completados."
   );
   assert.equal(translations.fr.businessTools, "Outils professionnels");
   assert.equal(translations["pt-BR"].businessTools, "Ferramentas do negócio");

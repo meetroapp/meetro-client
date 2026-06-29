@@ -1,0 +1,374 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  ASSISTANT_REQUEST_DRAFT_KEY,
+  buildAssistantRequestDraft,
+  classifyAssistantRequestIntent,
+  clearAssistantRequestDraft,
+  readAssistantRequestDraft,
+  saveAssistantRequestDraft,
+} from "../src/utils/assistantRequestDraft.js";
+import { t } from "../src/utils/language.js";
+import { buildRequestMatchingFields } from "../src/utils/requestMatchingFields.js";
+
+const assistantSource = readFileSync(new URL("../src/pages/Assistant.jsx", import.meta.url), "utf8");
+const uploadSource = readFileSync(new URL("../src/pages/Upload.jsx", import.meta.url), "utf8");
+
+function createStorage(seed = {}) {
+  const data = new Map(Object.entries(seed).map(([key, value]) => [key, String(value)]));
+
+  return {
+    getItem(key) {
+      return data.has(key) ? data.get(key) : null;
+    },
+    setItem(key, value) {
+      data.set(key, String(value));
+    },
+    removeItem(key) {
+      data.delete(key);
+    },
+  };
+}
+
+test("Ask Meetro generated project draft carries title details and category", () => {
+  const draft = buildAssistantRequestDraft({
+    userText: "I need a garage opener installed",
+    recommendations: {
+      businessType: "Garage Door Service",
+      heading: "Suggested project scope",
+      scope: [
+        "Describe the problem clearly.",
+        "Mention if materials are already purchased.",
+      ],
+      photos: ["Wide photo of the full area."],
+    },
+    mode: "scope",
+    createdAt: "2026-06-27T12:00:00.000Z",
+  });
+
+  assert.equal(draft.title, "Garage opener installed");
+  assert.equal(draft.category, "doorsWindows");
+  assert.equal(draft.service_specialty, "garage_door_opener_installation");
+  assert.equal(draft.requestMatchingFields.service_specialty, "garage_door_opener_installation");
+  assert.equal(draft.suggestedProjectType, "Garage Door Service");
+  assert.match(draft.description, /Project Summary:\nI need a garage opener installed/);
+  assert.match(draft.description, /Details:\nI need a garage door opener installed/);
+  assert.match(draft.description, /Helpful Details:/);
+  assert.match(draft.description, /Mention if materials are already purchased/);
+  assert.match(draft.description, /Photos to Include:\n• Wide photo of the full area/);
+  assert.doesNotMatch(draft.description, /Requested help:|Suggested project type:/);
+});
+
+test("Ask Meetro intent classification does not force automotive requests into handyman", () => {
+  const intent = classifyAssistantRequestIntent("Car won't start need help");
+
+  assert.equal(intent.serviceDomain, "transportation");
+  assert.equal(intent.category, "mechanic");
+  assert.equal(intent.categoryLabel, "Mechanic / Mobile Mechanic");
+  assert.equal(intent.suggestedServiceLabel, "Vehicle won't start");
+  assert.equal(intent.confidence, "high");
+  assert.notEqual(intent.category, "handyman");
+});
+
+test("Ask Meetro intent classification maps common project examples", () => {
+  assert.deepEqual(
+    {
+      category: classifyAssistantRequestIntent("garage door opener installed").category,
+      label: classifyAssistantRequestIntent("garage door opener installed").suggestedServiceLabel,
+    },
+    {
+      category: "doorsWindows",
+      label: "Garage Door Opener Installation",
+    }
+  );
+
+  assert.deepEqual(
+    {
+      category: classifyAssistantRequestIntent("kitchen faucet leaking").category,
+      label: classifyAssistantRequestIntent("kitchen faucet leaking").suggestedServiceLabel,
+    },
+    {
+      category: "plumbing",
+      label: "Plumbing Repairs",
+    }
+  );
+});
+
+test("unknown unsupported requests do not silently become handyman", () => {
+  const intent = classifyAssistantRequestIntent("My violin sounds strange");
+
+  assert.equal(intent.category, "");
+  assert.equal(intent.confidence, "low");
+  assert.equal(intent.supported, false);
+});
+
+test("broad home requests can safely fall back to general service", () => {
+  const intent = classifyAssistantRequestIntent("I need help with a home repair");
+
+  assert.equal(intent.category, "handyman");
+  assert.equal(intent.categoryLabel, "General Service");
+  assert.equal(intent.reason, "broad_home_service");
+});
+
+test("automotive prepared request carries mechanic category and clean wording", () => {
+  const intent = classifyAssistantRequestIntent("Car won't start need help");
+  const draft = buildAssistantRequestDraft({
+    userText: "Car won't start need help",
+    recommendations: {
+      businessType: "Mechanic / Mobile Mechanic",
+      intent,
+      heading: "Helpful Details",
+      scope: [
+        "Vehicle year, make, and model",
+        "Dashboard warning lights",
+      ],
+      photos: ["Dashboard or warning lights"],
+    },
+    createdAt: "2026-06-27T12:00:00.000Z",
+  });
+
+  assert.equal(draft.category, "mechanic");
+  assert.equal(draft.serviceDomain, "transportation");
+  assert.equal(draft.suggestedServiceLabel, "Vehicle won't start");
+  assert.match(draft.description, /Project Summary:\nCar won't start need help/);
+  assert.match(draft.description, /Details:\nMy vehicle will not start/);
+  assert.match(draft.description, /Helpful Details:\n• Vehicle year, make, and model/);
+  assert.match(draft.description, /• Whether roadside help is needed/);
+  assert.doesNotMatch(draft.description, /Please review|Confirm the work|Suggested project type/);
+
+  const matchingFields = buildRequestMatchingFields({
+    title: draft.title,
+    description: draft.description,
+    category: draft.category,
+  });
+  assert.equal(matchingFields.serviceDomain, "transportation");
+  assert.equal(matchingFields.serviceSpecialty, "mechanic");
+});
+
+test("assistant request draft saves, loads, and clears without auto-posting", () => {
+  const storage = createStorage();
+  const draft = buildAssistantRequestDraft({
+    userText: "I need a garage opener installed",
+    recommendations: {
+      businessType: "Garage Door Service",
+      heading: "Suggested project scope",
+      scope: ["Confirm opener model."],
+      photos: [],
+    },
+    createdAt: "2026-06-27T12:00:00.000Z",
+  });
+
+  saveAssistantRequestDraft(storage, draft);
+
+  const loaded = readAssistantRequestDraft(storage);
+  assert.equal(loaded.title, "Garage opener installed");
+  assert.equal(loaded.category, "doorsWindows");
+  assert.equal(storage.getItem("homeownerRequests"), null);
+
+  clearAssistantRequestDraft(storage);
+  assert.equal(storage.getItem(ASSISTANT_REQUEST_DRAFT_KEY), null);
+  assert.equal(storage.getItem("aiProjectDraft"), null);
+});
+
+test("assistant request draft still reads legacy Meetro draft keys", () => {
+  const storage = createStorage({
+    aiProjectDraft: "I need a garage opener installed",
+    aiBusinessRecommendation: "Garage Door Service",
+    aiProjectScope: "Confirm opener model.\nAdd photos.",
+  });
+
+  const loaded = readAssistantRequestDraft(storage);
+
+  assert.equal(loaded.title, "Garage opener installed");
+  assert.equal(loaded.category, "doorsWindows");
+  assert.match(loaded.description, /Confirm opener model/);
+});
+
+test("Upload consumes Ask Meetro draft and keeps request form editable before sending", () => {
+  assert.match(assistantSource, /saveAssistantRequestDraft\(localStorage, draft\)/);
+  assert.match(assistantSource, /t\("assistantUseThisToPostProject"\)/);
+  assert.match(uploadSource, /readAssistantRequestDraft\(localStorage\)/);
+  assert.match(uploadSource, /setTitle\(draft\.title \|\| ""\)/);
+  assert.match(uploadSource, /setDescription\(draft\.description \|\| ""\)/);
+  assert.match(uploadSource, /setCategory\(validCategory \? draft\.category/);
+  assert.match(uploadSource, /clearAssistantRequestDraft\(localStorage\)/);
+  assert.doesNotMatch(uploadSource, /readAssistantRequestDraft[\s\S]{0,260}handleCreatePost\(/);
+});
+
+test("created request preserves assistant draft metadata after user review", () => {
+  assert.match(uploadSource, /assistantDraft: assistantDraftMetadata/);
+  assert.match(uploadSource, /assistantSuggestedProjectType: assistantDraftMetadata\?\.suggestedProjectType/);
+  assert.match(uploadSource, /assistantOriginalPrompt: assistantDraftMetadata\?\.originalPrompt/);
+  assert.match(uploadSource, /assistantRecommendationText: assistantDraftMetadata\?\.recommendationText/);
+});
+
+test("request form has mobile containment for generated Meetro draft content", () => {
+  assert.match(uploadSource, /overflowX: "hidden"/);
+  assert.match(uploadSource, /overflowWrap: "anywhere"/);
+  assert.match(uploadSource, /minWidth: 0/);
+  assert.match(uploadSource, /maxWidth: "100%"/);
+  assert.match(uploadSource, /boxSizing: "border-box"/);
+  assert.match(uploadSource, /contain: "layout paint"/);
+  assert.match(uploadSource, /wordBreak: "break-word"/);
+});
+
+test("Request Details textarea expands for prepared request review", () => {
+  assert.match(uploadSource, /const descriptionInputRef = useRef\(null\)/);
+  assert.match(uploadSource, /ref=\{descriptionInputRef\}/);
+  assert.match(uploadSource, /Math\.max\(textarea\.scrollHeight, assistantDraftMetadata \? 320 : 140\)/);
+  assert.match(uploadSource, /minHeight: assistantDraftMetadata \? "320px"/);
+  assert.match(uploadSource, /maxHeight: "70dvh"/);
+  assert.match(uploadSource, /whiteSpace: "pre-wrap"/);
+});
+
+test("prepared request description is customer-facing request language", () => {
+  const draft = buildAssistantRequestDraft({
+    userText: "I need a garage door opener installed",
+    recommendations: {
+      businessType: "Garage Door Service",
+      heading: "Suggested project scope",
+      scope: [
+        "Describe the problem clearly.",
+        "Include where the work is located.",
+        "Add any measurements, brand names, or model numbers.",
+      ],
+      photos: [
+        "Garage door",
+        "Existing opener or mounting area",
+        "Power outlet",
+        "Safety sensor area",
+      ],
+    },
+    createdAt: "2026-06-27T12:00:00.000Z",
+  });
+
+  assert.match(draft.description, /^Project Summary:\nI need a garage door opener installed/);
+  assert.match(draft.description, /Details:\nI need a garage door opener installed/);
+  assert.match(draft.description, /mounting location, power source, and safety sensors/);
+  assert.match(draft.description, /Photos to Include:\n• Garage door/);
+  assert.equal(draft.requestMatchingFields.service_specialty, "garage_door_opener_installation");
+  assert.doesNotMatch(draft.description, /Assistant|Generated|Suggested project type|Requested help/);
+});
+
+test("prepared request matching fields survive the handoff when available", () => {
+  const draft = buildAssistantRequestDraft({
+    userText: "My kitchen faucet is leaking",
+    recommendations: {
+      businessType: "Plumbing",
+      scope: ["Include where the leak is located."],
+      photos: ["Leak area"],
+    },
+    createdAt: "2026-06-27T12:00:00.000Z",
+  });
+
+  assert.equal(draft.category, "plumbing");
+  assert.equal(draft.service_domain, "home_services");
+  assert.equal(draft.service_specialty, "plumbing_repairs");
+  assert.deepEqual(draft.requestMatchingFields, {
+    serviceDomain: "home_services",
+    service_domain: "home_services",
+    requestCategory: "plumbing",
+    request_category: "plumbing",
+    category: "plumbing",
+    serviceSpecialty: "plumbing_repairs",
+    service_specialty: "plumbing_repairs",
+  });
+});
+
+test("Ask Meetro page uses workflow copy and prepared request sections", () => {
+  assert.equal(t("assistantRequestHeroLine1", "en"), "Describe your project once.");
+  assert.equal(t("assistantRequestHeroLine2", "en"), "Meetro prepares your request.");
+  assert.equal(t("assistantRequestHeroLine3", "en"), "You review it.");
+  assert.equal(t("assistantRequestHeroLine4", "en"), "You send it.");
+  assert.equal(t("assistantRequestDescriptionTitle", "en"), "Project description");
+  assert.equal(t("assistantRequestPlaceholder", "en"), "Describe what you need done...");
+  assert.equal(t("assistantPrepareRequestAction", "en"), "Prepare Request");
+  assert.equal(t("assistantPreparedRequest", "en"), "Prepared Request");
+  assert.equal(t("assistantPreparedService", "en"), "Service");
+  assert.equal(t("assistantPreparedProjectSummary", "en"), "Project Summary");
+  assert.equal(t("assistantPreparedRecommendedDetails", "en"), "Helpful Details");
+  assert.equal(t("assistantPreparedPhotosToInclude", "en"), "Photos to Include");
+  assert.equal(t("assistantPreparedRecommendation", "en"), "Recommendation");
+  assert.equal(t("assistantEditDescription", "en"), "Edit Description");
+  assert.match(assistantSource, /t\("assistantRequestHeroLine1"\)/);
+  assert.match(assistantSource, /t\("assistantPreparedRequest"\)/);
+  assert.match(assistantSource, /t\("assistantEditDescription"\)/);
+  assert.match(assistantSource, /t\("assistantPrepareRequestAction"\)/);
+  assert.doesNotMatch(assistantSource, /t\("aiHelp"\)/);
+});
+
+test("Ask Meetro page avoids visible AI-first presentation language", () => {
+  assert.doesNotMatch(
+    assistantSource,
+    /Meetro AI|AI Help|AI Recommendation|AI Response|Assistant Response|Generated Content|Generated response|AI answers|Use This To Post Project|Post Project|Auto-create|Let AI do it/
+  );
+});
+
+test("request form shows Meetro prepared request continuity banner", () => {
+  assert.match(uploadSource, /assistantPreparedRequestBannerTitle/);
+  assert.match(uploadSource, /assistantPreparedRequestBannerText/);
+  assert.match(uploadSource, /assistantDraftMetadata && \(/);
+  assert.match(uploadSource, /preparedRequestOrb/);
+  assert.equal(t("assistantPreparedRequestBannerTitle", "en"), "Meetro prepared this request for you.");
+  assert.equal(t("assistantPreparedRequestBannerText", "en"), "Review and edit anything before sending.");
+});
+
+test("Request Details page no longer repeats request onboarding copy", () => {
+  assert.doesNotMatch(uploadSource, /t\("requestHelp"\)/);
+  assert.doesNotMatch(uploadSource, /t\("newProjectSubtitle"\)/);
+  assert.doesNotMatch(uploadSource, /t\("uploadTipTitle"\)/);
+  assert.doesNotMatch(uploadSource, /t\("uploadTipText"\)/);
+  assert.doesNotMatch(uploadSource, /t\("requestGuidanceWhatToInclude"\)/);
+  assert.doesNotMatch(uploadSource, /t\("requestDetailsHeading"\)/);
+});
+
+test("Request Details form remains the primary editable surface", () => {
+  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("requestIntelligencePrompt"\)\}<\/label>/);
+  assert.match(uploadSource, /selectedServiceCard/);
+  assert.match(uploadSource, /ServiceSelectorSheet/);
+  assert.doesNotMatch(uploadSource, /<select\s*\n\s*value=\{category\}/);
+  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectTitle"\)\}<\/label>/);
+  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectDescription"\)\}<\/label>/);
+  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("fullServiceAddress"\)\}<\/label>/);
+  assert.match(uploadSource, /onChange=\{\(e\) => setTitle\(e\.target\.value\)\}/);
+  assert.match(uploadSource, /onChange=\{\(e\) => setDescription\(e\.target\.value\)\}/);
+});
+
+test("Send Request remains primary and Cancel Request is visually secondary", () => {
+  assert.equal(t("createPost", "en"), "Send Request");
+  assert.equal(t("cancelRequest", "en"), "Cancel Request");
+  assert.equal(t("fullServiceAddress", "en"), "Service Address");
+  assert.match(uploadSource, /style=\{\{\s*\.\.\.primaryButton/);
+  assert.match(uploadSource, /style=\{cancelRequestButton\}/);
+  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*background: "rgba\(255,255,255,0\.64\)"/);
+  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*color: "#64748b"/);
+});
+
+test("Continue to Request and continuity labels exist in supported languages", () => {
+  const keys = [
+    "assistantUseThisToPostProject",
+    "assistantPreparedRequestBannerTitle",
+    "assistantPreparedRequestBannerText",
+    "assistantRequestHeroLine1",
+    "assistantRequestPlaceholder",
+    "assistantPrepareRequestAction",
+    "assistantPreparedRequest",
+    "assistantPreparedRecommendedDetails",
+    "assistantPreparedPhotosToInclude",
+    "assistantEditDescription",
+    "assistantRequestPhotoWide",
+  ];
+
+  for (const language of ["en", "es", "fr", "pt-BR"]) {
+    for (const key of keys) {
+      assert.notEqual(t(key, language), key);
+    }
+  }
+
+  assert.equal(t("assistantUseThisToPostProject", "en"), "Continue to Request");
+  assert.equal(t("assistantPrepareRequestAction", "es"), "Preparar solicitud");
+  assert.equal(t("assistantPrepareRequestAction", "fr"), "Préparer la demande");
+  assert.equal(t("assistantPrepareRequestAction", "pt-BR"), "Preparar solicitação");
+});

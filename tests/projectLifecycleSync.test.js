@@ -197,3 +197,50 @@ test("closeout moves one record to history and clears matching active snapshots"
   assert.equal(readArray(storage, "meetro_business_schedule")[0].status, "closed");
   assert.equal(storage.getItem("activeWorkStatus"), null);
 });
+
+test("closure-completed lifecycle state clears active snapshots", () => {
+  const storage = createStorage({
+    homeownerRequests: JSON.stringify([
+      {
+        requestId: "request-closure-complete",
+        conversationId: "conversation-closure-complete",
+        title: "Finished repair",
+        status: "completed",
+      },
+    ]),
+    meetro_business_schedule: JSON.stringify([
+      {
+        scheduleId: "schedule-closure-complete",
+        requestId: "request-closure-complete",
+        conversationId: "conversation-closure-complete",
+        status: "completed",
+      },
+    ]),
+    meetro_conversation_registry: JSON.stringify([
+      {
+        id: "conversation-closure-complete",
+        requestId: "request-closure-complete",
+        status: "completed",
+      },
+    ]),
+    activeWorkRequestId: "request-closure-complete",
+    activeWorkConversationId: "conversation-closure-complete",
+    activeWorkStatus: "completed",
+  });
+
+  updateProjectLifecycleState(
+    {
+      requestId: "request-closure-complete",
+      conversationId: "conversation-closure-complete",
+    },
+    "closure_completed",
+    { closureStatus: "closed" },
+    { storage }
+  );
+
+  assert.equal(readArray(storage, "homeownerRequests")[0].status, "closure_completed");
+  assert.equal(readArray(storage, "meetro_business_schedule")[0].status, "closure_completed");
+  assert.equal(readArray(storage, "meetro_conversation_registry")[0].workflowStatus, "closure_completed");
+  assert.equal(storage.getItem("activeWorkStatus"), null);
+  assert.equal(storage.getItem("activeWorkRequestId"), null);
+});

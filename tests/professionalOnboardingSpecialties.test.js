@@ -14,10 +14,13 @@ test("exports the onboarding specialty values used by professional setup", () =>
   const values = getProfessionalOnboardingSpecialtyValues();
 
   assert.ok(values.includes("handyman"));
+  assert.ok(values.includes("garage_door_opener_installation"));
   assert.ok(values.includes("door_replacement"));
   assert.ok(values.includes("painting"));
   assert.ok(values.includes("drywall"));
+  assert.ok(values.includes("plumbing_repairs"));
   assert.ok(values.includes("plumbing"));
+  assert.ok(values.includes("ceiling_fan_installation"));
   assert.ok(values.includes("electrical"));
   assert.ok(values.includes("tile"));
   assert.ok(values.includes("cabinetry"));

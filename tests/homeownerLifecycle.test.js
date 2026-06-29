@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   getHomeownerWorkflowPresentation,
   getHomeownerWorkflowTimeline,
+  isRequestActiveForHomeowner,
+  isRequestAvailableAsNewLead,
+  isRequestVisibleToHomeowner,
 } from "../src/utils/homeownerLifecycle.js";
 
 test("homeowner workflow mirrors proposal sent as homeowner approval", () => {
@@ -43,6 +46,27 @@ test("homeowner workflow mirrors active work statuses", () => {
   );
 });
 
+test("homeowner workflow keeps completion review separate from closed history", () => {
+  const completed = getHomeownerWorkflowPresentation({
+    status: "completed",
+    completionRecord: { notes: "Work finished" },
+  });
+  const closureCompleted = getHomeownerWorkflowPresentation({
+    status: "closure_completed",
+    completionRecord: { notes: "Work finished" },
+  });
+  const savedToHistory = getHomeownerWorkflowPresentation({
+    status: "completed",
+    savedToHistory: true,
+  });
+
+  assert.equal(completed.key, "completion");
+  assert.equal(completed.primaryActionLabel, "Review Completion");
+  assert.equal(closureCompleted.key, "history");
+  assert.equal(closureCompleted.primaryActionLabel, "Review Record");
+  assert.equal(savedToHistory.key, "history");
+});
+
 test("homeowner workflow timeline marks current stage", () => {
   const timeline = getHomeownerWorkflowTimeline({
     status: "quoted",
@@ -54,4 +78,40 @@ test("homeowner workflow timeline marks current stage", () => {
 
   assert.equal(approval.current, true);
   assert.equal(request.done, true);
+});
+
+test("older active requests stay homeowner-visible without date filtering", () => {
+  const olderActiveRequest = {
+    requestId: "request-old-active",
+    title: "Garage opener install",
+    status: "open",
+    createdAt: "2025-01-15T12:00:00.000Z",
+  };
+
+  assert.equal(isRequestVisibleToHomeowner(olderActiveRequest), true);
+  assert.equal(isRequestActiveForHomeowner(olderActiveRequest), true);
+});
+
+test("moved-on requests leave public new lead eligibility", () => {
+  assert.equal(
+    isRequestAvailableAsNewLead({
+      requestId: "request-scheduled",
+      status: "scheduled",
+    }),
+    false
+  );
+  assert.equal(
+    isRequestAvailableAsNewLead({
+      requestId: "request-closed",
+      status: "closed",
+    }),
+    false
+  );
+  assert.equal(
+    isRequestAvailableAsNewLead({
+      requestId: "request-open",
+      status: "open",
+    }),
+    true
+  );
 });
