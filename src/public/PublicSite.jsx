@@ -1,7 +1,7 @@
 const PUBLIC_LINKS = [
   { label: "Privacy Policy", href: "/privacy" },
   { label: "Terms of Service", href: "/terms" },
-  { label: "Contact", href: "/contact" },
+  { label: "Contact Us", href: "/contact" },
 ];
 
 const PUBLIC_ROUTES = new Set(["/", "/privacy", "/terms", "/contact"]);
@@ -40,8 +40,10 @@ function PublicSite() {
   if (path === "/contact") {
     return (
       <PublicDocumentPage
-        title="Contact"
-        text="For Meetro Community questions, contact WM FLEX LABS, LLC."
+        title="Contact Us"
+        text="Thank you for your interest in Meetro Community."
+        detailText="For general inquiries, partnerships, or questions about Meetro, please contact us at:"
+        closingText="We're currently preparing for launch and look forward to hearing from you."
         showEmail
       />
     );
@@ -93,7 +95,13 @@ function PublicLanding() {
   );
 }
 
-function PublicDocumentPage({ title, text, showEmail = false }) {
+function PublicDocumentPage({
+  title,
+  text,
+  detailText = "",
+  closingText = "",
+  showEmail = false,
+}) {
   return (
     <main style={documentPage}>
       <nav style={documentNav} aria-label="Meetro public site">
@@ -113,9 +121,9 @@ function PublicDocumentPage({ title, text, showEmail = false }) {
         <p style={statusPill}>Preparing for launch</p>
         <h1 style={documentTitle}>{title}</h1>
         <p style={documentText}>{text}</p>
+        {detailText && <p style={documentText}>{detailText}</p>}
         {showEmail && (
           <p style={documentText}>
-            Email:{" "}
             <a href="mailto:william@flexlabs.com" style={inlineLink}>
               william@flexlabs.com
             </a>
@@ -124,6 +132,7 @@ function PublicDocumentPage({ title, text, showEmail = false }) {
         <p style={companyLine}>
           Meetro Community is a product of WM FLEX LABS, LLC.
         </p>
+        {closingText && <p style={documentText}>{closingText}</p>}
         <p style={companyLine}>
           Developed and published by WM FLEX LABS, LLC.
         </p>
