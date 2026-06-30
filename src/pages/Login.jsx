@@ -1,60 +1,40 @@
 import { useState } from "react";
 import API_URL from "../api";
-import {
-  SUPPORTED_LANGUAGES,
-  getLanguage,
-  getLanguageLabel,
-  normalizeLanguage,
-  setLanguage,
-  t,
-} from "../utils/language";
-import { saveMeetroSession, getPostLoginPage, isProfessionalUser } from "../utils/session";
-import { buildPasswordResetRequest } from "../utils/passwordReset";
-import MeetroIcon from "../components/MeetroIcon";
+import { getLanguage, setLanguage } from "../utils/language";
 
 function Login({ setPage }) {
-  const [mode, setMode] = useState(
-    localStorage.getItem("meetroLoginMode") || "login"
-  );
+  const [mode, setMode] = useState("login");
   const [language, updateLanguage] = useState(getLanguage() || "en");
   const [accountType, setAccountType] = useState("homeowner");
   const [professionalCategory, setProfessionalCategory] = useState("contractor");
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetError, setResetError] = useState("");
-  const [resetConfirmation, setResetConfirmation] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [twoFactorStep, setTwoFactorStep] = useState(false);
   const [loading, setLoading] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
-  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const text = {
     en: {
       login: "Login",
       signup: "Sign Up",
-      getStarted: "Get Started",
-      welcomeTagline: "The modern platform for home and business services.",
-      welcomeBack: "Welcome back",
-      createYourAccount: "Create your Meetro account",
-      startHelper: "Choose your language, then continue into Meetro.",
+      welcomeBack: "Welcome back to your community.",
+      createYourAccount: "Create your Meetro account.",
       chooseAccountType: "Choose Account Type",
-      homeowner: "User Account",
+      homeowner: "Homeowner",
       homeownerDescription:
-        "Find trusted local professionals, request quotes, and manage projects.",
+        "Find trusted local pros, request quotes, and manage home projects.",
       professional: "Professional",
       professionalDescription:
-        "Offer services, receive quote requests, manage jobs, and grow your local business.",
+        "Offer services, receive quote requests, and grow your local business.",
       yourName: "Your Name",
       businessName: "Business Name",
       searchServiceCategory: "Search service category",
       email: "Email",
       password: "Password",
-      createAccount: "Create User Account",
+      createAccount: "Create Account",
       pleaseWait: "Please wait...",
       securityVerification: "Security Verification",
       enterVerificationCode:
@@ -69,30 +49,25 @@ function Login({ setPage }) {
       serverError: "Server error",
       enterEmailPassword: "Enter email and password",
       loginFailed: "Login failed",
-      acceptTermsRequired:
-        "Please agree to the Terms of Use and Privacy Policy to create your account.",
     },
     es: {
       login: "Iniciar sesión",
       signup: "Crear cuenta",
-      getStarted: "Comenzar",
-      welcomeTagline: "La plataforma moderna para servicios del hogar y negocios.",
-      welcomeBack: "Bienvenido de nuevo",
-      createYourAccount: "Crea tu cuenta de Meetro",
-      startHelper: "Elige tu idioma y continúa en Meetro.",
+      welcomeBack: "Bienvenido de nuevo a tu comunidad.",
+      createYourAccount: "Crea tu cuenta de Meetro.",
       chooseAccountType: "Elige el tipo de cuenta",
-      homeowner: "Cuenta de usuario",
+      homeowner: "Dueño de casa",
       homeownerDescription:
         "Encuentra profesionales locales, pide cotizaciones y administra proyectos.",
       professional: "Profesional",
       professionalDescription:
-        "Ofrece servicios, recibe solicitudes, administra trabajos y haz crecer tu negocio local.",
+        "Ofrece servicios, recibe cotizaciones y crece tu negocio local.",
       yourName: "Tu nombre",
       businessName: "Nombre del negocio",
       searchServiceCategory: "Buscar categoría de servicio",
       email: "Correo electrónico",
       password: "Contraseña",
-      createAccount: "Crear cuenta de usuario",
+      createAccount: "Crear cuenta",
       pleaseWait: "Por favor espera...",
       securityVerification: "Verificación de seguridad",
       enterVerificationCode:
@@ -108,283 +83,133 @@ function Login({ setPage }) {
       serverError: "Error del servidor",
       enterEmailPassword: "Ingresa correo y contraseña",
       loginFailed: "Error al iniciar sesión",
-      acceptTermsRequired:
-        "Acepta los Términos de Uso y la Política de Privacidad para crear tu cuenta.",
-    },
-    fr: {
-      login: "Connexion",
-      signup: "Créer un compte",
-      getStarted: "Commencer",
-      welcomeTagline: "La plateforme moderne pour les services à domicile et professionnels.",
-      welcomeBack: "Bon retour",
-      createYourAccount: "Créez votre compte Meetro",
-      startHelper: "Choisissez votre langue, puis continuez dans Meetro.",
-      chooseAccountType: "Choisissez le type de compte",
-      homeowner: "Compte utilisateur",
-      homeownerDescription:
-        "Trouvez des professionnels locaux, demandez des devis et gérez vos projets.",
-      professional: "Professionnel",
-      professionalDescription:
-        "Offrez vos services, recevez des demandes, gérez les travaux et développez votre activité locale.",
-      yourName: "Votre nom",
-      businessName: "Nom de l’entreprise",
-      searchServiceCategory: "Rechercher une catégorie de service",
-      email: "E-mail",
-      password: "Mot de passe",
-      createAccount: "Créer le compte",
-      pleaseWait: "Veuillez patienter...",
-      securityVerification: "Vérification de sécurité",
-      enterVerificationCode:
-        "Entrez le code à 6 chiffres envoyé à votre compte.",
-      meetroSecurityText: "Votre connexion est protégée par Meetro Security.",
-      codeSentTo: "Code envoyé à",
-      verifyCode: "Vérifier le code",
-      back: "Retour",
-      faceIdComingSoon: "Face ID et Touch ID seront bientôt disponibles.",
-      invalidCode: "Code invalide",
-      loginExpired: "Connexion expirée",
-      serverError: "Erreur du serveur",
-      enterEmailPassword: "Entrez l’e-mail et le mot de passe",
-      loginFailed: "Échec de la connexion",
-      acceptTermsRequired:
-        "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour créer votre compte.",
-    },
-    "pt-BR": {
-      login: "Entrar",
-      signup: "Criar conta",
-      getStarted: "Começar",
-      welcomeTagline: "A plataforma moderna para serviços residenciais e profissionais.",
-      welcomeBack: "Bem-vindo de volta",
-      createYourAccount: "Crie sua conta Meetro",
-      startHelper: "Escolha seu idioma e continue no Meetro.",
-      chooseAccountType: "Escolha o tipo de conta",
-      homeowner: "Conta de usuário",
-      homeownerDescription:
-        "Encontre profissionais locais, peça orçamentos e acompanhe projetos.",
-      professional: "Profissional",
-      professionalDescription:
-        "Ofereça serviços, receba solicitações, gerencie trabalhos e desenvolva seu negócio local.",
-      yourName: "Seu nome",
-      businessName: "Nome do negócio",
-      searchServiceCategory: "Buscar categoria de serviço",
-      email: "E-mail",
-      password: "Senha",
-      createAccount: "Criar conta",
-      pleaseWait: "Aguarde...",
-      securityVerification: "Verificação de segurança",
-      enterVerificationCode:
-        "Digite o código de 6 dígitos enviado para sua conta.",
-      meetroSecurityText: "Seu login é protegido pelo Meetro Security.",
-      codeSentTo: "Código enviado para",
-      verifyCode: "Verificar código",
-      back: "Voltar",
-      faceIdComingSoon: "Face ID e Touch ID em breve.",
-      invalidCode: "Código inválido",
-      loginExpired: "Login expirado",
-      serverError: "Erro do servidor",
-      enterEmailPassword: "Digite e-mail e senha",
-      loginFailed: "Falha ao entrar",
-      acceptTermsRequired:
-        "Aceite os Termos de Uso e a Política de Privacidade para criar sua conta.",
     },
   };
 
-  const normalizedLanguage = normalizeLanguage(language);
-  const T = text[normalizedLanguage] || text.en;
+  const T = text[language] || text.en;
 
   const professionalCategories = [
-    { value: "professional", labelKey: "signupCategoryProfessionalServices" },
-    { value: "contractor", labelKey: "signupCategoryGeneralContractor" },
-    { value: "handyman", labelKey: "handyman" },
-    { value: "applianceRepair", labelKey: "applianceRepair" },
-    { value: "automotiveServices", labelKey: "automotiveServices" },
-    { value: "carDetailing", labelKey: "carDetailing" },
-    { value: "carpentry", labelKey: "carpentry" },
-    { value: "cleaning", labelKey: "signupCategoryCleaningServices" },
-    { value: "concrete", labelKey: "concrete" },
-    { value: "demolition", labelKey: "demolition" },
-    { value: "doorsWindows", labelKey: "doorsWindows" },
-    { value: "drywall", labelKey: "signupCategoryDrywallRepair" },
-    { value: "electrical", labelKey: "electrical" },
-    { value: "fencing", labelKey: "fencing" },
-    { value: "flooring", labelKey: "flooring" },
-    { value: "homeHealthCare", labelKey: "homeHealthCare" },
-    { value: "hvac", labelKey: "hvac" },
-    { value: "junkRemoval", labelKey: "junkRemoval" },
-    { value: "landscaping", labelKey: "landscaping" },
-    { value: "lawnCare", labelKey: "lawnCare" },
-    { value: "mechanic", labelKey: "mechanic" },
-    { value: "mobileServices", labelKey: "mobileServices" },
-    { value: "moving", labelKey: "signupCategoryMovingServices" },
-    { value: "painting", labelKey: "painting" },
-    { value: "paverSealing", labelKey: "paverSealing" },
-    { value: "pestControl", labelKey: "pestControl" },
-    { value: "plumbing", labelKey: "plumbing" },
-    { value: "poolService", labelKey: "poolService" },
-    { value: "pressureWashing", labelKey: "pressureWashing" },
-    { value: "privateTransportation", labelKey: "privateTransportation" },
-    { value: "realEstate", labelKey: "realEstate" },
-    { value: "propertyManagement", labelKey: "propertyManagement" },
-    { value: "roofing", labelKey: "roofing" },
-    { value: "tile", labelKey: "signupCategoryTileInstallation" },
-    { value: "treeService", labelKey: "treeService" },
-    { value: "other", labelKey: "signupCategoryOtherServices" },
-  ].map((item) => ({
-    ...item,
-    label: t(item.labelKey, normalizedLanguage),
-  }));
+    { value: "professional", label: "Professional Services" },
+    { value: "contractor", label: "General Contractor" },
+    { value: "handyman", label: "Handyman" },
+    { value: "applianceRepair", label: "Appliance Repair" },
+    { value: "automotiveServices", label: "Automotive Services" },
+    { value: "carDetailing", label: "Car Detailing" },
+    { value: "carpentry", label: "Carpentry" },
+    { value: "cleaning", label: "Cleaning Services" },
+    { value: "concrete", label: "Concrete" },
+    { value: "demolition", label: "Demolition" },
+    { value: "doorsWindows", label: "Doors & Windows" },
+    { value: "drywall", label: "Drywall Repair" },
+    { value: "electrical", label: "Electrical" },
+    { value: "fencing", label: "Fencing" },
+    { value: "flooring", label: "Flooring" },
+    { value: "homeHealthCare", label: "Home Health Care" },
+    { value: "hvac", label: "HVAC / AC" },
+    { value: "junkRemoval", label: "Junk Removal" },
+    { value: "landscaping", label: "Landscaping" },
+    { value: "lawnCare", label: "Lawn Care" },
+    { value: "mechanic", label: "Mechanic" },
+    { value: "mobileServices", label: "Mobile Services" },
+    { value: "moving", label: "Moving Services" },
+    { value: "painting", label: "Painting" },
+    { value: "paverSealing", label: "Paver Sealing" },
+    { value: "pestControl", label: "Pest Control" },
+    { value: "plumbing", label: "Plumbing" },
+    { value: "poolService", label: "Pool Service" },
+    { value: "pressureWashing", label: "Pressure Washing" },
+    { value: "privateTransportation", label: "Private Transportation" },
+    { value: "realEstate", label: "Real Estate" },
+    { value: "roofing", label: "Roofing" },
+    { value: "tile", label: "Tile Installation" },
+    { value: "treeService", label: "Tree Service" },
+    { value: "other", label: "Other Services" },
+  ];
 
   const filteredProfessionalCategories = professionalCategories.filter((item) =>
     item.label.toLowerCase().includes(categorySearch.toLowerCase())
   );
 
   function changeLanguage(value) {
-    const nextLanguage = normalizeLanguage(value);
-    setLanguage(nextLanguage);
-    updateLanguage(nextLanguage);
-    localStorage.setItem("meetroLanguage", nextLanguage);
-  }
-
-  function openLegalDocument(documentId) {
-    localStorage.setItem("meetroSelectedLegalDocument", documentId);
-    localStorage.setItem("meetroLegalReturnPage", "login");
-    localStorage.setItem("meetroLoginMode", mode);
-    setPage("legal");
-  }
-
-  function openPasswordReset() {
-    setResetEmail(email.trim());
-    setResetError("");
-    setResetConfirmation("");
-    localStorage.setItem("meetroLoginMode", "reset");
-    setMode("reset");
-  }
-
-  function returnToLogin() {
-    setResetError("");
-    setResetConfirmation("");
-    localStorage.setItem("meetroLoginMode", "login");
-    setMode("login");
-  }
-
-  function handlePasswordReset() {
-    const result = buildPasswordResetRequest(resetEmail);
-
-    setResetConfirmation("");
-
-    if (!result.ok) {
-      setResetError(
-        result.errorCode === "email_required"
-          ? t("resetEmailRequired", normalizedLanguage)
-          : t("resetEmailInvalid", normalizedLanguage)
-      );
-      return;
-    }
-
-    setResetError("");
-    setEmail(result.email);
-    setResetConfirmation(t("resetPasswordConfirmation", normalizedLanguage));
+    setLanguage(value);
+    updateLanguage(value);
+    localStorage.setItem("meetroLanguage", value);
   }
 
 function checkIsProfessional(user = {}) {
-  return isProfessionalUser(user);
+  return (
+    user.account_type === "professional" ||
+    user.accountType === "professional"
+  );
 }
 
-  async function enterQAMobileWorkflowState() {
-    if (!import.meta.env.DEV) return;
-
-    const { seedQAMobileWorkflowState } = await import(
-      "../utils/qaMobileWorkflowSeed"
-    );
-    const result = seedQAMobileWorkflowState();
-
-    if (!result.ok) {
-      alert("QA seed unavailable.");
-      return;
-    }
-
-    setPage(result.page);
-  }
-
   function saveUserData(data) {
-    const result = saveMeetroSession(data, email.trim());
+    const user = data.user || {};
+    const isProfessional = checkIsProfessional(user);
 
-    const user = data?.user || {};
+    const finalAccountType = isProfessional ? "professional" : "homeowner";
+    const finalMode = isProfessional ? "business" : "personal";
 
-    if (user.profile_photo_url) {
-      localStorage.setItem(
-        "meetroPersonalProfilePhoto",
-        user.profile_photo_url
-      );
-    }
+    localStorage.setItem("token", data.token || "");
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("userId", user.id || "");
+    localStorage.setItem("userName", user.username || user.name || "");
+    localStorage.setItem("userEmail", user.email || email.trim());
 
-    return result;
-  }
+    localStorage.setItem(
+      "userRole",
+      isProfessional
+        ? user.business_category ||
+            user.businessCategory ||
+            user.role ||
+            "professional"
+        : "homeowner"
+    );
 
-  function persistHomeownerMobileNumber() {
-    if (accountType === "professional") return;
-
-    const nextPhone = mobileNumber.trim();
-    const nextName = name.trim();
-    const nextEmail = email.trim();
-    const scopedKeys = [nextName, nextEmail]
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter(Boolean);
-
-    if (!nextPhone) return;
-
-    localStorage.setItem("meetroHomeownerPrivatePhone", nextPhone);
-    localStorage.setItem("homeownerPrivatePhone", nextPhone);
-    scopedKeys.forEach((key) => {
-      localStorage.setItem(`meetroHomeownerPrivatePhone:${key}`, nextPhone);
-    });
-    localStorage.setItem("meetroHomeownerPrivatePhoneOwnerName", nextName);
-    localStorage.setItem("meetroHomeownerPrivatePhoneOwnerEmail", nextEmail);
-  }
-
-  function clearNewHomeownerRelationshipState() {
-    if (accountType === "professional") return;
-
-    [
-      "activeConversationId",
-      "activeConversationName",
-      "conversationBusinessName",
-      "conversationReturnPage",
-      "directRequestConversationId",
-      "directRequestId",
-      "directRequestMode",
-      "directRequestProfessionalCategory",
-      "directRequestProfessionalConversationId",
-      "directRequestProfessionalName",
-      "directRequestSource",
-      "homeownerRequests",
-      "completedProjects",
-      "requestProfessionalContext",
-      "selectedConversation",
-      "selectedHomeownerRequest",
-      "selectedHomeownerRequestId",
-      "selectedProfessionalCategory",
-      "selectedProfessionalId",
-      "selectedProfessionalName",
-      "selectedQuoteRequest",
-      "selectedQuoteRequestId",
-    ].forEach((key) => localStorage.removeItem(key));
+    localStorage.setItem("accountType", finalAccountType);
+    localStorage.setItem(
+      "businessName",
+      user.business_name || user.businessName || ""
+    );
+    localStorage.setItem(
+      "businessCategory",
+      user.business_category || user.businessCategory || ""
+    );
+    localStorage.setItem("activeAccountMode", finalMode);
+    localStorage.setItem("isProfessional", isProfessional ? "true" : "false");
+    localStorage.setItem(
+      "hasBusinessProfile",
+      isProfessional ? "true" : "false"
+    );
+   
+     localStorage.setItem(
+    "contractorProfileComplete",
+    isProfessional ? "true" : "false"
+   );
   }
 
   function routeUser(data) {
-    const page = getPostLoginPage(data.user || {});
-    setPage(page);
+    const user = data.user || {};
+    const isProfessional = checkIsProfessional(user);
+
+    if (isProfessional) {
+      localStorage.setItem("activeAccountMode", "business");
+      localStorage.setItem("isProfessional", "true");
+      localStorage.setItem("hasBusinessProfile", "true");
+      setPage("businessDashboard");
+      return;
+    }
+
+    localStorage.setItem("activeAccountMode", "personal");
+    localStorage.setItem("isProfessional", "false");
+    localStorage.setItem("hasBusinessProfile", "false");
+    setPage("home");
   }
 
   async function handleSubmit() {
     try {
       if (!email.trim() || !password.trim()) {
         alert(T.enterEmailPassword);
-        return;
-      }
-
-      if (mode === "signup" && !legalAccepted) {
-        alert(T.acceptTermsRequired);
         return;
       }
 
@@ -403,8 +228,6 @@ function checkIsProfessional(user = {}) {
               name: name.trim(),
               email: email.trim(),
               password,
-              mobile_number:
-                accountType === "professional" ? "" : mobileNumber.trim(),
               role:
                 accountType === "professional"
                   ? professionalCategory
@@ -465,10 +288,6 @@ function checkIsProfessional(user = {}) {
     }
 
     saveUserData(pendingData);
-    if (localStorage.getItem("firstLogin") === "true") {
-      clearNewHomeownerRelationshipState();
-    }
-    persistHomeownerMobileNumber();
     localStorage.removeItem("pendingLoginData");
     setTwoFactorStep(false);
     setTwoFactorCode("");
@@ -494,10 +313,10 @@ routeUser(pendingData);
       <div style={pageWrapper}>
         <div style={heroCard}>
           <div style={heroBubble}></div>
-          <div style={logoCircle}></div>
+          <div style={logoCircle}>2FA</div>
           <h1 style={securityTitle}>{T.securityVerification}</h1>
           <p style={heroSubtitle}>{T.enterVerificationCode}</p>
-          <p style={securityText}> {T.meetroSecurityText}</p>
+          <p style={securityText}>Secure login. {T.meetroSecurityText}</p>
         </div>
 
         <div style={cardStyle}>
@@ -566,7 +385,7 @@ routeUser(pendingData);
             {T.back}
           </button>
 
-          <div style={faceIdText}> {T.faceIdComingSoon}</div>
+          <div style={faceIdText}>{T.faceIdComingSoon}</div>
         </div>
       </div>
     );
@@ -575,145 +394,81 @@ routeUser(pendingData);
   return (
     <div style={pageWrapper}>
       <div style={languageBar}>
-        <div style={languageBox} aria-label={t("language")}>
-          {SUPPORTED_LANGUAGES.map((item) => {
-            const isActive = normalizedLanguage === item.code;
+        <div style={languageBox}>
+          <span style={languageLabel}>Language</span>
 
-            return (
-              <button
-                key={item.code}
-                type="button"
-                style={{
-                  ...languageButton,
-                  ...(isActive ? languageButtonActive : {}),
-                }}
-                onClick={() => changeLanguage(item.code)}
-                aria-pressed={isActive}
-              >
-                {getLanguageLabel(item.code)}
-              </button>
-            );
-          })}
+          <select
+            value={language}
+            onChange={(e) => changeLanguage(e.target.value)}
+            style={languageSelect}
+          >
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
         </div>
       </div>
 
       <div style={heroCard}>
         <div style={heroBubble}></div>
-        <div style={heroWaveOne}></div>
-        <div style={heroWaveTwo}></div>
-        <h1 style={heroTitle}>meetro<span style={heroTrademark}>TM</span></h1>
-        <p style={heroSubtitle}>{T.welcomeTagline}</p>
+        <div style={logoCircle}>M</div>
+        <h1 style={heroTitle}>Meetro</h1>
+        <p style={heroSubtitle}>
+          {mode === "login" ? T.welcomeBack : T.createYourAccount}
+        </p>
       </div>
 
       <div style={cardStyle}>
-        {mode !== "reset" && (
-          <div style={toggleRow}>
-            <button
-              style={{
-                ...toggleButton,
-                background: mode === "signup" ? "#5b3df5" : "#f3f4f6",
-                color: mode === "signup" ? "white" : "#111827",
-              }}
-              onClick={() => {
-                localStorage.setItem("meetroLoginMode", "signup");
-                setMode("signup");
-              }}
-            >
-              {T.getStarted}
-            </button>
+        <div style={toggleRow}>
+          <button
+            style={{
+              ...toggleButton,
+              background: mode === "login" ? "#5b3df5" : "#f3f4f6",
+              color: mode === "login" ? "white" : "#111827",
+            }}
+            onClick={() => setMode("login")}
+          >
+            {T.login}
+          </button>
 
-            <button
-              style={{
-                ...toggleButton,
-                background: mode === "login" ? "#5b3df5" : "#f3f4f6",
-                color: mode === "login" ? "white" : "#111827",
-              }}
-              onClick={() => {
-                localStorage.setItem("meetroLoginMode", "login");
-                setMode("login");
-                setLegalAccepted(false);
-              }}
-            >
-              {T.login}
-            </button>
-          </div>
-        )}
-
-        <div style={authIntro}>
-          <h2 style={authIntroTitle}>
-            {mode === "reset"
-              ? t("resetPasswordTitle", normalizedLanguage)
-              : mode === "login"
-              ? T.welcomeBack
-              : T.createYourAccount}
-          </h2>
-          <p style={authIntroText}>
-            {mode === "reset"
-              ? t("resetPasswordDescription", normalizedLanguage)
-              : T.startHelper}
-          </p>
+          <button
+            style={{
+              ...toggleButton,
+              background: mode === "signup" ? "#5b3df5" : "#f3f4f6",
+              color: mode === "signup" ? "white" : "#111827",
+            }}
+            onClick={() => setMode("signup")}
+          >
+            {T.signup}
+          </button>
         </div>
 
-        {mode === "reset" ? (
-          <div style={resetForm}>
-            <input
-              style={input}
-              type="email"
-              placeholder={t("resetEmailPlaceholder", normalizedLanguage)}
-              value={resetEmail}
-              onChange={(event) => {
-                setResetEmail(event.target.value);
-                setResetError("");
-              }}
-            />
-
-            {resetError && <div style={resetErrorBox}>{resetError}</div>}
-
-            {resetConfirmation && (
-              <div style={resetConfirmationBox}>
-                <strong>{resetConfirmation}</strong>
-                <span>{t("resetPasswordSimulatedNote", normalizedLanguage)}</span>
-              </div>
-            )}
-
-            <button type="button" style={submitButton} onClick={handlePasswordReset}>
-              {t("sendResetLink", normalizedLanguage)}
-            </button>
-
-            <button type="button" style={guestButton} onClick={returnToLogin}>
-              {t("backToLogin", normalizedLanguage)}
-            </button>
-          </div>
-        ) : (
-          <>
         {mode === "signup" && (
           <>
             <h2 style={sectionTitle}>{T.chooseAccountType}</h2>
-            <div style={accountTypeGrid}>
-              <button
-                style={
-                  accountType === "homeowner" ? selectedAccountCard : accountCard
-                }
-                onClick={() => setAccountType("homeowner")}
-              >
-                <span style={accountIcon}>Home</span>
-                <strong>{T.homeowner}</strong>
-                <span>{T.homeownerDescription}</span>
-              </button>
 
-              <button
-                style={
-                  accountType === "professional"
-                    ? selectedAccountCard
-                    : accountCard
-                }
-                onClick={() => setAccountType("professional")}
-              >
-                <span style={accountIcon}>Pro</span>
-                <strong>{T.professional}</strong>
-                <span>{T.professionalDescription}</span>
-              </button>
-            </div>
+            <button
+              style={
+                accountType === "homeowner" ? selectedAccountCard : accountCard
+              }
+              onClick={() => setAccountType("homeowner")}
+            >
+              <span style={accountIcon}>Home</span>
+              <strong>{T.homeowner}</strong>
+              <span>{T.homeownerDescription}</span>
+            </button>
+
+            <button
+              style={
+                accountType === "professional"
+                  ? selectedAccountCard
+                  : accountCard
+              }
+              onClick={() => setAccountType("professional")}
+            >
+              <span style={accountIcon}>Pro</span>
+              <strong>{T.professional}</strong>
+              <span>{T.professionalDescription}</span>
+            </button>
 
             <input
               style={input}
@@ -751,24 +506,6 @@ routeUser(pendingData);
                 </select>
               </>
             )}
-
-            {accountType !== "professional" && (
-              <>
-                <input
-                  style={input}
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder={t("homeownerMobileNumber", normalizedLanguage)}
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
-                />
-                <p style={fieldHelperText}>
-                  <MeetroIcon name="privacy" size={14} decorative />
-                  {t("homeownerMobilePrivacyNotice", normalizedLanguage)}
-                </p>
-              </>
-            )}
           </>
         )}
 
@@ -788,158 +525,46 @@ routeUser(pendingData);
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {mode === "login" && (
-          <button type="button" style={forgotPasswordButton} onClick={openPasswordReset}>
-            {t("forgotPassword", normalizedLanguage)}
-          </button>
-        )}
-
-        {mode === "signup" && (
-          <div style={legalAcceptanceCard}>
-            <label style={legalAcceptanceLabel}>
-              <input
-                type="checkbox"
-                checked={legalAccepted}
-                onChange={(event) => setLegalAccepted(event.target.checked)}
-                style={legalCheckbox}
-              />
-              <span>
-                {t("legalAgreePrefix")}{" "}
-                <button
-                  type="button"
-                  style={inlineLegalLink}
-                  onClick={() => openLegalDocument("terms")}
-                >
-                  {t("termsOfUse")}
-                </button>{" "}
-                {t("legalAgreeAnd")}{" "}
-                <button
-                  type="button"
-                  style={inlineLegalLink}
-                  onClick={() => openLegalDocument("privacy")}
-                >
-                  {t("privacyPolicy")}
-                </button>
-                .
-              </span>
-            </label>
-          </div>
-        )}
-
-        <button
-          style={{
-            ...submitButton,
-            ...(mode === "signup" && !legalAccepted ? disabledSubmitButton : {}),
-          }}
-          onClick={handleSubmit}
-          disabled={loading || (mode === "signup" && !legalAccepted)}
-        >
+        <button style={submitButton} onClick={handleSubmit} disabled={loading}>
           {loading
             ? T.pleaseWait
             : mode === "login"
             ? T.login
             : T.createAccount}
         </button>
-
-        {import.meta.env.DEV && (
-          <button
-            type="button"
-            style={qaSeedButton}
-            onClick={enterQAMobileWorkflowState}
-          >
-            QA Mobile: Sarah / William
-          </button>
-        )}
-          </>
-        )}
       </div>
-
-      <nav style={legalFooter} aria-label={t("legalDocuments")}>
-        <button
-          type="button"
-          style={footerLegalLink}
-          onClick={() => openLegalDocument("terms")}
-        >
-          {t("termsOfUse")}
-        </button>
-        <button
-          type="button"
-          style={footerLegalLink}
-          onClick={() => openLegalDocument("privacy")}
-        >
-          {t("privacyPolicy")}
-        </button>
-        <button
-          type="button"
-          style={footerLegalLink}
-          onClick={() => openLegalDocument("emergency")}
-        >
-          {t("emergencyDisclaimer")}
-        </button>
-        <button
-          type="button"
-          style={footerLegalLink}
-          onClick={() => openLegalDocument("ai")}
-        >
-          {t("aiAssistanceDisclaimer")}
-        </button>
-      </nav>
     </div>
   );
 }
 
 const pageWrapper = {
-  minHeight: "100dvh",
-  background:
-    "radial-gradient(circle at 50% 88%, rgba(91,61,245,0.26), transparent 28%), linear-gradient(180deg,#050719 0%,#080a22 52%,#030414 100%)",
-  padding:
-    "calc(env(safe-area-inset-top, 0px) + 18px) max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 18px) max(18px, env(safe-area-inset-left, 0px))",
+  minHeight: "100vh",
+  background: "#f5f7fb",
+  padding: "18px",
   boxSizing: "border-box",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
-  width: "100%",
-  maxWidth: "760px",
-  margin: "0 auto",
-  color: "#ffffff",
-  overflowX: "hidden",
 };
 
 const languageBar = {
   display: "flex",
-  justifyContent: "center",
-  marginBottom: "22px",
-  width: "100%",
+  justifyContent: "flex-end",
+  marginBottom: "16px",
 };
 
 const languageBox = {
-  width: "100%",
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "8px",
-  padding: "4px",
+  background: "white",
   borderRadius: "18px",
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  boxSizing: "border-box",
+  padding: "10px 14px",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
 };
 
-const languageButton = {
-  minHeight: "38px",
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: "14px",
-  background: "rgba(255,255,255,0.04)",
-  color: "#cbd5e1",
-  fontSize: "13px",
-  fontWeight: "850",
-  cursor: "pointer",
-  padding: "8px 9px",
-};
-
-const languageButtonActive = {
-  background: "linear-gradient(135deg,#6d4dff,#5b3df5)",
-  borderColor: "rgba(167,139,250,0.65)",
-  color: "#ffffff",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.24)",
+const languageLabel = {
+  fontWeight: "900",
+  color: "#111827",
 };
 
 const languageSelect = {
@@ -951,85 +576,49 @@ const languageSelect = {
 };
 
 const heroCard = {
-  background: "transparent",
+  background:
+    "linear-gradient(135deg, rgba(91,61,245,0.96) 0%, rgba(124,92,255,0.96) 100%)",
   borderRadius: "30px",
-  padding: "42px 22px 64px",
+  padding: "32px 28px",
   color: "white",
-  marginBottom: "10px",
+  marginBottom: "24px",
+  boxShadow: "0 18px 44px rgba(91,61,245,0.25)",
   position: "relative",
   overflow: "hidden",
-  minHeight: "270px",
-  display: "grid",
-  alignContent: "center",
 };
 
 const heroBubble = {
   position: "absolute",
-  bottom: "18px",
-  left: "50%",
-  transform: "translateX(-50%)",
-  width: "260px",
-  height: "100px",
+  top: "-40px",
+  right: "-40px",
+  width: "140px",
+  height: "140px",
   borderRadius: "50%",
-  background: "rgba(91,61,245,0.18)",
-  filter: "blur(2px)",
-};
-
-const heroWaveOne = {
-  position: "absolute",
-  left: "-20%",
-  right: "-20%",
-  bottom: "30px",
-  height: "92px",
-  borderRadius: "50%",
-  background:
-    "linear-gradient(135deg, transparent 8%, rgba(91,61,245,0.34) 42%, rgba(124,58,237,0.18) 72%, transparent 100%)",
-  transform: "rotate(-8deg)",
-};
-
-const heroWaveTwo = {
-  position: "absolute",
-  left: "-18%",
-  right: "-18%",
-  bottom: "8px",
-  height: "86px",
-  borderRadius: "50%",
-  background:
-    "linear-gradient(135deg, transparent 10%, rgba(76,29,149,0.28) 46%, rgba(91,61,245,0.16) 80%, transparent 100%)",
-  transform: "rotate(7deg)",
+  background: "rgba(255,255,255,0.08)",
 };
 
 const logoCircle = {
-  width: "68px",
-  height: "68px",
+  width: "70px",
+  height: "70px",
   borderRadius: "24px",
-  background: "rgba(139,92,246,0.18)",
-  border: "1px solid rgba(167,139,250,0.22)",
+  background: "rgba(255,255,255,0.18)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  fontSize: "34px",
+  fontWeight: "900",
   margin: "0 auto 18px",
   position: "relative",
   zIndex: 2,
-  boxShadow: "0 14px 34px rgba(91,61,245,0.18)",
 };
 
 const heroTitle = {
-  fontSize: "40px",
-  fontWeight: "950",
-  margin: "0 0 14px",
+  fontSize: "42px",
+  fontWeight: "900",
+  margin: "0 0 10px",
   textAlign: "center",
   position: "relative",
   zIndex: 2,
-  color: "#8b5cf6",
-  letterSpacing: "-0.04em",
-};
-
-const heroTrademark = {
-  fontSize: "9px",
-  verticalAlign: "super",
-  marginLeft: "2px",
-  letterSpacing: 0,
 };
 
 const securityTitle = {
@@ -1045,12 +634,10 @@ const heroSubtitle = {
   textAlign: "center",
   fontSize: "16px",
   lineHeight: "1.5",
-  opacity: 0.98,
-  margin: "0 auto",
-  maxWidth: "250px",
+  opacity: 0.95,
+  margin: "0",
   position: "relative",
   zIndex: 2,
-  color: "#f8fafc",
 };
 
 const securityText = {
@@ -1063,11 +650,10 @@ const securityText = {
 };
 
 const cardStyle = {
-  background: "rgba(255,255,255,0.96)",
-  borderRadius: "26px",
-  padding: "18px",
-  boxShadow: "0 18px 50px rgba(0,0,0,0.28)",
-  border: "1px solid rgba(255,255,255,0.16)",
+  background: "white",
+  borderRadius: "28px",
+  padding: "22px",
+  boxShadow: "0 16px 40px rgba(0,0,0,0.07)",
 };
 
 const toggleRow = {
@@ -1078,79 +664,49 @@ const toggleRow = {
 };
 
 const toggleButton = {
-  border: "1px solid rgba(91,61,245,0.18)",
+  border: "none",
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
   cursor: "pointer",
 };
 
-const authIntro = {
-  textAlign: "center",
-  margin: "2px 0 18px",
-};
-
-const authIntroTitle = {
-  margin: "0 0 5px",
-  color: "#0f172a",
-  fontSize: "22px",
-  fontWeight: "950",
-  letterSpacing: "-0.02em",
-};
-
-const authIntroText = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "14px",
-  lineHeight: 1.4,
-  fontWeight: "750",
-};
-
 const sectionTitle = {
   textAlign: "center",
-  fontSize: "18px",
+  fontSize: "24px",
   fontWeight: "900",
   color: "#111827",
-  margin: "0 0 12px",
-};
-
-const accountTypeGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "10px",
-  marginBottom: "14px",
+  marginBottom: "18px",
 };
 
 const accountCard = {
   width: "100%",
   border: "1px solid #e5e7eb",
   background: "white",
-  borderRadius: "18px",
-  padding: "14px",
+  borderRadius: "22px",
+  padding: "18px",
   display: "grid",
-  gap: "6px",
+  gap: "8px",
   textAlign: "left",
+  marginBottom: "14px",
   cursor: "pointer",
-  color: "#1e293b",
-  minHeight: "132px",
-  boxSizing: "border-box",
 };
 
 const selectedAccountCard = {
-  ...accountCard,
-  border: "2px solid #6d4dff",
+  width: "100%",
+  border: "2px solid #5b3df5",
   background: "#f3f0ff",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.14)",
+  borderRadius: "22px",
+  padding: "18px",
+  display: "grid",
+  gap: "8px",
+  textAlign: "left",
+  marginBottom: "14px",
+  cursor: "pointer",
 };
 
 const accountIcon = {
-  width: "fit-content",
-  borderRadius: "999px",
-  padding: "5px 9px",
-  background: "#ede9fe",
-  color: "#5b3df5",
-  fontSize: "12px",
-  fontWeight: "950",
+  fontSize: "28px",
 };
 
 const input = {
@@ -1158,22 +714,11 @@ const input = {
   border: "1px solid #e5e7eb",
   borderRadius: "18px",
   padding: "15px 16px",
-  fontSize: "16px",
+  fontSize: "15px",
   boxSizing: "border-box",
   outline: "none",
   marginBottom: "14px",
   background: "white",
-};
-
-const fieldHelperText = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "6px",
-  margin: "-8px 0 14px",
-  color: "#64748b",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  fontWeight: "750",
 };
 
 const hiddenInput = {
@@ -1230,112 +775,6 @@ const submitButton = {
   boxShadow: "0 12px 24px rgba(91,61,245,0.28)",
 };
 
-const forgotPasswordButton = {
-  display: "block",
-  width: "100%",
-  border: "none",
-  background: "transparent",
-  color: "#5b3df5",
-  fontSize: "14px",
-  fontWeight: "900",
-  textAlign: "right",
-  padding: "0 2px 14px",
-  cursor: "pointer",
-};
-
-const resetForm = {
-  display: "grid",
-  gap: "10px",
-};
-
-const resetErrorBox = {
-  marginTop: "-8px",
-  padding: "12px 14px",
-  borderRadius: "16px",
-  border: "1px solid rgba(239, 68, 68, 0.22)",
-  background: "#fef2f2",
-  color: "#991b1b",
-  fontSize: "13px",
-  fontWeight: "850",
-  lineHeight: 1.4,
-};
-
-const resetConfirmationBox = {
-  display: "grid",
-  gap: "6px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid rgba(16, 185, 129, 0.22)",
-  background: "#ecfdf5",
-  color: "#065f46",
-  fontSize: "13px",
-  fontWeight: "800",
-  lineHeight: 1.45,
-};
-
-const disabledSubmitButton = {
-  opacity: 0.58,
-  cursor: "not-allowed",
-  boxShadow: "none",
-};
-
-const legalAcceptanceCard = {
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
-  borderRadius: "18px",
-  padding: "13px",
-  margin: "2px 0 12px",
-};
-
-const legalAcceptanceLabel = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "10px",
-  color: "#334155",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  fontWeight: "700",
-};
-
-const legalCheckbox = {
-  width: "18px",
-  height: "18px",
-  marginTop: "1px",
-  accentColor: "#5b3df5",
-  flexShrink: 0,
-};
-
-const inlineLegalLink = {
-  border: "none",
-  background: "transparent",
-  color: "#5b3df5",
-  fontWeight: "900",
-  padding: 0,
-  textDecoration: "underline",
-  cursor: "pointer",
-  font: "inherit",
-};
-
-const legalFooter = {
-  display: "flex",
-  flexWrap: "wrap",
-  justifyContent: "center",
-  gap: "8px 12px",
-  marginTop: "18px",
-  paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-};
-
-const footerLegalLink = {
-  border: "none",
-  background: "transparent",
-  color: "#5b3df5",
-  fontSize: "12px",
-  fontWeight: "800",
-  textDecoration: "underline",
-  cursor: "pointer",
-  padding: "6px",
-};
-
 const guestButton = {
   width: "100%",
   padding: "15px",
@@ -1345,19 +784,6 @@ const guestButton = {
   color: "white",
   fontSize: "15px",
   fontWeight: "800",
-  cursor: "pointer",
-  marginTop: "12px",
-};
-
-const qaSeedButton = {
-  width: "100%",
-  padding: "13px",
-  borderRadius: "16px",
-  border: "1px solid #c4b5fd",
-  background: "#f5f3ff",
-  color: "#4c1d95",
-  fontSize: "14px",
-  fontWeight: "900",
   cursor: "pointer",
   marginTop: "12px",
 };

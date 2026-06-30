@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import {
   isProfessionalSession,
   syncAccountModeForPage,
@@ -70,7 +69,6 @@ import JobUpdate from "./pages/JobUpdate";
 import Legal from "./pages/Legal";
 import MeetroJourney from "./pages/MeetroJourney";
 import MeetroStory from "./pages/MeetroStory";
-import PublicLanding from "./pages/PublicLanding";
 
 const PageLoader = () => (
   <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
@@ -154,12 +152,7 @@ const publicLegalDocumentRoutes = {
   aiDisclaimer: "ai",
 };
 
-const publicMarketingRoutes = new Set([
-  "landing",
-  "meetro",
-  "meetroStory",
-  "publicLanding",
-]);
+const publicMarketingRoutes = new Set(["meetroStory"]);
 
 function withAssistantLayer(component, currentPage, setPage) {
   return withRouteBoundary(
@@ -189,14 +182,6 @@ function withGuideLayer(component, currentPage, setPage) {
 }
 
 function App() {
-  const isNativeRuntime = () => {
-    try {
-      return Boolean(Capacitor?.isNativePlatform?.());
-    } catch {
-      return false;
-    }
-  };
-
   useEffect(() => {
     recoverStoredRequestRelationships();
   }, []);
@@ -370,10 +355,6 @@ function App() {
     const routedHash = getTipsPageForRoute(currentHash);
 
     if (!hasToken) {
-      if (!currentHash && !isNativeRuntime()) {
-        return "publicLanding";
-      }
-
       return "login";
     }
 
@@ -706,10 +687,6 @@ if (page === "meetroJourney" || page === "tips" || page === "learn-meetro") {
 
 if (page === "meetroStory") {
   return <MeetroStory setPage={setPage} />;
-}
-
-if (page === "publicLanding" || page === "landing" || page === "meetro") {
-  return <PublicLanding />;
 }
 
 if (page === "contractorProfile") {

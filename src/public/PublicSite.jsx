@@ -1,20 +1,62 @@
-import heroImage from "../assets/hero.png";
-
 const PUBLIC_LINKS = [
-  { label: "Privacy Policy", href: "#privacy" },
-  { label: "Terms of Service", href: "#terms" },
-  { label: "Contact", href: "mailto:william@flexlabs.com" },
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Contact", href: "/contact" },
 ];
+
+const PUBLIC_ROUTES = new Set(["/", "/privacy", "/terms", "/contact"]);
+
+export function isPublicWebsitePath(pathname = "/") {
+  const cleanPath = normalizePublicPath(pathname);
+  return PUBLIC_ROUTES.has(cleanPath);
+}
+
+function normalizePublicPath(pathname = "/") {
+  const cleanPath = String(pathname || "/").replace(/\/+$/, "") || "/";
+  return cleanPath;
+}
+
+function PublicSite() {
+  const path = normalizePublicPath(window.location.pathname);
+
+  if (path === "/privacy") {
+    return (
+      <PublicDocumentPage
+        title="Privacy Policy"
+        text="Meetro is preparing for launch. Public privacy information will be maintained by WM FLEX LABS, LLC."
+      />
+    );
+  }
+
+  if (path === "/terms") {
+    return (
+      <PublicDocumentPage
+        title="Terms of Service"
+        text="Meetro is preparing for launch. Public terms of service will be maintained by WM FLEX LABS, LLC."
+      />
+    );
+  }
+
+  if (path === "/contact") {
+    return (
+      <PublicDocumentPage
+        title="Contact"
+        text="For Meetro questions, contact WM FLEX LABS, LLC."
+        showEmail
+      />
+    );
+  }
+
+  return <PublicLanding />;
+}
 
 function PublicLanding() {
   return (
     <main style={page}>
       <section style={heroSection}>
         <div style={heroBackdrop} aria-hidden="true" />
-        <img src={heroImage} alt="" style={heroImageStyle} aria-hidden="true" />
-
         <nav style={nav} aria-label="Meetro public site">
-          <a href="#top" style={brandLink}>
+          <a href="/" style={brandLink}>
             Meetro
           </a>
           <div style={navLinks}>
@@ -26,51 +68,95 @@ function PublicLanding() {
           </div>
         </nav>
 
-        <div id="top" style={heroContent}>
+        <div style={heroContent}>
           <p style={statusPill}>Preparing for launch</p>
           <h1 style={heroTitle}>Meetro</h1>
+          <p style={communityLabel}>Community</p>
           <p style={heroLine}>Connect. Communicate. Complete.</p>
-          <p style={heroText}>
-            Meetro is preparing for launch.
-          </p>
+          <p style={heroText}>Meetro is preparing for launch.</p>
           <p style={companyLine}>
             Meetro is developed and published by WM FLEX LABS, LLC.
           </p>
           <div style={heroActions}>
-            <a href="mailto:william@flexlabs.com" style={primaryAction}>
+            <a href="/contact" style={primaryAction}>
               Contact
             </a>
           </div>
         </div>
       </section>
 
-      <footer style={footer}>
-        <div>
-          <strong style={footerBrand}>Meetro</strong>
-          <p style={footerText}>Meetro is a product of WM FLEX LABS, LLC.</p>
-          <p style={footerText}>
-            Developed and published by WM FLEX LABS, LLC.
-          </p>
-          <p style={footerText}>
-            Contact:{" "}
-            <a href="mailto:william@flexlabs.com" style={footerLink}>
-              william@flexlabs.com
-            </a>
-          </p>
-          <p style={copyright}>
-            {"\u00A9"} 2026 WM FLEX LABS, LLC. All rights reserved.
-          </p>
-        </div>
+      <PublicFooter />
+    </main>
+  );
+}
 
-        <div style={footerLinks}>
+function PublicDocumentPage({ title, text, showEmail = false }) {
+  return (
+    <main style={documentPage}>
+      <nav style={documentNav} aria-label="Meetro public site">
+        <a href="/" style={brandLink}>
+          Meetro
+        </a>
+        <div style={navLinks}>
           {PUBLIC_LINKS.map((link) => (
-            <a key={link.label} href={link.href} style={footerLink}>
+            <a key={link.label} href={link.href} style={navLink}>
               {link.label}
             </a>
           ))}
         </div>
-      </footer>
+      </nav>
+
+      <section style={documentCard}>
+        <p style={statusPill}>Preparing for launch</p>
+        <h1 style={documentTitle}>{title}</h1>
+        <p style={documentText}>{text}</p>
+        {showEmail && (
+          <p style={documentText}>
+            Email:{" "}
+            <a href="mailto:william@flexlabs.com" style={inlineLink}>
+              william@flexlabs.com
+            </a>
+          </p>
+        )}
+        <p style={companyLine}>
+          Developed and published by WM FLEX LABS, LLC.
+        </p>
+        <a href="/" style={secondaryAction}>
+          Back to Meetro
+        </a>
+      </section>
+
+      <PublicFooter />
     </main>
+  );
+}
+
+function PublicFooter() {
+  return (
+    <footer style={footer}>
+      <div>
+        <strong style={footerBrand}>Meetro</strong>
+        <p style={footerText}>Meetro is a product of WM FLEX LABS, LLC.</p>
+        <p style={footerText}>Developed and published by WM FLEX LABS, LLC.</p>
+        <p style={footerText}>
+          Contact:{" "}
+          <a href="mailto:william@flexlabs.com" style={footerLink}>
+            william@flexlabs.com
+          </a>
+        </p>
+        <p style={copyright}>
+          {"\u00A9"} 2026 WM FLEX LABS, LLC. All rights reserved.
+        </p>
+      </div>
+
+      <div style={footerLinks}>
+        {PUBLIC_LINKS.map((link) => (
+          <a key={link.label} href={link.href} style={footerLink}>
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </footer>
   );
 }
 
@@ -106,17 +192,6 @@ const heroBackdrop = {
   pointerEvents: "none",
 };
 
-const heroImageStyle = {
-  position: "absolute",
-  right: "max(-42px, -6vw)",
-  bottom: "clamp(18px, 7vw, 82px)",
-  width: "clamp(210px, 42vw, 440px)",
-  maxWidth: "72vw",
-  opacity: 0.34,
-  filter: "drop-shadow(0 28px 44px rgba(91,61,245,0.18))",
-  pointerEvents: "none",
-};
-
 const nav = {
   position: "relative",
   zIndex: 1,
@@ -127,6 +202,13 @@ const nav = {
   width: "100%",
   maxWidth: "1120px",
   margin: "0 auto",
+};
+
+const documentNav = {
+  ...nav,
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 18px) clamp(18px, 5vw, 64px) 0",
+  boxSizing: "border-box",
 };
 
 const brandLink = {
@@ -180,6 +262,14 @@ const heroTitle = {
   fontWeight: 950,
 };
 
+const communityLabel = {
+  margin: "10px 0 0",
+  color: "#475569",
+  fontSize: "clamp(19px, 4vw, 28px)",
+  lineHeight: 1.12,
+  fontWeight: 900,
+};
+
 const heroLine = {
   margin: "16px 0 0",
   color: "#312e81",
@@ -225,6 +315,57 @@ const primaryAction = {
   fontWeight: 950,
   textDecoration: "none",
   boxShadow: "0 16px 34px rgba(91,61,245,0.24)",
+};
+
+const secondaryAction = {
+  ...primaryAction,
+  marginTop: "24px",
+  background: "rgba(255,255,255,0.78)",
+  color: "#4b32d1",
+  border: "1px solid rgba(91,61,245,0.18)",
+  boxShadow: "none",
+};
+
+const documentPage = {
+  minHeight: "100vh",
+  background: "#f7f8fc",
+  color: "#111827",
+  fontFamily: fontStack,
+  display: "grid",
+  gridTemplateRows: "auto 1fr auto",
+};
+
+const documentCard = {
+  width: "min(100% - 36px, 760px)",
+  margin: "clamp(64px, 14vh, 120px) auto",
+  border: "1px solid rgba(15,23,42,0.08)",
+  borderRadius: "24px",
+  padding: "clamp(24px, 5vw, 42px)",
+  boxSizing: "border-box",
+  background: "rgba(255,255,255,0.86)",
+  boxShadow: "0 20px 56px rgba(15,23,42,0.08)",
+};
+
+const documentTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "clamp(36px, 8vw, 68px)",
+  lineHeight: 1,
+  fontWeight: 950,
+};
+
+const documentText = {
+  margin: "18px 0 0",
+  color: "#475569",
+  fontSize: "18px",
+  lineHeight: 1.58,
+  fontWeight: 650,
+};
+
+const inlineLink = {
+  color: "#4b32d1",
+  fontWeight: 850,
+  textDecoration: "none",
 };
 
 const footer = {
@@ -277,4 +418,4 @@ const copyright = {
   fontWeight: 700,
 };
 
-export default PublicLanding;
+export default PublicSite;
