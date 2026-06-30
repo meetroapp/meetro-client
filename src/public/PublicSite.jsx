@@ -23,7 +23,7 @@ function PublicSite() {
     return (
       <PublicDocumentPage
         title="Privacy Policy"
-        text="Meetro is preparing for launch. Public privacy information will be maintained by WM FLEX LABS, LLC."
+        text="Meetro Community is preparing for launch. Public privacy information will be maintained by WM FLEX LABS, LLC."
       />
     );
   }
@@ -32,7 +32,7 @@ function PublicSite() {
     return (
       <PublicDocumentPage
         title="Terms of Service"
-        text="Meetro is preparing for launch. Public terms of service will be maintained by WM FLEX LABS, LLC."
+        text="Meetro Community is preparing for launch. Public terms of service will be maintained by WM FLEX LABS, LLC."
       />
     );
   }
@@ -41,7 +41,7 @@ function PublicSite() {
     return (
       <PublicDocumentPage
         title="Contact"
-        text="For Meetro questions, contact WM FLEX LABS, LLC."
+        text="For Meetro Community questions, contact WM FLEX LABS, LLC."
         showEmail
       />
     );
@@ -75,7 +75,10 @@ function PublicLanding() {
           <p style={heroLine}>Connect. Communicate. Complete.</p>
           <p style={heroText}>Meetro is preparing for launch.</p>
           <p style={companyLine}>
-            Meetro is developed and published by WM FLEX LABS, LLC.
+            Meetro Community is a product of WM FLEX LABS, LLC.
+          </p>
+          <p style={companyLine}>
+            Developed and published by WM FLEX LABS, LLC.
           </p>
           <div style={heroActions}>
             <a href="/contact" style={primaryAction}>
@@ -119,6 +122,9 @@ function PublicDocumentPage({ title, text, showEmail = false }) {
           </p>
         )}
         <p style={companyLine}>
+          Meetro Community is a product of WM FLEX LABS, LLC.
+        </p>
+        <p style={companyLine}>
           Developed and published by WM FLEX LABS, LLC.
         </p>
         <a href="/" style={secondaryAction}>
@@ -135,11 +141,12 @@ function PublicFooter() {
   return (
     <footer style={footer}>
       <div>
-        <strong style={footerBrand}>Meetro</strong>
-        <p style={footerText}>Meetro is a product of WM FLEX LABS, LLC.</p>
+        <strong style={footerBrand}>Meetro Community</strong>
+        <p style={footerText}>A product of WM FLEX LABS, LLC.</p>
         <p style={footerText}>Developed and published by WM FLEX LABS, LLC.</p>
         <p style={footerText}>
-          Contact:{" "}
+          Contact:
+          <br />
           <a href="mailto:william@flexlabs.com" style={footerLink}>
             william@flexlabs.com
           </a>
