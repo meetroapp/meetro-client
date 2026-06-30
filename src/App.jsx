@@ -1,17 +1,22 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import {
   isProfessionalSession,
   syncAccountModeForPage,
 } from "./utils/session";
+import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
+import { recoverStoredRequestRelationships } from "./utils/requestRelationshipRecovery";
 import MeetroAssistant from "./components/MeetroAssistant";
 import GuideOverlay from "./components/GuideOverlay";
+import GlobalInsightLayer from "./components/GlobalInsightLayer";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
 import Assistant from "./pages/Assistant";
 const Discover = lazy(() => import("./pages/Discover"));
-import Upload from "./pages/Upload";
-import Profile from "./pages/Profile";
+const Upload = lazy(() => import("./pages/Upload"));
+const Profile = lazy(() => import("./pages/Profile"));
 import ContractorProfile from "./pages/ContractorProfile";
 import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
@@ -21,6 +26,7 @@ import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const BusinessDashboard = lazy(() => import("./pages/BusinessDashboard"));
+const BusinessLeads = lazy(() => import("./pages/BusinessLeads"));
 import ProjectGallery from "./pages/ProjectGallery";
 const MessagesInbox = lazy(() => import("./pages/MessagesInbox"));
 const Notifications = lazy(() => import("./pages/Notifications"));
@@ -42,12 +48,11 @@ import EmergencyComplete from "./pages/EmergencyComplete";
 import ContractorDashboard from "./pages/ContractorDashboard";
 import CompletedJobDetails from "./pages/CompletedJobDetails";
 import ContractorJobAccepted from "./pages/ContractorJobAccepted";
-import BusinessLeads from "./pages/BusinessLeads";
 import QuoteBuilder from "./pages/QuoteBuilder";
 import ChangeOrderRequest from "./pages/ChangeOrderRequest";
 import BusinessAnalytics from "./pages/BusinessAnalytics";
 import BusinessCommandCenter from "./pages/BusinessCommandCenter";
-import ProfessionalOnboarding from "./pages/ProfessionalOnboarding";
+const ProfessionalOnboarding = lazy(() => import("./pages/ProfessionalOnboarding"));
 import BusinessAvailability from "./pages/BusinessAvailability";
 import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
 import HiringCenter from "./pages/HiringCenter";
@@ -65,6 +70,7 @@ import JobUpdate from "./pages/JobUpdate";
 import Legal from "./pages/Legal";
 import MeetroJourney from "./pages/MeetroJourney";
 import MeetroStory from "./pages/MeetroStory";
+import PublicLanding from "./pages/PublicLanding";
 
 const PageLoader = () => (
   <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
@@ -80,6 +86,38 @@ function withSuspense(component) {
   );
 }
 
+function safeGetStorageItem(key, fallback = "") {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeSetStorageItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage may be unavailable in restricted WebView contexts.
+  }
+}
+
+function safeReadJsonStorage(key, fallback) {
+  try {
+    return JSON.parse(safeGetStorageItem(key, "null")) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function withRouteBoundary(component, currentPage, setPage) {
+  return (
+    <RouteErrorBoundary resetKey={currentPage} currentPage={currentPage} setPage={setPage}>
+      {component}
+    </RouteErrorBoundary>
+  );
+}
+
 const assistantEnabledPages = new Set([
   "home",
   "discover",
@@ -92,7 +130,9 @@ const assistantEnabledPages = new Set([
   "notifications",
   "businessDashboard",
   "contractorDashboard",
+  "contractorProfile",
   "workCenter",
+  "schedule",
   "businessLeads",
   "quoteRequests",
   "quoteBuilder",
@@ -114,31 +154,52 @@ const publicLegalDocumentRoutes = {
   aiDisclaimer: "ai",
 };
 
-const publicMarketingRoutes = new Set(["meetroStory"]);
+const publicMarketingRoutes = new Set([
+  "landing",
+  "meetro",
+  "meetroStory",
+  "publicLanding",
+]);
 
 function withAssistantLayer(component, currentPage, setPage) {
-  return (
+  return withRouteBoundary(
     <>
       {component}
       {assistantEnabledPages.has(currentPage) && (
         <MeetroAssistant currentPage={currentPage} setPage={setPage} />
       )}
+      <GlobalInsightLayer currentPage={currentPage} setPage={setPage} />
       <GuideOverlay currentPage={currentPage} setPage={setPage} />
-    </>
+    </>,
+    currentPage,
+    setPage
   );
 }
 
 function withGuideLayer(component, currentPage, setPage) {
-  return (
+  return withRouteBoundary(
     <>
       {component}
+      <GlobalInsightLayer currentPage={currentPage} setPage={setPage} />
       <GuideOverlay currentPage={currentPage} setPage={setPage} />
-    </>
+    </>,
+    currentPage,
+    setPage
   );
 }
 
 function App() {
-  const token = localStorage.getItem("token");
+  const isNativeRuntime = () => {
+    try {
+      return Boolean(Capacitor?.isNativePlatform?.());
+    } catch {
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    recoverStoredRequestRelationships();
+  }, []);
 
  const professionalOnlyPages = [
   "assetCenter",
@@ -184,6 +245,11 @@ function App() {
 
   const getRoutePage = (route = "") => String(route || "").split("?")[0];
 
+  const getTipsPageForRoute = (targetPage = "") =>
+    ["tips", "learn-meetro", "meetroJourney"].includes(targetPage)
+      ? "meetroJourney"
+      : targetPage;
+
   const getHashRoute = () => window.location.hash.replace("#", "") || "";
 
   const isPublicProfileRoute = (route = "") => {
@@ -202,7 +268,7 @@ function App() {
     const selectedDocument = publicLegalDocumentRoutes[targetPage];
 
     if (selectedDocument) {
-      localStorage.setItem("meetroSelectedLegalDocument", selectedDocument);
+      safeSetStorageItem("meetroSelectedLegalDocument", selectedDocument);
       return "legal";
     }
 
@@ -218,7 +284,7 @@ function App() {
       return targetPage;
     }
 
-    const hasToken = localStorage.getItem("token");
+    const hasToken = safeGetStorageItem("token");
 
     if (isProfessionalOnlyPage(targetPage) && !hasToken) {
       return "login";
@@ -226,7 +292,7 @@ function App() {
 
     if (
       isProfessionalOnlyPage(targetPage) &&
-      (localStorage.getItem("activeAccountMode") || "personal") === "personal"
+      (safeGetStorageItem("activeAccountMode", "personal") || "personal") === "personal"
     ) {
       return "home";
     }
@@ -240,11 +306,45 @@ function App() {
       : targetPage;
   };
 
+  const hasRequiredProfessionalSetupData = () => {
+    let contractorProfile = {};
+    try {
+      contractorProfile = safeReadJsonStorage("contractorProfile", {});
+    } catch {
+      contractorProfile = {};
+    }
+
+    const serviceProfile = readBusinessServiceProfile(undefined, contractorProfile);
+    const parsedAvailability = safeReadJsonStorage("businessAvailability", []);
+    const availability = Array.isArray(parsedAvailability) ? parsedAvailability : [];
+    const businessName =
+      safeGetStorageItem("businessName") ||
+      contractorProfile.businessName ||
+      contractorProfile.name ||
+      "";
+    const serviceArea =
+      safeGetStorageItem("businessPrimaryCity") ||
+      safeGetStorageItem("businessZipCodes") ||
+      safeGetStorageItem("businessServiceArea") ||
+      contractorProfile.serviceArea ||
+      contractorProfile.location ||
+      "";
+
+    return Boolean(
+      String(businessName).trim() &&
+        String(serviceArea).trim() &&
+        serviceProfile.serviceSpecialties.length > 0 &&
+        availability.length > 0
+    );
+  };
+
 	  const shouldRouteToProfessionalOnboarding = (targetPage) => {
 	    if (targetPage !== "businessDashboard") return false;
 	    if (!isProfessionalSession()) return false;
-	    if (localStorage.getItem("meetroProfessionalOnboardingCompleted") === "true") return false;
-	    if (localStorage.getItem("meetroProfessionalOnboardingSkipped") === "true") return false;
+	    if (hasRequiredProfessionalSetupData()) {
+	      safeSetStorageItem("meetroProfessionalOnboardingCompleted", "true");
+	      return false;
+	    }
 	    return true;
 	  };
 	
@@ -253,7 +353,7 @@ function App() {
     const currentHash = getRoutePage(currentRoute);
 
     const hasToken =
-      localStorage.getItem("token");
+      safeGetStorageItem("token");
 
     if (currentHash && isPublicLegalPage(currentHash)) {
       return getLegalPageForRoute(currentHash);
@@ -267,26 +367,32 @@ function App() {
       return "contractorDetails";
     }
 
+    const routedHash = getTipsPageForRoute(currentHash);
+
     if (!hasToken) {
+      if (!currentHash && !isNativeRuntime()) {
+        return "publicLanding";
+      }
+
       return "login";
     }
 
     const onboardingComplete =
-      localStorage.getItem("onboardingComplete");
+      safeGetStorageItem("onboardingComplete");
 
     if (!onboardingComplete) {
       return "welcomeIntro";
     }
 
 	    if (
-	      currentHash &&
-	      isProfessionalOnlyPage(currentHash)
+	      routedHash &&
+	      isProfessionalOnlyPage(routedHash)
 	    ) {
-	      return getGuardedPage(currentHash);
+	      return getGuardedPage(routedHash);
     }
 
-    if (currentHash) {
-      return currentHash;
+    if (routedHash && routedHash !== "tour") {
+      return routedHash;
     }
 
 	    if (isProfessionalSession()) {
@@ -307,7 +413,7 @@ function App() {
   useEffect(() => {
     const handleAccountModeChange = () => {
       const activeMode =
-        localStorage.getItem("activeAccountMode") || "personal";
+        safeGetStorageItem("activeAccountMode", "personal");
 
       if (
         activeMode === "personal" &&
@@ -370,7 +476,7 @@ function App() {
       const hashPage = getRoutePage(hashRoute);
 
       const hasToken =
-        localStorage.getItem("token");
+        safeGetStorageItem("token");
 
       if (hashPage && isPublicLegalPage(hashPage)) {
         const legalPage = getLegalPageForRoute(hashPage);
@@ -408,7 +514,7 @@ function App() {
 
     const handleVisibilityResume = () => {
       const hasToken =
-        localStorage.getItem("token");
+        safeGetStorageItem("token");
       const currentRoute = getHashRoute();
       const currentHash = getRoutePage(currentRoute);
 
@@ -512,7 +618,7 @@ function App() {
       return;
     }
 
-    const hasToken = localStorage.getItem("token");
+    const hasToken = safeGetStorageItem("token");
 
     if (
       isProfessionalOnlyPage(newPage) &&
@@ -554,7 +660,7 @@ function App() {
 	  };
 
 if (page === "login") {
-  return <Login setPage={setPage} />;
+  return withRouteBoundary(<Login setPage={setPage} />, page, setPage);
 }
 
 if (page === "legal") {
@@ -586,15 +692,15 @@ if (page === "discover") {
 }
 
 if (page === "upload") {
-  return withAssistantLayer(<Upload setPage={setPage} />, page, setPage);
+  return withAssistantLayer(withSuspense(<Upload setPage={setPage} />), page, setPage);
 }
 
 
 if (page === "profile") {
-  return withAssistantLayer(<Profile setPage={setPage} />, page, setPage);
+  return withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage);
 }
 
-if (page === "meetroJourney") {
+if (page === "meetroJourney" || page === "tips" || page === "learn-meetro") {
   return <MeetroJourney setPage={setPage} />;
 }
 
@@ -602,8 +708,12 @@ if (page === "meetroStory") {
   return <MeetroStory setPage={setPage} />;
 }
 
+if (page === "publicLanding" || page === "landing" || page === "meetro") {
+  return <PublicLanding />;
+}
+
 if (page === "contractorProfile") {
-  return <ContractorProfile setPage={setPage} />;
+  return withRouteBoundary(<ContractorProfile setPage={setPage} />, page, setPage);
 }
 
 if (page === "chat") {
@@ -611,7 +721,7 @@ if (page === "chat") {
 }
 
 if (page === "conversation") {
-  return <Conversation setPage={setPage} />;
+  return withRouteBoundary(<Conversation setPage={setPage} />, page, setPage);
 }
 
 if (page === "projectDetails") {
@@ -619,7 +729,7 @@ if (page === "projectDetails") {
 }
 
 if (page === "contractors") {
-  localStorage.setItem("activeDiscoverMode", "businessDirectory");
+  safeSetStorageItem("activeDiscoverMode", "businessDirectory");
   return withSuspense(<Discover setPage={setPage} />);
 }
 
@@ -649,7 +759,11 @@ if (page === "businessDashboard") {
 }
 
 if (page === "professionalOnboarding") {
-  return <ProfessionalOnboarding setPage={setPage} />;
+  return withRouteBoundary(
+    withSuspense(<ProfessionalOnboarding setPage={setPage} />),
+    page,
+    setPage
+  );
 }
 
 if (page === "businessAnalytics") {
@@ -657,7 +771,11 @@ if (page === "businessAnalytics") {
 }
 
 if (page === "businessLeads") {
-  return withAssistantLayer(<BusinessLeads setPage={setPage} />, page, setPage);
+  return withAssistantLayer(
+    withSuspense(<BusinessLeads setPage={setPage} />),
+    page,
+    setPage
+  );
 }
 
 if (page === "quoteBuilder") {
@@ -768,7 +886,7 @@ if (page === "emergencyRequest") {
   return (
     <EmergencyRequest
       setPage={setPage}
-      selectedService={localStorage.getItem("selectedEmergencyService")}
+      selectedService={safeGetStorageItem("selectedEmergencyService")}
     />
   );
 }
