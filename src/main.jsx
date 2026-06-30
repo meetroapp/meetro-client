@@ -1,10 +1,16 @@
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import './index.css'
-import App from './App.jsx'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
 import PublicSite, { isPublicWebsitePath } from './public/PublicSite.jsx'
+
+// Public Presence Lock:
+// The public website is intentionally separate from the authenticated application.
+// Future product marketing belongs in src/public/PublicSite.jsx.
+// Authenticated product experiences belong inside App.jsx and app routes.
+// Do not merge these experiences without explicit architectural approval.
+const App = lazy(() => import('./App.jsx'))
 
 if (import.meta.env.DEV && typeof window !== "undefined") {
   window.addEventListener("error", (event) => {
@@ -47,10 +53,18 @@ function prepareAppEntryPath() {
 
 prepareAppEntryPath();
 
+const shouldUsePublicSite = shouldRenderPublicSite();
+
 createRoot(rootElement).render(
   <StrictMode>
     <RouteErrorBoundary resetKey="app">
-      {shouldRenderPublicSite() ? <PublicSite /> : <App />}
+      {shouldUsePublicSite ? (
+        <PublicSite />
+      ) : (
+        <Suspense fallback={<div style={{ padding: 24 }}>Loading Meetro...</div>}>
+          <App />
+        </Suspense>
+      )}
     </RouteErrorBoundary>
   </StrictMode>,
 )

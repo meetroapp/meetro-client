@@ -24,7 +24,13 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /"\/privacy"/);
   assert.match(publicSite, /"\/terms"/);
   assert.match(publicSite, /"\/contact"/);
-  assert.doesNotMatch(publicSite, /BottomNav|Login|TestFlight|roadmap|pricing|AI details/i);
+  assert.match(publicSite, /Back to Meetro/);
+  assert.match(publicSite, /href="\/"/);
+  assert.doesNotMatch(
+    publicSite,
+    /BottomNav|MeetroAssistant|BusinessDashboard|MessagesInbox|Work Center|WorkCenter|AuthProvider|SessionProvider|Login|TestFlight|roadmap|pricing|AI details/i
+  );
+  assert.doesNotMatch(publicSite, /#login|setPage|localStorage|sessionStorage/);
 
   assert.doesNotMatch(app, /PublicLanding/);
   assert.doesNotMatch(app, /publicLanding/);
@@ -33,4 +39,27 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(main, /isPublicWebsitePath/);
   assert.match(main, /isNativeRuntime/);
   assert.match(main, /window\.location\.pathname === "\/login"/);
+  assert.match(main, /const App = lazy\(\(\) => import\('\.\/App\.jsx'\)\)/);
+  assert.doesNotMatch(main, /import App from ['"]\.\/App\.jsx['"]/);
+  assert.match(main, /if \(isNativeRuntime\(\)\) return false/);
+  assert.match(main, /shouldUsePublicSite \? \(/);
+  assert.match(main, /Do not merge these experiences without explicit architectural approval/);
+});
+
+test("public presence standard documents the public and app boundary", () => {
+  assert.equal(existsSync("docs/KnowledgeBase/PUBLIC_PRESENCE_STANDARD.md"), true);
+
+  const standard = readFileSync(
+    "docs/KnowledgeBase/PUBLIC_PRESENCE_STANDARD.md",
+    "utf8"
+  );
+
+  assert.match(standard, /Public Presence Standard/);
+  assert.match(standard, /Public vs App Separation/);
+  assert.match(standard, /Allowed Public Content/);
+  assert.match(standard, /Not Allowed Public Content/);
+  assert.match(standard, /Authenticated product experiences belong inside the app/);
+  assert.match(standard, /Phase 1 — Public Presence/);
+  assert.match(standard, /Phase 2 — TestFlight/);
+  assert.match(standard, /Phase 3 — Public Launch/);
 });
