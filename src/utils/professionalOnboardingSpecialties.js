@@ -4,10 +4,13 @@ export const PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS = Object.freeze([
     labelKey: "professionalOnboardingDomainHomeServices",
     options: Object.freeze([
       { value: "handyman", labelKey: "professionalOnboardingSpecialtyHandyman" },
+      { value: "garage_door_opener_installation", labelKey: "professionalOnboardingSpecialtyGarageDoorOpenerInstallation" },
       { value: "door_replacement", labelKey: "professionalOnboardingSpecialtyDoorReplacement" },
       { value: "painting", labelKey: "professionalOnboardingSpecialtyPainting" },
       { value: "drywall", labelKey: "professionalOnboardingSpecialtyDrywall" },
+      { value: "plumbing_repairs", labelKey: "professionalOnboardingSpecialtyPlumbingRepairs" },
       { value: "plumbing", labelKey: "professionalOnboardingSpecialtyPlumbing" },
+      { value: "ceiling_fan_installation", labelKey: "professionalOnboardingSpecialtyCeilingFanInstallation" },
       { value: "electrical", labelKey: "professionalOnboardingSpecialtyElectrical" },
       { value: "tile", labelKey: "professionalOnboardingSpecialtyTile" },
       { value: "cabinetry", labelKey: "professionalOnboardingSpecialtyCabinetry" },
@@ -43,6 +46,8 @@ export const PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS = Object.freeze([
     domain: "transportation",
     labelKey: "professionalOnboardingDomainTransportation",
     options: Object.freeze([
+      { value: "mechanic", labelKey: "professionalOnboardingSpecialtyMechanic" },
+      { value: "mobile_services", labelKey: "professionalOnboardingSpecialtyMobileServices" },
       { value: "private_transportation", labelKey: "professionalOnboardingSpecialtyPrivateTransportation" },
     ]),
   },
@@ -59,10 +64,12 @@ const LEGACY_CATEGORY_BY_SPECIALTY = Object.freeze({
   appliance_installation: "Appliance Installation",
   cabinetry: "Cabinetry",
   caregiver: "Home Health Care",
+  ceiling_fan_installation: "Ceiling Fan Installation",
   door_replacement: "Door Replacement",
   drywall: "Drywall",
   electrical: "Electrical",
   flooring: "Flooring",
+  garage_door_opener_installation: "Garage Door Opener Installation",
   general_maintenance: "General Maintenance",
   handyman: "Handyman",
   home_health: "Home Health Care",
@@ -71,8 +78,11 @@ const LEGACY_CATEGORY_BY_SPECIALTY = Object.freeze({
   nursing: "Home Health Care",
   painting: "Painting",
   plumbing: "Plumbing",
+  plumbing_repairs: "Plumbing Repairs",
   pressure_washing: "Pressure Washing",
   private_transportation: "Private Transportation",
+  mechanic: "Mechanic",
+  mobile_services: "Mobile Services",
   rental_maintenance: "Property Maintenance",
   senior_care: "Home Health Care",
   tenant_ticket: "Property Maintenance",
@@ -94,17 +104,22 @@ const LEGACY_SPECIALTY_BY_CATEGORY = Object.freeze({
   "appliance installation": "appliance_installation",
   cabinetry: "cabinetry",
   carpentry: "cabinetry",
+  "ceiling fan installation": "ceiling_fan_installation",
   "door replacement": "door_replacement",
   drywall: "drywall",
   electrical: "electrical",
   flooring: "flooring",
+  "garage door opener installation": "garage_door_opener_installation",
   "general maintenance": "general_maintenance",
   handyman: "handyman",
   "home health care": "home_health",
   painting: "painting",
   plumbing: "plumbing",
+  "plumbing repairs": "plumbing_repairs",
   "pressure washing": "pressure_washing",
   "private transportation": "private_transportation",
+  mechanic: "mechanic",
+  "mobile services": "mobile_services",
   "property maintenance": "rental_maintenance",
   tile: "tile",
 });
@@ -127,6 +142,12 @@ export function getProfessionalSpecialtyLabel(specialty = "", translate = (key) 
   if (option) return translate(option.labelKey);
 
   return "";
+}
+
+export function getProfessionalSpecialtyOption(specialty = "") {
+  return PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.flatMap(
+    (group) => group.options.map((option) => ({ ...option, domain: group.domain }))
+  ).find((item) => item.value === specialty) || null;
 }
 
 export function normalizeSelectedSpecialties(values = []) {
