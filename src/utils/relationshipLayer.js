@@ -1,4 +1,8 @@
 import { getConversationParticipantIdentity } from "./conversationIdentity.js";
+import {
+  getRecordProfileScopeKey,
+  normalizeProfileScopeKey,
+} from "./accountProfileScope.js";
 
 export const RELATIONSHIP_TYPE_LABELS = Object.freeze({
   customer: "Customer",
@@ -453,6 +457,9 @@ function hasSavedProfilePhotoSource(conversation = {}) {
 export function createRelationshipLayerModel(conversations = [], options = {}) {
   const viewerRole = String(options.viewerRole || "").toLowerCase();
   const activeMode = String(options.activeMode || viewerRole || "personal").toLowerCase();
+  const activeProfileScopeKey = normalizeProfileScopeKey(
+    options.activeProfileScopeKey || options.profileScopeKey || ""
+  );
   const relationshipMap = new Map();
 
   toArray(conversations).forEach((conversation) => {
@@ -464,6 +471,14 @@ export function createRelationshipLayerModel(conversations = [], options = {}) {
     });
     const type = inferRelationshipType(conversation, identity, viewerRole);
     if (!isVisibleForActiveMode(conversation, type, activeMode)) return;
+    const recordProfileScopeKey = getRecordProfileScopeKey(conversation);
+    if (
+      activeProfileScopeKey &&
+      recordProfileScopeKey &&
+      recordProfileScopeKey !== activeProfileScopeKey
+    ) {
+      return;
+    }
 
     const relationshipId = normalizeKey(getRelationshipId(conversation, type, identity));
     const existing =

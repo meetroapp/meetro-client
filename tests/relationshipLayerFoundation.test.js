@@ -226,6 +226,55 @@ test("saved linked contacts stay separated between personal and business scopes"
   assert.equal(businessModel.relationships[0].savedToContacts, true);
 });
 
+test("saved contacts stay separated between active business profile scopes", () => {
+  const records = [
+    {
+      id: "saved-contact-business-bgone-customer-ed",
+      relationshipId: "customer-ed",
+      relationshipType: "customer",
+      relationshipScope: "business",
+      accountMode: "business",
+      customerName: "Ed Customer",
+      status: "Saved contact",
+      contactImported: true,
+      savedToContacts: true,
+      meetroAccountLinked: true,
+      linkedMeetroAccountId: "customer-ed",
+      contactProfileScopeKey: "business:bgone",
+    },
+    {
+      id: "saved-contact-business-flex-customer-lori",
+      relationshipId: "customer-lori",
+      relationshipType: "customer",
+      relationshipScope: "business",
+      accountMode: "business",
+      customerName: "Lori Customer",
+      status: "Saved contact",
+      contactImported: true,
+      savedToContacts: true,
+      meetroAccountLinked: true,
+      linkedMeetroAccountId: "customer-lori",
+      contactProfileScopeKey: "business:flexlabs",
+    },
+  ];
+
+  const bgoneModel = createRelationshipLayerModel(records, {
+    viewerRole: "business",
+    activeMode: "business",
+    activeProfileScopeKey: "business:bgone",
+  });
+  const flexModel = createRelationshipLayerModel(records, {
+    viewerRole: "business",
+    activeMode: "business",
+    activeProfileScopeKey: "business:flexlabs",
+  });
+
+  assert.equal(bgoneModel.relationships.length, 1);
+  assert.equal(bgoneModel.relationships[0].name, "Ed Customer");
+  assert.equal(flexModel.relationships.length, 1);
+  assert.equal(flexModel.relationships[0].name, "Lori Customer");
+});
+
 test("relationship identity keeps profile photos consistent as contacts become linked", () => {
   const model = createRelationshipLayerModel(
     [

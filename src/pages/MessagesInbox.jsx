@@ -35,6 +35,10 @@ import {
   isSavedRelationshipContact,
 } from "../utils/relationshipLayer";
 import {
+  getActiveProfileScopeDescriptor,
+  readProfileScopedContacts,
+} from "../utils/accountProfileScope";
+import {
   CONTACT_IMPORT_TYPE_OPTIONS,
   buildImportedContactRelationship,
   normalizeImportedContact,
@@ -795,6 +799,20 @@ function MessagesInbox({ setPage, currentPage }) {
     }));
   }
 
+  function getScopedContactConversationsForList() {
+    const { profileScopeKey } = getActiveProfileScopeDescriptor({
+      activeAccountMode,
+    });
+
+    return readProfileScopedContacts({ profileScopeKey }).map((item) => ({
+      ...item,
+      unread: isConversationUnreadForRole(item.id, undefined, item.unread),
+      saved_to_history: false,
+      userSavedToHistory: false,
+      user_saved_to_history: false,
+    }));
+  }
+
   function getLocalBusinessConversationsForList() {
     return Object.keys(localStorage)
       .filter((key) => key.startsWith("meetro_conversation_business_"))
@@ -830,6 +848,7 @@ function MessagesInbox({ setPage, currentPage }) {
       dedupeConversations(
         mergeEmergencyConversation([
           ...getRegistryConversationsForList(),
+          ...getScopedContactConversationsForList(),
           ...getLocalBusinessConversationsForList(),
         ])
       )
@@ -888,6 +907,7 @@ function MessagesInbox({ setPage, currentPage }) {
           dedupeConversations(
             mergeEmergencyConversation([
               ...getRegistryConversationsForList(),
+              ...getScopedContactConversationsForList(),
               ...nextQuotes,
               ...getLocalBusinessConversationsForList(),
             ])
@@ -1585,6 +1605,9 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const normalizedSearchQuery = normalizeMessageSearchText(searchQuery);
   const activeViewerRole = activeAccountMode === "business" ? "business" : "homeowner";
+  const activeContactProfileScope = getActiveProfileScopeDescriptor({
+    activeAccountMode,
+  });
   const liveIdentityQuotes = quotes.map((quote) =>
     applyLiveConversationAvatar(quote, activeViewerRole)
   );
@@ -1594,6 +1617,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const relationshipLayer = createRelationshipLayerModel(liveIdentityQuotes, {
     viewerRole: activeViewerRole,
     activeMode: activeAccountMode === "business" ? "business" : "personal",
+    activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
   });
   const currentSectionShowsCategories = false;
   const sectionRelationships = getMessageSectionRelationships(

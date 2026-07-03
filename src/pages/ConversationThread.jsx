@@ -73,6 +73,14 @@ import {
   firstIdentityValue,
 } from "../utils/conversationIdentityInput";
 import {
+  compactScopedContactRecord,
+  getActiveProfileScopeDescriptor,
+  getRecordContactScope,
+  getRecordProfileScopeKey,
+  normalizeProfileScopeKey,
+  upsertProfileScopedContact,
+} from "../utils/accountProfileScope";
+import {
   glassActionMenu,
   glassField,
   glassNavigationSurface,
@@ -630,6 +638,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const [appointmentDetails, setAppointmentDetails] = useState(null);
   const [appointmentReminderNotice, setAppointmentReminderNotice] = useState(null);
   const [saveNotice, setSaveNotice] = useState("");
+  const [savedThreadContactSnapshot, setSavedThreadContactSnapshot] = useState(null);
   const [jobRecordCount, setJobRecordCount] = useState(0);
   const [showJobRecords, setShowJobRecords] = useState(false);
   const [jobRecords, setJobRecords] = useState([]);
@@ -926,6 +935,10 @@ useEffect(() => {
     activeAccountMode === "business"
       ? "business"
       : "homeowner";
+
+  useEffect(() => {
+    setSavedThreadContactSnapshot(null);
+  }, [conversationId, activeAccountMode]);
 
   const normalizeEmergencySenderRole = (message = {}, fallbackRole = "") => {
     if (message.fromBusiness || message.authorRole === "business") {
@@ -1607,76 +1620,19 @@ useEffect(() => {
   }
 
   function getThreadContactProfileId() {
-    const scope = getThreadContactScope();
-
-    if (scope === "business") {
-      return firstIdentityValue(
-        selectedBusiness?.id,
-        selectedBusiness?.businessId,
-        selectedBusiness?.business_id,
-        localStorage.getItem("businessId"),
-        localStorage.getItem("contractorId"),
-        localStorage.getItem("businessName"),
-        localStorage.getItem("companyName")
-      );
-    }
-
-    return firstIdentityValue(
-      localStorage.getItem("userId"),
-      localStorage.getItem("currentUserId"),
-      localStorage.getItem("userEmail"),
-      localStorage.getItem("email"),
-      localStorage.getItem("userName")
-    );
+    return getActiveProfileScopeDescriptor({ activeAccountMode }).profileId;
   }
 
   function getThreadContactProfileScopeKey() {
-    const scope = getThreadContactScope();
-    const profileId =
-      normalizeSavedContactMatchKey(getThreadContactProfileId()) || "default";
-
-    return `${scope}:${profileId}`;
+    return getActiveProfileScopeDescriptor({ activeAccountMode }).profileScopeKey;
   }
 
   function getSavedContactRecordScope(record = {}) {
-    const scope = normalizeSavedContactMatchKey(
-      firstIdentityValue(
-        record.accountMode,
-        record.account_mode,
-        record.relationshipScope,
-        record.relationship_scope,
-        record.ownerMode,
-        record.owner_mode,
-        record.visibilityScope,
-        record.visibility_scope,
-        record.messageScope,
-        record.message_scope
-      )
-    );
-
-    if (/business|professional|contractor|workcenter|work_center/.test(scope)) {
-      return "business";
-    }
-    if (/personal|homeowner|user|tenantpersonal|tenant_personal/.test(scope)) {
-      return "personal";
-    }
-
-    return "";
+    return getRecordContactScope(record);
   }
 
   function getSavedContactProfileScopeKey(record = {}) {
-    return normalizeSavedContactMatchKey(
-      firstIdentityValue(
-        record.contactProfileScopeKey,
-        record.contact_profile_scope_key,
-        record.ownerProfileScopeKey,
-        record.owner_profile_scope_key,
-        record.profileScopeKey,
-        record.profile_scope_key,
-        record.ownerProfileKey,
-        record.owner_profile_key
-      )
-    );
+    return getRecordProfileScopeKey(record);
   }
 
   function recordMatchesThreadContactScope(record = {}) {
@@ -1686,7 +1642,7 @@ useEffect(() => {
     if (!recordScope || recordScope !== targetScope) return false;
 
     const recordProfileScopeKey = getSavedContactProfileScopeKey(record);
-    const targetProfileScopeKey = normalizeSavedContactMatchKey(
+    const targetProfileScopeKey = normalizeProfileScopeKey(
       getThreadContactProfileScopeKey()
     );
 
@@ -1843,7 +1799,8 @@ useEffect(() => {
     }[type] || "Contact";
   }
 
-  const savedThreadContactRecord = getSavedThreadContactRecord();
+  const savedThreadContactRecord =
+    savedThreadContactSnapshot || getSavedThreadContactRecord();
   const threadRelationshipSavedToContacts = Boolean(savedThreadContactRecord);
 
   function saveThreadRelationshipToContacts() {
@@ -1978,25 +1935,44 @@ useEffect(() => {
       unread: false,
     };
 
-    const registry = getConversationRegistry();
-    const updatedRegistry = [
-      savedContactRecord,
-      ...registry.filter((record) => String(record.id) !== String(savedContactRecord.id)),
-    ];
+    try {
+      const compactSavedContactRecord = compactScopedContactRecord(savedContactRecord);
+      upsertProfileScopedContact(compactSavedContactRecord, {
+        profileScopeKey: contactProfileScopeKey,
+      });
+      try {
+        const registry = getConversationRegistry();
+        const updatedRegistry = [
+          compactSavedContactRecord,
+          ...registry.filter((record) => String(record.id) !== String(compactSavedContactRecord.id)),
+        ];
 
-    localStorage.setItem(
-      "meetro_conversation_registry",
-      JSON.stringify(updatedRegistry)
-    );
-    writeUnreadConversationCount(updatedRegistry);
-    window.dispatchEvent(new Event("meetro-messages-updated"));
+        localStorage.setItem(
+          "meetro_conversation_registry",
+          JSON.stringify(updatedRegistry)
+        );
+        writeUnreadConversationCount(updatedRegistry);
+      } catch (registryError) {
+        console.warn("Saved contact store updated; registry mirror failed", registryError);
+      }
+      setSavedThreadContactSnapshot(compactSavedContactRecord);
+      window.dispatchEvent(new Event("meetro-messages-updated"));
 
-    setShowThreadMenu(false);
-    setSaveNotice(
-      language === "es"
-        ? `${contactName} se guardó en Contactos.`
-        : `${contactName} was saved to Contacts.`
-    );
+      setShowThreadMenu(false);
+      setSaveNotice(
+        language === "es"
+          ? "Guardado en Contactos."
+          : "Saved to Contacts."
+      );
+    } catch (error) {
+      console.error("Save to Contacts failed", error);
+      setShowThreadMenu(false);
+      setSaveNotice(
+        language === "es"
+          ? "No se pudo guardar en Contactos. Inténtalo de nuevo."
+          : "Could not save to Contacts. Please try again."
+      );
+    }
     setTimeout(() => setSaveNotice(""), 2200);
   }
 
@@ -4904,10 +4880,10 @@ const handleImageUpload = (event) => {
 
               {threadRelationshipSavedToContacts ? (
                 <button
-                  style={threadMenuBtn}
-                  onClick={openRelationshipDetails}
+                  style={{ ...threadMenuBtn, ...threadMenuBtnDisabled }}
+                  disabled
                 >
-                  {language === "es" ? "Ver contacto" : "View Contact"}
+                  {language === "es" ? "Guardado" : "Saved"}
                 </button>
               ) : (
                 <button

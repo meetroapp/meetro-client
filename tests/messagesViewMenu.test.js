@@ -499,7 +499,10 @@ test("ConversationThread opens a full-page relationship identity without leaving
   assert.match(conversationThreadSource, /viewRelationshipIdentity/);
   assert.match(conversationThreadSource, /function saveThreadRelationshipToContacts\(\)/);
   assert.match(conversationThreadSource, /Save to Contacts/);
-  assert.match(conversationThreadSource, /View Contact/);
+  assert.match(conversationThreadSource, /Saved to Contacts/);
+  assert.match(conversationThreadSource, /compactScopedContactRecord\(savedContactRecord\)/);
+  assert.match(conversationThreadSource, /upsertProfileScopedContact\(compactSavedContactRecord/);
+  assert.match(conversationThreadSource, /setSavedThreadContactSnapshot\(compactSavedContactRecord\)/);
   assert.match(conversationThreadSource, /business: "Professional \/ Business"/);
   assert.match(conversationThreadSource, /professional: "Professional \/ Business"/);
   assert.match(conversationThreadSource, /function getThreadContactScope\(\)/);
@@ -516,6 +519,7 @@ test("ConversationThread opens a full-page relationship identity without leaving
   assert.match(conversationThreadSource, /savedToContacts: true/);
   assert.match(conversationThreadSource, /sourceConversationId: conversationId/);
   assert.match(conversationThreadSource, /writeUnreadConversationCount\(updatedRegistry\)/);
+  assert.match(messagesSource, /readProfileScopedContacts\(\{ profileScopeKey \}\)/);
   assert.match(conversationThreadSource, /relationshipMeetroStatus/);
   assert.match(conversationThreadSource, /relationshipMeetroLinked/);
   assert.match(conversationThreadSource, /relationshipMeetroChat/);
@@ -560,6 +564,8 @@ test("Relationship identity opens on a fast path before inbox projections rebuil
   assert.match(messagesSource, /activeContactCardSnapshot/);
   assert.match(messagesSource, /setActiveContactCardSnapshot\(relationship\)/);
   assert.match(messagesSource, /if \(activeContactCard\) \{\n\s+return \(/);
+  assert.match(messagesSource, /getActiveProfileScopeDescriptor/);
+  assert.match(messagesSource, /activeContactProfileScope\.profileScopeKey/);
   assert.match(messagesSource, /const relationshipLayer = createRelationshipLayerModel/);
   assert.ok(
     messagesSource.indexOf("if (activeContactCard)") <

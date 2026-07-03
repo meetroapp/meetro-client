@@ -97,9 +97,12 @@ test("save to contacts matches only the active profile scope", () => {
   assert.match(conversationThreadSource, /function getThreadContactProfileId\(\)/);
   assert.match(conversationThreadSource, /function getThreadContactProfileScopeKey\(\)/);
   assert.match(conversationThreadSource, /function getSavedContactProfileScopeKey\(record = \{\}\)/);
-  assert.match(conversationThreadSource, /record\.contactProfileScopeKey/);
-  assert.match(conversationThreadSource, /record\.ownerProfileScopeKey/);
-  assert.match(conversationThreadSource, /record\.profileScopeKey/);
+  assert.match(conversationThreadSource, /getActiveProfileScopeDescriptor/);
+  assert.match(conversationThreadSource, /getRecordProfileScopeKey\(record\)/);
+  assert.match(conversationThreadSource, /compactScopedContactRecord\(savedContactRecord\)/);
+  assert.match(conversationThreadSource, /upsertProfileScopedContact\(compactSavedContactRecord/);
+  assert.match(conversationThreadSource, /setSavedThreadContactSnapshot\(compactSavedContactRecord\)/);
+  assert.match(conversationThreadSource, /Saved contact store updated; registry mirror failed/);
   assert.match(
     conversationThreadSource,
     /if \(!recordScope \|\| recordScope !== targetScope\) return false;/
