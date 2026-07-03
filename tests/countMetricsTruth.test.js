@@ -198,7 +198,6 @@ test("audited count surfaces use shared metrics projections", () => {
     "../src/pages/Home.jsx",
     "../src/pages/BusinessDashboard.jsx",
     "../src/pages/ContractorDashboard.jsx",
-    "../src/pages/MessagesInbox.jsx",
     "../src/components/BottomNav.jsx",
   ].map((sourcePath) =>
     fs.readFileSync(new URL(sourcePath, import.meta.url), "utf8")
@@ -207,6 +206,15 @@ test("audited count surfaces use shared metrics projections", () => {
   sources.forEach((source) => {
     assert.match(source, /dashboardMetrics/);
   });
+
+  const messagesSource = fs.readFileSync(
+    new URL("../src/pages/MessagesInbox.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(messagesSource, /createRelationshipLayerModel/);
+  assert.match(messagesSource, /writeUnreadConversationCount/);
+  assert.doesNotMatch(messagesSource, /messagesAttentionSummary|unreadHeroBadge/);
 });
 
 test("Work Center mission counts use shared professional metrics", () => {

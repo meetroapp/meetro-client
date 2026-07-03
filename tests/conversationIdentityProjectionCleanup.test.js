@@ -76,7 +76,7 @@ test("ConversationThread customer identity uses registry before request and acti
   assert.equal(input.resolvedCustomerIdentity.avatar, "registry-avatar.png");
   assert.equal(input.resolvedCustomerIdentity.location, "Registry Location");
   assert.equal(customerIdentity.displayName, "Sarah Registry");
-  assert.equal(customerIdentity.avatar, "request-avatar.png");
+  assert.equal(customerIdentity.avatar, "registry-avatar.png");
 });
 
 test("ConversationThread customer identity falls back to request then active context", () => {
@@ -239,6 +239,33 @@ test("Inbox and Thread produce matching participant identity for the same conver
   assert.equal(threadIdentity.initials, inboxProjected.participantInitials);
 });
 
+test("ConversationThread honors projected participant avatars over stale request aliases", () => {
+  const projected = applyConversationIdentity(
+    {
+      id: "conv-maggie",
+      conversation_type: "standard",
+      customerName: "Maggie Customer",
+      profilePhoto: "maggie-profile.jpg",
+    },
+    { viewerRole: "business" }
+  );
+  const threadInput = buildConversationIdentityInput({
+    conversationId: "conv-maggie",
+    registryEntry: projected,
+    selectedQuoteRequest: {
+      id: "conv-maggie",
+      customerName: "Maggie Customer",
+      customerAvatar: "old-request-avatar.jpg",
+    },
+  });
+  const threadIdentity = getPersonConversationIdentity(
+    threadInput.customerProjectionInput
+  );
+
+  assert.equal(projected.participantAvatar, "maggie-profile.jpg");
+  assert.equal(threadIdentity.avatar, projected.participantAvatar);
+});
+
 test("conversation identity input helper is pure deterministic and storage-free", () => {
   const source = {
     registryEntry: {
@@ -284,4 +311,13 @@ test("ConversationThread delegates display identity normalization to the shared 
   assert.match(threadSource, /buildConversationIdentityInput/);
   assert.match(threadSource, /customerProjectionInput/);
   assert.match(threadSource, /businessProjectionInput/);
+  assert.match(threadSource, /getScopedProfilePhoto/);
+  assert.match(threadSource, /scopedBusinessProfilePhoto/);
+  assert.match(threadSource, /scopedConversationBusinessPhoto/);
+  assert.match(threadSource, /getPersonalProfilePhotoForRecord/);
+  assert.match(threadSource, /scopedPersonalProfilePhoto/);
+  assert.doesNotMatch(threadSource, /localStorage\.getItem\("meetroBusinessProfilePhoto"\)/);
+  assert.doesNotMatch(threadSource, /localStorage\.getItem\("meetroPersonalProfilePhoto"\)/);
+  assert.match(threadSource, /function textActiveContact\(\)/);
+  assert.match(threadSource, /Edit \/ More/);
 });

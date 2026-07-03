@@ -21,6 +21,26 @@ import {
   getFieldAssistantPromptChips,
   getFieldProductivityResponse,
 } from "../utils/fieldProductivityAssistant";
+import {
+  buildGlobalInsightContextFromStorage,
+  getTopInsight,
+} from "../utils/insightEngine";
+import { areRelationshipInsightsEnabled } from "../utils/relationshipInsightSettings";
+import {
+  ASSISTANT_ORB_MARK,
+  ASSISTANT_WAKE_DISMISS_MS,
+  COMPANION_STATES,
+  getCompanionObservationScope,
+  getCompanionObservationScopeKey,
+  getAssistantIntentDisplayLabel,
+  getAssistantWakeAnimation,
+  getAssistantWakeInsightMessage,
+  getAssistantLauncherWakeAction,
+  isHighPriorityWakeInsight,
+  isCompanionObservationVisible,
+} from "../utils/assistantWakeExperience";
+import { getCompanionContext } from "../utils/companionContext";
+import { getConversationParticipantIdentity } from "../utils/conversationIdentity";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 
@@ -32,6 +52,11 @@ function stopNativeSpeechRecognitionQuietly() {
   } catch {
     return null;
   }
+}
+
+function getAssistantReducedMotion() {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 const VOICE_PREFERENCE_KEY = "meetroAssistantVoicePreference";
@@ -57,15 +82,15 @@ const VOICE_QUALITY_ORDER = {
 
 const assistantCopy = {
   en: {
-    buttonLabel: "Meetro help",
-    assistantName: "Meetro Assistant",
+    buttonLabel: "Meetro",
+    assistantName: "Meetro",
     assistantGreetingFallback: "there",
     assistantGreetingPrefix: "Hi",
-    assistantGreetingPrompt: "How can I help you today?",
+    assistantGreetingPrompt: "Review what matters next.",
     screenLabel: "Current screen",
     purposeLabel: "Purpose",
     nextStepLabel: "Suggested next step",
-    quickHelpLabel: "Quick help",
+    quickHelpLabel: "Next steps",
     feedbackButton: "Something is confusing",
     feedbackSaved: "Thanks. Saved for TestFlight review.",
     feedbackCategoryLabel: "What feels confusing?",
@@ -82,15 +107,15 @@ const assistantCopy = {
     copiedFeedbackSummary: "Feedback summary copied.",
     voiceButton: "Ask by voice",
     tapToTalk: "Tap To Talk",
-    assistantDetails: "Details & feedback",
+    assistantDetails: "Context & feedback",
     hideDetails: "Hide details",
     voiceListening: "Listening...",
     voiceUnsupported: "Voice Companion is not available on this device yet. Tap a question below to test how Meetro responds.",
     transcriptLabel: "You asked",
     answerLabel: "Meetro says",
-    assistantResponseLabel: "Assistant Response",
+    assistantResponseLabel: "Recommendation",
     readAloudLabel: "Read responses aloud",
-    voiceTipsTitle: "Try asking Meetro...",
+    voiceTipsTitle: "Ask about this work...",
     professionalVoiceTips: [
       "What’s next today?",
       "What appointments do I have?",
@@ -129,18 +154,18 @@ const assistantCopy = {
       myRequests: "My Requests",
       messages: "Messages",
       discover: "Find Businesses",
-      workCenter: "Open Work Center",
-      leads: "Open Opportunities",
-      schedule: "Open Schedule",
-      quotes: "Open Quotes",
-      activeWork: "Open Active Work",
-      closure: "Open Closure",
-      history: "Open History",
-      businessTools: "Open Business Tools",
+      workCenter: "Review Work Center",
+      leads: "Review Opportunities",
+      schedule: "Review Schedule",
+      quotes: "Review Proposals",
+      activeWork: "Continue Active Work",
+      closure: "Review Closure",
+      history: "View History",
+      businessTools: "Review Business Tools",
       profile: "Profile",
-      legal: "Open Legal",
-      quoteBuilder: "Open Quote Builder",
-      invoiceBuilder: "Open Invoice Builder",
+      legal: "Review Legal",
+      quoteBuilder: "Prepare Proposal",
+      invoiceBuilder: "Review Invoice",
     },
     actionRoutingReady: "I can help with that.",
     professionalActionUnavailable:
@@ -163,7 +188,7 @@ const assistantCopy = {
       discover: {
         name: "Discover",
         purpose: "Find businesses and review professional profiles before starting or continuing communication.",
-        next: "Open a business profile or return to Request Service if you already know what you need.",
+        next: "Review a business profile or return to Request Service if you already know what you need.",
         actions: ["requestService", "myRequests"],
       },
       upload: {
@@ -175,13 +200,13 @@ const assistantCopy = {
       myRequests: {
         name: "My Requests",
         purpose: "Track your request from communication through schedule, quote, work, completion, closure, and history.",
-        next: "Open a request to review details, appointments, quotes, messages, and next steps.",
+        next: "Review a request to check details, appointments, quotes, messages, and next steps.",
         actions: ["messages", "requestService"],
       },
       projectDetails: {
         name: "Request Details",
         purpose: "Review service details, photos, conversation, records, and current workflow status.",
-        next: "Open the conversation if you need to coordinate schedule, quote, work, or completion.",
+        next: "Continue the conversation if you need to coordinate schedule, quote, work, or completion.",
         actions: ["messages", "myRequests"],
       },
       conversationThread: {
@@ -193,25 +218,25 @@ const assistantCopy = {
       messagesInbox: {
         name: "Communication Center",
         purpose: "See conversations that need attention and understand each workflow status.",
-        next: "Open the conversation with the most urgent next step.",
+        next: "Continue the conversation with the most urgent next step.",
         actions: ["myRequests"],
       },
       businessDashboard: {
         name: "Business Dashboard",
         purpose: "See professional priorities, alerts, scheduled jobs, opportunities, and business performance.",
-        next: "Open the Work Center section that needs action.",
+        next: "Review the Work Center section that needs action.",
         actions: ["workCenter", "leads", "messages"],
       },
       contractorDashboard: {
         name: "Work Center",
-        purpose: "Manage customer relationships from first contact through closure.",
-        next: "Open the workflow card with the strongest alert or continue the current section.",
+        purpose: "Keep customer work moving from first contact through closure.",
+        next: "Review the workflow card with the strongest alert or continue the current section.",
         actions: ["leads", "messages"],
       },
       workCenter: {
         name: "Work Center",
-        purpose: "Manage customer relationships from first contact through closure.",
-        next: "Open the workflow card with the strongest alert or continue the current section.",
+        purpose: "Keep customer work moving from first contact through closure.",
+        next: "Review the workflow card with the strongest alert or continue the current section.",
         actions: ["leads", "messages"],
       },
       businessLeads: {
@@ -219,6 +244,12 @@ const assistantCopy = {
         purpose: "Review new service requests and decide whether to contact or schedule an evaluation.",
         next: "Contact the customer or schedule an evaluation before creating a quote.",
         actions: ["workCenter", "messages"],
+      },
+      schedule: {
+        name: "Schedule",
+        purpose: "Review visits and appointments that need timing, customer details, or follow-up.",
+        next: "Check today's visits, confirm missing details, or save the appointment.",
+        actions: ["schedule", "messages"],
       },
       quoteRequests: {
         name: "Lead Requests",
@@ -258,7 +289,7 @@ const assistantCopy = {
       },
       emergencyOperationsCenter: {
         name: "Emergency Operations",
-        purpose: "Manage urgent professional response work.",
+        purpose: "Coordinate urgent professional response work.",
         next: "Review the active dispatch or customer communication.",
         actions: ["workCenter", "messages"],
       },
@@ -270,7 +301,7 @@ const assistantCopy = {
       },
       profile: {
         name: "Profile",
-        purpose: "Manage account and business details.",
+        purpose: "Review account and business details.",
         next: "Update the details that help people understand who you are.",
         actions: ["home", "workCenter"],
       },
@@ -283,15 +314,15 @@ const assistantCopy = {
     },
   },
   es: {
-    buttonLabel: "Ayuda de Meetro",
+    buttonLabel: "Asistente Meetro",
     assistantName: "Asistente Meetro",
     assistantGreetingFallback: "ahí",
     assistantGreetingPrefix: "Hola",
-    assistantGreetingPrompt: "¿Cómo puedo ayudarte hoy?",
+    assistantGreetingPrompt: "Revisa lo que sigue.",
     screenLabel: "Pantalla actual",
     purposeLabel: "Propósito",
     nextStepLabel: "Siguiente paso sugerido",
-    quickHelpLabel: "Ayuda rápida",
+    quickHelpLabel: "Próximos pasos",
     feedbackButton: "Algo es confuso",
     feedbackSaved: "Gracias. Guardado para revisión de TestFlight.",
     feedbackCategoryLabel: "¿Qué se siente confuso?",
@@ -308,15 +339,15 @@ const assistantCopy = {
     copiedFeedbackSummary: "Resumen copiado.",
     voiceButton: "Preguntar con voz",
     tapToTalk: "Toca para hablar",
-    assistantDetails: "Detalles y comentarios",
+    assistantDetails: "Contexto y comentarios",
     hideDetails: "Ocultar detalles",
     voiceListening: "Escuchando...",
     voiceUnsupported: "El Compañero de Voz aún no está disponible en este dispositivo. Toca una pregunta abajo para probar cómo responde Meetro.",
     transcriptLabel: "Preguntaste",
     answerLabel: "Meetro dice",
-    assistantResponseLabel: "Respuesta del asistente",
+    assistantResponseLabel: "Recomendación",
     readAloudLabel: "Leer respuestas en voz alta",
-    voiceTipsTitle: "Prueba preguntar a Meetro...",
+    voiceTipsTitle: "Pregunta sobre este trabajo...",
     professionalVoiceTips: [
       "¿Qué sigue hoy?",
       "¿Qué citas tengo?",
@@ -401,13 +432,13 @@ const assistantCopy = {
       myRequests: {
         name: "Mis solicitudes",
         purpose: "Sigue tu solicitud desde comunicación hasta agenda, cotización, trabajo, cierre e historial.",
-        next: "Abre una solicitud para revisar detalles, citas, cotizaciones y mensajes.",
+        next: "Revisa una solicitud para ver detalles, citas, cotizaciones y mensajes.",
         actions: ["messages", "requestService"],
       },
       projectDetails: {
         name: "Detalles de solicitud",
         purpose: "Revisa detalles, fotos, conversación, registros y estado actual.",
-        next: "Abre la conversación si necesitas coordinar agenda, cotización o finalización.",
+        next: "Continúa la conversación si necesitas coordinar agenda, cotización o finalización.",
         actions: ["messages", "myRequests"],
       },
       conversationThread: {
@@ -419,25 +450,25 @@ const assistantCopy = {
       messagesInbox: {
         name: "Centro de comunicación",
         purpose: "Mira conversaciones que necesitan atención y su estado de flujo.",
-        next: "Abre la conversación con el siguiente paso más urgente.",
+        next: "Continúa la conversación con el siguiente paso más urgente.",
         actions: ["myRequests"],
       },
       businessDashboard: {
         name: "Panel del negocio",
         purpose: "Revisa prioridades, alertas, trabajos programados, oportunidades y rendimiento.",
-        next: "Abre la sección del Work Center que necesita acción.",
+        next: "Revisa la sección del Work Center que necesita acción.",
         actions: ["workCenter", "leads", "messages"],
       },
       contractorDashboard: {
         name: "Work Center",
-        purpose: "Gestiona relaciones con clientes desde el primer contacto hasta el cierre.",
-        next: "Abre la tarjeta con alerta o continúa la sección actual.",
+        purpose: "Mantén el trabajo con clientes avanzando desde el primer contacto hasta el cierre.",
+        next: "Revisa la tarjeta con alerta o continúa la sección actual.",
         actions: ["leads", "messages"],
       },
       workCenter: {
         name: "Work Center",
-        purpose: "Gestiona relaciones con clientes desde el primer contacto hasta el cierre.",
-        next: "Abre la tarjeta con alerta o continúa la sección actual.",
+        purpose: "Mantén el trabajo con clientes avanzando desde el primer contacto hasta el cierre.",
+        next: "Revisa la tarjeta con alerta o continúa la sección actual.",
         actions: ["leads", "messages"],
       },
       businessLeads: {
@@ -445,6 +476,12 @@ const assistantCopy = {
         purpose: "Revisa solicitudes nuevas y decide contactar o agendar evaluación.",
         next: "Contacta al cliente o agenda evaluación antes de cotizar.",
         actions: ["workCenter", "messages"],
+      },
+      schedule: {
+        name: "Agenda",
+        purpose: "Revisa visitas y citas que necesitan horario, datos del cliente o seguimiento.",
+        next: "Revisa las visitas de hoy, confirma detalles faltantes o guarda la cita.",
+        actions: ["schedule", "messages"],
       },
       quoteBuilder: {
         name: "Crear cotización",
@@ -626,15 +663,21 @@ function getLatestConversation() {
 }
 
 function getConversationLabel(conversation) {
-  return (
-    conversation?.customerName ||
-    conversation?.businessName ||
-    conversation?.title ||
-    conversation?.requestTitle ||
-    conversation?.service ||
-    conversation?.name ||
-    "the latest conversation"
-  );
+  return getConversationParticipantIdentity(conversation, {
+    viewerRole:
+      getAccountModeForPage(
+        "conversationThread",
+        localStorage.getItem("activeAccountMode") || "personal"
+      ) === "business"
+        ? "business"
+        : "homeowner",
+    fallbackName:
+      conversation?.title ||
+      conversation?.requestTitle ||
+      conversation?.service ||
+      conversation?.name ||
+      "the latest conversation",
+  }).displayName;
 }
 
 function getLocalDateKey(value = new Date()) {
@@ -741,19 +784,71 @@ function getQuoteSummary() {
   return { quotes, pending, revisions, accepted };
 }
 
-function getEmergencySummary() {
+function doesEmergencyRecordBelongToAccount(record = {}, scope = {}) {
+  const activeAccount = String(scope?.accountId || "").trim().toLowerCase();
+  if (!activeAccount) return false;
+
+  const candidateValues = [
+    record.accountId,
+    record.customerAccountId,
+    record.homeownerAccountId,
+    record.userId,
+    record.customerId,
+    record.email,
+    record.userEmail,
+    record.customerEmail,
+    record.homeownerEmail,
+    record.id,
+    record.requestId,
+    record.emergencyRequestId,
+    record.conversationId,
+  ];
+
+  return candidateValues.some((value) =>
+    String(value || "").trim().toLowerCase().includes(activeAccount)
+  );
+}
+
+function getEmergencySummary(scope = {}) {
+  const activeRecord = safeJson("activeEmergencyRecord", {});
   const status = String(localStorage.getItem("emergencyDispatchStatus") || "").toLowerCase();
-  const requestId = localStorage.getItem("emergencyRequestId") || "";
-  const issue = localStorage.getItem("emergencyIssue") || "";
-  const customer = localStorage.getItem("emergencyCustomerName") || "";
+  const requestId =
+    activeRecord.id ||
+    activeRecord.requestId ||
+    activeRecord.emergencyRequestId ||
+    localStorage.getItem("emergencyRequestId") ||
+    "";
+  const issue =
+    activeRecord.service ||
+    activeRecord.title ||
+    activeRecord.issue ||
+    localStorage.getItem("emergencyIssue") ||
+    "";
+  const customer =
+    activeRecord.customerName ||
+    activeRecord.customer ||
+    localStorage.getItem("emergencyCustomerName") ||
+    "";
   const inactiveStatuses = ["", "completed", "cancelled", "canceled", "closed", "resolved"];
-  const active = Boolean((requestId || issue || status) && !inactiveStatuses.includes(status));
+  const recordStatus = String(activeRecord.status || status || "").toLowerCase();
+  const baseActive = Boolean(
+    (requestId || issue || recordStatus) && !inactiveStatuses.includes(recordStatus)
+  );
+  const activeRole = scope.role === "business" ? "business" : "personal";
+  const belongsToActiveHomeowner = doesEmergencyRecordBelongToAccount(activeRecord, scope);
+  const active = Boolean(
+    baseActive && (activeRole === "business" || belongsToActiveHomeowner)
+  );
 
   return {
     active,
-    status: status || "pending",
+    status: recordStatus || "pending",
     issue,
     customer,
+    accountId: activeRole === "personal" && belongsToActiveHomeowner ? scope.accountId : "",
+    role: activeRole === "business" ? "business" : "personal",
+    homeownerSafe: activeRole === "personal" && belongsToActiveHomeowner,
+    requestId,
   };
 }
 
@@ -1094,8 +1189,8 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
     return makeResponse(
       "request_edit",
       isSpanish
-        ? "Puedes actualizar los detalles desde Mis solicitudes. Abre Editar solicitud, ajusta la información y guarda los cambios."
-        : "You can update the details from My Requests. Open Edit Request, adjust the information, and save your changes.",
+        ? "Puedes actualizar los detalles desde Mis solicitudes. Usa Editar solicitud, ajusta la información y guarda los cambios."
+        : "You can update the details from My Requests. Use Edit Request, adjust the information, and save your changes.",
       [makeRequestAssistantAction("editRequest", language, context)]
     );
   }
@@ -1104,8 +1199,8 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
     return makeResponse(
       "request_message_professional",
       isSpanish
-        ? "Abre la conversación para coordinar detalles, horario, acceso o preguntas sobre la solicitud."
-        : "Open the conversation to coordinate details, timing, access, or questions about the request.",
+        ? "Continúa la conversación para coordinar detalles, horario, acceso o preguntas sobre la solicitud."
+        : "Continue the conversation to coordinate details, timing, access, or questions about the request.",
       [makeRequestAssistantAction("openConversation", language, context)]
     );
   }
@@ -1131,8 +1226,8 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
     return makeResponse(
       "request_appointment_next_step",
       isSpanish
-        ? `Tienes una cita vinculada. Estado: ${context.appointmentStatus || "pendiente"}. Abre la conversación si necesitas confirmar detalles o pedir otro horario.`
-        : `You have a linked appointment. Status: ${context.appointmentStatus || "pending"}. Open the conversation if you need to confirm details or request a different time.`,
+        ? `Tienes una cita vinculada. Estado: ${context.appointmentStatus || "pendiente"}. Continúa la conversación si necesitas confirmar detalles o pedir otro horario.`
+        : `You have a linked appointment. Status: ${context.appointmentStatus || "pending"}. Continue the conversation if you need to confirm details or request a different time.`,
       [
         makeRequestAssistantAction("openConversation", language, context),
         makeRequestAssistantAction("openSchedule", language, context),
@@ -1606,7 +1701,7 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
   const notificationRole = roleMode === "business" ? "professional" : "homeowner";
   const unreadNotificationCount = getMeetroUnreadNotificationCount(notificationRole);
   const latestNotification = getNotifications(notificationRole).find((item) => !item.read);
-  const openMessagesAction = { label: language === "es" ? "Abrir mensajes" : "Open Messages", target: "messagesInbox" };
+  const openMessagesAction = { label: language === "es" ? "Revisar mensajes" : "Review Messages", target: "messagesInbox" };
 
   if (intent === "notifications") {
     return makeResponse(
@@ -1631,22 +1726,22 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     const emergency = getEmergencySummary();
     const activeWork = getActiveWorkSummary();
     const openScheduleAction = {
-      label: language === "es" ? "Abrir agenda" : "Open Schedule",
+      label: language === "es" ? "Revisar agenda" : "Review Schedule",
       target: "contractorDashboard",
       workCenterSection: "schedule",
     };
     const openQuotesAction = {
-      label: language === "es" ? "Abrir cotizaciones" : "Open Quotes",
+      label: language === "es" ? "Revisar propuestas" : "Review Proposals",
       target: "contractorDashboard",
       workCenterSection: "quotes",
     };
     const openActiveWorkAction = {
-      label: language === "es" ? "Abrir trabajo activo" : "Open Active Work",
+      label: language === "es" ? "Continuar trabajo activo" : "Continue Active Work",
       target: "contractorDashboard",
       workCenterSection: "active",
     };
     const openEmergencyAction = {
-      label: language === "es" ? "Abrir emergencias" : "Open Emergency Center",
+      label: language === "es" ? "Continuar emergencia" : "Continue Emergency Work",
       target: "emergencyOperationsCenter",
     };
     const remindLaterAction = {
@@ -1720,7 +1815,7 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
         language === "es"
           ? "No veo nada urgente ahora. Revisa Work Center para mantener el flujo al día."
           : "I do not see anything urgent right now. Review Work Center to keep the workflow moving.",
-        [{ label: language === "es" ? "Abrir Work Center" : "Open Work Center", target: "contractorDashboard" }]
+        [{ label: language === "es" ? "Revisar Work Center" : "Review Work Center", target: "contractorDashboard" }]
       );
     }
 
@@ -1773,7 +1868,7 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     }
 
     return makeResponse(intent, guide.next, [
-      { label: language === "es" ? "Abrir Work Center" : "Open Work Center", target: "contractorDashboard" },
+      { label: language === "es" ? "Revisar Work Center" : "Review Work Center", target: "contractorDashboard" },
     ]);
   }
 
@@ -1788,7 +1883,7 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     ["sent", "quoted", "viewed", "pending"].includes(getQuoteStatus(quote))
   );
   const openRequestAction = {
-    label: language === "es" ? "Abrir solicitud" : "Open Request",
+    label: language === "es" ? "Revisar solicitud" : "Review Request",
     target: "myRequests",
   };
 
@@ -2164,6 +2259,7 @@ function getAssistantFirstName() {
 
 function MeetroAssistant({ currentPage = "", setPage }) {
   const [open, setOpen] = useState(false);
+  const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
   const [assistantClosing, setAssistantClosing] = useState(false);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
@@ -2185,19 +2281,32 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [voiceResponseUnavailable, setVoiceResponseUnavailable] = useState(false);
   const [showAllEmergencyTips, setShowAllEmergencyTips] = useState(false);
   const [showAdvancedHelp, setShowAdvancedHelp] = useState(false);
+  const [companionMode, setCompanionMode] = useState(COMPANION_STATES.briefing);
   const lastInputModeRef = useRef("typed");
   const launcherDragRef = useRef(null);
   const voiceThinkingTimerRef = useRef(null);
   const assistantCloseTimerRef = useRef(null);
+  const assistantWakeTimerRef = useRef(null);
   const browserSpeechRecognitionRef = useRef(null);
   const latestNativeTranscriptRef = useRef("");
   const nativeTranscriptProcessedRef = useRef(false);
   const nativeSpeechTimeoutRef = useRef(null);
+  const assistantSheetRef = useRef(null);
+  const voiceAnswerRef = useRef(null);
   const language = getLanguage();
   const copy = assistantCopy[language] || assistantCopy.en;
+  const workCenterSectionForAssistant =
+    localStorage.getItem("meetroWorkCenterTab") ||
+    localStorage.getItem("activeWorkCenterTab") ||
+    "";
+  const assistantContextPage =
+    ["contractorDashboard", "workCenter"].includes(currentPage) &&
+    String(workCenterSectionForAssistant || "").toLowerCase().includes("schedule")
+      ? "schedule"
+      : currentPage;
   const guide = useMemo(
-    () => getScreenGuide(currentPage, language),
-    [currentPage, language]
+    () => getScreenGuide(assistantContextPage, language),
+    [assistantContextPage, language]
   );
   const roleLabel = getRoleLabel(currentPage, language);
   const isChat = currentPage === "conversationThread" || currentPage === "emergencyChat";
@@ -2213,6 +2322,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       localStorage.getItem("activeAccountMode") || "personal"
     ) === "business";
   const roleMode = isBusinessMode ? "business" : "personal";
+  const companionObservationScope = getCompanionObservationScope({
+    storage: localStorage,
+    currentPage: assistantContextPage,
+    role: roleMode,
+  });
+  const companionObservationScopeKey =
+    getCompanionObservationScopeKey(companionObservationScope);
+  const companionObservationScopeRef = useRef(companionObservationScopeKey);
   const serviceRequestContext = getServiceRequestContext(currentPage, roleMode, language);
   const voiceTips = serviceRequestContext.active
     ? getServiceRequestVoiceTips(roleMode)
@@ -2220,7 +2337,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     ? copy.professionalVoiceTips
     : copy.homeownerVoiceTips;
   const fieldPromptChips = getFieldAssistantPromptChips({
-    currentPage,
+    currentPage: assistantContextPage,
     language,
   });
   const notificationRole = isBusinessMode ? "professional" : "homeowner";
@@ -2250,6 +2367,71 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     ? "thinking"
     : "ready";
   const assistantFirstName = getAssistantFirstName() || copy.assistantGreetingFallback;
+  const companionTopInsight = useMemo(() => {
+    try {
+      if (!areRelationshipInsightsEnabled()) return null;
+      return getTopInsight(
+        buildGlobalInsightContextFromStorage({
+          storage: localStorage,
+          currentPage: assistantContextPage,
+        })
+      );
+    } catch {
+      return null;
+    }
+  }, [assistantContextPage]);
+  const wakeEmergencySummary = getEmergencySummary(companionObservationScope);
+  const wakeEmergencyCandidate = wakeEmergencySummary.active
+    ? {
+        id: `wake:emergency:${wakeEmergencySummary.requestId || companionObservationScope.requestId || "active"}`,
+        type: "emergency",
+        priority: "critical",
+        accountId: wakeEmergencySummary.accountId,
+        role: wakeEmergencySummary.role,
+        homeownerSafe: wakeEmergencySummary.homeownerSafe,
+        requestId: wakeEmergencySummary.requestId,
+        message:
+          wakeEmergencySummary.issue || wakeEmergencySummary.customer
+            ? `${wakeEmergencySummary.issue || t("emergencyNeedsAttention", language)} ${
+                wakeEmergencySummary.customer ? `for ${wakeEmergencySummary.customer}` : ""
+              }`.trim()
+            : t("emergencyNeedsAttention", language),
+      }
+    : null;
+  const wakeEmergencyInsight = isCompanionObservationVisible(
+    wakeEmergencyCandidate,
+    companionObservationScope
+  )
+    ? wakeEmergencyCandidate
+    : null;
+  const wakeTopInsight = wakeEmergencyInsight || (
+    isHighPriorityWakeInsight(companionTopInsight)
+      ? companionTopInsight
+      : null
+  );
+  const wakeObservationType = wakeEmergencyInsight ? "emergency" : "insight";
+  const wakeObservationMessage = wakeTopInsight
+    ? getAssistantWakeInsightMessage(wakeTopInsight, language)
+    : "";
+  const lanternContext = useMemo(
+    () =>
+      getCompanionContext({
+        currentPage: assistantContextPage,
+        language,
+        hasObservation: Boolean(wakeTopInsight),
+      }),
+    [assistantContextPage, language, wakeTopInsight]
+  );
+  const compactCompanionTitle = wakeTopInsight
+    ? t("assistantCompanionINoticed", language)
+    : lanternContext.title;
+  const compactCompanionMessage =
+    wakeObservationMessage || lanternContext.message;
+  const compactCompanionPrimaryLabel =
+    wakeObservationType === "emergency"
+      ? t("openEmergencyChat", language)
+      : lanternContext.primaryActionLabel;
+  const isConversationMode = companionMode === COMPANION_STATES.conversation;
 
   function getLauncherViewport() {
     return {
@@ -2266,6 +2448,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       }
       if (assistantCloseTimerRef.current) {
         window.clearTimeout(assistantCloseTimerRef.current);
+      }
+      if (assistantWakeTimerRef.current) {
+        window.clearTimeout(assistantWakeTimerRef.current);
       }
       if (nativeSpeechTimeoutRef.current) {
         window.clearTimeout(nativeSpeechTimeoutRef.current);
@@ -2333,6 +2518,101 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       setAssistantSpeaking(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !isConversationMode || !voiceAnswer) return;
+
+    const answerNode = voiceAnswerRef.current;
+    const sheetNode = assistantSheetRef.current;
+    if (!answerNode || !sheetNode) return;
+
+    const answerRect = answerNode.getBoundingClientRect();
+    const sheetRect = sheetNode.getBoundingClientRect();
+    const viewportBottom =
+      typeof window === "undefined" ? sheetRect.bottom : window.innerHeight;
+    const visibleBottom = Math.min(sheetRect.bottom, viewportBottom) - 12;
+    const visibleTop = sheetRect.top + 12;
+    const alreadyVisible =
+      answerRect.top >= visibleTop && answerRect.bottom <= visibleBottom;
+
+    if (alreadyVisible) return;
+
+    answerNode.scrollIntoView({
+      behavior: getAssistantReducedMotion() ? "auto" : "smooth",
+      block: "nearest",
+    });
+  }, [open, isConversationMode, voiceAnswer]);
+
+  useEffect(() => {
+    if (!wakeOpen) return undefined;
+    if (assistantWakeTimerRef.current) {
+      window.clearTimeout(assistantWakeTimerRef.current);
+    }
+    assistantWakeTimerRef.current = window.setTimeout(() => {
+      setWakeOpen(false);
+      assistantWakeTimerRef.current = null;
+    }, ASSISTANT_WAKE_DISMISS_MS);
+
+    return () => {
+      if (assistantWakeTimerRef.current) {
+        window.clearTimeout(assistantWakeTimerRef.current);
+        assistantWakeTimerRef.current = null;
+      }
+    };
+  }, [wakeOpen, currentPage]);
+
+  useEffect(() => {
+    if (companionObservationScopeRef.current === companionObservationScopeKey) {
+      return undefined;
+    }
+
+    resetTemporaryCompanionState();
+    companionObservationScopeRef.current = companionObservationScopeKey;
+    return undefined;
+  }, [companionObservationScopeKey]);
+
+  useEffect(() => {
+    function handleAssistantOpen(event) {
+      const detail = event?.detail || {};
+      const initialQuestion = String(detail.initialQuestion || detail.question || "").trim();
+
+      if (initialQuestion) {
+        openAssistantFromLauncher({ initialQuestion });
+        return;
+      }
+
+      setWakeOpen(true);
+    }
+
+    window.addEventListener("meetro:assistant:open", handleAssistantOpen);
+
+    return () => {
+      window.removeEventListener("meetro:assistant:open", handleAssistantOpen);
+    };
+  }, [currentPage, assistantContextPage]);
+
+  useEffect(() => {
+    function handleCompanionIdentityChange() {
+      resetTemporaryCompanionState();
+      companionObservationScopeRef.current = getCompanionObservationScopeKey(
+        getCompanionObservationScope({
+          storage: localStorage,
+          currentPage: assistantContextPage,
+          role: getAccountModeForPage(
+            currentPage,
+            localStorage.getItem("activeAccountMode") || "personal"
+          ),
+        })
+      );
+    }
+
+    window.addEventListener("accountModeChanged", handleCompanionIdentityChange);
+    window.addEventListener("meetro-account-switched", handleCompanionIdentityChange);
+    return () => {
+      window.removeEventListener("accountModeChanged", handleCompanionIdentityChange);
+      window.removeEventListener("meetro-account-switched", handleCompanionIdentityChange);
+    };
+  }, [assistantContextPage, currentPage]);
 
   const quickActions = (guide.actions || copy.fallback.actions || []).filter((action) => {
     if (!isBusinessMode && ["workCenter", "leads", "schedule", "quotes"].includes(action)) {
@@ -2503,7 +2783,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       currentPage,
       localStorage.getItem("activeAccountMode") || "personal"
     );
-    const response = getVoiceResponse(question, roleMode, language, guide, currentPage);
+    const response = getVoiceResponse(question, roleMode, language, guide, assistantContextPage);
     const context = getSelectedContext();
 
     setVoiceTranscript(question);
@@ -2520,6 +2800,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       timestamp: new Date().toISOString(),
       role: roleMode,
       screen: currentPage || "unknown",
+      contextPage: assistantContextPage || currentPage || "unknown",
       success: response.success,
       actions: Array.isArray(response.actions)
         ? response.actions.map((action) => action.label || action.target || action.action)
@@ -2906,7 +3187,35 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }, 180);
   }
 
-  function openAssistantFromLauncher() {
+  function clearAssistantWake() {
+    if (assistantWakeTimerRef.current) {
+      window.clearTimeout(assistantWakeTimerRef.current);
+      assistantWakeTimerRef.current = null;
+    }
+    setWakeOpen(false);
+  }
+
+  function resetTemporaryCompanionState() {
+    clearAssistantWake();
+    setOpen(false);
+    setAssistantClosing(false);
+    setVoiceListening(false);
+    setVoiceThinking(false);
+    setVoiceTranscript("");
+    setVoiceAnswer("");
+    setVoiceIntent("");
+    setVoiceActions([]);
+    setVoiceStatusChip(null);
+    setVoiceError("");
+    setVoiceResponseUnavailable(false);
+    setShowAdvancedHelp(false);
+    setCompanionMode(COMPANION_STATES.idle);
+    stopNativeSpeechRecognitionQuietly();
+  }
+
+  function openAssistantFromLauncher(options = {}) {
+    const initialQuestion = String(options.initialQuestion || "").trim();
+    clearAssistantWake();
     if (assistantCloseTimerRef.current) {
       window.clearTimeout(assistantCloseTimerRef.current);
       assistantCloseTimerRef.current = null;
@@ -2923,8 +3232,13 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceError("");
     setVoiceResponseUnavailable(false);
     lastInputModeRef.current = "typed";
+    setShowAdvancedHelp(false);
+    setCompanionMode(COMPANION_STATES.conversation);
     setOpen(true);
     setFeedbackSaved(false);
+    if (initialQuestion) {
+      processVoiceQuestion(initialQuestion, { inputMode: "typed" });
+    }
   }
 
   function handleLauncherPointerDown(event) {
@@ -3002,13 +3316,63 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function handleLauncherClick(event) {
-    if (launcherDragRef.current?.suppressClick) {
+    const launcherAction = getAssistantLauncherWakeAction({
+      open,
+      wakeOpen,
+      dragSuppressed: launcherDragRef.current?.suppressClick,
+    });
+
+    if (launcherAction === "suppress") {
       event.preventDefault();
       launcherDragRef.current = null;
       return;
     }
 
+    if (launcherAction === "open") {
+      openAssistantFromLauncher();
+      return;
+    }
+
+    if (launcherAction === "wake") {
+      setWakeOpen(true);
+    }
+  }
+
+  function handleWakePrimaryObservation() {
+    clearAssistantWake();
+    if (wakeObservationType === "emergency") {
+      setOpen(false);
+      setPage?.(isBusinessMode ? "emergencyOperationsCenter" : "emergencyStatus");
+      return;
+    }
+
+    handleWakeReviewInsights();
+  }
+
+  function handleWakeAskMeetro() {
     openAssistantFromLauncher();
+  }
+
+  function handleWakeReviewInsights() {
+    const answer =
+      wakeObservationMessage ||
+      (companionTopInsight
+        ? getAssistantWakeInsightMessage(companionTopInsight, language)
+        : t("assistantCompanionNoUrgent", language));
+    clearAssistantWake();
+    setAssistantClosing(false);
+    setVoiceListening(false);
+    setVoiceThinking(false);
+    setVoiceTranscript(t("assistantCompanionReviewInsights", language));
+    setVoiceAnswer(answer);
+    setVoiceIntent("review_insights");
+    setVoiceActions([]);
+    setVoiceStatusChip(null);
+    setVoiceError("");
+    setVoiceResponseUnavailable(false);
+    setShowAdvancedHelp(false);
+    setCompanionMode(COMPANION_STATES.conversation);
+    setOpen(true);
   }
 
   const launcherPositionStyle = launcherPosition
@@ -3028,7 +3392,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       <button
         className="meetro-assistant-launcher"
         type="button"
-        aria-label={copy.buttonLabel}
+        aria-label={copy.assistantName || copy.buttonLabel}
         onPointerDown={handleLauncherPointerDown}
         onPointerMove={handleLauncherPointerMove}
         onPointerUp={handleLauncherPointerUp}
@@ -3036,11 +3400,59 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         onClick={handleLauncherClick}
         style={{
           ...assistantButton,
+          ...(wakeOpen ? assistantButtonWake : {}),
           ...launcherPositionStyle,
         }}
       >
-        AI
+        <span style={assistantButtonMark} aria-hidden="true">
+          {ASSISTANT_ORB_MARK}
+        </span>
       </button>
+
+      {wakeOpen && !open && (
+        <section
+          style={getAssistantWakeBubbleStyle({
+            launcherPosition,
+            viewport: getLauncherViewport(),
+            fallbackBottom: launcherBottomClearance,
+            reducedMotion: getAssistantReducedMotion(),
+          })}
+          role="status"
+          aria-live="polite"
+          aria-label={t("assistantWakeAriaLabel", language)}
+        >
+          <button
+            type="button"
+            style={assistantWakeDismissButton}
+            onClick={clearAssistantWake}
+            aria-label={t("assistantWakeDismiss", language)}
+          >
+            ×
+          </button>
+          <div style={assistantWakeIcon} aria-hidden="true">
+            {ASSISTANT_ORB_MARK}
+          </div>
+          <p style={assistantWakeStatus}>{lanternContext.status}</p>
+          <p style={assistantWakeGreeting}>{compactCompanionTitle}</p>
+          <p style={assistantWakePrompt}>{compactCompanionMessage}</p>
+          <div style={assistantWakeActions}>
+            <button
+              type="button"
+              style={assistantWakeAction}
+              onClick={handleWakePrimaryObservation}
+            >
+              {compactCompanionPrimaryLabel}
+            </button>
+            <button
+              type="button"
+              style={assistantWakeSecondaryAction}
+              onClick={handleWakeAskMeetro}
+            >
+              {lanternContext.secondaryActionLabel}
+            </button>
+          </div>
+        </section>
+      )}
 
       {open && (
         <div
@@ -3061,8 +3473,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
           <div
             className={`meetro-assistant-sheet meetro-assistant-sheet-${assistantMode}`}
+            ref={assistantSheetRef}
             style={{
               ...assistantSheet,
+              ...companionStateStyles[companionMode],
               ...(assistantModeGlow[assistantMode] || assistantModeGlow.ready),
               paddingBottom: isChat
                 ? "calc(18px + env(safe-area-inset-bottom))"
@@ -3073,20 +3487,19 @@ function MeetroAssistant({ currentPage = "", setPage }) {
             <div style={assistantHandle} />
 
             <div style={assistantHeader}>
-              <div>
-                <span style={assistantEyebrow}>{roleLabel}</span>
-                <h2 style={assistantTitle}> {copy.assistantName}</h2>
-                <p style={assistantGreetingText}>
-                  {copy.assistantGreetingPrefix} {assistantFirstName},
-                </p>
-                <p style={assistantPromptText}>{copy.assistantGreetingPrompt}</p>
+              <div style={assistantHeaderCopy}>
+                <h2 style={assistantTitle}>{t("companionContextFallbackTitle", language)}</h2>
+                <p style={assistantPromptText}>{lanternContext.title}</p>
               </div>
 
-              <button type="button" style={assistantCloseButton} onClick={closeAssistant}>
-                {copy.close}
-              </button>
+              <div style={assistantHeaderActions}>
+                <button type="button" style={assistantCloseButton} onClick={closeAssistant}>
+                  {copy.close}
+                </button>
+              </div>
             </div>
 
+            {isConversationMode && (
             <div style={voiceCard}>
               <div style={voiceHero}>
                 <button
@@ -3106,7 +3519,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
                 <div style={voiceHeroText}>
                   <div style={voiceTitleRow}>
-                    <strong style={voiceTitle}>{copy.tapToTalk}</strong>
+                    <strong style={voiceTitle}>{lanternContext.status}</strong>
                     <span
                       style={{
                         ...voiceStatusPill,
@@ -3121,32 +3534,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                 </div>
               </div>
 
-              {fieldPromptChips.length > 0 && (
-                <div style={fieldPromptSection}>
-                  <div style={fieldPromptGrid}>
-                    {fieldPromptChips.map((chip) => (
-                      <button
-                        key={chip.id}
-                        type="button"
-                        style={fieldPromptChip}
-                        onClick={() =>
-                          processVoiceQuestion(chip.prompt, {
-                            inputMode: chip.inputMode || "typed",
-                          })
-                        }
-                      >
-                        {chip.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {voiceAnswer && (
-                <div style={voiceAnswerBox}>
+                <div style={voiceAnswerBox} ref={voiceAnswerRef}>
                   <div style={voiceAnswerHeader}>
                     <span style={assistantLabel}>
-                      {copy.assistantResponseLabel || copy.answerLabel}
+                      {t("meetroName", language)}
                     </span>
 
                     {voiceResponseSupported ? (
@@ -3193,7 +3585,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                         {voiceStatusChip.label}
                       </span>
                     )}
-                    {voiceIntent && <span style={voiceIntentPill}>{voiceIntent}</span>}
+                    {voiceIntent && (
+                      <span style={voiceIntentPill}>
+                        {getAssistantIntentDisplayLabel(voiceIntent, language)}
+                      </span>
+                    )}
                   </div>
 
                   {voiceActions.length > 0 && (
@@ -3222,51 +3618,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
               {voiceError && <p style={voiceErrorText}>{voiceError}</p>}
 
-              <div style={voiceTipsSection}>
-                <span style={voiceTipsTitle}>{copy.voiceTipsTitle}</span>
-                <div style={voiceTipsGrid}>
-                  {voiceTips.map((tip) => (
-                    <button
-                      key={tip}
-                      type="button"
-                      style={voiceTipChip}
-                      onClick={() => processVoiceQuestion(tip)}
-                    >
-                      {tip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
             </div>
-
-            {quickActions.length > 0 && (
-              <div style={assistantQuickActions}>
-                <span style={assistantLabel}>{copy.quickHelpLabel}</span>
-                <div style={assistantActionGrid}>
-                  {quickActions.map((action) => (
-                    <button
-                      key={action}
-                      type="button"
-                      style={assistantActionButton}
-                      onClick={() => handleQuickAction(action)}
-                    >
-                      {copy.actions[action] || action}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
 
-            <button
-              type="button"
-              style={advancedToggle}
-              onClick={() => setShowAdvancedHelp((current) => !current)}
-            >
-              {showAdvancedHelp ? copy.hideDetails : copy.assistantDetails}
-            </button>
-
-            {showAdvancedHelp && (
+            {false && showAdvancedHelp && (
               <div style={advancedPanel}>
                 <div style={assistantInfoCard}>
                   <span style={assistantLabel}>{copy.screenLabel}</span>
@@ -3411,17 +3766,184 @@ const assistantButton = {
   boxSizing: "border-box",
   contain: "layout paint",
   borderRadius: "50%",
-  border: "1px solid rgba(124, 58, 237, 0.25)",
-  background: "linear-gradient(135deg,#7c3aed,#a78bfa)",
-  color: "#ffffff",
+  border: "1px solid rgba(255, 255, 255, 0.34)",
+  background:
+    "radial-gradient(circle at 32% 22%, rgba(255,255,255,0.72), rgba(255,255,255,0.18) 38%, rgba(124,92,255,0.18) 100%)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  color: "#4c1d95",
   fontSize: 15,
   fontWeight: 950,
   boxShadow:
-    "0 0 0 6px rgba(124, 58, 237, 0.10), 0 14px 34px rgba(91, 61, 245, 0.34)",
+    "0 12px 30px rgba(15, 23, 42, 0.18), 0 0 24px rgba(124, 92, 255, 0.18), inset 0 1px 0 rgba(255,255,255,0.58)",
   cursor: "pointer",
   touchAction: "none",
   userSelect: "none",
   WebkitUserSelect: "none",
+  display: "grid",
+  placeItems: "center",
+};
+
+const assistantButtonWake = {
+  boxShadow:
+    "0 0 0 8px rgba(124, 58, 237, 0.11), 0 18px 42px rgba(91, 61, 245, 0.26), 0 0 34px rgba(124, 92, 255, 0.28), inset 0 1px 0 rgba(255,255,255,0.72)",
+  transform: "scale(1.025)",
+};
+
+const assistantButtonMark = {
+  width: 34,
+  height: 34,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "50%",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,0.82), rgba(221,214,254,0.48))",
+  color: "#5b21b6",
+  fontSize: 17,
+  fontWeight: 950,
+  letterSpacing: 0,
+  lineHeight: 1,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 5px 14px rgba(91,61,245,0.18)",
+};
+
+function getAssistantWakeBubbleStyle({
+  launcherPosition = null,
+  viewport = { width: 390, height: 844 },
+  fallbackBottom = 94,
+  reducedMotion = false,
+} = {}) {
+  const width = 280;
+  const safeWidth = Math.max(280, Number(viewport.width) || 390);
+  const safeHeight = Math.max(320, Number(viewport.height) || 844);
+  const base = {
+    ...assistantWakeBubble,
+    width,
+    animation: getAssistantWakeAnimation(reducedMotion),
+  };
+
+  if (launcherPosition) {
+    const x = Math.min(
+      Math.max(12, Number(launcherPosition.x || 0) - width + 52),
+      Math.max(12, safeWidth - width - 12)
+    );
+    const y = Math.min(
+      Math.max(16, Number(launcherPosition.y || 0) - 194),
+      Math.max(16, safeHeight - 260)
+    );
+    return {
+      ...base,
+      left: x,
+      top: y,
+      right: "auto",
+      bottom: "auto",
+    };
+  }
+
+  return {
+    ...base,
+    right: "max(12px, env(safe-area-inset-right, 0px))",
+    bottom: `calc(${fallbackBottom + 64}px + env(safe-area-inset-bottom, 0px))`,
+  };
+}
+
+const assistantWakeBubble = {
+  position: "fixed",
+  zIndex: 9999,
+  maxWidth: "calc(100vw - 24px)",
+  boxSizing: "border-box",
+  borderRadius: 22,
+  border: "1px solid rgba(255, 255, 255, 0.46)",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,0.76), rgba(248,250,255,0.62))",
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
+  boxShadow: "0 16px 40px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255,255,255,0.74)",
+  padding: "14px 14px 13px",
+  color: "#111827",
+  overflow: "hidden",
+  animation: "meetroAssistantWakeIn 180ms ease-out",
+};
+
+const assistantWakeDismissButton = {
+  position: "absolute",
+  top: 7,
+  right: 8,
+  width: 28,
+  height: 28,
+  border: "none",
+  borderRadius: "50%",
+  background: "rgba(15, 23, 42, 0.06)",
+  color: "#475569",
+  fontSize: 18,
+  lineHeight: "28px",
+  cursor: "pointer",
+};
+
+const assistantWakeIcon = {
+  width: 30,
+  height: 30,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "50%",
+  background: "rgba(255, 255, 255, 0.48)",
+  color: "#5b21b6",
+  fontSize: 14,
+  fontWeight: 950,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  marginBottom: 8,
+};
+
+const assistantWakeStatus = {
+  display: "inline-flex",
+  margin: "0 34px 6px 0",
+  padding: "4px 8px",
+  borderRadius: 999,
+  background: "rgba(124, 58, 237, 0.08)",
+  color: "#5b21b6",
+  fontSize: 11,
+  lineHeight: 1,
+  fontWeight: 950,
+};
+
+const assistantWakeGreeting = {
+  margin: "0 34px 3px 0",
+  color: "#1e1b4b",
+  fontSize: 15,
+  fontWeight: 850,
+  lineHeight: 1.25,
+};
+
+const assistantWakePrompt = {
+  margin: "0 0 11px",
+  color: "#475569",
+  fontSize: 13,
+  fontWeight: 650,
+  lineHeight: 1.35,
+};
+
+const assistantWakeActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+};
+
+const assistantWakeAction = {
+  border: "1px solid rgba(124, 58, 237, 0.2)",
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.78)",
+  color: "#5b21b6",
+  fontSize: 12,
+  fontWeight: 850,
+  padding: "8px 10px",
+  cursor: "pointer",
+  maxWidth: "100%",
+};
+
+const assistantWakeSecondaryAction = {
+  ...assistantWakeAction,
+  background: "rgba(255,255,255,0.54)",
+  color: "#475569",
+  border: "1px solid rgba(148, 163, 184, 0.26)",
 };
 
 const assistantOverlay = {
@@ -3449,23 +3971,41 @@ const assistantOverlay = {
 const assistantSheet = {
   width: "100%",
   maxWidth: "100%",
-  maxHeight: "min(86dvh, 720px)",
+  maxHeight: "min(84dvh, 720px)",
   overflowY: "auto",
   overflowX: "hidden",
   boxSizing: "border-box",
-  background: "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(248,250,255,0.97))",
-  border: "1px solid rgba(221, 214, 254, 0.9)",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,0.92), rgba(248,250,255,0.82))",
+  backdropFilter: "blur(22px)",
+  WebkitBackdropFilter: "blur(22px)",
+  border: "1px solid rgba(255,255,255,0.56)",
   borderRadius: 34,
   padding: "20px max(18px, env(safe-area-inset-right)) 18px max(18px, env(safe-area-inset-left))",
   margin: 0,
   boxShadow:
-    "0 28px 90px rgba(2, 6, 23, 0.28), inset 0 1px 0 rgba(255,255,255,0.82)",
+    "0 24px 80px rgba(2, 6, 23, 0.22), inset 0 1px 0 rgba(255,255,255,0.82)",
+  transition:
+    "max-height 180ms ease, padding 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
+  willChange: "max-height",
+};
+
+const companionStateStyles = {
+  [COMPANION_STATES.briefing]: {
+    maxHeight: "min(72dvh, 520px)",
+  },
+  [COMPANION_STATES.insights]: {
+    maxHeight: "min(64dvh, 460px)",
+  },
+  [COMPANION_STATES.conversation]: {
+    maxHeight: "min(86dvh, 720px)",
+  },
 };
 
 const assistantModeGlow = {
   ready: {
     boxShadow:
-      "0 28px 90px rgba(2, 6, 23, 0.28), 0 0 42px rgba(124, 58, 237, 0.16), inset 0 1px 0 rgba(255,255,255,0.82)",
+      "0 24px 80px rgba(2, 6, 23, 0.22), 0 0 34px rgba(124, 58, 237, 0.12), inset 0 1px 0 rgba(255,255,255,0.82)",
   },
   listening: {
     border: "1px solid rgba(236, 72, 153, 0.34)",
@@ -3498,6 +4038,22 @@ const assistantHeader = {
   justifyContent: "space-between",
   gap: 12,
   marginBottom: 10,
+  maxWidth: "100%",
+};
+
+const assistantHeaderCopy = {
+  minWidth: 0,
+  flex: "1 1 auto",
+};
+
+const assistantHeaderActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  gap: 7,
+  flexShrink: 0,
+  maxWidth: "45%",
 };
 
 const assistantEyebrow = {
@@ -3513,7 +4069,7 @@ const assistantEyebrow = {
 const assistantTitle = {
   margin: 0,
   color: "#0f172a",
-  fontSize: 24,
+  fontSize: 26,
   lineHeight: 1.1,
   fontWeight: 950,
 };
@@ -3529,8 +4085,8 @@ const assistantPurposeText = {
 
 const assistantGreetingText = {
   margin: "8px 0 0",
-  color: "#312e81",
-  fontSize: 18,
+  color: "#1e1b4b",
+  fontSize: 17,
   lineHeight: 1.2,
   fontWeight: 950,
 };
@@ -3541,6 +4097,74 @@ const assistantPromptText = {
   fontSize: 15,
   lineHeight: 1.3,
   fontWeight: 850,
+};
+
+const companionNoticePanel = {
+  padding: 14,
+  borderRadius: 22,
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,0.72), rgba(238,242,255,0.58))",
+  border: "1px solid rgba(255,255,255,0.54)",
+  boxShadow: "0 14px 34px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.72)",
+  marginBottom: 12,
+};
+
+const companionNoticeList = {
+  display: "grid",
+  gap: 7,
+  margin: "7px 0 11px",
+  padding: 0,
+  listStyle: "none",
+};
+
+const companionNoticeItem = {
+  margin: 0,
+  color: "#27364a",
+  fontSize: 14,
+  lineHeight: 1.38,
+  fontWeight: 760,
+};
+
+const companionIntentGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 8,
+  marginBottom: 12,
+};
+
+const companionIntentButton = {
+  minHeight: 42,
+  border: "1px solid rgba(124,58,237,0.16)",
+  borderRadius: 15,
+  background: "rgba(255,255,255,0.68)",
+  color: "#4338ca",
+  fontSize: 12,
+  lineHeight: 1.15,
+  fontWeight: 900,
+  padding: "9px 8px",
+  cursor: "pointer",
+};
+
+const companionIntentButtonActive = {
+  background: "rgba(124,58,237,0.10)",
+  border: "1px solid rgba(124,58,237,0.34)",
+  color: "#4c1d95",
+};
+
+const companionInsightPanel = {
+  padding: 13,
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.68)",
+  border: "1px solid rgba(226,232,240,0.9)",
+  marginBottom: 12,
+};
+
+const companionInsightText = {
+  margin: 0,
+  color: "#334155",
+  fontSize: 14,
+  lineHeight: 1.42,
+  fontWeight: 760,
 };
 
 const assistantNotificationPill = {
@@ -3564,6 +4188,13 @@ const assistantCloseButton = {
   fontSize: 13,
   fontWeight: 900,
   cursor: "pointer",
+};
+
+const assistantBackButton = {
+  ...assistantCloseButton,
+  background: "rgba(255,255,255,0.68)",
+  color: "#5b21b6",
+  border: "1px solid rgba(124,58,237,0.18)",
 };
 
 const assistantInfoCard = {
@@ -3668,9 +4299,9 @@ const voiceCard = {
   padding: 14,
   borderRadius: 24,
   background:
-    "radial-gradient(circle at top left, rgba(124,58,237,0.16), transparent 38%), linear-gradient(135deg,#ffffff,#f8f7ff)",
-  border: "1px solid rgba(124,58,237,0.18)",
-  boxShadow: "0 18px 42px rgba(91,61,245,0.13)",
+    "radial-gradient(circle at top left, rgba(124,58,237,0.10), transparent 38%), rgba(255,255,255,0.66)",
+  border: "1px solid rgba(255,255,255,0.52)",
+  boxShadow: "0 14px 34px rgba(91,61,245,0.09)",
 };
 
 const voiceHeader = {
@@ -3691,18 +4322,21 @@ const voiceHeroText = {
 };
 
 const voiceButton = {
-  width: 82,
-  height: 82,
+  width: 56,
+  height: 56,
   borderRadius: "50%",
   border: "1px solid rgba(167,139,250,0.55)",
-  background: "linear-gradient(135deg,#6d28d9,#a78bfa)",
-  color: "#ffffff",
-  fontSize: 34,
+  background:
+    "radial-gradient(circle at 35% 25%, rgba(255,255,255,0.82), rgba(124,58,237,0.22))",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  color: "#5b21b6",
+  fontSize: 24,
   fontWeight: 950,
   cursor: "pointer",
   flexShrink: 0,
   boxShadow:
-    "0 0 0 8px rgba(124,58,237,0.10), 0 18px 34px rgba(91,61,245,0.28)",
+    "0 0 0 5px rgba(124,58,237,0.08), 0 12px 26px rgba(91,61,245,0.18)",
 };
 
 const voiceButtonListening = {
@@ -3735,7 +4369,7 @@ const voiceTitleRow = {
 const voiceTitle = {
   display: "inline-flex",
   color: "#0f172a",
-  fontSize: 24,
+  fontSize: 18,
   lineHeight: 1.2,
   fontWeight: 950,
 };
@@ -3887,10 +4521,11 @@ const voiceResultBox = {
 
 const voiceAnswerBox = {
   marginTop: 10,
-  padding: 11,
-  borderRadius: 15,
-  background: "#f0fdf4",
-  border: "1px solid #bbf7d0",
+  padding: 13,
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(226,232,240,0.92)",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
 };
 
 const voiceAnswerHeader = {

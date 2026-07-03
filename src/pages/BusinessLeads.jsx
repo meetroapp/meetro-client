@@ -14,6 +14,13 @@ import {
   canProfessionalSeeLocalLead,
   getLocalLeadVisibilitySummary,
 } from "../utils/localLeadVisibility";
+import { isRequestAvailableAsNewLead } from "../utils/homeownerLifecycle";
+import {
+  getEligibleSharedProfessionalLeads,
+  isProfessionalLeadQaModeEnabled,
+  purgeProfessionalLeadCaches,
+  shouldUseBackendPostForProfessionalLead,
+} from "../utils/businessLeadSourceTruth";
 
 function BusinessLeads({ setPage, currentPage }) {
   const [loading, setLoading] = useState(true);
@@ -51,7 +58,7 @@ function BusinessLeads({ setPage, currentPage }) {
     professionalRequiredText: isSpanish
       ? "Solo cuentas profesionales pueden ver clientes del negocio."
       : "Only professional accounts can view business leads.",
-    goToProfile: isSpanish ? "Ir al Perfil" : "Go to Profile",
+    goToProfile: isSpanish ? "Revisar perfil" : "Review Profile",
   };
 
   function categoryLabel(category) {
@@ -167,6 +174,10 @@ function BusinessLeads({ setPage, currentPage }) {
 
       const homeownerRequests =
         getStoredHomeownerRequests();
+      purgeProfessionalLeadCaches();
+      const qaLeadMode = isProfessionalLeadQaModeEnabled({
+        dev: import.meta.env.DEV,
+      });
 
       function isDirectRelationshipRequest(request = {}) {
         return (
@@ -178,14 +189,15 @@ function BusinessLeads({ setPage, currentPage }) {
         );
       }
 
-      const publicHomeownerRequests = homeownerRequests.filter(
-        (request) => !isDirectRelationshipRequest(request)
+      const publicHomeownerRequests = getEligibleSharedProfessionalLeads(
+        homeownerRequests.filter((request) => !isDirectRelationshipRequest(request)),
+        professionalMatchProfile
       );
 
       function isClosedLead(item) {
         const itemId = String(item.id || item.requestId || "");
 
-        return publicHomeownerRequests.some((request) => {
+        return homeownerRequests.some((request) => {
           const requestId = String(request.id || request.requestId || "");
 
           const sameId = itemId && requestId && itemId === requestId;
@@ -194,31 +206,20 @@ function BusinessLeads({ setPage, currentPage }) {
             String(request.title || "").trim().toLowerCase() ===
             String(item.title || "").trim().toLowerCase();
 
-          const closedStatuses = [
-            "accepted",
-            "selected",
-            "scheduled",
-            "active",
-            "completed",
-            "cancelled",
-            "closed",
-          ];
-
-          const hasAcceptedQuote =
-            request.acceptedQuote ||
-            request.selectedProfessional ||
-            request.quotesReceived?.some(
-              (quote) => quote.status === "accepted"
-            );
-
           return (
             (sameId || sameTitle) &&
-            (closedStatuses.includes(request.status) || hasAcceptedQuote)
+            !isRequestAvailableAsNewLead(request)
           );
         });
       }
 
-      const convertedPosts = incomingPosts.map((post) => {
+      const sourceAuditedPosts = incomingPosts.filter((post) =>
+        shouldUseBackendPostForProfessionalLead(post, homeownerRequests, {
+          qaMode: qaLeadMode,
+        })
+      );
+
+      const convertedPosts = sourceAuditedPosts.map((post) => {
         const exactIdMatch = publicHomeownerRequests.find((request) => {
           return (
             String(request.id || request.requestId || "") ===
@@ -336,7 +337,18 @@ function BusinessLeads({ setPage, currentPage }) {
         if (!key) return;
         if (!candidateMap.has(key)) candidateMap.set(key, lead);
       });
-      const leadCandidates = Array.from(candidateMap.values());
+      const leadCandidates = Array.from(candidateMap.values()).filter((lead) => {
+        const matchingRequest = publicHomeownerRequests.find((request) => {
+          const requestId = String(request.requestId || request.id || "");
+          const leadId = String(lead.requestId || lead.id || "");
+
+          return requestId && leadId && requestId === leadId;
+        });
+
+        return Boolean(matchingRequest || shouldUseBackendPostForProfessionalLead(lead, homeownerRequests, {
+          qaMode: qaLeadMode,
+        }));
+      });
 
       const debugRows = leadCandidates.map((lead) => {
         const summary = getLocalLeadVisibilitySummary(
@@ -379,6 +391,7 @@ function BusinessLeads({ setPage, currentPage }) {
       }
 
       const matchedLeads = leadCandidates
+        .filter((lead) => isRequestAvailableAsNewLead(lead))
         .filter((lead) =>
           canProfessionalSeeLocalLead(professionalMatchProfile, lead)
         )

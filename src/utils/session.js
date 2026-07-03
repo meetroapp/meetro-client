@@ -42,6 +42,87 @@ export const professionalRoles = [
   "other",
 ];
 
+const normalizedProfessionalRoles = new Set(
+  professionalRoles.map((role) => String(role).toLowerCase())
+);
+
+function safeReadStoredUser() {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem("user") || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function safeReadStoredBusinessProfile() {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem("contractorProfile") || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function truthyProfileFlag(value) {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["true", "yes", "1", "active", "complete", "completed"].includes(
+    normalized
+  );
+}
+
+function hasProfileIdentity(profile = {}) {
+  return Boolean(
+    profile.id ||
+      profile.contractor_id ||
+      profile.contractorId ||
+      profile.businessId ||
+      profile.business_id ||
+      profile.business_name ||
+      profile.businessName ||
+      profile.name ||
+      profile.category ||
+      profile.business_category ||
+      profile.businessCategory
+  );
+}
+
+export function hasBusinessProfileOwnership(user = {}) {
+  if (typeof localStorage === "undefined") {
+    return Boolean(
+      truthyProfileFlag(user.hasBusinessProfile) ||
+        truthyProfileFlag(user.has_business_profile) ||
+        truthyProfileFlag(user.contractorProfileComplete) ||
+        truthyProfileFlag(user.contractor_profile_complete) ||
+        hasProfileIdentity(user.businessProfile) ||
+        hasProfileIdentity(user.business_profile) ||
+        hasProfileIdentity(user.contractorProfile) ||
+        hasProfileIdentity(user.contractor_profile) ||
+        Boolean(user.business_name || user.businessName)
+    );
+  }
+
+  const storedProfile = safeReadStoredBusinessProfile();
+
+  return Boolean(
+    truthyProfileFlag(user.hasBusinessProfile) ||
+      truthyProfileFlag(user.has_business_profile) ||
+      truthyProfileFlag(user.contractorProfileComplete) ||
+      truthyProfileFlag(user.contractor_profile_complete) ||
+      hasProfileIdentity(user.businessProfile) ||
+      hasProfileIdentity(user.business_profile) ||
+      hasProfileIdentity(user.contractorProfile) ||
+      hasProfileIdentity(user.contractor_profile) ||
+      Boolean(user.business_name || user.businessName) ||
+      localStorage.getItem("hasBusinessProfile") === "true" ||
+      localStorage.getItem("contractorProfileComplete") === "true" ||
+      Boolean(localStorage.getItem("businessName")) ||
+      Boolean(localStorage.getItem("businessCategory")) ||
+      hasProfileIdentity(storedProfile)
+  );
+}
+
 export function isProfessionalUser(user = {}) {
   const role = String(user.role || "").toLowerCase();
   const accountType = String(
@@ -49,13 +130,13 @@ export function isProfessionalUser(user = {}) {
   ).toLowerCase();
   const businessCategory = String(
     user.business_category || user.businessCategory || ""
-  );
+  ).toLowerCase();
 
   return (
     accountType === "professional" ||
     accountType === "business" ||
-    professionalRoles.includes(role) ||
-    professionalRoles.includes(businessCategory)
+    normalizedProfessionalRoles.has(role) ||
+    normalizedProfessionalRoles.has(businessCategory)
   );
 }
 
@@ -78,7 +159,8 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
     clearAccountWorkflowData();
   }
 
-  const isProfessional = isProfessionalUser(user);
+  const ownsBusinessProfile = hasBusinessProfileOwnership(user);
+  const isProfessional = isProfessionalUser(user) || ownsBusinessProfile;
 
   const finalAccountType = isProfessional ? "professional" : "homeowner";
   const preferredMode =
@@ -100,19 +182,63 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
   localStorage.setItem("userId", user.id || "");
   localStorage.setItem("userName", user.username || user.name || "");
   localStorage.setItem("userEmail", user.email || fallbackEmail || "");
+  localStorage.setItem(
+    "accountStatus",
+    user.accountStatus || user.account_status || user.status || "active"
+  );
+  localStorage.setItem(
+    "accountActive",
+    String(
+      user.accountActive ??
+        user.account_active ??
+        user.isActive ??
+        user.is_active ??
+        user.active ??
+        true
+    )
+  );
+  localStorage.setItem(
+    "accountConnected",
+    String(
+      user.accountConnected ??
+        user.account_connected ??
+        user.isConnected ??
+        user.is_connected ??
+        user.connected ??
+        true
+    )
+  );
   localStorage.setItem("userRole", finalRole);
   localStorage.setItem("accountType", finalAccountType);
   localStorage.setItem("activeAccountMode", finalMode);
   localStorage.setItem("isProfessional", isProfessional ? "true" : "false");
-  localStorage.setItem("hasBusinessProfile", isProfessional ? "true" : "false");
-  localStorage.setItem("businessName", user.business_name || user.businessName || "");
+  localStorage.setItem(
+    "hasBusinessProfile",
+    ownsBusinessProfile || isProfessional ? "true" : "false"
+  );
+  localStorage.setItem(
+    "businessName",
+    user.business_name ||
+      user.businessName ||
+      localStorage.getItem("businessName") ||
+      safeReadStoredBusinessProfile().business_name ||
+      safeReadStoredBusinessProfile().businessName ||
+      safeReadStoredBusinessProfile().name ||
+      ""
+  );
   localStorage.setItem(
     "businessCategory",
-    user.business_category || user.businessCategory || ""
+    user.business_category ||
+      user.businessCategory ||
+      localStorage.getItem("businessCategory") ||
+      safeReadStoredBusinessProfile().category ||
+      safeReadStoredBusinessProfile().business_category ||
+      safeReadStoredBusinessProfile().businessCategory ||
+      ""
   );
   localStorage.setItem(
     "contractorProfileComplete",
-    isProfessional ? "true" : "false"
+    ownsBusinessProfile || isProfessional ? "true" : "false"
   );
   if (nextIdentity) {
     localStorage.setItem("meetroLastAccountIdentity", nextIdentity);
@@ -139,13 +265,7 @@ export function getPostLoginPage(user = {}) {
 
 
 export function isProfessionalSession() {
-  const user = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  })();
+  const user = safeReadStoredUser();
 
   const userRole = localStorage.getItem("userRole") || user.role || "standard";
   const accountType =
@@ -162,6 +282,7 @@ export function isProfessionalSession() {
 
   return (
     storedIsProfessional ||
+    hasBusinessProfileOwnership(user) ||
     accountType === "business" ||
     accountType === "professional" ||
     isProfessionalUser({
@@ -176,6 +297,7 @@ const businessModePages = new Set([
   "businessDashboard",
   "professionalOnboarding",
   "businessLeads",
+  "contractorProfile",
   "businessCommandCenter",
   "businessAvailability",
   "customerRelationshipsCenter",

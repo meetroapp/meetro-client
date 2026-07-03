@@ -222,7 +222,7 @@ function BusinessCommandCenter({ setPage }) {
     aiHelp: {
       id: "aiHelp",
       icon: "aiHelp",
-      title: isSpanish ? "Ayuda IA del negocio" : "AI Business Help",
+      title: isSpanish ? "Preguntar a Meetro" : "Ask Meetro",
       desc: isSpanish
         ? "Configura preferencias del asistente y revisa soporte IA seguro."
         : "Manage assistant preferences and review safe AI support.",

@@ -306,13 +306,15 @@ test("Ask Meetro page avoids visible AI-first presentation language", () => {
   );
 });
 
-test("request form shows Meetro prepared request continuity banner", () => {
-  assert.match(uploadSource, /assistantPreparedRequestBannerTitle/);
-  assert.match(uploadSource, /assistantPreparedRequestBannerText/);
+test("request form shows an understanding-to-review transition without submission ambiguity", () => {
+  assert.match(uploadSource, /requestReviewIntroTitle/);
+  assert.match(uploadSource, /requestReviewIntroText/);
   assert.match(uploadSource, /assistantDraftMetadata && \(/);
   assert.match(uploadSource, /preparedRequestOrb/);
-  assert.equal(t("assistantPreparedRequestBannerTitle", "en"), "Meetro prepared this request for you.");
-  assert.equal(t("assistantPreparedRequestBannerText", "en"), "Review and edit anything before sending.");
+  assert.equal(t("requestReviewIntroTitle", "en"), "Here's what Meetro understood.");
+  assert.equal(t("requestReviewIntroText", "en"), "Review or edit anything before sending.");
+  assert.doesNotMatch(uploadSource, /assistantPreparedRequestBannerTitle/);
+  assert.doesNotMatch(uploadSource, /assistantPreparedRequestBannerText/);
 });
 
 test("Request Details page no longer repeats request onboarding copy", () => {
@@ -332,8 +334,29 @@ test("Request Details form remains the primary editable surface", () => {
   assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectTitle"\)\}<\/label>/);
   assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectDescription"\)\}<\/label>/);
   assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("fullServiceAddress"\)\}<\/label>/);
-  assert.match(uploadSource, /onChange=\{\(e\) => setTitle\(e\.target\.value\)\}/);
-  assert.match(uploadSource, /onChange=\{\(e\) => setDescription\(e\.target\.value\)\}/);
+  assert.match(uploadSource, /setTitleEdited\(true\);\s*setTitle\(e\.target\.value\);/);
+  assert.match(uploadSource, /setDescriptionEdited\(true\);\s*setDescription\(e\.target\.value\);/);
+});
+
+test("request page keeps matching language problem-first and avoids category-first validation", () => {
+  assert.equal(t("requestIntelligencePrompt", "en"), "What do you need help with?");
+  assert.equal(t("requestMatchLabel", "en"), "Closest match");
+  assert.equal(t("chooseClosestMatch", "en"), "Choose closest match");
+  assert.match(t("requestMatchRequired", "en"), /closest match/);
+  assert.match(uploadSource, /t\("requestMatchLabel"\)/);
+  assert.match(uploadSource, /t\("chooseClosestMatch"\)/);
+  assert.match(uploadSource, /alert\(t\("requestMatchRequired"\)\)/);
+  assert.doesNotMatch(uploadSource, /alert\(t\("selectServiceCategory"\)\)/);
+});
+
+test("request page prepares editable title and details from what the homeowner describes", () => {
+  assert.match(uploadSource, /function buildSuggestedRequestTitle/);
+  assert.match(uploadSource, /const \[titleEdited, setTitleEdited\] = useState\(false\)/);
+  assert.match(uploadSource, /const \[descriptionEdited, setDescriptionEdited\] = useState\(false\)/);
+  assert.match(uploadSource, /if \(!titleEdited\) \{\s*setTitle\(buildSuggestedRequestTitle/);
+  assert.match(uploadSource, /if \(!descriptionEdited\) \{\s*setDescription\(value\)/);
+  assert.match(uploadSource, /setTitleEdited\(true\)/);
+  assert.match(uploadSource, /setDescriptionEdited\(true\)/);
 });
 
 test("Send Request remains primary and Cancel Request is visually secondary", () => {
@@ -342,8 +365,15 @@ test("Send Request remains primary and Cancel Request is visually secondary", ()
   assert.equal(t("fullServiceAddress", "en"), "Service Address");
   assert.match(uploadSource, /style=\{\{\s*\.\.\.primaryButton/);
   assert.match(uploadSource, /style=\{cancelRequestButton\}/);
+  assert.match(uploadSource, /const requestActionBar = \{/);
+  assert.match(uploadSource, /bottom: "calc\(78px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
+  assert.match(uploadSource, /backdropFilter: "blur\(14px\)"/);
   assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*background: "rgba\(255,255,255,0\.64\)"/);
   assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*color: "#64748b"/);
+  assert.equal(
+    t("projectPostedSuccess", "en"),
+    "Your request was sent. You can follow what happens next from Home."
+  );
 });
 
 test("Continue to Request and continuity labels exist in supported languages", () => {
@@ -359,6 +389,12 @@ test("Continue to Request and continuity labels exist in supported languages", (
     "assistantPreparedPhotosToInclude",
     "assistantEditDescription",
     "assistantRequestPhotoWide",
+    "requestMatchLabel",
+    "chooseClosestMatch",
+    "requestMatchRequired",
+    "requestReviewIntroTitle",
+    "requestReviewIntroText",
+    "projectPostedSuccess",
   ];
 
   for (const language of ["en", "es", "fr", "pt-BR"]) {

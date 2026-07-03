@@ -22,8 +22,7 @@ function CompletedJobDetails({ setPage }) {
   const [completionApproved, setCompletionApproved] = useState(
     Boolean(
       completedProject?.completionApproved ||
-        completedProject?.homeownerCompletionApproved ||
-        completedProject?.reviewSubmitted
+        completedProject?.homeownerCompletionApproved
     )
   );
   const [resolveTogetherOpen, setResolveTogetherOpen] = useState(
@@ -419,6 +418,19 @@ function CompletedJobDetails({ setPage }) {
     setResolutionState("needs_resolution");
   };
 
+  const openResolveTogether = () => {
+    setConcernError("");
+    setResolveTogetherOpen(true);
+
+    if (typeof window === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("completion-concern-flow")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const markResolutionCorrected = () => {
     const resolvedAt = new Date().toISOString();
     const resolvedProject = {
@@ -739,7 +751,7 @@ function CompletedJobDetails({ setPage }) {
                 <button
                   type="button"
                   style={secondaryButton}
-                  onClick={() => setResolveTogetherOpen(true)}
+                  onClick={openResolveTogether}
                 >
                   {t("iHaveAConcern")}
                 </button>
@@ -748,7 +760,7 @@ function CompletedJobDetails({ setPage }) {
           </section>
 
           {resolveTogetherOpen && !completionApproved && resolutionState !== "needs_resolution" && (
-            <section style={resolveCard}>
+            <section id="completion-concern-flow" style={resolveCard}>
               <div>
                 <span style={sectionEyebrow}>{t("resolveTogether")}</span>
                 <h2 style={completionStatusTitle}>{t("resolveTogether")}</h2>
@@ -1125,10 +1137,7 @@ function CompletedJobDetails({ setPage }) {
 
               <button
                 style={secondaryButton}
-                onClick={() => {
-                  if (restoreConversationOriginContext(setPage)) return;
-                  setPage("messagesInbox");
-                }}
+                onClick={() => openProjectConversation("completion_review")}
               >
                 {t("messageProfessional")}
               </button>
@@ -1161,12 +1170,9 @@ function CompletedJobDetails({ setPage }) {
 
               <button
                 style={secondaryButton}
-                onClick={() => {
-                  if (restoreConversationOriginContext(setPage)) return;
-                  setPage("messagesInbox");
-                }}
+                onClick={() => openProjectConversation("completion_review")}
               >
-                Open Messages
+                Continue Conversation
               </button>
 
               <button
@@ -1284,11 +1290,12 @@ const page = {
   minHeight: "100vh",
   background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
   padding:
-    "calc(env(safe-area-inset-top, 0px) + 16px) max(14px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
+    "calc(env(safe-area-inset-top, 0px) + 16px) max(14px, env(safe-area-inset-right, 0px)) calc(164px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   width: "100%",
   maxWidth: "900px",
   margin: "0 auto",
+  scrollPaddingBottom: "calc(190px + env(safe-area-inset-bottom, 0px))",
 };
 
 const backButton = {
@@ -1321,7 +1328,7 @@ const printHeader = {
 
 const card = {
   maxWidth: "850px",
-  margin: "0 auto",
+  margin: "0 auto calc(90px + env(safe-area-inset-bottom, 0px))",
   background: "white",
   borderRadius: "24px",
   padding: "16px",
@@ -1528,6 +1535,10 @@ marginTop:"20px",
 const decisionActions = {
   display: "grid",
   gap: "10px",
+  position: "relative",
+  zIndex: 10001,
+  pointerEvents: "auto",
+  isolation: "isolate",
 };
 
 const resolveCard = {
@@ -1612,6 +1623,11 @@ background:"#5b3df5",
 color:"white",
 fontWeight:"900",
 cursor:"pointer",
+position:"relative",
+zIndex:1,
+pointerEvents:"auto",
+touchAction:"manipulation",
+WebkitTapHighlightColor:"transparent",
 };
 
 const secondaryButton={
@@ -1621,6 +1637,11 @@ padding:"14px",
 background:"white",
 fontWeight:"900",
 cursor:"pointer",
+position:"relative",
+zIndex:1,
+pointerEvents:"auto",
+touchAction:"manipulation",
+WebkitTapHighlightColor:"transparent",
 };
 
 const issueButton = {

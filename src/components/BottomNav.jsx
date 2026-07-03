@@ -8,7 +8,10 @@ import {
 } from "../utils/notifications";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import { getAccountModeForPage } from "../utils/session";
-import { getUnreadConversationCount } from "../utils/conversationUnread";
+import {
+  getConversationMetrics,
+  getProfessionalWorkMetrics,
+} from "../utils/dashboardMetrics";
 import MeetroIcon from "./MeetroIcon";
 
 function getUnreadMessageCount() {
@@ -18,7 +21,7 @@ function getUnreadMessageCount() {
     );
 
     if (Array.isArray(registry)) {
-      return getUnreadConversationCount(registry);
+      return getConversationMetrics({ registry }).unreadConversationCount;
     }
   } catch {
     // Fall back to the legacy cached count.
@@ -112,16 +115,7 @@ function getWorkCenterAlertDestination() {
 
 function getAcceptedQuoteReadyCount() {
   try {
-    const quoteHistory = JSON.parse(localStorage.getItem("workCenterQuoteHistory") || "[]");
-    if (!Array.isArray(quoteHistory)) return 0;
-
-    return quoteHistory.filter(
-      (quote) =>
-        !quote.movedToActiveAt &&
-        ["accepted", "approved", "quote_approved"].includes(
-          String(quote.status || quote.quoteStatus || "").toLowerCase()
-        )
-    ).length;
+    return getProfessionalWorkMetrics().quoteResponseAlertCount;
   } catch {
     return 0;
   }

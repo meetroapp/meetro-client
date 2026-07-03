@@ -2,6 +2,107 @@ function normalizeStatus(status) {
   return String(status || "pending").toLowerCase().trim();
 }
 
+const CLOSED_REQUEST_STATUSES = new Set([
+  "closed",
+  "closure_completed",
+  "history",
+  "archived",
+  "deleted",
+]);
+
+const CANCELLED_REQUEST_STATUSES = new Set(["cancelled", "canceled"]);
+
+const MOVED_ON_LEAD_STATUSES = new Set([
+  "accepted",
+  "selected",
+  "scheduled",
+  "work_scheduled",
+  "scheduled_work",
+  "on_the_way",
+  "enroute",
+  "arrived",
+  "active",
+  "in_progress",
+  "working",
+  "started",
+  "needs_resolution",
+  "completed",
+  "work_completed",
+  "closed",
+  "closure_completed",
+  "history",
+  "archived",
+  "deleted",
+  "cancelled",
+  "canceled",
+]);
+
+export function isRequestClosedOrArchived(request = {}) {
+  const status = normalizeStatus(request.status);
+  const lifecycleState = normalizeStatus(request.lifecycleState);
+  const closureStatus = normalizeStatus(request.closureStatus);
+
+  return Boolean(
+    CLOSED_REQUEST_STATUSES.has(status) ||
+      lifecycleState === "history" ||
+      lifecycleState === "archived" ||
+      closureStatus === "closed" ||
+      request.closedAt ||
+      request.archivedAt ||
+      request.deletedAt ||
+      request.archived === true ||
+      request.deleted === true ||
+      request.isArchived === true ||
+      request.isDeleted === true ||
+      request.savedToHistory
+  );
+}
+
+export function isRequestVisibleToHomeowner(request = {}) {
+  return Boolean(request) && !isRequestClosedOrArchived(request);
+}
+
+export function isRequestActiveForHomeowner(request = {}) {
+  const status = normalizeStatus(request.status);
+  return isRequestVisibleToHomeowner(request) && !CANCELLED_REQUEST_STATUSES.has(status);
+}
+
+export function isRequestAvailableAsNewLead(request = {}) {
+  const status = normalizeStatus(request.status || "open");
+  const relationshipOwned = Boolean(
+    request.professionalId ||
+      request.businessId ||
+      request.contractorId ||
+      request.assignedProfessionalId ||
+      request.selectedBusinessId ||
+      request.acceptedByBusinessId ||
+      request.matchedBusinessId ||
+      request.providerId ||
+      request.acceptedProfessionalId ||
+      request.selectedProfessionalId ||
+      request.assignedProfessionalName ||
+      request.assignedProfessional ||
+      request.acceptedByProfessionalId
+  );
+  const quoteAccepted = Array.isArray(request.quotesReceived)
+    ? request.quotesReceived.some((quote) =>
+        ["accepted", "approved"].includes(normalizeStatus(quote?.status || quote?.quoteStatus))
+      )
+    : false;
+
+  return Boolean(
+    request &&
+      !MOVED_ON_LEAD_STATUSES.has(status) &&
+      !relationshipOwned &&
+      !request.acceptedQuote &&
+      !request.selectedProfessional &&
+      !request.acceptedByProfessionalId &&
+      !request.acceptedAt &&
+      !quoteAccepted &&
+      !isRequestClosedOrArchived(request)
+  );
+}
+
 function hasItems(value) {
   return Array.isArray(value) ? value.length > 0 : Number(value || 0) > 0;
 }
@@ -22,6 +123,9 @@ export function getHomeownerLifecycleStage(request = {}, language = "en") {
     hasTimelineType(request, (type) => type.includes("completion"));
   const isClosed =
     status === "closed" ||
+    status === "closure_completed" ||
+    status === "history" ||
+    request.lifecycleState === "history" ||
     request.closureStatus === "closed" ||
     request.closedAt ||
     request.savedToHistory;
@@ -105,11 +209,13 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
   );
   const hasCompletion =
     status === "completed" ||
-    status === "closure_completed" ||
     Boolean(request.completionRecord) ||
     hasTimelineType(request, (type) => type.includes("completion"));
   const closed =
     status === "closed" ||
+    status === "closure_completed" ||
+    status === "history" ||
+    request.lifecycleState === "history" ||
     request.closureStatus === "closed" ||
     request.closedAt ||
     request.savedToHistory;
@@ -129,25 +235,25 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       request: {
         status: "Waiting for professional response",
         next: "No action needed right now.",
-        action: "Open Request",
+        action: "Continue Request",
         hint: "Request submitted",
       },
       visit: {
         status: "Visit scheduled",
         next: "Confirm or review the appointment details.",
-        action: "View Schedule",
+        action: "Review Schedule",
         hint: "Visit scheduled",
       },
       evaluation: {
         status: "Evaluation completed",
         next: "The professional can prepare your proposal.",
-        action: "View Details",
+        action: "Review Details",
         hint: "Evaluation saved",
       },
       proposal: {
         status: "Proposal Ready for Review",
         next: "Review the proposal, approve it, or request changes.",
-        action: "View Proposal",
+        action: "Review Proposal",
         hint: "Proposal ready",
       },
       approval: {
@@ -159,13 +265,13 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       payment: {
         status: "Payment / Deposit needed",
         next: "Review payment details before work is scheduled.",
-        action: "View Payment Details",
+        action: "Review Payment Details",
         hint: "Payment step",
       },
       workScheduled: {
         status: "Your work is scheduled",
         next: "Review the work date or message the professional.",
-        action: "View Schedule",
+        action: "Review Schedule",
         hint: "Work scheduled",
       },
       onTheWay: {
@@ -195,7 +301,7 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       history: {
         status: "Saved to Service History",
         next: "Use your service record for future work.",
-        action: "View Record",
+        action: "Review Record",
         hint: "Service history",
       },
       cancelled: {
@@ -209,25 +315,25 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       request: {
         status: "Esperando respuesta profesional",
         next: "No necesita hacer nada por ahora.",
-        action: "Abrir solicitud",
+        action: "Continuar solicitud",
         hint: "Solicitud enviada",
       },
       visit: {
         status: "Visita programada",
         next: "Confirme o revise los detalles de la cita.",
-        action: "Ver agenda",
+        action: "Revisar agenda",
         hint: "Visita programada",
       },
       evaluation: {
         status: "Evaluación completada",
         next: "El profesional puede preparar su propuesta.",
-        action: "Ver detalles",
+        action: "Revisar detalles",
         hint: "Evaluación guardada",
       },
       proposal: {
         status: "Propuesta lista para revisar",
         next: "Revise la propuesta, apruébela o solicite cambios.",
-        action: "Ver propuesta",
+        action: "Revisar propuesta",
         hint: "Propuesta lista",
       },
       approval: {
@@ -239,13 +345,13 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       payment: {
         status: "Pago / depósito requerido",
         next: "Revise los detalles de pago antes de programar el trabajo.",
-        action: "Ver pago",
+        action: "Revisar pago",
         hint: "Paso de pago",
       },
       workScheduled: {
         status: "Su trabajo está programado",
         next: "Revise la fecha o envíe un mensaje al profesional.",
-        action: "Ver agenda",
+        action: "Revisar agenda",
         hint: "Trabajo programado",
       },
       onTheWay: {
@@ -275,7 +381,7 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
       history: {
         status: "Guardado en historial de servicios",
         next: "Use el registro para trabajos futuros.",
-        action: "Ver registro",
+        action: "Revisar registro",
         hint: "Historial",
       },
       cancelled: {
@@ -291,7 +397,7 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
 
   if (status === "cancelled") key = "cancelled";
   else if (closed) key = "history";
-  else if (hasCompletion || ["completed", "work_completed", "closure_completed"].includes(status)) key = "completion";
+  else if (hasCompletion || ["completed", "work_completed"].includes(status)) key = "completion";
   else if (["on_the_way", "enroute"].includes(activeWorkStatus)) key = "onTheWay";
   else if (activeWorkStatus === "arrived") key = "arrived";
   else if (["active", "in_progress", "working", "started"].includes(activeWorkStatus)) key = "progress";

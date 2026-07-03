@@ -8,16 +8,16 @@ const PRIMARY_CTA_LABELS = {
     es: "Registrar notas de evaluación",
   },
   create_proposal: {
-    en: "Create Proposal",
-    es: "Crear propuesta",
+    en: "Prepare Proposal",
+    es: "Preparar propuesta",
   },
   send_proposal: {
     en: "Send Proposal",
     es: "Enviar propuesta",
   },
   open_conversation: {
-    en: "Open Conversation",
-    es: "Abrir conversación",
+    en: "Continue Conversation",
+    es: "Continuar conversación",
   },
   record_payment: {
     en: "Record Payment",
@@ -40,8 +40,8 @@ const PRIMARY_CTA_LABELS = {
     es: "Comenzar trabajo",
   },
   complete_work: {
-    en: "Complete Work",
-    es: "Completar trabajo",
+    en: "Record Completion",
+    es: "Registrar finalización",
   },
   create_receipt: {
     en: "Create Receipt",
@@ -52,8 +52,8 @@ const PRIMARY_CTA_LABELS = {
     es: "Enviar recibo",
   },
   close_job: {
-    en: "Close Job",
-    es: "Cerrar trabajo",
+    en: "Review Closure",
+    es: "Revisar cierre",
   },
   view_history: {
     en: "View History",

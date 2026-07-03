@@ -47,7 +47,7 @@ function Conversation({ setPage, currentPage }) {
     }
 
     if (lowerInput.includes("thank") || lowerInput.includes("thanks")) {
-      return "You're welcome. Meetro AI will continue helping organize the request while the contractor reviews your details.";
+      return "You're welcome. Meetro will continue helping organize the request while the contractor reviews your details.";
     }
 
     if (
@@ -59,10 +59,10 @@ function Conversation({ setPage, currentPage }) {
     }
 
     if (lowerInput.includes("hello") || lowerInput.includes("hi")) {
-      return "Hello. Meetro AI can help organize your request and connect you with the contractor.";
+      return "Hello. Meetro can help organize your request and connect you with the contractor.";
     }
 
-    return "Thanks. Meetro AI is helping organize your request. Can you upload a photo so the pro can give a faster estimate?";
+    return "Thanks. Meetro is helping organize your request. Can you upload a photo so the pro can give a faster estimate?";
   };
 
   const sendMessage = () => {

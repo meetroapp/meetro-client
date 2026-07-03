@@ -8,7 +8,9 @@ import {
   getHomeownerLifecycleStage,
   getHomeownerWorkflowPresentation,
   getHomeownerWorkflowTimeline,
+  isRequestVisibleToHomeowner,
 } from "../utils/homeownerLifecycle";
+import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveActiveJobSnapshot, saveActiveWorkSnapshot } from "../utils/workCenter";
 
 function PhotoStrip({ request, onPreview, language }) {
@@ -423,7 +425,7 @@ function MyRequests({ setPage }) {
   }
 
   function getDurableHomeownerRequests() {
-    const primaryRequests = readRequestArray("homeownerRequests");
+    const primaryRequests = getStoredHomeownerRequests();
     if (primaryRequests.length > 0) return primaryRequests;
 
     const backupRequests = readRequestArray("meetroHomeownerRequestsBackup");
@@ -436,7 +438,9 @@ function MyRequests({ setPage }) {
   }
 
   const requests = getDurableHomeownerRequests().filter((request) => {
-    if (!request || request.status === "closed") return false;
+    if (!isRequestVisibleToHomeowner(request)) {
+      return false;
+    }
     const hasId = request.requestId || request.id;
     const hasContent = request.title || request.description || request.service;
     return Boolean(hasId && hasContent);
@@ -1474,7 +1478,7 @@ function MyRequests({ setPage }) {
                         : "Hide Details"
                       : language === "es"
                       ? "Ver detalles"
-                      : "View Details"}
+                      : "Review Details"}
                   </button>
                 </div>
 
@@ -1723,8 +1727,8 @@ function MyRequests({ setPage }) {
                           onClick={() => openRequestConversation(request, linkedAppointment)}
                         >
                           {language === "es"
-                            ? "Abrir conversación"
-                            : "Open Conversation"}
+                            ? "Continuar conversación"
+                            : "Continue Conversation"}
                         </button>
                       )}
                     </div>

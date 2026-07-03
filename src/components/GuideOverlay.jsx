@@ -53,7 +53,6 @@ function GuideOverlay({ currentPage = "", setPage }) {
   const [tourType, setTourType] = useState("");
   const [stepIndex, setStepIndex] = useState(getStoredTourStepIndex);
   const [targetRect, setTargetRect] = useState(null);
-  const [showPrompt, setShowPrompt] = useState(false);
 
   const steps = useMemo(() => getGuideSteps(tourType || getDefaultTourType()), [tourType]);
   const activeStep = tourType ? steps[stepIndex] : null;
@@ -70,7 +69,6 @@ function GuideOverlay({ currentPage = "", setPage }) {
       const nextTourType = event?.detail?.tourType || getDefaultTourType();
       const nextSteps = getGuideSteps(nextTourType);
 
-      setShowPrompt(false);
       setTourType(nextTourType);
       setStepIndex(0);
       localStorage.setItem("meetroActiveTourType", nextTourType);
@@ -82,20 +80,6 @@ function GuideOverlay({ currentPage = "", setPage }) {
     window.addEventListener("meetroStartTour", handleStartTour);
     return () => window.removeEventListener("meetroStartTour", handleStartTour);
   }, [setPage]);
-
-  useEffect(() => {
-    if (tourType || showPrompt) return;
-    if (["login", "welcome", "welcomeIntro", "legal"].includes(currentPage)) return;
-    if (!localStorage.getItem("token")) return;
-
-    const defaultTourType = getDefaultTourType();
-    const completed = localStorage.getItem(getTourStorageKey(defaultTourType)) === "true";
-    const dismissed = localStorage.getItem(getPromptStorageKey()) === "true";
-
-    if (!completed && !dismissed) {
-      setShowPrompt(true);
-    }
-  }, [currentPage, tourType, showPrompt]);
 
   useEffect(() => {
     if (!activeStep?.route) return;
@@ -176,7 +160,6 @@ function GuideOverlay({ currentPage = "", setPage }) {
       localStorage.setItem(getTourStorageKey(tourType), "true");
     }
 
-    setShowPrompt(false);
     setTourType("");
     setStepIndex(0);
     setTargetRect(null);
@@ -192,7 +175,6 @@ function GuideOverlay({ currentPage = "", setPage }) {
       localStorage.setItem(getPromptStorageKey(), "true");
     }
 
-    setShowPrompt(false);
     setTourType("");
     setStepIndex(0);
     setTargetRect(null);
@@ -200,20 +182,7 @@ function GuideOverlay({ currentPage = "", setPage }) {
     localStorage.removeItem("meetroActiveTourStep");
   }
 
-  function startPromptTour() {
-    const nextTourType = getDefaultTourType();
-    const nextSteps = getGuideSteps(nextTourType);
-
-    setShowPrompt(false);
-    setTourType(nextTourType);
-    setStepIndex(0);
-    localStorage.setItem("meetroActiveTourType", nextTourType);
-    localStorage.setItem("meetroActiveTourStep", "0");
-    applyStepStorage(nextSteps[0]);
-    setPage(nextSteps[0]?.route || "home");
-  }
-
-  if (!activeStep && !showPrompt) return null;
+  if (!activeStep) return null;
 
   const cardStyle = targetRect
     ? {
@@ -239,22 +208,7 @@ function GuideOverlay({ currentPage = "", setPage }) {
       )}
 
       <section style={cardStyle} role="dialog" aria-modal="false">
-        {showPrompt ? (
-          <>
-            <p style={guideEyebrow}>{t("meetroTour", language)}</p>
-            <h2 style={guideTitle}>{t("guidePromptTitle", language)}</h2>
-            <p style={guideDescription}>{t("guidePromptDescription", language)}</p>
-            <div style={guideActions}>
-              <button type="button" style={secondaryButton} onClick={skipTour}>
-                {t("skip", language)}
-              </button>
-              <button type="button" style={primaryButton} onClick={startPromptTour}>
-                {t("startMeetroTour", language)}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
+        <>
             <div style={guideTopRow}>
               <p style={guideEyebrow}>{t("meetroTour", language)}</p>
               <span style={guideProgress}>
@@ -283,8 +237,7 @@ function GuideOverlay({ currentPage = "", setPage }) {
                 {isLastStep ? t("done", language) : t("next", language)}
               </button>
             </div>
-          </>
-        )}
+        </>
       </section>
     </div>
   );

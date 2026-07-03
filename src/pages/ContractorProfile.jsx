@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
+import ServiceSelectorSheet, {
+  flattenServiceGroups,
+} from "../components/ServiceSelectorSheet";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 import { setActiveAccountMode } from "../utils/session";
@@ -13,6 +16,19 @@ import {
   buildBusinessProfileShare,
   persistBusinessProfileShareRecord,
 } from "../utils/profileShare";
+import {
+  PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
+  getProfessionalSpecialtyLabel,
+} from "../utils/professionalOnboardingSpecialties";
+import {
+  readBusinessServiceProfile,
+  writeBusinessServiceProfile,
+} from "../utils/businessServiceProfile";
+import { applyBusinessIdentityFields, getBusinessIdentityProjection } from "../utils/businessIdentity";
+import {
+  readBusinessAvailability,
+  setBusinessAvailability,
+} from "../utils/businessAvailability";
 
 function ContractorProfile({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -27,6 +43,9 @@ function ContractorProfile({ setPage, currentPage }) {
   );
   const [category, setCategory] = useState(
     localStorage.getItem("businessCategory") || ""
+  );
+  const [serviceSpecialties, setServiceSpecialties] = useState(
+    () => readBusinessServiceProfile().serviceSpecialties
   );
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
@@ -63,12 +82,25 @@ function ContractorProfile({ setPage, currentPage }) {
   );
   
   const [bio, setBio] = useState("");
+  const [businessHours, setBusinessHours] = useState(
+    localStorage.getItem("businessHours") || ""
+  );
+  const [licenseNumber, setLicenseNumber] = useState(
+    localStorage.getItem("businessLicenseNumber") || ""
+  );
+  const [licenseState, setLicenseState] = useState(
+    localStorage.getItem("businessLicenseState") || ""
+  );
+  const [licenseType, setLicenseType] = useState(
+    localStorage.getItem("businessLicenseType") || ""
+  );
+  const [licenseExpiration, setLicenseExpiration] = useState(
+    localStorage.getItem("businessLicenseExpiration") || ""
+  );
   const [imageUrl, setImageUrl] = useState("");
 
   const [uploading, setUploading] = useState(false);
-  const [availableNow, setAvailableNow] = useState(
-    localStorage.getItem("meetroAvailableNow") === "true"
-  );
+  const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
   const [dispatchReady, setDispatchReady] = useState(
   localStorage.getItem("meetroDispatchReady") === "true"
 );
@@ -126,7 +158,7 @@ function ContractorProfile({ setPage, currentPage }) {
 
   useEffect(() => {
     const syncAvailability = () => {
-      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
+      setAvailableNow(readBusinessAvailability());
     };
 
     window.addEventListener("meetroAvailabilityChanged", syncAvailability);
@@ -144,6 +176,7 @@ function ContractorProfile({ setPage, currentPage }) {
 
   function unlockBusinessAccess(profileData) {
   if (!profileData) return;
+  const serviceProfile = readBusinessServiceProfile(localStorage, profileData);
 
   localStorage.setItem("contractorProfileComplete", "true");
 
@@ -189,6 +222,16 @@ function ContractorProfile({ setPage, currentPage }) {
         profileData.category || "",
       business_category:
         profileData.category || "",
+      serviceDomain: serviceProfile.serviceDomain,
+      businessServiceDomain: serviceProfile.serviceDomain,
+      serviceDomains: serviceProfile.serviceDomains,
+      businessServiceDomains: serviceProfile.serviceDomains,
+      serviceCategories: serviceProfile.serviceCategories,
+      businessServiceCategories: serviceProfile.serviceCategories,
+      serviceSpecialties: serviceProfile.serviceSpecialties,
+      businessServiceSpecialties: serviceProfile.serviceSpecialties,
+      serviceCapabilities: serviceProfile.serviceCapabilities,
+      businessServiceCapabilities: serviceProfile.serviceCapabilities,
       location:
         profileData.location || "",
       streetAddress: profileData.streetAddress || profileData.street_address || "",
@@ -209,6 +252,50 @@ function ContractorProfile({ setPage, currentPage }) {
         "",
       bio:
         profileData.bio || "",
+      businessHours:
+        profileData.businessHours || profileData.business_hours || "",
+      business_hours:
+        profileData.businessHours || profileData.business_hours || "",
+      licenseNumber:
+        profileData.licenseNumber ||
+        profileData.license_number ||
+        profileData.businessLicenseNumber ||
+        "",
+      license_number:
+        profileData.licenseNumber ||
+        profileData.license_number ||
+        profileData.businessLicenseNumber ||
+        "",
+      licenseState:
+        profileData.licenseState ||
+        profileData.license_state ||
+        profileData.businessLicenseState ||
+        "",
+      license_state:
+        profileData.licenseState ||
+        profileData.license_state ||
+        profileData.businessLicenseState ||
+        "",
+      licenseType:
+        profileData.licenseType ||
+        profileData.license_type ||
+        profileData.businessLicenseType ||
+        "",
+      license_type:
+        profileData.licenseType ||
+        profileData.license_type ||
+        profileData.businessLicenseType ||
+        "",
+      licenseExpiration:
+        profileData.licenseExpiration ||
+        profileData.license_expiration ||
+        profileData.businessLicenseExpiration ||
+        "",
+      license_expiration:
+        profileData.licenseExpiration ||
+        profileData.license_expiration ||
+        profileData.businessLicenseExpiration ||
+        "",
       image_url:
         profileData.image_url || "",
       logo:
@@ -240,7 +327,9 @@ function ContractorProfile({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.profile) {
-        const mergedProfile = mergeStoredAddressFields(data.profile);
+        const mergedProfile = mergeStoredBusinessDetailFields(
+          mergeStoredAddressFields(data.profile)
+        );
         setProfile(mergedProfile);
         fillForm(mergedProfile);
         unlockBusinessAccess(mergedProfile);
@@ -258,8 +347,10 @@ function ContractorProfile({ setPage, currentPage }) {
   }
 
   function fillForm(existingProfile) {
+    const serviceProfile = readBusinessServiceProfile(localStorage, existingProfile);
     setBusinessName(existingProfile.business_name || "");
     setCategory(existingProfile.category || "");
+    setServiceSpecialties(serviceProfile.serviceSpecialties);
     setPhone(existingProfile.phone || "");
     setStreetAddress(existingProfile.streetAddress || existingProfile.street_address || "");
     setAddressLine2(existingProfile.addressLine2 || existingProfile.address_line_2 || "");
@@ -294,6 +385,40 @@ function ContractorProfile({ setPage, currentPage }) {
     );
     setLocation(existingProfile.location || existingProfile.serviceArea || "");
     setBio(existingProfile.bio || "");
+    setBusinessHours(
+      existingProfile.businessHours ||
+        existingProfile.business_hours ||
+        localStorage.getItem("businessHours") ||
+        ""
+    );
+    setLicenseNumber(
+      existingProfile.licenseNumber ||
+        existingProfile.license_number ||
+        existingProfile.businessLicenseNumber ||
+        localStorage.getItem("businessLicenseNumber") ||
+        ""
+    );
+    setLicenseState(
+      existingProfile.licenseState ||
+        existingProfile.license_state ||
+        existingProfile.businessLicenseState ||
+        localStorage.getItem("businessLicenseState") ||
+        ""
+    );
+    setLicenseType(
+      existingProfile.licenseType ||
+        existingProfile.license_type ||
+        existingProfile.businessLicenseType ||
+        localStorage.getItem("businessLicenseType") ||
+        ""
+    );
+    setLicenseExpiration(
+      existingProfile.licenseExpiration ||
+        existingProfile.license_expiration ||
+        existingProfile.businessLicenseExpiration ||
+        localStorage.getItem("businessLicenseExpiration") ||
+        ""
+    );
     setImageUrl(existingProfile.image_url || "");
   }
 
@@ -387,6 +512,92 @@ function ContractorProfile({ setPage, currentPage }) {
     };
   }
 
+  function getStoredBusinessDetailFields() {
+    return {
+      businessHours: localStorage.getItem("businessHours") || "",
+      business_hours: localStorage.getItem("businessHours") || "",
+      licenseNumber: localStorage.getItem("businessLicenseNumber") || "",
+      license_number: localStorage.getItem("businessLicenseNumber") || "",
+      businessLicenseNumber: localStorage.getItem("businessLicenseNumber") || "",
+      licenseState: localStorage.getItem("businessLicenseState") || "",
+      license_state: localStorage.getItem("businessLicenseState") || "",
+      businessLicenseState: localStorage.getItem("businessLicenseState") || "",
+      licenseType: localStorage.getItem("businessLicenseType") || "",
+      license_type: localStorage.getItem("businessLicenseType") || "",
+      businessLicenseType: localStorage.getItem("businessLicenseType") || "",
+      licenseExpiration: localStorage.getItem("businessLicenseExpiration") || "",
+      license_expiration: localStorage.getItem("businessLicenseExpiration") || "",
+      businessLicenseExpiration: localStorage.getItem("businessLicenseExpiration") || "",
+    };
+  }
+
+  function mergeStoredBusinessDetailFields(profileData = {}) {
+    const storedDetailFields = getStoredBusinessDetailFields();
+
+    return {
+      ...storedDetailFields,
+      ...profileData,
+      businessHours:
+        profileData.businessHours ||
+        profileData.business_hours ||
+        storedDetailFields.businessHours ||
+        "",
+      business_hours:
+        profileData.businessHours ||
+        profileData.business_hours ||
+        storedDetailFields.businessHours ||
+        "",
+      licenseNumber:
+        profileData.licenseNumber ||
+        profileData.license_number ||
+        profileData.businessLicenseNumber ||
+        storedDetailFields.licenseNumber ||
+        "",
+      license_number:
+        profileData.licenseNumber ||
+        profileData.license_number ||
+        profileData.businessLicenseNumber ||
+        storedDetailFields.licenseNumber ||
+        "",
+      licenseState:
+        profileData.licenseState ||
+        profileData.license_state ||
+        profileData.businessLicenseState ||
+        storedDetailFields.licenseState ||
+        "",
+      license_state:
+        profileData.licenseState ||
+        profileData.license_state ||
+        profileData.businessLicenseState ||
+        storedDetailFields.licenseState ||
+        "",
+      licenseType:
+        profileData.licenseType ||
+        profileData.license_type ||
+        profileData.businessLicenseType ||
+        storedDetailFields.licenseType ||
+        "",
+      license_type:
+        profileData.licenseType ||
+        profileData.license_type ||
+        profileData.businessLicenseType ||
+        storedDetailFields.licenseType ||
+        "",
+      licenseExpiration:
+        profileData.licenseExpiration ||
+        profileData.license_expiration ||
+        profileData.businessLicenseExpiration ||
+        storedDetailFields.licenseExpiration ||
+        "",
+      license_expiration:
+        profileData.licenseExpiration ||
+        profileData.license_expiration ||
+        profileData.businessLicenseExpiration ||
+        storedDetailFields.licenseExpiration ||
+        "",
+    };
+  }
+
   function buildFullAddress() {
     return [
       streetAddress.trim(),
@@ -450,6 +661,33 @@ function ContractorProfile({ setPage, currentPage }) {
     localStorage.setItem("businessLocation", fields.location || "");
   }
 
+  function buildBusinessDetailFields() {
+    return {
+      businessHours: businessHours.trim(),
+      business_hours: businessHours.trim(),
+      licenseNumber: licenseNumber.trim(),
+      license_number: licenseNumber.trim(),
+      businessLicenseNumber: licenseNumber.trim(),
+      licenseState: licenseState.trim(),
+      license_state: licenseState.trim(),
+      businessLicenseState: licenseState.trim(),
+      licenseType: licenseType.trim(),
+      license_type: licenseType.trim(),
+      businessLicenseType: licenseType.trim(),
+      licenseExpiration: licenseExpiration.trim(),
+      license_expiration: licenseExpiration.trim(),
+      businessLicenseExpiration: licenseExpiration.trim(),
+    };
+  }
+
+  function persistBusinessDetailFields(fields) {
+    localStorage.setItem("businessHours", fields.businessHours || "");
+    localStorage.setItem("businessLicenseNumber", fields.licenseNumber || "");
+    localStorage.setItem("businessLicenseState", fields.licenseState || "");
+    localStorage.setItem("businessLicenseType", fields.licenseType || "");
+    localStorage.setItem("businessLicenseExpiration", fields.licenseExpiration || "");
+  }
+
   function hasRequiredAddressFields() {
     return (
       businessCity.trim() &&
@@ -463,6 +701,37 @@ function ContractorProfile({ setPage, currentPage }) {
   function formatCategory(value) {
     const found = categories.find((item) => item[0] === value);
     return found ? found[1] : value || t("categoryNotSet");
+  }
+
+  function formatLicenseSummary(fields = {}) {
+    const parts = [
+      fields.licenseType,
+      fields.licenseNumber,
+      fields.licenseState,
+    ].filter(Boolean);
+    const summary = parts.join(" • ");
+    if (summary && fields.licenseExpiration) {
+      return `${summary} • ${t("licenseExpiration")}: ${fields.licenseExpiration}`;
+    }
+    return summary;
+  }
+
+  function toggleServiceSpecialty(value) {
+    setServiceSpecialties((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    );
+  }
+
+  function updateBusinessAvailability(nextValue) {
+    const normalizedValue = setBusinessAvailability(nextValue);
+    setAvailableNow(normalizedValue);
+  }
+
+  function reviewBusinessSetup() {
+    localStorage.setItem("meetroProfessionalOnboardingReturnPage", "contractorProfile");
+    setPage("professionalOnboarding");
   }
 
   async function handleImageUpload(event) {
@@ -510,6 +779,54 @@ function ContractorProfile({ setPage, currentPage }) {
     name: profileData.business_name || businessName,
     category: profileData.category || category,
     phone: profileData.phone || phone,
+    businessHours: profileData.businessHours || profileData.business_hours || businessHours,
+    business_hours: profileData.businessHours || profileData.business_hours || businessHours,
+    licenseNumber:
+      profileData.licenseNumber ||
+      profileData.license_number ||
+      profileData.businessLicenseNumber ||
+      licenseNumber,
+    license_number:
+      profileData.licenseNumber ||
+      profileData.license_number ||
+      profileData.businessLicenseNumber ||
+      licenseNumber,
+    licenseState:
+      profileData.licenseState ||
+      profileData.license_state ||
+      profileData.businessLicenseState ||
+      licenseState,
+    license_state:
+      profileData.licenseState ||
+      profileData.license_state ||
+      profileData.businessLicenseState ||
+      licenseState,
+    licenseType:
+      profileData.licenseType ||
+      profileData.license_type ||
+      profileData.businessLicenseType ||
+      licenseType,
+    license_type:
+      profileData.licenseType ||
+      profileData.license_type ||
+      profileData.businessLicenseType ||
+      licenseType,
+    licenseExpiration:
+      profileData.licenseExpiration ||
+      profileData.license_expiration ||
+      profileData.businessLicenseExpiration ||
+      licenseExpiration,
+    license_expiration:
+      profileData.licenseExpiration ||
+      profileData.license_expiration ||
+      profileData.businessLicenseExpiration ||
+      licenseExpiration,
+    license:
+      profileData.license ||
+      profileData.licenseNumber ||
+      profileData.license_number ||
+      profileData.businessLicenseNumber ||
+      licenseNumber,
     location: profileData.location || location,
     streetAddress: profileData.streetAddress || profileData.street_address || "",
     addressLine2: profileData.addressLine2 || profileData.address_line_2 || "",
@@ -544,6 +861,14 @@ function ContractorProfile({ setPage, currentPage }) {
       profileData.businessServiceCategories ||
       profileData.business_service_categories ||
       safeJsonArray("businessServiceCategories"),
+    serviceCapabilities:
+      profileData.serviceCapabilities ||
+      profileData.service_capabilities ||
+      safeJsonArray("businessServiceCapabilities"),
+    businessServiceCapabilities:
+      profileData.businessServiceCapabilities ||
+      profileData.business_service_capabilities ||
+      safeJsonArray("businessServiceCapabilities"),
     serviceSpecialties:
       profileData.serviceSpecialties ||
       profileData.service_specialties ||
@@ -621,6 +946,8 @@ function safeJsonArray(key) {
         return;
       }
       const addressFields = buildAddressProfileFields();
+      const businessDetailFields = buildBusinessDetailFields();
+      const serviceProfile = writeBusinessServiceProfile({ serviceSpecialties });
 
       const result = await authFetch(
         "/contractor-profiles",
@@ -633,6 +960,17 @@ function safeJsonArray(key) {
             location: addressFields.location,
             bio,
             image_url: imageUrl,
+            serviceDomain: serviceProfile.serviceDomain,
+            businessServiceDomain: serviceProfile.serviceDomain,
+            serviceDomains: serviceProfile.serviceDomains,
+            businessServiceDomains: serviceProfile.serviceDomains,
+            serviceCategories: serviceProfile.serviceCategories,
+            businessServiceCategories: serviceProfile.serviceCategories,
+            serviceSpecialties: serviceProfile.serviceSpecialties,
+            businessServiceSpecialties: serviceProfile.serviceSpecialties,
+            serviceCapabilities: serviceProfile.serviceCapabilities,
+            businessServiceCapabilities: serviceProfile.serviceCapabilities,
+            ...businessDetailFields,
             ...addressFields,
           }),
         },
@@ -644,11 +982,27 @@ function safeJsonArray(key) {
       const data = result.data;
 
       if (data.profile) {
-        const savedProfile = { ...data.profile, ...addressFields, phone };
+        const savedProfile = {
+          ...data.profile,
+          ...addressFields,
+          phone,
+          ...businessDetailFields,
+          serviceDomain: serviceProfile.serviceDomain,
+          businessServiceDomain: serviceProfile.serviceDomain,
+          serviceDomains: serviceProfile.serviceDomains,
+          businessServiceDomains: serviceProfile.serviceDomains,
+          serviceCategories: serviceProfile.serviceCategories,
+          businessServiceCategories: serviceProfile.serviceCategories,
+          serviceSpecialties: serviceProfile.serviceSpecialties,
+          businessServiceSpecialties: serviceProfile.serviceSpecialties,
+          serviceCapabilities: serviceProfile.serviceCapabilities,
+          businessServiceCapabilities: serviceProfile.serviceCapabilities,
+        };
         alert(t("contractorProfileCreated"));
         setProfile(savedProfile);
         fillForm(savedProfile);
         persistBusinessAddressFields(addressFields);
+        persistBusinessDetailFields(businessDetailFields);
         unlockBusinessAccess(savedProfile);
       
         saveBusinessToDirectory(savedProfile);
@@ -675,6 +1029,8 @@ function safeJsonArray(key) {
         return;
       }
       const addressFields = buildAddressProfileFields();
+      const businessDetailFields = buildBusinessDetailFields();
+      const serviceProfile = writeBusinessServiceProfile({ serviceSpecialties });
 
       const result = await authFetch(
         `/contractor-profiles/${profile.id}`,
@@ -687,6 +1043,17 @@ function safeJsonArray(key) {
             location: addressFields.location,
             bio,
             image_url: imageUrl,
+            serviceDomain: serviceProfile.serviceDomain,
+            businessServiceDomain: serviceProfile.serviceDomain,
+            serviceDomains: serviceProfile.serviceDomains,
+            businessServiceDomains: serviceProfile.serviceDomains,
+            serviceCategories: serviceProfile.serviceCategories,
+            businessServiceCategories: serviceProfile.serviceCategories,
+            serviceSpecialties: serviceProfile.serviceSpecialties,
+            businessServiceSpecialties: serviceProfile.serviceSpecialties,
+            serviceCapabilities: serviceProfile.serviceCapabilities,
+            businessServiceCapabilities: serviceProfile.serviceCapabilities,
+            ...businessDetailFields,
             ...addressFields,
           }),
         },
@@ -698,11 +1065,28 @@ function safeJsonArray(key) {
       const data = result.data;
 
       if (data.profile) {
-        const savedProfile = { ...profile, ...data.profile, ...addressFields, phone };
+        const savedProfile = {
+          ...profile,
+          ...data.profile,
+          ...addressFields,
+          phone,
+          ...businessDetailFields,
+          serviceDomain: serviceProfile.serviceDomain,
+          businessServiceDomain: serviceProfile.serviceDomain,
+          serviceDomains: serviceProfile.serviceDomains,
+          businessServiceDomains: serviceProfile.serviceDomains,
+          serviceCategories: serviceProfile.serviceCategories,
+          businessServiceCategories: serviceProfile.serviceCategories,
+          serviceSpecialties: serviceProfile.serviceSpecialties,
+          businessServiceSpecialties: serviceProfile.serviceSpecialties,
+          serviceCapabilities: serviceProfile.serviceCapabilities,
+          businessServiceCapabilities: serviceProfile.serviceCapabilities,
+        };
         alert(t("profileUpdated"));
         setProfile(savedProfile);
         fillForm(savedProfile);
         persistBusinessAddressFields(addressFields);
+        persistBusinessDetailFields(businessDetailFields);
         unlockBusinessAccess(savedProfile);
         
         saveBusinessToDirectory(savedProfile);         
@@ -730,51 +1114,114 @@ function safeJsonArray(key) {
     profile?.showBusinessAddressPublic && profile?.fullAddress
       ? profile.fullAddress
       : profile?.serviceArea || profile?.location || "";
+  const businessIdentity = getBusinessIdentityProjection(profile || {
+    businessName,
+    category,
+    serviceArea,
+    phone,
+    bio,
+    businessHours,
+    licenseNumber,
+    licenseState,
+    licenseType,
+    licenseExpiration,
+    image_url: imageUrl,
+  }, {
+    translate: (key) => t(key, language),
+  });
+  const businessVerification = businessIdentity.verification;
+  const businessVerificationLabel = businessVerification.verificationLabel;
+  const profileBusinessHours =
+    profile?.businessHours || profile?.business_hours || businessHours || "";
+  const profileLicenseFields = {
+    licenseNumber:
+      profile?.licenseNumber ||
+      profile?.license_number ||
+      profile?.businessLicenseNumber ||
+      licenseNumber ||
+      "",
+    licenseState:
+      profile?.licenseState ||
+      profile?.license_state ||
+      profile?.businessLicenseState ||
+      licenseState ||
+      "",
+    licenseType:
+      profile?.licenseType ||
+      profile?.license_type ||
+      profile?.businessLicenseType ||
+      licenseType ||
+      "",
+    licenseExpiration:
+      profile?.licenseExpiration ||
+      profile?.license_expiration ||
+      profile?.businessLicenseExpiration ||
+      licenseExpiration ||
+      "",
+  };
+  const profileLicenseSummary = formatLicenseSummary(profileLicenseFields);
   const profileCompletionPercent = profile ? 92 : 0;
   const healthItems = [
     {
+      key: "profile",
       icon: "profile",
       label: t("profileComplete"),
       value: `${profileCompletionPercent}%`,
     },
     {
+      key: "availability",
       icon: "availableNow",
       label: t("availableNow"),
-      value: availableNow ? t("active") : t("inactive"),
+      value: availableNow ? t("currentlyAvailable") : t("currentlyInactive"),
     },
     {
+      key: "portfolio",
       icon: "portfolio",
       label: t("portfolioReady"),
       value: imageUrl || profile?.image_url ? t("ready") : t("preview"),
     },
     {
+      key: "emergency",
       icon: "emergency",
       label: t("emergencyReady"),
       value: dispatchReady ? t("ready") : t("notSet"),
     },
     {
+      key: "response",
       icon: "messages",
       label: t("fastResponse"),
       value: t("ready"),
     },
   ];
 
-  const publicProfileRecord = () => ({
-    id: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
-    name: profile?.business_name || businessName,
-    business_name: profile?.business_name || businessName,
-    category: profile?.category || category,
-    displayCategory: formatCategory(profile?.category || category),
-    location: profileDisplayAddress || serviceArea || location,
-    serviceArea: profile?.serviceArea || serviceArea,
-    phone: profile?.phone || phone,
-    bio: profile?.bio || bio,
-    image_url: profile?.image_url || imageUrl,
-    imageUrl: profile?.image_url || imageUrl,
-    logo: profile?.image_url || imageUrl,
-    rating: profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
-    status: availableNow ? "active" : "preview",
-  });
+  const publicProfileRecord = () =>
+    applyBusinessIdentityFields(
+      {
+        id: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
+        ...profile,
+        businessName: businessIdentity.businessName,
+        business_name: businessIdentity.businessName,
+        category: profile?.category || category,
+        displayCategory: formatCategory(profile?.category || category),
+        location: profileDisplayAddress || serviceArea || location,
+        serviceArea: profile?.serviceArea || serviceArea,
+        phone: profile?.phone || phone,
+        bio: profile?.bio || bio,
+        businessHours: profileBusinessHours,
+        business_hours: profileBusinessHours,
+        ...profileLicenseFields,
+        license_number: profileLicenseFields.licenseNumber,
+        license_state: profileLicenseFields.licenseState,
+        license_type: profileLicenseFields.licenseType,
+        license_expiration: profileLicenseFields.licenseExpiration,
+        image_url: profile?.image_url || imageUrl,
+        imageUrl: profile?.image_url || imageUrl,
+        logo: profile?.image_url || imageUrl,
+        rating: profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
+        status: availableNow ? "active" : "preview",
+      },
+      { businessProfilePhoto: businessIdentity.imageUrl }
+    );
 
   const viewPublicProfile = () => {
     persistBusinessProfileShareRecord(publicProfileRecord());
@@ -881,6 +1328,8 @@ function safeJsonArray(key) {
           category={category}
           setCategory={setCategory}
           categories={categories}
+          serviceSpecialties={serviceSpecialties}
+          toggleServiceSpecialty={toggleServiceSpecialty}
           phone={phone}
           setPhone={setPhone}
           location={location}
@@ -904,11 +1353,21 @@ function safeJsonArray(key) {
           language={language}
           bio={bio}
           setBio={setBio}
+          businessHours={businessHours}
+          setBusinessHours={setBusinessHours}
+          licenseNumber={licenseNumber}
+          setLicenseNumber={setLicenseNumber}
+          licenseState={licenseState}
+          setLicenseState={setLicenseState}
+          licenseType={licenseType}
+          setLicenseType={setLicenseType}
+          licenseExpiration={licenseExpiration}
+          setLicenseExpiration={setLicenseExpiration}
           imageUrl={imageUrl}
           setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
-          setAvailableNow={setAvailableNow}
+          onAvailabilityChange={updateBusinessAvailability}
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
@@ -928,10 +1387,10 @@ function safeJsonArray(key) {
 
             <div style={identityHeroLayout}>
               <div style={heroLogoFrame}>
-                {profile.image_url ? (
+                {businessIdentity.imageUrl ? (
                   <img
-                    src={profile.image_url}
-                    alt={profile.business_name}
+                    src={businessIdentity.imageUrl}
+                    alt={businessIdentity.businessName}
                     style={circleLogoImage}
                   />
                 ) : (
@@ -944,7 +1403,7 @@ function safeJsonArray(key) {
               <div style={identityHeroContent}>
                 <p style={eyebrow}>{t("businessProfile")}</p>
                 <BusinessNameTitle
-                  name={profile.business_name || t("businessNameNotSet")}
+                  name={businessIdentity.businessName || t("businessNameNotSet")}
                   variant="hero"
                 />
                 <p style={identityHeroMeta}>
@@ -954,27 +1413,99 @@ function safeJsonArray(key) {
                   <MeetroIcon name="location" size={14} decorative />{" "}
                   {profileDisplayAddress || t("locationNotSet")}
                 </p>
-              </div>
 
-              <div style={verifiedBadge}>
-                <MeetroIcon name="verified" size={14} decorative />{" "}
-                {t("verifiedBusiness")}
+                <div style={heroVerificationRow}>
+                  <div style={verifiedBadge}>
+                    <MeetroIcon name="verified" size={14} decorative />{" "}
+                    {businessVerification.compactBadgeText}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div style={glassCard}>
             <h2 style={compactCardTitle}>{t("businessHealth")}</h2>
+            <p style={bioStyle}>{t("businessReadinessSentence")}</p>
             <div style={businessHealthGrid}>
               {healthItems.map((item) => (
-                <div key={item.label} style={businessHealthItem}>
-                  <span style={businessHealthIcon}>
-                    <MeetroIcon name={item.icon} size={16} decorative />
-                  </span>
-                  <span style={businessHealthLabel}>{item.label}</span>
-                  <strong style={businessHealthValue}>{item.value}</strong>
-                </div>
+                item.key === "availability" ? (
+                  <div
+                    key={item.key}
+                    style={businessHealthItem}
+                  >
+                    <span style={businessHealthIcon}>
+                      <MeetroIcon name={item.icon} size={16} decorative />
+                    </span>
+                    <span style={businessHealthLabel}>{item.label}</span>
+                    <strong style={businessHealthValue}>{item.value}</strong>
+                    <button
+                      type="button"
+                      onClick={() => updateBusinessAvailability(!availableNow)}
+                      style={availabilityInlineAction}
+                    >
+                      {availableNow ? t("setUnavailable") : t("setAvailable")}
+                    </button>
+                  </div>
+                ) : (
+                  <div key={item.key} style={businessHealthItem}>
+                    <span style={businessHealthIcon}>
+                      <MeetroIcon name={item.icon} size={16} decorative />
+                    </span>
+                    <span style={businessHealthLabel}>{item.label}</span>
+                    <strong style={businessHealthValue}>{item.value}</strong>
+                  </div>
+                )
               ))}
+            </div>
+
+          </div>
+
+          <div style={customerTrustGroup}>
+            <div style={{ ...glassCard, ...customerPreviewCard }}>
+              <div style={customerPreviewLauncher}>
+                <div style={customerPreviewCopy}>
+                  <span style={customerTrustEyebrow}>{t("customerTrust")}</span>
+                  <h2 style={compactCardTitle}>{t("customerPreview")}</h2>
+                  <p style={bioStyle}>{t("customerPreviewHelp")}</p>
+                </div>
+                <button onClick={viewPublicProfile} style={smallEditButton}>
+                  {t("viewPublicProfile")} →
+                </button>
+              </div>
+            </div>
+
+            <ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly />
+
+            <div style={glassCard}>
+              <div style={bioCard}>
+                <h3 style={bioTitle}>{t("reviews")}</h3>
+                {profileReviews.length === 0 ? (
+                  <div style={emptyReviewsCard}>
+                    <span style={businessHealthIcon}>
+                      <MeetroIcon name="reviews" size={16} decorative />
+                    </span>
+                    <strong>{t("reviewsAfterCompletedJobs")}</strong>
+                  </div>
+                ) : (
+                  profileReviews.slice(0, 3).map((item) => (
+                    <div key={item.id} style={reviewPreviewCard}>
+                      <strong>
+                        <MeetroIcon name="reviews" size={16} decorative />{" "}
+                        {Number(item.rating || 0).toFixed(1)}
+                      </strong>
+                      <p style={reviewPreviewText}>
+                        {item.comment || t("noReviewText")}
+                      </p>
+                      <span style={reviewPreviewMeta}>
+                        {item.customerDisplayName ||
+                          (language === "es" ? "Cliente" : "Customer")}
+                        {item.service ? ` • ${item.service}` : ""}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
@@ -1023,56 +1554,64 @@ function safeJsonArray(key) {
               <InfoCard
                 icon="availability"
                 label={t("businessHours")}
-                value={availableNow ? t("availableNow") : t("notSet")}
+                value={profileBusinessHours || t("addBusinessHours")}
               />
               <InfoCard
                 icon="verified"
                 label={t("licenseInformation")}
-                value={t("notProvided")}
+                value={profileLicenseSummary || t("addLicenseInformation")}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              style={{ ...secondaryActionButton, marginTop: "14px" }}
+            >
+              {t("editBusinessInformation")}
+            </button>
           </div>
 
           <div style={glassCard}>
-            <div style={bioCard}>
-              <h3 style={bioTitle}>{t("reviews")}</h3>
-              {profileReviews.length === 0 ? (
-                <div style={emptyReviewsCard}>
-                  <strong>{t("noReviewsYet")}</strong>
-                  <p style={bioStyle}>
-                    {t("reviewsAfterCompletedJobs")}
-                  </p>
-                </div>
-              ) : (
-                profileReviews.slice(0, 3).map((item) => (
-                  <div key={item.id} style={reviewPreviewCard}>
-                    <strong>
-                      <MeetroIcon name="reviews" size={16} decorative />{" "}
-                      {Number(item.rating || 0).toFixed(1)}
-                    </strong>
-                    <p style={reviewPreviewText}>
-                      {item.comment || t("noReviewText")}
-                    </p>
-                    <span style={reviewPreviewMeta}>
-                      {item.customerDisplayName ||
-                        (language === "es" ? "Cliente" : "Customer")}
-                      {item.service ? ` • ${item.service}` : ""}
-                    </span>
-                  </div>
-                ))
-              )}
+            <h2 style={compactCardTitle}>{t("businessVerification")}</h2>
+            <div style={verificationStatusCard}>
+              <span style={businessHealthIcon}>
+                <MeetroIcon name="verified" size={16} decorative />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <strong style={verificationStatusText}>
+                  {businessVerificationLabel}
+                </strong>
+                <p style={bioStyle}>{businessVerification.publicTrustSummary}</p>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  style={{ ...secondaryActionButton, marginTop: "10px" }}
+                >
+                  {t("reviewVerification")}
+                </button>
+              </div>
             </div>
           </div>
 
           <div style={glassCard}>
-            <div style={customerPreviewLauncher}>
-              <div>
-                <h2 style={compactCardTitle}>{t("customerPreview")}</h2>
-                <p style={bioStyle}>{t("customerPreviewHelp")}</p>
+            <h2 style={compactCardTitle}>{t("businessSetup")}</h2>
+            <div style={verificationStatusCard}>
+              <span style={businessHealthIcon}>
+                <MeetroIcon name="settings" size={16} decorative />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <strong style={verificationStatusText}>
+                  {t("reviewBusinessSetup")}
+                </strong>
+                <p style={bioStyle}>{t("reviewBusinessSetupHelp")}</p>
+                <button
+                  type="button"
+                  onClick={reviewBusinessSetup}
+                  style={{ ...secondaryActionButton, marginTop: "10px" }}
+                >
+                  {t("reviewBusinessSetup")}
+                </button>
               </div>
-              <button onClick={viewPublicProfile} style={smallEditButton}>
-                {t("viewPublicProfile")} →
-              </button>
             </div>
           </div>
         </>
@@ -1086,6 +1625,8 @@ function safeJsonArray(key) {
           category={category}
           setCategory={setCategory}
           categories={categories}
+          serviceSpecialties={serviceSpecialties}
+          toggleServiceSpecialty={toggleServiceSpecialty}
           phone={phone}
           setPhone={setPhone}
           location={location}
@@ -1109,11 +1650,21 @@ function safeJsonArray(key) {
           language={language}
           bio={bio}
           setBio={setBio}
+          businessHours={businessHours}
+          setBusinessHours={setBusinessHours}
+          licenseNumber={licenseNumber}
+          setLicenseNumber={setLicenseNumber}
+          licenseState={licenseState}
+          setLicenseState={setLicenseState}
+          licenseType={licenseType}
+          setLicenseType={setLicenseType}
+          licenseExpiration={licenseExpiration}
+          setLicenseExpiration={setLicenseExpiration}
           imageUrl={imageUrl}
           setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
-          setAvailableNow={setAvailableNow}
+          onAvailabilityChange={updateBusinessAvailability}
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
@@ -1135,6 +1686,8 @@ function ProfileForm({
   category,
   setCategory,
   categories,
+  serviceSpecialties,
+  toggleServiceSpecialty,
   country,
   setCountry,
   language,
@@ -1158,11 +1711,21 @@ function ProfileForm({
   setShowBusinessAddressPublic,
   bio, 
   setBio,
+  businessHours,
+  setBusinessHours,
+  licenseNumber,
+  setLicenseNumber,
+  licenseState,
+  setLicenseState,
+  licenseType,
+  setLicenseType,
+  licenseExpiration,
+  setLicenseExpiration,
   imageUrl,
   setImageUrl,
   uploading,
   availableNow,
-  setAvailableNow,
+  onAvailabilityChange,
   dispatchReady,
   setDispatchReady,
   handleImageUpload,
@@ -1237,6 +1800,11 @@ function ProfileForm({
     </option>
   ))}
 </select>
+
+      <ServicesOfferedSection
+        selectedSpecialties={serviceSpecialties}
+        onToggle={toggleServiceSpecialty}
+      />
 
       <input
         placeholder={t("phoneNumber")}
@@ -1338,12 +1906,7 @@ function ProfileForm({
       <div style={toggleRow}>
         <button
           type="button"
-          onClick={() => {
-            const nextValue = !availableNow;
-            setAvailableNow(nextValue);
-            localStorage.setItem("meetroAvailableNow", String(nextValue));
-            window.dispatchEvent(new Event("meetroAvailabilityChanged"));
-          }}
+          onClick={() => onAvailabilityChange?.(!availableNow)}
           style={{
             ...toggleButton,
             background: availableNow ? "linear-gradient(135deg, #5b3df5, #7b61ff)" : "rgba(255,255,255,0.75)",
@@ -1365,6 +1928,49 @@ function ProfileForm({
         >
           <MeetroIcon name="dispatch" size={14} decorative /> {t("dispatchReady")}
         </button>
+      </div>
+
+      <div style={formSection}>
+        <h3 style={formSectionTitle}>{t("businessHours")}</h3>
+        <p style={helperText}>{t("businessHoursHelp")}</p>
+        <input
+          placeholder={t("businessHoursPlaceholder")}
+          value={businessHours}
+          onChange={(e) => setBusinessHours(e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+
+      <div style={formSection}>
+        <h3 style={formSectionTitle}>{t("licenseInformation")}</h3>
+        <p style={helperText}>{t("licenseInformationHelp")}</p>
+        <input
+          placeholder={t("licenseNumber")}
+          value={licenseNumber}
+          onChange={(e) => setLicenseNumber(e.target.value)}
+          style={inputStyle}
+        />
+        <div style={addressGrid}>
+          <input
+            placeholder={t("licenseState")}
+            value={licenseState}
+            onChange={(e) => setLicenseState(e.target.value)}
+            style={inputStyle}
+          />
+          <input
+            placeholder={t("licenseType")}
+            value={licenseType}
+            onChange={(e) => setLicenseType(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <input
+          type="date"
+          aria-label={t("licenseExpiration")}
+          value={licenseExpiration}
+          onChange={(e) => setLicenseExpiration(e.target.value)}
+          style={inputStyle}
+        />
       </div>
 
       <textarea
@@ -1391,6 +1997,82 @@ function ProfileForm({
   );
 }
 
+function ServicesOfferedSection({
+  selectedSpecialties = [],
+  onToggle,
+  readOnly = false,
+}) {
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const selectedLabels = selectedSpecialties
+    .map((specialty) => getProfessionalSpecialtyLabel(specialty, t))
+    .filter(Boolean);
+  const serviceOptions = flattenServiceGroups(
+    PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
+    t
+  );
+
+  return (
+    <div style={readOnly ? servicesOfferedReadOnlyCard : formSection}>
+      <h3 style={readOnly ? compactCardTitle : formSectionTitle}>
+        {t("servicesOffered")}
+      </h3>
+      <p style={helperText}>{t("servicesOfferedSubtitle")}</p>
+      <p style={capabilityCountText}>
+        {selectedSpecialties.length} {t("activeCapabilities")}
+      </p>
+
+      {readOnly ? (
+        selectedLabels.length > 0 ? (
+          <div style={serviceChipGrid}>
+            {selectedLabels.map((label) => (
+              <span key={label} style={serviceReadOnlyChip}>
+                {label}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p style={servicesEmptyText}>{t("servicesOfferedEmpty")}</p>
+        )
+      ) : (
+        <>
+          <button
+            type="button"
+            style={serviceManageButton}
+            onClick={() => setSelectorOpen(true)}
+          >
+            {t("chooseService")}
+          </button>
+          {selectedLabels.length > 0 ? (
+            <div style={serviceChipGrid}>
+              {selectedLabels.map((label) => (
+                <span key={label} style={serviceReadOnlyChip}>
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p style={servicesEmptyText}>{t("servicesOfferedEmpty")}</p>
+          )}
+          <ServiceSelectorSheet
+            open={selectorOpen}
+            title={t("servicesOffered")}
+            subtitle={t("servicesOfferedSubtitle")}
+            searchPlaceholder={t("searchServices")}
+            options={serviceOptions}
+            selectedValues={selectedSpecialties}
+            multiple
+            placement="center"
+            doneLabel={t("save")}
+            onToggle={(value) => onToggle?.(value)}
+            onDone={() => setSelectorOpen(false)}
+            onClose={() => setSelectorOpen(false)}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 function InfoCard({ label, value, icon }) {
   return (
     <div style={infoCard}>
@@ -1408,11 +2090,9 @@ function BusinessNameTitle({ name, variant = "hero" }) {
   const ampersandIndex = displayName.indexOf("&");
   const baseStyle = variant === "preview" ? businessTitle : pageTitle;
   const ampersandStyle =
-    variant === "preview"
-      ? previewAmpersandBusinessTitle
-      : heroAmpersandBusinessTitle;
+    variant === "preview" ? previewAmpersandBusinessTitle : {};
 
-  if (ampersandIndex === -1) {
+  if (ampersandIndex === -1 || variant !== "preview") {
     const Tag = variant === "preview" ? "h2" : "h1";
     return <Tag style={baseStyle}>{displayName}</Tag>;
   }
@@ -1501,14 +2181,15 @@ const eyebrow = {
 };
 
 const pageTitle = {
-  margin: "10px auto",
-  maxWidth: "min(100%, 560px)",
-  fontSize: "clamp(34px, 9vw, 42px)",
+  margin: "6px 0 4px",
+  maxWidth: "min(100%, 460px)",
+  fontSize: "clamp(22px, 5.8vw, 32px)",
   lineHeight: 1.08,
-  textAlign: "center",
-  overflowWrap: "normal",
+  textAlign: "left",
+  overflowWrap: "anywhere",
   wordBreak: "normal",
   hyphens: "none",
+  letterSpacing: "0",
 };
 
 const pageSubtitle = {
@@ -1528,22 +2209,26 @@ const verifiedBadge = {
   fontWeight: "900",
   fontSize: "12px",
   height: "fit-content",
-  whiteSpace: "nowrap",
+  whiteSpace: "normal",
   border: "1px solid rgba(255,255,255,0.18)",
 };
 
 const identityHeroLayout = {
   position: "relative",
-  display: "grid",
-  gridTemplateColumns: "88px minmax(0, 1fr)",
-  alignItems: "center",
-  gap: "16px",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  minWidth: 0,
+  padding: "4px",
+  borderRadius: "28px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
 };
 
 const heroLogoFrame = {
-  width: "88px",
-  height: "88px",
-  minWidth: "88px",
+  width: "clamp(56px, 15vw, 76px)",
+  height: "clamp(56px, 15vw, 76px)",
+  minWidth: "clamp(56px, 15vw, 76px)",
   borderRadius: "50%",
   background: "linear-gradient(145deg, #ffffff, #f0edff)",
   display: "flex",
@@ -1556,17 +2241,29 @@ const heroLogoFrame = {
 
 const identityHeroContent = {
   minWidth: 0,
+  display: "grid",
+  gap: "3px",
+  flex: "1 1 auto",
+  paddingTop: "2px",
 };
 
 const identityHeroMeta = {
-  margin: "7px 0 0",
+  margin: "2px 0 0",
   display: "flex",
   alignItems: "center",
   gap: "6px",
   flexWrap: "wrap",
   color: "rgba(255,255,255,0.88)",
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: "850",
+  lineHeight: 1.25,
+};
+
+const heroVerificationRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  marginTop: "7px",
 };
 
 const heroStats = {
@@ -1674,6 +2371,20 @@ const businessHealthValue = {
   lineHeight: 1.25,
 };
 
+const availabilityInlineAction = {
+  justifySelf: "start",
+  marginTop: "3px",
+  border: "1px solid rgba(91,61,245,0.18)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.82)",
+  color: "#4b32d1",
+  padding: "8px 10px",
+  fontSize: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+  maxWidth: "100%",
+};
+
 const quickActionsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
@@ -1692,12 +2403,39 @@ const secondaryActionButton = {
   cursor: "pointer",
 };
 
+const customerTrustGroup = {
+  display: "grid",
+  gap: "14px",
+  marginBottom: "18px",
+};
+
+const customerPreviewCard = {
+  marginBottom: 0,
+  border: "1px solid rgba(91,61,245,0.14)",
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.86), rgba(243,240,255,0.78))",
+};
+
 const customerPreviewLauncher = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "14px",
   flexWrap: "wrap",
+};
+
+const customerPreviewCopy = {
+  minWidth: 0,
+  display: "grid",
+  gap: "4px",
+};
+
+const customerTrustEyebrow = {
+  color: "#5b3df5",
+  fontSize: "12px",
+  fontWeight: "950",
+  letterSpacing: "0.2px",
+  textTransform: "uppercase",
 };
 
 const smallEditButton = {
@@ -1761,12 +2499,6 @@ const businessTitle = {
   color: "#111",
   textAlign: "center",
   overflowWrap: "normal",
-};
-
-const heroAmpersandBusinessTitle = {
-  display: "grid",
-  gap: "2px",
-  justifyItems: "center",
 };
 
 const previewAmpersandBusinessTitle = {
@@ -1899,6 +2631,129 @@ const helperText = {
   margin: "0 0 14px",
   color: "#60677a",
   fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const servicesOfferedReadOnlyCard = {
+  ...glassCard,
+};
+
+const serviceGroupGrid = {
+  display: "grid",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const capabilityCountText = {
+  margin: "-6px 0 12px",
+  color: "#4b32d1",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const verificationStatusCard = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  minWidth: 0,
+  border: "1px solid rgba(91,61,245,0.12)",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.72)",
+  padding: "14px",
+};
+
+const verificationStatusText = {
+  display: "block",
+  color: "#111827",
+  fontSize: "15px",
+  lineHeight: 1.3,
+  fontWeight: 950,
+  marginBottom: "4px",
+};
+
+const serviceManageButton = {
+  width: "100%",
+  border: "1px solid rgba(91,61,245,0.16)",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.86)",
+  color: "#4b32d1",
+  padding: "13px 14px",
+  fontSize: "15px",
+  fontWeight: 950,
+  cursor: "pointer",
+  marginBottom: "12px",
+  textAlign: "center",
+};
+
+const serviceGroupCard = {
+  display: "grid",
+  gap: "10px",
+  minWidth: 0,
+  padding: "12px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(255,255,255,0.9)",
+};
+
+const serviceGroupTitle = {
+  color: "#111",
+  fontSize: "14px",
+  lineHeight: 1.3,
+};
+
+const serviceOptionGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const serviceOptionButton = {
+  border: "1px solid rgba(91,61,245,0.12)",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.86)",
+  color: "#3b4054",
+  padding: "10px 12px",
+  minWidth: 0,
+  cursor: "pointer",
+  fontWeight: "850",
+  fontSize: "13px",
+  lineHeight: 1.25,
+  textAlign: "left",
+  overflowWrap: "anywhere",
+};
+
+const serviceOptionButtonSelected = {
+  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
+  color: "white",
+  borderColor: "rgba(91,61,245,0.42)",
+  boxShadow: "0 10px 22px rgba(91,61,245,0.18)",
+};
+
+const serviceChipGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const serviceReadOnlyChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  maxWidth: "100%",
+  padding: "9px 11px",
+  borderRadius: "999px",
+  background: "rgba(91,61,245,0.1)",
+  color: "#4b32d1",
+  fontSize: "13px",
+  fontWeight: "900",
+  overflowWrap: "anywhere",
+};
+
+const servicesEmptyText = {
+  margin: 0,
+  color: "#60677a",
+  fontSize: "14px",
   lineHeight: 1.45,
 };
 
@@ -2069,8 +2924,8 @@ const emptyReviewsCard = {
   gap: "6px",
   padding: "14px",
   borderRadius: "16px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(226,232,240,0.9)",
+  background: "rgba(248,247,255,0.78)",
+  border: "1px solid rgba(91,61,245,0.12)",
   color: "#334155",
 };
 

@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import { getLanguage, t } from "../utils/language";
+import {
+  readBusinessAvailability,
+  setBusinessAvailability,
+} from "../utils/businessAvailability";
 
 function BusinessAvailability({ setPage }) {
   const language = getLanguage();
   const isSpanish = language === "es";
-  const [availableNow, setAvailableNow] = useState(
-    localStorage.getItem("meetroAvailableNow") === "true"
-  );
+  const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
   const [dispatchReady, setDispatchReady] = useState(
     localStorage.getItem("meetroDispatchReady") === "true"
   );
@@ -19,7 +21,7 @@ function BusinessAvailability({ setPage }) {
 
   useEffect(() => {
     const syncAvailability = () => {
-      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
+      setAvailableNow(readBusinessAvailability());
       setDispatchReady(localStorage.getItem("meetroDispatchReady") === "true");
     };
 
@@ -35,10 +37,8 @@ function BusinessAvailability({ setPage }) {
   }, []);
 
   function toggleAvailableNow() {
-    const nextValue = !availableNow;
+    const nextValue = setBusinessAvailability(!availableNow);
     setAvailableNow(nextValue);
-    localStorage.setItem("meetroAvailableNow", String(nextValue));
-    window.dispatchEvent(new Event("meetroAvailabilityChanged"));
   }
 
   function toggleDispatchReady() {

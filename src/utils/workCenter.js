@@ -1,3 +1,10 @@
+import {
+  createScheduleProjectionFromRequest,
+  hasRequestSchedule,
+  isRequestConnectedToProfessional,
+} from "./professionalLifecycleProjection.js";
+import { getStoredHomeownerRequests } from "./workflowTimeline.js";
+
 export function safeJsonParse(value, fallback) {
   try {
     return JSON.parse(value || "");
@@ -7,10 +14,27 @@ export function safeJsonParse(value, fallback) {
 }
 
 export function getBusinessSchedule() {
-  return safeJsonParse(
+  const storedSchedule = safeJsonParse(
     localStorage.getItem("meetro_business_schedule"),
     []
   );
+  const schedule = Array.isArray(storedSchedule) ? storedSchedule : [];
+  const scheduleRequestKeys = new Set(
+    schedule
+      .flatMap((item) => [item.requestId, item.id, item.scheduleId])
+      .filter(Boolean)
+      .map(String)
+  );
+  const requestSchedule = getStoredHomeownerRequests()
+    .filter((request) => isRequestConnectedToProfessional(request))
+    .filter(hasRequestSchedule)
+    .map(createScheduleProjectionFromRequest)
+    .filter((item) => {
+      const key = item.requestId || item.id || item.scheduleId;
+      return !key || !scheduleRequestKeys.has(String(key));
+    });
+
+  return [...schedule, ...requestSchedule];
 }
 
 export function saveBusinessSchedule(schedule = []) {

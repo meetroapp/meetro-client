@@ -10,11 +10,25 @@ import {
   t,
 } from "../utils/language";
 import { authFetch, clearMeetroSession } from "../utils/authFetch";
-import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
+import {
+  hasBusinessProfileOwnership,
+  isProfessionalSession,
+  setActiveAccountMode,
+} from "../utils/session";
 import {
   getScopedProfilePhoto,
   getScopedProfilePhotoKey,
 } from "../utils/profilePhotoScoping";
+import {
+  areRelationshipInsightsEnabled,
+  setRelationshipInsightsEnabled,
+} from "../utils/relationshipInsightSettings";
+import {
+  clearInsightTestDismissals,
+  dispatchInsightTest,
+  getInsightTesterButtonGroups,
+  shouldRenderInsightTester,
+} from "../utils/relationshipInsightTester";
 
 function Profile({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -42,6 +56,9 @@ function Profile({ setPage, currentPage }) {
   const [assistantVoicePreference, setAssistantVoicePreference] = useState(
     localStorage.getItem("meetroAssistantVoicePreference") || "auto"
   );
+  const [relationshipInsightsEnabled, setRelationshipInsightsEnabledState] = useState(() =>
+    areRelationshipInsightsEnabled({ role: localStorage.getItem("activeAccountMode") || "personal" })
+  );
   const [profileNotice, setProfileNotice] = useState("");
   const [testFeedbackOpen, setTestFeedbackOpen] = useState(false);
   const [testFeedbackSaved, setTestFeedbackSaved] = useState(false);
@@ -52,6 +69,7 @@ function Profile({ setPage, currentPage }) {
     easier: "",
     screenshotNote: "",
   });
+  const insightTesterVisible = shouldRenderInsightTester();
 
   const [profilePhoto, setProfilePhoto] = useState(
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
@@ -93,12 +111,19 @@ function Profile({ setPage, currentPage }) {
     localStorage.getItem("contractorProfileComplete") === "true";
 
   const hasBusinessAccess =
+    hasBusinessProfileOwnership(user || {}) ||
+    hasBusinessProfileOwnership(businessProfile || {}) ||
     isProfessionalSession() ||
     contractorProfileComplete ||
     Boolean(localStorage.getItem("businessName")) ||
     Boolean(localStorage.getItem("businessCategory"));
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
+  const businessModeStatusLabel = isBusinessMode
+    ? t("active")
+    : hasBusinessAccess
+    ? t("available")
+    : t("inactive");
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -130,14 +155,43 @@ function Profile({ setPage, currentPage }) {
           return;
         }
 
-        setUser(result.data?.user || null);
+        const nextUser = result.data?.user || null;
+
+        setUser(nextUser);
+
+        if (nextUser) {
+          localStorage.setItem("user", JSON.stringify(nextUser));
+          if (nextUser.id || nextUser.userId || nextUser.user_id) {
+            localStorage.setItem(
+              "userId",
+              String(nextUser.id || nextUser.userId || nextUser.user_id)
+            );
+          }
+          if (nextUser.email) {
+            localStorage.setItem("userEmail", nextUser.email);
+          }
+
+          const savedPhoto =
+            nextUser.profile_photo_url ||
+            nextUser.profilePhotoUrl ||
+            nextUser.profilePhoto ||
+            nextUser.avatar ||
+            "";
+
+          if (savedPhoto) {
+            localStorage.setItem(getScopedProfilePhotoKey("personal"), savedPhoto);
+            if (activeMode !== "business") {
+              setProfilePhoto(savedPhoto);
+            }
+          }
+        }
       } catch (error) {
         console.error(error);
       }
     }
 
     fetchUser();
-  }, [language]);
+  }, [activeMode, language, setPage]);
 
   function handleProfilePhotoUpload(event) {
     const file = event.target.files?.[0];
@@ -215,8 +269,32 @@ function Profile({ setPage, currentPage }) {
           .then((result) => {
             const savedUrl =
               result?.user?.profile_photo_url || imageResult;
+            const savedUser = result?.user || {};
 
             localStorage.setItem(getScopedProfilePhotoKey("personal"), savedUrl);
+            try {
+              const cachedUser = JSON.parse(localStorage.getItem("user") || "{}") || {};
+              const nextUser = {
+                ...cachedUser,
+                ...savedUser,
+                profile_photo_url: savedUrl,
+                profilePhotoUrl: savedUrl,
+                profilePhoto: savedUrl,
+              };
+
+              localStorage.setItem("user", JSON.stringify(nextUser));
+              setUser(nextUser);
+            } catch {
+              localStorage.setItem(
+                "user",
+                JSON.stringify({
+                  ...savedUser,
+                  profile_photo_url: savedUrl,
+                  profilePhotoUrl: savedUrl,
+                  profilePhoto: savedUrl,
+                })
+              );
+            }
             setProfilePhoto(savedUrl);
           })
           .catch((error) => {
@@ -252,6 +330,28 @@ function Profile({ setPage, currentPage }) {
     setAssistantVoicePreference(value);
   }
 
+  function toggleRelationshipInsights() {
+    const nextEnabled = !relationshipInsightsEnabled;
+    setRelationshipInsightsEnabled(nextEnabled, { role: activeMode });
+    setRelationshipInsightsEnabledState(nextEnabled);
+  }
+
+  function triggerRelationshipInsightTest(type) {
+    if (!relationshipInsightsEnabled) {
+      setProfileNotice(t("devInsightsDisabledNote"));
+      return;
+    }
+    const dispatched = dispatchInsightTest(type);
+    setProfileNotice(
+      dispatched ? t("devInsightTriggered") : t("devInsightUnavailable")
+    );
+  }
+
+  function clearRelationshipInsightDismissalsForDev() {
+    clearInsightTestDismissals();
+    setProfileNotice(t("devInsightDismissalsCleared"));
+  }
+
   function switchMode(mode) {
     if (mode === "business" && !hasBusinessAccess) {
       setPage("contractorProfile");
@@ -261,6 +361,9 @@ function Profile({ setPage, currentPage }) {
     setActiveAccountMode(mode);
     localStorage.setItem("meetroPreferredAccountMode", mode);
     setActiveMode(mode);
+    setRelationshipInsightsEnabledState(
+      areRelationshipInsightsEnabled({ role: mode })
+    );
 
     const nextPage = mode === "business" ? "businessDashboard" : "home";
 
@@ -438,15 +541,8 @@ function Profile({ setPage, currentPage }) {
     setPage("legal");
   }
 
-  function startMeetroTour() {
-    window.dispatchEvent(
-      new CustomEvent("meetroStartTour", {
-        detail: {
-          tourType: isBusinessMode ? "professional" : "homeowner",
-          manual: true,
-        },
-      })
-    );
+  function openMeetroTips() {
+    setPage("meetroJourney");
   }
 
   function readLocalQueue(key) {
@@ -526,11 +622,6 @@ function Profile({ setPage, currentPage }) {
     localStorage.getItem("homeownerCity") ||
     localStorage.getItem("city") ||
     "";
-  const homeownerServiceArea =
-    localStorage.getItem("homeownerServiceArea") ||
-    localStorage.getItem("serviceArea") ||
-    homeownerCity ||
-    t("notSet");
   const memberSinceValue =
     user?.created_at ||
     user?.createdAt ||
@@ -782,20 +873,9 @@ function Profile({ setPage, currentPage }) {
           <div style={homeownerHeroContent}>
             <h2 style={homeownerHeroName}>{displayName}</h2>
             <p style={homeownerHeroMeta}>
-              {homeownerServiceArea} · {t("memberSince")} {memberSinceLabel}
+              {homeownerCity ? `${homeownerCity} · ` : ""}
+              {t("memberSince")} {memberSinceLabel}
             </p>
-            <div style={homeownerHeroBadges}>
-              <span style={homeownerVerificationBadge}>
-                <MeetroIcon name="verified" size={15} decorative />
-                {user?.email_verified || localStorage.getItem("emailVerified") === "true"
-                  ? t("verified")
-                  : t("notVerified")}
-              </span>
-              <span style={homeownerVerificationBadge}>
-                <MeetroIcon name="location" size={15} decorative />
-                {homeownerCity || t("serviceArea")}
-              </span>
-            </div>
           </div>
         </section>
 
@@ -901,6 +981,22 @@ function Profile({ setPage, currentPage }) {
             onClick={() => setPage("notifications")}
           />
 
+          <ToggleSettingRow
+            icon="customerRelationships"
+            label={t("relationshipInsights")}
+            description={t("relationshipInsightsDescription")}
+            enabled={relationshipInsightsEnabled}
+            onToggle={toggleRelationshipInsights}
+          />
+
+          {insightTesterVisible && (
+            <InsightTesterPanel
+              disabled={!relationshipInsightsEnabled}
+              onTrigger={triggerRelationshipInsightTest}
+              onClear={clearRelationshipInsightDismissalsForDev}
+            />
+          )}
+
           <SettingRow
             icon="emergency"
             label={t("emergencyContacts")}
@@ -952,7 +1048,7 @@ function Profile({ setPage, currentPage }) {
                 <span>{t("businessMode")}</span>
               </span>
               <strong style={settingValue}>
-                {t("inactive")}
+                {businessModeStatusLabel}
               </strong>
             </div>
 
@@ -991,9 +1087,9 @@ function Profile({ setPage, currentPage }) {
         <SettingsGroup title={t("support")} icon="help">
           <SettingRow
             icon="aiHelp"
-            label={t("startMeetroTour")}
+            label={t("learnMeetro")}
             value={t("open")}
-            onClick={startMeetroTour}
+            onClick={openMeetroTips}
           />
 
           <SettingRow
@@ -1230,7 +1326,7 @@ function Profile({ setPage, currentPage }) {
               <span>{t("businessMode")}</span>
             </span>
             <strong style={settingValue}>
-              {isBusinessMode ? t("active") : t("inactive")}
+              {businessModeStatusLabel}
             </strong>
           </div>
 
@@ -1285,6 +1381,22 @@ function Profile({ setPage, currentPage }) {
           onClick={() => setPage("notifications")}
         />
 
+        <ToggleSettingRow
+          icon="customerRelationships"
+          label={t("relationshipInsights")}
+          description={t("relationshipInsightsDescription")}
+          enabled={relationshipInsightsEnabled}
+          onToggle={toggleRelationshipInsights}
+        />
+
+        {insightTesterVisible && (
+          <InsightTesterPanel
+            disabled={!relationshipInsightsEnabled}
+            onTrigger={triggerRelationshipInsightTest}
+            onClear={clearRelationshipInsightDismissalsForDev}
+          />
+        )}
+
         <SettingRow
           icon="preview"
           label={t("appearance")}
@@ -1327,9 +1439,9 @@ function Profile({ setPage, currentPage }) {
       <SettingsGroup title={t("support")} icon="help">
         <SettingRow
           icon="aiHelp"
-          label={t("startMeetroTour")}
+          label={t("learnMeetro")}
           value={t("open")}
-          onClick={startMeetroTour}
+          onClick={openMeetroTips}
         />
 
         <SettingRow
@@ -1350,7 +1462,7 @@ function Profile({ setPage, currentPage }) {
           icon="aiHelp"
           label={t("aiBusinessHelp")}
           value={t("open")}
-          onClick={() => setPage("assistant")}
+          onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
         />
       </SettingsGroup>
 
@@ -1598,6 +1710,84 @@ function SettingRow({ icon, label, value, onClick, disabled = false }) {
   );
 }
 
+function ToggleSettingRow({ icon, label, description, enabled, onToggle }) {
+  return (
+    <button
+      type="button"
+      style={toggleSettingRow}
+      onClick={onToggle}
+      aria-pressed={enabled}
+    >
+      <span style={toggleSettingLeft}>
+        <span style={rowIcon}>
+          <ProfileIcon name={icon} size={18} />
+        </span>
+        <span style={toggleSettingCopy}>
+          <strong>{label}</strong>
+          <span style={toggleSettingDescription}>{description}</span>
+        </span>
+      </span>
+
+      <span style={toggleSwitchTrack(enabled)}>
+        <span style={toggleSwitchKnob(enabled)} />
+      </span>
+    </button>
+  );
+}
+
+function InsightTesterPanel({ disabled, onTrigger, onClear }) {
+  const buttonGroups = getInsightTesterButtonGroups();
+  return (
+    <div style={relationshipInsightTesterCard} data-dev-only="insight-tester">
+      <div style={relationshipInsightTesterHeader}>
+        <strong>{t("devInsightTester")}</strong>
+        <span>{disabled ? t("devInsightsOff") : t("devInsightsReady")}</span>
+      </div>
+
+      {disabled && <p style={relationshipInsightTesterNote}>{t("devInsightsDisabledNote")}</p>}
+
+      {buttonGroups.map((group) => (
+        <div key={group.key} style={relationshipInsightTesterGroup}>
+          <span style={relationshipInsightTesterGroupTitle}>
+            {group.key === "commitment" ? t("commitmentInsightTitle") : t("relationshipInsightTitle")}
+          </span>
+          <div style={relationshipInsightTesterGrid}>
+            {group.buttons.map(([type, label]) => (
+              <button
+                key={type}
+                type="button"
+                style={{
+                  ...relationshipInsightTesterButton,
+                  ...(disabled ? relationshipInsightTesterButtonDisabled : {}),
+                }}
+                onClick={() => onTrigger(type)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={relationshipInsightTesterGroup}>
+        <span style={relationshipInsightTesterGroupTitle}>{t("utility")}</span>
+        <div style={relationshipInsightTesterGrid}>
+          <button
+            type="button"
+            style={{
+              ...relationshipInsightTesterButton,
+              ...relationshipInsightTesterClearButton,
+            }}
+            onClick={onClear}
+          >
+            {t("devInsightClearDismissals")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileActionButton({ icon, label, onClick, badge, disabled = false }) {
   const isInteractive = Boolean(onClick) && !disabled;
   const Component = isInteractive ? "button" : "div";
@@ -1825,25 +2015,6 @@ const homeownerHeroMeta = {
   fontSize: "14px",
   lineHeight: 1.4,
   fontWeight: "750",
-};
-
-const homeownerHeroBadges = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "8px",
-  marginTop: "10px",
-};
-
-const homeownerVerificationBadge = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  borderRadius: "999px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
-  padding: "7px 9px",
-  fontSize: "12px",
-  fontWeight: "900",
 };
 
 const quickActionRow = {
@@ -2202,6 +2373,124 @@ const settingRow = {
   fontSize: "15px",
   cursor: "pointer",
   textAlign: "left",
+};
+
+const toggleSettingRow = {
+  ...settingRow,
+  alignItems: "center",
+};
+
+const toggleSettingLeft = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  minWidth: 0,
+  flex: "1 1 auto",
+};
+
+const toggleSettingCopy = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  minWidth: 0,
+  color: "#111827",
+};
+
+const toggleSettingDescription = {
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "700",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+};
+
+const toggleSwitchTrack = (enabled) => ({
+  width: "46px",
+  height: "28px",
+  borderRadius: "999px",
+  padding: "3px",
+  flex: "0 0 auto",
+  boxSizing: "border-box",
+  background: enabled ? "#5b3df5" : "#cbd5e1",
+  display: "flex",
+  justifyContent: enabled ? "flex-end" : "flex-start",
+  alignItems: "center",
+  transition: "background 160ms ease",
+});
+
+const toggleSwitchKnob = () => ({
+  width: "22px",
+  height: "22px",
+  borderRadius: "999px",
+  background: "#ffffff",
+  boxShadow: "0 2px 6px rgba(15,23,42,0.18)",
+});
+
+const relationshipInsightTesterCard = {
+  background: "#f8fafc",
+  border: "1px dashed #c4b5fd",
+  borderRadius: "16px",
+  padding: "12px",
+  marginBottom: "10px",
+  display: "grid",
+  gap: "10px",
+};
+
+const relationshipInsightTesterHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+  color: "#111827",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const relationshipInsightTesterGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const relationshipInsightTesterGroup = {
+  display: "grid",
+  gap: "7px",
+};
+
+const relationshipInsightTesterGroupTitle = {
+  color: "#64748b",
+  fontSize: "11px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const relationshipInsightTesterNote = {
+  margin: 0,
+  color: "#7c3aed",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: "850",
+};
+
+const relationshipInsightTesterButton = {
+  border: "1px solid #ddd6fe",
+  borderRadius: "999px",
+  background: "#ffffff",
+  color: "#4c1d95",
+  padding: "8px 10px",
+  fontSize: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const relationshipInsightTesterButtonDisabled = {
+  opacity: 0.64,
+};
+
+const relationshipInsightTesterClearButton = {
+  background: "#f3f0ff",
 };
 
 const settingInlineBlock = {

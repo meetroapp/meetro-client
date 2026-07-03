@@ -328,7 +328,7 @@ function QuoteRequests({ setPage, currentPage }) {
             }
             style={primaryButton}
           >
-            Open Conversation
+            Continue Conversation
           </button>
 
           <button

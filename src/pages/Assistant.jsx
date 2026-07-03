@@ -1,187 +1,184 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { t } from "../utils/language";
+import {
+  buildAssistantRequestDraft,
+  classifyAssistantRequestIntent,
+  saveAssistantRequestDraft,
+} from "../utils/assistantRequestDraft";
 
 function Assistant({ setPage }) {
   const [projectText, setProjectText] = useState("");
   const [mode, setMode] = useState("scope");
+  const [prepared, setPrepared] = useState(false);
+  const inputRef = useRef(null);
 
   const hasText = projectText.trim().length > 0;
 
-  const recommendations = getAiRecommendation(projectText, mode);
+  const recommendations = getPreparedRequest(projectText, mode);
 
   function useDraft() {
     if (projectText.trim()) {
-      localStorage.setItem("aiProjectDraft", projectText.trim());
-      localStorage.setItem("aiBusinessRecommendation", recommendations.businessType);
-      localStorage.setItem("aiProjectScope", recommendations.scope.join("\n"));
+      const draft = buildAssistantRequestDraft({
+        userText: projectText,
+        recommendations,
+        mode,
+      });
+
+      saveAssistantRequestDraft(localStorage, draft);
     }
 
     setPage("upload");
   }
 
+  function prepareRequest() {
+    if (!hasText) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    setPrepared(true);
+  }
+
+  function editDescription() {
+    setPrepared(false);
+    inputRef.current?.focus();
+  }
+
   return (
     <div style={page}>
       <div style={heroCard}>
-        <p style={eyebrow}>{t("aiHelp")}</p>
-        <h1 style={title}> Meetro AI</h1>
-        <p style={subtitle}>
-          Describe the job once. Meetro helps recommend the right business type,
-          questions, photos, and next step.
-        </p>
+        <span style={heroOrbMark} aria-hidden="true">M</span>
+        <h1 style={title}>Meetro</h1>
+        <div style={subtitleStack}>
+          <p style={subtitle}>{t("assistantRequestHeroLine1")}</p>
+          <p style={subtitle}>{t("assistantRequestHeroLine2")}</p>
+          <p style={subtitle}>{t("assistantRequestHeroLine3")}</p>
+          <p style={subtitle}>{t("assistantRequestHeroLine4")}</p>
+        </div>
       </div>
 
       <div style={askCard}>
-        <h2 style={askTitle}>What do you need help with?</h2>
+        <h2 style={askTitle}>{t("assistantRequestDescriptionTitle")}</h2>
         <p style={helperText}>
-          Describe your project once, then tap a tool below to get AI answers.
+          {t("assistantRequestExample")}
         </p>
 
         <textarea
+          ref={inputRef}
           style={textarea}
           value={projectText}
-          onChange={(event) => setProjectText(event.target.value)}
-          placeholder="Example: I need a garage door opener replaced..."
+          onChange={(event) => {
+            setProjectText(event.target.value);
+            setPrepared(false);
+          }}
+          placeholder={t("assistantRequestPlaceholder")}
         />
 
-        <div style={modeGrid}>
-          <button
-            style={mode === "scope" ? activeModeButton : modeButton}
-            onClick={() => setMode("scope")}
-          >
-             Build Scope
-          </button>
-
-          <button
-            style={mode === "estimate" ? activeModeButton : modeButton}
-            onClick={() => setMode("estimate")}
-          >
-             Prepare Estimate
-          </button>
-
-          <button
-            style={mode === "materials" ? activeModeButton : modeButton}
-            onClick={() => setMode("materials")}
-          >
-             Check Materials
-          </button>
-
-          <button
-            style={mode === "design" ? activeModeButton : modeButton}
-            onClick={() => setMode("design")}
-          >
-             Generate Ideas
-          </button>
-        </div>
+        <button
+          type="button"
+          style={{
+            ...prepareButton,
+            opacity: hasText ? 1 : 0.62,
+          }}
+          onClick={prepareRequest}
+        >
+          {t("assistantPrepareRequestAction")}
+        </button>
       </div>
 
+      {prepared && hasText && (
       <div style={resultCard}>
         <div style={resultHeader}>
-          <span style={resultIcon}>{recommendations.icon}</span>
+          <span style={resultIcon}>M</span>
           <div>
-            <p style={resultLabel}>AI Recommendation</p>
-            <h2 style={resultTitle}>
-              {hasText ? recommendations.businessType : "Describe your project"}
-            </h2>
+            <p style={resultLabel}>{t("assistantPreparedRequest")}</p>
+            <h2 style={resultTitle}>{recommendations.businessType}</h2>
           </div>
         </div>
 
-        {!hasText ? (
-          <p style={emptyText}>
-            Type what you need help with, then tap Build Scope, Prepare Estimate,
-            Check Materials, or Generate Ideas to get answers.
+        <div style={sectionBlock}>
+          <strong style={sectionLabel}>{t("assistantPreparedService")}</strong>
+          <p style={sectionText}>{recommendations.businessType}</p>
+        </div>
+
+        <div style={sectionBlock}>
+          <strong style={sectionLabel}>{t("assistantPreparedProjectSummary")}</strong>
+          <p style={sectionText}>{projectText.trim()}</p>
+        </div>
+
+        <div style={sectionBlock}>
+          <strong style={sectionLabel}>{t("assistantPreparedRecommendedDetails")}</strong>
+          {recommendations.scope.map((item) => (
+            <p key={item} style={bullet}>• {item}</p>
+          ))}
+        </div>
+
+        <div style={sectionBlock}>
+          <strong style={sectionLabel}>{t("assistantPreparedPhotosToInclude")}</strong>
+          {recommendations.photos.map((item) => (
+            <p key={item} style={bullet}>• {item}</p>
+          ))}
+        </div>
+
+        <div style={sectionBlock}>
+          <strong style={sectionLabel}>{t("assistantPreparedRecommendation")}</strong>
+          <p style={sectionText}>
+            {t("assistantPreparedRecommendationText")}
           </p>
-        ) : (
-          <>
-            <div style={sectionBlock}>
-              <strong style={sectionLabel}>Recommended business type</strong>
-              <p style={sectionText}>{recommendations.businessType}</p>
-            </div>
+        </div>
 
-            <div style={sectionBlock}>
-              <strong style={sectionLabel}>{recommendations.heading}</strong>
-              {recommendations.scope.map((item) => (
-                <p key={item} style={bullet}>• {item}</p>
-              ))}
-            </div>
-
-            <div style={sectionBlock}>
-              <strong style={sectionLabel}>Photos / details to add</strong>
-              {recommendations.photos.map((item) => (
-                <p key={item} style={bullet}>• {item}</p>
-              ))}
-            </div>
-
-            <button style={askButton} onClick={useDraft}>
-              Use This To Post Project
-            </button>
-          </>
-        )}
+        <div style={actionRow}>
+          <button style={secondaryButton} onClick={editDescription} type="button">
+            {t("assistantEditDescription")}
+          </button>
+          <button style={askButton} onClick={useDraft} type="button">
+            {t("assistantUseThisToPostProject")}
+          </button>
+        </div>
       </div>
+      )}
 
       <BottomNav setPage={setPage} currentPage="home" />
     </div>
   );
 }
 
-function getAiRecommendation(text, mode) {
-  const lower = text.toLowerCase();
-
-  let businessType = "Handyman / General Service";
-  let icon = "";
-
-  if (lower.includes("garage") || lower.includes("opener")) {
-    businessType = "Garage Door Service";
-    icon = "";
-  } else if (lower.includes("water heater") || lower.includes("toilet") || lower.includes("sink") || lower.includes("leak")) {
-    businessType = "Plumbing";
-    icon = "";
-  } else if (lower.includes("fan") || lower.includes("outlet") || lower.includes("switch") || lower.includes("electrical")) {
-    businessType = "Electrical / Handyman";
-    icon = "";
-  } else if (lower.includes("paint") || lower.includes("drywall")) {
-    businessType = "Painting / Drywall";
-    icon = "";
-  } else if (lower.includes("rental") || lower.includes("tenant") || lower.includes("property") || lower.includes("unit")) {
-    businessType = "Property Management";
-    icon = "";
-  }
+function getPreparedRequest(text, mode) {
+  const intent = classifyAssistantRequestIntent(text);
+  const businessType = getPreparedServiceLabel(intent);
+  const icon = "";
 
   const content = {
     scope: {
-      heading: "Suggested project scope",
-      scope: [
-        "Describe the problem clearly.",
-        "Include where the work is located.",
-        "Add any measurements, brand names, or model numbers.",
-        "Mention if materials are already purchased.",
-      ],
+      heading: t("assistantRequestScopeHeading"),
+      scope: getHelpfulDetailsForIntent(intent),
     },
     estimate: {
-      heading: "Estimate preparation",
+      heading: t("assistantRequestEstimateHeading"),
       scope: [
-        "Confirm the exact service needed.",
-        "Add photos so professionals can price accurately.",
-        "Mention preferred timing and access instructions.",
-        "Avoid buying materials until size and compatibility are confirmed.",
+        t("assistantRequestEstimateService"),
+        t("assistantRequestEstimatePhotos"),
+        t("assistantRequestEstimateTiming"),
+        t("assistantRequestEstimateMaterials"),
       ],
     },
     materials: {
-      heading: "Materials guidance",
+      heading: t("assistantRequestMaterialsHeading"),
       scope: [
-        "Check size, model, and compatibility before purchasing.",
-        "Take photos of existing parts, labels, and measurements.",
-        "Ask the professional to confirm before ordering.",
-        "Keep receipts and product links ready.",
+        t("assistantRequestMaterialsCompatibility"),
+        t("assistantRequestMaterialsPhotos"),
+        t("assistantRequestMaterialsConfirm"),
+        t("assistantRequestMaterialsReceipts"),
       ],
     },
     design: {
-      heading: "Design ideas",
+      heading: t("assistantRequestDesignHeading"),
       scope: [
-        "Coming soon: AI visual concepts and inspiration.",
-        "For now, add style preferences and example photos.",
-        "Mention colors, materials, and budget range.",
-        "Professionals can use this to prepare better recommendations.",
+        t("assistantRequestDesignComingSoon"),
+        t("assistantRequestDesignPreferences"),
+        t("assistantRequestDesignBudget"),
+        t("assistantRequestDesignProfessionalUse"),
       ],
     },
   };
@@ -189,14 +186,102 @@ function getAiRecommendation(text, mode) {
   return {
     businessType,
     icon,
+    intent,
     heading: content[mode].heading,
     scope: content[mode].scope,
-    photos: [
-      "Wide photo of the full area.",
-      "Close-up of the issue or product label.",
-      "Photo showing access, height, or surrounding space.",
-    ],
+    photos: getPhotoSuggestionsForIntent(intent),
   };
+}
+
+function getPreparedServiceLabel(intent) {
+  if (intent.category === "mechanic") return t("assistantRequestServiceMechanic");
+  if (intent.category === "doorsWindows") return t("assistantRequestServiceGarageDoor");
+  if (intent.category === "plumbing") return t("plumbing");
+  if (intent.category === "electrical") return t("assistantRequestServiceElectricalHandyman");
+  if (intent.category === "painting" || intent.category === "drywall") {
+    return t("assistantRequestServicePaintingDrywall");
+  }
+  if (intent.category === "propertyManagement") return t("propertyManagement");
+  if (intent.category === "handyman") return t("assistantRequestServiceHandymanGeneral");
+  return t("assistantRequestServiceMoreDetailsNeeded");
+}
+
+function getHelpfulDetailsForIntent(intent) {
+  if (intent.category === "mechanic") {
+    return [
+      t("assistantRequestVehicleMakeModel"),
+      t("assistantRequestVehicleCranks"),
+      t("assistantRequestVehicleWarningLights"),
+      t("assistantRequestVehicleBattery"),
+      t("assistantRequestVehicleLocation"),
+      t("assistantRequestVehicleRoadside"),
+    ];
+  }
+
+  if (intent.category === "doorsWindows") {
+    return [
+      t("assistantRequestGarageOpenerBrand"),
+      t("assistantRequestGarageExistingNew"),
+      t("assistantRequestGarageDoorSize"),
+      t("assistantRequestGaragePowerOutlet"),
+      t("assistantRequestGarageSafetySensors"),
+    ];
+  }
+
+  if (intent.category === "plumbing") {
+    return [
+      t("assistantRequestPlumbingLeakLocation"),
+      t("assistantRequestPlumbingActiveLeak"),
+      t("assistantRequestPlumbingShutoff"),
+      t("assistantRequestPlumbingUrgency"),
+    ];
+  }
+
+  if (!intent.category) {
+    return [
+      t("assistantRequestClarifyServiceType"),
+      t("assistantRequestClarifyLocation"),
+      t("assistantRequestClarifyTiming"),
+    ];
+  }
+
+  return [
+    t("assistantRequestScopeLocation"),
+    t("assistantRequestScopeMeasurements"),
+    t("assistantRequestScopeMaterials"),
+  ];
+}
+
+function getPhotoSuggestionsForIntent(intent) {
+  if (intent.category === "mechanic") {
+    return [
+      t("assistantRequestVehiclePhotoDashboard"),
+      t("assistantRequestVehiclePhotoBattery"),
+      t("assistantRequestVehiclePhotoLocation"),
+    ];
+  }
+
+  if (intent.category === "doorsWindows") {
+    return [
+      t("assistantRequestGaragePhotoDoor"),
+      t("assistantRequestGaragePhotoOpenerArea"),
+      t("assistantRequestGaragePhotoOutletSensor"),
+    ];
+  }
+
+  if (intent.category === "plumbing") {
+    return [
+      t("assistantRequestPlumbingPhotoLeak"),
+      t("assistantRequestPlumbingPhotoUnderSink"),
+      t("assistantRequestPlumbingPhotoShutoff"),
+    ];
+  }
+
+  return [
+    t("assistantRequestPhotoWide"),
+    t("assistantRequestPhotoClose"),
+    t("assistantRequestPhotoAccess"),
+  ];
 }
 
 const page = {
@@ -206,48 +291,71 @@ const page = {
     "radial-gradient(circle at top, rgba(91,61,245,0.18), transparent 34%), #f8fafc",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
+  boxSizing: "border-box",
+  width: "100%",
+  maxWidth: "760px",
+  minWidth: 0,
+  margin: "0 auto",
+  overflowX: "hidden",
 };
 
 const heroCard = {
-  padding: "22px",
-  borderRadius: "30px",
-  background:
-    "linear-gradient(135deg, rgba(91,61,245,0.98), rgba(124,58,237,0.92))",
-  color: "white",
-  boxShadow: "0 24px 54px rgba(91,61,245,0.25)",
-  marginBottom: "16px",
+  position: "relative",
+  padding: "18px",
+  borderRadius: "24px",
+  background: "rgba(255,255,255,0.72)",
+  border: "1px solid rgba(255,255,255,0.86)",
+  color: "#0f172a",
+  boxShadow: "0 18px 42px rgba(91,61,245,0.10)",
+  marginBottom: "12px",
+  overflow: "hidden",
+  backdropFilter: "blur(18px)",
 };
 
-const eyebrow = {
-  margin: "0 0 8px",
-  fontSize: "12px",
-  fontWeight: "950",
-  letterSpacing: "0.8px",
-  textTransform: "uppercase",
-  opacity: 0.82,
+const heroOrbMark = {
+  position: "absolute",
+  right: "16px",
+  top: "14px",
+  width: "42px",
+  height: "42px",
+  borderRadius: "50%",
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(91,61,245,0.10)",
+  border: "1px solid rgba(91,61,245,0.14)",
+  color: "#5b3df5",
+  fontSize: "18px",
+  fontWeight: 950,
 };
 
 const title = {
   margin: 0,
-  fontSize: "32px",
+  fontSize: "30px",
   fontWeight: "950",
   letterSpacing: "-1px",
 };
 
+const subtitleStack = {
+  display: "grid",
+  gap: "4px",
+  marginTop: "10px",
+};
+
 const subtitle = {
-  margin: "10px 0 0",
+  margin: 0,
   fontSize: "15px",
-  lineHeight: 1.45,
-  color: "rgba(255,255,255,0.9)",
+  lineHeight: 1.35,
+  color: "#475569",
+  fontWeight: 750,
 };
 
 const askCard = {
-  padding: "18px",
-  borderRadius: "28px",
+  padding: "16px",
+  borderRadius: "24px",
   background: "rgba(255,255,255,0.96)",
   border: "1px solid rgba(226,232,240,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.08)",
-  marginBottom: "16px",
+  boxShadow: "0 14px 32px rgba(15,23,42,0.06)",
+  marginBottom: "12px",
 };
 
 const askTitle = {
@@ -279,36 +387,26 @@ const textarea = {
   fontFamily: "inherit",
 };
 
-const modeGrid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
+const prepareButton = {
   marginTop: "12px",
-};
-
-const modeButton = {
-  padding: "12px 10px",
-  borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
-  color: "#334155",
-  fontSize: "13px",
-  fontWeight: "900",
-};
-
-const activeModeButton = {
-  ...modeButton,
+  width: "100%",
+  padding: "13px",
+  borderRadius: "18px",
+  border: "0",
   background: "#5b3df5",
   color: "white",
-  border: "1px solid #5b3df5",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 12px 26px rgba(91,61,245,0.18)",
 };
 
 const resultCard = {
-  padding: "18px",
-  borderRadius: "28px",
+  padding: "16px",
+  borderRadius: "24px",
   background: "rgba(255,255,255,0.98)",
   border: "1px solid rgba(226,232,240,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.08)",
+  boxShadow: "0 14px 32px rgba(15,23,42,0.06)",
 };
 
 const resultHeader = {
@@ -325,7 +423,9 @@ const resultIcon = {
   background: "rgba(91,61,245,0.10)",
   display: "grid",
   placeItems: "center",
-  fontSize: "24px",
+  color: "#5b3df5",
+  fontSize: "18px",
+  fontWeight: 950,
 };
 
 const resultLabel = {
@@ -341,12 +441,6 @@ const resultTitle = {
   fontSize: "21px",
   fontWeight: "950",
   color: "#0f172a",
-};
-
-const emptyText = {
-  margin: 0,
-  color: "#475569",
-  lineHeight: 1.45,
 };
 
 const sectionBlock = {
@@ -379,7 +473,6 @@ const bullet = {
 };
 
 const askButton = {
-  marginTop: "14px",
   width: "100%",
   padding: "14px",
   borderRadius: "20px",
@@ -390,6 +483,25 @@ const askButton = {
   fontWeight: "950",
   cursor: "pointer",
   boxShadow: "0 14px 30px rgba(91,61,245,0.24)",
+};
+
+const actionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const secondaryButton = {
+  width: "100%",
+  padding: "13px",
+  borderRadius: "18px",
+  border: "1px solid #dbe3ef",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: "15px",
+  fontWeight: "950",
+  cursor: "pointer",
 };
 
 export default Assistant;

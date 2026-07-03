@@ -12,6 +12,10 @@ const CATEGORY_ALIASES = Object.freeze({
   doorreplacement: "door_replacement",
   drywallRepair: "drywall",
   drywallrepair: "drywall",
+  ceilingFanInstallation: "ceiling_fan_installation",
+  ceilingfaninstallation: "ceiling_fan_installation",
+  garageDoorOpenerInstallation: "garage_door_opener_installation",
+  garagedooropenerinstallation: "garage_door_opener_installation",
   generalMaintenance: "general_maintenance",
   generalmaintenance: "general_maintenance",
   homeHealth: "home_health",
@@ -27,6 +31,8 @@ const CATEGORY_ALIASES = Object.freeze({
   propertymanagement: "property_management",
   propertyMaintenance: "property_maintenance",
   propertymaintenance: "property_maintenance",
+  plumbingRepairs: "plumbing_repairs",
+  plumbingrepairs: "plumbing_repairs",
   rentalMaintenance: "rental_maintenance",
   rentalmaintenance: "rental_maintenance",
   seniorCare: "senior_care",
@@ -48,6 +54,7 @@ export const SERVICE_DOMAIN_CATEGORIES = Object.freeze({
     "appliance_installation",
     "cabinetry",
     "carpentry",
+    "ceiling_fan_installation",
     "cleaning",
     "concrete",
     "contractor",
@@ -59,6 +66,7 @@ export const SERVICE_DOMAIN_CATEGORIES = Object.freeze({
     "electrical",
     "fencing",
     "flooring",
+    "garage_door_opener_installation",
     "general",
     "general_maintenance",
     "handyman",
@@ -71,6 +79,7 @@ export const SERVICE_DOMAIN_CATEGORIES = Object.freeze({
     "paver_sealing",
     "pest_control",
     "plumbing",
+    "plumbing_repairs",
     "pool_service",
     "pressure_washing",
     "property_maintenance",
@@ -132,6 +141,10 @@ const CATEGORY_DOMAIN_HINTS = Object.freeze({
 });
 
 const CATEGORY_ELIGIBILITY = Object.freeze({
+  ceiling_fan_installation: Object.freeze([
+    "ceiling_fan_installation",
+    "electrical",
+  ]),
   contractor: Object.freeze([
     "carpentry",
     "concrete",
@@ -140,19 +153,39 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
     "door_repair",
     "door_replacement",
     "drywall",
+    "ceiling_fan_installation",
     "flooring",
+    "garage_door_opener_installation",
     "painting",
     "repair",
     "tile",
   ]),
   cleaning: Object.freeze(["cleaning"]),
+  door_installation: Object.freeze([
+    "door_installation",
+    "door_repair",
+    "door_replacement",
+    "garage_door_opener_installation",
+  ]),
+  door_repair: Object.freeze([
+    "door_installation",
+    "door_repair",
+    "garage_door_opener_installation",
+  ]),
+  door_replacement: Object.freeze(["door_replacement", "door_installation"]),
   drywall: Object.freeze(["drywall"]),
-  electrical: Object.freeze(["electrical"]),
+  electrical: Object.freeze(["electrical", "ceiling_fan_installation"]),
+  garage_door_opener_installation: Object.freeze([
+    "garage_door_opener_installation",
+    "door_installation",
+    "door_repair",
+  ]),
   handyman: Object.freeze([
     "appliance_repair",
     "appliance_installation",
     "cabinetry",
     "carpentry",
+    "ceiling_fan_installation",
     "door_installation",
     "door_repair",
     "door_replacement",
@@ -164,6 +197,7 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
     "locksmith",
     "painting",
     "plumbing",
+    "plumbing_repairs",
     "repair",
     "tile",
   ]),
@@ -186,7 +220,8 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
   ]),
   landscaping: Object.freeze(["landscaping", "lawn_care", "tree_service"]),
   painting: Object.freeze(["painting"]),
-  plumbing: Object.freeze(["plumbing"]),
+  plumbing: Object.freeze(["plumbing", "plumbing_repairs"]),
+  plumbing_repairs: Object.freeze(["plumbing", "plumbing_repairs"]),
   property_management: Object.freeze([
     "inspection",
     "maintenance",
@@ -230,6 +265,10 @@ export function normalizeServiceCategory(value = "") {
   if (normalized.includes("nursing") || normalized.includes("nurse")) {
     return "nursing";
   }
+  if (normalized.includes("garage") && normalized.includes("opener")) {
+    return "garage_door_opener_installation";
+  }
+  if (normalized.includes("ceiling_fan")) return "ceiling_fan_installation";
   if (normalized.includes("door_replacement")) return "door_replacement";
   if (normalized.includes("door_installation")) return "door_installation";
   if (normalized.includes("door")) return "door_repair";
@@ -240,6 +279,9 @@ export function normalizeServiceCategory(value = "") {
     return "painting";
   }
   if (normalized.includes("drywall")) return "drywall";
+  if (normalized.includes("faucet") || normalized.includes("plumbing_repair")) {
+    return "plumbing_repairs";
+  }
   if (normalized.includes("rental_maintenance")) return "rental_maintenance";
   if (normalized.includes("tenant")) return "tenant_ticket";
   if (normalized.includes("property_management")) return "property_management";
@@ -354,13 +396,25 @@ function normalizeList(value) {
     .filter(Boolean);
 }
 
+function normalizeCapabilityList(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((capability) => {
+      if (typeof capability === "string") return capability;
+      return capability?.serviceId || capability?.specialty || capability?.id || "";
+    })
+    .map((id) => String(id).replace(/^capability:/, ""))
+    .map(normalizeServiceCategory)
+    .filter(Boolean);
+}
+
 function getProfessionalCategories(professional = {}) {
-  const categories = [
-    professional.category,
-    professional.businessCategory,
-    professional.business_category,
-    professional.serviceCategory,
-    professional.service_category,
+  const capabilityCategories = [
+    ...normalizeCapabilityList(professional.serviceCapabilities),
+    ...normalizeCapabilityList(professional.service_capabilities),
+    ...normalizeCapabilityList(professional.businessServiceCapabilities),
+    ...normalizeCapabilityList(professional.business_service_capabilities),
     ...normalizeList(professional.serviceCategories),
     ...normalizeList(professional.service_categories),
     ...normalizeList(professional.businessServiceSpecialties),
@@ -368,6 +422,20 @@ function getProfessionalCategories(professional = {}) {
     ...normalizeList(professional.specialties),
     ...normalizeList(professional.serviceSpecialties),
     ...normalizeList(professional.service_specialties),
+  ]
+    .map(normalizeServiceCategory)
+    .filter(Boolean);
+
+  if (capabilityCategories.length > 0) {
+    return [...new Set(capabilityCategories)];
+  }
+
+  const categories = [
+    professional.category,
+    professional.businessCategory,
+    professional.business_category,
+    professional.serviceCategory,
+    professional.service_category,
   ]
     .map(normalizeServiceCategory)
     .filter(Boolean);
@@ -438,6 +506,10 @@ function matchesSpecialty(professional = {}, request = {}) {
   if (!requestSpecialty) return true;
 
   const specialties = [
+    ...normalizeCapabilityList(professional.serviceCapabilities),
+    ...normalizeCapabilityList(professional.service_capabilities),
+    ...normalizeCapabilityList(professional.businessServiceCapabilities),
+    ...normalizeCapabilityList(professional.business_service_capabilities),
     ...normalizeList(professional.businessServiceSpecialties),
     ...normalizeList(professional.business_service_specialties),
     ...normalizeList(professional.specialties),

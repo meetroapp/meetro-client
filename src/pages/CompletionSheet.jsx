@@ -395,11 +395,11 @@ function CompletionSheet({ setPage }) {
           ? `Trabajo marcado como completado — Total: $${total}.`
           : `Job marked completed — Total: $${total}.`,
         title: isSpanish
-          ? "Cierre del proyecto"
-          : "Project Closeout",
+          ? "Registro de finalización"
+          : "Completion Record",
         subtitle: isSpanish
-          ? "Revisa el resumen final y confirma el cierre."
-          : "Review the final summary and confirm closeout.",
+          ? "Revisa el resumen de finalización antes del cierre."
+          : "Review the completion summary before closure.",
         requestId:
           localStorage.getItem("activeRequestId") ||
           conversationId,

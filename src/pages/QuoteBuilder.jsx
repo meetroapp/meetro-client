@@ -25,6 +25,7 @@ import {
   normalizeLaborPricingType,
 } from "../utils/pricingCalculations";
 import { restoreConversationOriginContext } from "../utils/conversationOrigin";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 
 function safeJson(value, fallback = null) {
   try {
@@ -1383,6 +1384,9 @@ function QuoteBuilder({ setPage }) {
 
   const buildQuoteShareText = () => {
     const pricing = getCurrentPricingPayload();
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Meetro Professional",
+    });
     const serviceLines = pricing.quoteLineItems
       .filter((item) => cleanText(item.description))
       .map(
@@ -1432,7 +1436,7 @@ ${notes || "—"}
 ${isSpanish ? "Términos" : "Terms"}:
 ${terms || "—"}
 
-${localStorage.getItem("businessName") || "Meetro Professional"}`;
+${businessIdentity.businessName}`;
   };
 
   async function copyQuoteSummary() {
@@ -1467,10 +1471,10 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
       return;
     }
 
-    const businessName =
-      localStorage.getItem("businessName") ||
-      localStorage.getItem("companyName") ||
-      "Meetro Professional";
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Meetro Professional",
+    });
+    const businessName = businessIdentity.businessName;
 
     const finalQuoteNumber =
       quoteNumber.trim() || `Q-${Date.now().toString().slice(-6)}`;
@@ -1868,6 +1872,9 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
       quoteNumber.trim() || `DRAFT-${Date.now().toString().slice(-6)}`;
 
     const amount = pricing.totalAmount;
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Business",
+    });
 
     const draftQuote = {
       quoteId: selectedQuoteForEdit?.quoteId || `quote-${Date.now()}`,
@@ -1886,7 +1893,7 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
       customerName: customerName || "Customer",
       location: customerLocation,
       address: customerLocation,
-      businessName: localStorage.getItem("businessName") || "Business",
+      businessName: businessIdentity.businessName,
       timeline,
       recommendedSolution,
       proposalSummary: recommendedSolution,
@@ -1958,12 +1965,15 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
     const amount = pricing.totalAmount;
 
     const quoteConversationId = getQuoteConversationId();
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Business",
+    });
 
     if (!quoteConversationId) {
       alert(
         isSpanish
           ? "Abre o crea una conversación con el cliente antes de enviar la cotización por Meetro Chat. También puedes compartirla externamente."
-          : "Open or create a customer conversation before sending this quote through Meetro Chat. You can still share it externally."
+          : "Continue or create a customer conversation before sending this quote through Meetro. You can still share it externally."
       );
       return;
     }
@@ -1992,7 +2002,7 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
       customerName: customerName || "Customer",
       location: customerLocation,
       address: customerLocation,
-      businessName: localStorage.getItem("businessName") || "Business",
+      businessName: businessIdentity.businessName,
       timeline,
       recommendedSolution,
       proposalSummary: recommendedSolution,
@@ -2624,9 +2634,9 @@ ${localStorage.getItem("businessName") || "Meetro Professional"}`;
           </p>
 
           <div style={aiQuoteHelpCard}>
-            <p style={eyebrowDark}>AI Quote Help</p>
+            <p style={eyebrowDark}>Meetro Proposal Help</p>
             <p style={aiQuoteHelpSubtitle}>
-              Use Meetro Assistant to improve quote wording, organize services, and check for missing details.
+              Use Meetro to improve proposal wording, organize services, and check for missing details.
             </p>
             <div style={aiChipGrid}>
               <button style={aiChip} onClick={() => runAiQuoteHelp("improve")}>

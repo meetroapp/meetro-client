@@ -105,9 +105,19 @@ function EmergencyDispatch({ setPage }) {
   }
 
   function openEmergencyChat() {
+    const currentUserKey =
+      localStorage.getItem("userId") ||
+      localStorage.getItem("userEmail") ||
+      "guest";
     const conversationId =
-      localStorage.getItem("activeConversationId");
+      activeEmergencyRecord.conversationId ||
+      localStorage.getItem("emergencyConversationId") ||
+      localStorage.getItem("activeConversationId") ||
+      `emergency-active-request-${currentUserKey}`;
 
+    localStorage.setItem("emergencyConversationId", conversationId);
+    localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("activeConversationName", selectedService);
     localStorage.setItem(
       "meetroConversationType",
       "emergency"
@@ -118,9 +128,7 @@ function EmergencyDispatch({ setPage }) {
       "emergencyDispatch"
     );
 
-    if (conversationId) {
-      setPage("conversationThread");
-    }
+    setPage("conversationThread");
   }
 
   function completeService() {

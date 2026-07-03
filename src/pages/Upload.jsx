@@ -1,24 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
-import { getRequestHelpGuidance } from "../utils/requestHelpGuidance";
+import {
+  clearAssistantRequestDraft,
+  readAssistantRequestDraft,
+} from "../utils/assistantRequestDraft";
 import { buildRequestMatchingFields } from "../utils/requestMatchingFields";
+import {
+  getRequestIntelligenceServices,
+  searchRequestServices,
+} from "../utils/requestIntelligence";
 import {
   CAMERA_PERMISSION_MESSAGE,
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
 
+function buildSuggestedRequestTitle(value = "", fallback = "") {
+  const source = String(value || fallback || "").trim();
+  if (!source) return "";
+
+  const cleaned = source
+    .replace(/^i\s+(need|want|would like)\s+(a|an|the)?\s*/i, "")
+    .replace(/^help\s+with\s+/i, "")
+    .replace(/[.?!]+$/g, "")
+    .trim();
+  const title = cleaned || source;
+
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
 function Upload({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
+  const descriptionInputRef = useRef(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
+  const [serviceSearch, setServiceSearch] = useState("");
   const [location, setLocation] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
   const [accessNotes, setAccessNotes] = useState("");
@@ -28,6 +52,11 @@ function Upload({ setPage, currentPage }) {
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [assistantDraftMetadata, setAssistantDraftMetadata] = useState(null);
+  const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
+  const [selectedServiceOptionId, setSelectedServiceOptionId] = useState("");
+  const [titleEdited, setTitleEdited] = useState(false);
+  const [descriptionEdited, setDescriptionEdited] = useState(false);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -79,7 +108,104 @@ function Upload({ setPage, currentPage }) {
     { value: "other", label: t("otherService") },
   ];
 
-  const activeGuidance = getRequestHelpGuidance(category, t);
+  useEffect(() => {
+    const draft = readAssistantRequestDraft(localStorage);
+    if (!draft) return;
+
+    const validCategory = categories.some((item) => item.value === draft.category);
+
+    setTitle(draft.title || "");
+    setDescription(draft.description || "");
+    setCategory(validCategory ? draft.category : draft.category ? "other" : "");
+    setCustomCategory(validCategory ? "" : draft.category || "");
+    setServiceSearch(
+      draft.suggestedServiceLabel ||
+        draft.suggestedProjectType ||
+        draft.title ||
+        ""
+    );
+    setSelectedServiceOptionId(draft.service_specialty ? `service:${draft.service_specialty}` : "");
+    setAssistantDraftMetadata(draft);
+    setTitleEdited(Boolean(draft.title));
+    setDescriptionEdited(Boolean(draft.description));
+    clearAssistantRequestDraft(localStorage);
+  }, []);
+
+  useEffect(() => {
+    const textarea = descriptionInputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, assistantDraftMetadata ? 320 : 140)}px`;
+  }, [description, assistantDraftMetadata]);
+
+  const serviceSuggestions = searchRequestServices(serviceSearch, {
+    translate: t,
+    limit: 4,
+  });
+  const serviceSelectorOptions = [
+    ...getRequestIntelligenceServices(t).map((service) => ({
+      value: `service:${service.serviceId}`,
+      label: service.label,
+      groupLabel: service.categoryLabel,
+      requestCategory: service.requestCategory,
+      aliases: service.aliases,
+    })),
+    ...categories.map((item) => ({
+      value: `category:${item.value}`,
+      label: item.label,
+      groupLabel: t("categoryExample"),
+      requestCategory: item.value,
+    })),
+  ];
+  const selectedServiceLabel =
+    serviceSearch ||
+    serviceSelectorOptions.find((option) => option.requestCategory === category)?.label ||
+    categories.find((item) => item.value === category)?.label ||
+    "";
+
+  function handleServiceSearchChange(value) {
+    setServiceSearch(value);
+
+    const [bestMatch] = searchRequestServices(value, { translate: t, limit: 1 });
+    if (bestMatch?.requestCategory) {
+      setCategory(bestMatch.requestCategory);
+      setCustomCategory("");
+      setSelectedServiceOptionId(`service:${bestMatch.serviceId}`);
+    }
+    if (!titleEdited) {
+      setTitle(buildSuggestedRequestTitle(value, bestMatch?.label || ""));
+    }
+    if (!descriptionEdited) {
+      setDescription(value);
+    }
+  }
+
+  function selectSuggestedService(service) {
+    setServiceSearch(service.label);
+    setCategory(service.requestCategory);
+    setCustomCategory("");
+    setSelectedServiceOptionId(`service:${service.serviceId}`);
+    if (!titleEdited) {
+      setTitle(buildSuggestedRequestTitle(service.label));
+    }
+    if (!descriptionEdited && !description.trim()) {
+      setDescription(service.label);
+    }
+  }
+
+  function selectServiceOption(_value, option) {
+    setServiceSearch(option.label);
+    setCategory(option.requestCategory);
+    setCustomCategory("");
+    setSelectedServiceOptionId(option.value);
+    if (!titleEdited) {
+      setTitle(buildSuggestedRequestTitle(option.label));
+    }
+    if (!descriptionEdited && !description.trim()) {
+      setDescription(option.label);
+    }
+  }
 
   function saveHomeownerRequestList(updatedHomeownerRequests) {
     try {
@@ -185,7 +311,7 @@ function Upload({ setPage, currentPage }) {
       }
 
       if (!category) {
-        alert(t("selectServiceCategory"));
+        alert(t("requestMatchRequired"));
         return;
       }
 
@@ -252,6 +378,10 @@ function Upload({ setPage, currentPage }) {
 
           title: title.trim(),
           description: description.trim(),
+          assistantDraft: assistantDraftMetadata,
+          assistantSuggestedProjectType: assistantDraftMetadata?.suggestedProjectType || "",
+          assistantOriginalPrompt: assistantDraftMetadata?.originalPrompt || "",
+          assistantRecommendationText: assistantDraftMetadata?.recommendationText || "",
 
           category: selectedCategory,
           ...requestMatchingFields,
@@ -341,6 +471,9 @@ function Upload({ setPage, currentPage }) {
         setImageUrl("");
         setProjectPhotos([]);
         setPhotoRecords([]);
+        setAssistantDraftMetadata(null);
+        setTitleEdited(false);
+        setDescriptionEdited(false);
 
         setPage("home");
       } else {
@@ -380,6 +513,10 @@ function Upload({ setPage, currentPage }) {
     setImageUrl("");
     setProjectPhotos([]);
     setPhotoRecords([]);
+    setAssistantDraftMetadata(null);
+    setTitleEdited(false);
+    setDescriptionEdited(false);
+    clearAssistantRequestDraft(localStorage);
 
     setPage("home");
   }
@@ -390,33 +527,62 @@ function Upload({ setPage, currentPage }) {
         ←
       </button>
 
-      <div style={heroCard}>
-        <p style={eyebrow}>{t("requestHelp")}</p>
-
-        <h1 style={pageTitle}>{t("newProject")}</h1>
-
-        <p style={pageSubtitle}>{t("newProjectSubtitle")}</p>
-      </div>
-
-      <div style={tipCard}>
-        <strong> {t("uploadTipTitle")}</strong>
-        <p>{t("uploadTipText")}</p>
-      </div>
+      {assistantDraftMetadata && (
+        <div style={preparedRequestBanner}>
+          <span style={preparedRequestOrb} aria-hidden="true">
+            M
+          </span>
+          <strong style={preparedRequestBannerTitle}>
+            {t("requestReviewIntroTitle")}
+          </strong>
+          <p style={preparedRequestBannerText}>
+            {t("requestReviewIntroText")}
+          </p>
+        </div>
+      )}
 
       <div style={cardStyle}>
-        <label style={fieldLabel}>{t("categoryExample")}</label>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
+        <label style={fieldLabel}>{t("requestIntelligencePrompt")}</label>
+        <input
+          placeholder={t("requestIntelligencePlaceholder")}
+          value={serviceSearch}
+          onChange={(event) => handleServiceSearchChange(event.target.value)}
           style={inputStyle}
-        >
-          <option value="">{t("selectServiceCategory")}</option>
-          {categories.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+        />
+
+        {serviceSuggestions.length > 0 && (
+          <div style={serviceSuggestionGrid}>
+            {serviceSuggestions.map((service) => (
+              <button
+                key={service.serviceId}
+                type="button"
+                style={{
+                  ...serviceSuggestionButton,
+                  ...(category === service.requestCategory
+                    ? serviceSuggestionButtonActive
+                    : {}),
+                }}
+                onClick={() => selectSuggestedService(service)}
+              >
+                {service.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={selectedServiceCard}>
+          <span style={selectedServiceLabelText}>{t("requestMatchLabel")}</span>
+          <strong style={selectedServiceValue}>
+            {selectedServiceLabel || t("chooseClosestMatch")}
+          </strong>
+          <button
+            type="button"
+            style={changeServiceButton}
+            onClick={() => setServiceSelectorOpen(true)}
+          >
+            {category ? t("change") : t("chooseClosestMatch")}
+          </button>
+        </div>
 
         {category === "other" && (
           <>
@@ -430,50 +596,39 @@ function Upload({ setPage, currentPage }) {
           </>
         )}
 
-        <div style={aiGuidanceCard}>
-          <div style={aiGuidanceHeading}>
-            <span style={aiGuidanceIcon} aria-hidden="true">
-              {category ? "✓" : "?"}
-            </span>
-            <div>
-              <strong style={aiGuidanceTitle}>{activeGuidance.title}</strong>
-              <p style={aiGuidanceText}>{activeGuidance.description}</p>
-            </div>
-          </div>
-
-          <span style={aiGuidanceExamplesLabel}>
-            {t("requestGuidanceWhatToInclude")}
-          </span>
-          <div style={aiGuidanceExamples}>
-            {activeGuidance.examples.map((example) => (
-              <span key={example} style={aiGuidanceExample}>
-                {example}
-              </span>
-            ))}
-          </div>
-
-          <div style={aiGuidanceNextStep}>
-            <strong>{t("requestGuidanceNextStepLabel")}:</strong>{" "}
-            {activeGuidance.nextStep}
-          </div>
+        <div style={requestReviewIntroCard}>
+          <strong style={requestReviewIntroTitle}>
+            {t("requestReviewIntroTitle")}
+          </strong>
+          <p style={requestReviewIntroText}>
+            {t("requestReviewIntroText")}
+          </p>
         </div>
-
-        <h2 style={requestDetailsHeading}>{t("requestDetailsHeading")}</h2>
 
         <label style={fieldLabel}>{t("projectTitle")}</label>
         <input
           placeholder={t("projectTitlePlaceholder")}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setTitleEdited(true);
+            setTitle(e.target.value);
+          }}
           style={inputStyle}
         />
 
         <label style={fieldLabel}>{t("projectDescription")}</label>
         <textarea
+          ref={descriptionInputRef}
           placeholder={t("projectDescriptionPlaceholder")}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={textareaStyle}
+          onChange={(e) => {
+            setDescriptionEdited(true);
+            setDescription(e.target.value);
+          }}
+          style={{
+            ...textareaStyle,
+            minHeight: assistantDraftMetadata ? "320px" : textareaStyle.minHeight,
+          }}
         />
 
         <label style={fieldLabel}>{t("fullServiceAddress")}</label>
@@ -575,26 +730,39 @@ function Upload({ setPage, currentPage }) {
           </div>
         )}
 
-        <button
-          onClick={handleCreatePost}
-          disabled={creating || uploading}
-          style={{
-            ...primaryButton,
-            background: creating || uploading ? "#999" : "#5b3df5",
-            cursor: creating || uploading ? "not-allowed" : "pointer",
-          }}
-        >
-          {creating ? t("creating") : t("createPost")}
-        </button>
+        <div style={requestActionBar}>
+          <button
+            onClick={handleCreatePost}
+            disabled={creating || uploading}
+            style={{
+              ...primaryButton,
+              background: creating || uploading ? "#999" : "#5b3df5",
+              cursor: creating || uploading ? "not-allowed" : "pointer",
+            }}
+          >
+            {creating ? t("creating") : t("createPost")}
+          </button>
 
-        <button
-          type="button"
-          onClick={handleCancelRequest}
-          style={cancelRequestButton}
-        >
-          {t("cancelRequest")}
-        </button>
+          <button
+            type="button"
+            onClick={handleCancelRequest}
+            style={cancelRequestButton}
+          >
+            {t("cancelRequest")}
+          </button>
+        </div>
       </div>
+
+      <ServiceSelectorSheet
+        open={serviceSelectorOpen}
+        title={t("chooseClosestMatch")}
+        subtitle={t("requestIntelligencePlaceholder")}
+        searchPlaceholder={t("searchServices")}
+        options={serviceSelectorOptions}
+        selectedValues={selectedServiceOptionId ? [selectedServiceOptionId] : []}
+        onSelect={selectServiceOption}
+        onClose={() => setServiceSelectorOpen(false)}
+      />
 
       <BottomNav setPage={setPage} currentPage="upload" />
     </div>
@@ -605,11 +773,16 @@ const pageWrapper = {
   background: "linear-gradient(180deg,#f8f7ff 0%,#eef2ff 100%)",
   minHeight: "100dvh",
   padding:
-    "calc(env(safe-area-inset-top) + 34px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
+    "calc(env(safe-area-inset-top) + 24px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   width: "100%",
   maxWidth: "760px",
+  minWidth: 0,
   margin: "0 auto",
+  overflowX: "hidden",
+  contain: "layout paint",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const backButton = {
@@ -624,7 +797,7 @@ const backButton = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  marginBottom: "18px",
+  marginBottom: "12px",
   boxShadow: "0 8px 20px rgba(15,23,42,0.08)",
   cursor: "pointer",
 };
@@ -636,6 +809,9 @@ const heroCard = {
   padding: "24px 22px",
   marginBottom: "14px",
   boxShadow: "0 14px 32px rgba(91,61,245,0.24)",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowWrap: "anywhere",
 };
 
 const eyebrow = {
@@ -667,16 +843,75 @@ const tipCard = {
   marginBottom: "14px",
   boxShadow: "0 8px 20px rgba(15,23,42,.04)",
   color: "#111827",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+};
+
+const preparedRequestBanner = {
+  position: "relative",
+  background: "rgba(255,255,255,0.82)",
+  border: "1px solid rgba(91,61,245,0.14)",
+  borderRadius: "20px",
+  padding: "14px 14px 14px 56px",
+  marginBottom: "12px",
+  boxShadow: "0 10px 24px rgba(91,61,245,0.08)",
+  maxWidth: "100%",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  backdropFilter: "blur(16px)",
+};
+
+const preparedRequestOrb = {
+  position: "absolute",
+  left: "14px",
+  top: "14px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "50%",
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(91,61,245,0.10)",
+  border: "1px solid rgba(91,61,245,0.14)",
+  color: "#5b3df5",
+  fontSize: "13px",
+  fontWeight: 950,
+};
+
+const preparedRequestBannerTitle = {
+  display: "block",
+  color: "#312e81",
+  fontSize: "14px",
+  fontWeight: 950,
+  marginBottom: "4px",
+};
+
+const preparedRequestBannerText = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: 700,
 };
 
 const cardStyle = {
   background: "rgba(255,255,255,.96)",
   border: "1px solid rgba(124,58,237,.10)",
   borderRadius: "24px",
-  padding: "18px",
+  padding: "16px",
   display: "grid",
-  gap: "10px",
+  gap: "9px",
   boxShadow: "0 12px 28px rgba(15,23,42,.06)",
+  maxWidth: "100%",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  backdropFilter: "blur(14px)",
 };
 
 const fieldLabel = {
@@ -696,12 +931,131 @@ const inputStyle = {
   outline: "none",
   background: "#ffffff",
   color: "#111827",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const serviceSuggestionGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  maxWidth: "100%",
+  minWidth: 0,
+  margin: "-2px 0 6px",
+};
+
+const serviceSuggestionButton = {
+  border: "1px solid rgba(91,61,245,0.12)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.82)",
+  color: "#4b5563",
+  padding: "9px 11px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+};
+
+const serviceSuggestionButtonActive = {
+  background: "rgba(91,61,245,0.11)",
+  borderColor: "rgba(91,61,245,0.32)",
+  color: "#4b32d1",
+};
+
+const selectedServiceCard = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "6px 12px",
+  alignItems: "center",
+  border: "1px solid rgba(91,61,245,0.13)",
+  borderRadius: "18px",
+  background: "rgba(91,61,245,0.05)",
+  padding: "13px",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const selectedServiceLabelText = {
+  gridColumn: "1 / -1",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 950,
+};
+
+const selectedServiceValue = {
+  color: "#111827",
+  fontSize: "15px",
+  lineHeight: 1.25,
+  fontWeight: 950,
+  minWidth: 0,
+  overflowWrap: "normal",
+  wordBreak: "normal",
+};
+
+const changeServiceButton = {
+  border: "1px solid rgba(91,61,245,0.18)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.82)",
+  color: "#5b3df5",
+  padding: "8px 11px",
+  fontSize: "13px",
+  fontWeight: 950,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const requestReviewIntroCard = {
+  display: "grid",
+  gap: "4px",
+  padding: "12px 13px",
+  borderRadius: "16px",
+  border: "1px solid rgba(91,61,245,0.12)",
+  background: "rgba(91,61,245,0.045)",
+  color: "#334155",
+};
+
+const requestReviewIntroTitle = {
+  color: "#312e81",
+  fontSize: "14px",
+  fontWeight: 950,
+};
+
+const requestReviewIntroText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: 750,
+};
+
+const requestActionBar = {
+  position: "sticky",
+  bottom: "calc(78px + env(safe-area-inset-bottom, 0px))",
+  zIndex: 8,
+  display: "grid",
+  gap: "8px",
+  marginTop: "8px",
+  padding: "10px",
+  borderRadius: "18px",
+  border: "1px solid rgba(226,232,240,0.95)",
+  background: "rgba(255,255,255,0.9)",
+  boxShadow: "0 14px 32px rgba(15,23,42,0.10)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
 };
 
 const textareaStyle = {
   ...inputStyle,
-  minHeight: "112px",
-  resize: "none",
+  minHeight: "140px",
+  resize: "vertical",
+  overflowWrap: "anywhere",
+  whiteSpace: "pre-wrap",
+  lineHeight: 1.45,
+  maxHeight: "70dvh",
+  overflowY: "auto",
 };
 
 const propertyManagementFoundationNote = {
@@ -721,12 +1075,16 @@ const aiGuidanceCard = {
   borderRadius: "20px",
   padding: "16px",
   margin: "4px 0 8px",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowWrap: "anywhere",
 };
 
 const aiGuidanceHeading = {
   display: "flex",
   alignItems: "flex-start",
   gap: "11px",
+  minWidth: 0,
 };
 
 const aiGuidanceIcon = {
@@ -757,6 +1115,7 @@ const aiGuidanceText = {
   fontSize: "13px",
   lineHeight: 1.45,
   margin: 0,
+  overflowWrap: "anywhere",
 };
 
 const aiGuidanceExamplesLabel = {
@@ -806,11 +1165,19 @@ const requestDetailsHeading = {
 };
 
 const uploadBox = {
-  border: "1.5px dashed #c4b5fd",
+  border: "1px dashed rgba(91,61,245,0.24)",
   borderRadius: "22px",
-  padding: "22px",
+  padding: "20px",
   textAlign: "center",
-  background: "linear-gradient(135deg,#faf7ff,#ffffff)",
+  background: "rgba(255,255,255,0.68)",
+  maxWidth: "100%",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  backdropFilter: "blur(12px)",
 };
 
 const plusUploadButton = {
@@ -818,7 +1185,7 @@ const plusUploadButton = {
   height: "54px",
   borderRadius: "18px",
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "rgba(91,61,245,0.92)",
   color: "white",
   fontSize: "30px",
   fontWeight: "900",
@@ -848,13 +1215,20 @@ const uploadingText = {
 const previewBox = {
   display: "grid",
   gap: "12px",
+  maxWidth: "100%",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const photoPreviewStrip = {
   display: "flex",
+  flexWrap: "wrap",
   gap: "12px",
-  overflowX: "auto",
+  overflowX: "hidden",
   paddingBottom: "6px",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const photoPreviewItem = {
@@ -920,14 +1294,14 @@ const photoCountText = {
 
 const cancelRequestButton = {
   width: "100%",
-  border: "none",
+  border: "1px solid rgba(148,163,184,0.26)",
   borderRadius: "18px",
-  padding: "15px",
-  background: "#fee2e2",
-  color: "#b91c1c",
+  padding: "13px",
+  background: "rgba(255,255,255,0.64)",
+  color: "#64748b",
   fontWeight: "900",
   fontSize: "15px",
-  marginTop: "10px",
+  marginTop: "8px",
   cursor: "pointer",
 };
 
@@ -935,9 +1309,10 @@ const primaryButton = {
   border: "none",
   color: "white",
   padding: "15px",
-  borderRadius: "16px",
+  borderRadius: "18px",
   fontWeight: "900",
   fontSize: "15px",
+  boxShadow: "0 14px 30px rgba(91,61,245,0.20)",
 };
 
 export default Upload;

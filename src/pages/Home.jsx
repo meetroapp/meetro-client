@@ -18,7 +18,6 @@ import {
   getHomeownerLifecycleStage,
 } from "../utils/homeownerLifecycle";
 import { getHomeownerProjectJourney } from "../utils/homeownerProjectJourney";
-import { isConversationUnreadForRole } from "../utils/conversationUnread";
 import { getHomeownerServiceHistory } from "../utils/homeownerServiceHistory";
 import {
   getStoredProfessionalMatchProfile,
@@ -37,15 +36,20 @@ import {
   canProfessionalReceiveLead,
   getLeadEligibilitySummary,
 } from "../utils/leadEligibility";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
+import {
+  getConversationMetrics,
+  getHomeownerRequestMetrics,
+  getProfessionalWorkMetrics,
+} from "../utils/dashboardMetrics";
 import {
   attachSpotlightPortfolioMedia,
   buildSpotlightProfessionalProfile,
   getEligibleSpotlightBusinesses,
   getSpotlightAvatarUrl,
-  getSpotlightFeaturedProject,
   getSpotlightMediaSourceSummary,
   getSpotlightMediaUrls,
-  getSpotlightMediaForBusiness,
   getSpotlightRequestContexts,
   isNoContextSpotlightSafeBusiness,
 } from "../utils/localSpotlightVisibility";
@@ -92,30 +96,24 @@ function Home({ setPage }) {
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
-  const allHomeownerRequests = JSON.parse(
-    localStorage.getItem("homeownerRequests") || "[]"
-  ).filter((request) => request);
-
-  const activeHomeownerRequests = allHomeownerRequests.filter(
-    (request) =>
-      request.status !== "cancelled" &&
-      request.status !== "closed"
-  );
+  const allHomeownerRequests = getStoredHomeownerRequests().filter((request) => request);
 
   const closurePendingRequests = allHomeownerRequests.filter(
     (request) => request.status === "completed"
   );
 
   const historyRequests = getHomeownerServiceHistory();
+  const homeownerMetrics = getHomeownerRequestMetrics({
+    requests: allHomeownerRequests,
+    history: historyRequests,
+  });
+  const activeHomeownerRequests = homeownerMetrics.activeRequests;
   const conversationRegistry = JSON.parse(
     localStorage.getItem("meetro_conversation_registry") || "[]"
   );
-
-  const unreadWorkflowMessages = conversationRegistry.filter((conversation) => {
-    const conversationId =
-      conversation?.conversationId || conversation?.id || "";
-
-    return conversationId && isConversationUnreadForRole(conversationId, "homeowner", conversation.unread);
+  const homeownerConversationMetrics = getConversationMetrics({
+    registry: conversationRegistry,
+    role: "homeowner",
   });
 
   useEffect(() => {
@@ -144,21 +142,16 @@ function Home({ setPage }) {
 
   const liveHomeownerRequests = getStoredHomeownerRequests();
 
-  const matchingBusinessLeads = liveHomeownerRequests.filter((request) => {
-    const status = String(request.status || "open").toLowerCase();
-
-    if (
-      status.includes("accepted") ||
-      status.includes("completed") ||
-      status.includes("cancelled")
-    ) {
-      return false;
-    }
-
-    return canProfessionalSeeLocalLead(professionalMatchProfile, request);
+  const professionalMetrics = getProfessionalWorkMetrics({
+    homeownerRequests: liveHomeownerRequests,
+    professional: professionalMatchProfile,
   });
 
-  const realBusinessLeadCount = String(matchingBusinessLeads.length);
+  const realBusinessLeadCount = String(professionalMetrics.newLeadCount);
+  const businessUnreadMessageCount = String(
+    getConversationMetrics({ registry: conversationRegistry, role: "business" })
+      .unreadConversationCount
+  );
 
   function toggleLanguage() {
     const nextLanguage = language === "en" ? "es" : "en";
@@ -231,6 +224,17 @@ function Home({ setPage }) {
     openWorkConversationForRequest(request);
   }
 
+  function openActiveEmergencyFromHome(isCompletedReview = false) {
+    if (isCompletedReview) {
+      setPage("emergencyComplete");
+      return;
+    }
+
+    if (!openActiveEmergencyConversation(setPage, "home")) {
+      setPage("emergencyStatus");
+    }
+  }
+
   const spotlightBusinesses = getLocalSpotlightBusinesses();
   const spotlightContexts = getSpotlightRequestContexts([], []);
   const matchedSpotlightBusinesses = getEligibleSpotlightBusinesses(
@@ -261,6 +265,8 @@ function Home({ setPage }) {
     spotlightPortfolioRefresh,
   ]);
 
+  const activeEmergencyInfo = getHomeActiveEmergencyInfo(language);
+
   if (isBusinessMode) {
     return (
       <div className="app-page meetro-responsive-page" style={pageWrapper}>
@@ -277,9 +283,9 @@ function Home({ setPage }) {
 
           <div className="meetro-responsive-grid meetro-grid-4" style={statsGrid}>
             <StatCard title={t("newLeads")} value={realBusinessLeadCount} note={t("live")} />
-            <StatCard title={t("messages")} value="5" note={t("unread")} />
-            <StatCard title={t("profileViews")} value="32" note={t("thisWeek")} />
-            <StatCard title={t("profileScore")} value="92%" note={t("great")} />
+            <StatCard title={t("messages")} value={businessUnreadMessageCount} note={t("unread")} />
+            <StatCard title={t("activeJobs")} value={professionalMetrics.activeWorkCount} note={t("workCenter")} />
+            <StatCard title={t("completedJobs")} value={professionalMetrics.completedJobsCount} note={t("jobHistory")} />
           </div>
         </div>
 
@@ -445,6 +451,37 @@ function Home({ setPage }) {
     <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
       <TopBar language={language} toggleLanguage={toggleLanguage} />
+
+      {activeEmergencyInfo && (
+        <div style={activeEmergencyCard}>
+          <div style={activeEmergencyTop}>
+            <div style={activeEmergencyIcon}>
+              <MeetroIcon
+                name={activeEmergencyInfo.isCompletedReview ? "reviews" : "emergency"}
+                size={22}
+                decorative
+              />
+            </div>
+
+            <div>
+              <strong style={activeEmergencyTitle}>
+                {activeEmergencyInfo.title}
+              </strong>
+
+              <p style={activeEmergencyText}>
+                {activeEmergencyInfo.text}
+              </p>
+            </div>
+          </div>
+
+          <button
+            style={activeEmergencyButton}
+            onClick={() => openActiveEmergencyFromHome(activeEmergencyInfo.isCompletedReview)}
+          >
+            {activeEmergencyInfo.buttonLabel}
+          </button>
+        </div>
+      )}
 
       <section style={homeWorkflowSection}>
         <div style={sectionHeader}>
@@ -620,117 +657,37 @@ function Home({ setPage }) {
             <strong>{t("requestService")}</strong>
           </button>
 
-          <button style={helpActionCard} onClick={() => setPage("emergency")}>
+          <button
+            style={helpActionCard}
+            onClick={() => {
+              if (activeEmergencyInfo) {
+                openActiveEmergencyFromHome(activeEmergencyInfo.isCompletedReview);
+                return;
+              }
+              setPage("emergency");
+            }}
+          >
             <span style={{ ...helpActionIcon, ...helpEmergencyIcon }}>
               <MeetroIcon name="emergency" size={24} decorative />
             </span>
-            <strong>{t("emergencyHelp")}</strong>
+            <strong>
+              {activeEmergencyInfo
+                ? t("manageEmergency", language)
+                : t("emergencyHelp", language)}
+            </strong>
           </button>
 
-          <button style={helpActionCard} onClick={() => setPage("assistant")}>
+          <button
+            style={helpActionCard}
+            onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
+          >
             <span style={helpActionIcon}>
               <MeetroIcon name="aiHelp" size={24} decorative />
             </span>
-            <strong>{t("aiHelp")}</strong>
+            <strong>{t("assistantCompanionAskMeetro", language)}</strong>
           </button>
         </div>
       </section>
-
-      {(() => {
-        const emergencyStatus =
-          localStorage.getItem("emergencyDispatchStatus") || "";
-
-        const emergencyNeedsReview =
-          localStorage.getItem("emergencyNeedsReview") === "true";
-
-        const selectedEmergencyService =
-          localStorage.getItem("selectedEmergencyService") || "";
-
-        const shouldShowEmergencyCard =
-          emergencyStatus &&
-          !["cancelled", "closed"].includes(emergencyStatus) &&
-          (emergencyStatus !== "completed" || emergencyNeedsReview);
-
-        if (!shouldShowEmergencyCard) return null;
-
-        const translatedEmergencyService =
-          language === "es"
-            ? selectedEmergencyService
-                ?.replace("Emergency Plumbing", "Plomería de Emergencia")
-                ?.replace("Emergency Electrical", "Electricista de Emergencia")
-                ?.replace("Roof Leak Repair", "Reparación de Techo")
-                ?.replace("Locksmith", "Cerrajero")
-                ?.replace("Storm Prep Help", "Preparación para Tormentas")
-                ?.replace("Other Emergency", "Otra Emergencia")
-            : selectedEmergencyService;
-
-        const translatedEmergencyStatus =
-          language === "es"
-            ? emergencyStatus
-                ?.replace("pending", "pendiente")
-                ?.replace("accepted", "aceptado")
-                ?.replace("enroute", "en camino")
-                ?.replace("arrived", "llegó")
-                ?.replace("started", "iniciado")
-                ?.replace("completed", "completado")
-            : emergencyStatus;
-
-        const isCompletedReview =
-          emergencyStatus === "completed" && emergencyNeedsReview;
-
-        return (
-          <div style={activeEmergencyCard}>
-            <div style={activeEmergencyTop}>
-              <div style={activeEmergencyIcon}>
-                <MeetroIcon
-                  name={isCompletedReview ? "reviews" : "emergency"}
-                  size={22}
-                  decorative
-                />
-              </div>
-
-              <div>
-                <strong style={activeEmergencyTitle}>
-                  {isCompletedReview
-                    ? language === "es"
-                      ? "Servicio completado"
-                      : "Service completed"
-                    : language === "es"
-                    ? "Emergencia activa"
-                    : "Active emergency"}
-                </strong>
-
-                <p style={activeEmergencyText}>
-                  {translatedEmergencyService || t("emergencyHelp")} •{" "}
-                  {translatedEmergencyStatus}
-                </p>
-              </div>
-            </div>
-
-            <button
-              style={activeEmergencyButton}
-              onClick={() => {
-                if (isCompletedReview) {
-                  setPage("emergencyComplete");
-                  return;
-                }
-
-                if (!openActiveEmergencyConversation(setPage, "home")) {
-                  setPage("emergencyStatus");
-                }
-              }}
-            >
-              {isCompletedReview
-                ? language === "es"
-                  ? "Calificar profesional"
-                  : "Rate professional"
-                : language === "es"
-                ? "Ver progreso"
-                : "View progress"}
-            </button>
-          </div>
-        );
-      })()}
 
       <section style={messagesCompactSection}>
         <button style={messageFocusCard} onClick={() => setPage("messagesInbox")}>
@@ -739,12 +696,12 @@ function Home({ setPage }) {
           </div>
           <div style={{ flex: 1 }}>
             <strong style={messageFocusTitle}>
-              {unreadWorkflowMessages.length > 0
-                ? `${unreadWorkflowMessages.length} ${t("homeMessagesCount", language)}`
+              {homeownerConversationMetrics.unreadConversationCount > 0
+                ? `${homeownerConversationMetrics.unreadConversationCount} ${t("homeMessagesCount", language)}`
                 : t("homeMessagesAllCaughtUp")}
             </strong>
             <p style={messageFocusText}>
-              {unreadWorkflowMessages.length > 0
+              {homeownerConversationMetrics.unreadConversationCount > 0
                 ? t("homeMessagesNeedAttentionText")
                 : t("homeMessagesAllCaughtUpText")}
             </p>
@@ -822,6 +779,93 @@ function QuickCard({ icon, title, text, onClick }) {
       <p style={quickText}>{text}</p>
     </button>
   );
+}
+
+function readHomeJson(key, fallback = {}) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "");
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function translateEmergencyServiceLabel(service = "", language = "en") {
+  const normalized = String(service || "").trim();
+  if (!normalized) return "";
+
+  const serviceKeyMap = {
+    "Emergency Plumbing": "emergencyPlumbing",
+    "Emergency Electrical": "emergencyElectrical",
+    "Roof Leak Repair": "roofLeakRepair",
+    Locksmith: "locksmith",
+    "Storm Prep Help": "stormPrepHelp",
+    "Other Emergency": "otherEmergency",
+  };
+  const key = serviceKeyMap[normalized];
+  return key ? t(key, language) : normalized;
+}
+
+function getHomeEmergencyStatusLabel(status = "", language = "en") {
+  const normalized = String(status || "").trim().toLowerCase();
+  const statusKeys = {
+    pending: "emergencyStatusPending",
+    accepted: "emergencyStatusAccepted",
+    enroute: "emergencyStatusEnroute",
+    arrived: "emergencyStatusArrived",
+    started: "emergencyStatusStarted",
+    completed: "emergencyStatusCompleted",
+  };
+  const key = statusKeys[normalized];
+  return key ? t(key, language) : normalized;
+}
+
+function getHomeActiveEmergencyInfo(language = "en") {
+  const activeEmergencyRecord = readHomeJson("activeEmergencyRecord", {});
+  const emergencyStatus =
+    activeEmergencyRecord.status ||
+    localStorage.getItem("emergencyDispatchStatus") ||
+    "";
+  const normalizedStatus = String(emergencyStatus || "").trim().toLowerCase();
+  const emergencyNeedsReview =
+    localStorage.getItem("emergencyNeedsReview") === "true";
+  const shouldShowEmergencyCard =
+    normalizedStatus &&
+    !["cancelled", "canceled", "closed"].includes(normalizedStatus) &&
+    (normalizedStatus !== "completed" || emergencyNeedsReview);
+
+  if (!shouldShowEmergencyCard) return null;
+
+  const service =
+    activeEmergencyRecord.service ||
+    activeEmergencyRecord.title ||
+    localStorage.getItem("selectedEmergencyService") ||
+    localStorage.getItem("emergencyIssue") ||
+    "";
+  const translatedService = translateEmergencyServiceLabel(service, language);
+  const isCompletedReview =
+    normalizedStatus === "completed" && emergencyNeedsReview;
+  const title = isCompletedReview
+    ? t("homeEmergencyCompletedTitle", language)
+    : t("activeEmergency", language);
+  const statusLabel = getHomeEmergencyStatusLabel(normalizedStatus, language);
+  const activeText = translatedService
+    ? t("homeEmergencyServiceActive", language).replace("{service}", translatedService)
+    : t("homeEmergencyRequestActive", language);
+  const text = isCompletedReview
+    ? t("homeEmergencyCompletionNeedsReview", language)
+    : statusLabel
+    ? `${activeText} • ${statusLabel}`
+    : activeText;
+
+  return {
+    title,
+    text,
+    buttonLabel: isCompletedReview
+      ? t("homeRateProfessional", language)
+      : t("viewEmergencyProgress", language),
+    isCompletedReview,
+  };
 }
 
 function getLocalSpotlightBusinesses() {
@@ -1373,21 +1417,20 @@ function readLocalJsonArray(key) {
 }
 
 function SpotlightCard({ business, language, onViewProfile }) {
-  const name =
-    business.name ||
-    business.business_name ||
-    t("homeLocalBusiness", language);
+  const identity = getBusinessIdentityProjection(business, {
+    fallbackName: t("homeLocalBusiness", language),
+  });
+  const name = identity.businessName || t("homeLocalBusiness", language);
   const category =
-    business.category ||
-    business.business_category ||
+    identity.servicesSummary ||
+    identity.category ||
     t("homeLocalService", language);
   const description =
-    business.bio ||
-    business.description ||
-    business.businessDescription ||
-    business.business_description ||
-    t("homeSpotlightFallbackDescription", language);
-  const featuredProject = getSpotlightFeaturedProject(business);
+    identity.description || t("homeSpotlightFallbackDescription", language);
+  const portfolioProof = getBusinessPortfolioProofProjection(business, {
+    translate: (key) => t(key, language),
+  });
+  const featuredProject = portfolioProof.featuredProject;
   const featuredProjectTitle =
     featuredProject?.title ||
     featuredProject?.name ||
@@ -1423,8 +1466,8 @@ function SpotlightCard({ business, language, onViewProfile }) {
         .replace("{area}", servingArea || t("homeLocalArea", language))
         .replace("{year}", servingSince)
     : "";
-  const logoUrl = getSpotlightAvatarUrl(business);
-  const mediaUrls = getSpotlightMediaForBusiness(business);
+  const logoUrl = identity.imageUrl || getSpotlightAvatarUrl(business);
+  const mediaUrls = portfolioProof.mediaUrls;
   const photoCountLabel =
     mediaUrls.length === 1
       ? t("homeOnePhoto", language)
@@ -1491,6 +1534,7 @@ function ToolCard({ icon, title, text, onClick }) {
 function ProjectCard({ request, language, onClick }) {
   const journey = getHomeownerProjectJourney(request, language);
   const professionalName = journey.professionalName;
+  const actionLabel = getHomeProjectActionLabel(request, journey, language);
 
   return (
     <div style={projectCard}>
@@ -1536,10 +1580,43 @@ function ProjectCard({ request, language, onClick }) {
         }}
       >
         <MeetroIcon name="openExternal" size={16} decorative />
-        {t("openProject", language)}
+        {actionLabel}
       </button>
     </div>
   );
+}
+
+function getHomeProjectActionLabel(request = {}, journey = {}, language = "en") {
+  const stageKey = String(journey.currentStageKey || journey.currentStage || "").toLowerCase();
+  const statusText = String(
+    request.status ||
+      request.workflowStatus ||
+      request.stage ||
+      journey.currentTitle ||
+      ""
+  ).toLowerCase();
+
+  if (/appointment|visit|scheduled/.test(stageKey) || /appointment|visit|scheduled/.test(statusText)) {
+    return t("viewVisit", language);
+  }
+
+  if (/quote|proposal|decision/.test(stageKey) || /quote|proposal/.test(statusText)) {
+    return t("reviewProposal", language);
+  }
+
+  if (/work/.test(stageKey) || /work|progress/.test(statusText)) {
+    return t("continueWork", language);
+  }
+
+  if (/completion|complete/.test(stageKey) || /completion|completed/.test(statusText)) {
+    return t("reviewCompletion", language);
+  }
+
+  if (/history|closed/.test(stageKey) || /history|closed/.test(statusText)) {
+    return t("viewHistory", language);
+  }
+
+  return t("continueConversation", language);
 }
 
 function ActiveRequestDetailsSheet({

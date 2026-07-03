@@ -299,7 +299,7 @@ function EmergencyStatus({ setPage }) {
               : "This emergency request has already been closed."}
           </p>
 
-          <button style={primaryButton} onClick={openEmergencyChat}>
+          <button style={primaryButton} onClick={() => setPage("home")}>
             {t.backHome}
           </button>
         </div>

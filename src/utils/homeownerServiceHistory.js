@@ -64,12 +64,11 @@ export function getCurrentHomeownerIdentity(storage = globalThis.localStorage) {
 
 export function isClosedServiceStatus(status = "") {
   return [
-    "completed",
-    "complete",
     "closed",
     "closure_completed",
     "closure complete",
     "closure verified",
+    "history",
   ].includes(normalized(status));
 }
 
@@ -299,4 +298,3 @@ export function getHomeownerServiceHistory(storage = globalThis.localStorage) {
         new Date(a.completedAt || a.closedAt || 0)
     );
 }
-

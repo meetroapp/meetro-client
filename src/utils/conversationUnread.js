@@ -1,4 +1,4 @@
-import { createNotification } from "./meetroNotifications";
+import { createNotification } from "./meetroNotifications.js";
 
 export function getConversationRegistry() {
   try {
@@ -10,6 +10,56 @@ export function getConversationRegistry() {
   } catch {
     return [];
   }
+}
+
+function getUserSavedHistoryKey(conversationId) {
+  return `meetro_conversation_user_saved_${conversationId}`;
+}
+
+export function isConversationUserSavedToHistory(conversation = {}) {
+  const id = String(conversation.id || conversation.conversationId || "");
+
+  return Boolean(
+    conversation.userSavedToHistory === true ||
+      conversation.user_saved_to_history === true ||
+      (id && localStorage.getItem(getUserSavedHistoryKey(id)) === "true")
+  );
+}
+
+export function saveConversationToUserHistory(conversationId, fallback = {}) {
+  const id = String(conversationId || fallback.id || fallback.conversationId || "");
+
+  if (!id) return getConversationRegistry();
+
+  localStorage.setItem(getUserSavedHistoryKey(id), "true");
+
+  const registry = getConversationRegistry();
+  const existing = registry.find(
+    (item) => String(item.id || item.conversationId || "") === id
+  );
+  const savedAt = new Date().toISOString();
+  const registryItem = {
+    ...(existing || {}),
+    ...fallback,
+    id,
+    conversationId: fallback.conversationId || existing?.conversationId || id,
+    userSavedToHistory: true,
+    user_saved_to_history: true,
+    userSavedToHistoryAt: savedAt,
+    savedToHistorySource: "user",
+    unread: existing?.unread ?? fallback.unread ?? false,
+  };
+
+  const updatedRegistry = [
+    registryItem,
+    ...registry.filter((item) => String(item.id || item.conversationId || "") !== id),
+  ];
+
+  localStorage.setItem("meetro_conversation_registry", JSON.stringify(updatedRegistry));
+  writeUnreadConversationCount(updatedRegistry);
+  window.dispatchEvent(new Event("meetro-messages-updated"));
+
+  return updatedRegistry;
 }
 
 export function getConversationViewerRole(role) {
@@ -50,10 +100,10 @@ export function isConversationUnreadForRole(conversationId, role, fallbackUnread
   return Boolean(fallbackUnread);
 }
 
-export function getUnreadConversationCount(registry = getConversationRegistry()) {
-  const role = getConversationViewerRole();
+export function getUnreadConversationCount(registry = getConversationRegistry(), role) {
+  const viewerRole = getConversationViewerRole(role);
   return registry.filter((item) =>
-    isConversationUnreadForRole(item.id || item.conversationId, role, item.unread)
+    isConversationUnreadForRole(item.id || item.conversationId, viewerRole, item.unread)
   ).length;
 }
 

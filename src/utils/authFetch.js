@@ -1,4 +1,5 @@
 import API_URL from "../api";
+import { getAccountConnectionStateFromAuthResult } from "./accountConnection";
 
 export function clearMeetroSession() {
   const keysToRemove = [
@@ -14,12 +15,23 @@ export function clearMeetroSession() {
     "contractorProfileComplete",
     "businessName",
     "businessCategory",
+    "accountStatus",
+    "accountActive",
+    "accountConnected",
     "activeAccountMode",
     "firstLogin",
     "pendingLoginData",
   ];
 
   keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
+export function announceAccountConnectionIssue(detail = {}) {
+  window.dispatchEvent(
+    new CustomEvent("meetroAccountConnectionIssue", {
+      detail,
+    })
+  );
 }
 
 export function handleAuthExpired(setPage) {
@@ -85,6 +97,13 @@ export async function authFetch(endpoint, options = {}, setPage) {
 
   if (authError) {
     handleAuthExpired(setPage);
+  } else {
+    const accountConnectionState =
+      getAccountConnectionStateFromAuthResult({ response, data });
+
+    if (!accountConnectionState.connected) {
+      announceAccountConnectionIssue(accountConnectionState);
+    }
   }
 
   return { response, data };

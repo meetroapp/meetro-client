@@ -1,14 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
+import ServiceSelectorSheet, {
+  flattenServiceGroups,
+} from "../components/ServiceSelectorSheet";
 import { getLanguage, t } from "../utils/language";
 import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
-  buildProfessionalSpecialtyProfile,
   inferProfessionalSpecialtiesFromLegacyCategories,
 } from "../utils/professionalOnboardingSpecialties";
+import {
+  readBusinessServiceProfile,
+  writeBusinessServiceProfile,
+} from "../utils/businessServiceProfile";
 
 const ONBOARDING_KEY = "meetroProfessionalOnboarding";
 const ONBOARDING_COMPLETED_KEY = "meetroProfessionalOnboardingCompleted";
 const PROFILE_DRAFT_KEY = "meetroProfessionalProfileDraft";
+const SAFE_RETURN_PAGES = new Set([
+  "businessDashboard",
+  "businessCommandCenter",
+  "contractorProfile",
+]);
 
 const radiusOptions = [
   { value: "10 miles", labelKey: "professionalOnboardingRadius10" },
@@ -33,6 +44,30 @@ function readJson(key, fallback = {}) {
   }
 }
 
+function readStorageValue(key, fallback = "") {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorageValue(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Setup remains usable even if WebView storage is temporarily unavailable.
+  }
+}
+
+function removeStorageValue(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore restricted storage cleanup failures.
+  }
+}
+
 function createInitialDraft() {
   const saved = readJson(PROFILE_DRAFT_KEY, {});
   const savedServiceCategories = Array.isArray(saved.serviceCategories)
@@ -43,27 +78,27 @@ function createInitialDraft() {
     : inferProfessionalSpecialtiesFromLegacyCategories(savedServiceCategories);
 
   return {
-    businessName: saved.businessName || localStorage.getItem("businessName") || "",
+    businessName: saved.businessName || readStorageValue("businessName") || "",
     contactName:
       saved.contactName ||
-      localStorage.getItem("businessContactName") ||
-      localStorage.getItem("userName") ||
+      readStorageValue("businessContactName") ||
+      readStorageValue("userName") ||
       "",
     phone:
       saved.phone ||
-      localStorage.getItem("businessPhone") ||
-      localStorage.getItem("emergencyBusinessPhone") ||
+      readStorageValue("businessPhone") ||
+      readStorageValue("emergencyBusinessPhone") ||
       "",
     email:
       saved.email ||
-      localStorage.getItem("businessEmail") ||
-      localStorage.getItem("userEmail") ||
+      readStorageValue("businessEmail") ||
+      readStorageValue("userEmail") ||
       "",
     serviceCategories: savedServiceCategories,
     serviceSpecialties: savedServiceSpecialties,
     otherService: saved.otherService || "",
-    primaryCity: saved.primaryCity || localStorage.getItem("businessPrimaryCity") || "",
-    zipCodes: saved.zipCodes || localStorage.getItem("businessZipCodes") || "",
+    primaryCity: saved.primaryCity || readStorageValue("businessPrimaryCity") || "",
+    zipCodes: saved.zipCodes || readStorageValue("businessZipCodes") || "",
     serviceRadius: saved.serviceRadius || "15 miles",
     customRadius: saved.customRadius || "",
     availability: Array.isArray(saved.availability) ? saved.availability : [],
@@ -72,10 +107,11 @@ function createInitialDraft() {
 
 function ProfessionalOnboarding({ setPage }) {
   const language = getLanguage();
-  const returnPage = localStorage.getItem("meetroProfessionalOnboardingReturnPage") || "";
+  const returnPage = readStorageValue("meetroProfessionalOnboardingReturnPage");
   const savedProgress = readJson(ONBOARDING_KEY, {});
   const [step, setStep] = useState(Number(savedProgress.step || 1));
   const [draft, setDraft] = useState(createInitialDraft);
+  const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
 
   const stepTitles = useMemo(
     () => [
@@ -88,15 +124,22 @@ function ProfessionalOnboarding({ setPage }) {
     ],
     [language]
   );
+  const serviceOptions = useMemo(
+    () => flattenServiceGroups(PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS, t),
+    [language]
+  );
+  const selectedServiceLabels = draft.serviceSpecialties
+    .map((specialty) => serviceOptions.find((option) => option.value === specialty)?.label)
+    .filter(Boolean);
 
   useEffect(() => {
-    localStorage.setItem(PROFILE_DRAFT_KEY, JSON.stringify(draft));
-    localStorage.setItem(
+    writeStorageValue(PROFILE_DRAFT_KEY, JSON.stringify(draft));
+    writeStorageValue(
       ONBOARDING_KEY,
       JSON.stringify({
         step,
-        skipped: localStorage.getItem("meetroProfessionalOnboardingSkipped") === "true",
-        completed: localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true",
+        skipped: readStorageValue("meetroProfessionalOnboardingSkipped") === "true",
+        completed: readStorageValue(ONBOARDING_COMPLETED_KEY) === "true",
         updatedAt: new Date().toISOString(),
       })
     );
@@ -116,15 +159,19 @@ function ProfessionalOnboarding({ setPage }) {
     });
   };
 
+  const getSafeCompletionDestination = () =>
+    SAFE_RETURN_PAGES.has(returnPage) ? returnPage : "contractorProfile";
+
   const goDashboard = () => {
-    localStorage.setItem("activeAccountMode", "business");
-    localStorage.removeItem("meetroProfessionalOnboardingReturnPage");
-    setPage("businessDashboard");
+    writeStorageValue("activeAccountMode", "business");
+    const destination = getSafeCompletionDestination();
+    removeStorageValue("meetroProfessionalOnboardingReturnPage");
+    setPage(destination);
   };
 
   const skipOnboarding = () => {
-    localStorage.setItem("meetroProfessionalOnboardingSkipped", "true");
-    localStorage.setItem(
+    writeStorageValue("meetroProfessionalOnboardingSkipped", "true");
+    writeStorageValue(
       ONBOARDING_KEY,
       JSON.stringify({
         step,
@@ -136,56 +183,66 @@ function ProfessionalOnboarding({ setPage }) {
     goDashboard();
   };
 
-  const completeOnboarding = () => {
-    const specialtyProfile = buildProfessionalSpecialtyProfile(draft);
+  const hasRequiredCompletionData = (serviceProfile) =>
+    Boolean(
+      String(draft.businessName || draft.contactName || draft.phone || draft.email).trim() &&
+        (serviceProfile?.serviceSpecialties?.length > 0 || String(draft.otherService || "").trim()) &&
+        String(draft.primaryCity || draft.zipCodes || draft.serviceRadius).trim() &&
+        draft.availability.length > 0
+    );
 
-    localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
-    localStorage.removeItem("meetroProfessionalOnboardingSkipped");
-    localStorage.setItem("businessName", draft.businessName);
-    localStorage.setItem("businessContactName", draft.contactName);
-    localStorage.setItem("businessPhone", draft.phone);
-    localStorage.setItem("businessEmail", draft.email);
-    localStorage.setItem("businessPrimaryCity", draft.primaryCity);
-    localStorage.setItem("businessZipCodes", draft.zipCodes);
-    localStorage.setItem("businessServiceRadius", draft.serviceRadius);
-    localStorage.setItem("businessAvailability", JSON.stringify(draft.availability));
-    localStorage.setItem(
-      "businessServiceCategories",
-      JSON.stringify(specialtyProfile.serviceCategories)
-    );
-    localStorage.setItem(
-      "businessServiceSpecialties",
-      JSON.stringify(specialtyProfile.serviceSpecialties)
-    );
-    localStorage.setItem(
-      "businessServiceDomains",
-      JSON.stringify(specialtyProfile.serviceDomains)
-    );
-    localStorage.setItem("businessServiceDomain", specialtyProfile.serviceDomain);
-    localStorage.setItem(
-      "businessCategory",
-      specialtyProfile.serviceCategories[0] || draft.otherService || ""
-    );
-    localStorage.setItem(
-      PROFILE_DRAFT_KEY,
-      JSON.stringify({
-        ...draft,
-        serviceCategories: specialtyProfile.serviceCategories,
-        serviceSpecialties: specialtyProfile.serviceSpecialties,
-        serviceDomains: specialtyProfile.serviceDomains,
-        serviceDomain: specialtyProfile.serviceDomain,
-      })
-    );
-    localStorage.setItem(
-      ONBOARDING_KEY,
-      JSON.stringify({
-        step: 6,
-        skipped: false,
-        completed: true,
-        updatedAt: new Date().toISOString(),
-      })
-    );
-    goDashboard();
+  const completeOnboarding = () => {
+    try {
+      writeStorageValue("activeAccountMode", "business");
+      writeStorageValue("businessName", draft.businessName);
+      writeStorageValue("businessContactName", draft.contactName);
+      writeStorageValue("businessPhone", draft.phone);
+      writeStorageValue("businessEmail", draft.email);
+      writeStorageValue("businessPrimaryCity", draft.primaryCity);
+      writeStorageValue("businessZipCodes", draft.zipCodes);
+      writeStorageValue("businessServiceRadius", draft.serviceRadius);
+      writeStorageValue("businessAvailability", JSON.stringify(draft.availability));
+
+      const specialtyProfile = writeBusinessServiceProfile({
+        serviceSpecialties: draft.serviceSpecialties,
+        otherService: draft.otherService,
+        serviceRadius: draft.serviceRadius,
+      });
+      const savedProfile = readBusinessServiceProfile(localStorage);
+
+      if (!hasRequiredCompletionData(savedProfile)) {
+        removeStorageValue(ONBOARDING_COMPLETED_KEY);
+        setStep(2);
+        return;
+      }
+
+      writeStorageValue(
+        PROFILE_DRAFT_KEY,
+        JSON.stringify({
+          ...draft,
+          serviceCategories: specialtyProfile.serviceCategories,
+          serviceSpecialties: specialtyProfile.serviceSpecialties,
+          serviceDomains: specialtyProfile.serviceDomains,
+          serviceDomain: specialtyProfile.serviceDomain,
+        })
+      );
+      writeStorageValue(
+        ONBOARDING_KEY,
+        JSON.stringify({
+          step: 6,
+          skipped: false,
+          completed: true,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      writeStorageValue(ONBOARDING_COMPLETED_KEY, "true");
+      removeStorageValue("meetroProfessionalOnboardingSkipped");
+      goDashboard();
+    } catch (error) {
+      console.error("Meetro professional setup finalization failed", error);
+      removeStorageValue(ONBOARDING_COMPLETED_KEY);
+      setStep(2);
+    }
   };
 
   const completionChecks = [
@@ -215,16 +272,19 @@ function ProfessionalOnboarding({ setPage }) {
             <button type="button" style={backButton} onClick={() => setStep((value) => Math.max(1, value - 1))}>
               {t("back")}
             </button>
-          ) : returnPage === "businessCommandCenter" ? (
+          ) : returnPage === "businessCommandCenter" || returnPage === "contractorProfile" ? (
             <button
               type="button"
               style={backButton}
               onClick={() => {
-                localStorage.removeItem("meetroProfessionalOnboardingReturnPage");
-                setPage("businessCommandCenter");
+                const destination = returnPage;
+                removeStorageValue("meetroProfessionalOnboardingReturnPage");
+                setPage(destination);
               }}
             >
-              {t("businessTools")}
+              {returnPage === "contractorProfile"
+                ? t("businessProfile")
+                : t("businessTools")}
             </button>
           ) : (
             <span />
@@ -269,33 +329,42 @@ function ProfessionalOnboarding({ setPage }) {
             <p style={helperText}>
               {t("professionalOnboardingSpecialtyHelp")}
             </p>
-            <div style={specialtyGroupList}>
-              {PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.map((group) => (
-                <section key={group.domain} style={specialtyGroup}>
-                  <h2 style={specialtyGroupTitle}>{t(group.labelKey)}</h2>
-                  <div style={chipGrid}>
-                    {group.options.map((option) => {
-                      const isSelected = draft.serviceSpecialties.includes(option.value);
-
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={isSelected ? "meetro-selected-card-soft" : ""}
-                          style={isSelected ? selectedChip : chip}
-                          onClick={() =>
-                            toggleArrayValue("serviceSpecialties", option.value)
-                          }
-                        >
-                          {isSelected ? "✓ " : ""}
-                          {t(option.labelKey)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
+            <button
+              type="button"
+              style={servicePickerButton}
+              onClick={() => setServiceSelectorOpen(true)}
+            >
+              {t("chooseService")}
+            </button>
+            <div style={selectedServiceList}>
+              {selectedServiceLabels.length > 0 ? (
+                selectedServiceLabels.map((label) => (
+                  <span key={label} style={selectedServiceChip}>
+                    {label}
+                  </span>
+                ))
+              ) : (
+                <span style={selectedServiceEmpty}>
+                  {t("servicesOfferedEmpty")}
+                </span>
+              )}
             </div>
+            <ServiceSelectorSheet
+              open={serviceSelectorOpen}
+              title={t("servicesOffered")}
+              subtitle={t("servicesOfferedSubtitle")}
+              searchPlaceholder={t("searchServices")}
+              options={serviceOptions}
+              selectedValues={draft.serviceSpecialties}
+              multiple
+              doneLabel={t("professionalOnboardingContinue")}
+              doneDisabled={
+                draft.serviceSpecialties.length === 0 && !draft.otherService.trim()
+              }
+              onToggle={(value) => toggleArrayValue("serviceSpecialties", value)}
+              onDone={() => setStep(4)}
+              onClose={() => setServiceSelectorOpen(false)}
+            />
             <Field
               label={t("professionalOnboardingOtherService")}
               value={draft.otherService}
@@ -577,6 +646,40 @@ const selectedChip = {
   background: "#eef2ff",
   borderColor: "#a5b4fc",
   color: "#4338ca",
+};
+
+const servicePickerButton = {
+  ...secondaryButton,
+  textAlign: "center",
+};
+
+const selectedServiceList = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const selectedServiceChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  maxWidth: "100%",
+  padding: "9px 11px",
+  borderRadius: "999px",
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "13px",
+  lineHeight: 1.25,
+  fontWeight: 900,
+  overflowWrap: "normal",
+  wordBreak: "normal",
+};
+
+const selectedServiceEmpty = {
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: 800,
 };
 
 const toggleList = {

@@ -115,7 +115,7 @@ h6 {
 }
 
 .meetro-assistant-launcher {
-  animation: meetro-assistant-soft-pulse 4.8s ease-in-out infinite;
+  animation: none;
 }
 
 .spotlight-showcase-image {
@@ -130,7 +130,8 @@ h6 {
 
 .meetro-evaluation-notes-open .meetro-assistant-launcher,
 .meetro-quote-builder-open .meetro-assistant-launcher,
-.meetro-work-center-schedule-open .meetro-assistant-launcher {
+.meetro-work-center-schedule-open .meetro-assistant-launcher,
+.messages-focused-flow-open .meetro-assistant-launcher {
   display: none !important;
 }
 
@@ -285,6 +286,16 @@ h6 {
   border: 2px solid rgba(91, 61, 245, 0.78) !important;
   background: rgba(246, 243, 255, 0.92) !important;
   box-shadow: 0 10px 24px rgba(91, 61, 245, 0.14) !important;
+}
+
+@media (max-width: 520px) and (orientation: portrait) {
+  .meetro-job-persistent-context {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    z-index: 12;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
 }
 
 .meetro-selected-badge {
@@ -446,6 +457,17 @@ h6 {
 
   50% {
     filter: drop-shadow(0 0 14px rgba(124, 58, 237, 0.38));
+  }
+}
+
+@keyframes meetroAssistantWakeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

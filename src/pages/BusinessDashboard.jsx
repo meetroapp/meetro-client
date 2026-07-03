@@ -3,7 +3,6 @@ import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
 import { authFetch } from "../utils/authFetch";
-import { getBusinessSchedule, getQuoteHistory } from "../utils/workCenter";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
@@ -14,18 +13,24 @@ import {
 } from "../utils/professionalRequestMatching";
 import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
 import { formatDashboardScheduleItem } from "../utils/businessDashboardScheduleLabels";
+import {
+  getConversationMetrics,
+  getProfessionalWorkMetrics,
+} from "../utils/dashboardMetrics";
+import {
+  readBusinessAvailability,
+  setBusinessAvailability,
+} from "../utils/businessAvailability";
 
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [language, updateLanguage] = useState(getLanguage());
   const [liveUnreadCount, setLiveUnreadCount] = useState(
-    Number(localStorage.getItem("mockUnreadMessages") || 0)
+    getConversationMetrics({ role: "business" }).unreadConversationCount
   );
 
-  const [availableNow, setAvailableNow] = useState(
-    localStorage.getItem("meetroAvailableNow") === "true"
-  );
+  const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
 
   const businessName =
     localStorage.getItem("businessName") ||
@@ -44,22 +49,12 @@ function BusinessDashboard({ setPage }) {
   };
 
   const liveHomeownerRequests = getStoredHomeownerRequests();
+  const professionalMetrics = getProfessionalWorkMetrics({
+    homeownerRequests: liveHomeownerRequests,
+    professional: professionalMatchProfile,
+  });
 
-  const matchingDashboardLeads = liveHomeownerRequests
-    .filter((request) => {
-      const status = String(request.status || "open").toLowerCase();
-
-      if (
-        status.includes("accepted") ||
-        status.includes("completed") ||
-        status.includes("cancelled")
-      ) {
-        return false;
-      }
-
-      return canProfessionalSeeLocalLead(professionalMatchProfile, request);
-    })
-    .slice(0, 3);
+  const matchingDashboardLeads = professionalMetrics.newLeads.slice(0, 3);
 
   const formatLeadTitle = (request) =>
     request.title ||
@@ -82,7 +77,7 @@ function BusinessDashboard({ setPage }) {
 
   useEffect(() => {
     const syncAvailability = () => {
-      setAvailableNow(localStorage.getItem("meetroAvailableNow") === "true");
+      setAvailableNow(readBusinessAvailability());
     };
 
     window.addEventListener("meetroAvailabilityChanged", syncAvailability);
@@ -97,7 +92,7 @@ function BusinessDashboard({ setPage }) {
   useEffect(() => {
     const syncUnreadMessages = () => {
       setLiveUnreadCount(
-        Number(localStorage.getItem("mockUnreadMessages") || 0)
+        getConversationMetrics({ role: "business" }).unreadConversationCount
       );
     };
 
@@ -238,51 +233,15 @@ function BusinessDashboard({ setPage }) {
       dispatchStatus
     );
 
-  const completedJobs = localStorage.getItem("completedJobsCount") || "1";
-  const revenue = localStorage.getItem("totalJobRevenue") || "0";
-
-  const getBusinessSchedule = () => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem("meetro_business_schedule") || "[]"
-      );
-
-      if (Array.isArray(saved) && saved.length > 0) {
-        return saved;
-      }
-    } catch {}
-
-    return [];
-  };
-
-  const businessSchedule = getBusinessSchedule();
-  const todayScheduleCount = businessSchedule.length;
+  const businessSchedule = professionalMetrics.scheduleItems;
+  const todayScheduleCount = professionalMetrics.scheduledJobsCount;
 
   const homeownerRequests =
     getStoredHomeownerRequests();
 
-  const quoteHistory = getQuoteHistory();
-
-  const activeProjectsCount = homeownerRequests.filter(
-    (project) =>
-      ["accepted", "scheduled", "active"].includes(project.status)
-  ).length;
-
-  const pendingQuotesCount = quoteHistory.filter(
-    (quote) =>
-      quote.status === "sent" ||
-      quote.status === "quoted" ||
-      !quote.status
-  ).length;
-
-  const quoteResponseAlertCount = quoteHistory.filter(
-    (quote) =>
-      !quote.movedToActiveAt &&
-      (
-        quote.status === "accepted" ||
-        quote.status === "revision_requested"
-      )
-  ).length;
+  const activeProjectsCount = professionalMetrics.activeWorkCount;
+  const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
+  const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
 
   const scheduleResponseAlertCount = getNotifications().filter(
     (notice) =>
@@ -388,8 +347,7 @@ function BusinessDashboard({ setPage }) {
     openWorkCenterSection("active");
   }
 
-  const unreadMessages = liveUnreadCount ||
-    localStorage.getItem("mockStandardUnreadMessages") || "0";
+  const unreadMessages = liveUnreadCount;
 
   const dashboardText = {
     en: {
@@ -412,18 +370,18 @@ function BusinessDashboard({ setPage }) {
       businessToolsTitle: "Business Tools",
       businessToolsSubtitle: "Run Your Business",
       businessToolsFeatures: ["Profile", "Portfolio", "Pricing", "Invoices", "Contracts", "Reports"],
-      openBusinessTools: "Open Business Tools",
+      openBusinessTools: "Review Business Tools",
       nextUpToday: "Next Up Today",
       nextUpDescription: "Visits, jobs, and appointments that move the day forward.",
-      viewFullSchedule: "View full schedule",
+      viewFullSchedule: "Review Schedule",
       customerLocation: "Customer location",
       quickActions: "Quick Actions",
       allTools: "All tools",
       workCenter: "Work Center",
       workSubtitle: "Active jobs, quotes, and work records.",
-      openWorkCenter: "Open Work Center",
+      openWorkCenter: "Continue Work",
       newLeads: "New Leads Near You",
-      viewAllLeads: "View all leads",
+      viewAllLeads: "Review leads",
       upgradeTitle: "Unlock unlimited homeowner leads",
       upgradeText:
         "Priority placement, unlimited lead access, and verified business visibility.",
@@ -447,20 +405,20 @@ function BusinessDashboard({ setPage }) {
       businessToolsDescription:
         "Perfil, disponibilidad, zonas de servicio, portafolio, reseñas, configuración y soporte del negocio.",
       businessToolsTitle: "Herramientas del Negocio",
-      businessToolsSubtitle: "Administra tu negocio",
+      businessToolsSubtitle: "Revisa tu negocio",
       businessToolsFeatures: ["Perfil", "Portafolio", "Precios", "Facturas", "Contratos", "Reportes"],
-      openBusinessTools: "Abrir Herramientas",
+      openBusinessTools: "Revisar herramientas",
       nextUpToday: "Próximo en agenda",
       nextUpDescription: "Visitas, trabajos y citas que mueven el día.",
-      viewFullSchedule: "Ver agenda",
+      viewFullSchedule: "Revisar agenda",
       customerLocation: "Ubicación del cliente",
       quickActions: "Acciones Rápidas",
       allTools: "Todas",
       workCenter: "Centro de Trabajo",
       workSubtitle: "Trabajos activos, cotizaciones e historial.",
-      openWorkCenter: "Abrir Centro de Trabajo",
+      openWorkCenter: "Continuar trabajo",
       newLeads: "Nuevas Oportunidades Cerca",
-      viewAllLeads: "Ver todos",
+      viewAllLeads: "Revisar oportunidades",
       upgradeTitle: "Desbloquea clientes ilimitados",
       upgradeText:
         "Prioridad, acceso ilimitado a oportunidades y visibilidad verificada.",
@@ -484,20 +442,20 @@ function BusinessDashboard({ setPage }) {
       businessToolsDescription:
         "Profil, disponibilité, zones de service, portfolio, avis, paramètres et support professionnel.",
       businessToolsTitle: "Outils professionnels",
-      businessToolsSubtitle: "Gérer votre activité",
+      businessToolsSubtitle: "Examiner votre activité",
       businessToolsFeatures: ["Profil", "Portfolio", "Prix", "Factures", "Contrats", "Rapports"],
-      openBusinessTools: "Ouvrir les outils",
+      openBusinessTools: "Examiner les outils",
       nextUpToday: "À venir aujourd’hui",
       nextUpDescription: "Visites, travaux et rendez-vous qui font avancer la journée.",
-      viewFullSchedule: "Voir le calendrier",
+      viewFullSchedule: "Examiner le calendrier",
       customerLocation: "Adresse du client",
       quickActions: "Actions rapides",
       allTools: "Tous les outils",
       workCenter: "Centre de travail",
       workSubtitle: "Travaux actifs, devis et dossiers.",
-      openWorkCenter: "Ouvrir le centre de travail",
+      openWorkCenter: "Continuer le travail",
       newLeads: "Nouveaux prospects près de vous",
-      viewAllLeads: "Voir tous les prospects",
+      viewAllLeads: "Examiner les prospects",
       upgradeTitle: "Débloquez des prospects illimités",
       upgradeText:
         "Placement prioritaire, accès illimité aux prospects et visibilité vérifiée.",
@@ -521,20 +479,20 @@ function BusinessDashboard({ setPage }) {
       businessToolsDescription:
         "Perfil, disponibilidade, áreas atendidas, portfólio, avaliações, configurações e suporte do negócio.",
       businessToolsTitle: "Ferramentas do negócio",
-      businessToolsSubtitle: "Gerencie seu negócio",
+      businessToolsSubtitle: "Revise seu negócio",
       businessToolsFeatures: ["Perfil", "Portfólio", "Preços", "Faturas", "Contratos", "Relatórios"],
-      openBusinessTools: "Abrir Ferramentas",
+      openBusinessTools: "Revisar ferramentas",
       nextUpToday: "Próximos de hoje",
       nextUpDescription: "Visitas, trabalhos e compromissos que movem o dia.",
-      viewFullSchedule: "Ver agenda",
+      viewFullSchedule: "Revisar agenda",
       customerLocation: "Local do cliente",
       quickActions: "Ações rápidas",
       allTools: "Todas as ferramentas",
       workCenter: "Centro de trabalho",
       workSubtitle: "Trabalhos ativos, orçamentos e registros.",
-      openWorkCenter: "Abrir Centro de trabalho",
+      openWorkCenter: "Continuar trabalho",
       newLeads: "Novas oportunidades perto de você",
-      viewAllLeads: "Ver todas",
+      viewAllLeads: "Revisar oportunidades",
       upgradeTitle: "Desbloqueie oportunidades ilimitadas",
       upgradeText:
         "Prioridade, acesso ilimitado a oportunidades e visibilidade verificada.",
@@ -620,10 +578,8 @@ function BusinessDashboard({ setPage }) {
           <button
             style={statusItem}
             onClick={() => {
-              const next = !availableNow;
-              localStorage.setItem("meetroAvailableNow", next ? "true" : "false");
+              const next = setBusinessAvailability(!availableNow);
               setAvailableNow(next);
-              window.dispatchEvent(new Event("meetroAvailabilityChanged"));
             }}
           >
             <span style={statusDot(availableNow)}></span>
@@ -677,8 +633,8 @@ function BusinessDashboard({ setPage }) {
                     ? "Revisar cotizaciones"
                     : "Review pending quotes"
                   : language === "es"
-                  ? "Abrir Work Center"
-                  : "Open Work Center"}
+                  ? "Continuar trabajo"
+                  : "Continue Work"}
               </strong>
             </div>
           </div>

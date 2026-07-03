@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getDashboardPageForAccountMode,
+  hasBusinessProfileOwnership,
   isProfessionalSession,
+  saveMeetroSession,
   setActiveAccountMode,
 } from "../src/utils/session.js";
 
@@ -70,4 +72,53 @@ test("dashboard route follows active account mode instead of professional capabi
   assert.equal(getDashboardPageForAccountMode(), "home");
   assert.equal(getDashboardPageForAccountMode("personal"), "home");
   assert.equal(getDashboardPageForAccountMode("business"), "businessDashboard");
+});
+
+test("business profile ownership stays separate from current personal mode", () => {
+  installStorage();
+  localStorage.setItem("activeAccountMode", "personal");
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({
+      id: "business-1",
+      business_name: "Bgone Home Renovation",
+      category: "handyman",
+    })
+  );
+
+  assert.equal(hasBusinessProfileOwnership(), true);
+  assert.equal(isProfessionalSession(), true);
+  assert.equal(setActiveAccountMode("business"), true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "business");
+});
+
+test("saving a session does not erase an existing business profile when user payload is personal", () => {
+  installStorage();
+  localStorage.setItem("activeAccountMode", "personal");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({
+      id: "business-1",
+      business_name: "Bgone Home Renovation",
+      category: "handyman",
+    })
+  );
+
+  const session = saveMeetroSession({
+    token: "token-123",
+    user: {
+      id: "user-1",
+      email: "william@example.com",
+      role: "homeowner",
+      account_type: "homeowner",
+    },
+  });
+
+  assert.equal(session.isProfessional, true);
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "true");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "true");
+  assert.equal(localStorage.getItem("businessName"), "Bgone Home Renovation");
+  assert.equal(localStorage.getItem("businessCategory"), "handyman");
+  assert.equal(setActiveAccountMode("business"), true);
 });

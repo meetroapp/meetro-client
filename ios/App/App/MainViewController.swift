@@ -6,5 +6,6 @@ class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(SpeechRecognition())
+        bridge?.registerPluginInstance(NativeContacts())
     }
 }

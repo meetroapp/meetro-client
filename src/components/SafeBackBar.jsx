@@ -1,11 +1,18 @@
-function SafeBackBar({ setPage, fallback = "home", label = "← Back" }) {
+function SafeBackBar({
+  setPage,
+  fallback = "home",
+  label = "← Back",
+  compact = false,
+}) {
   return (
     <div
       style={{
         position: "relative",
         top: "0",
         zIndex: 9999,
-        padding: "calc(env(safe-area-inset-top) + 12px) 0 14px",
+        padding: compact
+          ? "calc(env(safe-area-inset-top) + 4px) 0 8px"
+          : "calc(env(safe-area-inset-top) + 12px) 0 14px",
         background: "transparent",
         backdropFilter: "none",
         borderBottom: "none",
@@ -16,10 +23,10 @@ function SafeBackBar({ setPage, fallback = "home", label = "← Back" }) {
         style={{
           border: "none",
           background: "#eee7ff",
-          padding: "10px 16px",
+          padding: compact ? "8px 13px" : "10px 16px",
           borderRadius: "999px",
           boxShadow: "0 8px 20px rgba(91,61,245,0.12)",
-          fontSize: "16px",
+          fontSize: compact ? "14px" : "16px",
           fontWeight: "600",
           color: "#5b3df5",
           cursor: "pointer",

@@ -43,6 +43,21 @@ test("completed job Continue Conversation opens the project conversation", () =>
   );
 });
 
+test("completion review actions stay tappable and do not treat reviews as closure approval", () => {
+  assert.match(completedJobDetailsSource, /const confirmCompletion = \(\) =>/);
+  assert.match(completedJobDetailsSource, /onClick=\{confirmCompletion\}/);
+  assert.match(completedJobDetailsSource, /const openResolveTogether = \(\) =>/);
+  assert.match(completedJobDetailsSource, /onClick=\{openResolveTogether\}/);
+  assert.match(completedJobDetailsSource, /id="completion-concern-flow"/);
+  assert.match(completedJobDetailsSource, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.match(completedJobDetailsSource, /zIndex: 10001/);
+  assert.match(completedJobDetailsSource, /touchAction:"manipulation"/);
+  assert.doesNotMatch(
+    completedJobDetailsSource,
+    /completedProject\?\.completionApproved \|\|\s*completedProject\?\.homeownerCompletionApproved \|\|\s*completedProject\?\.reviewSubmitted/
+  );
+});
+
 test("emergency back and chat actions match their destination", () => {
   assert.match(emergencyStatusSource, /onClick=\{\(\) => setPage\("home"\)\}[\s\S]{0,80}\{t\.backHome\}/);
   assert.match(emergencyDispatchSource, /function openEmergencyChat\(\)/);

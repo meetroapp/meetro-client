@@ -11,6 +11,10 @@ import {
   normalizeServiceCategory,
 } from "../utils/professionalRequestMatching";
 import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
+import { searchRequestServices } from "../utils/requestIntelligence";
+import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
+import { getBusinessVerificationProjection } from "../utils/businessVerification";
+import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 
 function Discover({ setPage, currentPage }) {
   const [discoverMode, setDiscoverMode] = useState(
@@ -156,15 +160,34 @@ function Discover({ setPage, currentPage }) {
   const visibleBusinesses =
     !isProfessional && filter !== "all"
       ? businesses.filter((business) =>
-          canProfessionalSeeLocalLead(
-            {
-              ...business,
-              businessCategory:
-                business.category || business.business_category || "",
-              category: business.category || business.business_category || "",
-            },
-            { category: filter }
-          )
+          {
+            const services = getBusinessServicesProjection(business, {
+              translate: (key) => t(key, language),
+            });
+
+            return canProfessionalSeeLocalLead(
+              {
+                ...business,
+                businessCategory:
+                  business.category ||
+                  business.business_category ||
+                  services.categories[0] ||
+                  "",
+                category:
+                  business.category ||
+                  business.business_category ||
+                  services.categories[0] ||
+                  "",
+                serviceSpecialties: services.serviceIds,
+                businessServiceSpecialties: services.serviceIds,
+                serviceCategories: services.categories,
+                businessServiceCategories: services.categories,
+                serviceCapabilities: services.capabilities,
+                businessServiceCapabilities: services.capabilities,
+              },
+              { category: filter }
+            );
+          }
         )
       : businesses;
 
@@ -181,7 +204,12 @@ function Discover({ setPage, currentPage }) {
   ];
 
   function getBusinessDisplayCategory(business = {}) {
+    const services = getBusinessServicesProjection(business, {
+      translate: (key) => t(key, language),
+    });
+
     return (
+      services.shortSummary ||
       business.category ||
       business.business_category ||
       business.serviceCategory ||
@@ -204,16 +232,18 @@ function Discover({ setPage, currentPage }) {
     if (categoryValue === "all") return true;
 
     const normalizedCategory = normalizeServiceCategory(categoryValue);
+    const services = getBusinessServicesProjection(business, {
+      translate: (key) => t(key, language),
+    });
     const fields = [
+      ...services.serviceIds,
+      ...services.categories,
+      ...services.displayLabels,
+      ...services.matchingKeywords,
       business.category,
       business.business_category,
       business.serviceCategory,
       business.primaryCategory,
-      business.specialty,
-      ...(Array.isArray(business.specialties) ? business.specialties : []),
-      ...(Array.isArray(business.serviceSpecialties)
-        ? business.serviceSpecialties
-        : []),
     ];
 
     return fields.some(
@@ -226,7 +256,32 @@ function Discover({ setPage, currentPage }) {
   function businessMatchesSearch(business = {}, query = "") {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return true;
+    const interpretedServices = searchRequestServices(query, {
+      translate: (key) => t(key, language),
+      limit: 3,
+    });
+    const matchesInterpretedService = interpretedServices.some((service) =>
+      canProfessionalSeeLocalLead(
+        {
+          ...business,
+          businessCategory:
+            business.category || business.business_category || "",
+          category: business.category || business.business_category || "",
+        },
+        {
+          category: service.requestCategory,
+          serviceDomain: service.domain,
+          service_specialty: service.serviceId,
+          specialty: service.serviceId,
+        }
+      )
+    );
 
+    if (matchesInterpretedService) return true;
+
+    const services = getBusinessServicesProjection(business, {
+      translate: (key) => t(key, language),
+    });
     const searchableFields = [
       business.name,
       business.business_name,
@@ -245,10 +300,9 @@ function Discover({ setPage, currentPage }) {
       business.status,
       business.bio,
       business.description,
-      ...(Array.isArray(business.specialties) ? business.specialties : []),
-      ...(Array.isArray(business.serviceSpecialties)
-        ? business.serviceSpecialties
-        : []),
+      services.shortSummary,
+      services.publicSummary,
+      ...services.matchingKeywords,
       ...(Array.isArray(business.serviceCities) ? business.serviceCities : []),
     ];
 
@@ -369,17 +423,30 @@ function Discover({ setPage, currentPage }) {
 
   function selectBusiness(business) {
     const businessName = business.name || business.business_name || "";
+    const services = getBusinessServicesProjection(business, {
+      translate: (key) => t(key, language),
+    });
+    const proof = getBusinessPortfolioProofProjection(business, {
+      translate: (key) => t(key, language),
+    });
 
     const selectedBusiness = {
       id: business.id || businessName,
       business_name: businessName,
       name: businessName,
-      category: business.category || "",
+      category: services.shortSummary || business.category || "",
+      serviceSpecialties: services.serviceIds,
+      businessServiceSpecialties: services.serviceIds,
+      serviceCategories: services.categories,
+      businessServiceCategories: services.categories,
+      serviceCapabilities: services.capabilities,
+      businessServiceCapabilities: services.capabilities,
       location: business.location || "",
       bio: business.bio || "",
       imageUrl: business.image_url || business.imageUrl || business.logo || "",
       logo: business.image_url || business.logo || business.imageUrl || "",
-      rating: business.rating || "5.0",
+      rating: proof.averageRating || business.rating || "",
+      reviewCount: proof.reviewCount || business.reviewCount || 0,
       status: getBusinessStatus(business),
       businessStatus: getBusinessStatus(business),
     };
@@ -581,6 +648,12 @@ function Discover({ setPage, currentPage }) {
                 const paused = businessStatus === "paused";
                 const category = getBusinessDisplayCategory(business);
                 const serviceArea = getBusinessServiceArea(business);
+                const verification = getBusinessVerificationProjection(business, {
+                  translate: (key) => t(key, language),
+                });
+                const portfolioProof = getBusinessPortfolioProofProjection(business, {
+                  translate: (key) => t(key, language),
+                });
                 const imageSource =
                   business.image_url ||
                   business.imageUrl ||
@@ -623,7 +696,7 @@ function Discover({ setPage, currentPage }) {
                         </h2>
 
                         <span style={ratingPill}>
-                          ★ {business.rating || t("discoverRatingPending", language)}
+                          ★ {portfolioProof.averageRating || t("discoverRatingPending", language)}
                         </span>
                       </div>
 
@@ -632,7 +705,9 @@ function Discover({ setPage, currentPage }) {
                       </p>
 
                       <div style={businessTrustRow}>
-                        <span style={trustMini}>✓ {t("verified", language)}</span>
+                        <span style={verification.verified ? trustMini : pausedMini}>
+                          ✓ {verification.compactBadgeText}
+                        </span>
 
                         {paused ? (
                           <span style={pausedMini}>

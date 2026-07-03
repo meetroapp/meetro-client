@@ -80,6 +80,24 @@ test("customer conversation identity follows person fallback order", () => {
   assert.equal(identity.initials, "SD");
 });
 
+test("conversation identity accepts projected profile photo aliases", () => {
+  const person = getPersonConversationIdentity({
+    participantName: "Maggie Customer",
+    participantAvatar: "maggie-profile.jpg",
+    avatar: "fallback-avatar.jpg",
+  });
+  const business = getBusinessConversationIdentity({
+    businessName: "Reliable Electric",
+    participantAvatar: "reliable-profile.jpg",
+    logo: "reliable-logo.jpg",
+  });
+
+  assert.equal(person.displayName, "Maggie Customer");
+  assert.equal(person.avatar, "maggie-profile.jpg");
+  assert.equal(business.displayName, "Reliable Electric");
+  assert.equal(business.avatar, "reliable-profile.jpg");
+});
+
 test("emergency and hiring conversations preserve type badge without changing identity", () => {
   const emergency = getConversationParticipantIdentity(
     {
@@ -142,4 +160,3 @@ test("conversation surfaces consume the shared identity projection", () => {
   assert.match(threadSource, /getBusinessConversationIdentity/);
   assert.match(companionSource, /getConversationParticipantIdentity/);
 });
-

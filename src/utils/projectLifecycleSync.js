@@ -27,7 +27,7 @@ const ACTIVE_KEYS = [
   "activeJobLocation",
 ];
 
-const CLOSED_STATES = new Set(["closed", "history"]);
+const CLOSED_STATES = new Set(["closed", "closure_completed", "history"]);
 
 function getDefaultStorage() {
   return typeof localStorage !== "undefined" ? localStorage : null;

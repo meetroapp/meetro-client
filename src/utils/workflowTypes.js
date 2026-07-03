@@ -47,8 +47,8 @@ export function getWorkflowTitle(type, language = "en") {
       es: "Solicitud de pago",
     },
     workflow_completion_closeout: {
-      en: "Project Closeout",
-      es: "Cierre del proyecto",
+      en: "Completion Record",
+      es: "Registro de finalización",
     },
   };
 

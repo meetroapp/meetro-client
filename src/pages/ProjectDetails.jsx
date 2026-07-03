@@ -72,7 +72,7 @@ function ProjectDetails({ setPage, currentPage }) {
     ? "In progress"
     : isProfessionalProject
     ? post?.status || "Active"
-    : "Open Request";
+    : "Request active";
 
   const latestActivity = jobRecords[0] || null;
 
@@ -748,10 +748,10 @@ if (data.post) {
 
             {(isProfessionalProject || isBusinessLeadReviewPage) && (
               <div style={aiSummaryBox}>
-              <div style={aiSummaryIcon}>AI</div>
+              <div style={aiSummaryIcon}>M</div>
 
               <div>
-                <strong>AI Service Summary</strong>
+                <strong>Meetro Service Summary</strong>
 
                 <p>
                   {jobRecords.length === 0

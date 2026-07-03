@@ -22,9 +22,11 @@ import {
 import { mergeConversationMessages } from "../utils/conversationMessages";
 import {
   getConversationRegistry,
+  isConversationUserSavedToHistory,
   markConversationRead,
   markConversationUnread,
   markConversationUnreadForRecipient,
+  saveConversationToUserHistory,
   writeUnreadConversationCount,
 } from "../utils/conversationUnread";
 import {
@@ -38,11 +40,6 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
-
-import {
-  updateMatchingHomeownerRequests,
-  prependProjectTimeline,
-} from "../utils/workflowTimeline";
 
 import {
   getBusinessSchedule,
@@ -61,6 +58,30 @@ import {
 } from "../utils/appointmentReminders";
 import { createNotification } from "../utils/meetroNotifications";
 import { captureConversationOriginContext } from "../utils/conversationOrigin";
+import {
+  getBusinessConversationIdentity,
+  getPersonConversationIdentity,
+} from "../utils/conversationIdentity";
+import RelationshipIdentityPage from "../components/RelationshipIdentityPage";
+import { resolveRelationshipIdentity } from "../utils/relationshipIdentity";
+import {
+  getPersonalProfilePhotoForRecord,
+  getScopedProfilePhoto,
+} from "../utils/profilePhotoScoping";
+import {
+  buildConversationIdentityInput,
+  firstIdentityValue,
+} from "../utils/conversationIdentityInput";
+import {
+  glassActionMenu,
+  glassField,
+  glassNavigationSurface,
+  glassPill,
+  glassSurface,
+  keyboardSafeFlowPage,
+  nativeContactRow,
+  softPageSection,
+} from "../styles/liquidGlass";
 
 const IconBack = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -617,6 +638,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [tenantTicketDraft, setTenantTicketDraft] = useState(null);
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -984,15 +1006,16 @@ useEffect(() => {
   const selectedHomeownerRequestId =
     localStorage.getItem("selectedHomeownerRequestId") || "";
 
-  const firstIdentityValue = (...values) =>
-    values
-      .map((value) => String(value || "").trim())
-      .find(Boolean) || "";
-
   const conversationRegistryItem = getConversationRegistry().find(
     (item) =>
       String(item.id || item.conversationId || "") === String(conversationId)
   );
+  const threadUserSavedToHistory = isConversationUserSavedToHistory({
+    ...(conversationRegistryItem || {}),
+    ...(selectedQuoteRequest || {}),
+    id: conversationId,
+    conversationId,
+  });
 
   const conversationMeta = (() => {
     try {
@@ -1004,186 +1027,55 @@ useEffect(() => {
     }
   })();
 
-  const hiringPositionTitle = firstIdentityValue(
-    conversationRegistryItem?.positionTitle,
-    conversationRegistryItem?.position_title,
-    conversationRegistryItem?.project_title,
-    conversationMeta?.positionTitle,
-    conversationMeta?.projectTitle
-  );
+  const conversationIdentityInput = buildConversationIdentityInput({
+    conversationId,
+    registryEntry: conversationRegistryItem,
+    meta: conversationMeta,
+    selectedConversation,
+    selectedQuoteRequest,
+    selectedHomeownerRequest,
+    selectedContractor: selectedBusiness,
+    activeEmergencyRecord,
+    activeJob: activeJobSnapshot,
+    conversationBusinessName,
+    localFallbacks: {
+      activeConversationId: localStorage.getItem("activeConversationId") || "",
+      activeConversationName: localStorage.getItem("activeConversationName") || "",
+      activeCustomerLocation: localStorage.getItem("activeCustomerLocation") || "",
+      projectLocation: localStorage.getItem("projectLocation") || "",
+      conversationBusinessName: localStorage.getItem("conversationBusinessName") || "",
+      businessName: localStorage.getItem("businessName") || "",
+    },
+  });
 
-  const hiringParticipantName = firstIdentityValue(
-    conversationRegistryItem?.applicantName,
-    conversationRegistryItem?.participantName,
-    conversationRegistryItem?.homeowner_email,
-    conversationMeta?.applicantName,
-    conversationMeta?.participantName,
-    localStorage.getItem("activeConversationName")
-  );
+  const {
+    linkedSelectedConversation: conversationLinkedSelectedConversation,
+    linkedQuoteRequest: conversationLinkedQuoteRequest,
+    linkedHomeownerRequest: conversationLinkedHomeownerRequest,
+    conversationCustomerIdentity,
+    requestCustomerIdentity,
+    resolvedCustomerIdentity,
+    customerProjectionInput,
+    businessProjectionInput,
+    hiring,
+  } = conversationIdentityInput;
 
-  const hiringBusinessName = firstIdentityValue(
-    conversationRegistryItem?.businessName,
-    conversationMeta?.businessName,
-    localStorage.getItem("conversationBusinessName"),
-    localStorage.getItem("businessName")
-  );
+  const hiringPositionTitle = hiring.positionTitle;
+  const hiringParticipantName = hiring.participantName;
+  const hiringBusinessName = hiring.businessName;
 
-  const isConversationLinkedRecord = (record = {}) => {
-    const linkedIds = [
-      record.id,
-      record.conversationId,
-      record.projectConversationId,
-      record.activeConversationId,
-      record.requestId,
-    ]
-      .map((value) => String(value || "").trim())
-      .filter(Boolean);
+  const projectedCustomerConversationIdentity =
+    getPersonConversationIdentity(customerProjectionInput);
 
-    return linkedIds.includes(String(conversationId));
-  };
-
-  const conversationLinkedSelectedConversation =
-    selectedConversation && isConversationLinkedRecord(selectedConversation)
-      ? selectedConversation
-      : null;
-
-  const conversationLinkedQuoteRequest =
-    selectedQuoteRequest && isConversationLinkedRecord(selectedQuoteRequest)
-      ? selectedQuoteRequest
-      : null;
-
-  const conversationLinkedHomeownerRequest =
-    selectedHomeownerRequest && isConversationLinkedRecord(selectedHomeownerRequest)
-      ? selectedHomeownerRequest
-      : null;
-
-  const conversationCustomerIdentity = {
-    name: firstIdentityValue(
-      conversationRegistryItem?.customerName,
-      conversationRegistryItem?.homeownerName,
-      conversationRegistryItem?.homeowner_email,
-      conversationRegistryItem?.customer,
-      conversationRegistryItem?.name,
-      conversationMeta?.customerName,
-      conversationMeta?.homeownerName,
-      conversationMeta?.homeowner_email,
-      conversationLinkedSelectedConversation?.customerName,
-      conversationLinkedSelectedConversation?.homeownerName,
-      conversationLinkedSelectedConversation?.homeowner_email,
-      conversationLinkedSelectedConversation?.customer,
-      conversationLinkedSelectedConversation?.name
-    ),
-    avatar: firstIdentityValue(
-      conversationRegistryItem?.customerAvatar,
-      conversationRegistryItem?.homeownerAvatar,
-      conversationRegistryItem?.avatar,
-      conversationRegistryItem?.profilePhoto,
-      conversationMeta?.customerAvatar,
-      conversationMeta?.avatar,
-      conversationLinkedSelectedConversation?.customerAvatar,
-      conversationLinkedSelectedConversation?.avatar,
-      conversationLinkedSelectedConversation?.profilePhoto
-    ),
-    location: firstIdentityValue(
-      conversationRegistryItem?.customerLocation,
-      conversationRegistryItem?.location,
-      conversationMeta?.customerLocation,
-      conversationMeta?.location,
-      conversationLinkedSelectedConversation?.customerLocation,
-      conversationLinkedSelectedConversation?.location
-    ),
-  };
-
-  const requestCustomerIdentity = {
-    name: firstIdentityValue(
-      conversationLinkedQuoteRequest?.homeownerName,
-      conversationLinkedQuoteRequest?.homeowner_name,
-      conversationLinkedQuoteRequest?.customerName,
-      conversationLinkedQuoteRequest?.homeowner_email,
-      conversationLinkedHomeownerRequest?.homeownerName,
-      conversationLinkedHomeownerRequest?.customerName,
-      conversationLinkedHomeownerRequest?.homeowner_email
-    ),
-    avatar: firstIdentityValue(
-      conversationLinkedQuoteRequest?.customerAvatar,
-      conversationLinkedQuoteRequest?.homeownerAvatar,
-      conversationLinkedQuoteRequest?.avatar,
-      conversationLinkedHomeownerRequest?.customerAvatar,
-      conversationLinkedHomeownerRequest?.homeownerAvatar,
-      conversationLinkedHomeownerRequest?.avatar
-    ),
-    location: firstIdentityValue(
-      conversationLinkedQuoteRequest?.location,
-      conversationLinkedQuoteRequest?.address,
-      conversationLinkedHomeownerRequest?.location,
-      conversationLinkedHomeownerRequest?.address
-    ),
-  };
-
-  const linkedCustomerIdentity = {
-    name: firstIdentityValue(
-      activeJobSnapshot?.conversationId === conversationId
-        ? activeJobSnapshot?.customer
-        : "",
-      localStorage.getItem("activeConversationId") === conversationId
-        ? localStorage.getItem("activeConversationName")
-        : ""
-    ),
-    avatar: "",
-    location: firstIdentityValue(
-      localStorage.getItem("activeConversationId") === conversationId
-        ? localStorage.getItem("activeCustomerLocation")
-        : "",
-      localStorage.getItem("activeConversationId") === conversationId
-        ? localStorage.getItem("projectLocation")
-        : ""
-    ),
-  };
-
-  const resolvedCustomerIdentity = {
-    name:
-      conversationCustomerIdentity.name ||
-      requestCustomerIdentity.name ||
-      linkedCustomerIdentity.name ||
-      "Customer",
-    avatar:
-      conversationCustomerIdentity.avatar ||
-      requestCustomerIdentity.avatar ||
-      linkedCustomerIdentity.avatar ||
-      "",
-    location:
-      conversationCustomerIdentity.location ||
-      requestCustomerIdentity.location ||
-      linkedCustomerIdentity.location ||
-      "",
-  };
-
+  const projectedConversationBusinessIdentity =
+    getBusinessConversationIdentity(businessProjectionInput);
   const conversationBusinessIdentity = {
-    name: firstIdentityValue(
-      conversationRegistryItem?.businessName,
-      conversationRegistryItem?.providerName,
-      conversationMeta?.businessName,
-      conversationLinkedSelectedConversation?.businessName,
-      conversationBusinessName,
-      localStorage.getItem("conversationBusinessName")
-    ),
-    avatar: firstIdentityValue(
-      conversationRegistryItem?.businessAvatar,
-      conversationRegistryItem?.businessLogo,
-      conversationRegistryItem?.logo,
-      conversationMeta?.businessAvatar,
-      conversationMeta?.businessLogo,
-      conversationLinkedSelectedConversation?.businessAvatar,
-      conversationLinkedSelectedConversation?.businessLogo,
-      selectedBusiness?.image_url,
-      selectedBusiness?.logo,
-      selectedBusiness?.imageUrl,
-      selectedBusiness?.profileImage
-    ),
+    name: projectedConversationBusinessIdentity.displayName,
+    avatar: projectedConversationBusinessIdentity.avatar,
   };
 
   const activeCustomerName =
-    activeEmergencyRecord.customerName || resolvedCustomerIdentity.name;
+    activeEmergencyRecord.customerName || projectedCustomerConversationIdentity.displayName;
 
   const activeBusinessName =
     activeEmergencyRecord.businessName ||
@@ -1328,6 +1220,40 @@ useEffect(() => {
     window.location.href = phoneNumber.startsWith("tel:")
       ? phoneNumber
       : `tel:${phoneNumber}`;
+  }
+
+  function textActiveContact() {
+    const phoneNumber = String(activeCallPhone || "").trim();
+
+    if (!phoneNumber) {
+      alert(
+        language === "es"
+          ? "No hay teléfono agregado para este contacto."
+          : "No phone number has been added for this contact."
+      );
+      return;
+    }
+
+    window.location.href = phoneNumber.startsWith("sms:")
+      ? phoneNumber
+      : `sms:${phoneNumber}`;
+  }
+
+  function emailActiveContact() {
+    const email = String(relationshipContactEmail || "").trim();
+
+    if (!email) {
+      alert(
+        language === "es"
+          ? "No hay correo agregado para este contacto."
+          : "No email address has been added for this contact."
+      );
+      return;
+    }
+
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(
+      `Message for ${activeHeaderName}`
+    )}`;
   }
 
   function openRelationshipDetails() {
@@ -1528,18 +1454,783 @@ useEffect(() => {
       ? resolvedCustomerIdentity.location
       : activeLocation;
 
-  const personalProfilePhoto =
-    localStorage.getItem("meetroPersonalProfilePhoto") || "";
+  const relationshipIdentityType = (() => {
+    const labels = {
+      customer: { en: "Customer", es: "Cliente", fr: "Client", "pt-BR": "Cliente" },
+      professional: { en: "Professional", es: "Profesional", fr: "Professionnel", "pt-BR": "Profissional" },
+      vendor: { en: "Vendor", es: "Proveedor", fr: "Fournisseur", "pt-BR": "Fornecedor" },
+      employee: { en: "Employee", es: "Empleado", fr: "Employé", "pt-BR": "Funcionário" },
+      tenant: { en: "Tenant", es: "Inquilino", fr: "Locataire", "pt-BR": "Inquilino" },
+      propertyManager: {
+        en: "Property Manager",
+        es: "Administrador de propiedad",
+        fr: "Gestionnaire immobilier",
+        "pt-BR": "Administrador de propriedade",
+      },
+      business: { en: "Business", es: "Negocio", fr: "Entreprise", "pt-BR": "Empresa" },
+    };
+    const labelFor = (key) => labels[key]?.[language] || labels[key]?.en || labels.customer.en;
+    const rawType = String(
+      conversationRegistryItem?.relationshipType ||
+        conversationRegistryItem?.relationship_type ||
+        conversationMeta?.relationshipType ||
+        selectedConversation?.relationshipType ||
+        selectedQuoteRequest?.relationshipType ||
+        ""
+    ).toLowerCase();
 
-  const businessProfilePhoto =
-    localStorage.getItem("meetroBusinessProfilePhoto") || "";
+    if (rawType.includes("tenant")) return labelFor("tenant");
+    if (rawType.includes("propertymanager") || rawType.includes("property_manager")) {
+      return labelFor("propertyManager");
+    }
+    if (rawType.includes("employee")) return labelFor("employee");
+    if (rawType.includes("vendor")) return labelFor("vendor");
+    if (rawType.includes("professional")) return labelFor("professional");
+    if (rawType.includes("business")) return labelFor("business");
+    if (rawType.includes("customer")) return labelFor("customer");
 
-  const activeLogo =
+    if (isHiringThread) return labelFor("employee");
+    return currentViewerRole === "business" ? labelFor("customer") : labelFor("professional");
+  })();
+  const relationshipIdentityActionLabel = t("viewRelationshipIdentity", language).replace(
+    "{type}",
+    relationshipIdentityType
+  );
+
+  const relationshipDetailSource = {
+    ...conversationRegistryItem,
+    ...conversationMeta,
+    ...conversationLinkedSelectedConversation,
+    ...conversationLinkedHomeownerRequest,
+    ...conversationLinkedQuoteRequest,
+    ...selectedConversation,
+    ...selectedHomeownerRequest,
+    ...selectedQuoteRequest,
+    ...(activeJobSnapshot?.conversationId === conversationId ? activeJobSnapshot : {}),
+  };
+
+  const scopedBusinessProfilePhoto = getScopedProfilePhoto(
+    "business",
+    selectedBusiness || {}
+  );
+  const scopedConversationBusinessPhoto = getScopedProfilePhoto(
+    "business",
+    relationshipDetailSource
+  );
+  const scopedPersonalProfilePhoto = getPersonalProfilePhotoForRecord(
+    relationshipDetailSource
+  );
+
+  const resolvedActiveLogo =
     currentViewerRole === "business"
-      ? resolvedCustomerIdentity.avatar
-      : conversationBusinessIdentity.avatar ||
-        businessProfilePhoto ||
+      ? scopedPersonalProfilePhoto || projectedCustomerConversationIdentity.avatar
+      : scopedConversationBusinessPhoto ||
+        conversationBusinessIdentity.avatar ||
+        scopedBusinessProfilePhoto ||
         "";
+  const threadRelationshipIdentity = resolveRelationshipIdentity({
+    record: relationshipDetailSource,
+    identity: {
+      displayName: activeHeaderName,
+      typeLabel: relationshipIdentityType,
+      avatar: resolvedActiveLogo,
+    },
+    viewerRole: currentViewerRole,
+    isLinked: true,
+    typeLabel: relationshipIdentityType,
+    meta: displayCategory || relationshipIdentityType,
+    location: displayLocation,
+    status: t("relationshipMeetroLinked", language),
+  });
+  const activeLogo = threadRelationshipIdentity.avatar;
+
+  const relationshipContactEmail = firstIdentityValue(
+    relationshipDetailSource.customerEmail,
+    relationshipDetailSource.homeownerEmail,
+    relationshipDetailSource.homeowner_email,
+    relationshipDetailSource.businessEmail,
+    relationshipDetailSource.providerEmail,
+    relationshipDetailSource.email
+  );
+
+  const relationshipStreetAddress = firstIdentityValue(
+    relationshipDetailSource.serviceAddress,
+    relationshipDetailSource.fullServiceAddress,
+    relationshipDetailSource.fullAddress,
+    relationshipDetailSource.address
+  );
+  const relationshipServiceArea = firstIdentityValue(
+    displayLocation,
+    relationshipDetailSource.serviceArea,
+    relationshipDetailSource.service_area,
+    relationshipDetailSource.location,
+    relationshipDetailSource.customerLocation,
+    relationshipDetailSource.customer_location
+  );
+  const relationshipContactLocationFact = relationshipStreetAddress
+    ? {
+        label: t("relationshipAddress", language),
+        value: relationshipStreetAddress,
+        span: "wide",
+      }
+    : {
+        label: t("relationshipServiceArea", language),
+        value: relationshipServiceArea,
+        span: "wide",
+      };
+
+  const relationshipContactRows = [
+    {
+      label: t("relationshipPhone", language),
+      value: activeCallPhone,
+    },
+    {
+      label: t("relationshipEmail", language),
+      value: relationshipContactEmail,
+    },
+    relationshipContactLocationFact,
+  ].filter((item) => String(item.value || "").trim());
+
+  function normalizeSavedContactMatchKey(value = "") {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  function normalizeSavedContactPhone(value = "") {
+    return String(value || "").replace(/[^\d+]/g, "");
+  }
+
+  function getThreadContactScope() {
+    return activeAccountMode === "business" ? "business" : "personal";
+  }
+
+  function getThreadContactProfileId() {
+    const scope = getThreadContactScope();
+
+    if (scope === "business") {
+      return firstIdentityValue(
+        selectedBusiness?.id,
+        selectedBusiness?.businessId,
+        selectedBusiness?.business_id,
+        localStorage.getItem("businessId"),
+        localStorage.getItem("contractorId"),
+        localStorage.getItem("businessName"),
+        localStorage.getItem("companyName")
+      );
+    }
+
+    return firstIdentityValue(
+      localStorage.getItem("userId"),
+      localStorage.getItem("currentUserId"),
+      localStorage.getItem("userEmail"),
+      localStorage.getItem("email"),
+      localStorage.getItem("userName")
+    );
+  }
+
+  function getThreadContactProfileScopeKey() {
+    const scope = getThreadContactScope();
+    const profileId =
+      normalizeSavedContactMatchKey(getThreadContactProfileId()) || "default";
+
+    return `${scope}:${profileId}`;
+  }
+
+  function getSavedContactRecordScope(record = {}) {
+    const scope = normalizeSavedContactMatchKey(
+      firstIdentityValue(
+        record.accountMode,
+        record.account_mode,
+        record.relationshipScope,
+        record.relationship_scope,
+        record.ownerMode,
+        record.owner_mode,
+        record.visibilityScope,
+        record.visibility_scope,
+        record.messageScope,
+        record.message_scope
+      )
+    );
+
+    if (/business|professional|contractor|workcenter|work_center/.test(scope)) {
+      return "business";
+    }
+    if (/personal|homeowner|user|tenantpersonal|tenant_personal/.test(scope)) {
+      return "personal";
+    }
+
+    return "";
+  }
+
+  function getSavedContactProfileScopeKey(record = {}) {
+    return normalizeSavedContactMatchKey(
+      firstIdentityValue(
+        record.contactProfileScopeKey,
+        record.contact_profile_scope_key,
+        record.ownerProfileScopeKey,
+        record.owner_profile_scope_key,
+        record.profileScopeKey,
+        record.profile_scope_key,
+        record.ownerProfileKey,
+        record.owner_profile_key
+      )
+    );
+  }
+
+  function recordMatchesThreadContactScope(record = {}) {
+    const recordScope = getSavedContactRecordScope(record);
+    const targetScope = getThreadContactScope();
+
+    if (!recordScope || recordScope !== targetScope) return false;
+
+    const recordProfileScopeKey = getSavedContactProfileScopeKey(record);
+    const targetProfileScopeKey = normalizeSavedContactMatchKey(
+      getThreadContactProfileScopeKey()
+    );
+
+    if (recordProfileScopeKey || targetProfileScopeKey) {
+      return recordProfileScopeKey === targetProfileScopeKey;
+    }
+
+    return true;
+  }
+
+  function getThreadRelationshipLinkedId(contactType = getSavedThreadContactType()) {
+    const genericLinkedId = firstIdentityValue(
+      relationshipDetailSource.linkedMeetroAccountId,
+      relationshipDetailSource.linked_meetro_account_id,
+      relationshipDetailSource.meetroAccountId,
+      relationshipDetailSource.meetro_account_id
+    );
+    const businessLinkedId = firstIdentityValue(
+      relationshipDetailSource.businessId,
+      relationshipDetailSource.business_id,
+      relationshipDetailSource.professionalId,
+      relationshipDetailSource.professional_id,
+      relationshipDetailSource.providerId,
+      relationshipDetailSource.provider_id,
+      relationshipDetailSource.contractorId,
+      relationshipDetailSource.contractor_id,
+      selectedBusiness?.id
+    );
+    const personLinkedId = firstIdentityValue(
+      relationshipDetailSource.customerId,
+      relationshipDetailSource.customer_id,
+      relationshipDetailSource.homeownerId,
+      relationshipDetailSource.homeowner_id,
+      relationshipDetailSource.userId,
+      relationshipDetailSource.user_id
+    );
+
+    if (["business", "professional", "vendor"].includes(contactType)) {
+      return firstIdentityValue(businessLinkedId, genericLinkedId);
+    }
+    if (["customer", "tenant", "employee", "propertyManager"].includes(contactType)) {
+      return firstIdentityValue(personLinkedId, genericLinkedId);
+    }
+
+    return firstIdentityValue(
+      currentViewerRole === "business" ? personLinkedId : businessLinkedId,
+      genericLinkedId
+    );
+  }
+
+  function getSavedThreadContactRecord() {
+    const contactType = getSavedThreadContactType();
+    const linkedId = normalizeSavedContactMatchKey(
+      getThreadRelationshipLinkedId(contactType)
+    );
+    const email = normalizeSavedContactMatchKey(relationshipContactEmail);
+    const phone = normalizeSavedContactPhone(activeCallPhone);
+    const contactRecords = getConversationRegistry().filter(
+      (record) =>
+        record &&
+        typeof record === "object" &&
+        (record.contactImported === true || record.savedToContacts === true) &&
+        recordMatchesThreadContactScope(record)
+    );
+
+    const getRecordLinkedId = (record = {}) =>
+      normalizeSavedContactMatchKey(
+        firstIdentityValue(
+          record.linkedMeetroAccountId,
+          record.linked_meetro_account_id,
+          record.meetroAccountId,
+          record.meetro_account_id,
+          record.businessId,
+          record.business_id,
+          record.professionalId,
+          record.professional_id,
+          record.providerId,
+          record.provider_id,
+          record.contractorId,
+          record.contractor_id,
+          record.customerId,
+          record.customer_id,
+          record.homeownerId,
+          record.homeowner_id,
+          record.userId,
+          record.user_id
+        )
+      );
+
+    if (linkedId) {
+      const linkedMatch = contactRecords.find(
+        (record) => getRecordLinkedId(record) === linkedId
+      );
+
+      if (linkedMatch) return linkedMatch;
+    }
+
+    return contactRecords.find((record) => {
+      const recordEmail = normalizeSavedContactMatchKey(
+        firstIdentityValue(record.email, record.businessEmail, record.customerEmail)
+      );
+      const recordPhone = normalizeSavedContactPhone(
+        firstIdentityValue(record.phone, record.businessPhone, record.customerPhone)
+      );
+
+      return Boolean(
+        (email && recordEmail && email === recordEmail) ||
+          (phone && recordPhone && phone === recordPhone)
+      );
+    });
+  }
+
+  function getSavedThreadContactType() {
+    const rawType = String(
+      relationshipDetailSource.relationshipType ||
+        relationshipDetailSource.relationship_type ||
+        relationshipIdentityType ||
+        ""
+    ).toLowerCase();
+
+    if (/tenant|inquilino|locataire/.test(rawType)) return "tenant";
+    if (/property/.test(rawType)) return "propertyManager";
+    if (/employee|applicant|hiring/.test(rawType)) return "employee";
+    if (/vendor|supplier|subcontractor|proveedor|fournisseur/.test(rawType)) {
+      return "vendor";
+    }
+    if (/business|empresa|entreprise/.test(rawType)) return "business";
+    if (/customer|cliente|client/.test(rawType)) return "customer";
+
+    return currentViewerRole === "business" ? "customer" : "professional";
+  }
+
+  function getSavedThreadContactNameField(type) {
+    return {
+      business: "businessName",
+      customer: "customerName",
+      employee: "employeeName",
+      propertyManager: "propertyManagerName",
+      tenant: "tenantName",
+      vendor: "vendorName",
+      professional: "professionalName",
+    }[type] || "participantName";
+  }
+
+  function getSavedThreadContactLabel(type) {
+    return {
+      business: "Professional / Business",
+      customer: "Customer",
+      employee: "Employee",
+      propertyManager: "Property Manager",
+      tenant: "Tenant",
+      vendor: "Professional / Business",
+      professional: "Professional / Business",
+    }[type] || "Contact";
+  }
+
+  const savedThreadContactRecord = getSavedThreadContactRecord();
+  const threadRelationshipSavedToContacts = Boolean(savedThreadContactRecord);
+
+  function saveThreadRelationshipToContacts() {
+    const existingRecord = savedThreadContactRecord || getSavedThreadContactRecord();
+    const contactName = firstIdentityValue(
+      threadRelationshipIdentity.displayName,
+      activeHeaderName,
+      activeBusinessName,
+      relationshipDetailSource.businessName,
+      relationshipDetailSource.providerName,
+      relationshipDetailSource.professionalName,
+      relationshipDetailSource.participantName,
+      relationshipDetailSource.customerName,
+      relationshipDetailSource.homeownerName
+    );
+
+    if (!contactName) {
+      setShowThreadMenu(false);
+      setSaveNotice(
+        language === "es"
+          ? "No se encontró un nombre para guardar."
+          : "No contact name was available to save."
+      );
+      setTimeout(() => setSaveNotice(""), 2200);
+      return;
+    }
+
+    const contactType = getSavedThreadContactType();
+    const contactScope = getThreadContactScope();
+    const contactProfileId = getThreadContactProfileId();
+    const contactProfileScopeKey = getThreadContactProfileScopeKey();
+    const linkedId = getThreadRelationshipLinkedId(contactType);
+    const identityField = getSavedThreadContactNameField(contactType);
+    const contactLabel = getSavedThreadContactLabel(contactType);
+    const contactSeed = normalizeSavedContactMatchKey(
+      firstIdentityValue(linkedId, relationshipContactEmail, activeCallPhone, contactName, conversationId)
+    ) || String(Date.now());
+    const relationshipSeed = firstIdentityValue(
+      relationshipDetailSource.relationshipId,
+      relationshipDetailSource.relationship_id,
+      linkedId,
+      `${contactType}:${contactName}`
+    );
+    const savedAt = new Date().toISOString();
+    const linkedIdentityFields = ["business", "professional", "vendor"].includes(contactType)
+      ? {
+          ...(linkedId
+            ? {
+                businessId: linkedId,
+                business_id: linkedId,
+                professionalId: linkedId,
+                professional_id: linkedId,
+                providerId: linkedId,
+                provider_id: linkedId,
+              }
+            : {}),
+          businessPhone: activeCallPhone,
+          providerPhone: activeCallPhone,
+          businessEmail: relationshipContactEmail,
+          providerEmail: relationshipContactEmail,
+        }
+      : {
+          ...(linkedId
+            ? {
+                customerId: linkedId,
+                customer_id: linkedId,
+                homeownerId: linkedId,
+                homeowner_id: linkedId,
+                userId: linkedId,
+                user_id: linkedId,
+              }
+            : {}),
+          customerPhone: activeCallPhone,
+          homeownerPhone: activeCallPhone,
+          customerEmail: relationshipContactEmail,
+          homeownerEmail: relationshipContactEmail,
+        };
+
+    const savedContactRecord = {
+      ...(existingRecord || {}),
+      ...linkedIdentityFields,
+      id:
+        existingRecord?.id ||
+        `saved-contact-${normalizeSavedContactMatchKey(contactProfileScopeKey)}-${contactType}-${contactSeed}`,
+      relationshipId: existingRecord?.relationshipId || relationshipSeed,
+      relationshipType: existingRecord?.relationshipType || contactType,
+      relationshipScope: contactScope,
+      relationship_scope: contactScope,
+      accountMode: contactScope,
+      account_mode: contactScope,
+      ownerProfileType: contactScope,
+      owner_profile_type: contactScope,
+      ownerProfileId: contactProfileId,
+      owner_profile_id: contactProfileId,
+      ownerProfileScopeKey: contactProfileScopeKey,
+      owner_profile_scope_key: contactProfileScopeKey,
+      contactProfileScopeKey,
+      contact_profile_scope_key: contactProfileScopeKey,
+      profileScopeKey: contactProfileScopeKey,
+      profile_scope_key: contactProfileScopeKey,
+      [identityField]: contactName,
+      participantName: contactName,
+      displayName: contactName,
+      project_title: contactName,
+      project_description: "Saved from conversation.",
+      homeowner_email: relationshipContactEmail || contactName,
+      phone: activeCallPhone,
+      email: relationshipContactEmail,
+      address: relationshipStreetAddress,
+      location: relationshipStreetAddress || relationshipServiceArea || displayLocation,
+      serviceArea: relationshipServiceArea,
+      status: "Saved contact",
+      currentWorkStatus: "Saved contact",
+      contactImportType: contactType === "professional" ? "vendor" : contactType,
+      contactImportLabel: contactLabel,
+      contactImported: true,
+      savedToContacts: true,
+      meetroAccountLinked: true,
+      linkedMeetroAccountId: linkedId,
+      sourceConversationId: conversationId,
+      conversation_type: "standard",
+      participantAvatar: activeLogo,
+      profilePhoto: activeLogo,
+      businessProfilePhoto:
+        ["business", "professional", "vendor"].includes(contactType) ? activeLogo : "",
+      businessLogo:
+        ["business", "professional", "vendor"].includes(contactType) ? activeLogo : "",
+      contactPhoto:
+        ["business", "professional", "vendor"].includes(contactType) ? "" : activeLogo,
+      savedAt,
+      updatedAt: savedAt,
+      unread: false,
+    };
+
+    const registry = getConversationRegistry();
+    const updatedRegistry = [
+      savedContactRecord,
+      ...registry.filter((record) => String(record.id) !== String(savedContactRecord.id)),
+    ];
+
+    localStorage.setItem(
+      "meetro_conversation_registry",
+      JSON.stringify(updatedRegistry)
+    );
+    writeUnreadConversationCount(updatedRegistry);
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+
+    setShowThreadMenu(false);
+    setSaveNotice(
+      language === "es"
+        ? `${contactName} se guardó en Contactos.`
+        : `${contactName} was saved to Contacts.`
+    );
+    setTimeout(() => setSaveNotice(""), 2200);
+  }
+
+  const activeProjectStageText = String(
+    activeProjectStage ||
+      relationshipDetailSource.status ||
+      relationshipDetailSource.workflowStage ||
+      relationshipDetailSource.stage ||
+      ""
+  ).toLowerCase();
+
+  const isTerminalRelationshipWork =
+    activeProjectStageText.includes("completed") ||
+    activeProjectStageText.includes("closed") ||
+    activeProjectStageText.includes("archived") ||
+    activeProjectStageText.includes("cancelled") ||
+    activeProjectStageText.includes("deleted");
+
+  const relationshipHasCurrentWork =
+    !isTerminalRelationshipWork &&
+    Boolean(
+      hasActiveEmergencyJob ||
+        isActiveWorkLinkedToConversation ||
+        activeJobSnapshot?.conversationId === conversationId ||
+        conversationLinkedQuoteRequest ||
+        conversationLinkedHomeownerRequest ||
+        messages.some((message) =>
+          ["schedule", "schedule-update", "quote", "workflow_quote"].includes(
+            String(message?.type || message?.workflowType || "").toLowerCase()
+          )
+        )
+    );
+  const relationshipIdentityFactRows = [
+    {
+      label: t("relationshipType", language),
+      value: relationshipIdentityType,
+    },
+    {
+      label: t("relationshipMeetroStatus", language),
+      value: t("relationshipMeetroLinked", language),
+    },
+    {
+      label: t("relationshipPhone", language),
+      value: activeCallPhone,
+    },
+    {
+      label: t("relationshipEmail", language),
+      value: relationshipContactEmail,
+      span: "wide",
+    },
+    relationshipContactLocationFact,
+  ].filter((item) => String(item.value || "").trim());
+
+  const relationshipCurrentWorkItems = relationshipHasCurrentWork
+    ? [
+        {
+          title:
+            activeHeaderProject ||
+            relationshipDetailSource.projectTitle ||
+            relationshipDetailSource.title ||
+            t("project", language),
+          meta: activeProjectStageLabel,
+        },
+      ]
+    : [];
+
+  const relationshipCompletedWorkItems = (() => {
+    const completedRecords = jobRecords
+      .filter((item) => {
+        const value = String(
+          item.status || item.type || item.workflowType || item.title || ""
+        ).toLowerCase();
+
+        return (
+          value.includes("completion") ||
+          value.includes("completed") ||
+          value.includes("closed") ||
+          value.includes("history")
+        );
+      })
+      .slice(0, 3)
+      .map((item) => ({
+        title: item.title || activeHeaderProject || t("project", language),
+        meta: item.subtitle || item.time || "",
+      }));
+
+    if (completedRecords.length > 0) return completedRecords;
+
+    if (!isTerminalRelationshipWork) return [];
+
+    return [
+      {
+        title:
+          activeHeaderProject ||
+          relationshipDetailSource.projectTitle ||
+          relationshipDetailSource.title ||
+          t("project", language),
+        meta: activeProjectStageLabel,
+      },
+    ];
+  })();
+
+  const relationshipInvoiceItems = messages
+    .filter((message) => {
+      const value = String(
+        message?.type || message?.workflowType || message?.documentType || ""
+      ).toLowerCase();
+
+      return (
+        value.includes("invoice") ||
+        value.includes("receipt") ||
+        Boolean(message?.invoice || message?.receipt)
+      );
+    })
+    .slice(-3)
+    .reverse()
+    .map((message) => ({
+      title:
+        message.title ||
+        message.receipt?.service ||
+        message.invoice?.service ||
+        t("documentReceipt", language),
+      meta:
+        message.subtitle ||
+        message.receipt?.total ||
+        message.invoice?.total ||
+        message.time ||
+        "",
+    }));
+
+  const relationshipDocumentItems = [...jobRecords, ...messages]
+    .filter((item) => {
+      const value = String(
+        item?.type || item?.workflowType || item?.documentType || ""
+      ).toLowerCase();
+
+      return (
+        Boolean(item?.imageUrl || item?.fileName) ||
+        value.includes("photo") ||
+        value.includes("scan") ||
+        value.includes("document")
+      );
+    })
+    .slice(0, 4)
+    .map((item) => ({
+      title:
+        item.title ||
+        item.fileName ||
+        item.photoType ||
+        t("relationshipDocument", language),
+      meta: item.subtitle || item.time || item.createdAt || "",
+    }));
+
+  const relationshipMemoryItems = jobRecords.slice(0, 3).map((item) => ({
+    title: item.title || t("relationshipMemory", language),
+    meta: item.subtitle || item.savedAt || item.time || "",
+  }));
+  const relationshipIdentityActions = [
+    {
+      label: t("relationshipMeetroChat", language),
+      primary: true,
+      onClick: () => setShowProfileCard(false),
+    },
+    {
+      label: language === "es" ? "Texto" : "Text",
+      onClick: () => {
+        setShowProfileCard(false);
+        textActiveContact();
+      },
+    },
+    {
+      label: language === "es" ? "Llamar" : "Call",
+      onClick: () => {
+        setShowProfileCard(false);
+        callActiveContact();
+      },
+    },
+    {
+      label: language === "es" ? "Correo" : "Email",
+      onClick: () => {
+        setShowProfileCard(false);
+        emailActiveContact();
+      },
+    },
+    {
+      label: language === "es" ? "Editar / más" : "Edit / More",
+      onClick: () => {
+        setShowProfileCard(false);
+        setShowThreadMenu(true);
+      },
+    },
+  ];
+  const relationshipIdentitySections = [
+    {
+      title: t("relationshipContactInformation", language),
+      empty: t("relationshipNoContactInfoYet", language),
+      items: relationshipContactRows.map((item) => ({
+        title: item.label,
+        meta: item.value,
+      })),
+    },
+    {
+      title: t("relationshipCurrentWork", language),
+      empty: t("relationshipNoCurrentWorkYet", language),
+      items: relationshipCurrentWorkItems,
+    },
+    {
+      title: t("relationshipJobHistory", language),
+      empty: t("relationshipNoCompletedWorkYet", language),
+      items: relationshipCompletedWorkItems,
+    },
+    {
+      title: t("relationshipInvoiceHistory", language),
+      empty: t("relationshipNoInvoicesYet", language),
+      items: relationshipInvoiceItems,
+    },
+    {
+      title: t("relationshipDocuments", language),
+      empty: t("relationshipNoDocumentsYet", language),
+      items: relationshipDocumentItems,
+    },
+    {
+      title: t("relationshipNotes", language),
+      empty: t("relationshipNoNotesYet", language),
+      items: [],
+      span: "wide",
+    },
+    {
+      title: t("relationshipMemory", language),
+      empty: t("relationshipMemoryWillGrow", language),
+      items: relationshipMemoryItems,
+      span: "wide",
+    },
+  ];
 
   useEffect(() => {
     return () => {
@@ -1848,59 +2539,7 @@ useEffect(() => {
       }
     };
 
-    const loadMessages = async () => {
-      const selectedQuoteRequestId =
-        localStorage.getItem("selectedQuoteRequestId") || conversationId;
-
-      if (
-        selectedQuoteRequestId &&
-        !isHiringThread &&
-        !String(selectedQuoteRequestId).startsWith("demo")
-      ) {
-        try {
-          const result = await authFetch(
-            `/messages/${selectedQuoteRequestId}`,
-            {},
-            setPage
-          );
-
-          const backendMessages = result?.data?.messages;
-
-          if (!cancelled && Array.isArray(backendMessages) && backendMessages.length > 0) {
-            const mapped = backendMessages
-              .map(mapBackendMessage)
-              .filter(
-                (message) =>
-                  !isEmergencyThread ||
-                  message.workflowType !== "emergency_request"
-              );
-            let localMessages = [];
-
-            try {
-              const savedMessages = JSON.parse(
-                localStorage.getItem(storageKey) || "[]"
-              );
-              localMessages = Array.isArray(savedMessages) ? savedMessages : [];
-            } catch {
-              localMessages = [];
-            }
-
-            const merged = sanitizeMessagesForConversation(
-              mergeConversationMessages(localMessages, mapped)
-            );
-
-            auditShadowTimeline(merged, "backend-message");
-            setMessages(merged);
-            localStorage.setItem(storageKey, JSON.stringify(merged));
-            markConversationRead(conversationId, {}, currentViewerRole);
-            window.dispatchEvent(new Event("meetro-messages-updated"));
-            return;
-          }
-        } catch (err) {
-          console.error("Failed to load backend messages", err);
-        }
-      }
-
+    const loadLocalMessages = () => {
       const saved = localStorage.getItem(storageKey);
 
       if (saved) {
@@ -1961,17 +2600,92 @@ useEffect(() => {
               localStorage.setItem(storageKey, JSON.stringify(migrated));
             }
           }
+
+          return migrated;
         } catch {
+          const fallbackMessages = isEmergencyThread ? [] : starterMessages;
+
           if (!cancelled) {
-            setMessages(isEmergencyThread ? [] : starterMessages);
+            setMessages(fallbackMessages);
           }
+
+          return fallbackMessages;
         }
-      } else if (!cancelled) {
-        setMessages(isEmergencyThread ? [] : starterMessages);
       }
 
-      markConversationRead(conversationId, {}, currentViewerRole);
-      window.dispatchEvent(new Event("meetro-messages-updated"));
+      const fallbackMessages = isEmergencyThread ? [] : starterMessages;
+
+      if (!cancelled) {
+        setMessages(fallbackMessages);
+      }
+
+      return fallbackMessages;
+    };
+
+    const loadMessages = async () => {
+      const selectedQuoteRequestId =
+        localStorage.getItem("selectedQuoteRequestId") || conversationId;
+      const localMessages = loadLocalMessages();
+      const canFetchBackendMessages =
+        selectedQuoteRequestId &&
+        !isHiringThread &&
+        /^\d+$/.test(String(selectedQuoteRequestId));
+
+      if (canFetchBackendMessages) {
+        try {
+          const result = await authFetch(
+            `/messages/${selectedQuoteRequestId}`,
+            {},
+            setPage
+          );
+
+          const backendMessages = result?.data?.messages;
+
+          if (!cancelled && Array.isArray(backendMessages) && backendMessages.length > 0) {
+            const mapped = backendMessages
+              .map(mapBackendMessage)
+              .filter(
+                (message) =>
+                  !isEmergencyThread ||
+                  message.workflowType !== "emergency_request"
+              );
+            let localMessages = [];
+
+            try {
+              const savedMessages = JSON.parse(
+                localStorage.getItem(storageKey) || "[]"
+              );
+              localMessages = Array.isArray(savedMessages) ? savedMessages : [];
+            } catch {
+              localMessages = [];
+            }
+
+            const merged = sanitizeMessagesForConversation(
+              mergeConversationMessages(localMessages, mapped)
+            );
+
+            auditShadowTimeline(merged, "backend-message");
+            setMessages(merged);
+            localStorage.setItem(storageKey, JSON.stringify(merged));
+            try {
+              markConversationRead(conversationId, {}, currentViewerRole);
+              window.dispatchEvent(new Event("meetro-messages-updated"));
+            } catch {
+              // Backend hydration should never interrupt the visible thread.
+            }
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to load backend messages", err);
+        }
+      }
+
+      try {
+        markConversationRead(conversationId, {}, currentViewerRole);
+        window.dispatchEvent(new Event("meetro-messages-updated"));
+      } catch {
+        // Read receipts and inbox refreshes must never block the active thread.
+      }
     };
 
     loadMessages();
@@ -2084,6 +2798,16 @@ useEffect(() => {
           (conversationType === "business" ? "Saved Business" : "Message"),
         unread: false,
         saved_to_history: existingRegistryItem?.saved_to_history || false,
+        userSavedToHistory:
+          existingRegistryItem?.userSavedToHistory ||
+          existingRegistryItem?.user_saved_to_history ||
+          localStorage.getItem(`meetro_conversation_user_saved_${conversationId}`) === "true",
+        user_saved_to_history:
+          existingRegistryItem?.user_saved_to_history ||
+          existingRegistryItem?.userSavedToHistory ||
+          localStorage.getItem(`meetro_conversation_user_saved_${conversationId}`) === "true",
+        userSavedToHistoryAt: existingRegistryItem?.userSavedToHistoryAt || "",
+        savedToHistorySource: existingRegistryItem?.savedToHistorySource || "",
         conversation_type: conversationType || "standard",
         positionTitle: existingRegistryItem?.positionTitle || hiringPositionTitle,
         positionId: existingRegistryItem?.positionId || conversationMeta?.positionId || "",
@@ -2177,31 +2901,45 @@ useEffect(() => {
 
     setMessages((prev) => {
       const nextMessages = mergeConversationMessages(prev, [messageWithRole]);
-      localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+      } catch (error) {
+        console.warn("Conversation local save failed; message remains visible", error);
+      }
+
       return nextMessages;
     });
 
-    markConversationRead(conversationId, {}, currentViewerRole);
-    markConversationUnreadForRecipient(conversationId, currentViewerRole, {
-      project_title:
-        activeHeaderProject ||
-        "Conversation",
-      project_description:
-        messageWithRole.title ||
-        messageWithRole.text ||
-        "New message",
-      homeowner_email:
-        (isHiringThread ? hiringParticipantName : resolvedCustomerIdentity.name) ||
-        "Contact",
-      conversation_type: conversationType || "standard",
-      positionTitle: isHiringThread ? hiringPositionTitle : "",
-      applicantName: isHiringThread ? hiringParticipantName : "",
-      businessName: isHiringThread ? hiringBusinessName : "",
-      source: isHiringThread ? "hiring_message" : "",
-      saved_to_history: false,
-    });
+    try {
+      markConversationRead(conversationId, {}, currentViewerRole);
+      markConversationUnreadForRecipient(conversationId, currentViewerRole, {
+        project_title:
+          activeHeaderProject ||
+          "Conversation",
+        project_description:
+          messageWithRole.title ||
+          messageWithRole.text ||
+          "New message",
+        homeowner_email:
+          (isHiringThread ? hiringParticipantName : resolvedCustomerIdentity.name) ||
+          "Contact",
+        conversation_type: conversationType || "standard",
+        positionTitle: isHiringThread ? hiringPositionTitle : "",
+        applicantName: isHiringThread ? hiringParticipantName : "",
+        businessName: isHiringThread ? hiringBusinessName : "",
+        source: isHiringThread ? "hiring_message" : "",
+        saved_to_history: false,
+      });
+    } catch (error) {
+      console.warn("Conversation registry update failed; message remains visible", error);
+    }
 
-    window.dispatchEvent(new Event("meetro-messages-updated"));
+    try {
+      window.dispatchEvent(new Event("meetro-messages-updated"));
+    } catch {
+      // Message rendering should not depend on cross-page refresh events.
+    }
 
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -2285,11 +3023,11 @@ useEffect(() => {
             )
           );
         } else {
-          updateMessageStatus(messageWithRole.id, "failed", 0);
+          updateMessageStatus(messageWithRole.id, "sent", 0);
         }
       } catch (err) {
         console.error("Failed to persist message to backend", err);
-        updateMessageStatus(messageWithRole.id, "failed", 0);
+        updateMessageStatus(messageWithRole.id, "sent", 0);
       }
     } else {
       updateMessageStatus(messageWithRole.id, "sent", 400);
@@ -2481,8 +3219,8 @@ useEffect(() => {
       type: "scan",
       sender: "me",
       senderRole: currentViewerRole,
-      text: language === "es" ? "Escaneo de documento" : "Document scan",
-      title: language === "es" ? "Escaneo preparado" : "Scan prepared",
+      text: language === "es" ? "Documento compartido" : "Document shared",
+      title: language === "es" ? "Documento" : "Document",
       subtitle:
         language === "es"
           ? "Permisos, recibos, estimados o notas"
@@ -2495,31 +3233,262 @@ useEffect(() => {
     });
   };
 
+  const sendVideoCard = () => {
+    setShowAttachMenu(false);
+    addOutgoingMessage({
+      id: `video-${Date.now()}`,
+      type: "update",
+      sender: "me",
+      senderRole: currentViewerRole,
+      text: language === "es" ? "Video compartido" : "Video shared",
+      title: language === "es" ? "Video" : "Video",
+      subtitle:
+        language === "es"
+          ? "Video agregado a esta conversación"
+          : "Video added to this conversation",
+      time: getTime(),
+      status: "sending",
+      unsent: false,
+      replyTo: replyingTo,
+      createdAt: Date.now(),
+    });
+  };
+
+  const sendVoiceMessageCard = () => {
+    setShowAttachMenu(false);
+    addOutgoingMessage({
+      id: `voice-${Date.now()}`,
+      type: "update",
+      sender: "me",
+      senderRole: currentViewerRole,
+      text: language === "es" ? "Mensaje de voz compartido" : "Voice message shared",
+      title: language === "es" ? "Mensaje de voz" : "Voice Message",
+      subtitle:
+        language === "es"
+          ? "Nota de voz agregada a esta conversación"
+          : "Voice note added to this conversation",
+      time: getTime(),
+      status: "sending",
+      unsent: false,
+      replyTo: replyingTo,
+      createdAt: Date.now(),
+    });
+  };
+
+  const openWorkCenterHandoff = (section = "active") => {
+    setShowAttachMenu(false);
+    setShowThreadMenu(false);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+    setShowScheduleModal(false);
+    localStorage.setItem("meetroWorkCenterTab", section);
+    localStorage.setItem("activeWorkCenterTab", section);
+    setPage("workCenter");
+  };
+
+  const getChatScheduleHandoffContext = () => {
+    const relationshipId = firstIdentityValue(
+      relationshipDetailSource.relationshipId,
+      relationshipDetailSource.relationship_id,
+      conversationMeta?.relationshipId,
+      conversationRegistryItem?.relationshipId,
+      conversationId
+    );
+    const customerAccountId = firstIdentityValue(
+      relationshipDetailSource.customerId,
+      relationshipDetailSource.customer_id,
+      relationshipDetailSource.homeownerId,
+      relationshipDetailSource.homeowner_id,
+      relationshipDetailSource.customerAccountId,
+      relationshipDetailSource.linkedCustomerId,
+      conversationMeta?.customerId,
+      conversationMeta?.homeownerId
+    );
+    const externalContactId = customerAccountId
+      ? ""
+      : firstIdentityValue(
+          savedThreadContactRecord?.id,
+          relationshipDetailSource.externalContactId,
+          relationshipDetailSource.contactId,
+          relationshipDetailSource.id,
+          conversationRegistryItem?.contactId
+        );
+    const businessId = firstIdentityValue(
+      relationshipDetailSource.businessId,
+      relationshipDetailSource.business_id,
+      relationshipDetailSource.professionalId,
+      relationshipDetailSource.providerId,
+      selectedBusiness?.id,
+      localStorage.getItem("businessId"),
+      localStorage.getItem("contractorId")
+    );
+    const projectTitle = firstIdentityValue(
+      selectedQuoteRequest?.title,
+      selectedQuoteRequest?.projectTitle,
+      selectedHomeownerRequest?.title,
+      selectedHomeownerRequest?.projectTitle,
+      selectedConversation?.projectTitle,
+      selectedConversation?.title,
+      relationshipDetailSource.projectTitle,
+      relationshipDetailSource.title,
+      activeHeaderProject,
+      activeProjectTitle,
+      activeName
+    );
+    const location = firstIdentityValue(
+      relationshipStreetAddress,
+      relationshipServiceArea,
+      displayLocation,
+      activeLocation,
+      activeEmergencyRecord.location,
+      localStorage.getItem("activeCustomerLocation")
+    );
+    const customerName = firstIdentityValue(
+      activeCustomerName,
+      relationshipDetailSource.customerName,
+      relationshipDetailSource.homeownerName,
+      activeHeaderName
+    );
+    const customerPhone = firstIdentityValue(customerCallPhone, activeCallPhone);
+    const isLinkedMeetroCustomer = Boolean(
+      customerAccountId ||
+        relationshipDetailSource.meetroAccountLinked ||
+        relationshipDetailSource.isMeetroUser ||
+        relationshipDetailSource.linkedMeetroAccountId ||
+        conversationRegistryItem?.meetroAccountLinked ||
+        conversationRegistryItem?.isMeetroUser ||
+        selectedConversation?.meetroAccountLinked
+    );
+    const isExplicitExternalContact = Boolean(
+      relationshipDetailSource.isExternalCustomer ||
+        relationshipDetailSource.contactImported ||
+        relationshipDetailSource.savedToContacts ||
+        relationshipDetailSource.externalContactId ||
+        savedThreadContactRecord?.contactImported ||
+        savedThreadContactRecord?.savedToContacts ||
+        externalContactId
+    );
+    const isExternalCustomer = Boolean(
+      !isLinkedMeetroCustomer &&
+        (isExplicitExternalContact ||
+          (!conversationId && (customerPhone || relationshipContactEmail)))
+    );
+
+    return {
+      contextSource: "conversation",
+      appointmentType: isEmergencyThread ? "emergency" : "walkthrough",
+      title: projectTitle
+        ? projectTitle
+        : customerName
+          ? `Visit with ${customerName}`
+          : "Scheduled Visit",
+      customerName,
+      phone: customerPhone,
+      customerPhone,
+      email: relationshipContactEmail || "",
+      customerEmail: relationshipContactEmail || "",
+      address: location,
+      location,
+      requestId:
+        selectedHomeownerRequestId ||
+        selectedQuoteRequest?.requestId ||
+        selectedQuoteRequest?.id ||
+        selectedHomeownerRequest?.requestId ||
+        selectedHomeownerRequest?.id ||
+        "",
+      quoteId: selectedQuoteRequest?.quoteId || selectedQuoteRequest?.id || "",
+      conversationId,
+      relationshipId,
+      customerAccountId,
+      externalContactId,
+      businessId,
+      businessName: activeBusinessName || "",
+      activeAccountMode,
+      activeMode: activeAccountMode,
+      activeRole: currentViewerRole,
+      isExternalCustomer,
+      inviteLink: "https://getmeetro.com",
+      scheduleDedupeKey: [
+        relationshipId || externalContactId || customerAccountId || conversationId,
+        projectTitle,
+      ]
+        .filter(Boolean)
+        .join("|"),
+      services: [projectTitle].filter(Boolean),
+      notes: "",
+    };
+  };
+
+  const handOffChatScheduleToWorkCenter = () => {
+    const handoff = getChatScheduleHandoffContext();
+
+    localStorage.setItem("meetroAssistantSchedulePrefill", JSON.stringify(handoff));
+    localStorage.setItem("meetroChatScheduleHandoff", JSON.stringify(handoff));
+    localStorage.setItem(
+      `meetroChatScheduleHandoff:${conversationId}`,
+      JSON.stringify(handoff)
+    );
+    localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("activeWorkConversationId", conversationId);
+    localStorage.setItem("activeConversationName", handoff.customerName || activeHeaderName || "");
+    localStorage.setItem("activeWorkService", handoff.title || "");
+    localStorage.setItem("activeWorkLocation", handoff.location || "");
+
+    openWorkCenterHandoff("schedule");
+  };
+
+  const openInvoiceBuilderHandoff = () => {
+    setShowAttachMenu(false);
+    setShowThreadMenu(false);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+    setShowScheduleModal(false);
+    localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("activeConversationName", activeName || "");
+    localStorage.setItem("invoiceBuilderReturnPage", "messagesInbox");
+    setPage("invoiceBuilder");
+  };
+
+  const openTenantTicketComposer = () => {
+    openWorkCenterHandoff("active");
+  };
+
+  const updateTenantTicketDraft = (field, value) => {
+    setTenantTicketDraft((current) =>
+      current ? { ...current, [field]: value, notice: "" } : current
+    );
+  };
+
+  const reviewTenantTicketDraft = (event) => {
+    event.preventDefault();
+    if (!tenantTicketDraft) return;
+
+    if (!tenantTicketDraft.propertyUnit.trim() || !tenantTicketDraft.description.trim()) {
+      setTenantTicketDraft((current) =>
+        current
+          ? {
+              ...current,
+              notice: "Add the property/unit and a short description before reviewing.",
+            }
+          : current
+      );
+      return;
+    }
+
+    setTenantTicketDraft((current) =>
+      current ? { ...current, step: "review", notice: "" } : current
+    );
+  };
+
+  const submitTenantTicketDraft = () => {
+    if (!tenantTicketDraft) return;
+    setTenantTicketDraft(null);
+    openWorkCenterHandoff("active");
+  };
+
 
 const sendPaymentCard = () => {
-  setShowAttachMenu(false);
-  addOutgoingMessage({
-    id: `payment-${Date.now()}`,
-    type: "payment",
-    sender: "me",
-    senderRole: currentViewerRole,
-    text:
-      language === "es"
-        ? "Pago solicitado"
-        : "Payment requested",
-    title:
-      language === "es"
-        ? "Solicitud de pago"
-        : "Payment Request",
-    subtitle:
-      language === "es"
-        ? "Factura enviada al cliente"
-        : "Invoice sent to customer",
-    time: getTime(),
-    status: "sending",
-    unsent: false,
-    createdAt: Date.now(),
-  });
+  openInvoiceBuilderHandoff();
 };
 
 
@@ -2530,81 +3499,7 @@ const startWorkflowPhotoUpload = (workflowType) => {
 };
 
   const sendMaterialsCard = () => {
-  const materialsRequest = {
-    id: `materials-approval-${Date.now()}`,
-    type: "workflow_materials_approval",
-    sender: "me",
-    senderRole: currentViewerRole,
-    role: currentViewerRole,
-    text:
-      language === "es"
-        ? "Solicitud de materiales enviada para aprobación."
-        : "Materials request sent for approval.",
-    title:
-      language === "es"
-        ? "Aprobación de materiales"
-        : "Materials Approval",
-    subtitle:
-      language === "es"
-        ? "Revisa quién proveerá los materiales y aprueba para continuar."
-        : "Review who will provide materials and approve to continue.",
-    materials: [
-      {
-        id: "material-pvc",
-        title: language === "es" ? "PVC / conectores" : "PVC / fittings",
-        qty: "1",
-        source: "business",
-      },
-      {
-        id: "material-supplies",
-        title: language === "es" ? "Suministros básicos" : "Basic supplies",
-        qty: "1",
-        source: "business",
-      },
-    ],
-    provider:
-      language === "es"
-        ? "El profesional comprará los materiales"
-        : "Business will purchase materials",
-    status: "pending_materials_approval",
-    requestId:
-      selectedQuoteRequest?.requestId ||
-      selectedQuoteRequest?.id ||
-      conversationId ||
-      "",
-    projectTitle:
-      selectedQuoteRequest?.projectTitle ||
-      selectedQuoteRequest?.title ||
-      activeName ||
-      "Project",
-    time: getTime(),
-    unsent: false,
-    createdAt: Date.now(),
-  };
-
-  addOutgoingMessage(materialsRequest);
-
-  updateMatchingHomeownerRequests(
-    materialsRequest,
-    (request) =>
-      prependProjectTimeline(
-        {
-          ...request,
-          status: "waiting_materials_approval",
-          materialsApprovalPending: true,
-          materialsApprovalRequestedAt: new Date().toISOString(),
-        },
-        {
-          type: "materialsApprovalRequested",
-          label:
-            language === "es"
-              ? "Aprobación de materiales solicitada"
-              : "Materials approval requested",
-        }
-      )
-  );
-
-  setShowAttachMenu(false);
+  openWorkCenterHandoff("active");
 };
 
 
@@ -2780,6 +3675,16 @@ const handleImageUpload = (event) => {
     const normalizedStatus = String(rawStatus).toLowerCase().replace(/\s+/g, "_");
 
     if (
+      message?.isOutdated ||
+      message?.replacedAt ||
+      normalizedStatus.includes("replaced") ||
+      normalizedStatus.includes("outdated") ||
+      normalizedStatus.includes("superseded")
+    ) {
+      return "replaced";
+    }
+
+    if (
       normalizedStatus.includes("confirmed") ||
       normalizedStatus === "customer_confirmed"
     ) {
@@ -2805,6 +3710,9 @@ const handleImageUpload = (event) => {
     if (status === "confirmed") return t("appointmentConfirmed", language);
     if (status === "change_requested") return t("appointmentChangeRequested", language);
     if (status === "cancelled") return t("appointmentCancelled", language);
+    if (status === "replaced") {
+      return language === "es" ? "Horario actualizado" : "Schedule updated";
+    }
     return t("appointmentPendingConfirmation", language);
   };
 
@@ -2842,7 +3750,46 @@ const handleImageUpload = (event) => {
   const isCustomerFacingPendingAppointment = (message) =>
     currentViewerRole !== "business" &&
     message?.type === "schedule" &&
+    !message?.isOutdated &&
+    !message?.replacedAt &&
     getAppointmentConfirmationStatus(message) === "pending_customer_confirmation";
+
+  const getScheduleMessageVisitId = (message = {}) =>
+    firstIdentityValue(
+      message?.schedule?.visitId,
+      message?.visitId,
+      message?.schedule?.id,
+      message?.scheduleId,
+      message?.appointmentId
+    );
+
+  const editScheduleFromMessage = (scheduleMessage = {}) => {
+    if (currentViewerRole !== "business") return;
+
+    const scheduleId = getScheduleMessageVisitId(scheduleMessage);
+    if (!scheduleId) {
+      setSaveNotice(
+        language === "es"
+          ? "No se encontró la visita vinculada para editar."
+          : "No linked visit was found to edit."
+      );
+      setTimeout(() => setSaveNotice(""), 2400);
+      return;
+    }
+
+    setAppointmentDetails(null);
+    setShowThreadMenu(false);
+    setShowAttachMenu(false);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+    localStorage.setItem("meetroScheduleEditId", scheduleId);
+    localStorage.setItem("activeWorkScheduleId", scheduleId);
+    localStorage.setItem("activeConversationId", conversationId);
+    localStorage.setItem("activeWorkConversationId", conversationId);
+    localStorage.setItem("meetroWorkCenterTab", "schedule");
+    localStorage.setItem("activeWorkCenterTab", "schedule");
+    setPage("workCenter");
+  };
 
   const updateScheduleConfirmationStatus = async (scheduleMessage, confirmationStatus) => {
     if (!scheduleMessage?.id) return;
@@ -2850,6 +3797,8 @@ const handleImageUpload = (event) => {
     const updatedAt = new Date().toISOString();
     const isWorkSchedule = isWorkScheduleMessage(scheduleMessage);
     const scheduleId =
+      scheduleMessage.schedule?.visitId ||
+      scheduleMessage.visitId ||
       scheduleMessage.schedule?.id ||
       scheduleMessage.scheduleId ||
       scheduleMessage.appointmentId ||
@@ -2883,12 +3832,42 @@ const handleImageUpload = (event) => {
       customerConfirmationStatus: confirmationStatus,
       confirmationStatus,
       confirmationStatusLabel: statusLabel,
+      status:
+        confirmationStatus === "confirmed"
+          ? isWorkSchedule
+            ? "work_confirmed"
+            : "scheduled"
+          : confirmationStatus === "change_requested"
+          ? "change_requested"
+          : schedule.status,
+      workflowStage:
+        confirmationStatus === "confirmed"
+          ? isWorkSchedule
+            ? "work_scheduled"
+            : "visit_scheduled"
+          : schedule.workflowStage,
       workflowStatus:
         confirmationStatus === "confirmed"
-          ? "appointment_confirmed"
+          ? isWorkSchedule
+            ? "work_confirmed"
+            : "visit_scheduled"
           : confirmationStatus === "change_requested"
           ? "appointment_change_requested"
           : schedule.workflowStatus,
+      nextAction:
+        confirmationStatus === "confirmed" && !isWorkSchedule
+          ? "record_evaluation"
+          : schedule.nextAction,
+      nextResponsibility:
+        confirmationStatus === "confirmed" && !isWorkSchedule
+          ? language === "es"
+            ? "Registrar evaluación"
+            : "Record Evaluation"
+          : schedule.nextResponsibility,
+      evaluationStatus:
+        confirmationStatus === "confirmed" && !isWorkSchedule
+          ? "ready_after_visit"
+          : schedule.evaluationStatus,
       confirmedAt:
         confirmationStatus === "confirmed" ? updatedAt : schedule.confirmedAt,
       changeRequestedAt:
@@ -3053,6 +4032,53 @@ const handleImageUpload = (event) => {
     setPage("messagesInbox");
   };
 
+  const saveChatToHistory = () => {
+    const latestThreadMessage = threadMessages[threadMessages.length - 1] || {};
+    const latestThreadText =
+      latestThreadMessage.text ||
+      latestThreadMessage.content ||
+      latestThreadMessage.title ||
+      "";
+    const fallback = {
+      ...(selectedQuoteRequest || {}),
+      ...(conversationRegistryItem || {}),
+      id: conversationId,
+      conversationId,
+      project_title:
+        activeHeaderProject ||
+        selectedQuoteRequest?.project_title ||
+        selectedQuoteRequest?.projectTitle ||
+        activeHeaderName ||
+        "Conversation",
+      project_description:
+        latestThreadText ||
+        selectedQuoteRequest?.project_description ||
+        selectedQuoteRequest?.projectDescription ||
+        "Saved conversation for future reference.",
+      homeowner_email:
+        activeHeaderName ||
+        selectedQuoteRequest?.homeowner_email ||
+        conversationRegistryItem?.homeowner_email ||
+        "Contact",
+      location:
+        activeLocation ||
+        selectedQuoteRequest?.location ||
+        conversationRegistryItem?.location ||
+        "Saved Contact",
+      conversation_type: conversationType || selectedQuoteRequest?.conversation_type || "standard",
+      unread: false,
+    };
+
+    saveConversationToUserHistory(conversationId, fallback);
+    setShowThreadMenu(false);
+    setSaveNotice(
+      language === "es"
+        ? "Chat guardado en el historial."
+        : "Chat saved to history."
+    );
+    setTimeout(() => setSaveNotice(""), 2200);
+  };
+
   const startReply = (message) => {
     setReplyingTo({
       id: message.id,
@@ -3080,19 +4106,23 @@ const handleImageUpload = (event) => {
 
     setShowThreadMenu(false);
     setShowAttachMenu(false);
-    setChatScheduleForm({
-      appointmentType: "walkthrough",
-      date: new Date().toISOString().slice(0, 10),
-      time: "12:00",
-      title: activeName
-        ? `Visit with ${activeName}`
-        : language === "es"
-        ? "Visita programada"
-        : "Scheduled Visit",
-      location: activeLocation || "",
-      notes: "",
-    });
-    setShowScheduleModal(true);
+    setActiveMessageId(null);
+    setShowMobileSheet(false);
+
+    if (currentViewerRole !== "business") {
+      setSaveNotice(
+        language === "es"
+          ? "La programación la administra el profesional. Puedes escribirle sobre el horario aquí."
+          : "Scheduling is managed by the professional. You can message them about the schedule here."
+      );
+      setTimeout(() => setSaveNotice(""), 2600);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus?.();
+      });
+      return;
+    }
+
+    handOffChatScheduleToWorkCenter();
   };
 
   const buildAppointmentReminderSystemMessage = (schedule, reminderResult) => {
@@ -3274,107 +4304,19 @@ const handleImageUpload = (event) => {
   const saveMessageAsSchedule = async (message) => {
     if (isHiringThread) return;
 
-    const schedule = getBusinessSchedule();
-    const linkedRequestId =
-      selectedHomeownerRequestId ||
-      selectedQuoteRequest?.requestId ||
-      selectedQuoteRequest?.id ||
-      selectedHomeownerRequest?.requestId ||
-      selectedHomeownerRequest?.id ||
-      conversationId;
-    const linkedRequestTitle =
-      selectedQuoteRequest?.title ||
-      selectedQuoteRequest?.projectTitle ||
-      selectedHomeownerRequest?.title ||
-      selectedHomeownerRequest?.projectTitle ||
-      selectedConversation?.projectTitle ||
-      activeProjectTitle ||
-      activeName ||
-      "";
-
-    let newVisit = {
-      id: `schedule-${Date.now()}`,
-      date: new Date().toISOString().slice(0, 10),
-      time: "12:00 PM",
-      title: activeName ? `Visit with ${activeName}` : "Scheduled Visit",
-      location: activeLocation || "Customer location",
-      status: "Scheduled",
-      customerConfirmationStatus: "pending_customer_confirmation",
-      confirmationStatus: "pending_customer_confirmation",
-      conversationId,
-      projectConversationId: conversationId,
-      activeConversationId: conversationId,
-      requestId: linkedRequestId,
-      selectedHomeownerRequestId,
-      customerName: activeCustomerName,
-      homeownerName: activeCustomerName,
-      businessName: activeBusinessName,
-      requestTitle: linkedRequestTitle,
-      projectTitle: linkedRequestTitle,
-      selectedConversation,
-      selectedHomeownerRequest,
-      conversationType,
-      source: "meetro_chat",
-      workflowSource: "meetro_chat_message_schedule",
-      notes: message?.text || "",
-      createdAt: new Date().toISOString(),
-    };
-
-    const reminderResult = await scheduleAppointmentReminderNotifications(newVisit, {
-      viewerRole: "professional",
-      language,
-    });
-
-    newVisit = reminderResult.appointment || newVisit;
-
-    if (reminderResult.permissionDenied) {
-      setAppointmentReminderNotice({
-        context: "conversation",
-        message:
-          language === "es"
-            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
-            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
-      });
-    } else {
-      setAppointmentReminderNotice(null);
+    if (currentViewerRole !== "business") {
+      setSaveNotice(
+        language === "es"
+          ? "La programación la administra el profesional. Puedes escribirle sobre el horario aquí."
+          : "Scheduling is managed by the professional. You can message them about the schedule here."
+      );
+      setTimeout(() => setSaveNotice(""), 2600);
+      setActiveMessageId(null);
+      setShowMobileSheet(false);
+      return;
     }
 
-    saveBusinessSchedule([newVisit, ...schedule]);
-
-    const scheduleMessage = {
-      id: Date.now(),
-      sender: "business",
-      role: "business",
-      type: "schedule",
-      conversationId,
-      workflowSource: "meetro_chat_message_schedule",
-      text:
-        language === "es"
-          ? ` Mensaje guardado como visita programada para hoy a las ${getDisplayScheduleTime(newVisit.time)}.`
-          : ` Message saved as a scheduled visit for today at ${getDisplayScheduleTime(newVisit.time)}.`,
-      schedule: newVisit,
-      time: formatMessageTime(new Date()),
-      createdAt: new Date().toISOString(),
-    };
-    const reminderSystemMessage = buildAppointmentReminderSystemMessage(
-      newVisit,
-      reminderResult
-    );
-    const messagesToAdd = reminderSystemMessage
-      ? [scheduleMessage, reminderSystemMessage]
-      : [scheduleMessage];
-
-    const storageKey = `meetro_conversation_${conversationId}`;
-    const existingMessages = JSON.parse(
-      localStorage.getItem(storageKey) || "[]"
-    );
-
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify([...existingMessages, ...messagesToAdd])
-    );
-
-    window.dispatchEvent(new Event("meetro-messages-updated"));
+    handOffChatScheduleToWorkCenter();
     setActiveMessageId(null);
     setShowMobileSheet(false);
   };
@@ -3605,7 +4547,8 @@ const handleImageUpload = (event) => {
 
           <button
             style={avatarProfileButton}
-            onClick={() => setShowProfileCard(true)}
+            aria-label={t("openRelationshipDetails", language)}
+            onClick={openRelationshipDetails}
           >
             <div style={avatar}>
               {activeLogo ? (
@@ -3623,7 +4566,8 @@ const handleImageUpload = (event) => {
 
           <button
             style={headerIdentityButton}
-            onClick={() => setShowProfileCard(true)}
+            aria-label={t("openRelationshipDetails", language)}
+            onClick={openRelationshipDetails}
           >
             <div style={name}>{activeHeaderName}</div>
 
@@ -3634,7 +4578,7 @@ const handleImageUpload = (event) => {
                    : activeHeaderProject}
               </span>
 
-              {!isHiringThread && (
+              {!isHiringThread && relationshipHasCurrentWork && (
                 <strong style={chatProjectStagePill}>
                   {activeProjectStageLabel}
                 </strong>
@@ -3658,6 +4602,12 @@ const handleImageUpload = (event) => {
                 : language === "es"
                 ? "Activo ahora"
                 : "Active now"}
+
+              {relationshipHasCurrentWork && (
+                <span style={relationshipActiveWorkBadge}>
+                  {t("relationshipActiveWork", language)}
+                </span>
+              )}
 
               {jobRecordCount > 0 && (
                 <button
@@ -3732,77 +4682,190 @@ const handleImageUpload = (event) => {
         )}
 
         {showProfileCard && (
-          <div style={profileOverlay} onClick={() => setShowProfileCard(false)}>
-            <div style={profileMiniCard} onClick={(event) => event.stopPropagation()}>
-              <button
-                style={profileCloseButton}
-                onClick={() => setShowProfileCard(false)}
-              >
-                ×
-              </button>
+          <div style={profileOverlay}>
+            <RelationshipIdentityPage
+              identity={{
+                displayName: threadRelationshipIdentity.displayName,
+                typeLabel: threadRelationshipIdentity.typeLabel,
+                avatar: threadRelationshipIdentity.avatar,
+                initials: threadRelationshipIdentity.initials,
+                meta: threadRelationshipIdentity.meta,
+                location: threadRelationshipIdentity.location,
+              }}
+              onBack={() => setShowProfileCard(false)}
+              backLabel={language === "es" ? "Volver" : "Back"}
+              intro={t("relationshipIdentityIntro", language)}
+              details={relationshipIdentityFactRows}
+              actions={relationshipIdentityActions}
+              sections={relationshipIdentitySections}
+            />
+          </div>
+        )}
 
-              <div style={profileHeroMini}>
-                <div style={profileLargeAvatar}>
-                  {activeLogo ? (
-                    <img src={activeLogo} alt={activeHeaderName} style={profileLargeAvatarImage} />
-                  ) : (
-                    activeHeaderName
-                      .split(" ")
-                      .map((word) => word[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()
-                  )}
-                </div>
-
-                <h2 style={profileCardTitle}>{activeHeaderName}</h2>
-
-                <p style={profileCardMeta}>
-                  {displayCategory || (language === "es" ? "Perfil conectado" : "Connected profile")}
-                </p>
-
-                {displayLocation && (
-                  <p style={profileCardLocation}> {displayLocation}</p>
-                )}
-              </div>
-
-              <div style={profileInfoGrid}>
-                <div style={profileInfoBox}>
-                  <strong>{language === "es" ? "Estado" : "Status"}</strong>
-                  <span>{language === "es" ? "Activo ahora" : "Active now"}</span>
-                </div>
-
-                <div style={profileInfoBox}>
-                  <strong>{language === "es" ? "Proyecto" : "Project"}</strong>
-                  <span>{activeHeaderProject || (language === "es" ? "Conversación" : "Conversation")}</span>
-                </div>
-              </div>
-
-              <div style={profileActionRow}>
-                {hasActiveCallPhone && (
-                  <button
-                    style={profilePrimaryAction}
-                    onClick={() => {
-                      setShowProfileCard(false);
-                      callActiveContact();
-                    }}
-                  >
-                     {language === "es" ? "Llamar" : "Call"}
-                  </button>
-                )}
-
+        {tenantTicketDraft && (
+          <div style={tenantTicketOverlay} role="dialog" aria-label="Tenant Ticket">
+            <div style={tenantTicketPanel}>
+              <div style={tenantTicketHeader}>
                 <button
-                  style={profileSecondaryAction}
+                  type="button"
+                  style={tenantTicketBackButton}
                   onClick={() => {
-                    setShowProfileCard(false);
-                    setShowJobRecords(true);
+                    if (tenantTicketDraft.step === "review") {
+                      updateTenantTicketDraft("step", "edit");
+                      return;
+                    }
+                    setTenantTicketDraft(null);
                   }}
                 >
-                   {language === "es"
-                    ? "Registro del trabajo"
-                    : "Job Records"}
+                  {tenantTicketDraft.step === "review" ? "Back" : "Cancel"}
                 </button>
+                <strong>
+                  {tenantTicketDraft.step === "created"
+                    ? "Ticket Created"
+                    : tenantTicketDraft.step === "review"
+                    ? "Review Ticket"
+                    : "New Tenant Ticket"}
+                </strong>
+                {tenantTicketDraft.step === "edit" ? (
+                  <button
+                    type="button"
+                    style={tenantTicketHeaderAction}
+                    onClick={reviewTenantTicketDraft}
+                  >
+                    Review
+                  </button>
+                ) : tenantTicketDraft.step === "review" ? (
+                  <button
+                    type="button"
+                    style={tenantTicketHeaderAction}
+                    onClick={submitTenantTicketDraft}
+                  >
+                    Submit
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    style={tenantTicketHeaderAction}
+                    onClick={() => setTenantTicketDraft(null)}
+                  >
+                    Done
+                  </button>
+                )}
               </div>
+
+              {tenantTicketDraft.step === "edit" && (
+                <form style={tenantTicketForm} onSubmit={reviewTenantTicketDraft}>
+                  <label style={tenantTicketField}>
+                    <span>Property / Unit</span>
+                    <input
+                      value={tenantTicketDraft.propertyUnit}
+                      onChange={(event) =>
+                        updateTenantTicketDraft("propertyUnit", event.target.value)
+                      }
+                      placeholder="1225 Wales Dr, Unit 204"
+                      style={tenantTicketInput}
+                    />
+                  </label>
+                  <label style={tenantTicketField}>
+                    <span>Issue Type</span>
+                    <select
+                      value={tenantTicketDraft.issueType}
+                      onChange={(event) =>
+                        updateTenantTicketDraft("issueType", event.target.value)
+                      }
+                      style={tenantTicketInput}
+                    >
+                      <option>Plumbing</option>
+                      <option>HVAC</option>
+                      <option>Electrical</option>
+                      <option>Appliance</option>
+                      <option>General Maintenance</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                  <label style={tenantTicketField}>
+                    <span>Priority</span>
+                    <select
+                      value={tenantTicketDraft.priority}
+                      onChange={(event) =>
+                        updateTenantTicketDraft("priority", event.target.value)
+                      }
+                      style={tenantTicketInput}
+                    >
+                      <option>Low</option>
+                      <option>Normal</option>
+                      <option>High</option>
+                      <option>Emergency</option>
+                    </select>
+                  </label>
+                  <label style={tenantTicketField}>
+                    <span>Description</span>
+                    <textarea
+                      value={tenantTicketDraft.description}
+                      onChange={(event) =>
+                        updateTenantTicketDraft("description", event.target.value)
+                      }
+                      placeholder="Describe what needs attention."
+                      style={tenantTicketTextarea}
+                    />
+                  </label>
+                  <div style={tenantTicketPhotos}>
+                    <span>Photos</span>
+                    <strong>Photo upload stays in conversation tools.</strong>
+                  </div>
+                  {tenantTicketDraft.notice && (
+                    <p style={tenantTicketNotice}>{tenantTicketDraft.notice}</p>
+                  )}
+                  <button type="submit" style={tenantTicketPrimaryButton}>
+                    Review Ticket
+                  </button>
+                </form>
+              )}
+
+              {tenantTicketDraft.step === "review" && (
+                <div style={tenantTicketForm}>
+                  <div style={tenantTicketReviewCard}>
+                    <strong>Tenant Ticket</strong>
+                    <span>{tenantTicketDraft.issueType}</span>
+                    <div style={tenantTicketReviewRow}>
+                      <span>Property / Unit</span>
+                      <strong>{tenantTicketDraft.propertyUnit}</strong>
+                    </div>
+                    <div style={tenantTicketReviewRow}>
+                      <span>Priority</span>
+                      <strong>{tenantTicketDraft.priority}</strong>
+                    </div>
+                    <div style={tenantTicketReviewRow}>
+                      <span>Description</span>
+                      <strong>{tenantTicketDraft.description}</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    style={tenantTicketPrimaryButton}
+                    onClick={submitTenantTicketDraft}
+                  >
+                    Submit Ticket
+                  </button>
+                </div>
+              )}
+
+              {tenantTicketDraft.step === "created" && (
+                <div style={tenantTicketSuccess}>
+                  <div style={tenantTicketSuccessIcon}>✓</div>
+                  <h2>Tenant Ticket Created</h2>
+                  <p>
+                    Ticket {tenantTicketDraft.createdTicketId} was added to this conversation.
+                  </p>
+                  <button
+                    type="button"
+                    style={tenantTicketPrimaryButton}
+                    onClick={() => setTenantTicketDraft(null)}
+                  >
+                    Continue Conversation
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -3820,7 +4883,7 @@ const handleImageUpload = (event) => {
             </button>
 
             <button style={callMenuBtn} onClick={openRelationshipDetails}>
-              {language === "es" ? "Detalles" : "Details"}
+              {relationshipIdentityActionLabel}
             </button>
           </div>
         )}
@@ -3834,15 +4897,26 @@ const handleImageUpload = (event) => {
 
               <button
                 style={threadMenuBtn}
-                onClick={() => {
-                  setShowProfileCard(false);
-                  setShowJobRecords(false);
-                  setShowThreadMenu(false);
-                  setShowProfileCard(true);
-                }}
+                onClick={openRelationshipDetails}
               >
-                {language === "es" ? "Detalles del proyecto" : "Project Details"}
+                {relationshipIdentityActionLabel}
               </button>
+
+              {threadRelationshipSavedToContacts ? (
+                <button
+                  style={threadMenuBtn}
+                  onClick={openRelationshipDetails}
+                >
+                  {language === "es" ? "Ver contacto" : "View Contact"}
+                </button>
+              ) : (
+                <button
+                  style={threadMenuBtn}
+                  onClick={saveThreadRelationshipToContacts}
+                >
+                  {language === "es" ? "Guardar en Contactos" : "Save to Contacts"}
+                </button>
+              )}
 
               {hasActiveCallPhone && (
                 <button
@@ -3893,15 +4967,17 @@ const handleImageUpload = (event) => {
                 {language === "es" ? "Fotos" : "Photos"}
               </button>
 
-              <button
-                style={threadMenuBtn}
-                onClick={() => {
-                  setShowThreadMenu(false);
-                  openChatScheduleModal();
-                }}
-              >
-                {language === "es" ? "Programación" : "Schedule"}
-              </button>
+              {currentViewerRole === "business" && (
+                <button
+                  style={threadMenuBtn}
+                  onClick={() => {
+                    setShowThreadMenu(false);
+                    openChatScheduleModal();
+                  }}
+                >
+                  {language === "es" ? "Programación" : "Schedule"}
+                </button>
+              )}
             </div>
 
             <div style={menuSection}>
@@ -3917,6 +4993,26 @@ const handleImageUpload = (event) => {
                 }}
               >
                 {language === "es" ? "Marcar como no leído" : "Mark as unread"}
+              </button>
+
+              <button
+                style={{
+                  ...threadMenuBtn,
+                  ...(threadUserSavedToHistory ? threadMenuBtnDisabled : {}),
+                }}
+                onClick={() => {
+                  if (threadUserSavedToHistory) return;
+                  saveChatToHistory();
+                }}
+                disabled={threadUserSavedToHistory}
+              >
+                {threadUserSavedToHistory
+                  ? language === "es"
+                    ? "Guardado en historial"
+                    : "Saved to History"
+                  : language === "es"
+                  ? "Guardar chat en historial"
+                  : "Save Chat to History"}
               </button>
 
               <button
@@ -3968,8 +5064,8 @@ const handleImageUpload = (event) => {
                       ? "Ocultar ▲"
                       : "Hide ▲"
                     : language === "es"
-                    ? "Ver detalles ▼"
-                    : "View Details ▼"}
+                    ? "Revisar detalles ▼"
+                    : "Review Details ▼"}
                 </button>
 
                 <div
@@ -4425,6 +5521,7 @@ const handleImageUpload = (event) => {
               msg.type === "schedule" ||
               msg.type === "location" ||
               msg.type === "scan" ||
+              msg.type === "tenant_ticket" ||
               msg.type === "photoWorkflow" ||
               isReceiptDocument;
             const hideDocumentOperationalHeader =
@@ -4499,6 +5596,7 @@ const handleImageUpload = (event) => {
                         {(msg.type === "scan" || msg.type === "scan-share") && (
                           <IconScanClean />
                         )}
+                        {msg.type === "tenant_ticket" && <IconIssueClean />}
                         {msg.type === "photoWorkflow" &&
                           (resolvePhotoWorkflowIcon(msg.photoType || msg.workflowType) || workflowMessageProps?.icon)}
                         {(msg.type === "workflow_change_request" || msg.type === "workflow-change") && (
@@ -4519,6 +5617,7 @@ const handleImageUpload = (event) => {
                             "location-share",
                             "scan",
                             "scan-share",
+                            "tenant_ticket",
                             "photoWorkflow",
                             "workflow_change_request",
                             "workflow-change",
@@ -4572,6 +5671,46 @@ const handleImageUpload = (event) => {
                           openImageGallery(msg);
                         }}
                       />
+                    )}
+
+                    {msg.type === "tenant_ticket" && msg.ticket && (
+                      <div style={scheduleCardDetails}>
+                        <div style={scheduleCustomerTitle}>
+                          {language === "es" ? "Ticket creado" : "Ticket Created"}
+                        </div>
+                        <div style={scheduleDetailRow}>
+                          <span>{language === "es" ? "Número" : "Ticket"}</span>
+                          <strong>{msg.ticket.id}</strong>
+                        </div>
+                        {msg.ticket.propertyUnit && (
+                          <div style={scheduleDetailRow}>
+                            <span>{language === "es" ? "Propiedad / unidad" : "Property / Unit"}</span>
+                            <strong>{msg.ticket.propertyUnit}</strong>
+                          </div>
+                        )}
+                        {msg.ticket.issueType && (
+                          <div style={scheduleDetailRow}>
+                            <span>{language === "es" ? "Tipo" : "Issue Type"}</span>
+                            <strong>{msg.ticket.issueType}</strong>
+                          </div>
+                        )}
+                        {msg.ticket.issue && (
+                          <div style={scheduleDetailRow}>
+                            <span>{language === "es" ? "Descripción" : "Description"}</span>
+                            <strong>{msg.ticket.issue}</strong>
+                          </div>
+                        )}
+                        {msg.ticket.priority && (
+                          <div style={scheduleDetailRow}>
+                            <span>{language === "es" ? "Prioridad" : "Priority"}</span>
+                            <strong>{msg.ticket.priority}</strong>
+                          </div>
+                        )}
+                        <div style={scheduleDetailRow}>
+                          <span>{language === "es" ? "Estado" : "Status"}</span>
+                          <strong>{msg.ticket.status || "Open"}</strong>
+                        </div>
+                      </div>
                     )}
 
                     {msg.type === "schedule" && msg.schedule && (
@@ -5070,7 +6209,7 @@ const handleImageUpload = (event) => {
                 style={actionBtn}
                 onClick={() => saveMessageAsSchedule(activeMessage)}
               >
-                 {language === "es" ? "Guardar como visita" : "Save as Schedule"}
+                 {language === "es" ? "Revisar programación" : "Review Schedule"}
               </button>
             )}
 
@@ -5166,18 +6305,32 @@ const handleImageUpload = (event) => {
                     <span>{language === "es" ? "Fotos" : "Photos"}</span>
                   </button>
 
-                  <button style={attachMenuBtn} onClick={sendLocationCard}>
+                  <button style={attachMenuBtn} onClick={sendVideoCard}>
                     <span style={attachIconCircle}>
-                      <IconLocationClean />
+                      <IconCameraClean />
                     </span>
-                    <span>{language === "es" ? "Ubicación" : "Location"}</span>
+                    <span>{language === "es" ? "Video" : "Video"}</span>
                   </button>
 
                   <button style={attachMenuBtn} onClick={sendScanCard}>
                     <span style={attachIconCircle}>
                       <IconScanClean />
                     </span>
-                    <span>{language === "es" ? "Escanear" : "Scan"}</span>
+                    <span>{language === "es" ? "Documento" : "Document"}</span>
+                  </button>
+
+                  <button style={attachMenuBtn} onClick={sendVoiceMessageCard}>
+                    <span style={attachIconCircle}>
+                      <IconPhone />
+                    </span>
+                    <span>{language === "es" ? "Mensaje de voz" : "Voice Message"}</span>
+                  </button>
+
+                  <button style={attachMenuBtn} onClick={sendLocationCard}>
+                    <span style={attachIconCircle}>
+                      <IconLocationClean />
+                    </span>
+                    <span>{language === "es" ? "Ubicación" : "Location"}</span>
                   </button>
                 </div>
               </div>
@@ -5187,13 +6340,22 @@ const handleImageUpload = (event) => {
                   {language === "es" ? "Flujo de trabajo" : "Workflow"}
                 </div>
                 <div style={attachMenuGrid}>
-                  {!isHiringThread && (
-                    <>
-                      <button style={menuActionPrimary} onClick={openChatScheduleModal}>
+	                  {!isHiringThread && (
+	                    <>
+	                      {currentViewerRole === "business" && (
+	                        <button style={menuActionPrimary} onClick={openChatScheduleModal}>
+	                          <span style={attachIconCircle}>
+	                            <IconCalendarClean />
+	                          </span>
+	                            <span>{language === "es" ? "Revisar programación" : "Review Schedule"}</span>
+	                        </button>
+	                      )}
+
+                      <button style={menuActionPrimary} onClick={openTenantTicketComposer}>
                         <span style={attachIconCircle}>
-                          <IconCalendarClean />
+                          <IconIssueClean />
                         </span>
-                        <span>{language === "es" ? "Programar" : "Schedule"}</span>
+                        <span>{language === "es" ? "Continuar trabajo" : "Continue Work"}</span>
                       </button>
 
                       <button
@@ -5222,14 +6384,14 @@ const handleImageUpload = (event) => {
                         <span style={attachIconCircle}>
                           <IconMaterialsClean />
                         </span>
-                        <span>{language === "es" ? "Materiales" : "Materials"}</span>
+                        <span>{language === "es" ? "Continuar trabajo" : "Continue Work"}</span>
                       </button>
 
                       <button style={menuActionPrimary} onClick={sendPaymentCard}>
                         <span style={attachIconCircle}>
                           <IconPaymentClean />
                         </span>
-                        <span>{language === "es" ? "Pago" : "Payment"}</span>
+                        <span>{language === "es" ? "Preparar factura" : "Prepare Invoice"}</span>
                       </button>
 
                       <button
@@ -5474,7 +6636,7 @@ const handleImageUpload = (event) => {
 
               <div style={recordTools}>
                 <button style={recordSpeakBtn} onClick={speakJobRecords}>
-                  {aiSpeaking ? " Stop AI Voice" : " " + (language === "es" ? "Explicar registro" : "AI Speak Job Record")}
+                  {aiSpeaking ? " Stop Meetro Voice" : " " + (language === "es" ? "Leer registro" : "Read Job Record")}
                 </button>
               </div>
 
@@ -5539,7 +6701,7 @@ const handleImageUpload = (event) => {
                               </div>
 
                               <div style={expandedInfoRow}>
-                                 AI workflow summary available
+                                 Meetro workflow summary available
                               </div>
 
                               <div style={expandedInfoRow}>
@@ -5576,8 +6738,8 @@ const handleImageUpload = (event) => {
                               }}
                             >
                               {aiSpeaking
-                                ? " Stop AI"
-                                : " Explain Timeline Item"}
+                                ? " Stop Meetro"
+                                : " Read Timeline Item"}
                             </button>
                           </div>
                         )}
@@ -5729,16 +6891,11 @@ const handleImageUpload = (event) => {
               {currentViewerRole === "business" && (
                 <button
                   style={storySpeakBtn}
-                  onClick={() => {
-                    localStorage.setItem("meetroWorkCenterTab", "schedule");
-                    localStorage.setItem("activeWorkCenterTab", "schedule");
-                    setAppointmentDetails(null);
-                    setPage("workCenter");
-                  }}
+                  onClick={() => editScheduleFromMessage(appointmentDetails)}
                 >
                   {language === "es"
-                    ? "Abrir en Work Center"
-                    : "Open in Work Center"}
+                    ? "Editar programación"
+                    : "Edit Schedule"}
                 </button>
               )}
 
@@ -5792,7 +6949,7 @@ const handleImageUpload = (event) => {
               </div>
 
               <button style={storySpeakBtn} onClick={speakJobStory}>
-                {aiSpeaking ? " Stop AI Voice" : " " + (language === "es" ? "Explicar con AI" : "AI Speak Summary")}
+                {aiSpeaking ? " Stop Meetro Voice" : " " + (language === "es" ? "Leer resumen" : "Read Summary")}
               </button>
 
               <button style={storySaveBtn} onClick={saveToJobRecord}>
@@ -5958,6 +7115,9 @@ const page = {
   height: "100dvh",
   minHeight: "100dvh",
   maxHeight: "100dvh",
+  width: "100%",
+  maxWidth: "100vw",
+  minWidth: 0,
   background: "linear-gradient(135deg, #eef1f8 0%, #f8fafc 100%)",
   display: "flex",
   justifyContent: "flex-start",
@@ -5988,6 +7148,8 @@ const phone = {
 const embeddedPage = {
   ...page,
   width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   height: "100%",
   minHeight: 0,
   maxHeight: "100%",
@@ -6075,8 +7237,8 @@ const chatProjectStagePill = {
 const headerIdentityButton = {
   flex: 1,
   minWidth: 0,
-  flex: 1,
-  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
   border: "none",
   background: "transparent",
   textAlign: "left",
@@ -6087,154 +7249,224 @@ const headerIdentityButton = {
 const profileOverlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15,23,42,0.28)",
-  zIndex: 999,
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "center",
-  padding: "calc(env(safe-area-inset-top) + 18px) 18px 18px",
+  background:
+    "linear-gradient(180deg, rgba(248,250,252,0.98), rgba(255,255,255,0.98))",
+  backdropFilter: "blur(14px)",
+  zIndex: 1200,
+  display: "block",
+  padding: "calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 18px)",
   boxSizing: "border-box",
+  overflowX: "hidden",
+  overflowY: "auto",
+  WebkitOverflowScrolling: "touch",
 };
 
-const profileMiniCard = {
-  width: "100%",
-  maxWidth: "420px",
-  background: "white",
-  borderRadius: "28px",
-  padding: "22px",
-  boxShadow: "0 24px 60px rgba(15,23,42,0.24)",
-  position: "relative",
-};
-
-const profileCloseButton = {
-  position: "absolute",
-  top: "22px",
-  right: "14px",
-  border: "none",
-  background: "#f1f5f9",
-  width: "34px",
-  height: "34px",
-  borderRadius: "999px",
-  fontSize: "22px",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const profileHeroMini = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  textAlign: "center",
-};
-
-const profileLargeAvatar = {
-  width: "92px",
-  height: "92px",
-  borderRadius: "999px",
-  background: "linear-gradient(135deg,#5b3df5,#8b5cf6)",
-  color: "white",
-  display: "flex",
+const relationshipActiveWorkBadge = {
+  display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  fontWeight: "900",
-  fontSize: "28px",
-  overflow: "hidden",
+  marginLeft: "2px",
+  borderRadius: "999px",
+  padding: "3px 7px",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: "11px",
+  fontWeight: 950,
+  whiteSpace: "nowrap",
 };
 
-const profileLargeAvatarImage = {
+const tenantTicketOverlay = {
+  ...keyboardSafeFlowPage,
+  position: "fixed",
+  inset: 0,
+  zIndex: 1250,
+  padding: "calc(env(safe-area-inset-top, 0px) + 8px) 12px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+  boxSizing: "border-box",
+  overflowY: "auto",
+  overflowX: "hidden",
+  WebkitOverflowScrolling: "touch",
+};
+
+const tenantTicketPanel = {
+  ...glassSurface,
   width: "100%",
-  height: "100%",
-  objectFit: "cover",
+  maxWidth: "560px",
+  minHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px)",
+  margin: "0 auto",
+  borderRadius: "26px",
+  padding: "14px",
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
-const profileCardTitle = {
-  margin: "14px 0 4px",
-  fontSize: "24px",
-  fontWeight: "950",
-  color: "#0f172a",
-};
-
-const profileCardMeta = {
-  margin: 0,
-  color: "#475569",
-  fontWeight: "800",
-};
-
-const profileCardLocation = {
-  margin: "8px 0 0",
-  color: "#475569",
-  fontWeight: "700",
-};
-
-const profileInfoGrid = {
+const tenantTicketHeader = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "auto minmax(0, 1fr) auto",
+  alignItems: "center",
   gap: "10px",
-  marginTop: "18px",
+  minHeight: "44px",
+  color: "#0f172a",
+  fontSize: "14px",
+  fontWeight: 950,
 };
 
-const profileInfoBox = {
-  background: "#f8fafc",
-  borderRadius: "18px",
-  padding: "10px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "5px",
+const tenantTicketBackButton = {
+  border: "none",
+  background: "transparent",
+  color: "#2563eb",
+  padding: "8px 0",
+  fontSize: "13px",
+  fontWeight: 850,
+};
+
+const tenantTicketHeaderAction = {
+  ...tenantTicketBackButton,
+  fontWeight: 950,
+};
+
+const tenantTicketForm = {
+  display: "grid",
+  gap: "12px",
+  marginTop: "18px",
+  minWidth: 0,
+};
+
+const tenantTicketField = {
+  display: "grid",
+  gap: "6px",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: 900,
+  minWidth: 0,
+};
+
+const tenantTicketInput = {
+  ...glassField,
+  width: "100%",
+  minHeight: "46px",
+  borderRadius: "14px",
+  color: "#0f172a",
+  padding: "0 12px",
+  fontSize: "14px",
+  fontWeight: 800,
+  boxSizing: "border-box",
+  outline: "none",
+};
+
+const tenantTicketTextarea = {
+  ...tenantTicketInput,
+  minHeight: "112px",
+  padding: "12px",
+  resize: "vertical",
+  lineHeight: 1.4,
+};
+
+const tenantTicketPhotos = {
+  ...softPageSection,
+  border: "1px dashed rgba(148,163,184,0.36)",
+  borderRadius: "16px",
+  color: "#64748b",
+  padding: "14px",
+  display: "grid",
+  gap: "4px",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const tenantTicketNotice = {
+  margin: 0,
+  borderRadius: "14px",
+  background: "#fff7ed",
+  color: "#9a3412",
+  padding: "10px 12px",
+  fontSize: "13px",
+  fontWeight: 850,
+};
+
+const tenantTicketPrimaryButton = {
+  width: "100%",
+  border: "none",
+  borderRadius: "16px",
+  background: "#0f2a44",
+  color: "#ffffff",
+  minHeight: "48px",
+  padding: "0 14px",
+  fontSize: "14px",
+  fontWeight: 950,
+  boxShadow: "0 12px 24px rgba(15,42,68,0.18)",
+};
+
+const tenantTicketReviewCard = {
+  ...glassSurface,
+  borderRadius: "20px",
+  padding: "14px",
+  display: "grid",
+  gap: "10px",
+  boxSizing: "border-box",
+  minWidth: 0,
+};
+
+const tenantTicketReviewRow = {
+  display: "grid",
+  gap: "4px",
+  paddingTop: "8px",
+  borderTop: "1px solid #f1f5f9",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 850,
+  overflowWrap: "anywhere",
+};
+
+const tenantTicketSuccess = {
+  minHeight: "calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 150px)",
+  display: "grid",
+  alignContent: "center",
+  justifyItems: "center",
+  gap: "12px",
+  textAlign: "center",
   color: "#0f172a",
 };
 
-const profileActionRow = {
-  display: "flex",
-  gap: "10px",
-  marginTop: "18px",
-};
-
-const profilePrimaryAction = {
-  flex: 1,
-  border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
-  color: "white",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-};
-
-const profileSecondaryAction = {
-  flex: 1,
-  border: "none",
-  background: "#f1f5f9",
-  color: "#0f172a",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
+const tenantTicketSuccessIcon = {
+  width: "64px",
+  height: "64px",
+  borderRadius: "999px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#10b981",
+  color: "#ffffff",
+  fontSize: "30px",
+  fontWeight: 950,
 };
 
 const header = {
+  ...glassNavigationSurface,
   flex: "0 0 auto",
   minHeight: "76px",
   display: "flex",
   alignItems: "center",
   gap: "10px",
   padding: "calc(env(safe-area-inset-top) + 8px) 12px 10px",
-  borderBottom: "1px solid #edf0f5",
-  background: "rgba(255,255,255,0.98)",
-  backdropFilter: "blur(14px)",
   position: "relative",
   zIndex: 20,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const headerBtn = {
+  ...glassPill,
   width: "44px",
   height: "44px",
   borderRadius: "18px",
-  border: "1px solid #e7eaf2",
-  background: "#ffffff",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
   color: "#111827",
-  boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
 };
 
 const activeHeaderBtn = {
@@ -6354,16 +7586,17 @@ const jobRecordMiniBadge = {
 
 
 const callMenu = {
+  ...glassActionMenu,
   position: "fixed",
   top: "72px",
   right: "max(68px, env(safe-area-inset-right, 0px))",
-  width: "210px",
-  background: "#ffffff",
-  border: "1px solid #e8ebf3",
+  width: "min(210px, calc(100vw - 40px))",
+  maxWidth: "calc(100vw - 40px)",
   borderRadius: "16px",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.14)",
   padding: "6px",
   zIndex: 81,
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const callMenuBtn = {
@@ -6381,22 +7614,25 @@ const callMenuBtn = {
 };
 
 const threadMenu = {
+  ...glassActionMenu,
   position: "fixed",
   top: "72px",
   right: "max(16px, env(safe-area-inset-right, 0px))",
-  width: "250px",
+  width: "min(250px, calc(100vw - 32px))",
+  maxWidth: "calc(100vw - 32px)",
   maxHeight: "75vh",
   overflowY: "auto",
-  background: "#ffffff",
-  border: "1px solid #e8ebf3",
+  overflowX: "hidden",
   borderRadius: "16px",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.14)",
   padding: "8px",
   zIndex: 120,
+  boxSizing: "border-box",
 };
 
 const menuActionBase = {
   width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   border: "none",
   borderRadius: "12px",
   background: "transparent",
@@ -6410,9 +7646,8 @@ const menuActionBase = {
 
 const menuActionPrimary = {
   ...menuActionBase,
+  ...nativeContactRow,
   minHeight: "46px",
-  border: "1px solid #e7eaf2",
-  background: "#f8fafc",
   color: "#111827",
   fontSize: "12px",
   fontWeight: "800",
@@ -6439,6 +7674,12 @@ const menuActionTertiary = {
 
 const threadMenuBtn = {
   ...menuActionTertiary,
+};
+
+const threadMenuBtnDisabled = {
+  color: "#94a3b8",
+  cursor: "default",
+  opacity: 0.78,
 };
 
 const menuSection = {
@@ -6541,9 +7782,13 @@ const emergencyTimeline = {
   display: "flex",
   alignItems: "center",
   gap: "10px",
-  overflowX: "auto",
+  flexWrap: "wrap",
+  overflowX: "hidden",
   marginTop: "14px",
   paddingBottom: "2px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 
 const emergencyStep = {
@@ -6554,6 +7799,7 @@ const emergencyStep = {
   color: "#475569",
   fontSize: "10px",
   fontWeight: "800",
+  maxWidth: "100%",
 };
 
 const emergencyStepActive = {
@@ -8028,6 +9274,9 @@ const actionBtn = {
   background: "#f6f7fb",
   fontWeight: "700",
   cursor: "pointer",
+  boxSizing: "border-box",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 const bottomStack = {
@@ -8141,18 +9390,16 @@ const pendingImageName = {
 };
 
 const attachMenu = {
+  ...glassActionMenu,
   margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   maxHeight: "230px",
   overflowY: "auto",
   WebkitOverflowScrolling: "touch",
-  background: "#ffffff",
-  border: "1px solid #e7eaf2",
   borderRadius: "24px",
   padding: "10px",
   display: "grid",
   gridTemplateColumns: "1fr",
   gap: "8px",
-  boxShadow: "0 18px 45px rgba(15,23,42,0.14)",
   animation: "meetroSheetIn 180ms ease-out",
 };
 
@@ -8163,10 +9410,10 @@ const attachMenuGrid = {
 };
 
 const attachMenuBtn = {
+  ...glassPill,
   minHeight: "52px",
   border: "none",
   borderRadius: "19px",
-  background: "#f8fafc",
   color: "#111827",
   fontSize: "10px",
   fontWeight: "800",
@@ -8244,6 +9491,7 @@ const photoExplainInput = {
 const composer = {
   flex: "0 0 auto",
   margin: 0,
+  width: "100%",
   background: "rgba(255,255,255,0.98)",
   border: "0",
   borderTop: "1px solid rgba(203,213,225,0.7)",
@@ -8254,7 +9502,9 @@ const composer = {
   gap: "8px",
   boxShadow: "none",
   maxWidth: "100%",
+  minWidth: 0,
   boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const circleBtn = {
@@ -8283,6 +9533,7 @@ const activeCircleBtn = {
 const inputWrap = {
   flex: 1,
   minWidth: 0,
+  maxWidth: "100%",
   minHeight: "40px",
   display: "flex",
   alignItems: "center",
@@ -8295,6 +9546,8 @@ const inputWrap = {
 
 const input = {
   width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   minHeight: "22px",
   maxHeight: "120px",
   border: "none",

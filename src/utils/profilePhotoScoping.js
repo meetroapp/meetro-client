@@ -34,21 +34,119 @@ export function getStoredContractorProfile(storage = globalThis.localStorage) {
   return safeParseStorageJson(storage, "contractorProfile", {});
 }
 
+function firstPhotoValue(...values) {
+  return (
+    values
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || ""
+  );
+}
+
+function normalizeEmail(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getRecordIdentityIds(record = {}) {
+  return [
+    record.id,
+    record.userId,
+    record.user_id,
+    record.accountId,
+    record.account_id,
+    record.memberId,
+    record.member_id,
+    record.meetroUserId,
+    record.meetro_user_id,
+    record.profileId,
+    record.profile_id,
+    record.customerId,
+    record.customer_id,
+    record.homeownerId,
+    record.homeowner_id,
+    record.homeownerUserId,
+    record.homeowner_user_id,
+    record.participantId,
+    record.participant_id,
+    record.participantUserId,
+    record.participant_user_id,
+    record.professionalId,
+    record.professional_id,
+    record.professionalUserId,
+    record.professional_user_id,
+    record.providerId,
+    record.provider_id,
+    record.providerUserId,
+    record.provider_user_id,
+    record.contractorId,
+    record.contractor_id,
+    record.contractorUserId,
+    record.contractor_user_id,
+    record.ownerId,
+    record.owner_id,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function getRecordIdentityEmails(record = {}) {
+  return [
+    record.email,
+    record.userEmail,
+    record.user_email,
+    record.accountEmail,
+    record.account_email,
+    record.memberEmail,
+    record.member_email,
+    record.meetroEmail,
+    record.meetro_email,
+    record.customerEmail,
+    record.customer_email,
+    record.homeownerEmail,
+    record.homeowner_email,
+    record.participantEmail,
+    record.participant_email,
+    record.professionalEmail,
+    record.professional_email,
+    record.providerEmail,
+    record.provider_email,
+    record.contractorEmail,
+    record.contractor_email,
+    record.ownerEmail,
+    record.owner_email,
+  ]
+    .map(normalizeEmail)
+    .filter(Boolean);
+}
+
 export function getBusinessPhotoIdentity(
   profile = {},
   storage = globalThis.localStorage
 ) {
   const storedProfile = getStoredContractorProfile(storage);
-  const businessId =
+  const explicitBusinessId =
     profile?.id ||
     profile?.businessId ||
     profile?.business_id ||
-    storedProfile?.id ||
-    storedProfile?.businessId ||
     "";
-  const businessName =
+  const explicitBusinessName =
     profile?.business_name ||
     profile?.businessName ||
+    profile?.companyName ||
+    profile?.company_name ||
+    profile?.providerName ||
+    profile?.provider_name ||
+    profile?.professionalName ||
+    profile?.professional_name ||
+    profile?.contractorName ||
+    profile?.contractor_name ||
+    profile?.displayName ||
+    profile?.name ||
+    "";
+  const businessId =
+    explicitBusinessId ||
+    (!explicitBusinessName ? storedProfile?.id || storedProfile?.businessId || "" : "");
+  const businessName =
+    explicitBusinessName ||
     profile?.name ||
     storage.getItem("businessName") ||
     storedProfile?.businessName ||
@@ -95,6 +193,16 @@ export function isSameBusinessProfile(storedProfile = {}, profile = {}, storage 
   const profileName = normalizeStorageKeyPart(
     profile?.business_name ||
       profile?.businessName ||
+      profile?.companyName ||
+      profile?.company_name ||
+      profile?.providerName ||
+      profile?.provider_name ||
+      profile?.professionalName ||
+      profile?.professional_name ||
+      profile?.contractorName ||
+      profile?.contractor_name ||
+      profile?.displayName ||
+      profile?.name ||
       storage.getItem("businessName") ||
       ""
   );
@@ -113,6 +221,29 @@ export function getScopedProfilePhoto(
 
   if (scopedPhoto) return scopedPhoto;
 
+  if (mode !== "business") {
+    const storedUser = safeParseStorageJson(storage, "user", {});
+
+    return firstPhotoValue(
+      profile?.profile_photo_url,
+      profile?.profilePhotoUrl,
+      profile?.profilePhoto,
+      profile?.profile_photo,
+      profile?.avatar,
+      profile?.avatarUrl,
+      profile?.image_url,
+      profile?.imageUrl,
+      storedUser?.profile_photo_url,
+      storedUser?.profilePhotoUrl,
+      storedUser?.profilePhoto,
+      storedUser?.profile_photo,
+      storedUser?.avatar,
+      storedUser?.avatarUrl,
+      storedUser?.image_url,
+      storedUser?.imageUrl
+    );
+  }
+
   if (mode === "business") {
     const profilePhoto = profile?.image_url || profile?.imageUrl || "";
     if (profilePhoto) return profilePhoto;
@@ -120,6 +251,7 @@ export function getScopedProfilePhoto(
     const storedProfile = getStoredContractorProfile(storage);
     if (isSameBusinessProfile(storedProfile, profile, storage)) {
       return (
+        storage.getItem(getScopedProfilePhotoKey("business", storedProfile, storage)) ||
         storedProfile?.image_url ||
         storedProfile?.imageUrl ||
         storedProfile?.logo ||
@@ -129,4 +261,53 @@ export function getScopedProfilePhoto(
   }
 
   return "";
+}
+
+export function isSameStoredUserProfile(record = {}, storage = globalThis.localStorage) {
+  const storedUser = safeParseStorageJson(storage, "user", {});
+  const storedIds = [
+    storage.getItem("userId"),
+    storedUser.id,
+    storedUser.userId,
+    storedUser.user_id,
+    storedUser.accountId,
+    storedUser.account_id,
+    storedUser.memberId,
+    storedUser.member_id,
+    storedUser.meetroUserId,
+    storedUser.meetro_user_id,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const recordIds = getRecordIdentityIds(record);
+
+  if (storedIds.length > 0 && recordIds.some((id) => storedIds.includes(id))) {
+    return true;
+  }
+
+  const storedEmails = [
+    storage.getItem("userEmail"),
+    storedUser.email,
+    storedUser.userEmail,
+    storedUser.user_email,
+    storedUser.accountEmail,
+    storedUser.account_email,
+    storedUser.memberEmail,
+    storedUser.member_email,
+    storedUser.meetroEmail,
+    storedUser.meetro_email,
+  ]
+    .map(normalizeEmail)
+    .filter(Boolean);
+  const recordEmails = getRecordIdentityEmails(record);
+
+  return storedEmails.length > 0 && recordEmails.some((email) => storedEmails.includes(email));
+}
+
+export function getPersonalProfilePhotoForRecord(
+  record = {},
+  storage = globalThis.localStorage
+) {
+  if (!isSameStoredUserProfile(record, storage)) return "";
+  return getScopedProfilePhoto("personal", record, storage);
 }

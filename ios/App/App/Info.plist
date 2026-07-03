@@ -32,6 +32,8 @@
 		<string>Photo library access is needed to choose job and project photos.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Photo library access is needed to save job and project photos.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>Meetro uses Contacts access so you can import existing customers, tenants, vendors, employees, and business contacts into Messages.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>Meetro uses speech recognition to turn your voice commands into text.</string>
 		<key>UILaunchStoryboardName</key>

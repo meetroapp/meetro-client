@@ -1,6 +1,52 @@
+import { recoverRequestRelationships } from "./requestRelationshipRecovery.js";
+
 export function getStoredHomeownerRequests() {
+  const readArray = (key) => {
+    try {
+      const value = localStorage.getItem(key);
+      const parsed = value ? JSON.parse(value) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const requestKey = (request = {}) =>
+    String(
+      request.requestId ||
+        request.id ||
+        [request.title, request.createdAt].filter(Boolean).join("::")
+    );
+
   try {
-    return JSON.parse(localStorage.getItem("homeownerRequests") || "[]");
+    const primary = readArray("homeownerRequests");
+    const backup = readArray("meetroHomeownerRequestsBackup");
+
+    if (backup.length === 0) {
+      const recovered = recoverRequestRelationships(primary, { storage: localStorage });
+      if (recovered.changed) {
+        localStorage.setItem("homeownerRequests", JSON.stringify(recovered.requests));
+      }
+      return recovered.requests;
+    }
+
+    const merged = [...primary];
+    const seen = new Set(primary.map(requestKey).filter(Boolean));
+
+    backup.forEach((request) => {
+      const key = requestKey(request);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      merged.push(request);
+    });
+
+    const recovered = recoverRequestRelationships(merged, { storage: localStorage });
+
+    if (merged.length !== primary.length || recovered.changed) {
+      localStorage.setItem("homeownerRequests", JSON.stringify(recovered.requests));
+    }
+
+    return recovered.requests;
   } catch {
     return [];
   }

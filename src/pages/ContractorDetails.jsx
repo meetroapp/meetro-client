@@ -14,11 +14,10 @@ import {
   inferRequestCategory,
   inferServiceDomain,
 } from "../utils/professionalRequestMatching";
-import {
-  getProfessionalSpecialtyLabel,
-  inferProfessionalSpecialtiesFromLegacyCategories,
-  normalizeSelectedSpecialties,
-} from "../utils/professionalOnboardingSpecialties";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
+import { getBusinessVerificationProjection } from "../utils/businessVerification";
+import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 
 function ContractorDetails({ setPage, currentPage }) {
   const [profile, setProfile] = useState(null);
@@ -543,12 +542,13 @@ function ContractorDetails({ setPage, currentPage }) {
     );
   }
 
-  const profileName =
-    profile.business_name || profile.name || t("contractor");
+  const businessIdentity = getBusinessIdentityProjection(profile, {
+    fallbackName: t("contractor"),
+  });
+  const profileName = businessIdentity.businessName || t("contractor");
   const profileCategory =
-    profile.category ||
-    profile.business_category ||
-    profile.serviceCategory ||
+    businessIdentity.servicesSummary ||
+    businessIdentity.category ||
     "";
   const profileDomain =
     profile.serviceDomain ||
@@ -566,22 +566,29 @@ function ContractorDetails({ setPage, currentPage }) {
   const serviceArea =
     canShowFullAddress && fullBusinessAddress
       ? fullBusinessAddress
-      : profile.serviceArea ||
-        profile.service_area ||
-        profile.location ||
-        profile.city ||
+      : businessIdentity.serviceArea ||
         profile.primaryCity ||
         (isSpanish ? "Área de servicio pendiente" : "Service area pending");
   const description =
-    profile.bio ||
-    profile.description ||
-    profile.business_description ||
+    businessIdentity.description ||
     (isSpanish
       ? "Este profesional aún no agregó una descripción del negocio."
       : "This professional has not added a business description yet.");
   const servicesOffered = getServicesOffered(profile, profileCategory, isSpanish);
   const availabilitySummary = getAvailabilitySummary(profile, isSpanish);
   const credentialSummary = getCredentialSummary(profile, isSpanish);
+  const portfolioProof = getBusinessPortfolioProofProjection(
+    {
+      ...profile,
+      businessPortfolio: projects,
+      projectGallery: projects,
+    },
+    {
+      translate: (key) => t(key),
+      reviews,
+    }
+  );
+  const publicPortfolioProjects = portfolioProof.projects;
   const allowedForHomeownerContext = isProfileAllowedForHomeownerContext(profile);
 
   if (!allowedForHomeownerContext) {
@@ -627,7 +634,7 @@ function ContractorDetails({ setPage, currentPage }) {
           <h1 style={businessTitle}>{selectedProject.title}</h1>
 
           <p style={mutedText}>
-            {profile.business_name || profile.name || t("businessProfile")}
+            {profileName || t("businessProfile")}
           </p>
 
           {selectedProject.description && (
@@ -698,17 +705,15 @@ function ContractorDetails({ setPage, currentPage }) {
       </button>
 
       <div style={cardStyle}>
-        {profile.image_url || profile.imageUrl || profile.logo ? (
+        {businessIdentity.imageUrl ? (
           <img
-            src={profile.image_url || profile.imageUrl || profile.logo}
+            src={businessIdentity.imageUrl}
             alt={profileName}
             style={profileImage}
           />
         ) : (
           <div style={imagePlaceholder}>
-            {(profileName || "B")
-              .charAt(0)
-              .toUpperCase()}
+            {businessIdentity.initials}
           </div>
         )}
 
@@ -728,14 +733,14 @@ function ContractorDetails({ setPage, currentPage }) {
         </p>
 
         <div style={ratingSummary}>
-          {reviewStats?.total_reviews ? (
+          {portfolioProof.reviewCount ? (
             <>
               <strong style={{ color: "#111" }}>
-                 {reviewStats.average_rating || profile.rating}
+                 {portfolioProof.averageRating || profile.rating}
               </strong>
 
               <span style={{ color: "#666", marginLeft: "8px" }}>
-                ({reviewStats.total_reviews} {t("reviews")})
+                ({portfolioProof.reviewCount} {t("reviews")})
               </span>
             </>
           ) : (
@@ -746,11 +751,15 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
 
         <div style={badgeRow}>
-          <span style={verifiedBadge}>✓ {t("verified")}</span>
-          <span style={responseBadge}>{credentialSummary.verified}</span>
+          <span style={credentialSummary.verified ? verifiedBadge : mutedBadge}>
+            ✓ {credentialSummary.compactBadgeText}
+          </span>
+          <span style={credentialSummary.verified ? responseBadge : mutedBadge}>
+            {credentialSummary.publicTrustSummary}
+          </span>
           <span style={credentialSummary.licensed ? responseBadge : mutedBadge}>
             {credentialSummary.licensed ||
-              (isSpanish ? "Credenciales pendientes" : "Credentials pending")}
+              credentialSummary.credentialsLabel}
           </span>
 
           {profile.is_featured && (
@@ -766,11 +775,11 @@ function ContractorDetails({ setPage, currentPage }) {
           {isSpanish ? "Vista previa del trabajo" : "Portfolio preview"}
         </h2>
 
-        {projects[0]?.image_url ? (
+        {portfolioProof.featuredProject?.image_url ? (
           <div style={portfolioCoverWrap}>
             <img
-              src={projects[0].image_url}
-              alt={projects[0].title || profileName}
+              src={portfolioProof.featuredProject.image_url}
+              alt={portfolioProof.featuredProject.title || profileName}
               style={portfolioCoverImage}
             />
           </div>
@@ -812,21 +821,21 @@ function ContractorDetails({ setPage, currentPage }) {
             value={availabilitySummary}
           />
           <TrustItem
-            label={isSpanish ? "Perfil verificado" : "Verified profile"}
-            value={credentialSummary.verified}
+            label={t("businessVerification")}
+            value={credentialSummary.verificationLabel}
           />
           <TrustItem
-            label={isSpanish ? "Licencia / seguro" : "Licensed / insured"}
+            label={t("licensedInsured")}
             value={
               credentialSummary.licensed ||
-              (isSpanish ? "No agregado todavía" : "Not added yet")
+              credentialSummary.credentialsLabel
             }
           />
           <TrustItem
             label={isSpanish ? "Reseñas" : "Reviews"}
             value={
-              reviewStats?.total_reviews
-                ? `${reviewStats.total_reviews} ${t("reviews")}`
+              portfolioProof.reviewCount
+                ? `${portfolioProof.reviewCount} ${t("reviews")}`
                 : isSpanish
                 ? "Reseñas pendientes"
                 : "Reviews pending"
@@ -838,11 +847,11 @@ function ContractorDetails({ setPage, currentPage }) {
       <div style={cardStyle}>
         <h2 style={sectionTitle}>{t("projectGallery")}</h2>
 
-        {projects.length === 0 && (
+        {publicPortfolioProjects.length === 0 && (
           <p style={mutedText}>{t("noProjectPhotos")}</p>
         )}
 
-        {projects.map((project) => {
+        {publicPortfolioProjects.map((project) => {
           const projectImages = getProjectImages(project);
           const coverImage = projectImages[0];
 
@@ -1124,70 +1133,18 @@ function getHomeownerRequestContexts() {
 }
 
 function getServicesOffered(profile = {}, fallbackCategory = "", isSpanish = false) {
-  const storedSpecialties = readStoredArray("businessServiceSpecialties");
-  const profileSpecialties = [
-    ...(Array.isArray(profile.businessServiceSpecialties)
-      ? profile.businessServiceSpecialties
-      : []),
-    ...(Array.isArray(profile.serviceSpecialties)
-      ? profile.serviceSpecialties
-      : []),
-    ...(Array.isArray(profile.service_specialties)
-      ? profile.service_specialties
-      : []),
-    ...(profile.id || profile.name || profile.business_name ? [] : storedSpecialties),
-  ];
-  const normalizedSpecialties = normalizeSelectedSpecialties(profileSpecialties);
-
-  if (normalizedSpecialties.length > 0) {
-    return normalizedSpecialties.map((specialty) =>
-      getProfessionalSpecialtyLabel(specialty, t)
-    ).filter(Boolean);
-  }
-
-  const legacyCategories = [
-    ...(Array.isArray(profile.services) ? profile.services : []),
-    ...(Array.isArray(profile.serviceCategories) ? profile.serviceCategories : []),
-    ...(Array.isArray(profile.service_categories) ? profile.service_categories : []),
-    profile.primaryService,
-    profile.service,
-    fallbackCategory,
-  ].filter(Boolean);
-  const inferredSpecialties = inferProfessionalSpecialtiesFromLegacyCategories(
-    legacyCategories
+  const services = getBusinessServicesProjection(
+    { ...profile, category: profile.category || fallbackCategory },
+    { translate: t }
   );
 
-  if (inferredSpecialties.length > 0) {
-    return inferredSpecialties.map((specialty) =>
-      getProfessionalSpecialtyLabel(specialty, t)
-    ).filter(Boolean);
-  }
-
-  const readableCategories = [
-    ...new Set(
-      legacyCategories
-        .map((service) => String(service || "").trim())
-        .filter(Boolean)
-        .filter((service) => !service.includes("_"))
-    ),
-  ];
-
-  if (readableCategories.length > 0) return readableCategories;
+  if (!services.isEmpty) return services.displayLabels;
 
   return [
     isSpanish
       ? "Servicios no listados todavía"
       : "Services not listed yet",
   ];
-}
-
-function readStoredArray(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function getAvailabilitySummary(profile = {}, isSpanish = false) {
@@ -1211,11 +1168,9 @@ function getAvailabilitySummary(profile = {}, isSpanish = false) {
 }
 
 function getCredentialSummary(profile = {}, isSpanish = false) {
-  const verified =
-    profile.verified ||
-    profile.isVerified ||
-    profile.profileVerified ||
-    profile.status === "active";
+  const verification = getBusinessVerificationProjection(profile, {
+    translate: (key) => t(key),
+  });
   const licensed =
     profile.licensedInsured ||
     profile.licensed_insured ||
@@ -1224,13 +1179,11 @@ function getCredentialSummary(profile = {}, isSpanish = false) {
     "";
 
   return {
-    verified: verified
-      ? isSpanish
-        ? "Perfil verificado"
-        : "Verified profile"
-      : isSpanish
-      ? "Verificación pendiente"
-      : "Verification pending",
+    verified: verification.verified,
+    verificationLabel: verification.verificationLabel,
+    compactBadgeText: verification.compactBadgeText,
+    publicTrustSummary: verification.publicTrustSummary,
+    credentialsLabel: verification.credentialsLabel,
     licensed: licensed
       ? isSpanish
         ? "Licencia / seguro agregado"

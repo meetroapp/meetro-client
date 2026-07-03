@@ -12,12 +12,15 @@ const REQUEST_SPECIALTY_DOMAINS = Object.freeze({
   door_repair: "home_services",
   door_replacement: "home_services",
   drywall: "home_services",
+  ceiling_fan_installation: "home_services",
   electrical: "home_services",
   flooring: "home_services",
+  garage_door_opener_installation: "home_services",
   general_maintenance: "home_services",
   handyman: "home_services",
   painting: "home_services",
   plumbing: "home_services",
+  plumbing_repairs: "home_services",
   pressure_washing: "home_services",
   tile: "home_services",
 
@@ -31,6 +34,10 @@ const REQUEST_SPECIALTY_DOMAINS = Object.freeze({
   tenant_ticket: "property_management",
 
   private_transportation: "transportation",
+  automotive_services: "transportation",
+  car_detailing: "transportation",
+  mechanic: "transportation",
+  mobile_services: "transportation",
 });
 
 const KNOWN_DOMAINS = new Set([
@@ -70,6 +77,22 @@ function inferSpecialtyFromText(request = {}) {
   if (text.includes("private transportation") || text.includes("private ride")) {
     return "private_transportation";
   }
+  if (
+    text.includes("mobile mechanic") ||
+    text.includes("mechanic") ||
+    text.includes("car won't start") ||
+    text.includes("car wont start") ||
+    text.includes("vehicle won't start") ||
+    text.includes("vehicle wont start") ||
+    text.includes("engine won't start") ||
+    text.includes("engine wont start") ||
+    text.includes("dead battery") ||
+    text.includes("jump start")
+  ) {
+    return "mechanic";
+  }
+  if (text.includes("car detail") || text.includes("detailing")) return "car_detailing";
+  if (text.includes("automotive")) return "automotive_services";
 
   if (text.includes("tenant ticket")) return "tenant_ticket";
   if (text.includes("tenant") && text.includes("maintenance")) return "tenant_ticket";
@@ -87,15 +110,23 @@ function inferSpecialtyFromText(request = {}) {
     return "door_replacement";
   }
 
+  if (text.includes("garage") && text.includes("opener")) {
+    return "garage_door_opener_installation";
+  }
+
   if (text.includes("door repair") || text.includes("fix door") || text.includes("door")) {
     return "door_repair";
   }
 
   if (text.includes("drywall")) return "drywall";
   if (text.includes("paint")) return "painting";
+  if (text.includes("faucet") || text.includes("plumbing repair")) {
+    return "plumbing_repairs";
+  }
   if (text.includes("plumbing") || text.includes("plumber") || text.includes("leak")) {
     return "plumbing";
   }
+  if (text.includes("ceiling fan")) return "ceiling_fan_installation";
   if (text.includes("electrical") || text.includes("outlet") || text.includes("breaker")) {
     return "electrical";
   }

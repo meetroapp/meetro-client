@@ -2,6 +2,16 @@
 // mutate stored records. Future owners are noted at each selector boundary.
 
 import { getProjectIdentity } from "./projectIdentity.js";
+import {
+  createQuoteProjectionFromRequest,
+  createScheduleProjectionFromRequest,
+  hasRequestQuoteProjection,
+  hasRequestSchedule,
+  isRequestConnectedToProfessional,
+  isRequestClosedForProfessionalProjection,
+  isRequestProfessionalWork,
+} from "./professionalLifecycleProjection.js";
+import { recoverRequestRelationships } from "./requestRelationshipRecovery.js";
 
 export const WORK_CENTER_READ_CONTRACTS = Object.freeze([
   {
@@ -60,8 +70,21 @@ export const WORK_CENTER_READ_CONTRACTS = Object.freeze([
   },
 ]);
 
-const ACTIVE_REQUEST_STATUSES = new Set(["accepted", "scheduled", "active"]);
-const COMPLETED_STATUSES = new Set(["completed"]);
+const ACTIVE_REQUEST_STATUSES = new Set([
+  "accepted",
+  "scheduled",
+  "work_scheduled",
+  "scheduled_work",
+  "on_the_way",
+  "enroute",
+  "arrived",
+  "active",
+  "in_progress",
+  "working",
+  "started",
+  "needs_resolution",
+]);
+const COMPLETED_STATUSES = new Set(["completed", "closed", "closure_completed", "history"]);
 const ACTIVE_EMERGENCY_STATUSES = new Set([
   "accepted",
   "enroute",
@@ -93,6 +116,34 @@ function readJson(key, fallback) {
 function readArray(key) {
   const value = readJson(key, []);
   return Array.isArray(value) ? value : [];
+}
+
+function getRequestKey(request = {}) {
+  return String(
+    request.requestId ||
+      request.id ||
+      [request.title, request.createdAt].filter(Boolean).join("::")
+  );
+}
+
+function readHomeownerRequestsSnapshot() {
+  const primary = readArray("homeownerRequests");
+  const backup = readArray("meetroHomeownerRequestsBackup");
+  if (backup.length === 0) {
+    return recoverRequestRelationships(primary, { storage: getStorage() }).requests;
+  }
+
+  const merged = [...primary];
+  const seen = new Set(primary.map(getRequestKey).filter(Boolean));
+
+  backup.forEach((request) => {
+    const key = getRequestKey(request);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(request);
+  });
+
+  return recoverRequestRelationships(merged, { storage: getStorage() }).requests;
 }
 
 function normalizeStatus(status) {
@@ -136,9 +187,30 @@ function hasValues(record) {
 
 // Future owner: Scheduling. Work Center should consume this projection.
 export function getScheduleItems() {
-  return readArray("meetro_business_schedule").map((item) =>
+  const storedItems = readArray("meetro_business_schedule").map((item) =>
     withSelectorMeta(item, "meetro_business_schedule")
   );
+  const storedRequestKeys = new Set(
+    storedItems
+      .flatMap((item) => [item.requestId, item.id, item.scheduleId])
+      .filter(Boolean)
+      .map(String)
+  );
+  const requestItems = readHomeownerRequestsSnapshot()
+    .filter((request) => isRequestConnectedToProfessional(request))
+    .filter(hasRequestSchedule)
+    .filter((request) => {
+      const requestId = getRequestKey(request);
+      return !requestId || !storedRequestKeys.has(String(requestId));
+    })
+    .map((request) =>
+      withSelectorMeta(
+        createScheduleProjectionFromRequest(request),
+        "homeownerRequests"
+      )
+    );
+
+  return [...storedItems, ...requestItems];
 }
 
 function getSafeScheduleIdentity(schedule) {
@@ -429,7 +501,28 @@ export function getQuoteItems() {
       ? "meetroQuoteHistory"
       : "quoteHistory";
 
-  return quotes.map((quote) => withSelectorMeta(quote, source));
+  const storedItems = quotes.map((quote) => withSelectorMeta(quote, source));
+  const storedRequestKeys = new Set(
+    storedItems
+      .flatMap((item) => [item.requestId, item.id, item.quoteId])
+      .filter(Boolean)
+      .map(String)
+  );
+  const requestQuoteItems = readHomeownerRequestsSnapshot()
+    .filter((request) => isRequestConnectedToProfessional(request))
+    .filter(hasRequestQuoteProjection)
+    .filter((request) => {
+      const requestId = getRequestKey(request);
+      return !requestId || !storedRequestKeys.has(String(requestId));
+    })
+    .map((request) =>
+      withSelectorMeta(
+        createQuoteProjectionFromRequest(request),
+        "homeownerRequests"
+      )
+    );
+
+  return [...storedItems, ...requestQuoteItems];
 }
 
 function getQuoteReconciliationItems() {
@@ -801,10 +894,16 @@ export function getActiveWorkItems() {
     );
   }
 
-  readArray("homeownerRequests")
-    .filter((request) =>
-      ACTIVE_REQUEST_STATUSES.has(normalizeStatus(request?.status))
-    )
+  readHomeownerRequestsSnapshot()
+    .filter((request) => {
+      const status = normalizeStatus(request?.status);
+      return (
+        isRequestConnectedToProfessional(request) &&
+        (ACTIVE_REQUEST_STATUSES.has(status) ||
+          isRequestProfessionalWork(request))
+      );
+    })
+    .filter((request) => !isRequestClosedForProfessionalProjection(request))
     .forEach((request) => {
       items.push(
         withSelectorMeta(request, "homeownerRequests")
@@ -870,13 +969,23 @@ export function getCompletedWorkItems() {
       .filter((value) => value !== undefined && value !== null && value !== "")
       .map(String)
   );
-  const homeownerItems = readArray("homeownerRequests")
+  const scheduleIds = new Set(
+    scheduleItems
+      .flatMap((item) => [item.requestId, item.id, item.scheduleId])
+      .filter((value) => value !== undefined && value !== null && value !== "")
+      .map(String)
+  );
+  const homeownerItems = readHomeownerRequestsSnapshot()
     .filter((project) =>
       COMPLETED_STATUSES.has(normalizeStatus(project?.status))
     )
     .filter((project) => {
       const id = project.requestId || project.id;
-      return id === undefined || id === null || !savedIds.has(String(id));
+      return (
+        id === undefined ||
+        id === null ||
+        (!savedIds.has(String(id)) && !scheduleIds.has(String(id)))
+      );
     })
     .map((project) =>
       withSelectorMeta(
@@ -914,7 +1023,7 @@ function getJobRecordEvents() {
 }
 
 function getRequestTimelineEvents() {
-  return readArray("homeownerRequests").flatMap((request) => {
+  return readHomeownerRequestsSnapshot().flatMap((request) => {
     const events = Array.isArray(request.projectTimeline)
       ? request.projectTimeline
       : [];
@@ -1274,7 +1383,7 @@ export function getSelectedProjectContext(projectId) {
   }
 
   const normalizedProjectId = String(projectId);
-  const homeownerRequests = readArray("homeownerRequests").map((request) =>
+  const homeownerRequests = readHomeownerRequestsSnapshot().map((request) =>
     withSelectorMeta(request, "homeownerRequests")
   );
   const selected = readJson("selectedActiveProject", null);

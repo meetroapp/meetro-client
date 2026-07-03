@@ -81,10 +81,10 @@ function InvoiceBuilder({ setPage }) {
     serviceDescriptionPlaceholder: isSpanish ? "Servicio completado según lo solicitado." : "Service completed as requested.",
     jobReference: isSpanish ? "Referencia del trabajo" : "Job reference",
     completionDate: isSpanish ? "Fecha de finalización" : "Completion date",
-    aiInvoiceHelp: isSpanish ? "Ayuda de IA para factura" : "AI Invoice Help",
+    aiInvoiceHelp: isSpanish ? "Ayuda de Meetro para factura" : "Meetro Invoice Help",
     aiInvoiceSubtitle: isSpanish
-      ? "Usa Meetro Assistant para mejorar el texto de la factura, organizar cargos y revisar detalles faltantes."
-      : "Use Meetro Assistant to improve invoice wording, organize charges, and check for missing details.",
+      ? "Usa Meetro para mejorar el texto de la factura, organizar cargos y revisar detalles faltantes."
+      : "Use Meetro to improve invoice wording, organize charges, and check for missing details.",
     improveWording: isSpanish ? "Mejorar texto" : "Improve wording",
     checkMissingDetails: isSpanish ? "Revisar detalles faltantes" : "Check missing details",
     makeCustomerFriendly: isSpanish ? "Hacerlo claro para el cliente" : "Make customer friendly",
@@ -157,7 +157,7 @@ function InvoiceBuilder({ setPage }) {
       : "Attaches this invoice to the current Work Center job and its supporting records.",
     saveToThisJobUnavailable: isSpanish
       ? "Abre desde un trabajo de Work Center para usar esta opción."
-      : "Open from a Work Center job to use this option.",
+      : "Start from a Work Center job to use this option.",
     saveToCustomerHistory: isSpanish ? "Guardar en historial del cliente" : "Save to customer history",
     saveToCustomerHistoryHelp: isSpanish
       ? "Guarda un registro local de solo lectura bajo esta relación con el cliente."
@@ -182,7 +182,7 @@ function InvoiceBuilder({ setPage }) {
     saveAfterAdding: isSpanish ? "Guarda la factura después de agregar" : "Save invoice after adding",
     openFromCustomerContext: isSpanish
       ? "Abre esta factura desde una conversación con cliente o un trabajo de Work Center antes de enviarla."
-      : "Open this invoice from a customer conversation or Work Center job before sending.",
+      : "Start this invoice from a customer conversation or Work Center job before sending.",
     noLineItemsSaved: isSpanish
       ? "No hay partidas guardadas. Los cargos de resumen aparecen abajo."
       : "No line items saved. Summary charges are shown below.",

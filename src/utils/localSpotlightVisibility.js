@@ -9,6 +9,8 @@ import {
   normalizeServiceCategory,
   normalizeServiceDomain,
 } from "./professionalRequestMatching.js";
+import { getBusinessIdentityProjection } from "./businessIdentity.js";
+import { getBusinessServicesProjection } from "./businessServiceProfile.js";
 
 export const SPOTLIGHT_PORTFOLIO_STORAGE_KEYS = BUSINESS_PORTFOLIO_STORAGE_KEYS;
 
@@ -249,6 +251,11 @@ export function getSpotlightMediaForBusiness(business = {}) {
     business.coverImage,
     business.cover_image,
     getSpotlightAvatarUrl(business),
+    business.logo,
+    business.logoUrl,
+    business.logo_url,
+    business.businessLogo,
+    business.business_logo,
   ]);
 
   const workPhotos = cleanMediaUrls([
@@ -268,18 +275,7 @@ export function getSpotlightMediaForBusiness(business = {}) {
 export const getSpotlightShowcaseMediaUrls = getSpotlightMediaForBusiness;
 
 export function getSpotlightAvatarUrl(business = {}) {
-  return (
-    business.logo ||
-    business.logoUrl ||
-    business.logo_url ||
-    business.businessLogo ||
-    business.business_logo ||
-    business.avatarUrl ||
-    business.avatar_url ||
-    business.profileImage ||
-    business.profile_image ||
-    ""
-  );
+  return getBusinessIdentityProjection(business).imageUrl;
 }
 
 export function getSpotlightFeaturedProject(business = {}) {
@@ -443,30 +439,18 @@ export function getSpotlightMediaSourceSummary(business = {}) {
 }
 
 export function buildSpotlightProfessionalProfile(business = {}) {
+  const services = getBusinessServicesProjection(business);
   const category =
     business.category ||
     business.business_category ||
     business.businessCategory ||
     "";
-  const serviceCategories = [
-    ...normalizeList(business.serviceCategories),
-    ...normalizeList(business.service_categories),
-    ...normalizeList(business.businessServiceCategories),
-    ...normalizeList(business.business_service_categories),
-    category,
-  ]
-    .map(normalizeServiceCategory)
-    .filter(Boolean);
-  const serviceSpecialties = [
-    ...normalizeList(business.serviceSpecialties),
-    ...normalizeList(business.service_specialties),
-    ...normalizeList(business.businessServiceSpecialties),
-    ...normalizeList(business.business_service_specialties),
-    ...normalizeList(business.specialties),
-  ];
+  const serviceCategories = services.categories.map(normalizeServiceCategory).filter(Boolean);
+  const serviceSpecialties = services.serviceIds;
   const serviceDomain =
     normalizeServiceDomain(
-      business.serviceDomain ||
+      services.domains[0] ||
+        business.serviceDomain ||
         business.service_domain ||
         business.businessServiceDomain ||
         business.business_service_domain ||
@@ -486,6 +470,8 @@ export function buildSpotlightProfessionalProfile(business = {}) {
     serviceSpecialties,
     businessServiceSpecialties:
       business.businessServiceSpecialties || serviceSpecialties,
+    serviceCapabilities: services.capabilities,
+    businessServiceCapabilities: services.capabilities,
     city: business.city || business.primaryCity || business.businessPrimaryCity || "",
     zip:
       business.zip ||

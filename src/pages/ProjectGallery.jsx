@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import API_URL from "../api";
@@ -9,11 +10,10 @@ import {
   persistBusinessPortfolioProjects,
 } from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
-import {
-  getProfessionalReviews,
-  getProfessionalReviewStats,
-} from "../utils/reviewStorage";
 import { persistBusinessProfileShareRecord } from "../utils/profileShare";
+import { applyBusinessIdentityFields, getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
+import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
   CAMERA_PERMISSION_MESSAGE,
   createPhotoInputEvent,
@@ -35,12 +35,14 @@ function ProjectGallery({ setPage, currentPage }) {
 
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editImages, setEditImages] = useState([]);
   const [activeEditImage, setActiveEditImage] = useState("");
   const [expandedEditImage, setExpandedEditImage] = useState("");
+  const portfolioEditorScrollRef = useRef(null);
   const [language, updateLanguage] = useState(getLanguage());
 
   useEffect(() => {
@@ -64,6 +66,22 @@ function ProjectGallery({ setPage, currentPage }) {
   useEffect(() => {
     fetchMyProfileAndProjects();
   }, [language]);
+
+  useEffect(() => {
+    if ((!editingProject && !creatingProject) || typeof window === "undefined") return undefined;
+
+    portfolioEditorScrollRef.current = {
+      x: window.scrollX || window.pageXOffset || 0,
+      y: window.scrollY || window.pageYOffset || 0,
+    };
+
+    return () => {
+      const scrollPosition = portfolioEditorScrollRef.current;
+      if (scrollPosition) {
+        window.scrollTo(scrollPosition.x, scrollPosition.y);
+      }
+    };
+  }, [editingProject, creatingProject]);
 
   async function fetchMyProfileAndProjects() {
     try {
@@ -203,6 +221,7 @@ function ProjectGallery({ setPage, currentPage }) {
         setTitle("");
         setDescription("");
         setImages([]);
+        setCreatingProject(false);
 
         await fetchMyProfileAndProjects();
       }
@@ -385,6 +404,36 @@ function ProjectGallery({ setPage, currentPage }) {
           contractorProfile.business_service_domain ||
           localStorage.getItem("businessServiceDomain") ||
           "",
+        serviceSpecialties:
+          existingBusiness?.serviceSpecialties ||
+          contractorProfile.serviceSpecialties ||
+          contractorProfile.businessServiceSpecialties ||
+          [],
+        businessServiceSpecialties:
+          existingBusiness?.businessServiceSpecialties ||
+          contractorProfile.businessServiceSpecialties ||
+          contractorProfile.serviceSpecialties ||
+          [],
+        serviceCategories:
+          existingBusiness?.serviceCategories ||
+          contractorProfile.serviceCategories ||
+          contractorProfile.businessServiceCategories ||
+          [],
+        businessServiceCategories:
+          existingBusiness?.businessServiceCategories ||
+          contractorProfile.businessServiceCategories ||
+          contractorProfile.serviceCategories ||
+          [],
+        serviceCapabilities:
+          existingBusiness?.serviceCapabilities ||
+          contractorProfile.serviceCapabilities ||
+          contractorProfile.businessServiceCapabilities ||
+          [],
+        businessServiceCapabilities:
+          existingBusiness?.businessServiceCapabilities ||
+          contractorProfile.businessServiceCapabilities ||
+          contractorProfile.serviceCapabilities ||
+          [],
         serviceZipCodes:
           existingBusiness?.serviceZipCodes ||
           contractorProfile.serviceZipCodes ||
@@ -398,6 +447,18 @@ function ProjectGallery({ setPage, currentPage }) {
           localStorage.getItem("businessLocalDemoSafe") === "true" ||
           undefined,
       };
+      const services = getBusinessServicesProjection(businessRecord, {
+        translate: t,
+      });
+      const publicBusinessRecord = applyBusinessIdentityFields({
+        ...businessRecord,
+        serviceSpecialties: services.serviceIds,
+        businessServiceSpecialties: services.serviceIds,
+        serviceCategories: services.categories,
+        businessServiceCategories: services.categories,
+        serviceCapabilities: services.capabilities,
+        businessServiceCapabilities: services.capabilities,
+      });
       const filteredBusinesses = existingBusinesses.filter((business) => {
         const existingId = String(business.id || business.businessId || "");
         const existingName = String(
@@ -413,7 +474,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
       localStorage.setItem(
         "meetroBusinesses",
-        JSON.stringify([businessRecord, ...filteredBusinesses])
+        JSON.stringify([publicBusinessRecord, ...filteredBusinesses])
       );
     } catch {}
 
@@ -434,16 +495,47 @@ function ProjectGallery({ setPage, currentPage }) {
   function viewPublicPortfolio() {
     if (!profile) return;
 
-    persistBusinessProfileShareRecord({
-      ...profile,
-      name: profile.business_name || profile.name || localStorage.getItem("businessName") || "",
-      business_name:
-        profile.business_name || profile.name || localStorage.getItem("businessName") || "",
-      businessPortfolio: projects,
-      projectGallery: projects,
-    });
+    persistBusinessProfileShareRecord(
+      applyBusinessIdentityFields({
+        ...profile,
+        businessPortfolio: projects,
+        projectGallery: projects,
+      })
+    );
     localStorage.setItem("contractorDetailsReturnPage", "projectGallery");
     setPage("contractorDetails");
+  }
+
+  function openCreateProjectEditor() {
+    setPhotoError("");
+    setCreatingProject(true);
+  }
+
+  function closeCreateProjectEditor() {
+    setCreatingProject(false);
+    setTitle("");
+    setDescription("");
+    setImages([]);
+    setPhotoError("");
+  }
+
+  function openPortfolioProjectEditor(project) {
+    setPhotoError("");
+    setEditingProject(project);
+    setEditTitle(project.title || "");
+    setEditDescription(project.description || "");
+    const projectImages = getProjectImages(project);
+    setEditImages(projectImages);
+    setActiveEditImage(projectImages[0] || "");
+  }
+
+  function closePortfolioProjectEditor() {
+    setEditingProject(null);
+    setEditTitle("");
+    setEditDescription("");
+    setEditImages([]);
+    setActiveEditImage("");
+    setExpandedEditImage("");
   }
 
   if (loading) {
@@ -454,23 +546,27 @@ function ProjectGallery({ setPage, currentPage }) {
     );
   }
 
-  const businessName =
-    profile?.business_name || profile?.name || localStorage.getItem("businessName") || t("portfolio");
-  const projectPhotoCount = projects.reduce(
-    (total, project) => total + getProjectImages(project).length,
-    0
+  const businessIdentity = getBusinessIdentityProjection(profile || {}, {
+    fallbackName: t("portfolio"),
+    translate: (key) => t(key, language),
+  });
+  const businessName = businessIdentity.businessName || t("portfolio");
+  const portfolioProof = getBusinessPortfolioProofProjection(
+    {
+      ...profile,
+      businessPortfolio: projects,
+      projectGallery: projects,
+    },
+    {
+      translate: (key) => t(key, language),
+    }
   );
-  const featuredProjectCount = projects.filter((project) => project.spotlightFeatured).length;
   const portfolioStatus =
-    projects.length > 0 && projectPhotoCount > 0
+    portfolioProof.hasPublicProof
       ? t("portfolioTrustReady")
       : t("portfolioNeedsPhotos");
-  const portfolioReviews = getProfessionalReviews({
-    professionalId: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
-    professionalName: businessName,
-  });
-  const portfolioReviewStats = getProfessionalReviewStats(portfolioReviews);
-  const mostRecentReview = portfolioReviews[0] || null;
+  const portfolioReviewStats = portfolioProof.reviewStats;
+  const mostRecentReview = portfolioProof.mostRecentReview;
   const profileYearsServing =
     profile?.yearsServing ||
     profile?.years_serving ||
@@ -482,24 +578,25 @@ function ProjectGallery({ setPage, currentPage }) {
     profile?.licensed_insured ||
     profile?.insured ||
     "";
+  const businessVerification = businessIdentity.verification;
   const credentialItems = [
     {
       icon: "verified",
       label: t("verifiedBusiness"),
-      value: profile ? t("ready") : t("notSet"),
+      value: businessVerification.verificationLabel,
     },
     {
       icon: "portfolio",
       label: t("portfolioReady"),
-      value: projectPhotoCount > 0 ? t("ready") : t("notSet"),
+      value: portfolioProof.projectCount > 0 ? t("ready") : t("notSet"),
     },
     {
       icon: "verified",
       label: t("licensedInsured"),
       value:
         licensedInsuredValue === true
-          ? t("ready")
-          : licensedInsuredValue || t("notProvided"),
+          ? businessVerification.credentialsLabel
+          : licensedInsuredValue || businessVerification.credentialsLabel,
     },
     {
       icon: "history",
@@ -507,170 +604,6 @@ function ProjectGallery({ setPage, currentPage }) {
       value: profileYearsServing || t("notProvided"),
     },
   ];
-
-  if (editingProject) {
-
-    return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
-        <button
-          style={backButton}
-          onClick={() => setEditingProject(null)}
-        >
-          ← {language === "es" ? "Volver al portafolio" : "Back to Portfolio"}
-        </button>
-
-        <div style={editPageCard}>
-          <h1 style={editPageTitle}>
-            {language === "es" ? "Editar portafolio" : "Edit Portfolio Item"}
-          </h1>
-
-          <p style={editPageSubtitle}>
-            {language === "es"
-              ? "Actualiza la información visible para clientes."
-              : "Update the information customers will see."}
-          </p>
-
-          <div style={editPhotoHeader}>
-            <strong>
-              {language === "es" ? "Fotos del portafolio" : "Portfolio Photos"}
-            </strong>
-
-            <button
-              style={smallAddPhotoBtn}
-              onClick={openEditProjectPhotoPicker}
-            >
-              + {language === "es" ? "Agregar fotos" : "Add Photos"}
-            </button>
-          </div>
-
-          <input
-            ref={editPortfolioImageInputRef}
-            id="editPortfolioImageInput"
-            type="file"
-            accept="image/*"
-            multiple
-            style={{ display: "none" }}
-            onChange={handleEditImageUpload}
-          />
-
-          {photoError && <p style={uploadingText}>{photoError}</p>}
-
-          {editImages.length > 0 ? (
-            <>
-              <img
-                src={activeEditImage || editImages[0]}
-                alt={editTitle || "Portfolio preview"}
-                style={editMainImage}
-                onClick={() =>
-                  setExpandedEditImage(
-                    activeEditImage || editImages[0]
-                  )
-                }
-              />
-
-              <div style={editImagesGrid}>
-                {editImages.map((url, index) => (
-                  <div key={`${editingProject.id}-edit-${index}`} style={editImageTile}>
-                    <img
-                      src={url}
-                      alt={`Portfolio ${index + 1}`}
-                      style={{
-                        ...editImage,
-                        ...((activeEditImage || editImages[0]) === url
-                          ? activeEditThumbnail
-                          : {}),
-                      }}
-                      onClick={() => setActiveEditImage(url)}
-                    />
-
-                    <button
-                      style={deletePhotoBtn}
-                      onClick={() => {
-                        setEditImages((currentImages) => {
-                          const nextImages = currentImages.filter((image) => image !== url);
-
-                          if ((activeEditImage || currentImages[0]) === url) {
-                            setActiveEditImage(nextImages[0] || "");
-                          }
-
-                          return nextImages;
-                        });
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div style={emptyEditPhotos}>
-              {language === "es"
-                ? "No hay fotos en este portafolio."
-                : "No photos in this portfolio item."}
-            </div>
-          )}
-
-          {uploading && (
-            <p style={uploadingText}>
-              {language === "es" ? "Subiendo fotos..." : "Uploading photos..."}
-            </p>
-          )}
-
-          <input
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            placeholder={t("projectTitle")}
-            style={inputStyle}
-          />
-
-          <textarea
-            value={editDescription}
-            onChange={(e) => setEditDescription(e.target.value)}
-            placeholder={t("projectDescription")}
-            style={{
-              ...inputStyle,
-              minHeight: "150px",
-              resize: "none",
-            }}
-          />
-
-          <button
-            style={publishButton}
-            onClick={handleSaveProjectEdit}
-          >
-            {language === "es" ? "Guardar cambios" : "Save Changes"}
-          </button>
-        </div>
-
-        {expandedEditImage && (
-          <div
-            style={imagePreviewOverlay}
-            onClick={() => setExpandedEditImage("")}
-          >
-            <button
-              type="button"
-              style={closePreviewBtn}
-              onClick={(event) => {
-                event.stopPropagation();
-                setExpandedEditImage("");
-              }}
-            >
-              ×
-            </button>
-
-            <img
-              src={expandedEditImage}
-              alt="Expanded portfolio preview"
-              style={expandedPreviewImage}
-            />
-          </div>
-        )}
-
-        <BottomNav setPage={setPage} currentPage="profile" />
-      </div>
-    );
-  }
 
   return (
     <div className="app-page meetro-responsive-page" style={pageWrapper}>
@@ -698,7 +631,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
       <div style={heroCard}>
         <div style={heroTopRow}>
-          <div>
+          <div style={heroIdentityBlock}>
             <div style={heroBadge}>
               <MeetroIcon name="portfolio" size={16} decorative />{" "}
               {portfolioStatus}
@@ -708,7 +641,7 @@ function ProjectGallery({ setPage, currentPage }) {
           </div>
 
           <div style={heroProofStack}>
-            <strong>{projects.length}</strong>
+            <strong>{portfolioProof.projectCount}</strong>
             <span>{t("projects")}</span>
           </div>
         </div>
@@ -717,12 +650,12 @@ function ProjectGallery({ setPage, currentPage }) {
 
         <div style={statsGrid}>
           <div style={statCard}>
-            <div style={statNumber}>{projectPhotoCount}</div>
+            <div style={statNumber}>{portfolioProof.photoCount}</div>
             <div style={statLabel}>{t("photos")}</div>
           </div>
 
           <div style={statCard}>
-            <div style={statNumber}>{featuredProjectCount}</div>
+            <div style={statNumber}>{portfolioProof.featuredProjectCount}</div>
             <div style={statLabel}>{t("featuredInSpotlight")}</div>
           </div>
 
@@ -763,17 +696,10 @@ function ProjectGallery({ setPage, currentPage }) {
           <div style={portfolioActionGrid}>
             <button
               style={primaryActionButton}
-              onClick={() => {
-                document.getElementById("portfolioProjectTitleInput")?.focus();
-              }}
+              onClick={() => openCreateProjectEditor()}
             >
               <MeetroIcon name="addProject" size={16} decorative />{" "}
               {t("addProject")}
-            </button>
-
-            <button style={secondaryActionButton} onClick={openProjectPhotoPicker}>
-              <MeetroIcon name="photoCount" size={16} decorative />{" "}
-              {t("addPhotos")}
             </button>
 
             <button style={secondaryActionButton} onClick={viewPublicPortfolio}>
@@ -806,9 +732,7 @@ function ProjectGallery({ setPage, currentPage }) {
 
                 <button
                   style={primaryButton}
-                  onClick={() =>
-                    document.getElementById("portfolioProjectTitleInput")?.focus()
-                  }
+                  onClick={() => openCreateProjectEditor()}
                 >
                   {t("addFirstProject")}
                 </button>
@@ -835,7 +759,6 @@ function ProjectGallery({ setPage, currentPage }) {
               return (
                 <div
                   key={project.id}
-                  className={project.spotlightFeatured ? "meetro-selected-card" : ""}
                   style={{
                     ...projectCard,
                     ...(project.spotlightFeatured ? projectCardFeatured : {}),
@@ -889,14 +812,7 @@ function ProjectGallery({ setPage, currentPage }) {
                     <div style={projectButtonRow}>
                       <button
                         style={editPortfolioBtn}
-                        onClick={() => {
-                          setEditingProject(project);
-                          setEditTitle(project.title || "");
-                          setEditDescription(project.description || "");
-                          const projectImages = getProjectImages(project);
-                          setEditImages(projectImages);
-                          setActiveEditImage(projectImages[0] || "");
-                        }}
+                        onClick={() => openPortfolioProjectEditor(project)}
                       >
                         <MeetroIcon name="editPortfolio" size={16} decorative />{" "}
                         {t("editPortfolio")}
@@ -965,119 +881,341 @@ function ProjectGallery({ setPage, currentPage }) {
             </div>
           </section>
 
-          <div style={uploadCard}>
-            <div style={sectionHeader}>
-              <h2 style={sectionTitle}>
-                <MeetroIcon name="addProject" size={24} decorative />{" "}
-                {t("addProject")}
-              </h2>
-
-              <div style={sectionInfoBadge} aria-label={t("projectType")}>
-                <MeetroIcon name="beforeAfter" size={14} decorative />
-                {t("beforeAfterProject")}
-              </div>
-            </div>
-
-            <input
-              id="portfolioProjectTitleInput"
-              placeholder={t("projectTitle")}
-              value={title}
-              onChange={(e) =>
-                setTitle(e.target.value)
-              }
-              style={inputStyle}
-            />
-
-            <textarea
-              placeholder={t(
-                "projectDescription"
-              )}
-              value={description}
-              onChange={(e) =>
-                setDescription(
-                  e.target.value
-                )
-              }
-              style={{
-                ...inputStyle,
-                minHeight: "120px",
-                resize: "none",
-              }}
-            />
-
-            <div style={uploadZone}>
-              <input
-                ref={projectImageInputRef}
-                id="projectImageInput"
-                type="file"
-                accept="image/*"
-                multiple
-                style={{ display: "none" }}
-                onChange={handleImageUpload}
-              />
-
-              <button
-                onClick={openProjectPhotoPicker}
-                style={uploadButton}
-              >
-                +
-              </button>
-
-              <h3 style={uploadTitle}>
-                {images.length > 0
-                  ? `${images.length} ${t("photosReady")}`
-                  : t("uploadPhotos")}
-              </h3>
-
-              <p style={uploadText}>
-                {t("portfolioUploadHelp")}
-              </p>
-
-              {uploading && (
-                <p style={uploadingText}>
-                  {t("uploadingPhotos")}
-                </p>
-              )}
-              {photoError && <p style={uploadingText}>{photoError}</p>}
-            </div>
-
-            {images.length > 0 && (
-              <div style={previewGrid}>
-                {images.map((url, index) => (
-                  <div key={url} style={previewTile}>
-                    <img
-                      src={url}
-                      alt={`Portfolio preview ${index + 1}`}
-                      style={previewImage}
-                    />
-
-                    <button
-                      style={removePreviewBtn}
-                      onClick={() =>
-                        setImages((currentImages) =>
-                          currentImages.filter((image) => image !== url)
-                        )
-                      }
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={handleCreateProject}
-              style={publishButton}
-            >
-              <MeetroIcon name="publishProject" size={16} decorative />{" "}
-              {t("publishProject")}
-            </button>
-          </div>
         </>
       )}
 
       <BottomNav setPage={setPage} currentPage="projectGallery" />
+
+      {creatingProject && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={editorBackdrop}
+            role="presentation"
+            onClick={closeCreateProjectEditor}
+          >
+            <section
+              style={portfolioEditorSheet}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("addProject")}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div style={editorHandle} aria-hidden="true" />
+
+              <div style={editorHeader}>
+                <div style={{ minWidth: 0 }}>
+                  <h1 style={editPageTitle}>{t("addProject")}</h1>
+                  <p style={editPageSubtitle}>{t("portfolioUploadHelp")}</p>
+                </div>
+
+                <button
+                  type="button"
+                  style={editorHeaderCancel}
+                  onClick={closeCreateProjectEditor}
+                >
+                  {t("cancel")}
+                </button>
+              </div>
+
+              <div style={portfolioEditorBody}>
+                <div style={sectionInfoBadge} aria-label={t("projectType")}>
+                  <MeetroIcon name="beforeAfter" size={14} decorative />
+                  {t("beforeAfterProject")}
+                </div>
+
+                <input
+                  ref={projectImageInputRef}
+                  id="projectImageInput"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={handleImageUpload}
+                />
+
+                <input
+                  id="portfolioProjectTitleInput"
+                  placeholder={t("projectTitle")}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  style={inputStyle}
+                />
+
+                <textarea
+                  placeholder={t("projectDescription")}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    minHeight: "120px",
+                    resize: "none",
+                  }}
+                />
+
+                <div style={uploadZone}>
+                  <button
+                    type="button"
+                    onClick={openProjectPhotoPicker}
+                    style={uploadButton}
+                  >
+                    +
+                  </button>
+
+                  <h3 style={uploadTitle}>
+                    {images.length > 0
+                      ? `${images.length} ${t("photosReady")}`
+                      : t("uploadPhotos")}
+                  </h3>
+
+                  <p style={uploadText}>{t("portfolioUploadHelp")}</p>
+
+                  {uploading && (
+                    <p style={uploadingText}>{t("uploadingPhotos")}</p>
+                  )}
+                  {photoError && <p style={uploadingText}>{photoError}</p>}
+                </div>
+
+                {images.length > 0 && (
+                  <div style={previewGrid}>
+                    {images.map((url, index) => (
+                      <div key={url} style={previewTile}>
+                        <img
+                          src={url}
+                          alt={`Portfolio preview ${index + 1}`}
+                          style={previewImage}
+                        />
+
+                        <button
+                          type="button"
+                          style={removePreviewBtn}
+                          onClick={() =>
+                            setImages((currentImages) =>
+                              currentImages.filter((image) => image !== url)
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={editorFooter}>
+                <button
+                  type="button"
+                  style={editorCancelButton}
+                  onClick={closeCreateProjectEditor}
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  style={editorSaveButton}
+                  onClick={handleCreateProject}
+                >
+                  <MeetroIcon name="publishProject" size={16} decorative />{" "}
+                  {t("publishProject")}
+                </button>
+              </div>
+            </section>
+          </div>,
+          document.body
+        )}
+
+      {editingProject && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={editorBackdrop}
+            role="presentation"
+            onClick={closePortfolioProjectEditor}
+          >
+            <section
+              style={portfolioEditorSheet}
+              role="dialog"
+              aria-modal="true"
+              aria-label={language === "es" ? "Editar proyecto" : "Edit Project"}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div style={editorHandle} aria-hidden="true" />
+
+              <div style={editorHeader}>
+                <div style={{ minWidth: 0 }}>
+                  <h1 style={editPageTitle}>
+                    {language === "es" ? "Editar proyecto" : "Edit Project"}
+                  </h1>
+
+                  <p style={editPageSubtitle}>
+                    {language === "es"
+                      ? "Actualiza la información visible para clientes."
+                      : "Update the information customers will see."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  style={editorHeaderCancel}
+                  onClick={closePortfolioProjectEditor}
+                >
+                  {t("cancel")}
+                </button>
+              </div>
+
+              <div style={portfolioEditorBody}>
+                <div style={editPhotoHeader}>
+                  <strong>
+                    {language === "es" ? "Fotos del portafolio" : "Portfolio Photos"}
+                  </strong>
+
+                  <button
+                    type="button"
+                    style={smallAddPhotoBtn}
+                    onClick={openEditProjectPhotoPicker}
+                  >
+                    + {language === "es" ? "Agregar fotos" : "Add Photos"}
+                  </button>
+                </div>
+
+                <input
+                  ref={editPortfolioImageInputRef}
+                  id="editPortfolioImageInput"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={handleEditImageUpload}
+                />
+
+                {photoError && <p style={uploadingText}>{photoError}</p>}
+
+                {editImages.length > 0 ? (
+                  <>
+                    <img
+                      src={activeEditImage || editImages[0]}
+                      alt={editTitle || "Portfolio preview"}
+                      style={editMainImage}
+                      onClick={() =>
+                        setExpandedEditImage(activeEditImage || editImages[0])
+                      }
+                    />
+
+                    <div style={editImagesGrid}>
+                      {editImages.map((url, index) => (
+                        <div key={`${editingProject.id}-edit-${index}`} style={editImageTile}>
+                          <img
+                            src={url}
+                            alt={`Portfolio ${index + 1}`}
+                            style={{
+                              ...editImage,
+                              ...((activeEditImage || editImages[0]) === url
+                                ? activeEditThumbnail
+                                : {}),
+                            }}
+                            onClick={() => setActiveEditImage(url)}
+                          />
+
+                          <button
+                            type="button"
+                            style={deletePhotoBtn}
+                            onClick={() => {
+                              setEditImages((currentImages) => {
+                                const nextImages = currentImages.filter((image) => image !== url);
+
+                                if ((activeEditImage || currentImages[0]) === url) {
+                                  setActiveEditImage(nextImages[0] || "");
+                                }
+
+                                return nextImages;
+                              });
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={emptyEditPhotos}>
+                    {language === "es"
+                      ? "No hay fotos en este portafolio."
+                      : "No photos in this portfolio item."}
+                  </div>
+                )}
+
+                {uploading && (
+                  <p style={uploadingText}>
+                    {language === "es" ? "Subiendo fotos..." : "Uploading photos..."}
+                  </p>
+                )}
+
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder={t("projectTitle")}
+                  style={inputStyle}
+                />
+
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder={t("projectDescription")}
+                  style={{
+                    ...inputStyle,
+                    minHeight: "150px",
+                    resize: "none",
+                  }}
+                />
+              </div>
+
+              <div style={editorFooter}>
+                <button
+                  type="button"
+                  style={editorCancelButton}
+                  onClick={closePortfolioProjectEditor}
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="button"
+                  style={editorSaveButton}
+                  onClick={handleSaveProjectEdit}
+                >
+                  {t("save")}
+                </button>
+              </div>
+            </section>
+
+            {expandedEditImage && (
+              <div
+                style={imagePreviewOverlay}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setExpandedEditImage("");
+                }}
+              >
+                <button
+                  type="button"
+                  style={closePreviewBtn}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedEditImage("");
+                  }}
+                >
+                  ×
+                </button>
+
+                <img
+                  src={expandedEditImage}
+                  alt="Expanded portfolio preview"
+                  style={expandedPreviewImage}
+                />
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
      
     </div>
   );
@@ -1149,15 +1287,25 @@ const heroTopRow = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: "16px",
+  gap: "18px",
+  minWidth: 0,
+};
+
+const heroIdentityBlock = {
+  minWidth: 0,
+  flex: "1 1 auto",
+  display: "grid",
+  gap: "10px",
 };
 
 const heroProofStack = {
-  minWidth: "76px",
+  flex: "0 0 auto",
+  minWidth: "82px",
   background: "rgba(255,255,255,0.12)",
   borderRadius: "18px",
-  padding: "12px 10px",
+  padding: "13px 12px",
   textAlign: "center",
+  marginTop: "2px",
 };
 
 const heroBadge = {
@@ -1169,23 +1317,28 @@ const heroBadge = {
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "800",
-  marginBottom: "14px",
+  width: "fit-content",
+  maxWidth: "100%",
   boxShadow: "0 8px 18px rgba(91,61,245,0.10)",
 };
 
 const heroTitle = {
-  fontSize: "28px",
+  fontSize: "clamp(21px, 6vw, 28px)",
   margin: 0,
-  lineHeight: 1.08,
+  lineHeight: 1.12,
   color: "white",
   textShadow: "0 2px 10px rgba(0,0,0,0.22)",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+  hyphens: "none",
 };
 
 const heroSubtitle = {
   color: "rgba(255,255,255,0.78)",
-  marginTop: "16px",
-  lineHeight: 1.6,
-  fontSize: "17px",
+  marginTop: "18px",
+  lineHeight: 1.55,
+  fontSize: "16px",
+  maxWidth: "64ch",
 };
 
 const portfolioActionGrid = {
@@ -1469,20 +1622,120 @@ const projectCard = {
 };
 
 const projectCardFeatured = {
-  border: "2px solid #5b3df5",
-  boxShadow: "0 18px 44px rgba(91,61,245,0.18)",
+  border: "1px solid rgba(91,61,245,0.34)",
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,247,255,0.94))",
+  boxShadow: "0 14px 34px rgba(91,61,245,0.12)",
 };
 
-const editPageCard = {
+const editorBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1300,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "rgba(15,23,42,0.24)",
+  padding:
+    "calc(env(safe-area-inset-top) + 12px) max(10px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 12px) max(10px, env(safe-area-inset-left))",
+  boxSizing: "border-box",
+  overflow: "hidden",
+  touchAction: "none",
+};
+
+const portfolioEditorSheet = {
+  width: "min(100%, 680px)",
+  maxWidth: "100%",
+  maxHeight: "min(86dvh, 760px)",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateRows: "auto auto 1fr auto",
+  gap: "12px",
   background: "white",
-  borderRadius: "28px",
-  padding: "22px",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  border: "1px solid rgba(91,61,245,0.14)",
+  borderRadius: "24px",
+  padding: "10px 14px 14px",
+  boxShadow: "0 24px 70px rgba(15,23,42,0.22)",
+  backdropFilter: "blur(18px)",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const editorHandle = {
+  justifySelf: "center",
+  width: "48px",
+  height: "5px",
+  borderRadius: "999px",
+  background: "rgba(100,116,139,0.24)",
+};
+
+const editorHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const editorHeaderCancel = {
+  border: "1px solid rgba(148,163,184,0.28)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.8)",
+  color: "#475569",
+  padding: "9px 12px",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const portfolioEditorBody = {
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+  minHeight: 0,
+  paddingRight: "2px",
+  WebkitOverflowScrolling: "touch",
+  touchAction: "pan-y",
+};
+
+const editorFooter = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr)",
+  gap: "10px",
+  paddingTop: "10px",
+  borderTop: "1px solid rgba(226,232,240,0.86)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.96))",
+  boxSizing: "border-box",
+};
+
+const editorCancelButton = {
+  minWidth: 0,
+  border: "1px solid rgba(148,163,184,0.32)",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.82)",
+  color: "#475569",
+  padding: "12px 14px",
+  fontSize: "14px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const editorSaveButton = {
+  minWidth: 0,
+  border: "1px solid rgba(91,61,245,0.42)",
+  borderRadius: "16px",
+  background: "#5b3df5",
+  color: "#ffffff",
+  padding: "12px 14px",
+  fontSize: "14px",
+  fontWeight: 950,
+  cursor: "pointer",
+  boxShadow: "0 12px 26px rgba(91,61,245,0.22)",
 };
 
 const editPageTitle = {
   margin: 0,
-  fontSize: "30px",
+  fontSize: "22px",
   fontWeight: "950",
   color: "#111827",
 };
@@ -1543,7 +1796,7 @@ const imagePreviewOverlay = {
   position: "fixed",
   inset: 0,
   background: "rgba(15,23,42,0.92)",
-  zIndex: 80,
+  zIndex: 1400,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1559,8 +1812,8 @@ const expandedPreviewImage = {
 
 const closePreviewBtn = {
   position: "fixed",
-  top: "18px",
-  right: "18px",
+  top: "calc(env(safe-area-inset-top, 0px) + 18px)",
+  right: "calc(env(safe-area-inset-right, 0px) + 18px)",
   width: "42px",
   height: "42px",
   borderRadius: "999px",
