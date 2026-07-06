@@ -51,12 +51,17 @@ test("Work Center Add Visit consumes chat prefill and saves one linked visit", (
   assert.match(contractorDashboardSource, /businessId,/);
 });
 
-test("saved visits send linked schedule cards and external appointments through native sharing", () => {
-  assert.match(contractorDashboardSource, /scheduleId: newVisit\.id/);
-  assert.match(contractorDashboardSource, /visitId: newVisit\.visitId \|\| newVisit\.id/);
-  assert.match(contractorDashboardSource, /relationshipId: newVisit\.relationshipId \|\| ""/);
-  assert.match(contractorDashboardSource, /customerAccountId: newVisit\.customerAccountId \|\| ""/);
-  assert.match(contractorDashboardSource, /externalContactId: newVisit\.externalContactId \|\| ""/);
+test("saved linked visits auto-send schedule cards and external visits use share", () => {
+  assert.match(contractorDashboardSource, /if \(isLinkedMeetroScheduleCustomer\(newVisit\)\) \{/);
+  assert.match(contractorDashboardSource, /sendScheduleVisitToMeetroChat\(newVisit\)/);
+  assert.match(contractorDashboardSource, /openScheduleDeliveryChoice\(newVisit\)/);
+  assert.match(contractorDashboardSource, /function sendScheduleVisitToMeetroChat\(visit = \{\}\) \{/);
+  assert.match(contractorDashboardSource, /scheduleId: visit\.id/);
+  assert.match(contractorDashboardSource, /visitId: visit\.visitId \|\| visit\.id/);
+  assert.match(contractorDashboardSource, /relationshipId: visit\.relationshipId \|\| ""/);
+  assert.match(contractorDashboardSource, /customerAccountId: visit\.customerAccountId \|\| ""/);
+  assert.match(contractorDashboardSource, /externalContactId: visit\.externalContactId \|\| ""/);
+  assert.match(contractorDashboardSource, /Share by Text \/ iOS Message/);
   assert.match(contractorDashboardSource, /async function shareExternalScheduleVisit/);
   assert.match(contractorDashboardSource, /Share\.share/);
   assert.match(contractorDashboardSource, /sms:\$\{encodeURIComponent\(phone\)\}/);

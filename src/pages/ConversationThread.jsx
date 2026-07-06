@@ -40,6 +40,11 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 
 import {
   getBusinessSchedule,
@@ -605,6 +610,7 @@ const MessageItem = memo(({ message }) => {
 
 function ConversationThreadInner({ setPage, embedded = false }) {
   const [language, setLanguageState] = useState(getLanguage());
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
@@ -3469,6 +3475,13 @@ const sendPaymentCard = () => {
 
 
 const startWorkflowPhotoUpload = (workflowType) => {
+  if (mediaUploadDeferred) {
+    setPendingWorkflowPhotoType("");
+    setShowAttachMenu(false);
+    setSaveNotice(getMediaDeferredNotice(language));
+    return;
+  }
+
   setPendingWorkflowPhotoType(workflowType);
   setShowAttachMenu(false);
   fileInputRef.current?.click();
@@ -3480,6 +3493,18 @@ const startWorkflowPhotoUpload = (workflowType) => {
 
 
 const handleImageUpload = (event) => {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setSaveNotice,
+      })
+    ) {
+      setPendingWorkflowPhotoType("");
+      setShowAttachMenu(false);
+      return;
+    }
+
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -3573,9 +3598,16 @@ const handleImageUpload = (event) => {
 
   const openConversationCamera = async () => {
     setShowAttachMenu(false);
+
+    if (mediaUploadDeferred) {
+      setSaveNotice(getMediaDeferredNotice(language));
+      return;
+    }
+
     await openJobPhotoPicker({
       inputRef: cameraInputRef,
       fileNamePrefix: "message-photo",
+      language,
       onPhotos: (photos) =>
         handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) => setSaveNotice(message || CAMERA_PERMISSION_MESSAGE),
@@ -4049,8 +4081,8 @@ const handleImageUpload = (event) => {
     setShowThreadMenu(false);
     setSaveNotice(
       language === "es"
-        ? "Chat guardado en el historial."
-        : "Chat saved to history."
+        ? "Conversación guardada en el historial."
+        : "Conversation saved to history."
     );
     setTimeout(() => setSaveNotice(""), 2200);
   };
@@ -4463,7 +4495,7 @@ const handleImageUpload = (event) => {
 
   return (
     <div
-      className="conversation-thread-page chat-thread-page"
+      className="conversation-thread-page chat-thread-page meetro-visual-page"
       style={embedded ? embeddedPage : page}
     >
       <style>{animations}</style>
@@ -4540,10 +4572,18 @@ const handleImageUpload = (event) => {
             </div>
           </button>
 
-          <button
+          <div
             style={headerIdentityButton}
+            role="button"
+            tabIndex={0}
             aria-label={t("openRelationshipDetails", language)}
             onClick={openRelationshipDetails}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openRelationshipDetails();
+              }
+            }}
           >
             <div style={name}>{activeHeaderName}</div>
 
@@ -4588,13 +4628,16 @@ const handleImageUpload = (event) => {
               {jobRecordCount > 0 && (
                 <button
                   style={jobRecordMiniBadge}
-                  onClick={() => setShowJobRecords(true)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowJobRecords(true);
+                  }}
                 >
                    {jobRecordCount}
                 </button>
               )}
             </div>
-          </button>
+          </div>
 
           {hasActiveCallPhone && (
             <button
@@ -4914,7 +4957,7 @@ const handleImageUpload = (event) => {
                   setShowJobRecords(true);
                 }}
               >
-                {language === "es" ? "Línea de tiempo" : "Timeline"}
+                {language === "es" ? "Historial de relación" : "Relationship History"}
               </button>
             </div>
 
@@ -4987,8 +5030,8 @@ const handleImageUpload = (event) => {
                     ? "Guardado en historial"
                     : "Saved to History"
                   : language === "es"
-                  ? "Guardar chat en historial"
-                  : "Save Chat to History"}
+                  ? "Guardar conversación en historial"
+                  : "Save Conversation to History"}
               </button>
 
               <button
@@ -6264,21 +6307,50 @@ const handleImageUpload = (event) => {
                   {language === "es" ? "Compartir" : "Share"}
                 </div>
                 <div style={attachMenuGrid}>
-                  <button style={attachMenuBtn} onClick={openConversationCamera}>
+                  <button
+                    style={
+                      mediaUploadDeferred
+                        ? { ...attachMenuBtn, ...deferredAttachMenuBtn }
+                        : attachMenuBtn
+                    }
+                    disabled={mediaUploadDeferred}
+                    onClick={openConversationCamera}
+                  >
                     <span style={attachIconCircle}>
                       <IconCameraClean />
                     </span>
-                    <span>{language === "es" ? "Cámara" : "Camera"}</span>
+                    <span>
+                      {mediaUploadDeferred
+                        ? language === "es"
+                          ? "Fotos próximamente"
+                          : "Photos coming soon"
+                        : language === "es"
+                          ? "Cámara"
+                          : "Camera"}
+                    </span>
                   </button>
 
                   <button
-                    style={attachMenuBtn}
+                    style={
+                      mediaUploadDeferred
+                        ? { ...attachMenuBtn, ...deferredAttachMenuBtn }
+                        : attachMenuBtn
+                    }
+                    disabled={mediaUploadDeferred}
                     onClick={() => fileInputRef.current.click()}
                   >
                     <span style={attachIconCircle}>
                       <IconPhotosClean />
                     </span>
-                    <span>{language === "es" ? "Fotos" : "Photos"}</span>
+                    <span>
+                      {mediaUploadDeferred
+                        ? language === "es"
+                          ? "Fotos próximamente"
+                          : "Photos coming soon"
+                        : language === "es"
+                          ? "Fotos"
+                          : "Photos"}
+                    </span>
                   </button>
 
                   <button style={attachMenuBtn} onClick={sendVideoCard}>
@@ -6335,7 +6407,12 @@ const handleImageUpload = (event) => {
                       </button>
 
                       <button
-                        style={menuActionPrimary}
+                        style={
+                          mediaUploadDeferred
+                            ? { ...menuActionPrimary, ...deferredAttachMenuBtn }
+                            : menuActionPrimary
+                        }
+                        disabled={mediaUploadDeferred}
                         onClick={() => startWorkflowPhotoUpload("progress")}
                       >
                         <span style={attachIconCircle}>
@@ -6347,7 +6424,12 @@ const handleImageUpload = (event) => {
                       </button>
 
                       <button
-                        style={menuActionPrimary}
+                        style={
+                          mediaUploadDeferred
+                            ? { ...menuActionPrimary, ...deferredAttachMenuBtn }
+                            : menuActionPrimary
+                        }
+                        disabled={mediaUploadDeferred}
                         onClick={() => startWorkflowPhotoUpload("issue")}
                       >
                         <span style={attachIconCircle}>
@@ -6371,7 +6453,12 @@ const handleImageUpload = (event) => {
                       </button>
 
                       <button
-                        style={menuActionPrimary}
+                        style={
+                          mediaUploadDeferred
+                            ? { ...menuActionPrimary, ...deferredAttachMenuBtn }
+                            : menuActionPrimary
+                        }
+                        disabled={mediaUploadDeferred}
                         onClick={() => startWorkflowPhotoUpload("completion")}
                       >
                         <span style={attachIconCircle}>
@@ -6529,6 +6616,7 @@ const handleImageUpload = (event) => {
               type="file"
               style={{ display: "none" }}
               accept="image/*"
+              disabled={mediaUploadDeferred}
               onChange={handleImageUpload}
             />
 
@@ -6538,6 +6626,7 @@ const handleImageUpload = (event) => {
               style={{ display: "none" }}
               accept="image/*"
               capture="environment"
+              disabled={mediaUploadDeferred}
               onChange={handleImageUpload}
             />
           </div>
@@ -6668,7 +6757,7 @@ const handleImageUpload = (event) => {
                         {expandedRecord === item.id && (
                           <div style={expandedPanel}>
                             <div style={expandedPreview}>
-                               Timeline preview
+                               Meetro Moment preview
                             </div>
 
                             <div style={expandedInfo}>
@@ -6715,7 +6804,7 @@ const handleImageUpload = (event) => {
                             >
                               {aiSpeaking
                                 ? " Stop Meetro"
-                                : " Read Timeline Item"}
+                                : " Read Meetro Moment"}
                             </button>
                           </div>
                         )}
@@ -7094,7 +7183,8 @@ const page = {
   width: "100%",
   maxWidth: "100vw",
   minWidth: 0,
-  background: "linear-gradient(135deg, #eef1f8 0%, #f8fafc 100%)",
+  background:
+    "var(--meetro-gradient-community-page, linear-gradient(135deg, #f6f0e5 0%, #f8fafc 100%))",
   display: "flex",
   justifyContent: "flex-start",
   alignItems: "center",
@@ -7107,7 +7197,7 @@ const page = {
 const phone = {
   width: "100%",
   maxWidth: "860px",
-  background: "#ffffff",
+  background: "var(--meetro-surface-paper, #ffffff)",
   height: "100%",
   maxHeight: "100%",
   minHeight: 0,
@@ -7115,7 +7205,7 @@ const phone = {
   paddingBottom: "0",
   overflowX: "hidden",
   overflowY: "hidden",
-  boxShadow: "0 20px 60px rgba(15,23,42,0.08)",
+  boxShadow: "var(--meetro-shadow-soft, 0 20px 60px rgba(15,23,42,0.08))",
   margin: "0 auto",
   display: "flex",
   flexDirection: "column",
@@ -7142,7 +7232,7 @@ const embeddedPhone = {
   maxHeight: "100%",
   borderRadius: "28px",
   boxShadow: "none",
-  border: "1px solid rgba(226,232,240,0.95)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
 };
 
 const messageTextBlock = {
@@ -7204,7 +7294,7 @@ const chatProjectStagePill = {
   justifyContent: "center",
   borderRadius: "999px",
   padding: "3px 7px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#3730a3",
   fontSize: "11px",
   fontWeight: 950,
@@ -7226,7 +7316,7 @@ const profileOverlay = {
   position: "fixed",
   inset: 0,
   background:
-    "linear-gradient(180deg, rgba(248,250,252,0.98), rgba(255,255,255,0.98))",
+    "var(--meetro-gradient-community-page, linear-gradient(180deg, rgba(251,246,237,0.98), rgba(255,253,248,0.98)))",
   backdropFilter: "blur(14px)",
   zIndex: 1200,
   display: "block",
@@ -7363,13 +7453,13 @@ const tenantTicketPrimaryButton = {
   width: "100%",
   border: "none",
   borderRadius: "16px",
-  background: "#0f2a44",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #1f4d34, #14351f))",
   color: "#ffffff",
   minHeight: "48px",
   padding: "0 14px",
   fontSize: "14px",
   fontWeight: 950,
-  boxShadow: "0 12px 24px rgba(15,42,68,0.18)",
+  boxShadow: "var(--meetro-shadow-lifted, 0 12px 24px rgba(15,42,68,0.18))",
 };
 
 const tenantTicketReviewCard = {
@@ -7446,9 +7536,9 @@ const headerBtn = {
 };
 
 const activeHeaderBtn = {
-  border: "1px solid #5b3df5",
-  color: "#5b3df5",
-  background: "#f5f3ff",
+  border: "1px solid rgba(31,77,52,0.18)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
 };
 
 const appointmentReminderNoticeCard = {
@@ -7474,7 +7564,7 @@ const appointmentReminderSettingsButton = {
   border: "none",
   borderRadius: "14px",
   padding: "10px 12px",
-  background: "#7c3aed",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #1f4d34, #14351f))",
   color: "#ffffff",
   fontWeight: 900,
 };
@@ -7492,7 +7582,7 @@ const avatar = {
   width: "48px",
   height: "48px",
   borderRadius: "50%",
-  background: "linear-gradient(135deg, #7c5cff, #5b3df5)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #1f4d34, #14351f))",
   color: "#ffffff",
   display: "flex",
   alignItems: "center",
@@ -7524,7 +7614,7 @@ const businessInfoLine = {
   alignItems: "center",
   gap: "6px",
   marginTop: "3px",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #5f6b63)",
   fontWeight: "700",
   fontSize: "12px",
   overflow: "hidden",
@@ -7552,8 +7642,8 @@ const greenDot = {
 
 const jobRecordMiniBadge = {
   marginLeft: "8px",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "4px 8px",
   borderRadius: "999px",
   fontSize: "10px",
@@ -7635,10 +7725,15 @@ const menuActionPrimary = {
   gap: "4px",
 };
 
+const deferredAttachMenuBtn = {
+  cursor: "not-allowed",
+  opacity: 0.62,
+};
+
 const menuActionSecondary = {
   ...menuActionPrimary,
-  background: "#eef2ff",
-  border: "1px solid rgba(226,232,240,0.9)",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
 };
 
 const menuActionTertiary = {
@@ -7659,7 +7754,7 @@ const threadMenuBtnDisabled = {
 };
 
 const menuSection = {
-  borderTop: "1px solid #edf2ff",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   paddingTop: "8px",
   marginTop: "8px",
 };
@@ -7669,7 +7764,7 @@ const menuSectionTitle = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   fontWeight: "800",
-  color: "#5f6b85",
+  color: "var(--meetro-color-wood, #b7791f)",
   padding: "2px 12px 6px",
 };
 
@@ -8269,11 +8364,11 @@ const operationalCard = {
   width: "100%",
   maxWidth: "min(520px, calc(100% - 20px))",
   maxWidth: "100%",
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
+  background: "var(--meetro-surface-paper, #ffffff)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: "24px",
   padding: "16px",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  boxShadow: "var(--meetro-shadow-soft, 0 14px 34px rgba(15,23,42,0.08))",
   boxSizing: "border-box",
   overflow: "hidden",
 };
@@ -8291,7 +8386,7 @@ const operationalIcon = {
   width: "44px",
   height: "44px",
   borderRadius: "16px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -8300,7 +8395,7 @@ const operationalIcon = {
 
 const operationalSubtitle = {
   marginTop: "4px",
-  color: "#667085",
+  color: "var(--meetro-color-muted, #5f6b63)",
   fontSize: "13px",
   fontWeight: "700",
   overflowWrap: "anywhere",
@@ -8407,7 +8502,7 @@ const appointmentConfirmButton = {
 };
 
 const appointmentRequestTimeButton = {
-  border: "1px solid #c7d2fe",
+  border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "16px",
   padding: "12px 14px",
   background: "#ffffff",
@@ -8477,8 +8572,8 @@ const approveBtn = {
 
 const requestChangeBtn = {
   background: "#ffffff",
-  color: "#5b3df5",
-  border: "2px solid #5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "2px solid var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
 
   border: "1px solid #e5e7eb",
@@ -8505,7 +8600,7 @@ const operationalImage = {
 const changeRequestBody = {
   marginTop: "12px",
   background: "rgba(255,255,255,.78)",
-  border: "1px solid rgba(124,58,237,.14)",
+  border: "1px solid rgba(23,35,23,.14)",
   borderRadius: "16px",
   padding: "12px",
 };
@@ -8648,8 +8743,8 @@ const leaveReviewButton = {
   border: "none",
   borderRadius: "16px",
   padding: "12px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontWeight: "900",
   cursor: "pointer",
   marginTop: "12px",
@@ -8672,7 +8767,7 @@ const invoiceWorkflowHeader = {
 
 const invoiceWorkflowEyebrow = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -8686,8 +8781,8 @@ const invoiceWorkflowTitle = {
 };
 
 const invoiceWorkflowAmount = {
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   borderRadius: "16px",
   padding: "10px 12px",
   fontWeight: "900",
@@ -8746,8 +8841,8 @@ const invoiceQuestionButton = {
   border: "none",
   borderRadius: "16px",
   padding: "12px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -8923,7 +9018,7 @@ const revisedQuoteHeader = {
 
 const revisedQuoteEyebrow = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -8937,8 +9032,8 @@ const revisedQuoteTitle = {
 };
 
 const revisedQuoteAmount = {
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   borderRadius: "16px",
   padding: "10px 12px",
   fontWeight: "900",
@@ -8997,8 +9092,8 @@ const requestRevisedQuoteChangeButton = {
   border: "none",
   borderRadius: "16px",
   padding: "12px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -9040,7 +9135,7 @@ const reviewChangeButton = {
 
 const revisedQuoteButton = {
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
   borderRadius: "12px",
   padding: "10px",
@@ -9053,7 +9148,7 @@ const changeRequestStatus = {
   padding: "7px 10px",
   borderRadius: "999px",
   background: "#f5f3ff",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "10px",
   fontWeight: "900",
 };
@@ -9091,7 +9186,7 @@ const myBubble = {
   background: "linear-gradient(135deg, #f1eaff, #ded2ff)",
   color: "#2f1f75",
   border: "1px solid rgba(124,92,255,0.20)",
-  boxShadow: "0 8px 22px rgba(91,61,245,0.10)",
+  boxShadow: "0 8px 22px rgba(31,77,52,0.10)",
   borderBottomRightRadius: "10px",
 };
 
@@ -9099,7 +9194,7 @@ const imageCardBubble = {
   background: "#ffffff",
   color: "#111827",
   border: "1px solid rgba(124,92,255,0.28)",
-  boxShadow: "0 10px 30px rgba(91,61,245,0.18)",
+  boxShadow: "0 10px 30px rgba(31,77,52,0.18)",
 };
 
 const emergencyMyBubble = {
@@ -9150,7 +9245,7 @@ const replyPreviewTheirs = {
   padding: "8px",
   borderRadius: "12px",
   background: "#ffffff",
-  borderLeft: "3px solid #5b3df5",
+  borderLeft: "3px solid var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   flexDirection: "column",
   fontSize: "10px",
@@ -9313,7 +9408,7 @@ const quickBtn = {
 const replyComposer = {
   margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   background: "#f7f8fb",
-  borderLeft: "4px solid #5b3df5",
+  borderLeft: "4px solid var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "10px 12px",
   display: "flex",
@@ -9342,7 +9437,7 @@ const replyCloseBtn = {
 const pendingImageBox = {
   margin: "0 16px calc(env(safe-area-inset-bottom) + 8px)",
   background: "#f7f8fb",
-  borderLeft: "4px solid #5b3df5",
+  borderLeft: "4px solid var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "10px 12px",
   display: "flex",
@@ -9405,8 +9500,8 @@ const attachIconCircle = {
   width: "32px",
   height: "32px",
   borderRadius: "15px",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -9444,7 +9539,7 @@ const photoChipRow = {
 
 const photoChip = {
   border: "none",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#4338ca",
   borderRadius: "999px",
   padding: "8px 12px",
@@ -9468,9 +9563,9 @@ const composer = {
   flex: "0 0 auto",
   margin: 0,
   width: "100%",
-  background: "rgba(255,255,255,0.98)",
+  background: "var(--meetro-surface-paper, rgba(255,255,255,0.98))",
   border: "0",
-  borderTop: "1px solid rgba(203,213,225,0.7)",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: 0,
   padding: "8px 12px calc(8px + env(safe-area-inset-bottom))",
   display: "flex",
@@ -9487,8 +9582,8 @@ const circleBtn = {
   width: "42px",
   height: "42px",
   borderRadius: "14px",
-  border: "1px solid rgba(203,213,225,0.9)",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, #ffffff)",
   color: "#0ea5ff",
   display: "flex",
   alignItems: "center",
@@ -9499,11 +9594,11 @@ const circleBtn = {
 };
 
 const activeCircleBtn = {
-  background: "#f5f3ff",
-  border: "1px solid #5b3df5",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  border: "1px solid rgba(31,77,52,0.18)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   transform: "rotate(45deg)",
-  boxShadow: "0 8px 18px rgba(91,61,245,0.18)",
+  boxShadow: "var(--meetro-shadow-soft, 0 8px 18px rgba(15,23,42,0.12))",
 };
 
 const inputWrap = {
@@ -9513,8 +9608,8 @@ const inputWrap = {
   minHeight: "40px",
   display: "flex",
   alignItems: "center",
-  border: "1.5px solid rgba(148,163,184,0.45)",
-  background: "rgba(248,250,252,0.95)",
+  border: "1.5px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   borderRadius: "999px",
   padding: "0 14px",
   boxSizing: "border-box",
@@ -9691,7 +9786,7 @@ const recordTools = {
 const recordSpeakBtn = {
   width: "100%",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "18px",
   padding: "14px",
@@ -9736,12 +9831,12 @@ const timelineDot = {
   width: "38px",
   height: "38px",
   borderRadius: "16px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "18px",
-  boxShadow: "0 8px 16px rgba(91,61,245,0.12)",
+  boxShadow: "0 8px 16px rgba(31,77,52,0.12)",
   zIndex: 2,
 };
 
@@ -9758,12 +9853,12 @@ const expandedPanel = {
 const expandedPreview = {
   height: "140px",
   borderRadius: "18px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontWeight: "800",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const expandedInfo = {
@@ -9782,7 +9877,7 @@ const expandedInfoRow = {
 
 const expandedSpeakBtn = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   padding: "13px",
   borderRadius: "16px",
@@ -9821,7 +9916,7 @@ const recordItemIcon = {
   width: "54px",
   height: "54px",
   borderRadius: "18px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -9908,7 +10003,7 @@ const storyIcon = {
   width: "70px",
   height: "70px",
   borderRadius: "24px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -9921,7 +10016,7 @@ const storyIconInner = {
   height: "36px",
   borderRadius: "14px",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -9959,7 +10054,7 @@ const storySpeakBtn = {
   padding: "14px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   cursor: "pointer",
@@ -10077,12 +10172,12 @@ class ConversationThreadErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div style={{ padding: 24, fontFamily: "system-ui", color: "#111827" }}>
-          <h2>Chat error</h2>
-          <p>The chat screen crashed instead of loading.</p>
+          <h2>Conversation error</h2>
+          <p>The conversation screen crashed instead of loading.</p>
           <pre style={{ whiteSpace: "pre-wrap", background: "#fee2e2", padding: 12, borderRadius: 12 }}>
             {String(this.state.error?.message || this.state.error)}
           </pre>
-          <button onClick={() => this.props.setPage("messagesInbox")}>Back to Messages</button>
+          <button onClick={() => this.props.setPage("messagesInbox")}>Back to Communication Center</button>
         </div>
       );
     }

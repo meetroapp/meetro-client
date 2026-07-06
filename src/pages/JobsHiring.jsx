@@ -140,7 +140,7 @@ function JobsHiring({ setPage, language }) {
     const selectedJobDisplay = getLocalizedHiringJobDisplay(selectedJob, activeLanguage);
 
     return (
-      <div className="app-page meetro-responsive-page" style={page}>
+      <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
         <div style={header}>
           <button type="button" style={backBtn} onClick={() => setSelectedJob(null)}>
             ← {label("jobsHiringBackToJobs")}
@@ -152,7 +152,7 @@ function JobsHiring({ setPage, language }) {
           </div>
         </div>
 
-        <article style={detailCard}>
+        <article className="meetro-visual-surface" style={detailCard}>
           <div style={detailTop}>
             <span style={detailIcon}>
               <MeetroIcon name="jobsHiring" size={24} decorative />
@@ -186,6 +186,7 @@ function JobsHiring({ setPage, language }) {
           <div style={actionRow}>
             <button
               type="button"
+              className="meetro-visual-primary-button"
               style={primaryButton}
               onClick={() => openApplicationSheet(selectedJob)}
             >
@@ -232,7 +233,7 @@ function JobsHiring({ setPage, language }) {
   }
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <div style={header}>
         <button type="button" style={backBtn} onClick={() => setPage("discover")}>
           ← {label("jobsHiringBackToDiscover")}
@@ -246,7 +247,7 @@ function JobsHiring({ setPage, language }) {
         </div>
       </div>
 
-      <section style={section}>
+      <section className="meetro-visual-surface" style={section}>
         <SectionHeading
           title={label("jobsHiringSearchTitle")}
           description={label("jobsHiringSearchDescription")}
@@ -285,7 +286,7 @@ function JobsHiring({ setPage, language }) {
         </div>
       </section>
 
-      <section style={section}>
+      <section className="meetro-visual-surface" style={section}>
         <SectionHeading
           title={label("jobsHiringCategoriesTitle")}
           description={label("jobsHiringCategoriesDescription")}
@@ -317,7 +318,7 @@ function JobsHiring({ setPage, language }) {
         </div>
       </section>
 
-      <section style={section}>
+      <section className="meetro-visual-surface" style={section}>
         <SectionHeading
           title={label("jobsHiringFeaturedTitle")}
           description={filteredJobsCountLabel}
@@ -325,7 +326,7 @@ function JobsHiring({ setPage, language }) {
 
         <div style={jobsGrid}>
           {filteredJobs.length === 0 ? (
-            <div style={emptyState}>
+            <div className="meetro-visual-empty-state" style={emptyState}>
               <strong>{label("jobsHiringNoMatchingOpenings")}</strong>
               <span>{label("jobsHiringNoMatchingOpeningsHelp")}</span>
             </div>
@@ -334,7 +335,7 @@ function JobsHiring({ setPage, language }) {
               const jobDisplay = getLocalizedHiringJobDisplay(job, activeLanguage);
 
               return (
-              <article key={job.id} style={jobCard}>
+              <article key={job.id} className="meetro-visual-surface" style={jobCard}>
                 <div style={jobTop}>
                   <span style={jobIcon}>
                     <MeetroIcon name="jobsHiring" size={22} decorative />
@@ -353,6 +354,7 @@ function JobsHiring({ setPage, language }) {
                 </dl>
                 <button
                   type="button"
+                  className="meetro-visual-primary-button"
                   style={primaryButton}
                   onClick={() => setSelectedJob(job)}
                 >
@@ -411,7 +413,7 @@ function ComingSoonSheet({ notice, onClose, language }) {
         <div style={sheetHandle}></div>
         <h2 style={sheetTitle}>{notice.title}</h2>
         <p style={sheetBody}>{notice.body}</p>
-        <button type="button" style={primaryButton} onClick={onClose}>
+        <button type="button" className="meetro-visual-primary-button" style={primaryButton} onClick={onClose}>
           {label("jobsHiringGotIt")}
         </button>
       </div>
@@ -473,7 +475,7 @@ function ApplicationSheet({ job, draft, onChange, onClose, onPreview, language }
           />
         </div>
 
-        <button type="button" style={primaryButton} onClick={onPreview}>
+        <button type="button" className="meetro-visual-primary-button" style={primaryButton} onClick={onPreview}>
           {label("jobsHiringPreviewApplication")}
         </button>
         <button type="button" style={secondaryButton} onClick={onClose}>
@@ -495,7 +497,7 @@ const page = {
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
-  background: "#f8fafc",
+  background: "var(--meetro-gradient-community-page)",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
 };
@@ -511,9 +513,10 @@ const backBtn = {
   minHeight: "42px",
   padding: "0 12px",
   borderRadius: "14px",
-  border: "1px solid rgba(148,163,184,0.35)",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  boxShadow: "var(--meetro-shadow-soft)",
   fontSize: "15px",
   fontWeight: "900",
   cursor: "pointer",
@@ -521,7 +524,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#4338ca",
+  color: "var(--meetro-color-wood)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -531,13 +534,13 @@ const title = {
   margin: 0,
   fontSize: "30px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   letterSpacing: 0,
 };
 
 const subtitle = {
   margin: "7px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "15px",
   lineHeight: 1.45,
   fontWeight: "700",
@@ -547,6 +550,11 @@ const section = {
   display: "grid",
   gap: "12px",
   marginBottom: "20px",
+  padding: "16px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "22px",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const sectionHeading = {
@@ -556,14 +564,14 @@ const sectionHeading = {
 
 const sectionTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   fontWeight: "950",
 };
 
 const sectionDescription = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "700",
@@ -580,11 +588,11 @@ const input = {
   minWidth: 0,
   minHeight: "46px",
   boxSizing: "border-box",
-  border: "1px solid #cbd5e1",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "14px",
   padding: "0 12px",
-  background: "#ffffff",
-  color: "#0f172a",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   fontSize: "15px",
   fontWeight: "750",
 };
@@ -599,20 +607,20 @@ const categoryRow = {
 
 const categoryPill = {
   flex: "0 0 auto",
-  border: "1px solid transparent",
+  border: "1px solid var(--meetro-color-line)",
   padding: "8px 11px",
   borderRadius: "999px",
-  background: "#ede9fe",
-  color: "#4c1d95",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
 };
 
 const activeCategoryPill = {
-  background: "#5b35f5",
-  borderColor: "#5b35f5",
-  color: "#ffffff",
+  background: "var(--meetro-color-forest)",
+  borderColor: "var(--meetro-color-forest)",
+  color: "#fffdf8",
 };
 
 const jobsGrid = {
@@ -626,9 +634,9 @@ const jobCard = {
   gap: "10px",
   padding: "14px",
   borderRadius: "18px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const jobTop = {
@@ -644,8 +652,8 @@ const jobIcon = {
   borderRadius: "14px",
   display: "grid",
   placeItems: "center",
-  background: "#ede9fe",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
 };
 
 const employmentBadge = {
@@ -659,7 +667,7 @@ const employmentBadge = {
 
 const categoryText = {
   margin: 0,
-  color: "#4338ca",
+  color: "var(--meetro-color-wood)",
   fontSize: "12px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -667,21 +675,21 @@ const categoryText = {
 
 const jobTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   fontWeight: "950",
 };
 
 const businessName = {
   margin: 0,
-  color: "#334155",
+  color: "var(--meetro-color-coffee)",
   fontSize: "14px",
   fontWeight: "850",
 };
 
 const bodyText = {
   margin: 0,
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.5,
   fontWeight: "650",
@@ -699,8 +707,9 @@ const detailItem = {
   gap: "3px",
   padding: "9px",
   borderRadius: "12px",
-  background: "#f8fafc",
-  color: "#334155",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-coffee)",
   fontSize: "12px",
   fontWeight: "750",
 };
@@ -710,8 +719,9 @@ const primaryButton = {
   minHeight: "46px",
   border: "0",
   borderRadius: "14px",
-  background: "#5b35f5",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
+  boxShadow: "0 14px 28px rgba(31, 77, 52, 0.18)",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
@@ -719,9 +729,10 @@ const primaryButton = {
 
 const secondaryButton = {
   ...primaryButton,
-  background: "#ffffff",
-  color: "#5b35f5",
-  border: "1px solid #c4b5fd",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "none",
 };
 
 const detailCard = {
@@ -729,9 +740,9 @@ const detailCard = {
   gap: "14px",
   padding: "16px",
   borderRadius: "20px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const detailTop = {
@@ -747,20 +758,20 @@ const detailIcon = {
   borderRadius: "16px",
   display: "grid",
   placeItems: "center",
-  background: "#ede9fe",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
 };
 
 const detailTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "22px",
   fontWeight: "950",
 };
 
 const fieldLabel = {
   margin: "0 0 6px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "11px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -769,7 +780,7 @@ const fieldLabel = {
 const requirementsList = {
   margin: 0,
   paddingLeft: "20px",
-  color: "#334155",
+  color: "var(--meetro-color-coffee)",
   fontSize: "13px",
   lineHeight: 1.55,
   fontWeight: "700",
@@ -786,9 +797,9 @@ const emptyState = {
   gap: "5px",
   padding: "14px",
   borderRadius: "16px",
-  border: "1px dashed #cbd5e1",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px dashed var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
 };
@@ -813,28 +824,29 @@ const sheet = {
   gap: "12px",
   padding: "16px",
   borderRadius: "22px",
-  background: "#ffffff",
-  boxShadow: "0 18px 50px rgba(15,23,42,0.25)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const sheetHandle = {
   width: "48px",
   height: "5px",
   borderRadius: "999px",
-  background: "#cbd5e1",
+  background: "var(--meetro-color-line)",
   justifySelf: "center",
 };
 
 const sheetTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   fontWeight: "950",
 };
 
 const sheetBody = {
   margin: 0,
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.5,
   fontWeight: "700",

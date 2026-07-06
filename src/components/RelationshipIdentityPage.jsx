@@ -379,7 +379,7 @@ const identityAvatar = {
   borderRadius: "30px",
   background:
     "linear-gradient(145deg, rgba(255,255,255,0.88), rgba(226,232,240,0.58))",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -407,7 +407,7 @@ const identityHeaderText = {
 
 const identityEyebrow = {
   margin: "0 0 4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.35px",
@@ -446,7 +446,7 @@ const identityBackButton = {
   ...glassPill,
   border: "1px solid rgba(255,255,255,0.72)",
   borderRadius: "16px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "9px 12px",
   fontSize: "13px",
   fontWeight: "950",
@@ -506,12 +506,12 @@ const identityIconCapsule = {
   alignItems: "center",
   justifyContent: "center",
   flex: "0 0 auto",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   background:
     "linear-gradient(145deg, rgba(255,255,255,0.92), rgba(237,233,254,0.62))",
   border: "1px solid rgba(255,255,255,0.76)",
   boxShadow:
-    "inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 22px rgba(91,61,245,0.1)",
+    "inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 22px rgba(31,77,52,0.1)",
 };
 
 const identityFactText = {
@@ -553,7 +553,7 @@ const identityPrimaryAction = {
   ...glassPill,
   border: "1px solid rgba(255,255,255,0.42)",
   background:
-    "linear-gradient(145deg, rgba(91,61,245,0.95), rgba(37,99,235,0.82))",
+    "linear-gradient(145deg, rgba(31,77,52,0.95), rgba(37,99,235,0.82))",
   color: "#ffffff",
   padding: "10px 13px",
   fontSize: "12px",
@@ -566,7 +566,7 @@ const identityPrimaryAction = {
   minHeight: "48px",
   flex: "1 1 132px",
   boxShadow:
-    "inset 0 1px 0 rgba(255,255,255,0.28), 0 15px 30px rgba(91,61,245,0.24)",
+    "inset 0 1px 0 rgba(255,255,255,0.28), 0 15px 30px rgba(31,77,52,0.24)",
   boxSizing: "border-box",
   whiteSpace: "normal",
 };

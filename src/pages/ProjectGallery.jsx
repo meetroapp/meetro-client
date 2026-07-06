@@ -19,6 +19,12 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredCopy,
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 
 function ProjectGallery({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -44,6 +50,8 @@ function ProjectGallery({ setPage, currentPage }) {
   const [expandedEditImage, setExpandedEditImage] = useState("");
   const portfolioEditorScrollRef = useRef(null);
   const [language, updateLanguage] = useState(getLanguage());
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -122,6 +130,16 @@ function ProjectGallery({ setPage, currentPage }) {
 
   async function handleImageUpload(event) {
     try {
+      if (
+        !guardFriendsAndFamilyMediaUpload({
+          event,
+          language,
+          onDeferred: setPhotoError,
+        })
+      ) {
+        return;
+      }
+
       const selectedFiles = Array.from(event.target.files || []);
 
       if (selectedFiles.length === 0) return;
@@ -176,9 +194,15 @@ function ProjectGallery({ setPage, currentPage }) {
   async function openProjectPhotoPicker() {
     setPhotoError("");
 
+    if (mediaUploadDeferred) {
+      setPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
     await openJobPhotoPicker({
       inputRef: projectImageInputRef,
       fileNamePrefix: "portfolio-photo",
+      language,
       onPhotos: (photos) =>
         handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
@@ -233,6 +257,16 @@ function ProjectGallery({ setPage, currentPage }) {
 
   async function handleEditImageUpload(event) {
     try {
+      if (
+        !guardFriendsAndFamilyMediaUpload({
+          event,
+          language,
+          onDeferred: setPhotoError,
+        })
+      ) {
+        return;
+      }
+
       const selectedFiles = Array.from(event.target.files || []);
 
       if (selectedFiles.length === 0) return;
@@ -281,9 +315,15 @@ function ProjectGallery({ setPage, currentPage }) {
   async function openEditProjectPhotoPicker() {
     setPhotoError("");
 
+    if (mediaUploadDeferred) {
+      setPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
     await openJobPhotoPicker({
       inputRef: editPortfolioImageInputRef,
       fileNamePrefix: "portfolio-edit-photo",
+      language,
       onPhotos: (photos) =>
         handleEditImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
@@ -929,6 +969,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   type="file"
                   accept="image/*"
                   multiple
+                  disabled={mediaUploadDeferred}
                   style={{ display: "none" }}
                   onChange={handleImageUpload}
                 />
@@ -956,18 +997,29 @@ function ProjectGallery({ setPage, currentPage }) {
                   <button
                     type="button"
                     onClick={openProjectPhotoPicker}
-                    style={uploadButton}
+                    disabled={mediaUploadDeferred}
+                    style={
+                      mediaUploadDeferred
+                        ? { ...uploadButton, ...disabledUploadButton }
+                        : uploadButton
+                    }
                   >
                     +
                   </button>
 
                   <h3 style={uploadTitle}>
-                    {images.length > 0
+                    {mediaUploadDeferred
+                      ? mediaDeferredCopy.title
+                      : images.length > 0
                       ? `${images.length} ${t("photosReady")}`
                       : t("uploadPhotos")}
                   </h3>
 
-                  <p style={uploadText}>{t("portfolioUploadHelp")}</p>
+                  <p style={uploadText}>
+                    {mediaUploadDeferred
+                      ? mediaDeferredCopy.detail
+                      : t("portfolioUploadHelp")}
+                  </p>
 
                   {uploading && (
                     <p style={uploadingText}>{t("uploadingPhotos")}</p>
@@ -1070,10 +1122,17 @@ function ProjectGallery({ setPage, currentPage }) {
 
                   <button
                     type="button"
-                    style={smallAddPhotoBtn}
+                    style={
+                      mediaUploadDeferred
+                        ? { ...smallAddPhotoBtn, ...disabledSmallAddPhotoBtn }
+                        : smallAddPhotoBtn
+                    }
+                    disabled={mediaUploadDeferred}
                     onClick={openEditProjectPhotoPicker}
                   >
-                    + {language === "es" ? "Agregar fotos" : "Add Photos"}
+                    {mediaUploadDeferred
+                      ? mediaDeferredCopy.title
+                      : `+ ${language === "es" ? "Agregar fotos" : "Add Photos"}`}
                   </button>
                 </div>
 
@@ -1083,6 +1142,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   type="file"
                   accept="image/*"
                   multiple
+                  disabled={mediaUploadDeferred}
                   style={{ display: "none" }}
                   onChange={handleEditImageUpload}
                 />
@@ -1234,8 +1294,8 @@ const pageWrapper = {
 
 const backButton = {
   border: "none",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "12px 18px",
   borderRadius: "18px",
   fontWeight: "800",
@@ -1248,7 +1308,7 @@ const compactHeader = {
 };
 
 const compactKicker = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -1273,7 +1333,7 @@ const compactSubtitle = {
 
 const heroCard = {
   background:
-    "linear-gradient(135deg,#111827 0%,#1e293b 58%,#312e81 100%)",
+    "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f) 0%, var(--meetro-color-forest, #1f4d34) 58%, var(--meetro-color-coffee, #4a3428) 100%)",
   borderRadius: "28px",
   padding: "24px",
   color: "white",
@@ -1310,7 +1370,7 @@ const heroProofStack = {
 
 const heroBadge = {
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "inline-flex",
   alignItems: "center",
   gap: "7px",
@@ -1319,7 +1379,7 @@ const heroBadge = {
   fontWeight: "800",
   width: "fit-content",
   maxWidth: "100%",
-  boxShadow: "0 8px 18px rgba(91,61,245,0.10)",
+  boxShadow: "0 8px 18px rgba(49,35,20,0.10)",
 };
 
 const heroTitle = {
@@ -1354,7 +1414,7 @@ const primaryActionButton = {
   justifyContent: "center",
   gap: "8px",
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7b61ff)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   padding: "14px 16px",
   borderRadius: "18px",
@@ -1367,9 +1427,9 @@ const secondaryActionButton = {
   alignItems: "center",
   justifyContent: "center",
   gap: "8px",
-  border: "1px solid #ddd6fe",
+  border: "1px solid rgba(31,77,52,0.18)",
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "14px 16px",
   borderRadius: "18px",
   fontWeight: "900",
@@ -1469,7 +1529,7 @@ const inputStyle = {
 
 const uploadZone = {
   border:
-    "2px dashed rgba(91,61,245,0.24)",
+    "2px dashed rgba(31,77,52,0.24)",
   borderRadius: "26px",
   padding: "36px 20px",
   textAlign: "center",
@@ -1483,11 +1543,17 @@ const uploadButton = {
   borderRadius: "50%",
   border: "none",
   background:
-    "linear-gradient(135deg,#5b3df5,#7b61ff)",
+    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontSize: "42px",
   cursor: "pointer",
   fontWeight: "bold",
+};
+
+const disabledUploadButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const uploadTitle = {
@@ -1500,7 +1566,7 @@ const uploadText = {
 };
 
 const uploadingText = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "800",
   marginTop: "14px",
 };
@@ -1551,7 +1617,7 @@ const publishButton = {
   border: "none",
   borderRadius: "20px",
   background:
-    "linear-gradient(135deg,#5b3df5,#7b61ff)",
+    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontWeight: "900",
   fontSize: "17px",
@@ -1571,8 +1637,8 @@ const galleryTitle = {
 };
 
 const projectCount = {
-  background: "#ebe7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 14px",
   borderRadius: "999px",
   fontWeight: "800",
@@ -1622,10 +1688,10 @@ const projectCard = {
 };
 
 const projectCardFeatured = {
-  border: "1px solid rgba(91,61,245,0.34)",
+  border: "1px solid rgba(31,77,52,0.34)",
   background:
     "linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,247,255,0.94))",
-  boxShadow: "0 14px 34px rgba(91,61,245,0.12)",
+  boxShadow: "0 14px 34px rgba(31,77,52,0.12)",
 };
 
 const editorBackdrop = {
@@ -1652,7 +1718,7 @@ const portfolioEditorSheet = {
   gridTemplateRows: "auto auto 1fr auto",
   gap: "12px",
   background: "white",
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
   borderRadius: "24px",
   padding: "10px 14px 14px",
   boxShadow: "0 24px 70px rgba(15,23,42,0.22)",
@@ -1722,15 +1788,15 @@ const editorCancelButton = {
 
 const editorSaveButton = {
   minWidth: 0,
-  border: "1px solid rgba(91,61,245,0.42)",
+  border: "1px solid rgba(31,77,52,0.42)",
   borderRadius: "16px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   padding: "12px 14px",
   fontSize: "14px",
   fontWeight: 950,
   cursor: "pointer",
-  boxShadow: "0 12px 26px rgba(91,61,245,0.22)",
+  boxShadow: "0 12px 26px rgba(49,35,20,0.16)",
 };
 
 const editPageTitle = {
@@ -1756,12 +1822,18 @@ const editPhotoHeader = {
 
 const smallAddPhotoBtn = {
   border: "none",
-  background: "#ede9fe",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 12px",
   borderRadius: "14px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const disabledSmallAddPhotoBtn = {
+  background: "#f1f5f9",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const editImageTile = {
@@ -1835,7 +1907,7 @@ const editMainImage = {
 };
 
 const activeEditThumbnail = {
-  border: "3px solid #5b3df5",
+  border: "3px solid var(--meetro-color-forest, #1f4d34)",
 };
 
 const editImagesGrid = {
@@ -1942,7 +2014,7 @@ const portfolioActions = {
 
 const openPortfolioBtn = {
   border: "none",
-  background: "linear-gradient(135deg,#7c5cff,#5b3df5)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   padding: "13px",
   borderRadius: "16px",
@@ -1953,9 +2025,9 @@ const openPortfolioBtn = {
 const editPortfolioBtn = {
   width: "auto",
   alignSelf: "center",
-  border: "1px solid #ddd6fe",
-  background: "#fcfbff",
-  color: "#5b3df5",
+  border: "1px solid rgba(31,77,52,0.18)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 18px",
   borderRadius: "999px",
   fontWeight: "800",
@@ -1985,9 +2057,9 @@ const spotlightFeatureBtn = {
 };
 
 const spotlightFeatureBtnActive = {
-  borderColor: "#5b3df5",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const projectImageGrid = {
@@ -2089,7 +2161,7 @@ const primaryButton = {
   padding: "16px",
   border: "none",
   borderRadius: "18px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontWeight: "800",
   fontSize: "16px",

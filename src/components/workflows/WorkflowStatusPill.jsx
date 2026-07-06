@@ -1,8 +1,8 @@
 function WorkflowStatusPill({
   label,
-  background = "rgba(139, 92, 246, 0.15)",
-  color = "#8b5cf6",
-  border = "1px solid rgba(139, 92, 246, 0.35)",
+  background = "rgba(31, 77, 52, 0.15)",
+  color = "var(--meetro-color-forest, #1f4d34)",
+  border = "1px solid rgba(31, 77, 52, 0.35)",
 }) {
   return (
     <div

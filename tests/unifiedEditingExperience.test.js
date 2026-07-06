@@ -131,7 +131,7 @@ test("Portfolio spotlight truth is distinct from temporary selection and preview
     source.indexOf("const projectCardFeatured = {"),
     source.indexOf("const editorBackdrop = {")
   );
-  assert.match(featuredStyleBlock, /border: "1px solid rgba\(91,61,245,0\.34\)"/);
+  assert.match(featuredStyleBlock, /border: "1px solid rgba\(31,77,52,0\.34\)"/);
   assert.doesNotMatch(featuredStyleBlock, /0 0 0 4px/);
   assert.doesNotMatch(featuredStyleBlock, /border: "2px solid #5b3df5"/);
 

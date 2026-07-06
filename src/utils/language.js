@@ -158,7 +158,7 @@ export const translations = {
     homeownerWorkflowHome: "Home",
     homeHelpToday: "How can we help today?",
     homeHelpTodaySubtitle:
-      "Request service, track active work, respond to messages, and review service history.",
+      "Request service, track active work, continue conversations, and review service history.",
     requestService: "Request Service",
     homeWorkflowLabel: "Homeowner workflow",
     homeMyProjects: "My Projects",
@@ -169,12 +169,12 @@ export const translations = {
     homeNoActiveRequestsTitle: "No active requests yet",
     homeNoActiveRequestsText:
       "Request service to start the workflow with a professional.",
-    homeMessagesTitle: "Messages",
-    homeOpenMessages: "Review Messages",
+    homeMessagesTitle: "Communication",
+    homeOpenMessages: "Open Communication Center",
     homeMessagesNeedAttention: "Conversations needing attention",
     homeMessagesNeedAttentionText:
-      "Review Messages to respond or check the latest update.",
-    homeMessagesAllCaughtUp: "No messages need attention",
+      "Open Communication Center to respond or check the latest update.",
+    homeMessagesAllCaughtUp: "No conversations need attention",
     homeMessagesAllCaughtUpText:
       "New professional replies and workflow updates will appear here.",
     homeHistoryEyebrow: "Relationship memory",
@@ -193,10 +193,10 @@ export const translations = {
     conversation: "Conversation",
     loadingConversation: "Loading conversation...",
 
-    discoverHeroTitle: "Local Project Feed",
+    discoverHeroTitle: "Local Work Near You",
     discoverHeroSubtitle:
       "Browse homeowner service requests and discover local opportunities.",
-    localProjectFeed: "Local Project Feed",
+    localProjectFeed: "Local Work Near You",
     findLocalServices: "Find Local Services",
     professionalDiscoverText:
   "Explore local opportunities matching your business category.",
@@ -270,7 +270,7 @@ export const translations = {
     dashboard: "Dashboard",
     businessDashboard: "Business Dashboard",
     businessTools: "Business Tools",
-    messages: "Messages",
+    messages: "Communication",
     customers: "Customers",
     portfolio: "Portfolio",
     account: "Account",
@@ -285,7 +285,7 @@ export const translations = {
 
     manageEmergencyJobs: "Manage emergency jobs",
     reviewIncomingRequests: "Review incoming quote requests",
-    customerMessages: "Customer messages and updates",
+    customerMessages: "Customer conversations and updates",
     showCompletedWork: "Show your completed work",
 
     demoPlumbingTitle: "Plumbing repair",
@@ -297,7 +297,7 @@ export const translations = {
     demoFlooringTitle: "Flooring estimate",
     demoFlooringDescription: "Need vinyl plank installation quote",
 
-    myMessages: "My Messages",
+    myMessages: "My Conversations",
     chatSubtitle:
       "Stay connected with local professionals and project conversations.",
     bathroomRemodel: "Bathroom Remodel",
@@ -309,7 +309,7 @@ export const translations = {
     twoMinutesAgo: "2m ago",
     oneHourAgo: "1h ago",
     threeHoursAgo: "3h ago",
-    noMessagesYet: "No messages yet",
+    noMessagesYet: "No conversations yet",
     noMessagesText: "Your service conversations will appear here.",
     closePhotoGallery: "Close photo gallery",
     previousPhoto: "Previous photo",
@@ -318,11 +318,11 @@ export const translations = {
 
     loadingMessages: "Loading messages...",
     backToDashboard: "Back to Dashboard",
-    messagesInboxSubtitle: "Homeowner conversations and quote chats",
+    messagesInboxSubtitle: "Homeowner conversations and project context",
     communicationCenterTitle: "Communication Center",
     conversationFilters: "Conversation Filters",
     customerCenter: "Customer Center",
-    activeMessages: "Active Messages",
+    activeMessages: "Active Conversations",
     savedHistory: "Saved History",
     active: "Active",
     activeLabel: "Active",
@@ -339,7 +339,7 @@ export const translations = {
     messageNextStepEmergency: "Review emergency status",
     messageNextStepSaved: "Review relationship history",
     messageNextStepOpen: "Open conversation",
-    noUnreadMessagesTitle: "No unread messages",
+    noUnreadMessagesTitle: "No unread conversations",
     noUnreadMessagesText: "You're all caught up.",
     noSavedConversationsTitle: "No saved conversations",
     noSavedConversationsText:
@@ -359,14 +359,14 @@ export const translations = {
     shareSaveReceipt: "Share / Save Receipt",
     emergencyNeedsAttention: "Emergency needs attention",
     emergencyInProgress: "Emergency in progress",
-    openEmergencyChat: "Open Emergency Chat",
+    openEmergencyChat: "Open Emergency Conversation",
     acceptDispatch: "Accept Dispatch",
     onTheWay: "On The Way",
     startWork: "Start Work",
     completeEmergency: "Complete",
     openCompletionSheet: "Open Completion Sheet",
     operations: "Operations",
-    backToChat: "Back to Chat",
+    backToChat: "Back to Conversation",
     liveEmergencyView: "Live Emergency View",
     liveRoute: "Live Route",
     professionalToCustomer: "Professional → Customer",
@@ -503,9 +503,9 @@ leadCapeCoral3: "Cape Coral, FL • 3 mi away",
 leadCapeCoral2: "Cape Coral, FL • 2 mi away",
 leadCapeCoral5: "Cape Coral, FL • 5 mi away",
 
-posted1hAgo: "Posted 1h ago",
-posted2hAgo: "Posted 2h ago",
-posted3hAgo: "Posted 3h ago",
+posted1hAgo: "Shared 1h ago",
+posted2hAgo: "Shared 2h ago",
+posted3hAgo: "Shared 3h ago",
 
 requests: "Requests",
 
@@ -704,7 +704,7 @@ dashboardNoNewLeads: "No new leads right now",
 dashboardNoNewLeadsText:
   "When matching homeowner requests are available, they will appear here.",
 dashboardNewRequest: "New request",
-dashboardRecentlyPosted: "Recently posted",
+dashboardRecentlyPosted: "Recently shared",
 myProfile: "My Profile",
 manage: "Manage",
 leads: "Leads",
@@ -967,7 +967,7 @@ saveChanges: "Save Changes",
 cancelEdit: "Cancel Edit",
 projectCancelled: "Project Cancelled",
 selected: "Selected",
-posted: "Posted",
+posted: "Shared",
 views: "Views",
 quotes: "Quotes",
 messages: "Messages",
@@ -985,7 +985,7 @@ confirmCancelProject:
   "Are you sure you want to cancel this request?",
 
 loadingProject: "Loading request...",
-postNotFound: "Post not found",
+postNotFound: "Request not found",
 projectCouldNotBeLoaded:
   "This service request could not be loaded.",
 noDescriptionAdded:
@@ -1157,7 +1157,7 @@ readOnlyStatus: "Read-only",
 previewStatus: "Preview",
 featuredInSpotlight: "Featured in Spotlight",
 useInSpotlight: "Use in Spotlight",
-localServicesSpotlight: "Local Services Spotlight",
+localServicesSpotlight: "Today's Spotlight",
 saveInvoice: "Save Invoice",
 printInvoice: "Print Invoice",
 downloadSavePdf: "Download / Save PDF",
@@ -1299,7 +1299,7 @@ scheduleVisitCall: "Schedule Visit / Call",
 activateProject: "Activate Project",
 createQuote: "Create Quote",
 noScheduledVisits: "No scheduled visits yet.",
-scheduledVisitsFromChat: "Visits saved from chat will appear here.",
+scheduledVisitsFromChat: "Visits saved from conversations will appear here.",
 manualScheduleEntry: "Manual calendar entry",
 manualScheduleNotice: "Manually added customers will not have chat, automatic records, Meetro tracking, or full project workflow until converted into a Meetro project.",
 manualCustomerWarning: "Manual customer: no chat, automatic records, Meetro tracking, or full workflow until converted into a Meetro project.",
@@ -1482,7 +1482,7 @@ workWaitingOnMaterials: "Work waiting on materials",
 nothingUrgent: "Nothing urgent right now",
 newDecisionsAppearHere: "New decisions will appear here.",
 currentAction: "Current Action",
-emergencyContinuesInChat: "Emergency operations continue in chat.",
+emergencyContinuesInChat: "Emergency coordination continues in the conversation.",
 suggestedNextAction: "Suggested next action",
 openProject: "Continue Project",
 noCurrentWork: "No current work",
@@ -1680,7 +1680,7 @@ afterApprovalWorkStarts: "After approval work starts",
     homeownerWorkflowHome: "Inicio",
     homeHelpToday: "¿Cómo podemos ayudar hoy?",
     homeHelpTodaySubtitle:
-      "Solicita servicio, sigue trabajo activo, responde mensajes y revisa el historial.",
+      "Solicita servicio, sigue trabajo activo, continúa conversaciones y revisa el historial.",
     requestService: "Solicitar Servicio",
     homeWorkflowLabel: "Flujo del cliente",
     homeMyProjects: "Mis proyectos",
@@ -1692,12 +1692,12 @@ afterApprovalWorkStarts: "After approval work starts",
     homeNoActiveRequestsTitle: "No hay solicitudes activas",
     homeNoActiveRequestsText:
       "Solicita servicio para iniciar el flujo con un profesional.",
-    homeMessagesTitle: "Mensajes",
-    homeOpenMessages: "Revisar mensajes",
+    homeMessagesTitle: "Comunicación",
+    homeOpenMessages: "Abrir Centro de Comunicación",
     homeMessagesNeedAttention: "Conversaciones que requieren atención",
     homeMessagesNeedAttentionText:
-      "Revisa mensajes para responder o consultar la actualización más reciente.",
-    homeMessagesAllCaughtUp: "No hay mensajes pendientes",
+      "Abre el Centro de Comunicación para responder o consultar la actualización más reciente.",
+    homeMessagesAllCaughtUp: "No hay conversaciones pendientes",
     homeMessagesAllCaughtUpText:
       "Las respuestas profesionales y actualizaciones aparecerán aquí.",
     homeHistoryEyebrow: "Memoria de la relación",
@@ -1793,7 +1793,7 @@ afterApprovalWorkStarts: "After approval work starts",
     dashboard: "Inicio",
     businessDashboard: "Panel de Negocio",
     businessTools: "Herramientas del Negocio",
-    messages: "Mensajes",
+    messages: "Comunicación",
     customers: "Clientes",
     portfolio: "Portafolio",
     account: "Cuenta",
@@ -1808,7 +1808,7 @@ afterApprovalWorkStarts: "After approval work starts",
 
     manageEmergencyJobs: "Administrar trabajos de emergencia",
     reviewIncomingRequests: "Revisar solicitudes entrantes",
-    customerMessages: "Mensajes y actualizaciones de clientes",
+    customerMessages: "Conversaciones y actualizaciones de clientes",
     showCompletedWork: "Muestra tu trabajo completado",
 
     demoPlumbingTitle: "Reparación de plomería",
@@ -1833,7 +1833,7 @@ afterApprovalWorkStarts: "After approval work starts",
     twoMinutesAgo: "Hace 2 min",
     oneHourAgo: "Hace 1 h",
     threeHoursAgo: "Hace 3 h",
-    noMessagesYet: "Aún no hay mensajes",
+    noMessagesYet: "Aún no hay conversaciones",
     noMessagesText: "Las conversaciones de tus servicios aparecerán aquí.",
     closePhotoGallery: "Cerrar galería de fotos",
     previousPhoto: "Foto anterior",
@@ -1843,11 +1843,11 @@ afterApprovalWorkStarts: "After approval work starts",
     loadingMessages: "Cargando mensajes...",
     backToDashboard: "Volver al Panel",
     messagesInboxSubtitle:
-      "Conversaciones con propietarios y chats de cotización",
+      "Conversaciones con propietarios y contexto de proyecto",
     communicationCenterTitle: "Centro de Comunicación",
     conversationFilters: "Filtros de conversación",
     customerCenter: "Centro de clientes",
-    activeMessages: "Mensajes activos",
+    activeMessages: "Conversaciones activas",
     savedHistory: "Historial guardado",
     active: "Activo",
     activeLabel: "Activos",
@@ -1864,7 +1864,7 @@ afterApprovalWorkStarts: "After approval work starts",
     messageNextStepEmergency: "Revisar estado de emergencia",
     messageNextStepSaved: "Revisar historial de la relación",
     messageNextStepOpen: "Abrir conversación",
-    noUnreadMessagesTitle: "No hay mensajes sin leer",
+    noUnreadMessagesTitle: "No hay conversaciones sin leer",
     noUnreadMessagesText: "Estás al día.",
     noSavedConversationsTitle: "No hay conversaciones guardadas",
     noSavedConversationsText:
@@ -1884,14 +1884,14 @@ afterApprovalWorkStarts: "After approval work starts",
     shareSaveReceipt: "Compartir / Guardar recibo",
     emergencyNeedsAttention: "Emergencia necesita atención",
     emergencyInProgress: "Emergencia en progreso",
-    openEmergencyChat: "Abrir chat de emergencia",
+    openEmergencyChat: "Abrir conversación de emergencia",
     acceptDispatch: "Aceptar despacho",
     onTheWay: "En camino",
     startWork: "Iniciar trabajo",
     completeEmergency: "Completar",
     openCompletionSheet: "Abrir hoja de finalización",
     operations: "Operaciones",
-    backToChat: "Volver al chat",
+    backToChat: "Volver a la conversación",
     liveEmergencyView: "Vista de emergencia en vivo",
     liveRoute: "Ruta en vivo",
     professionalToCustomer: "Profesional → Cliente",
@@ -2514,7 +2514,7 @@ selected: "Seleccionado",
 posted: "Publicado",
 views: "Vistas",
 quotes: "Cotizaciones",
-messages: "Mensajes",
+messages: "Comunicación",
 workflowStarted: "Flujo iniciado",
 projectPhotos: "Fotos de la Solicitud",
 projectPhoto: "foto",
@@ -2707,7 +2707,7 @@ readOnlyStatus: "Solo lectura",
 previewStatus: "Vista previa",
 featuredInSpotlight: "Destacado en Spotlight",
 useInSpotlight: "Usar en Spotlight",
-localServicesSpotlight: "Destacados locales",
+localServicesSpotlight: "El destacado de hoy",
 saveInvoice: "Guardar factura",
 printInvoice: "Imprimir factura",
 downloadSavePdf: "Descargar / guardar PDF",
@@ -2854,7 +2854,7 @@ scheduleVisitCall: "Programar visita / llamada",
 activateProject: "Activar proyecto",
 createQuote: "Crear cotización",
 noScheduledVisits: "No hay visitas programadas todavía.",
-scheduledVisitsFromChat: "Las visitas guardadas desde el chat aparecerán aquí.",
+scheduledVisitsFromChat: "Las visitas guardadas desde conversaciones aparecerán aquí.",
 manualScheduleEntry: "Entrada manual de calendario",
 manualScheduleNotice: "Los clientes agregados manualmente no tendrán chat, registros automáticos, seguimiento de Meetro ni flujo completo de proyecto hasta convertirse en un proyecto Meetro.",
 manualCustomerWarning: "Cliente manual: no tiene chat, registros automáticos, seguimiento de Meetro ni flujo completo hasta convertirlo en proyecto Meetro.",
@@ -3042,7 +3042,7 @@ workWaitingOnMaterials: "Trabajo esperando materiales",
 nothingUrgent: "Nada urgente ahora",
 newDecisionsAppearHere: "Las nuevas decisiones aparecerán aquí.",
 currentAction: "Acción actual",
-emergencyContinuesInChat: "La emergencia continúa en el chat.",
+emergencyContinuesInChat: "La coordinación de emergencia continúa en la conversación.",
 suggestedNextAction: "Próxima acción sugerida",
 openProject: "Continuar proyecto",
 noCurrentWork: "No hay trabajo activo",
@@ -3131,7 +3131,7 @@ const frenchTranslations = {
   portuguese: "Português",
   dashboard: "Tableau de bord",
   services: "Services",
-  messages: "Messages",
+  messages: "Communication",
   account: "Compte",
   business: "Entreprise",
   leads: "Prospects",
@@ -3198,7 +3198,7 @@ const frenchTranslations = {
   previewStatus: "Aperçu",
   featuredInSpotlight: "Mis en avant",
   useInSpotlight: "Utiliser dans Spotlight",
-  localServicesSpotlight: "Services locaux en vedette",
+  localServicesSpotlight: "Le coup de projecteur du jour",
   saveInvoice: "Enregistrer la facture",
   printInvoice: "Imprimer la facture",
   downloadSavePdf: "Télécharger / enregistrer le PDF",
@@ -3237,7 +3237,7 @@ const portugueseTranslations = {
   portuguese: "Português",
   dashboard: "Painel",
   services: "Serviços",
-  messages: "Mensagens",
+  messages: "Comunicação",
   account: "Conta",
   business: "Negócio",
   leads: "Oportunidades",
@@ -3304,7 +3304,7 @@ const portugueseTranslations = {
   previewStatus: "Prévia",
   featuredInSpotlight: "Destacado no Spotlight",
   useInSpotlight: "Usar no Spotlight",
-  localServicesSpotlight: "Destaques de serviços locais",
+  localServicesSpotlight: "Destaque de hoje",
   saveInvoice: "Salvar fatura",
   printInvoice: "Imprimir fatura",
   downloadSavePdf: "Baixar / salvar PDF",
@@ -4020,13 +4020,15 @@ Object.assign(translations["pt-BR"], {
 
 const highTrafficParityLabels = {
   en: {
-    homeLocalServicesEyebrow: "Local services",
+    homeLocalServicesEyebrow: "Community inspiration",
     homeMyProjects: "My Projects",
     homeMyProjectsSubtitle: "Active and completed work in one place.",
     homeMyProjectsActive: "Active",
     homeMyProjectsHistory: "History",
     homeActiveRequestsGuide:
       "Current status, next action, and quick access for each request.",
+    homeOpenMessages: "Open Communication Center",
+    communicationCenterTitle: "Communication Center",
     homeMessagesGuide: "Review only the conversations that need attention.",
     homeHistoryEyebrow: "Completed work",
     homeServiceHistoryTitle: "Service History",
@@ -4041,22 +4043,51 @@ const highTrafficParityLabels = {
     homeEmergencyHelpNowText: "Fast help from available professionals.",
     homeCompletionReview: "Completion review",
     homeWorkCompletedClosurePending: "Work completed, closure pending",
-    homeLocalServicesSpotlight: "Local Services Spotlight",
-    homeLocalServicesSubtitle: "Discover trusted local professionals in your area.",
+    homeLocalServicesSpotlight: "Today's Spotlight",
+    homeLocalServicesSubtitle:
+      "A glimpse of what meaningful local work can make possible.",
     homeLocalServicesEmpty:
-      "Local Services Spotlight will appear here as local professionals add portfolio media.",
+      "Today's Spotlight will appear here as local work begins leaving stories behind.",
     homeLocalBusiness: "Local business",
     homeLocalService: "Local service",
     homeSpotlightFallbackDescription:
-      "Roofing, home repairs, remodeling, and cleanup. Quality work you can count on.",
+      "Meaningful work can make home feel safer, calmer, and more connected.",
+    homeSpotlightStoryEyebrow: "Story first",
+    homeSpotlightStoryBody:
+      "The work matters because of the life it makes possible.",
+    homeSpotlightBusinessIntro:
+      "Meet the professional who helped make it possible.",
+    homeSpotlightProofLine:
+      "From here, the relationship can become a conversation, a project, and someday a Meetro Moment.",
+    homeSpotlightRelationshipHint: "Relationship begins with trust",
+    homeSpotlightReviewTrust: "Trust strengthened by homeowner feedback",
+    homeSpotlightWorkProof: "Completed work gives the story its proof",
+    homeSpotlightReviewCount: "{count} relationship reviews",
+    homeSpotlightWorkProofCount: "{count} completed stories shown",
+    homeSpotlightStoryPlaceholder: "Story preview",
+    homeSpotlightStoryKitchen: "The kitchen where Sunday dinners began",
+    homeSpotlightStoryOutdoor:
+      "The backyard where birthdays became traditions",
+    homeSpotlightStoryProtection:
+      "The work that helped a family feel safe at home",
+    homeSpotlightStoryPeaceful: "The morning routine became peaceful again",
+    homeSpotlightStoryRelief:
+      "The repair that gave a family peace of mind",
+    homeSpotlightStoryTrust: "One project became years of trust",
+    homeSpotlightStoryCommunity:
+      "Neighbors came together. A community grew stronger.",
+    homeSpotlightStoryRenewal:
+      "The reset that made home feel possible again",
+    homeSpotlightStoryDefault:
+      "One project became the beginning of a story",
     homeServingLocalAreaSince: "Serving {area} since {year}",
     homeLocalArea: "the local area",
     homeOnePhoto: "1 Photo",
     homePhotoCount: "{count} Photos",
-    homePortfolioPreview: "Portfolio preview",
+    homePortfolioPreview: "Story preview",
     homePreviousPhoto: "Previous photo",
     homeNextPhoto: "Next photo",
-    homeViewProfile: "Review Profile",
+    homeViewProfile: "Meet the Professional",
     homeRequestDetails: "Request Details",
     homeRequestDetailsAria: "Request details",
     homeActiveRequest: "Active Request",
@@ -4131,8 +4162,12 @@ const highTrafficParityLabels = {
     myRequestsCompletion: "Completion",
     myRequestsServiceHistory: "Service History",
     myRequestsBack: "Back",
-    myRequestsTitle: "My Requests",
-    myRequestsSubtitle: "Review status, next steps, and service details.",
+    myRequestsTitle: "Work Center",
+    myRequestsSubtitle: "Manage your home projects, requests, quotes, schedule, and history.",
+    myRequestsPerspectiveEyebrow: "Homeowner perspective",
+    myRequestsPerspectiveTitle: "How we move forward together",
+    myRequestsPerspectiveText:
+      "See the current status, the next step, and where the conversation continues for every project.",
     myRequestsEmptyTitle: "No requests yet",
     myRequestsEmptyText: "Request help to start receiving professional responses.",
     myRequestsRequestHelp: "Request Help",
@@ -4200,7 +4235,10 @@ const highTrafficParityLabels = {
     wcOpen: "open",
     wcRevenueNote: "Operational summary of revenue, closed jobs, and open quotes.",
     activeJobs: "Active Jobs",
-    workCenterPurposeStatement: "Start with what deserves attention now.",
+    workCenterPurposeStatement:
+      "See what needs attention, what happens next, and where each customer relationship moves forward.",
+    workCenterProfessionalPerspectiveLine:
+      "Customer work stays connected through requests, evaluations, quotes, schedule, active jobs, completion, and history.",
     workCenterQuotesTitle: "Quotes / Proposals",
     workCenterActiveWorkTitle: "Active Work",
     workCenterRevenueTitle: "Revenue",
@@ -4222,9 +4260,104 @@ const highTrafficParityLabels = {
     opportunityNextStep: "Contact customer or schedule evaluation.",
     awaitingReview: "Awaiting Review",
     noNewOpportunities: "No new opportunities",
+
+    communityTitle: "Community",
+    communityEntryTitle: "Explore Community",
+    communityEntryHomeCopy:
+      "Discover trusted businesses, opportunities, and local stories around you.",
+    communityEntryBusinessCopy:
+      "Discover businesses, opportunities, and local stories happening around you.",
+    communityOpenAction: "Open Community",
+    communitySubtitle:
+      "Explore the people, opportunities, and stories that make your community stronger.",
+    communityGuideQuestion: "What would you like to discover today?",
+    communityPreviewAria: "Community discovery previews",
+    communityBusinessesTitle: "Businesses",
+    communityBusinessesCopy:
+      "Discover trusted professionals and local businesses serving your community.",
+    communityBusinessesEmptyTitle:
+      "Local businesses will appear here as Meetro grows.",
+    communityBusinessesEmptyText:
+      "Soon, this space will introduce trusted professionals serving your community.",
+    communityViewAllBusinesses: "View All Businesses",
+    communityHiringTitle: "Hiring",
+    communityHiringCopy:
+      "Find your next teammate, opportunity, or collaboration.",
+    communityHiringEmptyTitle: "Hiring opportunities will appear here.",
+    communityHiringEmptyText:
+      "As local teams grow, Meetro will show opportunities to work, collaborate, and build together.",
+    communityViewAllHiring: "View All Hiring",
+    communitySpotlightTitle: "Spotlight",
+    communitySpotlightCopy: "Discover today’s featured community story.",
+    communitySpotlightEyebrow: "Today’s Spotlight",
+    communitySpotlightCue:
+      "Meet the professional who helped make it possible.",
+    communityExploreSpotlight: "Explore Spotlight",
+    communitySpotlightLocalProfessional: "a local professional",
+    communitySpotlightStoryTitle:
+      "Trusted work is already shaping your community.",
+    communitySpotlightStoryText:
+      "Meet {business}, part of the relationships and local work helping neighbors move forward.",
+    communitySpotlightStoryFallbackTitle:
+      "Spotlight stories are beginning here.",
+    communitySpotlightStoryFallbackText:
+      "As trusted work grows, this space will introduce the people, relationships, and care behind it.",
+    communitySpotlightStoryFallbackMeta:
+      "Spotlight stays light for Phase 5A and does not require media uploads.",
+    communitySpotlightBusinessSingular: "business",
+    communitySpotlightBusinessPlural: "businesses",
+    communitySpotlightCountMeta:
+      "{count} local {businessLabel} ready for Community discovery.",
+    communitySpotlightPageTitle: "Stories Behind Trusted Work",
+    communitySpotlightPageSubtitle:
+      "Discover the professionals, relationships, and local work helping your community feel more connected.",
+    communitySpotlightStoryAria: "Spotlight story",
+    communitySpotlightFeaturedEyebrow: "Featured Community Story",
+    communitySpotlightWarmupEyebrow: "Spotlight Is Warming Up",
+    communitySpotlightWarmupCue:
+      "Meaningful local stories will appear here as Meetro grows.",
+    communitySpotlightPrincipleTitle:
+      "Spotlight is discovery, not preservation.",
+    communitySpotlightPrincipleText:
+      "Meetro Moments preserves completed accomplishments. Spotlight helps the community discover the people and trust behind meaningful work.",
+
+    momentsBackToProfile: "Back to Profile",
+    momentsEyebrow: "Meetro Moments",
+    momentsWelcomeText:
+      "This is where completed work becomes remembered history: the projects, people, and promises worth carrying forward.",
+    momentsPreservationStatementAria: "Meetro Moments preservation promise",
+    momentsPreservationStatementTitle: "What deserves to be remembered",
+    momentsPreservationStatementText:
+      "Completed work, trusted relationships, and the history that grows from them.",
+    momentsPromiseAria: "Meetro Moments promise",
+    momentsPromiseText: "Only verified work becomes a remembered Moment.",
+    momentsReflectionAria: "Today's Reflection",
+    momentsReflectionLabel: "Today's Reflection",
+    momentsVerifiedReflectionBody:
+      "This verified work is now part of the story you are building through Meetro.",
+    momentsViewMoment: "View Moment",
+    momentsSeeWhatMomentsBecome: "See what Moments become",
+    momentsStoryInspiration: "Story inspiration",
+    momentsStoryTakingOver: "Your story is beginning to take over",
+    momentsStoryCanBecome: "What your story can become",
+    momentsInspirationText:
+      "Until your own Moments arrive, Meetro shows a few glimpses of the memories completed work can leave behind. As your story grows, these quietly make room for yours.",
+    momentsInspirationAria: "Meetro Moment inspiration",
+    momentsFutureMemory: "Future memory",
+    momentsCompleteOwnStory:
+      "Your Meetro Moments are now telling this story on their own.",
+    momentsVerifiedHistory: "Verified history",
+    momentsYourMoments: "Your Meetro Moments",
+    momentsEmptyTitle:
+      "Your first remembered project will appear after verified work is closed.",
+    momentsEmptyText:
+      "Until then, these inspirations show the kind of history Meetro will preserve for you.",
+    momentsReceiptSaved: "Receipt saved",
+    momentsBeforeAfterPreviewAria: "Before and after photo preview",
+    momentsVerifiedLabel: "Verified Meetro Moment",
   },
   es: {
-    homeLocalServicesEyebrow: "Servicios locales",
+    homeLocalServicesEyebrow: "Inspiración comunitaria",
     homeMyProjects: "Mis proyectos",
     homeMyProjectsSubtitle:
       "Trabajo activo y completado en un solo lugar.",
@@ -4232,6 +4365,8 @@ const highTrafficParityLabels = {
     homeMyProjectsHistory: "Historial",
     homeActiveRequestsGuide:
       "Estado actual, siguiente acción y acceso rápido a cada solicitud.",
+    homeOpenMessages: "Abrir Centro de Comunicación",
+    communicationCenterTitle: "Centro de Comunicación",
     homeMessagesGuide:
       "Revisa solo las conversaciones que necesitan atención.",
     homeHistoryEyebrow: "Trabajo completado",
@@ -4249,22 +4384,55 @@ const highTrafficParityLabels = {
     homeCompletionReview: "Revisión de finalización",
     homeWorkCompletedClosurePending:
       "Trabajo completado, cierre pendiente",
-    homeLocalServicesSpotlight: "Destacados locales",
-    homeLocalServicesSubtitle: "Descubre profesionales locales confiables en tu área.",
+    homeLocalServicesSpotlight: "El destacado de hoy",
+    homeLocalServicesSubtitle:
+      "Un vistazo a lo que el trabajo local significativo puede hacer posible.",
     homeLocalServicesEmpty:
-      "Los servicios locales destacados aparecerán aquí cuando profesionales locales agreguen contenido de portafolio.",
+      "El destacado de hoy aparecerá aquí cuando el trabajo local empiece a dejar historias.",
     homeLocalBusiness: "Negocio local",
     homeLocalService: "Servicio local",
     homeSpotlightFallbackDescription:
-      "Reparaciones, remodelaciones y servicios locales de confianza.",
+      "El trabajo significativo puede hacer que el hogar se sienta más seguro, tranquilo y conectado.",
+    homeSpotlightStoryEyebrow: "La historia primero",
+    homeSpotlightStoryBody:
+      "El trabajo importa por la vida que hace posible.",
+    homeSpotlightBusinessIntro:
+      "Conoce al profesional que ayudó a hacerlo posible.",
+    homeSpotlightProofLine:
+      "Desde aquí, la relación puede convertirse en conversación, proyecto y algún día en un Meetro Moment.",
+    homeSpotlightRelationshipHint: "La relación empieza con confianza",
+    homeSpotlightReviewTrust:
+      "La confianza se fortalece con comentarios de propietarios",
+    homeSpotlightWorkProof:
+      "El trabajo completado le da prueba a la historia",
+    homeSpotlightReviewCount: "{count} reseñas de relación",
+    homeSpotlightWorkProofCount: "{count} historias completadas",
+    homeSpotlightStoryPlaceholder: "Vista previa de la historia",
+    homeSpotlightStoryKitchen:
+      "La cocina donde comenzaron las cenas de domingo",
+    homeSpotlightStoryOutdoor:
+      "El patio donde los cumpleaños se volvieron tradiciones",
+    homeSpotlightStoryProtection:
+      "El trabajo que ayudó a una familia a sentirse segura en casa",
+    homeSpotlightStoryPeaceful:
+      "La rutina de la mañana volvió a ser tranquila",
+    homeSpotlightStoryRelief:
+      "La reparación que dio tranquilidad a una familia",
+    homeSpotlightStoryTrust: "Un proyecto se convirtió en años de confianza",
+    homeSpotlightStoryCommunity:
+      "Los vecinos se unieron. La comunidad se fortaleció.",
+    homeSpotlightStoryRenewal:
+      "El reinicio que hizo que el hogar volviera a sentirse posible",
+    homeSpotlightStoryDefault:
+      "Un proyecto se convirtió en el comienzo de una historia",
     homeServingLocalAreaSince: "Sirviendo {area} desde {year}",
     homeLocalArea: "el área local",
     homeOnePhoto: "1 foto",
     homePhotoCount: "{count} fotos",
-    homePortfolioPreview: "Vista previa",
+    homePortfolioPreview: "Vista previa de la historia",
     homePreviousPhoto: "Foto anterior",
     homeNextPhoto: "Siguiente foto",
-    homeViewProfile: "Revisar perfil",
+    homeViewProfile: "Conoce al profesional",
     homeRequestDetails: "Detalles de solicitud",
     homeRequestDetailsAria: "Detalles de la solicitud",
     homeActiveRequest: "Solicitud activa",
@@ -4339,8 +4507,12 @@ const highTrafficParityLabels = {
     myRequestsCompletion: "Finalización",
     myRequestsServiceHistory: "Historial de servicio",
     myRequestsBack: "Volver",
-    myRequestsTitle: "Mis Solicitudes",
-    myRequestsSubtitle: "Revisa el estado, próximos pasos y detalles de tus servicios.",
+    myRequestsTitle: "Work Center",
+    myRequestsSubtitle: "Administra proyectos del hogar, solicitudes, cotizaciones, agenda e historial.",
+    myRequestsPerspectiveEyebrow: "Perspectiva del propietario",
+    myRequestsPerspectiveTitle: "Cómo avanzamos juntos",
+    myRequestsPerspectiveText:
+      "Ve el estado actual, el siguiente paso y dónde continúa la conversación de cada proyecto.",
     myRequestsEmptyTitle: "No hay solicitudes todavía",
     myRequestsEmptyText: "Solicita ayuda para comenzar a recibir respuestas profesionales.",
     myRequestsRequestHelp: "Solicitar Ayuda",
@@ -4408,7 +4580,10 @@ const highTrafficParityLabels = {
     wcOpen: "abiertas",
     wcRevenueNote: "Resumen operativo de ingresos, trabajos cerrados y cotizaciones abiertas.",
     activeJobs: "Trabajos activos",
-    workCenterPurposeStatement: "Empieza con lo que necesita atención ahora.",
+    workCenterPurposeStatement:
+      "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes.",
+    workCenterProfessionalPerspectiveLine:
+      "El trabajo con clientes se mantiene conectado entre solicitudes, evaluaciones, cotizaciones, agenda, trabajos activos, finalización e historial.",
     workCenterQuotesTitle: "Cotizaciones / Propuestas",
     workCenterActiveWorkTitle: "Trabajo activo",
     workCenterRevenueTitle: "Ingresos",
@@ -4430,9 +4605,105 @@ const highTrafficParityLabels = {
     opportunityNextStep: "Contacta al cliente o programa una evaluación.",
     awaitingReview: "Esperando revisión",
     noNewOpportunities: "No hay oportunidades nuevas",
+
+    communityTitle: "Comunidad",
+    communityEntryTitle: "Explorar comunidad",
+    communityEntryHomeCopy:
+      "Descubre negocios de confianza, oportunidades e historias locales cerca de ti.",
+    communityEntryBusinessCopy:
+      "Descubre negocios, oportunidades e historias locales que ocurren cerca de ti.",
+    communityOpenAction: "Abrir comunidad",
+    communitySubtitle:
+      "Explora las personas, oportunidades e historias que fortalecen tu comunidad.",
+    communityGuideQuestion: "¿Qué te gustaría descubrir hoy?",
+    communityPreviewAria: "Vistas previas de descubrimiento comunitario",
+    communityBusinessesTitle: "Negocios",
+    communityBusinessesCopy:
+      "Descubre profesionales de confianza y negocios locales que sirven a tu comunidad.",
+    communityBusinessesEmptyTitle:
+      "Los negocios locales aparecerán aquí a medida que Meetro crezca.",
+    communityBusinessesEmptyText:
+      "Pronto, este espacio presentará profesionales de confianza que sirven a tu comunidad.",
+    communityViewAllBusinesses: "Ver todos los negocios",
+    communityHiringTitle: "Contratación",
+    communityHiringCopy:
+      "Encuentra tu próximo compañero de equipo, oportunidad o colaboración.",
+    communityHiringEmptyTitle: "Las oportunidades aparecerán aquí.",
+    communityHiringEmptyText:
+      "A medida que los equipos locales crezcan, Meetro mostrará oportunidades para trabajar, colaborar y construir juntos.",
+    communityViewAllHiring: "Ver contratación",
+    communitySpotlightTitle: "Spotlight",
+    communitySpotlightCopy: "Descubre la historia destacada de la comunidad de hoy.",
+    communitySpotlightEyebrow: "Spotlight de hoy",
+    communitySpotlightCue:
+      "Conoce al profesional que ayudó a hacerlo posible.",
+    communityExploreSpotlight: "Explorar Spotlight",
+    communitySpotlightLocalProfessional: "un profesional local",
+    communitySpotlightStoryTitle:
+      "El trabajo confiable ya está dando forma a tu comunidad.",
+    communitySpotlightStoryText:
+      "Conoce a {business}, parte de las relaciones y el trabajo local que ayudan a los vecinos a avanzar.",
+    communitySpotlightStoryFallbackTitle:
+      "Las historias de Spotlight comienzan aquí.",
+    communitySpotlightStoryFallbackText:
+      "A medida que crezca el trabajo confiable, este espacio presentará las personas, relaciones y cuidado detrás de él.",
+    communitySpotlightStoryFallbackMeta:
+      "Spotlight se mantiene ligero para Phase 5A y no requiere cargas de medios.",
+    communitySpotlightBusinessSingular: "negocio",
+    communitySpotlightBusinessPlural: "negocios",
+    communitySpotlightCountMeta:
+      "{count} {businessLabel} locales listos para el descubrimiento comunitario.",
+    communitySpotlightPageTitle: "Historias detrás del trabajo confiable",
+    communitySpotlightPageSubtitle:
+      "Descubre los profesionales, relaciones y trabajo local que ayudan a que tu comunidad se sienta más conectada.",
+    communitySpotlightStoryAria: "Historia de Spotlight",
+    communitySpotlightFeaturedEyebrow: "Historia comunitaria destacada",
+    communitySpotlightWarmupEyebrow: "Spotlight está comenzando",
+    communitySpotlightWarmupCue:
+      "Las historias locales significativas aparecerán aquí a medida que Meetro crezca.",
+    communitySpotlightPrincipleTitle:
+      "Spotlight es descubrimiento, no preservación.",
+    communitySpotlightPrincipleText:
+      "Meetro Moments preserva logros completados. Spotlight ayuda a la comunidad a descubrir las personas y la confianza detrás del trabajo significativo.",
+
+    momentsBackToProfile: "Volver al perfil",
+    momentsEyebrow: "Meetro Moments",
+    momentsWelcomeText:
+      "Aquí el trabajo completado se convierte en historia recordada: proyectos, personas y promesas que vale la pena conservar.",
+    momentsPreservationStatementAria:
+      "Promesa de preservación de Meetro Moments",
+    momentsPreservationStatementTitle: "Lo que merece ser recordado",
+    momentsPreservationStatementText:
+      "Trabajo completado, relaciones de confianza y la historia que crece a partir de ellas.",
+    momentsPromiseAria: "Promesa de Meetro Moments",
+    momentsPromiseText: "Solo el trabajo verificado se convierte en un Moment recordado.",
+    momentsReflectionAria: "Reflexión de hoy",
+    momentsReflectionLabel: "Reflexión de hoy",
+    momentsVerifiedReflectionBody:
+      "Este trabajo verificado ahora forma parte de la historia que estás construyendo con Meetro.",
+    momentsViewMoment: "Ver Moment",
+    momentsSeeWhatMomentsBecome: "Ver en qué se convierten los Moments",
+    momentsStoryInspiration: "Inspiración de historia",
+    momentsStoryTakingOver: "Tu historia empieza a ocupar este espacio",
+    momentsStoryCanBecome: "Lo que tu historia puede llegar a ser",
+    momentsInspirationText:
+      "Hasta que lleguen tus propios Moments, Meetro muestra algunos destellos de los recuerdos que el trabajo completado puede dejar. A medida que tu historia crezca, estos harán espacio para la tuya.",
+    momentsInspirationAria: "Inspiración de Meetro Moment",
+    momentsFutureMemory: "Recuerdo futuro",
+    momentsCompleteOwnStory:
+      "Tus Meetro Moments ya están contando esta historia por sí solos.",
+    momentsVerifiedHistory: "Historia verificada",
+    momentsYourMoments: "Tus Meetro Moments",
+    momentsEmptyTitle:
+      "Tu primer proyecto recordado aparecerá después de cerrar trabajo verificado.",
+    momentsEmptyText:
+      "Hasta entonces, estas inspiraciones muestran el tipo de historia que Meetro preservará para ti.",
+    momentsReceiptSaved: "Recibo guardado",
+    momentsBeforeAfterPreviewAria: "Vista previa de fotos antes y después",
+    momentsVerifiedLabel: "Meetro Moment verificado",
   },
   fr: {
-    homeLocalServicesEyebrow: "Services locaux",
+    homeLocalServicesEyebrow: "Inspiration communautaire",
     homeMyProjects: "Mes projets",
     homeMyProjectsSubtitle:
       "Travaux actifs et terminés au même endroit.",
@@ -4440,6 +4711,8 @@ const highTrafficParityLabels = {
     homeMyProjectsHistory: "Historique",
     homeActiveRequestsGuide:
       "Statut actuel, prochaine action et accès rapide à chaque demande.",
+    homeOpenMessages: "Ouvrir le centre de communication",
+    communicationCenterTitle: "Centre de communication",
     homeMessagesGuide:
       "Consultez uniquement les conversations qui nécessitent votre attention.",
     homeHistoryEyebrow: "Travail terminé",
@@ -4457,22 +4730,55 @@ const highTrafficParityLabels = {
     homeCompletionReview: "Examen de l’achèvement",
     homeWorkCompletedClosurePending:
       "Travail terminé, clôture en attente",
-    homeLocalServicesSpotlight: "Services locaux en vedette",
-    homeLocalServicesSubtitle: "Découvrez des professionnels locaux de confiance dans votre secteur.",
+    homeLocalServicesSpotlight: "Le coup de projecteur du jour",
+    homeLocalServicesSubtitle:
+      "Un aperçu de ce que le travail local significatif peut rendre possible.",
     homeLocalServicesEmpty:
-      "Les services locaux en vedette apparaîtront ici lorsque les professionnels locaux ajouteront des médias de portfolio.",
+      "Le coup de projecteur du jour apparaîtra ici lorsque le travail local commencera à laisser des histoires.",
     homeLocalBusiness: "Entreprise locale",
     homeLocalService: "Service local",
     homeSpotlightFallbackDescription:
-      "Toiture, réparations, rénovations et nettoyage. Un travail fiable sur lequel compter.",
+      "Un travail significatif peut rendre la maison plus sûre, plus calme et plus connectée.",
+    homeSpotlightStoryEyebrow: "L'histoire d'abord",
+    homeSpotlightStoryBody:
+      "Le travail compte par la vie qu'il rend possible.",
+    homeSpotlightBusinessIntro:
+      "Rencontrez le professionnel qui a aidé à rendre cela possible.",
+    homeSpotlightProofLine:
+      "À partir d'ici, la relation peut devenir une conversation, un projet et un jour un Meetro Moment.",
+    homeSpotlightRelationshipHint: "La relation commence par la confiance",
+    homeSpotlightReviewTrust:
+      "La confiance renforcée par les avis des propriétaires",
+    homeSpotlightWorkProof:
+      "Le travail terminé donne une preuve à l'histoire",
+    homeSpotlightReviewCount: "{count} avis de relation",
+    homeSpotlightWorkProofCount: "{count} histoires terminées",
+    homeSpotlightStoryPlaceholder: "Aperçu de l'histoire",
+    homeSpotlightStoryKitchen:
+      "La cuisine où les dîners du dimanche ont commencé",
+    homeSpotlightStoryOutdoor:
+      "Le jardin où les anniversaires sont devenus des traditions",
+    homeSpotlightStoryProtection:
+      "Le travail qui a aidé une famille à se sentir en sécurité chez elle",
+    homeSpotlightStoryPeaceful:
+      "La routine du matin est redevenue paisible",
+    homeSpotlightStoryRelief:
+      "La réparation qui a apporté la tranquillité à une famille",
+    homeSpotlightStoryTrust: "Un projet est devenu des années de confiance",
+    homeSpotlightStoryCommunity:
+      "Des voisins se sont réunis. Une communauté s'est renforcée.",
+    homeSpotlightStoryRenewal:
+      "Le renouveau qui a redonné à la maison son sentiment de possible",
+    homeSpotlightStoryDefault:
+      "Un projet est devenu le début d'une histoire",
     homeServingLocalAreaSince: "Au service de {area} depuis {year}",
     homeLocalArea: "la région locale",
     homeOnePhoto: "1 photo",
     homePhotoCount: "{count} photos",
-    homePortfolioPreview: "Aperçu du portfolio",
+    homePortfolioPreview: "Aperçu de l'histoire",
     homePreviousPhoto: "Photo précédente",
     homeNextPhoto: "Photo suivante",
-    homeViewProfile: "Examiner le profil",
+    homeViewProfile: "Rencontrer le professionnel",
     homeRequestDetails: "Détails de la demande",
     homeRequestDetailsAria: "Détails de la demande",
     homeActiveRequest: "Demande active",
@@ -4547,8 +4853,12 @@ const highTrafficParityLabels = {
     myRequestsCompletion: "Achèvement",
     myRequestsServiceHistory: "Historique du service",
     myRequestsBack: "Retour",
-    myRequestsTitle: "Mes demandes",
-    myRequestsSubtitle: "Consultez le statut, les prochaines étapes et les détails du service.",
+    myRequestsTitle: "Centre de travail",
+    myRequestsSubtitle: "Gérez vos projets de maison, demandes, devis, planning et historique.",
+    myRequestsPerspectiveEyebrow: "Point de vue propriétaire",
+    myRequestsPerspectiveTitle: "Comment avançons-nous ensemble",
+    myRequestsPerspectiveText:
+      "Voyez le statut actuel, la prochaine étape et où la conversation continue pour chaque projet.",
     myRequestsEmptyTitle: "Aucune demande pour le moment",
     myRequestsEmptyText: "Demandez de l'aide pour commencer à recevoir des réponses de professionnels.",
     myRequestsRequestHelp: "Demander de l'aide",
@@ -4616,7 +4926,11 @@ const highTrafficParityLabels = {
     wcOpen: "ouverts",
     wcRevenueNote: "Résumé opérationnel des revenus, travaux clôturés et devis ouverts.",
     activeJobs: "Travaux actifs",
-    workCenterPurposeStatement: "Commencez par ce qui mérite l’attention maintenant.",
+    workCenterDashboardTitle: "Centre de travail",
+    workCenterPurposeStatement:
+      "Voyez ce qui demande de l’attention, ce qui vient ensuite et comment chaque relation client avance.",
+    workCenterProfessionalPerspectiveLine:
+      "Le travail client reste connecté entre demandes, évaluations, devis, planning, travaux actifs, achèvement et historique.",
     workCenterQuotesTitle: "Devis / propositions",
     workCenterActiveWorkTitle: "Travail actif",
     workCenterRevenueTitle: "Revenus",
@@ -4638,6 +4952,103 @@ const highTrafficParityLabels = {
     opportunityNextStep: "Contactez le client ou planifiez une évaluation.",
     awaitingReview: "En attente d’examen",
     noNewOpportunities: "Aucune nouvelle opportunité",
+
+    communityTitle: "Communauté",
+    communityEntryTitle: "Explorer la communauté",
+    communityEntryHomeCopy:
+      "Découvrez des entreprises de confiance, des opportunités et des histoires locales autour de vous.",
+    communityEntryBusinessCopy:
+      "Découvrez les entreprises, les opportunités et les histoires locales près de vous.",
+    communityOpenAction: "Ouvrir la communauté",
+    communitySubtitle:
+      "Explorez les personnes, les opportunités et les histoires qui renforcent votre communauté.",
+    communityGuideQuestion: "Que souhaitez-vous découvrir aujourd’hui ?",
+    communityPreviewAria: "Aperçus de découverte communautaire",
+    communityBusinessesTitle: "Entreprises",
+    communityBusinessesCopy:
+      "Découvrez des professionnels de confiance et des entreprises locales au service de votre communauté.",
+    communityBusinessesEmptyTitle:
+      "Les entreprises locales apparaîtront ici à mesure que Meetro grandira.",
+    communityBusinessesEmptyText:
+      "Bientôt, cet espace présentera des professionnels de confiance au service de votre communauté.",
+    communityViewAllBusinesses: "Voir toutes les entreprises",
+    communityHiringTitle: "Recrutement",
+    communityHiringCopy:
+      "Trouvez votre prochain coéquipier, une opportunité ou une collaboration.",
+    communityHiringEmptyTitle: "Les opportunités de recrutement apparaîtront ici.",
+    communityHiringEmptyText:
+      "À mesure que les équipes locales grandiront, Meetro montrera des opportunités pour travailler, collaborer et construire ensemble.",
+    communityViewAllHiring: "Voir le recrutement",
+    communitySpotlightTitle: "Spotlight",
+    communitySpotlightCopy:
+      "Découvrez l’histoire communautaire mise en lumière aujourd’hui.",
+    communitySpotlightEyebrow: "Spotlight du jour",
+    communitySpotlightCue:
+      "Rencontrez le professionnel qui a aidé à rendre cela possible.",
+    communityExploreSpotlight: "Explorer Spotlight",
+    communitySpotlightLocalProfessional: "un professionnel local",
+    communitySpotlightStoryTitle:
+      "Le travail de confiance façonne déjà votre communauté.",
+    communitySpotlightStoryText:
+      "Rencontrez {business}, une partie des relations et du travail local qui aident les voisins à avancer.",
+    communitySpotlightStoryFallbackTitle:
+      "Les histoires Spotlight commencent ici.",
+    communitySpotlightStoryFallbackText:
+      "À mesure que le travail de confiance grandira, cet espace présentera les personnes, les relations et le soin qui l’accompagnent.",
+    communitySpotlightStoryFallbackMeta:
+      "Spotlight reste léger pour la Phase 5A et ne nécessite pas de téléversements média.",
+    communitySpotlightBusinessSingular: "entreprise",
+    communitySpotlightBusinessPlural: "entreprises",
+    communitySpotlightCountMeta:
+      "{count} {businessLabel} locales prêtes pour la découverte communautaire.",
+    communitySpotlightPageTitle: "Les histoires derrière le travail de confiance",
+    communitySpotlightPageSubtitle:
+      "Découvrez les professionnels, les relations et le travail local qui rendent votre communauté plus connectée.",
+    communitySpotlightStoryAria: "Histoire Spotlight",
+    communitySpotlightFeaturedEyebrow: "Histoire communautaire à la une",
+    communitySpotlightWarmupEyebrow: "Spotlight commence à s’allumer",
+    communitySpotlightWarmupCue:
+      "Des histoires locales significatives apparaîtront ici à mesure que Meetro grandira.",
+    communitySpotlightPrincipleTitle:
+      "Spotlight est découverte, pas préservation.",
+    communitySpotlightPrincipleText:
+      "Meetro Moments préserve les accomplissements terminés. Spotlight aide la communauté à découvrir les personnes et la confiance derrière le travail significatif.",
+
+    momentsBackToProfile: "Retour au profil",
+    momentsEyebrow: "Meetro Moments",
+    momentsWelcomeText:
+      "C’est ici que le travail terminé devient une histoire dont on se souvient : les projets, les personnes et les promesses à garder.",
+    momentsPreservationStatementAria:
+      "Promesse de préservation de Meetro Moments",
+    momentsPreservationStatementTitle: "Ce qui mérite d’être retenu",
+    momentsPreservationStatementText:
+      "Le travail terminé, les relations de confiance et l’histoire qui en naît.",
+    momentsPromiseAria: "Promesse de Meetro Moments",
+    momentsPromiseText: "Seul le travail vérifié devient un Moment dont on se souvient.",
+    momentsReflectionAria: "Réflexion du jour",
+    momentsReflectionLabel: "Réflexion du jour",
+    momentsVerifiedReflectionBody:
+      "Ce travail vérifié fait désormais partie de l’histoire que vous construisez avec Meetro.",
+    momentsViewMoment: "Voir le Moment",
+    momentsSeeWhatMomentsBecome: "Voir ce que deviennent les Moments",
+    momentsStoryInspiration: "Inspiration d’histoire",
+    momentsStoryTakingOver: "Votre histoire commence à prendre sa place",
+    momentsStoryCanBecome: "Ce que votre histoire peut devenir",
+    momentsInspirationText:
+      "En attendant vos propres Moments, Meetro montre quelques aperçus des souvenirs que le travail terminé peut laisser. À mesure que votre histoire grandira, ils laisseront doucement la place à la vôtre.",
+    momentsInspirationAria: "Inspiration Meetro Moment",
+    momentsFutureMemory: "Souvenir futur",
+    momentsCompleteOwnStory:
+      "Vos Meetro Moments racontent maintenant cette histoire par eux-mêmes.",
+    momentsVerifiedHistory: "Histoire vérifiée",
+    momentsYourMoments: "Vos Meetro Moments",
+    momentsEmptyTitle:
+      "Votre premier projet mémorable apparaîtra après la clôture d’un travail vérifié.",
+    momentsEmptyText:
+      "D’ici là, ces inspirations montrent le type d’histoire que Meetro préservera pour vous.",
+    momentsReceiptSaved: "Reçu enregistré",
+    momentsBeforeAfterPreviewAria: "Aperçu avant et après",
+    momentsVerifiedLabel: "Meetro Moment vérifié",
     reviewJob: "Examiner les détails",
     viewDetails: "Examiner les détails",
     aiAssistSummary: "Aide de Meetro pour le résumé",
@@ -4662,7 +5073,7 @@ const highTrafficParityLabels = {
     viewMyRequests: "Examiner mes demandes",
   },
   "pt-BR": {
-    homeLocalServicesEyebrow: "Serviços locais",
+    homeLocalServicesEyebrow: "Inspiração da comunidade",
     homeMyProjects: "Meus projetos",
     homeMyProjectsSubtitle:
       "Trabalhos ativos e concluídos em um só lugar.",
@@ -4670,6 +5081,8 @@ const highTrafficParityLabels = {
     homeMyProjectsHistory: "Histórico",
     homeActiveRequestsGuide:
       "Status atual, próxima ação e acesso rápido para cada solicitação.",
+    homeOpenMessages: "Abrir Centro de Comunicação",
+    communicationCenterTitle: "Centro de Comunicação",
     homeMessagesGuide:
       "Revise apenas as conversas que precisam de atenção.",
     homeHistoryEyebrow: "Trabalho concluído",
@@ -4687,22 +5100,55 @@ const highTrafficParityLabels = {
     homeCompletionReview: "Revisão de conclusão",
     homeWorkCompletedClosurePending:
       "Trabalho concluído, fechamento pendente",
-    homeLocalServicesSpotlight: "Destaques de serviços locais",
-    homeLocalServicesSubtitle: "Descubra profissionais locais confiáveis na sua área.",
+    homeLocalServicesSpotlight: "Destaque de hoje",
+    homeLocalServicesSubtitle:
+      "Um vislumbre do que o trabalho local significativo pode tornar possível.",
     homeLocalServicesEmpty:
-      "Os destaques de serviços locais aparecerão aqui quando profissionais locais adicionarem mídia ao portfólio.",
+      "O destaque de hoje aparecerá aqui quando o trabalho local começar a deixar histórias.",
     homeLocalBusiness: "Empresa local",
     homeLocalService: "Serviço local",
     homeSpotlightFallbackDescription:
-      "Telhados, reparos, reformas e limpeza. Trabalho de qualidade em que você pode confiar.",
+      "Trabalho significativo pode fazer o lar parecer mais seguro, calmo e conectado.",
+    homeSpotlightStoryEyebrow: "História primeiro",
+    homeSpotlightStoryBody:
+      "O trabalho importa pela vida que torna possível.",
+    homeSpotlightBusinessIntro:
+      "Conheça o profissional que ajudou a tornar isso possível.",
+    homeSpotlightProofLine:
+      "Daqui, o relacionamento pode virar conversa, projeto e um dia um Meetro Moment.",
+    homeSpotlightRelationshipHint: "Relacionamento começa com confiança",
+    homeSpotlightReviewTrust:
+      "Confiança fortalecida por comentários de proprietários",
+    homeSpotlightWorkProof:
+      "O trabalho concluído dá prova à história",
+    homeSpotlightReviewCount: "{count} avaliações de relacionamento",
+    homeSpotlightWorkProofCount: "{count} histórias concluídas",
+    homeSpotlightStoryPlaceholder: "Prévia da história",
+    homeSpotlightStoryKitchen:
+      "A cozinha onde os almoços de domingo começaram",
+    homeSpotlightStoryOutdoor:
+      "O quintal onde aniversários viraram tradições",
+    homeSpotlightStoryProtection:
+      "O trabalho que ajudou uma família a se sentir segura em casa",
+    homeSpotlightStoryPeaceful:
+      "A rotina da manhã voltou a ser tranquila",
+    homeSpotlightStoryRelief:
+      "O reparo que trouxe paz de espírito a uma família",
+    homeSpotlightStoryTrust: "Um projeto virou anos de confiança",
+    homeSpotlightStoryCommunity:
+      "Vizinhos se uniram. Uma comunidade ficou mais forte.",
+    homeSpotlightStoryRenewal:
+      "O recomeço que fez o lar parecer possível de novo",
+    homeSpotlightStoryDefault:
+      "Um projeto se tornou o começo de uma história",
     homeServingLocalAreaSince: "Atendendo {area} desde {year}",
     homeLocalArea: "a região local",
     homeOnePhoto: "1 foto",
     homePhotoCount: "{count} fotos",
-    homePortfolioPreview: "Prévia do portfólio",
+    homePortfolioPreview: "Prévia da história",
     homePreviousPhoto: "Foto anterior",
     homeNextPhoto: "Próxima foto",
-    homeViewProfile: "Revisar perfil",
+    homeViewProfile: "Conheça o profissional",
     homeRequestDetails: "Detalhes da solicitação",
     homeRequestDetailsAria: "Detalhes da solicitação",
     homeActiveRequest: "Solicitação ativa",
@@ -4777,8 +5223,12 @@ const highTrafficParityLabels = {
     myRequestsCompletion: "Conclusão",
     myRequestsServiceHistory: "Histórico de serviços",
     myRequestsBack: "Voltar",
-    myRequestsTitle: "Minhas solicitações",
-    myRequestsSubtitle: "Revise status, próximas etapas e detalhes do serviço.",
+    myRequestsTitle: "Work Center",
+    myRequestsSubtitle: "Gerencie projetos da casa, solicitações, orçamentos, agenda e histórico.",
+    myRequestsPerspectiveEyebrow: "Perspectiva do proprietário",
+    myRequestsPerspectiveTitle: "Como avançamos juntos",
+    myRequestsPerspectiveText:
+      "Veja o status atual, a próxima etapa e onde a conversa continua para cada projeto.",
     myRequestsEmptyTitle: "Ainda não há solicitações",
     myRequestsEmptyText: "Solicite ajuda para começar a receber respostas de profissionais.",
     myRequestsRequestHelp: "Solicitar ajuda",
@@ -4846,7 +5296,11 @@ const highTrafficParityLabels = {
     wcOpen: "abertos",
     wcRevenueNote: "Resumo operacional de receita, trabalhos fechados e orçamentos abertos.",
     activeJobs: "Trabalhos ativos",
-    workCenterPurposeStatement: "Comece pelo que precisa de atenção agora.",
+    workCenterDashboardTitle: "Work Center",
+    workCenterPurposeStatement:
+      "Veja o que precisa de atenção, o que vem a seguir e como cada relacionamento com cliente avança.",
+    workCenterProfessionalPerspectiveLine:
+      "O trabalho com clientes permanece conectado entre solicitações, avaliações, orçamentos, agenda, trabalhos ativos, conclusão e histórico.",
     workCenterQuotesTitle: "Orçamentos / Propostas",
     workCenterActiveWorkTitle: "Trabalho ativo",
     workCenterRevenueTitle: "Receita",
@@ -4868,6 +5322,102 @@ const highTrafficParityLabels = {
     opportunityNextStep: "Contate o cliente ou agende uma avaliação.",
     awaitingReview: "Aguardando análise",
     noNewOpportunities: "Nenhuma nova oportunidade",
+
+    communityTitle: "Comunidade",
+    communityEntryTitle: "Explorar Comunidade",
+    communityEntryHomeCopy:
+      "Descubra empresas confiáveis, oportunidades e histórias locais ao seu redor.",
+    communityEntryBusinessCopy:
+      "Descubra empresas, oportunidades e histórias locais acontecendo ao seu redor.",
+    communityOpenAction: "Abrir Comunidade",
+    communitySubtitle:
+      "Explore as pessoas, oportunidades e histórias que fortalecem sua comunidade.",
+    communityGuideQuestion: "O que você gostaria de descobrir hoje?",
+    communityPreviewAria: "Prévias de descoberta da comunidade",
+    communityBusinessesTitle: "Empresas",
+    communityBusinessesCopy:
+      "Descubra profissionais de confiança e empresas locais que atendem sua comunidade.",
+    communityBusinessesEmptyTitle:
+      "Empresas locais aparecerão aqui à medida que o Meetro crescer.",
+    communityBusinessesEmptyText:
+      "Em breve, este espaço apresentará profissionais de confiança que atendem sua comunidade.",
+    communityViewAllBusinesses: "Ver todas as empresas",
+    communityHiringTitle: "Contratação",
+    communityHiringCopy:
+      "Encontre seu próximo colega de equipe, oportunidade ou colaboração.",
+    communityHiringEmptyTitle: "Oportunidades de contratação aparecerão aqui.",
+    communityHiringEmptyText:
+      "À medida que equipes locais crescerem, o Meetro mostrará oportunidades para trabalhar, colaborar e construir juntos.",
+    communityViewAllHiring: "Ver contratação",
+    communitySpotlightTitle: "Spotlight",
+    communitySpotlightCopy: "Descubra a história em destaque da comunidade de hoje.",
+    communitySpotlightEyebrow: "Spotlight de hoje",
+    communitySpotlightCue:
+      "Conheça o profissional que ajudou a tornar isso possível.",
+    communityExploreSpotlight: "Explorar Spotlight",
+    communitySpotlightLocalProfessional: "um profissional local",
+    communitySpotlightStoryTitle:
+      "Trabalho confiável já está moldando sua comunidade.",
+    communitySpotlightStoryText:
+      "Conheça {business}, parte dos relacionamentos e do trabalho local que ajudam vizinhos a avançar.",
+    communitySpotlightStoryFallbackTitle:
+      "As histórias Spotlight começam aqui.",
+    communitySpotlightStoryFallbackText:
+      "À medida que o trabalho confiável crescer, este espaço apresentará as pessoas, relacionamentos e cuidado por trás dele.",
+    communitySpotlightStoryFallbackMeta:
+      "Spotlight permanece leve para a Fase 5A e não exige uploads de mídia.",
+    communitySpotlightBusinessSingular: "empresa",
+    communitySpotlightBusinessPlural: "empresas",
+    communitySpotlightCountMeta:
+      "{count} {businessLabel} locais prontas para descoberta da comunidade.",
+    communitySpotlightPageTitle: "Histórias por trás do trabalho confiável",
+    communitySpotlightPageSubtitle:
+      "Descubra os profissionais, relacionamentos e trabalho local que ajudam sua comunidade a se sentir mais conectada.",
+    communitySpotlightStoryAria: "História Spotlight",
+    communitySpotlightFeaturedEyebrow: "História comunitária em destaque",
+    communitySpotlightWarmupEyebrow: "Spotlight está começando",
+    communitySpotlightWarmupCue:
+      "Histórias locais significativas aparecerão aqui à medida que o Meetro crescer.",
+    communitySpotlightPrincipleTitle:
+      "Spotlight é descoberta, não preservação.",
+    communitySpotlightPrincipleText:
+      "Meetro Moments preserva conquistas concluídas. Spotlight ajuda a comunidade a descobrir as pessoas e a confiança por trás do trabalho significativo.",
+
+    momentsBackToProfile: "Voltar ao perfil",
+    momentsEyebrow: "Meetro Moments",
+    momentsWelcomeText:
+      "É aqui que o trabalho concluído se torna história lembrada: projetos, pessoas e promessas que vale preservar.",
+    momentsPreservationStatementAria:
+      "Promessa de preservação do Meetro Moments",
+    momentsPreservationStatementTitle: "O que merece ser lembrado",
+    momentsPreservationStatementText:
+      "Trabalho concluído, relações de confiança e a história que nasce delas.",
+    momentsPromiseAria: "Promessa do Meetro Moments",
+    momentsPromiseText: "Somente trabalho verificado se torna um Moment lembrado.",
+    momentsReflectionAria: "Reflexão de hoje",
+    momentsReflectionLabel: "Reflexão de hoje",
+    momentsVerifiedReflectionBody:
+      "Este trabalho verificado agora faz parte da história que você está construindo com o Meetro.",
+    momentsViewMoment: "Ver Moment",
+    momentsSeeWhatMomentsBecome: "Ver o que Moments se tornam",
+    momentsStoryInspiration: "Inspiração de história",
+    momentsStoryTakingOver: "Sua história começa a ocupar este espaço",
+    momentsStoryCanBecome: "O que sua história pode se tornar",
+    momentsInspirationText:
+      "Até seus próprios Moments chegarem, o Meetro mostra alguns vislumbres das memórias que o trabalho concluído pode deixar. À medida que sua história crescer, eles abrirão espaço para a sua.",
+    momentsInspirationAria: "Inspiração Meetro Moment",
+    momentsFutureMemory: "Memória futura",
+    momentsCompleteOwnStory:
+      "Seus Meetro Moments agora contam esta história por conta própria.",
+    momentsVerifiedHistory: "História verificada",
+    momentsYourMoments: "Seus Meetro Moments",
+    momentsEmptyTitle:
+      "Seu primeiro projeto lembrado aparecerá depois que um trabalho verificado for fechado.",
+    momentsEmptyText:
+      "Até lá, essas inspirações mostram o tipo de história que o Meetro preservará para você.",
+    momentsReceiptSaved: "Recibo salvo",
+    momentsBeforeAfterPreviewAria: "Prévia antes e depois",
+    momentsVerifiedLabel: "Meetro Moment verificado",
     reviewJob: "Revisar detalhes",
     viewDetails: "Revisar detalhes",
     aiAssistSummary: "Ajuda do Meetro para resumo",
@@ -4907,9 +5457,23 @@ const projectJourneyLabels = {
     editRequest: "Edit Request",
     requestChange: "Request Change",
     continueConversation: "Continue Conversation",
+    homeProjectNextStepLabel: "Next Step",
     requestSubmitted: "Request Submitted",
     requestSubmittedSummary:
       "Your request is in Meetro and ready for local professionals to review.",
+    homeProjectNextStepRequestSubmitted:
+      "Your request has been received. Continue the conversation while a professional reviews the details.",
+    homeProjectNextStepVisitScheduled:
+      "Your visit is scheduled. Continue the conversation if anything changes.",
+    homeProjectNextStepEvaluationComplete:
+      "Your evaluation is complete. Your professional is preparing the next step.",
+    homeProjectNextStepQuoteReady: "Your quote is ready to review.",
+    homeProjectNextStepWorkScheduled:
+      "Your work is scheduled. Continue the conversation for updates.",
+    homeProjectNextStepWorkInProgress:
+      "Work is underway. Stay connected for progress updates.",
+    homeProjectNextStepCompleted:
+      "This project is complete and ready for history.",
     professionalReviewing: "Professional Reviewing",
     professionalReviewingSummary:
       "Professionals can review the request and respond when there is a fit.",
@@ -4969,7 +5533,7 @@ const projectJourneyLabels = {
     reviewCompletion: "Review Completion",
     leaveReview: "Leave Review",
     messageProfessional: "Message Professional",
-    relationshipTimeline: "Relationship Timeline",
+    relationshipTimeline: "Relationship History",
     projectTimeline: "Project Timeline",
     professionalResponded: "Professional Responded",
     quoteSent: "Quote Sent",
@@ -5003,9 +5567,23 @@ const projectJourneyLabels = {
     editRequest: "Editar solicitud",
     requestChange: "Solicitar cambio",
     continueConversation: "Continuar conversación",
+    homeProjectNextStepLabel: "Próximo paso",
     requestSubmitted: "Solicitud enviada",
     requestSubmittedSummary:
       "Su solicitud está en Meetro y lista para que profesionales locales la revisen.",
+    homeProjectNextStepRequestSubmitted:
+      "Su solicitud fue recibida. Continúe la conversación mientras un profesional revisa los detalles.",
+    homeProjectNextStepVisitScheduled:
+      "Su visita está programada. Continúe la conversación si algo cambia.",
+    homeProjectNextStepEvaluationComplete:
+      "Su evaluación está completa. Su profesional está preparando el próximo paso.",
+    homeProjectNextStepQuoteReady: "Su cotización está lista para revisar.",
+    homeProjectNextStepWorkScheduled:
+      "Su trabajo está programado. Continúe la conversación para recibir actualizaciones.",
+    homeProjectNextStepWorkInProgress:
+      "El trabajo está en marcha. Manténgase conectado para recibir actualizaciones.",
+    homeProjectNextStepCompleted:
+      "Este proyecto está completo y listo para el historial.",
     professionalReviewing: "Profesional revisando",
     professionalReviewingSummary:
       "Los profesionales pueden revisar la solicitud y responder si encaja.",
@@ -5065,7 +5643,7 @@ const projectJourneyLabels = {
     reviewCompletion: "Revisar finalización",
     leaveReview: "Dejar reseña",
     messageProfessional: "Mensaje al profesional",
-    relationshipTimeline: "Cronología de la relación",
+    relationshipTimeline: "Historial de la relación",
     projectTimeline: "Cronología del proyecto",
     professionalResponded: "Profesional respondió",
     quoteSent: "Cotización enviada",
@@ -5099,9 +5677,23 @@ const projectJourneyLabels = {
     editRequest: "Modifier la demande",
     requestChange: "Demander un changement",
     continueConversation: "Continuer la conversation",
+    homeProjectNextStepLabel: "Prochaine étape",
     requestSubmitted: "Demande envoyée",
     requestSubmittedSummary:
       "Votre demande est dans Meetro et prête à être examinée par des professionnels locaux.",
+    homeProjectNextStepRequestSubmitted:
+      "Votre demande a été reçue. Continuez la conversation pendant qu’un professionnel examine les détails.",
+    homeProjectNextStepVisitScheduled:
+      "Votre visite est planifiée. Continuez la conversation si quelque chose change.",
+    homeProjectNextStepEvaluationComplete:
+      "Votre évaluation est terminée. Votre professionnel prépare la prochaine étape.",
+    homeProjectNextStepQuoteReady: "Votre devis est prêt à être examiné.",
+    homeProjectNextStepWorkScheduled:
+      "Vos travaux sont planifiés. Continuez la conversation pour suivre les mises à jour.",
+    homeProjectNextStepWorkInProgress:
+      "Les travaux sont en cours. Restez connecté pour suivre les progrès.",
+    homeProjectNextStepCompleted:
+      "Ce projet est terminé et prêt pour l’historique.",
     professionalReviewing: "Professionnel en cours d’examen",
     professionalReviewingSummary:
       "Les professionnels peuvent examiner la demande et répondre lorsqu’elle correspond.",
@@ -5161,7 +5753,7 @@ const projectJourneyLabels = {
     reviewCompletion: "Examiner l’achèvement",
     leaveReview: "Laisser un avis",
     messageProfessional: "Message au professionnel",
-    relationshipTimeline: "Chronologie de la relation",
+    relationshipTimeline: "Historique de la relation",
     projectTimeline: "Chronologie du projet",
     professionalResponded: "Le professionnel a répondu",
     quoteSent: "Devis envoyé",
@@ -5195,9 +5787,23 @@ const projectJourneyLabels = {
     editRequest: "Editar solicitação",
     requestChange: "Solicitar alteração",
     continueConversation: "Continuar conversa",
+    homeProjectNextStepLabel: "Próximo passo",
     requestSubmitted: "Solicitação enviada",
     requestSubmittedSummary:
       "Sua solicitação está no Meetro e pronta para profissionais locais analisarem.",
+    homeProjectNextStepRequestSubmitted:
+      "Sua solicitação foi recebida. Continue a conversa enquanto um profissional revisa os detalhes.",
+    homeProjectNextStepVisitScheduled:
+      "Sua visita está agendada. Continue a conversa se algo mudar.",
+    homeProjectNextStepEvaluationComplete:
+      "Sua avaliação está completa. Seu profissional está preparando o próximo passo.",
+    homeProjectNextStepQuoteReady: "Seu orçamento está pronto para revisão.",
+    homeProjectNextStepWorkScheduled:
+      "Seu trabalho está agendado. Continue a conversa para receber atualizações.",
+    homeProjectNextStepWorkInProgress:
+      "O trabalho está em andamento. Fique conectado para acompanhar o progresso.",
+    homeProjectNextStepCompleted:
+      "Este projeto está completo e pronto para o histórico.",
     professionalReviewing: "Profissional analisando",
     professionalReviewingSummary:
       "Profissionais podem analisar a solicitação e responder quando houver compatibilidade.",
@@ -5257,7 +5863,7 @@ const projectJourneyLabels = {
     reviewCompletion: "Revisar conclusão",
     leaveReview: "Deixar avaliação",
     messageProfessional: "Mensagem ao profissional",
-    relationshipTimeline: "Linha do tempo da relação",
+    relationshipTimeline: "Histórico da relação",
     projectTimeline: "Linha do tempo do projeto",
     professionalResponded: "Profissional respondeu",
     quoteSent: "Orçamento enviado",
@@ -5488,6 +6094,11 @@ const businessIdentityPageLabels = {
     quickActions: "Business Management",
     businessHealth: "Business Readiness",
     businessReadinessSentence: "Your business is almost ready to receive customers.",
+    readyForCustomers: "Ready for customers",
+    readyForCustomersHelp:
+      "Customers can find your business, understand what you offer, and request work.",
+    inactiveReadinessHelp:
+      "Customers can still preview your profile, but new requests are paused until availability is on.",
     businessInformation: "Business Information",
     servicesOffered: "Services Offered",
     servicesOfferedSubtitle:
@@ -5527,6 +6138,8 @@ const businessIdentityPageLabels = {
     customerTrust: "Customer Trust",
     customerPreview: "Customer Preview",
     customerPreviewHelp: "Preview how homeowners see your business.",
+    customerPreviewSummary:
+      "This preview reflects your business name, services, service area, reviews, and trust details.",
     viewPublicProfile: "Preview Customer View",
     shareProfile: "Share Profile",
     profileSummaryCopied: "Profile summary copied.",
@@ -5550,6 +6163,30 @@ const businessIdentityPageLabels = {
     licenseExpiration: "License Expiration",
     verificationDetails: "Verification Details",
     reviewVerification: "Review Verification",
+    portfolioProof: "Portfolio Proof",
+    portfolioProofHelp:
+      "Completed work and reviews help customers understand what your business has done.",
+    portfolioProofEmpty:
+      "Portfolio proof will appear after you add completed projects or receive reviews.",
+    addPortfolioProof: "Add Portfolio Proof",
+    publicPresenceGuidance: "Improve Customer Presence",
+    publicPresenceGuidanceHelp:
+      "A few small updates can make your business easier for customers to understand.",
+    addServiceArea: "Add Service Area",
+    addServiceAreaGuidance:
+      "Help customers understand where your business can work.",
+    chooseServicesOffered: "Choose Services Offered",
+    chooseServicesOfferedGuidance:
+      "Confirm the services customers can request from your business.",
+    addBusinessHoursGuidance:
+      "Share when customers can usually expect your business to be available.",
+    addPortfolioProofGuidance:
+      "Show completed work so customers can evaluate your business with confidence.",
+    reviewVerificationGuidance:
+      "Review the trust details customers may see on your business profile.",
+    previewCustomerView: "Preview Customer View",
+    previewCustomerViewGuidance:
+      "Open the customer view to confirm your profile feels ready.",
   },
   es: {
     setupRequired: "Perfil de negocio necesario",
@@ -5570,6 +6207,11 @@ const businessIdentityPageLabels = {
     quickActions: "Gestión del negocio",
     businessHealth: "Preparación del negocio",
     businessReadinessSentence: "Tu negocio está casi listo para recibir clientes.",
+    readyForCustomers: "Listo para clientes",
+    readyForCustomersHelp:
+      "Los clientes pueden encontrar tu negocio, entender lo que ofreces y solicitar trabajo.",
+    inactiveReadinessHelp:
+      "Los clientes aún pueden ver tu perfil, pero las nuevas solicitudes quedan pausadas hasta activar la disponibilidad.",
     businessInformation: "Información del negocio",
     servicesOffered: "Servicios ofrecidos",
     servicesOfferedSubtitle:
@@ -5609,6 +6251,8 @@ const businessIdentityPageLabels = {
     customerTrust: "Confianza del cliente",
     customerPreview: "Vista del cliente",
     customerPreviewHelp: "Previsualiza cómo los propietarios ven tu negocio.",
+    customerPreviewSummary:
+      "Esta vista refleja el nombre del negocio, servicios, área de servicio, reseñas y detalles de confianza.",
     viewPublicProfile: "Previsualizar vista del cliente",
     shareProfile: "Compartir perfil",
     profileSummaryCopied: "Resumen del perfil copiado.",
@@ -5632,6 +6276,30 @@ const businessIdentityPageLabels = {
     licenseExpiration: "Vencimiento de licencia",
     verificationDetails: "Detalles de verificación",
     reviewVerification: "Revisar verificación",
+    portfolioProof: "Prueba de portafolio",
+    portfolioProofHelp:
+      "Los trabajos completados y las reseñas ayudan a los clientes a entender lo que tu negocio ha hecho.",
+    portfolioProofEmpty:
+      "La prueba de portafolio aparecerá después de agregar proyectos completados o recibir reseñas.",
+    addPortfolioProof: "Agregar prueba de portafolio",
+    publicPresenceGuidance: "Mejorar presencia ante clientes",
+    publicPresenceGuidanceHelp:
+      "Unas pequeñas actualizaciones pueden hacer que tu negocio sea más fácil de entender.",
+    addServiceArea: "Agregar área de servicio",
+    addServiceAreaGuidance:
+      "Ayuda a los clientes a entender dónde puede trabajar tu negocio.",
+    chooseServicesOffered: "Elegir servicios ofrecidos",
+    chooseServicesOfferedGuidance:
+      "Confirma los servicios que los clientes pueden solicitar a tu negocio.",
+    addBusinessHoursGuidance:
+      "Comparte cuándo los clientes normalmente pueden esperar disponibilidad.",
+    addPortfolioProofGuidance:
+      "Muestra trabajo completado para que los clientes evalúen tu negocio con confianza.",
+    reviewVerificationGuidance:
+      "Revisa los detalles de confianza que los clientes pueden ver en tu perfil.",
+    previewCustomerView: "Previsualizar vista del cliente",
+    previewCustomerViewGuidance:
+      "Abre la vista del cliente para confirmar que tu perfil se siente listo.",
   },
   fr: {
     setupRequired: "Profil d’entreprise nécessaire",
@@ -5653,6 +6321,11 @@ const businessIdentityPageLabels = {
     quickActions: "Gestion de l’entreprise",
     businessHealth: "Préparation de l’entreprise",
     businessReadinessSentence: "Votre entreprise est presque prête à recevoir des clients.",
+    readyForCustomers: "Prête pour les clients",
+    readyForCustomersHelp:
+      "Les clients peuvent trouver votre entreprise, comprendre vos services et demander une intervention.",
+    inactiveReadinessHelp:
+      "Les clients peuvent encore consulter votre profil, mais les nouvelles demandes sont suspendues jusqu’à ce que la disponibilité soit activée.",
     businessInformation: "Informations sur l’entreprise",
     servicesOffered: "Services proposés",
     servicesOfferedSubtitle:
@@ -5693,6 +6366,8 @@ const businessIdentityPageLabels = {
     customerPreview: "Aperçu client",
     customerPreviewHelp:
       "Prévisualisez comment les propriétaires voient votre entreprise.",
+    customerPreviewSummary:
+      "Cet aperçu reflète le nom de votre entreprise, vos services, votre zone d’intervention, vos avis et vos éléments de confiance.",
     viewPublicProfile: "Prévisualiser la vue client",
     shareProfile: "Partager le profil",
     profileSummaryCopied: "Résumé du profil copié.",
@@ -5716,6 +6391,30 @@ const businessIdentityPageLabels = {
     licenseExpiration: "Expiration de la licence",
     verificationDetails: "Détails de vérification",
     reviewVerification: "Revoir la vérification",
+    portfolioProof: "Preuve de portfolio",
+    portfolioProofHelp:
+      "Les travaux terminés et les avis aident les clients à comprendre ce que votre entreprise a réalisé.",
+    portfolioProofEmpty:
+      "La preuve de portfolio apparaîtra après l’ajout de projets terminés ou la réception d’avis.",
+    addPortfolioProof: "Ajouter une preuve de portfolio",
+    publicPresenceGuidance: "Améliorer la présence client",
+    publicPresenceGuidanceHelp:
+      "Quelques petites mises à jour peuvent rendre votre entreprise plus facile à comprendre.",
+    addServiceArea: "Ajouter une zone de service",
+    addServiceAreaGuidance:
+      "Aidez les clients à comprendre où votre entreprise peut intervenir.",
+    chooseServicesOffered: "Choisir les services proposés",
+    chooseServicesOfferedGuidance:
+      "Confirmez les services que les clients peuvent demander à votre entreprise.",
+    addBusinessHoursGuidance:
+      "Indiquez quand les clients peuvent généralement attendre votre disponibilité.",
+    addPortfolioProofGuidance:
+      "Montrez des travaux terminés afin que les clients évaluent votre entreprise en confiance.",
+    reviewVerificationGuidance:
+      "Revoyez les éléments de confiance que les clients peuvent voir sur votre profil.",
+    previewCustomerView: "Prévisualiser la vue client",
+    previewCustomerViewGuidance:
+      "Ouvrez la vue client pour confirmer que votre profil semble prêt.",
   },
   "pt-BR": {
     setupRequired: "Perfil do negócio necessário",
@@ -5737,6 +6436,11 @@ const businessIdentityPageLabels = {
     quickActions: "Gestão do negócio",
     businessHealth: "Prontidão do negócio",
     businessReadinessSentence: "Seu negócio está quase pronto para receber clientes.",
+    readyForCustomers: "Pronto para clientes",
+    readyForCustomersHelp:
+      "Clientes podem encontrar seu negócio, entender o que você oferece e solicitar trabalho.",
+    inactiveReadinessHelp:
+      "Clientes ainda podem visualizar seu perfil, mas novas solicitações ficam pausadas até a disponibilidade ser ativada.",
     businessInformation: "Informações do negócio",
     servicesOffered: "Serviços oferecidos",
     servicesOfferedSubtitle:
@@ -5777,6 +6481,8 @@ const businessIdentityPageLabels = {
     customerPreview: "Prévia do cliente",
     customerPreviewHelp:
       "Veja como os proprietários visualizam seu negócio.",
+    customerPreviewSummary:
+      "Esta prévia reflete o nome do negócio, serviços, área de atendimento, avaliações e detalhes de confiança.",
     viewPublicProfile: "Pré-visualizar vista do cliente",
     shareProfile: "Compartilhar perfil",
     profileSummaryCopied: "Resumo do perfil copiado.",
@@ -5800,6 +6506,30 @@ const businessIdentityPageLabels = {
     licenseExpiration: "Vencimento da licença",
     verificationDetails: "Detalhes da verificação",
     reviewVerification: "Revisar verificação",
+    portfolioProof: "Prova de portfólio",
+    portfolioProofHelp:
+      "Trabalhos concluídos e avaliações ajudam clientes a entender o que seu negócio já realizou.",
+    portfolioProofEmpty:
+      "A prova de portfólio aparecerá depois que você adicionar projetos concluídos ou receber avaliações.",
+    addPortfolioProof: "Adicionar prova de portfólio",
+    publicPresenceGuidance: "Melhorar presença para clientes",
+    publicPresenceGuidanceHelp:
+      "Algumas pequenas atualizações podem tornar seu negócio mais fácil de entender.",
+    addServiceArea: "Adicionar área de atendimento",
+    addServiceAreaGuidance:
+      "Ajude clientes a entender onde seu negócio pode trabalhar.",
+    chooseServicesOffered: "Escolher serviços oferecidos",
+    chooseServicesOfferedGuidance:
+      "Confirme os serviços que clientes podem solicitar ao seu negócio.",
+    addBusinessHoursGuidance:
+      "Compartilhe quando os clientes normalmente podem esperar disponibilidade.",
+    addPortfolioProofGuidance:
+      "Mostre trabalhos concluídos para que clientes avaliem seu negócio com confiança.",
+    reviewVerificationGuidance:
+      "Revise os detalhes de confiança que clientes podem ver no perfil do negócio.",
+    previewCustomerView: "Pré-visualizar vista do cliente",
+    previewCustomerViewGuidance:
+      "Abra a visão do cliente para confirmar que seu perfil parece pronto.",
   },
 };
 
@@ -6938,7 +7668,7 @@ const discoverMarketplaceLabels = {
     discoverClearSearch: "Clear search",
     discoverCategories: "Service categories",
     discoverCategoryAll: "All",
-    discoverLocalServices: "Local Services Spotlight",
+    discoverLocalServices: "Today's Spotlight",
     discoverResultsCount: "{count} professionals found",
     discoverNoProsTitle: "No professionals found.",
     discoverNoProsText: "Try another service or expand your search area.",
@@ -7032,7 +7762,7 @@ const notificationCenterLabels = {
     notificationsEmptyText:
       "Alerts that need your attention will appear here.",
     notificationCategory_projectUpdates: "Project Updates",
-    notificationCategory_messages: "Messages",
+    notificationCategory_messages: "Conversations",
     notificationCategory_quotes: "Quotes",
     notificationCategory_schedule: "Schedule",
     notificationCategory_emergency: "Emergency",
@@ -7053,7 +7783,7 @@ const notificationCenterLabels = {
     notificationsEmptyText:
       "Las alertas que requieren tu atención aparecerán aquí.",
     notificationCategory_projectUpdates: "Actualizaciones del proyecto",
-    notificationCategory_messages: "Mensajes",
+    notificationCategory_messages: "Conversaciones",
     notificationCategory_quotes: "Cotizaciones",
     notificationCategory_schedule: "Agenda",
     notificationCategory_emergency: "Emergencia",
@@ -7074,7 +7804,7 @@ const notificationCenterLabels = {
     notificationsEmptyText:
       "Les alertes nécessitant votre attention apparaîtront ici.",
     notificationCategory_projectUpdates: "Mises à jour du projet",
-    notificationCategory_messages: "Messages",
+    notificationCategory_messages: "Conversations",
     notificationCategory_quotes: "Devis",
     notificationCategory_schedule: "Horaire",
     notificationCategory_emergency: "Urgence",
@@ -7095,7 +7825,7 @@ const notificationCenterLabels = {
     notificationsEmptyText:
       "Alertas que precisam da sua atenção aparecerão aqui.",
     notificationCategory_projectUpdates: "Atualizações do projeto",
-    notificationCategory_messages: "Mensagens",
+    notificationCategory_messages: "Conversas",
     notificationCategory_quotes: "Orçamentos",
     notificationCategory_schedule: "Agenda",
     notificationCategory_emergency: "Emergência",
@@ -7130,9 +7860,9 @@ const guidedTourLabels = {
     guideCreateRequestTitle: "Create Request",
     guideCreateRequestDescription:
       "Use the request screen to describe what you need, add photos, and start a relationship with a professional.",
-    guideMessagesTitle: "Messages",
+    guideMessagesTitle: "Communication Center",
     guideMessagesDescription:
-      "Messages are the shared workspace for project updates, documents, questions, and next steps.",
+      "Communication Center keeps project conversations, documents, questions, and next steps connected.",
     guideScheduleTitle: "Schedule",
     guideScheduleDescription:
       "Track appointments, visits, and service timing from your active project workflow.",
@@ -7195,9 +7925,9 @@ const guidedTourLabels = {
     guideCreateRequestTitle: "Crear solicitud",
     guideCreateRequestDescription:
       "Usa la solicitud para describir lo que necesitas, agregar fotos e iniciar una relación con un profesional.",
-    guideMessagesTitle: "Mensajes",
+    guideMessagesTitle: "Centro de Comunicación",
     guideMessagesDescription:
-      "Mensajes es el espacio compartido para actualizaciones, documentos, preguntas y próximos pasos.",
+      "El Centro de Comunicación mantiene conectadas las conversaciones, documentos, preguntas y próximos pasos.",
     guideScheduleTitle: "Agenda",
     guideScheduleDescription:
       "Sigue citas, visitas y horarios desde el flujo de tu proyecto activo.",
@@ -7260,9 +7990,9 @@ const guidedTourLabels = {
     guideCreateRequestTitle: "Créer une demande",
     guideCreateRequestDescription:
       "Décrivez votre besoin, ajoutez des photos et démarrez une relation avec un professionnel.",
-    guideMessagesTitle: "Messages",
+    guideMessagesTitle: "Centre de communication",
     guideMessagesDescription:
-      "Messages est l’espace partagé pour les mises à jour, documents, questions et prochaines étapes.",
+      "Le centre de communication relie les conversations, documents, questions et prochaines étapes.",
     guideScheduleTitle: "Horaire",
     guideScheduleDescription:
       "Suivez les rendez-vous, visites et dates de service dans le flux du projet.",
@@ -7325,9 +8055,9 @@ const guidedTourLabels = {
     guideCreateRequestTitle: "Criar solicitação",
     guideCreateRequestDescription:
       "Descreva o que precisa, adicione fotos e inicie uma relação com um profissional.",
-    guideMessagesTitle: "Mensagens",
+    guideMessagesTitle: "Centro de Comunicação",
     guideMessagesDescription:
-      "Mensagens é o espaço compartilhado para atualizações, documentos, dúvidas e próximos passos.",
+      "O Centro de Comunicação mantém conversas, documentos, dúvidas e próximos passos conectados.",
     guideScheduleTitle: "Agenda",
     guideScheduleDescription:
       "Acompanhe visitas, compromissos e horários dentro do fluxo do projeto ativo.",
@@ -7425,7 +8155,7 @@ const fieldProductivityAssistantLabels = {
     assistantFieldPrepareProfessionalDefault: "the next customer update, missing job facts, and any documentation you can capture now",
     assistantFieldPrepareHomeownerDefault: "questions for the professional, photos, access notes, and decisions needed for the project",
     assistantFieldActionCreateRequest: "Create Request",
-    assistantFieldActionOpenMessages: "Review Messages",
+    assistantFieldActionOpenMessages: "Continue in Communication Center",
     assistantFieldActionOpenWorkCenter: "Continue Work",
     assistantFieldActionOpenSchedule: "Review Schedule",
     assistantFieldActionOpenEvaluation: "Review Evaluation",
@@ -7478,6 +8208,16 @@ const fieldProductivityAssistantLabels = {
     assistantCompanionContinueWorking: "Continue Working",
     assistantCompanionReviewInsights: "Review Insights",
     assistantCompanionAskMeetro: "Ask Meetro",
+    assistantCompanionPanelTitle: "Meetro Companion",
+    assistantCompanionWorkspaceGuidance: "Workspace guidance",
+    assistantCompanionObservation: "Observation",
+    assistantCompanionRecommendation: "Recommendation",
+    assistantCompanionRecommendationDefault:
+      "Take the next step only when it helps your current work.",
+    assistantCompanionSuggestedActions: "Suggested actions",
+    assistantCompanionInputPlaceholder: "Ask anything...",
+    assistantCompanionSend: "Send",
+    assistantResponding: "Responding",
     assistantCompanionContinueToMeetro: "Continue to Meetro",
     assistantCompanionNoUrgent: "No urgent commitments right now.",
     assistantCompanionTodaysFocus: "Today's focus",
@@ -7490,12 +8230,19 @@ const fieldProductivityAssistantLabels = {
     companionContextDismiss: "Dismiss",
     companionContextHomeTitle: "Today's Work",
     companionContextHomeMessage: "Review what deserves attention next.",
+    companionContextBusinessDashboardTitle: "Business Dashboard",
+    companionContextBusinessDashboardMessage:
+      "Review what deserves business attention today.",
     companionContextRequestTitle: "Preparing Request",
     companionContextRequestMessage: "Meetro can prepare this before you send it.",
     companionContextDiscoverTitle: "Finding Help",
     companionContextDiscoverMessage: "Compare services before choosing the next step.",
-    companionContextConversationTitle: "Customer Conversation",
-    companionContextConversationMessage: "Summarize this conversation or prepare the next reply.",
+    companionContextConversationTitle: "Communication Center",
+    companionContextConversationMessage:
+      "I can summarize this conversation, find schedule or proposal details, or prepare the next reply.",
+    companionContextEmergencyTitle: "Emergency",
+    companionContextEmergencyMessage:
+      "Review the urgent service context and continue through the owning workspace.",
     companionContextScheduleTitle: "Schedule Visit",
     companionContextScheduleMessage: "Prepare or confirm the visit details.",
     companionContextWorkCenterTitle: "Current Work",
@@ -7510,6 +8257,17 @@ const fieldProductivityAssistantLabels = {
     companionContextInvoiceMessage: "Check payment details before you continue.",
     companionContextCompletionTitle: "Closure Review",
     companionContextCompletionMessage: "Check what remains before this becomes history.",
+    companionContextProjectTitle: "Project Details",
+    companionContextProjectMessage: "Review this project's current status and next step.",
+    companionContextBusinessProfileTitle: "Business Profile",
+    companionContextBusinessProfileMessage:
+      "Review business readiness, trust, and public presence.",
+    companionContextBusinessToolsTitle: "Business Tools",
+    companionContextBusinessToolsMessage:
+      "Choose the business management tool that belongs to this task.",
+    companionContextPortfolioTitle: "Portfolio",
+    companionContextPortfolioMessage:
+      "Review proof of work before changing what customers see.",
     companionContextProfileTitle: "Account Help",
     companionContextProfileMessage: "Find the profile or setting you need.",
     companionContextFallbackTitle: "Meetro",
@@ -7776,7 +8534,7 @@ const fieldProductivityAssistantLabels = {
     assistantFieldPrepareProfessionalDefault: "la próxima actualización al cliente, datos faltantes del trabajo y documentación útil",
     assistantFieldPrepareHomeownerDefault: "preguntas para el profesional, fotos, notas de acceso y decisiones necesarias",
     assistantFieldActionCreateRequest: "Crear solicitud",
-    assistantFieldActionOpenMessages: "Revisar mensajes",
+    assistantFieldActionOpenMessages: "Continuar en Centro de Comunicación",
     assistantFieldActionOpenWorkCenter: "Continuar trabajo",
     assistantFieldActionOpenSchedule: "Revisar agenda",
     assistantFieldActionOpenEvaluation: "Revisar evaluación",
@@ -7829,6 +8587,16 @@ const fieldProductivityAssistantLabels = {
     assistantCompanionContinueWorking: "Continuar trabajando",
     assistantCompanionReviewInsights: "Revisar ideas útiles",
     assistantCompanionAskMeetro: "Preguntar a Meetro",
+    assistantCompanionPanelTitle: "Compañero Meetro",
+    assistantCompanionWorkspaceGuidance: "Guía del espacio de trabajo",
+    assistantCompanionObservation: "Observación",
+    assistantCompanionRecommendation: "Recomendación",
+    assistantCompanionRecommendationDefault:
+      "Da el siguiente paso solo cuando ayude a tu trabajo actual.",
+    assistantCompanionSuggestedActions: "Acciones sugeridas",
+    assistantCompanionInputPlaceholder: "Pregunta lo que necesites...",
+    assistantCompanionSend: "Enviar",
+    assistantResponding: "Respondiendo",
     assistantCompanionContinueToMeetro: "Continuar a Meetro",
     assistantCompanionNoUrgent: "No hay compromisos urgentes ahora.",
     assistantCompanionTodaysFocus: "Enfoque de hoy",
@@ -7841,12 +8609,19 @@ const fieldProductivityAssistantLabels = {
     companionContextDismiss: "Cerrar",
     companionContextHomeTitle: "Trabajo de hoy",
     companionContextHomeMessage: "Revisa qué necesita atención ahora.",
+    companionContextBusinessDashboardTitle: "Panel del negocio",
+    companionContextBusinessDashboardMessage:
+      "Revisa qué merece atención del negocio hoy.",
     companionContextRequestTitle: "Preparando solicitud",
     companionContextRequestMessage: "Meetro puede preparar esto antes de enviarlo.",
     companionContextDiscoverTitle: "Encontrar ayuda",
     companionContextDiscoverMessage: "Compara servicios antes de elegir el siguiente paso.",
-    companionContextConversationTitle: "Conversación con cliente",
-    companionContextConversationMessage: "Resume esta conversación o prepara la próxima respuesta.",
+    companionContextConversationTitle: "Centro de Comunicación",
+    companionContextConversationMessage:
+      "Puedo resumir esta conversación, encontrar detalles de agenda o propuesta, o preparar la próxima respuesta.",
+    companionContextEmergencyTitle: "Emergencia",
+    companionContextEmergencyMessage:
+      "Revisa el contexto urgente y continúa desde el espacio que lo administra.",
     companionContextScheduleTitle: "Programar visita",
     companionContextScheduleMessage: "Prepara o confirma los detalles de la visita.",
     companionContextWorkCenterTitle: "Trabajo actual",
@@ -7861,6 +8636,17 @@ const fieldProductivityAssistantLabels = {
     companionContextInvoiceMessage: "Revisa los detalles de pago antes de continuar.",
     companionContextCompletionTitle: "Cierre",
     companionContextCompletionMessage: "Revisa qué falta antes de que esto pase al historial.",
+    companionContextProjectTitle: "Detalles del proyecto",
+    companionContextProjectMessage: "Revisa el estado actual y el siguiente paso del proyecto.",
+    companionContextBusinessProfileTitle: "Perfil del negocio",
+    companionContextBusinessProfileMessage:
+      "Revisa preparación, confianza y presencia pública del negocio.",
+    companionContextBusinessToolsTitle: "Herramientas del negocio",
+    companionContextBusinessToolsMessage:
+      "Elige la herramienta de gestión que pertenece a esta tarea.",
+    companionContextPortfolioTitle: "Portafolio",
+    companionContextPortfolioMessage:
+      "Revisa la prueba de trabajo antes de cambiar lo que ven los clientes.",
     companionContextProfileTitle: "Ayuda de cuenta",
     companionContextProfileMessage: "Encuentra el perfil o ajuste que necesitas.",
     companionContextFallbackTitle: "Meetro",
@@ -8127,7 +8913,7 @@ const fieldProductivityAssistantLabels = {
     assistantFieldPrepareProfessionalDefault: "la prochaine mise à jour client, les faits manquants et la documentation utile",
     assistantFieldPrepareHomeownerDefault: "questions pour le professionnel, photos, accès et décisions nécessaires",
     assistantFieldActionCreateRequest: "Créer une demande",
-    assistantFieldActionOpenMessages: "Examiner les messages",
+    assistantFieldActionOpenMessages: "Continuer dans le centre de communication",
     assistantFieldActionOpenWorkCenter: "Continuer le travail",
     assistantFieldActionOpenSchedule: "Examiner le planning",
     assistantFieldActionOpenEvaluation: "Examiner l’évaluation",
@@ -8180,6 +8966,16 @@ const fieldProductivityAssistantLabels = {
     assistantCompanionContinueWorking: "Continuer le travail",
     assistantCompanionReviewInsights: "Revoir les informations utiles",
     assistantCompanionAskMeetro: "Demander à Meetro",
+    assistantCompanionPanelTitle: "Compagnon Meetro",
+    assistantCompanionWorkspaceGuidance: "Orientation de l'espace de travail",
+    assistantCompanionObservation: "Observation",
+    assistantCompanionRecommendation: "Recommandation",
+    assistantCompanionRecommendationDefault:
+      "Passez à l'étape suivante seulement si elle aide votre travail actuel.",
+    assistantCompanionSuggestedActions: "Actions suggérées",
+    assistantCompanionInputPlaceholder: "Demandez quelque chose...",
+    assistantCompanionSend: "Envoyer",
+    assistantResponding: "Réponse",
     assistantCompanionContinueToMeetro: "Continuer vers Meetro",
     assistantCompanionNoUrgent: "Aucun engagement urgent pour le moment.",
     assistantCompanionTodaysFocus: "Priorité du jour",
@@ -8192,12 +8988,19 @@ const fieldProductivityAssistantLabels = {
     companionContextDismiss: "Fermer",
     companionContextHomeTitle: "Travail du jour",
     companionContextHomeMessage: "Revoyez ce qui mérite l’attention maintenant.",
+    companionContextBusinessDashboardTitle: "Tableau de bord entreprise",
+    companionContextBusinessDashboardMessage:
+      "Revoyez ce qui mérite l’attention de l’entreprise aujourd’hui.",
     companionContextRequestTitle: "Préparation de la demande",
     companionContextRequestMessage: "Meetro peut préparer cela avant l’envoi.",
     companionContextDiscoverTitle: "Trouver de l’aide",
     companionContextDiscoverMessage: "Comparez les services avant de choisir la prochaine étape.",
-    companionContextConversationTitle: "Conversation client",
-    companionContextConversationMessage: "Résumez cette conversation ou préparez la prochaine réponse.",
+    companionContextConversationTitle: "Centre de communication",
+    companionContextConversationMessage:
+      "Je peux résumer cette conversation, trouver les détails de l'horaire ou de la proposition, ou préparer la prochaine réponse.",
+    companionContextEmergencyTitle: "Urgence",
+    companionContextEmergencyMessage:
+      "Revoyez le contexte urgent et continuez dans l’espace qui en est responsable.",
     companionContextScheduleTitle: "Planifier la visite",
     companionContextScheduleMessage: "Préparez ou confirmez les détails de la visite.",
     companionContextWorkCenterTitle: "Travail en cours",
@@ -8212,6 +9015,17 @@ const fieldProductivityAssistantLabels = {
     companionContextInvoiceMessage: "Vérifiez les détails de paiement avant de continuer.",
     companionContextCompletionTitle: "Clôture",
     companionContextCompletionMessage: "Vérifiez ce qui reste avant que cela passe à l’historique.",
+    companionContextProjectTitle: "Détails du projet",
+    companionContextProjectMessage: "Revoyez l’état actuel du projet et la prochaine étape.",
+    companionContextBusinessProfileTitle: "Profil de l’entreprise",
+    companionContextBusinessProfileMessage:
+      "Revoyez la préparation, la confiance et la présence publique de l’entreprise.",
+    companionContextBusinessToolsTitle: "Outils de l’entreprise",
+    companionContextBusinessToolsMessage:
+      "Choisissez l’outil de gestion qui appartient à cette tâche.",
+    companionContextPortfolioTitle: "Portfolio",
+    companionContextPortfolioMessage:
+      "Revoyez la preuve du travail avant de modifier ce que les clients voient.",
     companionContextProfileTitle: "Aide compte",
     companionContextProfileMessage: "Trouvez le profil ou le paramètre nécessaire.",
     companionContextFallbackTitle: "Meetro",
@@ -8478,7 +9292,7 @@ const fieldProductivityAssistantLabels = {
     assistantFieldPrepareProfessionalDefault: "a próxima atualização ao cliente, fatos pendentes e documentação útil",
     assistantFieldPrepareHomeownerDefault: "perguntas para o profissional, fotos, acesso e decisões necessárias",
     assistantFieldActionCreateRequest: "Criar solicitação",
-    assistantFieldActionOpenMessages: "Revisar mensagens",
+    assistantFieldActionOpenMessages: "Continuar no Centro de Comunicação",
     assistantFieldActionOpenWorkCenter: "Continuar trabalho",
     assistantFieldActionOpenSchedule: "Revisar agenda",
     assistantFieldActionOpenEvaluation: "Revisar avaliação",
@@ -8531,6 +9345,16 @@ const fieldProductivityAssistantLabels = {
     assistantCompanionContinueWorking: "Continuar trabalhando",
     assistantCompanionReviewInsights: "Revisar insights",
     assistantCompanionAskMeetro: "Perguntar ao Meetro",
+    assistantCompanionPanelTitle: "Companheiro Meetro",
+    assistantCompanionWorkspaceGuidance: "Orientação do espaço de trabalho",
+    assistantCompanionObservation: "Observação",
+    assistantCompanionRecommendation: "Recomendação",
+    assistantCompanionRecommendationDefault:
+      "Dê o próximo passo apenas quando ajudar seu trabalho atual.",
+    assistantCompanionSuggestedActions: "Ações sugeridas",
+    assistantCompanionInputPlaceholder: "Pergunte qualquer coisa...",
+    assistantCompanionSend: "Enviar",
+    assistantResponding: "Respondendo",
     assistantCompanionContinueToMeetro: "Continuar para o Meetro",
     assistantCompanionNoUrgent: "Não há compromissos urgentes agora.",
     assistantCompanionTodaysFocus: "Foco de hoje",
@@ -8543,12 +9367,19 @@ const fieldProductivityAssistantLabels = {
     companionContextDismiss: "Fechar",
     companionContextHomeTitle: "Trabalho de hoje",
     companionContextHomeMessage: "Revise o que precisa de atenção agora.",
+    companionContextBusinessDashboardTitle: "Painel do negócio",
+    companionContextBusinessDashboardMessage:
+      "Revise o que merece atenção do negócio hoje.",
     companionContextRequestTitle: "Preparando solicitação",
     companionContextRequestMessage: "Meetro pode preparar isso antes de enviar.",
     companionContextDiscoverTitle: "Encontrar ajuda",
     companionContextDiscoverMessage: "Compare serviços antes de escolher o próximo passo.",
-    companionContextConversationTitle: "Conversa com cliente",
-    companionContextConversationMessage: "Resuma esta conversa ou prepare a próxima resposta.",
+    companionContextConversationTitle: "Centro de Comunicação",
+    companionContextConversationMessage:
+      "Posso resumir esta conversa, encontrar detalhes de agenda ou proposta, ou preparar a próxima resposta.",
+    companionContextEmergencyTitle: "Emergência",
+    companionContextEmergencyMessage:
+      "Revise o contexto urgente e continue pelo espaço responsável.",
     companionContextScheduleTitle: "Agendar visita",
     companionContextScheduleMessage: "Prepare ou confirme os detalhes da visita.",
     companionContextWorkCenterTitle: "Trabalho atual",
@@ -8563,6 +9394,17 @@ const fieldProductivityAssistantLabels = {
     companionContextInvoiceMessage: "Verifique os detalhes de pagamento antes de continuar.",
     companionContextCompletionTitle: "Fechamento",
     companionContextCompletionMessage: "Verifique o que falta antes de isso virar histórico.",
+    companionContextProjectTitle: "Detalhes do projeto",
+    companionContextProjectMessage: "Revise o estado atual do projeto e o próximo passo.",
+    companionContextBusinessProfileTitle: "Perfil do negócio",
+    companionContextBusinessProfileMessage:
+      "Revise prontidão, confiança e presença pública do negócio.",
+    companionContextBusinessToolsTitle: "Ferramentas do negócio",
+    companionContextBusinessToolsMessage:
+      "Escolha a ferramenta de gestão que pertence a esta tarefa.",
+    companionContextPortfolioTitle: "Portfólio",
+    companionContextPortfolioMessage:
+      "Revise a prova de trabalho antes de alterar o que os clientes veem.",
     companionContextProfileTitle: "Ajuda da conta",
     companionContextProfileMessage: "Encontre o perfil ou ajuste que você precisa.",
     companionContextFallbackTitle: "Meetro",

@@ -280,9 +280,9 @@ const guideDimmer = {
 
 const spotlightRing = {
   position: "absolute",
-  border: "2px solid rgba(124, 58, 237, 0.95)",
+  border: "2px solid rgba(31, 77, 52, 0.95)",
   borderRadius: "18px",
-  boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.28), 0 14px 36px rgba(88, 28, 135, 0.26)",
+  boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.28), 0 14px 36px rgba(31, 77, 52, 0.22)",
   pointerEvents: "none",
 };
 
@@ -317,7 +317,7 @@ const guideTopRow = {
 
 const guideEyebrow = {
   margin: "0 0 8px",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "11px",
   fontWeight: "900",
   letterSpacing: "0.08em",
@@ -365,7 +365,7 @@ const buttonBase = {
 
 const primaryButton = {
   ...buttonBase,
-  background: "#6d28d9",
+  background: "var(--meetro-color-charcoal, #172317)",
   color: "#ffffff",
   boxShadow: "0 10px 22px rgba(109, 40, 217, 0.25)",
 };

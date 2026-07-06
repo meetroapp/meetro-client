@@ -578,8 +578,8 @@ const chipList = {
 const chip = {
   padding: "7px 9px",
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#3730a3",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "900",
 };

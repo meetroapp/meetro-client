@@ -330,10 +330,10 @@ function normalizeMessageSection(value) {
 }
 
 const CONVERSATION_SECTION_ACTIONS = [
-  ["chat", "New Chat"],
-  ["group", "New Group Chat"],
+  ["chat", "New Conversation"],
+  ["group", "New Group Conversation"],
 ];
-const SAVED_HISTORY_ACTION = ["savedHistory", "Saved Chat History"];
+const SAVED_HISTORY_ACTION = ["savedHistory", "Saved Conversation History"];
 
 const CONTACTS_SECTION_ACTIONS = [
   ["customer", "Add Customer"],
@@ -449,6 +449,7 @@ function MessagesInbox({ setPage, currentPage }) {
     localStorage.getItem("activeAccountMode") || "personal"
   );
   const [isSplitPane, setIsSplitPane] = useState(false);
+  const [isWideWorkspace, setIsWideWorkspace] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
     localStorage.getItem("activeConversationId") || ""
   );
@@ -676,17 +677,31 @@ function MessagesInbox({ setPage, currentPage }) {
     const mediaQuery = window.matchMedia(
       "(min-width: 900px) and (hover: hover) and (pointer: fine)"
     );
-    const updateSplitPane = () => setIsSplitPane(mediaQuery.matches);
+    const wideQuery = window.matchMedia(
+      "(min-width: 1180px) and (hover: hover) and (pointer: fine)"
+    );
+    const updateSplitPane = () => {
+      setIsSplitPane(mediaQuery.matches);
+      setIsWideWorkspace(wideQuery.matches);
+    };
 
     updateSplitPane();
 
     if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener("change", updateSplitPane);
-      return () => mediaQuery.removeEventListener("change", updateSplitPane);
+      wideQuery.addEventListener("change", updateSplitPane);
+      return () => {
+        mediaQuery.removeEventListener("change", updateSplitPane);
+        wideQuery.removeEventListener("change", updateSplitPane);
+      };
     }
 
     mediaQuery.addListener(updateSplitPane);
-    return () => mediaQuery.removeListener(updateSplitPane);
+    wideQuery.addListener(updateSplitPane);
+    return () => {
+      mediaQuery.removeListener(updateSplitPane);
+      wideQuery.removeListener(updateSplitPane);
+    };
   }, []);
 
   useEffect(() => {
@@ -1112,7 +1127,10 @@ function MessagesInbox({ setPage, currentPage }) {
       safeRemoveStorage("meetroMessagesOpenSavedHistory");
     }
 
-    openConversation(conversation, { forceRoute: true });
+    openConversation(conversation, {
+      preferSplitPane: isSplitPane && !options.returnToSavedHistory,
+      forceRoute: !isSplitPane || options.returnToSavedHistory,
+    });
   }
 
   const isHiringConversation = (quote) =>
@@ -1545,7 +1563,7 @@ function MessagesInbox({ setPage, currentPage }) {
     if (messageSection === "conversations") {
       return {
         title: "No conversations yet",
-        text: "Start a chat when communication is ready. Active conversations will stay here.",
+        text: "Start a conversation when communication is ready. Active conversations will stay here.",
       };
     }
 
@@ -1589,7 +1607,7 @@ function MessagesInbox({ setPage, currentPage }) {
   if (activeContactCard) {
     return (
       <div
-        className="app-page meetro-wide-page messages-relationship-identity-page messages-focused-flow-open"
+        className="app-page meetro-wide-page meetro-visual-page messages-relationship-identity-page messages-focused-flow-open"
         style={relationshipIdentityPageWrapper}
       >
         {relationshipNotice && (
@@ -1659,7 +1677,16 @@ function MessagesInbox({ setPage, currentPage }) {
   const emptyCopy = getEmptyMessageCopy();
   const activeSplitConversation = searchedVisibleQuotes.find(
     (quote) => String(quote.id) === String(activeSplitConversationId)
-  );
+  ) || liveIdentityQuotes.find((quote) => {
+    const conversation = normalizeConversationForOpen(quote);
+    return conversation && String(conversation.id) === String(activeSplitConversationId);
+  });
+  const activeWorkspaceConversation = activeSplitConversation
+    ? normalizeConversationForOpen(activeSplitConversation)
+    : null;
+  const activeWorkspaceRelationship = activeWorkspaceConversation
+    ? getRelationshipForConversation(activeWorkspaceConversation)
+    : null;
   const activeRelationship = relationshipLayer.relationships.find(
     (relationship) => relationship.id === activeRelationshipId
   );
@@ -1698,6 +1725,293 @@ function MessagesInbox({ setPage, currentPage }) {
     conversationStarter?.mode === "group" &&
     selectedConversationStarterRelationships.filter(relationshipCanOpenConversation).length >= 2;
 
+  function relationshipOwnsConversation(relationship = {}, conversation = {}) {
+    if (!relationship || !conversation) return false;
+
+    const conversationIds = new Set(
+      [
+        conversation.id,
+        conversation.conversationId,
+        conversation.threadId,
+        conversation.sourceConversationId,
+        conversation.activeConversationId,
+        conversation.projectConversationId,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    );
+
+    const relationshipConversationIds = [
+      relationship.primaryConversation?.id,
+      relationship.primaryConversation?.conversationId,
+      relationship.primaryConversation?.threadId,
+      relationship.primaryConversation?.sourceConversationId,
+      ...(getRelationshipConversations(relationship).flatMap((item) => [
+        item.id,
+        item.conversationId,
+        item.threadId,
+        item.sourceConversationId,
+        item.conversation?.id,
+        item.conversation?.conversationId,
+      ])),
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+
+    return relationshipConversationIds.some((id) => conversationIds.has(id));
+  }
+
+  function getRelationshipForConversation(conversation = {}) {
+    if (!conversation) return null;
+
+    const relationshipId = String(
+      conversation.relationshipId ||
+        conversation.relationship_id ||
+        conversation.sourceRelationshipId ||
+        conversation.source_relationship_id ||
+        ""
+    ).trim();
+
+    return (
+      relationshipLayer.relationships.find((relationship) =>
+        relationshipId && String(relationship.id) === relationshipId
+      ) ||
+      relationshipLayer.relationships.find((relationship) =>
+        relationshipOwnsConversation(relationship, conversation)
+      ) ||
+      null
+    );
+  }
+
+  function getWorkspaceContextValue(...values) {
+    return (
+      values
+        .map((value) => String(value || "").trim())
+        .find(Boolean) || ""
+    );
+  }
+
+  function isGenericConversationLabel(value = "") {
+    return /^(relationship|conversation|active communication|customer context)$/i.test(
+      String(value || "").trim()
+    );
+  }
+
+  function getCommunicationIntent(conversation = {}, relationship = null) {
+    const explicitIntent = getWorkspaceContextValue(
+      conversation.communicationIntent,
+      conversation.communication_intent,
+      conversation.conversationIntent,
+      conversation.conversation_intent,
+      conversation.intent,
+      conversation.intentLabel,
+      conversation.intent_label,
+      conversation.purpose,
+      relationship?.intent
+    );
+
+    if (explicitIntent) return explicitIntent;
+    if (isEmergencyConversationType(conversation)) {
+      return isSpanish ? "Servicio de emergencia" : "Emergency Service";
+    }
+    if (isHiringConversation(conversation)) {
+      return isSpanish ? "Contratación" : "Hiring";
+    }
+
+    const projectTitle = getWorkspaceContextValue(
+      conversation.project_title,
+      conversation.projectTitle,
+      conversation.requestTitle,
+      conversation.request_title,
+      conversation.title,
+      relationship?.currentWork?.[0]?.title
+    );
+    const combined = [
+      projectTitle,
+      conversation.project_description,
+      conversation.lastMessage,
+      conversation.status,
+      conversation.workflow_status,
+      conversation.quoteStatus,
+      conversation.proposalStatus,
+      conversation.invoiceStatus,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (projectTitle && !isGenericConversationLabel(projectTitle)) {
+      return projectTitle;
+    }
+    if (/permit/.test(combined)) return isSpanish ? "Seguimiento de permiso" : "Permit Follow-up";
+    if (/maintenance|repair|ticket|issue/.test(combined)) {
+      return isSpanish ? "Mantenimiento" : "Maintenance";
+    }
+    if (/quote|proposal|estimate|cotiz/.test(combined)) {
+      return isSpanish ? "Conversación de estimado" : "Estimate Discussion";
+    }
+    if (/invoice|payment|receipt|pago/.test(combined)) {
+      return isSpanish ? "Conversación de pago" : "Payment Discussion";
+    }
+    if (/schedule|appointment|visit|cita/.test(combined)) {
+      return isSpanish ? "Visita programada" : "Scheduled Visit";
+    }
+
+    return isSpanish ? "Comunicación general" : "General Communication";
+  }
+
+  function getConversationOwnerLabel(conversation = {}, relationship = null) {
+    const explicitOwner = getWorkspaceContextValue(
+      conversation.currentOwner,
+      conversation.current_owner,
+      conversation.owner,
+      conversation.nextResponsibility,
+      conversation.next_responsibility,
+      conversation.responsibleParty,
+      conversation.responsible_party,
+      relationship?.nextResponsibility
+    );
+
+    if (explicitOwner) return explicitOwner;
+    if (conversation.unread) return isSpanish ? "Tú" : "You";
+
+    const state = getResolvedConversationState(conversation);
+
+    if (/customer|homeowner|client|tenant|approval|approve|confirm|change_requested/.test(state)) {
+      return isSpanish ? "Cliente" : "Customer";
+    }
+    if (/professional|business|contractor|provider|technician|in_progress|scheduled|evaluation/.test(state)) {
+      return isSpanish ? "Profesional" : "Professional";
+    }
+
+    return isSpanish ? "Compartido" : "Shared";
+  }
+
+  function getConversationAuthorityFacts(conversation = {}, relationship = null) {
+    const statusLabel = getWorkflowStatusLabel(conversation);
+
+    return [
+      {
+        label: "Intent",
+        value: getCommunicationIntent(conversation, relationship),
+      },
+      statusLabel && { label: "Current status", value: statusLabel },
+      {
+        label: "Current owner",
+        value: getConversationOwnerLabel(conversation, relationship),
+      },
+      {
+        label: "Next decision",
+        value: getConversationNextStep(conversation),
+      },
+    ].filter(Boolean);
+  }
+
+  function getWorkspaceContextFacts(conversation = {}, relationship = null) {
+    if (!conversation) return [];
+
+    const relatedJob =
+      activeJobSnapshot?.conversationId &&
+      String(activeJobSnapshot.conversationId) === String(conversation.id)
+        ? activeJobSnapshot
+        : null;
+
+    const projectTitle =
+      conversation.project_title ||
+      conversation.projectTitle ||
+      conversation.title ||
+      relatedJob?.projectTitle ||
+      relatedJob?.title ||
+      "";
+    const scheduleDate =
+      conversation.scheduleDate ||
+      conversation.scheduledDate ||
+      conversation.appointmentDate ||
+      conversation.visitDate ||
+      relatedJob?.scheduleDate ||
+      relatedJob?.scheduledDate ||
+      "";
+    const scheduleTime =
+      conversation.scheduleTime ||
+      conversation.appointmentTime ||
+      conversation.visitTime ||
+      relatedJob?.scheduleTime ||
+      relatedJob?.appointmentTime ||
+      "";
+    const quoteStatus =
+      conversation.quoteStatus ||
+      conversation.quote_status ||
+      conversation.proposalStatus ||
+      conversation.proposal_status ||
+      relatedJob?.quoteStatus ||
+      "";
+    const currentWork =
+      relationship?.currentWorkStatus ||
+      relatedJob?.currentWorkStatus ||
+      relatedJob?.stage ||
+      "";
+
+    return [
+      projectTitle && { label: "Related work", value: projectTitle },
+      currentWork && { label: "Current work", value: currentWork },
+      (scheduleDate || scheduleTime) && {
+        label: "Schedule",
+        value: [scheduleDate, scheduleTime].filter(Boolean).join(" · "),
+      },
+      quoteStatus && { label: "Quote status", value: quoteStatus },
+    ].filter(Boolean);
+  }
+
+  function getRelationshipMemoryFacts(conversation = {}, relationship = null) {
+    if (!relationship && !conversation) return [];
+
+    const counts = relationship ? getRelationshipCounts(relationship) : {};
+    const relationshipSince = getWorkspaceContextValue(
+      relationship?.relationshipSince,
+      conversation.relationshipSince,
+      conversation.relationship_since,
+      conversation.createdAt,
+      conversation.created_at
+    );
+    const latestActivity =
+      relationship?.latestActivityAt && Number.isFinite(relationship.latestActivityAt)
+        ? formatMessageTime(new Date(relationship.latestActivityAt).toISOString())
+        : getConversationDisplayTime(conversation);
+
+    return [
+      relationshipSince && { label: "Relationship since", value: relationshipSince },
+      latestActivity && { label: "Recent activity", value: latestActivity },
+      (counts.currentWork || 0) > 0 && {
+        label: "Active work",
+        value: `${counts.currentWork}`,
+      },
+      (counts.jobHistory || 0) > 0 && {
+        label: "Completed work",
+        value: `${counts.jobHistory}`,
+      },
+      (counts.invoices || 0) > 0 && { label: "Invoices", value: `${counts.invoices}` },
+      ((counts.documents || 0) > 0 || (counts.photos || 0) > 0) && {
+        label: "Documents",
+        value: `${(counts.documents || 0) + (counts.photos || 0)}`,
+      },
+    ]
+      .filter(Boolean)
+      .slice(0, 4);
+  }
+
+  function openWorkspaceContextDetails(conversation = {}) {
+    const stagedConversation = stageConversationForThread(conversation);
+    if (!stagedConversation) return;
+
+    if (activeAccountMode === "business") {
+      localStorage.setItem("activeWorkCenterTab", "active");
+      localStorage.setItem("meetroWorkCenterTab", "active");
+      setPage("contractorDashboard");
+      return;
+    }
+
+    setPage("projectDetails");
+  }
+
   function openRelationshipConversation(relationship, options = {}) {
     if (messageSection === "contacts" && !options.fromStarter) {
       openContactCard(relationship);
@@ -1719,7 +2033,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setRelationshipViewMenuOpen(false);
     setRelationshipActionMenuOpen(false);
     setSavedHistoryOpen(false);
-    openConversation(conversation, { forceRoute: true });
+    openConversation(conversation, { preferSplitPane: true });
   }
 
   function getConversationIdForOpen(record = {}) {
@@ -1843,7 +2157,7 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getHeaderActionLabel() {
-    if (messageSection === "conversations") return "New Chat";
+    if (messageSection === "conversations") return "New Conversation";
     if (messageSection === "contacts") return "Add / Import";
     if (messageSection === "hiring") return "Open Hiring Center";
     if (messageSection === "emergency") return "Open Emergency";
@@ -1852,7 +2166,7 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getHeaderActionMenuLabel() {
-    if (messageSection === "conversations") return "New chat";
+    if (messageSection === "conversations") return "New Conversation";
     if (messageSection === "contacts") return "Contacts actions";
 
     return `${activeMessageSectionLabel} actions`;
@@ -2051,7 +2365,7 @@ function MessagesInbox({ setPage, currentPage }) {
     const nextConversation = createConversationFromRelationship(relationship);
 
     if (!nextConversation?.id) {
-      setRelationshipNotice("Start with a linked Meetro contact before opening chat.");
+      setRelationshipNotice("Start with a linked Meetro contact before opening a conversation.");
       return;
     }
 
@@ -2531,6 +2845,7 @@ function MessagesInbox({ setPage, currentPage }) {
             ? activeConversationRow
             : {}),
         }}
+        className="meetro-visual-surface"
       >
         <div
           style={{
@@ -2556,8 +2871,12 @@ function MessagesInbox({ setPage, currentPage }) {
             <div style={conversationRowTitleBlock}>
               <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
               <p style={conversationRowMeta}>
-                {rowIdentity.typeLabel}
-                {conversation.project_title ? ` · ${conversation.project_title}` : ""}
+                {[
+                  rowIdentity.typeLabel,
+                  getCommunicationIntent(conversation).trim() || "",
+                ]
+                  .filter((value, index, values) => value && values.indexOf(value) === index)
+                  .join(" · ")}
               </p>
             </div>
 
@@ -2587,6 +2906,174 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
         </div>
       </button>
+    );
+  }
+
+  function renderWorkspaceContextPanel() {
+    const conversation = activeWorkspaceConversation;
+    const relationship = activeWorkspaceRelationship;
+
+    if (!conversation) {
+      return (
+        <aside
+          style={workspaceContextPane}
+          aria-label="Relationship and project context"
+          className="meetro-visual-surface"
+        >
+          <div style={workspaceContextEmpty}>
+            <div style={workspaceContextIcon}>CTX</div>
+            <h2 style={workspaceContextTitle}>Relationship context</h2>
+            <p style={workspaceContextText}>
+              Context will appear here as this relationship develops.
+            </p>
+          </div>
+        </aside>
+      );
+    }
+
+    const contactRecord = relationship
+      ? getRelationshipContactRecord(relationship)
+      : conversation;
+    const contact = relationship ? getRelationshipContact(relationship) : {};
+    const contextIdentity = resolveRelationshipIdentity({
+      relationship,
+      record: contactRecord,
+      viewerRole: activeAccountMode === "business" ? "business" : "homeowner",
+      isLinked:
+        relationship?.meetroAccountLinked === true ||
+        contactRecord?.meetroAccountLinked === true ||
+        conversation.meetroAccountLinked === true,
+      typeLabel:
+        relationship?.typeLabel ||
+        (isEmergencyConversationType(conversation)
+          ? "Emergency"
+          : isHiringConversation(conversation)
+          ? "Hiring"
+          : "Relationship"),
+    });
+    const authorityFacts = getConversationAuthorityFacts(conversation, relationship);
+    const contextFacts = getWorkspaceContextFacts(conversation, relationship);
+    const memoryFacts = getRelationshipMemoryFacts(conversation, relationship);
+    const hasContextFacts = contextFacts.length > 0;
+    const hasMemoryFacts = memoryFacts.length > 0;
+    const hasContactInfo = Boolean(contact.phone || contact.email || contact.address);
+    const canOpenDetails = Boolean(
+      conversation.project_title ||
+        conversation.projectTitle ||
+        conversation.requestId ||
+        conversation.id
+    );
+
+    return (
+      <aside
+        style={workspaceContextPane}
+        aria-label="Relationship and project context"
+        className="meetro-visual-surface"
+      >
+        <section style={workspaceContextCard} className="meetro-visual-surface">
+          <p style={workspaceContextEyebrow}>Relationship</p>
+          <div style={workspaceIdentityRow}>
+            <div style={workspaceContextAvatar}>
+              {contextIdentity.avatar ? (
+                <img
+                  src={contextIdentity.avatar}
+                  alt={contextIdentity.displayName}
+                  style={avatarImage}
+                />
+              ) : (
+                contextIdentity.initials
+              )}
+            </div>
+            <div style={workspaceIdentityCopy}>
+              <h2 style={workspaceContextTitle}>{contextIdentity.displayName}</h2>
+              <p style={workspaceContextMeta}>{contextIdentity.typeLabel}</p>
+            </div>
+          </div>
+
+          {hasContactInfo && (
+            <div style={workspaceFactList}>
+              {contact.phone && (
+                <div style={workspaceFactRow}>
+                  <span style={workspaceFactLabel}>Phone</span>
+                  <strong style={workspaceFactValue}>{contact.phone}</strong>
+                </div>
+              )}
+              {contact.email && (
+                <div style={workspaceFactRow}>
+                  <span style={workspaceFactLabel}>Email</span>
+                  <strong style={workspaceFactValue}>{contact.email}</strong>
+                </div>
+              )}
+              {contact.address && (
+                <div style={workspaceFactRow}>
+                  <span style={workspaceFactLabel}>Address</span>
+                  <strong style={workspaceFactValue}>{contact.address}</strong>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section style={workspaceContextCard} className="meetro-visual-surface">
+          <p style={workspaceContextEyebrow}>Communication</p>
+          <div style={workspaceFactList}>
+            {authorityFacts.map((fact) => (
+              <div key={fact.label} style={workspaceFactRow}>
+                <span style={workspaceFactLabel}>{fact.label}</span>
+                <strong style={workspaceFactValue}>{fact.value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={workspaceContextCard} className="meetro-visual-surface">
+          <p style={workspaceContextEyebrow}>Related work</p>
+          {hasContextFacts ? (
+            <div style={workspaceFactList}>
+              {contextFacts.map((fact) => (
+                <div key={fact.label} style={workspaceFactRow}>
+                  <span style={workspaceFactLabel}>{fact.label}</span>
+                  <strong style={workspaceFactValue}>{fact.value}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={workspaceContextText}>
+              Context will appear here as this relationship develops.
+            </p>
+          )}
+
+          {canOpenDetails && (
+            <button
+              type="button"
+              style={workspaceContextAction}
+              onClick={() => openWorkspaceContextDetails(conversation)}
+            >
+              {activeAccountMode === "business"
+                ? t("openActiveWorkAction")
+                : t("openProject")}
+            </button>
+          )}
+        </section>
+
+        <section style={workspaceContextCard} className="meetro-visual-surface">
+          <p style={workspaceContextEyebrow}>Relationship memory</p>
+          {hasMemoryFacts ? (
+            <div style={workspaceFactList}>
+              {memoryFacts.map((fact) => (
+                <div key={fact.label} style={workspaceFactRow}>
+                  <span style={workspaceFactLabel}>{fact.label}</span>
+                  <strong style={workspaceFactValue}>{fact.value}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={workspaceContextText}>
+              Relationship memory will grow as work, decisions, and history accumulate.
+            </p>
+          )}
+        </section>
+      </aside>
     );
   }
 
@@ -2830,7 +3317,7 @@ function MessagesInbox({ setPage, currentPage }) {
         role: relationship.typeLabel || "Contact",
       })),
       project_title: groupName,
-      project_description: "Group conversation started in Messages.",
+      project_description: "Group conversation started in Communication Center.",
       status: "Group conversation",
       currentWorkStatus: "Group conversation",
       conversation_type: "standard",
@@ -3165,7 +3652,7 @@ function MessagesInbox({ setPage, currentPage }) {
           forwardedTicket
             ? `Ticket ${forwardedTicket.id} forwarded into this shared conversation.`
             : relationshipComposer.purpose.trim() ||
-              "Shared conversation created in Messages.",
+              "Shared conversation created in Communication Center.",
         status: forwardedTicket ? "Ticket forwarded" : "Group conversation",
         currentWorkStatus: forwardedTicket ? "Ticket forwarded" : "Group conversation",
         category: forwardedTicket ? "maintenance_ticket" : "relationship_space",
@@ -3250,10 +3737,10 @@ function MessagesInbox({ setPage, currentPage }) {
         createsContactPlaceholder
           ? "Saved contact. Invite to Meetro later."
           : relationshipComposer.type === "hiring"
-          ? relationshipComposer.note.trim() || "Hiring conversation started in Messages."
+          ? relationshipComposer.note.trim() || "Hiring conversation started in Communication Center."
           : relationshipComposer.type === "emergency"
-          ? relationshipComposer.note.trim() || "Emergency conversation started in Messages."
-          : relationshipComposer.note.trim() || "Conversation started in Messages.",
+          ? relationshipComposer.note.trim() || "Emergency conversation started in Communication Center."
+          : relationshipComposer.note.trim() || "Conversation started in Communication Center.",
       homeowner_email: name,
       phone: relationshipComposer.phone.trim(),
       email,
@@ -3316,7 +3803,7 @@ function MessagesInbox({ setPage, currentPage }) {
         ? shouldReturnToStarter
           ? `${name} was saved as a contact.`
           : `${name} was saved as a contact.`
-        : `${name} was added to Messages.`
+        : `${name} was added to Communication Center.`
     );
   }
 
@@ -3570,7 +4057,7 @@ function MessagesInbox({ setPage, currentPage }) {
   if (!accountConnectionState.connected) {
     return (
       <div
-        className="app-page meetro-wide-page messages-inbox-page"
+        className="app-page meetro-wide-page meetro-visual-page messages-inbox-page"
         style={{ ...pageWrapper, paddingTop: "0px" }}
       >
         <SafeBackBar
@@ -3580,8 +4067,12 @@ function MessagesInbox({ setPage, currentPage }) {
           compact
         />
 
-        <section style={accountRecoveryCard} aria-label="Messages account recovery">
-          <p style={filterEyebrow}>Messages</p>
+        <section
+          style={accountRecoveryCard}
+          aria-label="Communication Center account recovery"
+          className="meetro-visual-surface meetro-visual-empty-state"
+        >
+          <p style={filterEyebrow}>Communication Center</p>
           <h1 style={accountRecoveryTitle}>
             {accountConnectionState.title || "Account connection needs attention"}
           </h1>
@@ -3617,7 +4108,7 @@ function MessagesInbox({ setPage, currentPage }) {
   if (activeContactCardFromLayer) {
     return (
       <div
-        className="app-page meetro-wide-page messages-relationship-identity-page messages-focused-flow-open"
+        className="app-page meetro-wide-page meetro-visual-page messages-relationship-identity-page messages-focused-flow-open"
         style={relationshipIdentityPageWrapper}
       >
         {relationshipNotice && (
@@ -3633,7 +4124,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
   return (
     <div
-      className={`app-page meetro-wide-page messages-inbox-page${
+      className={`app-page meetro-wide-page meetro-visual-page messages-inbox-page${
         focusedMessagesFlowOpen ? " messages-focused-flow-open" : ""
       }`}
       style={{
@@ -3665,7 +4156,7 @@ function MessagesInbox({ setPage, currentPage }) {
       {!focusedConversationFlowOpen && (
         <>
           <div style={messagesHubHeader}>
-            <h1 style={messagesHubTitle}>Messages</h1>
+            <h1 style={messagesHubTitle}>Communication Center</h1>
             <div style={relationshipMenuWrap}>
               <button
                 type="button"
@@ -3709,7 +4200,7 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           </div>
 
-          <div style={messageSectionNavigation} aria-label="Messages navigation">
+          <div style={messageSectionNavigation} aria-label="Communication Center navigation">
             {(() => {
               const [key, label] = CONTACT_SECTION_OPTION;
               const count = getMessageSectionCount(key);
@@ -3786,9 +4277,10 @@ function MessagesInbox({ setPage, currentPage }) {
       {conversationStarter && !relationshipComposer && (
         <section
           style={conversationStarterPanel}
+          className="meetro-visual-surface"
           aria-label={
             conversationStarter.mode === "group"
-              ? "New Group Chat"
+              ? "New Group Conversation"
               : "Choose Contacts"
           }
         >
@@ -3797,7 +4289,7 @@ function MessagesInbox({ setPage, currentPage }) {
               <p style={filterEyebrow}>Conversations</p>
               <h2 style={relationshipPanelTitle}>
                 {conversationStarter.mode === "group"
-                  ? "New Group Chat"
+                  ? "New Group Conversation"
                   : "Choose Contacts"}
               </h2>
               <p style={relationshipSubtitle}>
@@ -3973,7 +4465,7 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {contactImport && (
-        <section style={relationshipPanel} aria-label="Import Contacts">
+        <section style={relationshipPanel} aria-label="Import Contacts" className="meetro-visual-surface">
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
               <p style={filterEyebrow}>Relationships</p>
@@ -4223,7 +4715,11 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {relationshipComposer && (
-        <section style={relationshipPanel} aria-label={relationshipComposer.label}>
+        <section
+          style={relationshipPanel}
+          aria-label={relationshipComposer.label}
+          className="meetro-visual-surface"
+        >
           <form onSubmit={saveRelationshipComposer} style={relationshipComposerForm}>
             <div style={relationshipPanelHeader}>
               <div style={relationshipPanelHeaderText}>
@@ -4421,7 +4917,11 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {ticketComposer && activeRelationship && (
-        <section style={relationshipPanel} aria-label="Create maintenance ticket">
+        <section
+          style={relationshipPanel}
+          aria-label="Create maintenance ticket"
+          className="meetro-visual-surface"
+        >
           <form onSubmit={saveMaintenanceTicket} style={relationshipComposerForm}>
             <div style={relationshipPanelHeader}>
               <div style={relationshipPanelHeaderText}>
@@ -4506,11 +5006,15 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {savedHistoryOpen && (
-        <section style={relationshipPanel} aria-label="Saved Chat History">
+        <section
+          style={relationshipPanel}
+          aria-label="Saved Conversation History"
+          className="meetro-visual-surface"
+        >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>Messages</p>
-              <h2 style={relationshipPanelTitle}>Saved Chat History</h2>
+              <p style={filterEyebrow}>Communication Center</p>
+              <h2 style={relationshipPanelTitle}>Saved Conversation History</h2>
               <p style={relationshipSubtitle}>
                 Conversations you save manually stay here for future reference.
               </p>
@@ -4528,10 +5032,10 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
 
           {savedHistoryQuotes.length === 0 ? (
-            <div style={emptyCard}>
+            <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
               <div style={emptyIcon}>HIS</div>
-              <h2 style={emptyTitle}>No saved chat history yet</h2>
-              <p style={emptyText}>Chats you save from the conversation menu will appear here.</p>
+              <h2 style={emptyTitle}>No saved conversation history yet</h2>
+              <p style={emptyText}>Conversations you save from the conversation menu will appear here.</p>
             </div>
           ) : (
             <div style={conversationList}>
@@ -4553,10 +5057,19 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {!savedHistoryOpen && (
-      <div style={isSplitPane ? splitShell : undefined}>
+      <div
+        style={
+          isSplitPane
+            ? {
+                ...splitShell,
+                ...(isWideWorkspace ? wideWorkspaceShell : {}),
+              }
+            : undefined
+        }
+      >
         <div style={isSplitPane ? splitListPane : undefined}>
           {(messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
-            <div style={emptyCard}>
+            <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
               <div style={emptyIcon}>MSG</div>
 
               <h2 style={emptyTitle}>
@@ -4624,6 +5137,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     ? activeConversationRow
                     : {}),
                 }}
+                className="meetro-visual-surface"
               >
                 <div
                   style={{
@@ -4651,10 +5165,17 @@ function MessagesInbox({ setPage, currentPage }) {
                     <div style={conversationRowTitleBlock}>
                       <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
                       <p style={conversationRowMeta}>
-                        {rowIdentity.typeLabel}
-                        {!inactiveImportedContact && primaryConversation.project_title
-                          ? ` · ${primaryConversation.project_title}`
-                          : ""}
+                        {inactiveImportedContact
+                          ? rowIdentity.typeLabel
+                          : [
+                              rowIdentity.typeLabel,
+                              getCommunicationIntent(primaryConversation, relationship).trim() || "",
+                            ]
+                              .filter(
+                                (value, index, values) =>
+                                  value && values.indexOf(value) === index
+                              )
+                              .join(" · ")}
                       </p>
                     </div>
 
@@ -4688,17 +5209,18 @@ function MessagesInbox({ setPage, currentPage }) {
 	            })}
 	          </div>
 
-	          <div style={messagesSecondaryActions} aria-label="Messages secondary actions">
+	          <div style={messagesSecondaryActions} aria-label="Communication Center secondary actions">
 	            <button
 	              type="button"
 	              style={savedHistorySecondaryButton}
+                className="meetro-visual-surface"
 	              onClick={() => openRelationshipAction(...SAVED_HISTORY_ACTION)}
 	            >
-	              <span style={savedHistorySecondaryTitle}>Saved Chat History</span>
+	              <span style={savedHistorySecondaryTitle}>Saved Conversation History</span>
 	              <span style={savedHistorySecondaryMeta}>
 	                {savedHistoryQuotes.length > 0
 	                  ? `${savedHistoryQuotes.length} saved`
-	                  : "Chats you save manually"}
+	                  : "Conversations you save manually"}
 	              </span>
 	            </button>
 	          </div>
@@ -4719,7 +5241,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 }}
               />
             ) : (
-              <div style={splitPlaceholder}>
+              <div style={splitPlaceholder} className="meetro-visual-empty-state meetro-visual-surface">
                 <div style={splitPlaceholderIcon}>MSG</div>
                 <h2 style={splitPlaceholderTitle}>{t("communicationCenterTitle")}</h2>
                 <p style={splitPlaceholderText}>
@@ -4731,6 +5253,8 @@ function MessagesInbox({ setPage, currentPage }) {
             )}
           </div>
         )}
+
+        {isWideWorkspace && renderWorkspaceContextPanel()}
       </div>
       )}
 
@@ -4742,7 +5266,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
 const pageWrapper = {
   background:
-    "radial-gradient(circle at 18% 0%, rgba(219,234,254,0.58), transparent 32%), radial-gradient(circle at 100% 12%, rgba(237,233,254,0.44), transparent 28%), linear-gradient(to bottom, #fbfcff, #f6f8fc)",
+    "var(--meetro-gradient-community-page, radial-gradient(circle at 18% 0%, rgba(243,236,220,0.74), transparent 32%), radial-gradient(circle at 100% 12%, rgba(225,236,221,0.52), transparent 28%), linear-gradient(to bottom, #fbfcff, #f6f8fc))",
   minHeight: "100vh",
   padding:
     "0 max(18px, env(safe-area-inset-right, 0px)) calc(132px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
@@ -4757,6 +5281,12 @@ const pageWrapper = {
   scrollPaddingBottom: "calc(160px + env(safe-area-inset-bottom, 0px))",
 };
 
+const focusedConversationPageWrapper = {
+  ...keyboardSafeFlowPage,
+  paddingBottom: "calc(170px + env(safe-area-inset-bottom, 0px))",
+  scrollPaddingBottom: "calc(190px + env(safe-area-inset-bottom, 0px))",
+};
+
 const relationshipIdentityPageWrapper = {
   ...pageWrapper,
   ...focusedConversationPageWrapper,
@@ -4769,12 +5299,6 @@ const splitPageWrapper = {
   maxWidth: "min(1360px, 100vw)",
 };
 
-const focusedConversationPageWrapper = {
-  ...keyboardSafeFlowPage,
-  paddingBottom: "calc(170px + env(safe-area-inset-bottom, 0px))",
-  scrollPaddingBottom: "calc(190px + env(safe-area-inset-bottom, 0px))",
-};
-
 const splitShell = {
   display: "grid",
   gridTemplateColumns: "minmax(320px, 0.42fr) minmax(0, 0.58fr)",
@@ -4785,6 +5309,13 @@ const splitShell = {
   width: "100%",
   minWidth: 0,
   overflow: "hidden",
+};
+
+const wideWorkspaceShell = {
+  gridTemplateColumns:
+    "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
+  gap: "20px",
+  height: "min(780px, calc(100dvh - 300px))",
 };
 
 const splitListPane = {
@@ -4801,8 +5332,160 @@ const splitThreadPane = {
   height: "100%",
   overflow: "hidden",
   borderRadius: "30px",
-  background: "rgba(255,255,255,0.82)",
-  boxShadow: "0 18px 44px rgba(15,23,42,0.08)",
+  background: "var(--meetro-surface-paper, rgba(255,255,255,0.82))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 18px 44px rgba(15,23,42,0.08))",
+};
+
+const workspaceContextPane = {
+  minWidth: 0,
+  minHeight: 0,
+  height: "100%",
+  overflowY: "auto",
+  overflowX: "hidden",
+  display: "grid",
+  alignContent: "start",
+  gap: "14px",
+  paddingRight: "4px",
+  WebkitOverflowScrolling: "touch",
+};
+
+const workspaceContextCard = {
+  ...glassSurface,
+  borderRadius: "28px",
+  padding: "18px",
+  display: "grid",
+  gap: "14px",
+  minWidth: 0,
+  overflow: "hidden",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 18px 44px rgba(15,23,42,0.08))",
+};
+
+const workspaceContextEmpty = {
+  ...workspaceContextCard,
+  minHeight: "100%",
+  placeItems: "center",
+  alignContent: "center",
+  textAlign: "center",
+};
+
+const workspaceContextIcon = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "13px",
+  fontWeight: "950",
+};
+
+const workspaceContextEyebrow = {
+  margin: 0,
+  color: "var(--meetro-color-wood, #b7791f)",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+};
+
+const workspaceIdentityRow = {
+  display: "grid",
+  gridTemplateColumns: "54px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const workspaceContextAvatar = {
+  width: "54px",
+  height: "54px",
+  borderRadius: "18px",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "950",
+  fontSize: "16px",
+  flexShrink: 0,
+  overflow: "hidden",
+};
+
+const workspaceIdentityCopy = {
+  minWidth: 0,
+};
+
+const workspaceContextTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "20px",
+  lineHeight: 1.12,
+  fontWeight: "950",
+  overflowWrap: "break-word",
+};
+
+const workspaceContextMeta = {
+  margin: "5px 0 0",
+  color: "var(--meetro-color-muted, #5f6b63)",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "800",
+};
+
+const workspaceContextText = {
+  margin: 0,
+  color: "var(--meetro-color-muted, #5f6b63)",
+  fontSize: "14px",
+  lineHeight: 1.5,
+  fontWeight: "700",
+};
+
+const workspaceFactList = {
+  display: "grid",
+  gap: "10px",
+  minWidth: 0,
+};
+
+const workspaceFactRow = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  padding: "10px 12px",
+  borderRadius: "18px",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+};
+
+const workspaceFactLabel = {
+  color: "var(--meetro-color-wood, #b7791f)",
+  fontSize: "11px",
+  fontWeight: "900",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const workspaceFactValue = {
+  color: "#0f172a",
+  fontSize: "14px",
+  lineHeight: 1.35,
+  fontWeight: "900",
+  overflowWrap: "anywhere",
+};
+
+const workspaceContextAction = {
+  border: "none",
+  borderRadius: "18px",
+  padding: "13px 14px",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #1f4d34, #14351f))",
+  color: "#ffffff",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "var(--meetro-shadow-lifted, 0 14px 32px rgba(31,77,52,0.22))",
 };
 
 const splitPlaceholder = {
@@ -4815,10 +5498,10 @@ const splitPlaceholder = {
   textAlign: "center",
   padding: "28px",
   borderRadius: "30px",
-  background:
-    "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,250,252,0.92))",
-  border: "1px solid rgba(226,232,240,0.95)",
-  color: "#475569",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 18px 44px rgba(15,23,42,0.08))",
+  color: "var(--meetro-color-muted, #5f6b63)",
 };
 
 const splitPlaceholderIcon = {
@@ -4828,7 +5511,8 @@ const splitPlaceholderIcon = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#ede9ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "34px",
   marginBottom: "16px",
 };
@@ -4849,14 +5533,14 @@ const splitPlaceholderText = {
 
 const backButton = {
   border: "none",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 14px",
   borderRadius: "999px",
   fontWeight: "900",
   marginBottom: "18px",
   cursor: "pointer",
-  boxShadow: "0 8px 22px rgba(91,61,245,0.12)",
+  boxShadow: "var(--meetro-shadow-soft, 0 8px 22px rgba(15,23,42,0.08))",
 };
 
 const messagesHubHeader = {
@@ -5012,15 +5696,15 @@ const relationshipMenuWrap = {
 };
 
 const relationshipMenuButton = {
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: "999px",
-  background: "rgba(255,255,255,0.82)",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 12px",
   fontSize: "12px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 6px 16px rgba(15,23,42,0.04)",
+  boxShadow: "var(--meetro-shadow-soft, 0 6px 16px rgba(15,23,42,0.04))",
   maxWidth: "min(180px, calc(100vw - 96px))",
   minWidth: 0,
   overflow: "hidden",
@@ -5052,10 +5736,10 @@ const relationshipAddButton = {
 
 const relationshipNewChatButton = {
   ...relationshipAddButton,
-  background: "rgba(255,255,255,0.86)",
-  color: "#5b3df5",
-  border: "1px solid rgba(91,61,245,0.18)",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 10px 24px rgba(15,23,42,0.08))",
 };
 
 const sectionActionIcon = {
@@ -5152,7 +5836,7 @@ const relationshipDropdownItemCount = {
 
 const relationshipDropdownItemActive = {
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const relationshipNoticeCard = {
@@ -5236,7 +5920,7 @@ const conversationStarterAddContact = {
   border: "none",
   borderRadius: "999px",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "6px 2px",
   fontSize: "12px",
   fontWeight: "950",
@@ -5271,7 +5955,7 @@ const conversationStarterSelectedChip = {
   minWidth: 0,
   borderRadius: "999px",
   background: "#ede9ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 10px",
   fontSize: "12px",
   fontWeight: "900",
@@ -5366,7 +6050,7 @@ const conversationStarterRow = {
 };
 
 const conversationStarterRowSelected = {
-  border: "1px solid rgba(91,61,245,0.28)",
+  border: "1px solid rgba(31,77,52,0.28)",
   background: "#f8f6ff",
 };
 
@@ -5404,8 +6088,8 @@ const conversationStarterRowMeta = {
 const conversationStarterRowAction = {
   flex: "0 0 auto",
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   padding: "6px 8px",
   fontSize: "11px",
   fontWeight: "950",
@@ -5459,7 +6143,7 @@ const conversationStarterPrimaryAction = {
   bottom: "calc(78px + env(safe-area-inset-bottom, 0px))",
   zIndex: 5,
   marginTop: "auto",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.18)",
+  boxShadow: "0 10px 24px rgba(31,77,52,0.18)",
 };
 
 const emptyCard = {
@@ -5579,7 +6263,7 @@ const searchClearButton = {
 
 const filterEyebrow = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "900",
   letterSpacing: "0.35px",
@@ -5604,7 +6288,7 @@ const relationshipSubtitle = {
 const relationshipPrimaryAction = {
   border: "none",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   padding: "10px 13px",
   fontSize: "12px",
@@ -5618,9 +6302,9 @@ const relationshipPrimaryAction = {
 
 const relationshipSecondaryAction = {
   ...glassPill,
-  border: "1px solid rgba(91,61,245,0.16)",
+  border: "1px solid rgba(31,77,52,0.16)",
   borderRadius: "999px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 13px",
   fontSize: "12px",
   fontWeight: "950",
@@ -5711,7 +6395,7 @@ const contactCardSubpanel = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
   borderRadius: "18px",
   background: "rgba(248,246,255,0.72)",
   padding: "12px",
@@ -5820,7 +6504,7 @@ const contactImportSourceButton = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
   borderRadius: "18px",
   background: "rgba(248,250,252,0.92)",
   color: "#0f172a",
@@ -5903,7 +6587,7 @@ const contactImportRow = {
 const contactImportReviewRow = {
   ...contactImportRow,
   background: "#f8f6ff",
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
 };
 
 const contactImportSelectLabel = {
@@ -5939,9 +6623,9 @@ const photoPlaceholderBox = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
-  border: "1px dashed rgba(91,61,245,0.26)",
+  border: "1px dashed rgba(31,77,52,0.26)",
   background: "#f8f6ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "14px",
   fontSize: "13px",
@@ -6034,8 +6718,8 @@ const conversationRow = {
 };
 
 const unreadConversationRow = {
-  background: "#f8f6ff",
-  border: "1px solid rgba(91,61,245,0.18)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  border: "1px solid rgba(31,77,52,0.18)",
 };
 
 const emergencyConversationRow = {
@@ -6044,15 +6728,15 @@ const emergencyConversationRow = {
 };
 
 const activeConversationRow = {
-  border: "2px solid rgba(91,61,245,0.30)",
+  border: "2px solid rgba(31,77,52,0.22)",
 };
 
 const conversationRowAvatar = {
   width: "48px",
   height: "48px",
   borderRadius: "16px",
-  background: "#ede9ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -6097,7 +6781,7 @@ const conversationRowName = {
 
 const conversationRowMeta = {
   margin: "3px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-wood, #b7791f)",
   fontSize: "12px",
   lineHeight: 1.25,
   fontWeight: "800",
@@ -6119,7 +6803,7 @@ const conversationUnreadBadge = {
   height: "22px",
   padding: "0 7px",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   display: "inline-flex",
   alignItems: "center",
@@ -6139,7 +6823,7 @@ const conversationRowBottom = {
 
 const conversationRowPreview = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #5f6b63)",
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: "700",
@@ -6151,8 +6835,9 @@ const conversationRowPreview = {
 
 const conversationStatusChip = {
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   padding: "6px 9px",
   fontSize: "11px",
   fontWeight: "900",
@@ -6178,7 +6863,7 @@ const splitAvatarCircle = {
 };
 
 const unreadAvatar = {
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
 };
 
@@ -6188,7 +6873,7 @@ const emergencyAvatar = {
 };
 
 const timeText = {
-  color: "#888",
+  color: "var(--meetro-color-muted, #5f6b63)",
   fontSize: "12px",
   whiteSpace: "nowrap",
   fontWeight: "800",

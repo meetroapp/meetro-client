@@ -146,7 +146,7 @@ function JobUpdate({ setPage }) {
 
 const page = {
   minHeight: "100vh",
-  background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
+  background: "linear-gradient(180deg, #f8fafc 0%, var(--meetro-surface-sage, #eef4ea) 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 28px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -165,7 +165,7 @@ const icon = {
   width: "70px",
   height: "70px",
   borderRadius: "24px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -234,9 +234,9 @@ const quickChip = {
 
 
 const quickChipActive = {
-  border: "1px solid #5b3df5",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "14px",
   padding: "11px",
   fontWeight: "900",
@@ -270,7 +270,7 @@ const primaryButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   cursor: "pointer",

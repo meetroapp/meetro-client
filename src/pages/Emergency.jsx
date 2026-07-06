@@ -289,7 +289,7 @@ const primaryButton = {
   padding: "12px",
   borderRadius: "16px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "800",
   cursor: "pointer",

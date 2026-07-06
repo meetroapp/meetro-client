@@ -9,7 +9,7 @@ function BusinessIntelligence({ setPage }) {
   const model = getBusinessIntelligenceModel();
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={isSpanish ? "Inteligencia del negocio" : "Business Intelligence"}
         description={
@@ -21,7 +21,7 @@ function BusinessIntelligence({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <div style={readOnlyCard}>
+      <div className="meetro-visual-surface" style={readOnlyCard}>
         <strong>{isSpanish ? "Solo lectura" : "Read-only preview"}</strong>
         <span>
           {isSpanish
@@ -30,7 +30,7 @@ function BusinessIntelligence({ setPage }) {
         </span>
       </div>
 
-      <section style={messageCard}>
+      <section className="meetro-visual-surface" style={messageCard}>
         <p style={messageTitle}>
           {isSpanish ? "De trabajo a inteligencia" : "From Work to Intelligence"}
         </p>
@@ -61,7 +61,7 @@ function BusinessIntelligence({ setPage }) {
         </h2>
         <div style={insightGrid}>
           {model.categories.map((category) => (
-            <article key={category.id} style={insightCard}>
+            <article key={category.id} className="meetro-visual-surface" style={insightCard}>
               <div style={cardHeader}>
                 <h3 style={cardTitle}>{category.name}</h3>
                 <span style={categoryKey}>{category.id}</span>
@@ -98,7 +98,7 @@ const page = {
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, #fbf6ed)",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
 };
@@ -130,7 +130,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#6d28d9",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -168,14 +168,14 @@ const readOnlyCard = {
 const messageCard = {
   padding: "14px",
   borderRadius: "16px",
-  border: "1px solid #ddd6fe",
-  background: "#f5f3ff",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
   marginBottom: "16px",
 };
 
 const messageTitle = {
   margin: "0 0 6px",
-  color: "#6d28d9",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -227,7 +227,7 @@ const stepNumber = {
   width: "26px",
   height: "26px",
   borderRadius: "999px",
-  background: "#6d28d9",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   display: "inline-flex",
   alignItems: "center",
@@ -276,8 +276,8 @@ const categoryKey = {
   overflowWrap: "anywhere",
   padding: "5px 7px",
   borderRadius: "999px",
-  background: "#f5f3ff",
-  color: "#6d28d9",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "10px",
   fontWeight: "900",
 };

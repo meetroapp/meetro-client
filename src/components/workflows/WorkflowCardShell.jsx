@@ -6,7 +6,7 @@ function WorkflowCardShell({ icon, title, children }) {
         borderRadius: 22,
         padding: 18,
         marginTop: 12,
-        border: "1px solid rgba(139,92,246,0.15)",
+        border: "1px solid rgba(31,77,52,0.15)",
         boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
       }}
     >

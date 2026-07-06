@@ -127,7 +127,7 @@ function Conversation({ setPage, currentPage }) {
             style={{
               border: "none",
               background: "#f1efff",
-              color: "#5b3df5",
+              color: "var(--meetro-color-forest, #1f4d34)",
               padding: "10px 14px",
               borderRadius: "14px",
               fontWeight: "bold",
@@ -175,7 +175,7 @@ function Conversation({ setPage, currentPage }) {
             style={{
               border: "none",
               background: "#ece7ff",
-              color: "#5b3df5",
+              color: "var(--meetro-color-forest, #1f4d34)",
               borderRadius: "14px",
               padding: "12px",
               fontWeight: "bold",
@@ -202,7 +202,7 @@ function Conversation({ setPage, currentPage }) {
             onClick={sendMessage}
             style={{
               border: "none",
-              background: "#5b3df5",
+              background: "var(--meetro-color-forest, #1f4d34)",
               color: "white",
               borderRadius: "14px",
               padding: "12px 16px",
@@ -233,7 +233,7 @@ function MessageBubble({ text, align }) {
     >
       <div
         style={{
-          background: isRight ? "#5b3df5" : "white",
+          background: isRight ? "var(--meetro-color-forest, #1f4d34)" : "white",
           color: isRight ? "white" : "#333",
           padding: "14px 16px",
           borderRadius: "20px",

@@ -40,7 +40,8 @@ test("Messages hub uses section navigation and a popover start action", () => {
   assert.match(messagesSource, /\["emergency", "Emergency"\]/);
   assert.match(messagesSource, /messagesHubHeader/);
   assert.match(messagesSource, /messagesHubTitle/);
-  assert.match(messagesSource, />Messages<\/h1>/);
+  assert.match(messagesSource, />Communication Center<\/h1>/);
+  assert.doesNotMatch(messagesSource, />Messages<\/h1>/);
   assert.match(messagesSource, /<SafeBackBar[\s\S]*compact/);
   assert.match(safeBackBarSource, /compact = false/);
   assert.match(safeBackBarSource, /compact\s+\?\s+"calc\(env\(safe-area-inset-top\) \+ 4px\) 0 8px"/);
@@ -82,7 +83,7 @@ test("Messages sections keep contacts as a fixed relationship directory anchor",
   assert.match(messagesSource, /\["conversations", "Conversations"\]/);
   assert.match(messagesSource, /\["hiring", "Hiring"\]/);
   assert.match(messagesSource, /\["emergency", "Emergency"\]/);
-  assert.match(messagesSource, /aria-label="Messages navigation"/);
+  assert.match(messagesSource, /aria-label="Communication Center navigation"/);
   assert.match(messagesSource, /aria-label="Open Contacts"/);
   assert.match(messagesSource, /contactsDirectoryTab/);
   assert.match(messagesSource, /aria-label="Communication contexts"/);
@@ -124,16 +125,33 @@ test("Messages adopts shared Liquid Glass visual primitives", () => {
 
 test("Messages start actions stay simple and avoid architecture labels", () => {
   assert.match(messagesSource, /const CONVERSATION_SECTION_ACTIONS = \[/);
-  assert.match(messagesSource, /\["chat", "New Chat"\]/);
-  assert.match(messagesSource, /\["group", "New Group Chat"\]/);
+  assert.match(messagesSource, /\["chat", "New Conversation"\]/);
+  assert.match(messagesSource, /\["group", "New Group Conversation"\]/);
   assert.match(messagesSource, /function getMessageSectionActions\(\)/);
-  assert.match(messagesSource, /if \(messageSection === "conversations"\) return "New Chat"/);
+  assert.match(messagesSource, /if \(messageSection === "conversations"\) return "New Conversation"/);
   assert.match(messagesSource, /if \(messageSection === "contacts"\) return "Add \/ Import"/);
   assert.match(messagesSource, /if \(messageSection === "hiring"\) return "Open Hiring Center"/);
   assert.match(messagesSource, /if \(messageSection === "emergency"\) return "Open Emergency"/);
   assert.match(messagesSource, /const relationshipNewChatButton = \{/);
   assert.doesNotMatch(messagesSource, /Create Relationship Space|Relationship Layer|Business DNA|Understanding Engine/);
   assert.doesNotMatch(messagesSource, /relationship space/i);
+});
+
+test("Communication naming keeps relationship intent distinct without changing routes", () => {
+  assert.match(messagesSource, />Communication Center<\/h1>/);
+  assert.match(messagesSource, /aria-label="Communication Center navigation"/);
+  assert.match(messagesSource, /Search Conversations/);
+  assert.match(messagesSource, /Hiring conversation started in Communication Center\./);
+  assert.match(messagesSource, /Emergency conversation started in Communication Center\./);
+  assert.match(messagesSource, /Conversation started in Communication Center\./);
+  assert.match(messagesSource, /Start a conversation when communication is ready\./);
+  assert.match(messagesSource, /setPage\("hiringCenter"\)/);
+  assert.match(messagesSource, /if \(type === "chat"\)/);
+  assert.match(messagesSource, /setConversationStarter\(createEmptyConversationStarter\("single"\)\)/);
+  assert.match(messagesSource, /if \(type === "group"\)/);
+  assert.match(messagesSource, /setConversationStarter\(createEmptyConversationStarter\("group"\)\)/);
+  assert.doesNotMatch(messagesSource, />Messages<\/h1>/);
+  assert.doesNotMatch(messagesSource, /New Chat|New Group Chat|Start a chat|Message Center|Threads|Feed|Posts/);
 });
 
 test("Messages Hiring stays communication-only and routes setup to Hiring Center", () => {
@@ -165,7 +183,7 @@ test("New conversation flow starts from contacts without an intermediate source 
   assert.doesNotMatch(messagesSource, /conversationStarter\.step === "source"/);
   assert.match(messagesSource, /conversationStarter\.step === "select"/);
   assert.doesNotMatch(messagesSource, /conversationStarter\.step === "groupSetup"/);
-  assert.match(messagesSource, /conversationStarter\.mode === "group"[\s\S]*\? "New Group Chat"[\s\S]*: "Choose Contacts"/);
+  assert.match(messagesSource, /conversationStarter\.mode === "group"[\s\S]*\? "New Group Conversation"[\s\S]*: "Choose Contacts"/);
   assert.match(messagesSource, /placeholder="Search contacts"/);
   assert.match(messagesSource, /conversationStarterToLabel/);
   assert.match(messagesSource, />To:<\/span>/);
@@ -186,7 +204,7 @@ test("New conversation flow starts from contacts without an intermediate source 
 
 test("Messages landing stays relationship-inbox first", () => {
   const headerIndex = messagesSource.indexOf("messagesHubHeader");
-  const tabsIndex = messagesSource.indexOf('aria-label="Messages navigation"');
+  const tabsIndex = messagesSource.indexOf('aria-label="Communication Center navigation"');
   const searchIndex = messagesSource.indexOf('id="messages-search"');
   const rowsIndex = messagesSource.indexOf("searchedVisibleQuotes.map");
 
@@ -229,7 +247,7 @@ test("Messages blocks stale local rows when account connection is inactive", () 
   assert.match(messagesSource, /if \(shouldBlockMessagesForConnection\(resultConnectionState\)\) \{/);
   assert.match(messagesSource, /reason: "local_messages"/);
   assert.match(messagesSource, /if \(!accountConnectionState\.connected\) \{/);
-  assert.match(messagesSource, /Messages account recovery/);
+  assert.match(messagesSource, /Communication Center account recovery/);
   assert.match(messagesSource, /Reconnect Account/);
 });
 
@@ -270,6 +288,31 @@ test("Choose contact flow is a focused mobile page with keyboard-safe scrolling"
   assert.match(messagesSource, /relationshipDisabledAction/);
 });
 
+test("Messages page wrappers initialize before relationship identity render can trip the route boundary", () => {
+  const focusedWrapperIndex = messagesSource.indexOf(
+    "const focusedConversationPageWrapper = {"
+  );
+  const identityWrapperIndex = messagesSource.indexOf(
+    "const relationshipIdentityPageWrapper = {"
+  );
+  const identityWrapperBody = messagesSource.slice(
+    identityWrapperIndex,
+    messagesSource.indexOf("const splitPageWrapper = {")
+  );
+
+  assert.notEqual(focusedWrapperIndex, -1);
+  assert.notEqual(identityWrapperIndex, -1);
+  assert.ok(
+    focusedWrapperIndex < identityWrapperIndex,
+    "focusedConversationPageWrapper must be initialized before relationshipIdentityPageWrapper spreads it"
+  );
+  assert.match(identityWrapperBody, /\.\.\.focusedConversationPageWrapper/);
+  assert.doesNotMatch(
+    identityWrapperBody,
+    /Cannot access 'focusedConversationPageWrapper' before initialization/
+  );
+});
+
 test("Messages exposes Import Contacts as a reviewable relationship flow", () => {
   const conversationActionsBlock = messagesSource.slice(
     messagesSource.indexOf("const CONVERSATION_SECTION_ACTIONS"),
@@ -281,11 +324,11 @@ test("Messages exposes Import Contacts as a reviewable relationship flow", () =>
   );
 
   assert.match(messagesSource, /if \(messageSection === "contacts"\) return CONTACTS_SECTION_ACTIONS/);
-  assert.match(conversationActionsBlock, /\["chat", "New Chat"\]/);
-  assert.match(conversationActionsBlock, /\["group", "New Group Chat"\]/);
+  assert.match(conversationActionsBlock, /\["chat", "New Conversation"\]/);
+  assert.match(conversationActionsBlock, /\["group", "New Group Conversation"\]/);
   assert.doesNotMatch(conversationActionsBlock, /Import Contacts/);
   assert.match(contactsActionsBlock, /\["import", "Import Contacts"\]/);
-  assert.doesNotMatch(contactsActionsBlock, /New Chat|New Group Chat/);
+  assert.doesNotMatch(contactsActionsBlock, /New Conversation|New Group Conversation/);
   assert.match(messagesSource, /Import Contacts/);
   assert.match(messagesSource, /Import from phone contacts/);
   assert.match(messagesSource, /Import from computer file/);
@@ -297,12 +340,12 @@ test("Messages exposes Import Contacts as a reviewable relationship flow", () =>
   assert.match(messagesSource, /setMessageSection\("contacts"\)/);
 });
 
-test("Messages keeps Saved Chat History as secondary history, not a section primary action", () => {
-  assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "Saved Chat History"\]/);
-  assert.match(messagesSource, /aria-label="Messages secondary actions"/);
+test("Messages keeps Saved Conversation History as secondary history, not a section primary action", () => {
+  assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "Saved Conversation History"\]/);
+  assert.match(messagesSource, /aria-label="Communication Center secondary actions"/);
   assert.match(messagesSource, /style=\{savedHistorySecondaryButton\}/);
   assert.match(messagesSource, /openRelationshipAction\(\.\.\.SAVED_HISTORY_ACTION\)/);
-  assert.match(messagesSource, /Chats you save manually/);
+  assert.match(messagesSource, /Conversations you save manually/);
   assert.doesNotMatch(messagesSource, /return \[\.\.CONVERSATION_SECTION_ACTIONS, SAVED_HISTORY_ACTION\]/);
   assert.doesNotMatch(messagesSource, /return \[\.\.CONTACTS_SECTION_ACTIONS, SAVED_HISTORY_ACTION\]/);
   assert.doesNotMatch(messagesSource, /return \[\.\.HIRING_SECTION_ACTIONS, SAVED_HISTORY_ACTION\]/);
@@ -326,7 +369,10 @@ test("Messages opens imported inactive contacts as relationship identity before 
   assert.match(messagesSource, /<RelationshipIdentityPage/);
   assert.match(messagesSource, /Invite when you are ready to continue this relationship in Meetro\./);
   assert.match(messagesSource, /if \(activeContactCard\) \{\n\s+return \(/);
-  assert.match(messagesSource, /className="app-page meetro-wide-page messages-relationship-identity-page messages-focused-flow-open"/);
+  assert.match(
+    messagesSource,
+    /className="app-page meetro-wide-page meetro-visual-page messages-relationship-identity-page messages-focused-flow-open"/
+  );
   assert.match(messagesSource, /relationshipIdentityPageWrapper/);
   assert.match(messagesSource, /{renderContactCard\(activeContactCard\)}/);
   assert.match(messagesSource, /relationshipIdentityReturnScrollRef/);
@@ -413,7 +459,8 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /safeSetStorage\("selectedConversation", JSON\.stringify\(threadPayload\)\)/);
   assert.match(messagesSource, /setRelationshipViewMenuOpen\(false\);[\s\S]*setRelationshipActionMenuOpen\(false\);/);
   assert.match(messagesSource, /setActiveContactCardId\(""\);[\s\S]*setSavedHistoryOpen\(false\);/);
-  assert.match(messagesSource, /openConversation\(conversation, \{ forceRoute: true \}\)/);
+  assert.match(messagesSource, /preferSplitPane: isSplitPane && !options\.returnToSavedHistory/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
   assert.match(messagesSource, /function openConversation\(quote, options = \{\}\)/);
   assert.match(messagesSource, /const conversation = prepareConversation\(quote, \{ updateList: false \}\);/);
   assert.doesNotMatch(messagesSource, /setPage\("conversationThread"\);\n\n\s+window\.setTimeout\(\(\) => \{\n\s+prepareConversation/);
@@ -428,13 +475,50 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /zIndex: 60/);
   assert.match(messagesSource, /statusChip === "Emergency" \? emergencyConversationRow/);
   assert.match(messagesSource, /const count = getMessageSectionCount\(key\)/);
-  assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "Saved Chat History"\]/);
+  assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "Saved Conversation History"\]/);
   assert.match(messagesSource, /const \[savedHistoryOpen, setSavedHistoryOpen\] = useState\(\s*localStorage\.getItem\("meetroMessagesOpenSavedHistory"\) === "true"\s*\)/);
   assert.match(messagesSource, /if \(type === "savedHistory"\)/);
   assert.match(messagesSource, /setSavedHistoryOpen\(true\)/);
-  assert.match(messagesSource, /aria-label="Saved Chat History"/);
+  assert.match(messagesSource, /aria-label="Saved Conversation History"/);
   assert.match(messagesSource, /savedHistoryQuotes\.map/);
   assert.match(messagesSource, /!savedHistoryOpen && \(/);
+});
+
+test("Messages renders an adaptive workspace without changing mobile conversation routing", () => {
+  assert.match(messagesSource, /const \[isSplitPane, setIsSplitPane\] = useState\(false\)/);
+  assert.match(messagesSource, /const \[isWideWorkspace, setIsWideWorkspace\] = useState\(false\)/);
+  assert.match(messagesSource, /\(min-width: 900px\) and \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(messagesSource, /\(min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(messagesSource, /setIsWideWorkspace\(wideQuery\.matches\)/);
+  assert.match(messagesSource, /const wideWorkspaceShell = \{/);
+  assert.match(messagesSource, /gridTemplateColumns:\s*\n\s+"minmax\(280px, 0\.28fr\) minmax\(420px, 0\.44fr\) minmax\(280px, 0\.28fr\)"/);
+  assert.match(messagesSource, /isWideWorkspace \? wideWorkspaceShell : \{\}/);
+  assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /function renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /aria-label="Relationship and project context"/);
+  assert.match(messagesSource, /Context will appear here as this relationship develops\./);
+  assert.match(messagesSource, /<ConversationThread[\s\S]*embedded/);
+  assert.match(messagesSource, /preferSplitPane: isSplitPane && !options\.returnToSavedHistory/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
+  assert.match(messagesSource, /setPage\("conversationThread"\)/);
+});
+
+test("Messages desktop context panel exposes Communication Center context without owning work", () => {
+  assert.match(messagesSource, /function getCommunicationIntent\(conversation = \{\}, relationship = null\)/);
+  assert.match(messagesSource, /function getConversationAuthorityFacts\(conversation = \{\}, relationship = null\)/);
+  assert.match(messagesSource, /function getRelationshipMemoryFacts\(conversation = \{\}, relationship = null\)/);
+  assert.match(messagesSource, /label: "Intent"/);
+  assert.match(messagesSource, /label: "Current status"/);
+  assert.match(messagesSource, /label: "Current owner"/);
+  assert.match(messagesSource, /label: "Next decision"/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship memory<\/p>/);
+  assert.match(messagesSource, /Relationship memory will grow as work, decisions, and history accumulate\./);
+  assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /setPage\("contractorDashboard"\)/);
+  assert.match(messagesSource, /setPage\("projectDetails"\)/);
+  assert.doesNotMatch(messagesSource, /create.*Project.*Context|save.*Project.*Context|new.*WorkspaceContext/i);
 });
 
 test("ConversationThread renders local or empty messages before backend hydration", () => {
@@ -449,14 +533,14 @@ test("ConversationThread renders local or empty messages before backend hydratio
   assert.match(conversationThreadSource, /Read receipts and inbox refreshes must never block the active thread/);
 });
 
-test("Saved Chat History is user-saved only and chat menu owns the save action", () => {
+test("Saved Conversation History is user-saved only and conversation menu owns the save action", () => {
   assert.match(messagesSource, /import \{[\s\S]*isConversationUserSavedToHistory[\s\S]*\} from "\.\.\/utils\/conversationUnread"/);
   assert.match(messagesSource, /function isSavedChatHistoryConversation\(quote = \{\}\) \{\s*return isConversationUserSavedToHistory\(quote\);\s*\}/);
   assert.doesNotMatch(messagesSource, /quote\.archived \|\|[\s\S]{0,120}meetro_conversation_saved_/);
   assert.match(messagesSource, /Conversations you save manually stay here for future reference\./);
-  assert.match(messagesSource, /Chats you save from the conversation menu will appear here\./);
+  assert.match(messagesSource, /Conversations you save from the conversation menu will appear here\./);
   assert.match(conversationThreadSource, /saveConversationToUserHistory/);
-  assert.match(conversationThreadSource, /Save Chat to History/);
+  assert.match(conversationThreadSource, /Save Conversation to History/);
   assert.match(conversationThreadSource, /Saved to History/);
   assert.match(conversationThreadSource, /userSavedToHistory/);
 });
@@ -544,6 +628,20 @@ test("ConversationThread opens a full-page relationship identity without leaving
   assert.match(conversationThreadSource, /relationshipMemoryItems/);
   assert.match(conversationThreadSource, /relationshipNoCurrentWorkYet/);
   assert.match(conversationThreadSource, /relationshipMemoryWillGrow/);
+});
+
+test("ConversationThread relationship header avoids nested buttons", () => {
+  const headerBlock = conversationThreadSource.slice(
+    conversationThreadSource.indexOf("<div\n            style={headerIdentityButton}"),
+    conversationThreadSource.indexOf("{hasActiveCallPhone && (")
+  );
+
+  assert.match(headerBlock, /role="button"/);
+  assert.match(headerBlock, /tabIndex=\{0\}/);
+  assert.match(headerBlock, /onKeyDown=\{\(event\) => \{/);
+  assert.match(headerBlock, /event\.key === "Enter" \|\| event\.key === " "/);
+  assert.doesNotMatch(headerBlock, /<button\n\s+style=\{headerIdentityButton\}/);
+  assert.match(headerBlock, /event\.stopPropagation\(\)/);
 });
 
 test("ConversationThread sends messages local-first before backend sync", () => {

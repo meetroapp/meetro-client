@@ -80,7 +80,7 @@ const logoCircle = {
   width: "86px",
   height: "86px",
   borderRadius: "28px",
-  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), #7b61ff)",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -88,7 +88,7 @@ const logoCircle = {
   fontSize: "42px",
   fontWeight: "bold",
   margin: "0 auto 24px",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.3)",
+  boxShadow: "0 14px 30px rgba(31,77,52,0.3)",
 };
 
 const title = {
@@ -126,7 +126,7 @@ const primaryButton = {
   padding: "17px",
   border: "none",
   borderRadius: "18px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "bold",
   fontSize: "17px",

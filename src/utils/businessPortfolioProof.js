@@ -138,6 +138,9 @@ export function getBusinessPortfolioProofProjection(source = {}, options = {}) {
   ];
   const featuredProjects = projects.filter((project) => project.spotlightFeatured);
   const featuredProject = featuredProjects[0] || projects[0] || null;
+  const featuredProjectMediaUrls = featuredProject
+    ? getBusinessPortfolioProjectImages(featuredProject)
+    : [];
   const reviews = Array.isArray(options.reviews)
     ? options.reviews
     : getProfessionalReviews(
@@ -158,6 +161,7 @@ export function getBusinessPortfolioProofProjection(source = {}, options = {}) {
     mediaUrls,
     featuredProjects,
     featuredProject,
+    featuredProjectMediaUrls,
     featuredProjectCount: featuredProjects.length,
     reviews,
     mostRecentReview: reviews[0] || null,

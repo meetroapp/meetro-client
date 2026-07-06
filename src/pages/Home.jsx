@@ -71,6 +71,12 @@ const homeLayoutMediaStyles = `
       display: none !important;
     }
   }
+
+  @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
+    .home-community-entry {
+      display: none !important;
+    }
+  }
 `;
 
 function Home({ setPage }) {
@@ -638,6 +644,29 @@ function Home({ setPage }) {
             {t("homeLocalServicesEmpty", language)}
           </div>
         )}
+      </section>
+
+      <section className="home-community-entry" style={communityEntrySection}>
+        <button
+          type="button"
+          style={communityEntryCard}
+          onClick={() => setPage("discover")}
+        >
+          <span style={communityEntryIcon}>
+            <MeetroIcon name="discover" size={24} decorative />
+          </span>
+          <span style={communityEntryCopy}>
+            <strong style={communityEntryTitle}>
+              {t("communityEntryTitle", language)}
+            </strong>
+            <span style={communityEntryText}>
+              {t("communityEntryHomeCopy", language)}
+            </span>
+          </span>
+          <span style={communityEntryAction}>
+            {t("communityOpenAction", language)} →
+          </span>
+        </button>
       </section>
 
       <section style={quickHelpSection}>
@@ -1416,6 +1445,57 @@ function readLocalJsonArray(key) {
   }
 }
 
+function getSpotlightStoryKey({ primaryValues = [], fallbackValues = [] } = {}) {
+  const primaryStoryKey = resolveSpotlightStoryKey(primaryValues);
+
+  if (primaryStoryKey) return primaryStoryKey;
+
+  return resolveSpotlightStoryKey(fallbackValues) || "homeSpotlightStoryDefault";
+}
+
+function resolveSpotlightStoryKey(values = []) {
+  const text = values
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (!text) return "";
+
+  if (/(handshake|trust|trusted|relationship|repeat|loyal|years|appreciation)/.test(text)) {
+    return "homeSpotlightStoryTrust";
+  }
+
+  if (/(community|neighbor|volunteer|school|park|ramp|garden|together)/.test(text)) {
+    return "homeSpotlightStoryCommunity";
+  }
+
+  if (/(plumb|faucet|leak|drain|hvac|electric|repair|emergency|water|pipe|clog)/.test(text)) {
+    return "homeSpotlightStoryRelief";
+  }
+
+  if (/(roof|storm|gutter|window|security|safe|protect)/.test(text)) {
+    return "homeSpotlightStoryProtection";
+  }
+
+  if (/(backyard|patio|pergola|deck|landscape|yard|fence|tree|garden)/.test(text)) {
+    return "homeSpotlightStoryOutdoor";
+  }
+
+  if (/(bath|bathroom|shower|morning|vanity)/.test(text)) {
+    return "homeSpotlightStoryPeaceful";
+  }
+
+  if (/(kitchen|dining|cabinet|counter|meal|family room)/.test(text)) {
+    return "homeSpotlightStoryKitchen";
+  }
+
+  if (/(clean|cleanup|restore|reset|renovation|remodel)/.test(text)) {
+    return "homeSpotlightStoryRenewal";
+  }
+
+  return "";
+}
+
 function SpotlightCard({ business, language, onViewProfile }) {
   const identity = getBusinessIdentityProjection(business, {
     fallbackName: t("homeLocalBusiness", language),
@@ -1442,7 +1522,21 @@ function SpotlightCard({ business, language, onViewProfile }) {
     featuredProject?.summary ||
     featuredProject?.caption ||
     "";
-  const cardDescription = featuredProjectDescription || description;
+  const featuredProjectMediaUrls = portfolioProof.featuredProjectMediaUrls || [];
+  const storyKey = getSpotlightStoryKey({
+    primaryValues: [
+      featuredProjectTitle,
+      featuredProjectDescription,
+      featuredProject?.category,
+      featuredProject?.service,
+      featuredProject?.serviceType,
+      featuredProject?.service_type,
+      featuredProjectMediaUrls.join(" "),
+    ],
+    fallbackValues: [category, description],
+  });
+  const storyTitle = t(storyKey, language);
+  const storyBody = t("homeSpotlightStoryBody", language);
   const servingSince =
     business.servingSince ||
     business.serving_since ||
@@ -1467,24 +1561,44 @@ function SpotlightCard({ business, language, onViewProfile }) {
         .replace("{year}", servingSince)
     : "";
   const logoUrl = identity.imageUrl || getSpotlightAvatarUrl(business);
-  const mediaUrls = portfolioProof.mediaUrls;
+  const mediaUrls = featuredProjectMediaUrls.length
+    ? featuredProjectMediaUrls
+    : portfolioProof.mediaUrls;
   const photoCountLabel =
     mediaUrls.length === 1
       ? t("homeOnePhoto", language)
       : t("homePhotoCount", language).replace("{count}", mediaUrls.length);
+  const relationshipLine =
+    portfolioProof.reviewCount > 0
+      ? t("homeSpotlightReviewTrust", language)
+      : portfolioProof.projectCount > 0
+        ? t("homeSpotlightWorkProof", language)
+        : t("homeSpotlightRelationshipHint", language);
 
   return (
     <article style={spotlightCard}>
-      <SpotlightSlideshow
-        images={mediaUrls}
-        alt={name}
-        photoCountLabel={photoCountLabel}
-        placeholderLabel={t("homePortfolioPreview", language)}
-        previousLabel={t("homePreviousPhoto", language)}
-        nextLabel={t("homeNextPhoto", language)}
-      />
+      <div style={spotlightHero}>
+        <SpotlightSlideshow
+          images={mediaUrls}
+          alt={storyTitle}
+          photoCountLabel={photoCountLabel}
+          placeholderLabel={t("homeSpotlightStoryPlaceholder", language)}
+          previousLabel={t("homePreviousPhoto", language)}
+          nextLabel={t("homeNextPhoto", language)}
+        />
+        <div style={spotlightHeroOverlay} />
+        <div style={spotlightHeroCopy}>
+          <span style={spotlightStoryEyebrow}>{t("homeSpotlightStoryEyebrow", language)}</span>
+          <h3 style={spotlightStoryTitle}>{storyTitle}</h3>
+          <p style={spotlightStoryBody}>{storyBody}</p>
+        </div>
+      </div>
 
       <div style={spotlightContent}>
+        <span style={spotlightBusinessIntro}>
+          {t("homeSpotlightBusinessIntro", language)}
+        </span>
+
         <div style={spotlightBusinessRow}>
           <div style={spotlightLogoWrap}>
             {logoUrl ? (
@@ -1502,14 +1616,13 @@ function SpotlightCard({ business, language, onViewProfile }) {
             {servingLine && (
               <span style={spotlightServingLine}>{servingLine}</span>
             )}
+            <span style={spotlightServingLine}>{relationshipLine}</span>
           </div>
         </div>
 
-        {featuredProjectTitle && (
-          <strong style={spotlightProjectTitle}>{featuredProjectTitle}</strong>
-        )}
-
-        <p style={spotlightDescription}>{cardDescription}</p>
+        <p style={spotlightDescription}>
+          {t("homeSpotlightProofLine", language)}
+        </p>
 
         <button type="button" style={spotlightButton} onClick={onViewProfile}>
           {t("homeViewProfile", language)}
@@ -1535,6 +1648,7 @@ function ProjectCard({ request, language, onClick }) {
   const journey = getHomeownerProjectJourney(request, language);
   const professionalName = journey.professionalName;
   const actionLabel = getHomeProjectActionLabel(request, journey, language);
+  const nextStepCopy = getHomeProjectNextStepCopy(request, journey, language);
 
   return (
     <div style={projectCard}>
@@ -1571,6 +1685,11 @@ function ProjectCard({ request, language, onClick }) {
         <p style={projectProfessionalName}>{professionalName}</p>
       )}
 
+      <div style={projectNextStepPanel}>
+        <span style={projectNextStepLabel}>{t("homeProjectNextStepLabel", language)}</span>
+        <p style={projectNextStepText}>{nextStepCopy}</p>
+      </div>
+
       <button
         type="button"
         style={projectOpenButton}
@@ -1584,6 +1703,81 @@ function ProjectCard({ request, language, onClick }) {
       </button>
     </div>
   );
+}
+
+function getHomeProjectNextStepCopy(request = {}, journey = {}, language = "en") {
+  const currentTitle = String(journey.currentTitle || "").toLowerCase();
+  const stageKey = String(journey.currentKey || journey.currentStageKey || "").toLowerCase();
+  const statusText = String(
+    request.status ||
+      request.workflowStatus ||
+      request.stage ||
+      request.activeWorkStatus ||
+      request.workStatus ||
+      journey.currentTitle ||
+      ""
+  ).toLowerCase();
+  const workStatus = String(
+    request.activeWorkStatus ||
+      request.workStatus ||
+      request.workflowStage ||
+      request.status ||
+      ""
+  ).toLowerCase();
+
+  if (
+    /evaluation.*complete|complete.*evaluation/.test(statusText) ||
+    /evaluation.*complete|complete.*evaluation/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepEvaluationComplete", language);
+  }
+
+  if (
+    /work_scheduled|scheduled_work/.test(workStatus) ||
+    /work scheduled/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepWorkScheduled", language);
+  }
+
+  if (
+    /active|in_progress|working|started/.test(workStatus) ||
+    /work in progress/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepWorkInProgress", language);
+  }
+
+  if (
+    /completion|complete|completed|closure_completed|closed|history/.test(statusText) ||
+    /completion|completed/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepCompleted", language);
+  }
+
+  if (
+    /quote|proposal|decision/.test(stageKey) ||
+    /quote|proposal|decision/.test(statusText) ||
+    /quote ready|decision required/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepQuoteReady", language);
+  }
+
+  if (
+    /appointment|visit|scheduled/.test(stageKey) ||
+    /appointment|visit|scheduled/.test(statusText) ||
+    /appointment scheduled|visit scheduled/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepVisitScheduled", language);
+  }
+
+  if (
+    stageKey === "request" ||
+    /new|requested|request submitted|open|pending/.test(statusText) ||
+    /request submitted/.test(currentTitle)
+  ) {
+    return t("homeProjectNextStepRequestSubmitted", language);
+  }
+
+  return journey.currentSummary || t("homeProjectNextStepRequestSubmitted", language);
 }
 
 function getHomeProjectActionLabel(request = {}, journey = {}, language = "en") {
@@ -2090,12 +2284,12 @@ function ProCard({ name, category, location, rating, reviewCount, onClick }) {
 }
 
 const pageWrapper = {
-  background: "linear-gradient(to bottom, #f7f7fb 0%, #f2f3f8 100%)",
+  background: "var(--meetro-gradient-community-page)",
   minHeight: "100dvh",
   padding:
     "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   width: "100%",
   maxWidth: "920px",
   minWidth: 0,
@@ -2120,15 +2314,16 @@ const brandWrap = {
 const brandMain = {
   fontSize: "22px",
   fontWeight: "900",
-  color: "#5b3df5",
-  letterSpacing: "-1px",
+  color: "var(--meetro-color-forest)",
+  letterSpacing: 0,
 };
 
 const brandBadge = {
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "6px 10px",
   borderRadius: "999px",
+  border: "1px solid var(--meetro-color-line)",
   fontSize: "11px",
   fontWeight: "800",
   letterSpacing: "1px",
@@ -2136,32 +2331,33 @@ const brandBadge = {
 };
 
 const languageButton = {
-  border: "none",
-  background: "white",
-  color: "#111",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   padding: "11px 14px",
   borderRadius: "18px",
   fontWeight: "700",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, var(--meetro-color-forest, #1f4d34) 100%)",
   color: "white",
   borderRadius: "28px",
   padding: "26px 22px",
   marginBottom: "20px",
-  boxShadow: "0 20px 46px rgba(91,61,245,0.22)",
+  boxShadow: "0 20px 46px rgba(31,77,52,0.22)",
 };
 
 const businessHero = {
-  background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)",
+  background: "var(--meetro-gradient-community-hero)",
   color: "white",
   borderRadius: "32px",
   padding: "22px 18px",
   marginBottom: "22px",
-  boxShadow: "0 18px 40px rgba(15,23,42,0.24)",
+  border: "1px solid rgba(255,253,248,0.14)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const eyebrow = {
@@ -2201,9 +2397,9 @@ const businessText = {
 };
 
 const mainButton = {
-  border: "none",
-  background: "white",
-  color: "#5b3df5",
+  border: "1px solid rgba(255,253,248,0.72)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   padding: "15px 20px",
   borderRadius: "18px",
   fontWeight: "900",
@@ -2275,12 +2471,12 @@ const quickGrid = {
 };
 
 const quickCard = {
-  border: "none",
-  background: "white",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "20px",
   padding: "14px",
   textAlign: "left",
-  boxShadow: "0 8px 18px rgba(0,0,0,0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
@@ -2288,7 +2484,7 @@ const quickIcon = {
   width: "40px",
   height: "40px",
   borderRadius: "14px",
-  background: "#f3f0ff",
+  background: "var(--meetro-surface-sage)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -2299,12 +2495,12 @@ const quickIcon = {
 const quickTitle = {
   margin: "0 0 4px",
   fontSize: "16px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const quickText = {
   margin: 0,
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.4,
 };
@@ -2323,9 +2519,9 @@ const homeWorkflowSection = {
   marginBottom: "24px",
   padding: "18px",
   borderRadius: "26px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(226,232,240,0.9)",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.06)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const segmentedControl = {
@@ -2334,7 +2530,8 @@ const segmentedControl = {
   gap: "8px",
   padding: "4px",
   borderRadius: "18px",
-  background: "#f1f5f9",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
   marginBottom: "14px",
 };
 
@@ -2343,16 +2540,16 @@ const segmentedButton = {
   borderRadius: "14px",
   padding: "11px 12px",
   background: "transparent",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "950",
   cursor: "pointer",
 };
 
 const segmentedButtonActive = {
-  background: "#5b3df5",
-  color: "#ffffff",
-  boxShadow: "0 8px 18px rgba(91,61,245,0.18)",
+  background: "var(--meetro-color-forest)",
+  color: "#fffdf8",
+  boxShadow: "0 8px 18px rgba(31,77,52,0.18)",
 };
 
 const compactEmptyCard = {
@@ -2360,9 +2557,9 @@ const compactEmptyCard = {
   gap: "5px",
   padding: "14px",
   borderRadius: "18px",
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "800",
 };
@@ -2371,9 +2568,9 @@ const quickHelpSection = {
   marginBottom: "20px",
   padding: "16px",
   borderRadius: "24px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(226,232,240,0.9)",
-  boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const helpActionGrid = {
@@ -2384,14 +2581,14 @@ const helpActionGrid = {
 
 const helpActionCard = {
   minHeight: "92px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "18px",
   padding: "13px 8px",
   display: "grid",
   placeItems: "center",
   gap: "8px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "13px",
   fontWeight: "950",
   cursor: "pointer",
@@ -2402,8 +2599,8 @@ const helpActionIcon = {
   width: "42px",
   height: "42px",
   borderRadius: "16px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   display: "grid",
   placeItems: "center",
 };
@@ -2419,7 +2616,7 @@ const messagesCompactSection = {
 
 const sectionGuideText = {
   margin: "5px 0 0",
-  color: "#667085",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.42,
   fontWeight: "700",
@@ -2454,49 +2651,179 @@ const spotlightEmptyCard = {
   boxSizing: "border-box",
   padding: "16px",
   borderRadius: "20px",
-  border: "1px solid rgba(226,232,240,0.95)",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.45,
   fontWeight: "800",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const spotlightDebugLine = {
   margin: "8px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "11px",
   fontWeight: "850",
 };
 
+const communityEntrySection = {
+  marginBottom: "22px",
+};
+
+const communityEntryCard = {
+  width: "100%",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "24px",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper), var(--meetro-surface-sage))",
+  boxShadow: "var(--meetro-shadow-soft)",
+  padding: "16px",
+  display: "grid",
+  gridTemplateColumns: "48px 1fr",
+  gap: "12px",
+  alignItems: "center",
+  textAlign: "left",
+  color: "var(--meetro-color-ink)",
+  cursor: "pointer",
+};
+
+const communityEntryIcon = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "18px",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
+  display: "grid",
+  placeItems: "center",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+};
+
+const communityEntryCopy = {
+  display: "grid",
+  gap: "5px",
+  minWidth: 0,
+};
+
+const communityEntryTitle = {
+  color: "var(--meetro-color-ink)",
+  fontSize: "18px",
+  lineHeight: 1.1,
+  fontWeight: "950",
+};
+
+const communityEntryText = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: "700",
+};
+
+const communityEntryAction = {
+  gridColumn: "1 / -1",
+  justifySelf: "start",
+  marginTop: "2px",
+  color: "var(--meetro-color-forest)",
+  fontSize: "14px",
+  fontWeight: "950",
+};
+
 const spotlightSubtitle = {
   margin: "2px 0 20px",
-  color: "#53617a",
+  color: "var(--meetro-color-muted)",
   fontSize: "16px",
   lineHeight: 1.35,
   fontWeight: "650",
 };
 
 const spotlightCard = {
-  width: "82vw",
-  maxWidth: "360px",
+  width: "88vw",
+  maxWidth: "520px",
   flex: "0 0 auto",
   boxSizing: "border-box",
   scrollSnapAlign: "start",
-  borderRadius: "22px",
-  border: "1px solid rgba(226,232,240,0.95)",
-  background: "#ffffff",
-  boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
+  borderRadius: "30px",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-lifted)",
   overflow: "hidden",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
+};
+
+const spotlightHero = {
+  position: "relative",
+  minHeight: "320px",
+  overflow: "hidden",
+  background: "#111827",
+};
+
+const spotlightHeroOverlay = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  background:
+    "linear-gradient(0deg, rgba(15,23,42,0.86), rgba(15,23,42,0.38) 58%, rgba(15,23,42,0.14)), linear-gradient(90deg, rgba(15,23,42,0.62), rgba(15,23,42,0.12))",
+};
+
+const spotlightHeroCopy = {
+  position: "absolute",
+  left: "18px",
+  right: "18px",
+  bottom: "18px",
+  color: "#fff",
+  display: "grid",
+  gap: "8px",
+};
+
+const spotlightStoryEyebrow = {
+  justifySelf: "start",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.20)",
+  background: "rgba(255,255,255,0.16)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  color: "#fde68a",
+  padding: "7px 10px",
+  fontSize: "11px",
+  lineHeight: 1,
+  fontWeight: "950",
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+};
+
+const spotlightStoryTitle = {
+  margin: 0,
+  color: "#fff",
+  fontSize: "clamp(1.75rem, 6vw, 2.7rem)",
+  lineHeight: 0.98,
+  letterSpacing: 0,
+  fontWeight: "950",
+  textShadow: "0 16px 34px rgba(0,0,0,0.42)",
+};
+
+const spotlightStoryBody = {
+  margin: 0,
+  maxWidth: "420px",
+  color: "rgba(255,255,255,0.90)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "760",
+  textShadow: "0 10px 26px rgba(0,0,0,0.38)",
 };
 
 const spotlightContent = {
   display: "grid",
-  gap: "10px",
-  padding: "11px 14px 15px",
+  gap: "12px",
+  padding: "15px 16px 17px",
   minWidth: 0,
+};
+
+const spotlightBusinessIntro = {
+  color: "#b7791f",
+  fontSize: "12px",
+  fontWeight: "950",
+  letterSpacing: "0.05em",
+  textTransform: "uppercase",
 };
 
 const spotlightBusinessRow = {
@@ -2538,7 +2865,7 @@ const spotlightBusinessText = {
 };
 
 const spotlightName = {
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "19px",
   fontWeight: "950",
   overflow: "hidden",
@@ -2547,7 +2874,7 @@ const spotlightName = {
 };
 
 const spotlightCategory = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "850",
   overflow: "hidden",
@@ -2557,25 +2884,15 @@ const spotlightCategory = {
 };
 
 const spotlightServingLine = {
-  color: "#53617a",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   fontWeight: "850",
   overflowWrap: "anywhere",
 };
 
-const spotlightProjectTitle = {
-  display: "block",
-  margin: "0 0 -4px",
-  color: "#111827",
-  fontSize: "15px",
-  fontWeight: "950",
-  lineHeight: 1.25,
-  overflowWrap: "anywhere",
-};
-
 const spotlightDescription = {
   margin: 0,
-  color: "#53617a",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.38,
   fontWeight: "650",
@@ -2590,18 +2907,18 @@ const spotlightButton = {
   width: "100%",
   minHeight: "46px",
   border: "0",
-  borderRadius: "13px",
-  background: "#5b3df5",
+  borderRadius: "999px",
+  background: "var(--meetro-gradient-community-action)",
   color: "#ffffff",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 12px 28px rgba(91,61,245,0.22)",
+  boxShadow: "0 12px 28px rgba(31,77,52,0.22)",
 };
 
 const sectionEyebrow = {
   margin: "0 0 5px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-wood)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -2611,13 +2928,13 @@ const sectionEyebrow = {
 const sectionTitle = {
   margin: "0 0 12px",
   fontSize: "24px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const textButton = {
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontWeight: "900",
   cursor: "pointer",
   minHeight: "40px",
@@ -2626,50 +2943,52 @@ const textButton = {
 };
 
 const backHomeButton = {
-  border: "none",
-  background: "#ffffff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   padding: "12px 14px",
   borderRadius: "16px",
   fontWeight: "900",
   marginBottom: "16px",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
 const emptyCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "26px",
   padding: "24px",
   marginBottom: "24px",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const emptyTitle = {
   margin: "0 0 8px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const mutedText = {
   margin: "0 0 16px",
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.5,
 };
 
 const primaryButton = {
   border: "none",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   padding: "14px 18px",
   borderRadius: "16px",
   fontWeight: "900",
   cursor: "pointer",
+  boxShadow: "0 12px 28px rgba(31,77,52,0.18)",
 };
 
 const secondaryButton = {
-  border: "none",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "14px 18px",
   borderRadius: "16px",
   fontWeight: "900",
@@ -2689,13 +3008,13 @@ const heroActionRow = {
 const heroAiButton = {
   padding: "14px 12px",
   borderRadius: "18px",
-  border: "1px solid rgba(91,61,245,0.22)",
-  background: "rgba(255,255,255,0.94)",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   fontSize: "14px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 12px 26px rgba(91,61,245,0.12)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const heroDivider = {
@@ -2835,11 +3154,11 @@ const projectCard = {
   flex: "0 0 auto",
   scrollSnapAlign: "start",
   textAlign: "left",
-  border: "1px solid #dfe6f1",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "20px",
   padding: "18px",
-  boxShadow: "0 12px 30px rgba(15,23,42,.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
   boxSizing: "border-box",
   overflow: "hidden",
   overflowWrap: "break-word",
@@ -2871,7 +3190,7 @@ const projectTopActions = {
 
 const projectTitle = {
   margin: "0 0 10px",
-  color: "#050812",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   fontWeight: "950",
   lineHeight: 1.12,
@@ -2883,15 +3202,41 @@ const projectTitle = {
 
 const projectProfessionalName = {
   margin: "10px 0 0",
-  color: "#263653",
+  color: "var(--meetro-color-coffee)",
   fontSize: "14px",
   fontWeight: "800",
   lineHeight: 1.35,
 };
 
+const projectNextStepPanel = {
+  margin: "12px 0 0",
+  padding: "12px",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage), var(--meetro-surface-paper))",
+  border: "1px solid var(--meetro-color-line)",
+};
+
+const projectNextStepLabel = {
+  display: "block",
+  color: "var(--meetro-color-forest)",
+  fontSize: "11px",
+  fontWeight: "950",
+  lineHeight: 1.1,
+  textTransform: "uppercase",
+  letterSpacing: 0,
+};
+
+const projectNextStepText = {
+  margin: "5px 0 0",
+  color: "var(--meetro-color-ink)",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.38,
+};
+
 const projectStatus = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: "950",
 };
@@ -2901,8 +3246,8 @@ const projectStageCompact = {
   marginTop: 10,
   padding: "10px 12px",
   borderRadius: 16,
-  background: "rgba(99, 102, 241, 0.08)",
-  border: "1px solid rgba(99, 102, 241, 0.12)",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
 };
 
 const projectVisualProgress = {
@@ -2918,9 +3263,9 @@ const projectProgressDot = {
   borderRadius: "999px",
   display: "grid",
   placeItems: "center",
-  background: "#f8fafc",
-  border: "1px solid #dbe3ef",
-  color: "#94a3b8",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-muted)",
   fontSize: "8px",
   fontWeight: "950",
 };
@@ -2932,17 +3277,17 @@ const projectProgressDotDone = {
 };
 
 const projectProgressDotCurrent = {
-  background: "#5b3df5",
-  borderColor: "#5b3df5",
-  color: "#ffffff",
+  background: "var(--meetro-color-forest)",
+  borderColor: "var(--meetro-color-forest)",
+  color: "#fffdf8",
 };
 
 const projectLifecycleCompact = {
   marginTop: 12,
   padding: "12px 14px",
   borderRadius: 18,
-  background: "#f7f4ff",
-  border: "1px solid #ddd6fe",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   display: "flex",
   flexDirection: "column",
   gap: 4,
@@ -2957,7 +3302,7 @@ const projectActionSummary = {
 };
 
 const projectAmount = {
-  color: "#050812",
+  color: "var(--meetro-color-ink)",
   fontSize: "22px",
   fontWeight: "950",
   whiteSpace: "nowrap",
@@ -2968,7 +3313,7 @@ const projectMiniMetaRow = {
   display: "flex",
   flexWrap: "wrap",
   gap: 8,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: 12,
   fontWeight: 800,
 };
@@ -2976,7 +3321,7 @@ const projectMiniMetaRow = {
 const projectStageLabel = {
   display: "block",
   marginBottom: "3px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "10px",
   fontWeight: "950",
   letterSpacing: "0.06em",
@@ -3005,8 +3350,8 @@ const projectBadgeDot = {
 
 const projectCategoryTag = {
   display: "inline-flex",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "6px 9px",
   borderRadius: "999px",
   fontSize: "11px",
@@ -3017,7 +3362,7 @@ const projectCategoryTag = {
 
 const projectDescription = {
   margin: "8px 0 0",
-  color: "#4b5563",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   lineHeight: 1.35,
   minHeight: "28px",
@@ -3027,13 +3372,13 @@ const projectLifecycleBox = {
   marginTop: "10px",
   padding: "10px 11px",
   borderRadius: "15px",
-  background: "#f8fafc",
-  border: "1px solid #e0e7ff",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
 };
 
 const projectLifecycleLabel = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "10px",
   fontWeight: "950",
   letterSpacing: "0.06em",
@@ -3043,7 +3388,7 @@ const projectLifecycleLabel = {
 
 const projectLifecycleNext = {
   display: "block",
-  color: "#17233f",
+  color: "var(--meetro-color-ink)",
   fontSize: "14px",
   lineHeight: 1.35,
 };
@@ -3057,11 +3402,11 @@ const projectTimelineHint = {
 
 const projectTimelineStep = {
   display: "inline-flex",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "999px",
   padding: "6px 8px",
-  background: "#f8fafc",
-  color: "#64748b",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-muted)",
   fontSize: "10px",
   fontWeight: "900",
 };
@@ -3073,9 +3418,9 @@ const projectTimelineStepDone = {
 };
 
 const projectTimelineStepCurrent = {
-  borderColor: "#8b7cff",
-  background: "#f7f4ff",
-  color: "#4f28e8",
+  borderColor: "rgba(31,77,52,0.32)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
 };
 
 const projectOpenButton = {
@@ -3087,8 +3432,8 @@ const projectOpenButton = {
   alignItems: "center",
   justifyContent: "center",
   gap: "9px",
-  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
@@ -3111,13 +3456,13 @@ const projectStatChip = {
   alignItems: "center",
   gap: "6px",
   minHeight: "50px",
-  boxShadow: "0 3px 10px rgba(91,61,245,0.03)",
+  boxShadow: "0 3px 10px rgba(31,77,52,0.04)",
 };
 
 const projectStatViews = {
-  background: "linear-gradient(135deg, #faf7ff, #ffffff)",
-  border: "1.5px solid #ddd6fe",
-  color: "#5b3df5",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage), var(--meetro-surface-paper))",
+  border: "1.5px solid rgba(31,77,52,0.18)",
+  color: "var(--meetro-color-forest)",
 };
 
 const projectStatMessages = {
@@ -3133,16 +3478,16 @@ const projectStatQuotes = {
 };
 
 const projectStatQuoteAlert = {
-  background: "linear-gradient(135deg,#f5f3ff,#ffffff)",
-  border: "2px solid #8b5cf6",
-  color: "#5b3df5",
-  boxShadow: "0 0 0 4px rgba(91,61,245,0.10), 0 0 30px rgba(91,61,245,0.35)",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage), var(--meetro-surface-paper))",
+  border: "2px solid var(--meetro-color-forest)",
+  color: "var(--meetro-color-forest)",
+  boxShadow: "0 0 0 4px rgba(31,77,52,0.10), 0 0 30px rgba(31,77,52,0.24)",
 };
 
 const projectQuoteAlertText = {
   display: "block",
   marginTop: "4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "11px",
   fontWeight: "900",
 };
@@ -3152,7 +3497,7 @@ const projectStatIcon = {
   height: "22px",
   borderRadius: "8px",
   background: "rgba(255,255,255,0.82)",
-  border: "1px solid rgba(91,61,245,0.08)",
+  border: "1px solid var(--meetro-color-line)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -3176,7 +3521,7 @@ const projectStatLabel = {
 
 const projectProgressBar = {
   height: "5px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage)",
   borderRadius: "999px",
   overflow: "hidden",
   marginBottom: "7px",
@@ -3185,14 +3530,14 @@ const projectProgressBar = {
 const projectProgressFill = {
   width: "22%",
   height: "100%",
-  background: "linear-gradient(90deg, #5b3df5, #8b5cf6)",
+  background: "var(--meetro-gradient-community-action)",
   borderRadius: "999px",
 };
 
 const projectFooter = {
-  borderTop: "1px solid #f3f4f6",
+  borderTop: "1px solid var(--meetro-color-line)",
   paddingTop: "8px",
-  color: "#4f46e5",
+  color: "var(--meetro-color-forest)",
   fontWeight: "900",
   fontSize: "11px",
   display: "flex",
@@ -3213,8 +3558,8 @@ const projectFooterIcon = {
   width: "24px",
   height: "24px",
   borderRadius: "50%",
-  background: "#f8f7ff",
-  border: "1px solid #ede9fe",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -3246,8 +3591,8 @@ const detailsSheet = {
   overflowY: "auto",
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
-  background: "#ffffff",
-  border: "1px solid rgba(226,232,240,0.95)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "26px 26px 22px 22px",
   padding: "10px 16px 18px",
   boxSizing: "border-box",
@@ -3273,7 +3618,7 @@ const detailsSheetHeader = {
 
 const detailsSheetTitle = {
   margin: "2px 0 0",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "21px",
   lineHeight: 1.15,
 };
@@ -3281,10 +3626,10 @@ const detailsSheetTitle = {
 const detailsSheetClose = {
   width: "38px",
   height: "38px",
-  border: "1px solid rgba(148,163,184,0.42)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "50%",
-  background: "#ffffff",
-  color: "#334155",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   fontSize: "24px",
   fontWeight: 800,
   cursor: "pointer",
@@ -3307,9 +3652,9 @@ const detailsSheetRow = {
   minHeight: "58px",
   padding: "10px 12px",
   borderRadius: "14px",
-  border: "1px solid rgba(226,232,240,0.86)",
-  background: "linear-gradient(135deg,#ffffff,#f8fafc)",
-  color: "#475569",
+  border: "1px solid var(--meetro-color-line)",
+  background: "linear-gradient(135deg, var(--meetro-surface-paper), var(--meetro-surface-warm))",
+  color: "var(--meetro-color-muted)",
   boxSizing: "border-box",
   minWidth: 0,
   maxWidth: "100%",
@@ -3323,20 +3668,20 @@ const detailsSheetRowIcon = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "15px",
   fontWeight: "950",
 };
 
 const detailsSheetRowLabel = {
-  color: "#334155",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "750",
 };
 
 const detailsSheetRowValue = {
-  color: "#1f2937",
+  color: "var(--meetro-color-ink)",
   fontSize: "14px",
   fontWeight: "900",
   lineHeight: 1.35,
@@ -3356,18 +3701,18 @@ const detailsPrimaryAction = {
   alignItems: "center",
   justifyContent: "center",
   gap: "12px",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   fontSize: "16px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.24)",
+  boxShadow: "0 14px 30px rgba(31,77,52,0.22)",
 };
 
 const detailsSecondaryAction = {
   width: "100%",
   minHeight: "52px",
-  border: "1px solid rgba(91,61,245,0.32)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
   marginTop: "12px",
   padding: "0 16px",
@@ -3375,8 +3720,8 @@ const detailsSecondaryAction = {
   alignItems: "center",
   justifyContent: "center",
   gap: "12px",
-  background: "#ffffff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
@@ -3385,7 +3730,7 @@ const detailsSecondaryAction = {
 const projectFooterDate = {
   display: "block",
   marginTop: "2px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   fontWeight: "800",
 };
@@ -3420,7 +3765,7 @@ const landscapeProjectsTitle = {
   margin: "0 0 10px",
   fontSize: "14px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
 };
 
 const landscapeProjectsList = {
@@ -3432,15 +3777,15 @@ const landscapeProjectsList = {
 
 const messageFocusCard = {
   width: "100%",
-  border: "1px solid rgba(59,130,246,0.16)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "24px",
-  background: "linear-gradient(135deg,#ffffff,#f8fbff)",
+  background: "linear-gradient(135deg, var(--meetro-surface-paper), var(--meetro-surface-warm))",
   padding: "18px",
   display: "flex",
   alignItems: "center",
   gap: "12px",
   textAlign: "left",
-  boxShadow: "0 14px 30px rgba(15,23,42,0.07)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
@@ -3450,29 +3795,29 @@ const messageFocusIcon = {
   borderRadius: "16px",
   display: "grid",
   placeItems: "center",
-  background: "#dbeafe",
-  color: "#1d4ed8",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "22px",
   flexShrink: 0,
 };
 
 const messageFocusTitle = {
   display: "block",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "16px",
   fontWeight: "950",
 };
 
 const messageFocusText = {
   margin: "4px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.4,
   fontWeight: "650",
 };
 
 const messageOpenText = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: "950",
   whiteSpace: "nowrap",
@@ -3484,17 +3829,18 @@ const messageFocusBadge = {
   borderRadius: "999px",
   display: "grid",
   placeItems: "center",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-color-forest)",
+  color: "#fffdf8",
   fontSize: "14px",
   fontWeight: "950",
 };
 
 const historyCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "24px",
   padding: "18px",
-  boxShadow: "0 12px 28px rgba(15,23,42,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   display: "grid",
   gap: "14px",
   width: "100%",
@@ -3529,14 +3875,14 @@ const historyTitle = {
   margin: 0,
   fontSize: "18px",
   fontWeight: "900",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   minWidth: 0,
   overflowWrap: "anywhere",
 };
 
 const historyContractor = {
   margin: "6px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontWeight: "700",
 };
 
@@ -3556,9 +3902,9 @@ const historyMetaGrid = {
   gap: "10px",
   padding: "12px",
   borderRadius: "16px",
-  background: "#f8fafc",
-  border: "1px solid #e5e7eb",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   fontWeight: "800",
 };
@@ -3569,7 +3915,7 @@ const historyMetaItem = {
 };
 
 const historyMetaValue = {
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "13px",
   fontWeight: "900",
 };
@@ -3578,7 +3924,7 @@ const historyBottom = {
   display: "grid",
   gridTemplateColumns: "1fr",
   gap: "10px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontWeight: "800",
   minWidth: 0,
   maxWidth: "100%",
@@ -3586,8 +3932,8 @@ const historyBottom = {
 
 const historyButton = {
   border: "none",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   borderRadius: "14px",
   padding: "10px 14px",
   fontWeight: "900",
@@ -3602,9 +3948,9 @@ const historySecondaryActions = {
 };
 
 const historySecondaryButton = {
-  border: "1px solid #dbe3ef",
-  background: "#ffffff",
-  color: "#4f46e5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "14px",
   padding: "10px 12px",
   fontWeight: "900",
@@ -3655,7 +4001,7 @@ const proMeta = {
 
 const ratingBadge = {
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "8px 10px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -3742,7 +4088,7 @@ const compactViewButton = {
   borderRadius: "999px",
   padding: "9px 14px",
   background: "#efe7ff",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "12px",
   fontWeight: "900",
   cursor: "pointer",
@@ -3759,7 +4105,7 @@ const compactSummaryCard = {
   borderRadius: "14px",
   padding: "8px 6px",
   textAlign: "center",
-  border: "1px solid rgba(124, 58, 237, 0.09)",
+  border: "1px solid rgba(23, 35, 23, 0.09)",
   boxShadow: "0 6px 16px rgba(91, 33, 182, 0.05)",
 };
 
@@ -3794,7 +4140,7 @@ const summaryCard = {
   background: "white",
   borderRadius: "24px",
   padding: "18px",
-  border: "1px solid rgba(124, 58, 237, 0.12)",
+  border: "1px solid rgba(23, 35, 23, 0.12)",
   boxShadow: "0 14px 34px rgba(91, 33, 182, 0.08)",
 };
 
@@ -3832,7 +4178,7 @@ const summaryText = {
 
 const summaryDivider = {
   height: "1px",
-  background: "rgba(124, 58, 237, 0.1)",
+  background: "rgba(23, 35, 23, 0.1)",
   margin: "14px 0",
 };
 
@@ -3850,7 +4196,7 @@ const summaryButton = {
 };
 
 const ecosystemCard = {
-  border: "1px solid rgba(124, 58, 237, 0.14)",
+  border: "1px solid rgba(23, 35, 23, 0.14)",
   background: "linear-gradient(180deg, #ffffff 0%, #faf7ff 100%)",
   borderRadius: "22px",
   padding: "16px",
@@ -3880,7 +4226,7 @@ const ecosystemIcon = {
 const ecosystemBadge = {
   fontSize: "11px",
   fontWeight: "800",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   background: "#efe7ff",
   padding: "6px 9px",
   borderRadius: "999px",

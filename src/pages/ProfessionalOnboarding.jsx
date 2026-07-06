@@ -472,7 +472,7 @@ function StepActions({ onNext }) {
 const page = {
   boxSizing: "border-box",
   minHeight: "100dvh",
-  background: "linear-gradient(180deg, #f8fafc, #eef2ff)",
+  background: "linear-gradient(180deg, #f8fafc, var(--meetro-surface-sage, #eef4ea))",
   padding:
     "max(22px, calc(env(safe-area-inset-top, 0px) + 18px)) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))",
   overflowX: "hidden",
@@ -516,7 +516,7 @@ const progressFill = {
   display: "block",
   height: "100%",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   transition: "width 160ms ease",
 };
 
@@ -533,7 +533,7 @@ const card = {
 
 const eyebrow = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: 950,
   textTransform: "uppercase",
@@ -584,7 +584,7 @@ const primaryButton = {
   minHeight: "50px",
   border: "none",
   borderRadius: "16px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   fontWeight: 950,
   cursor: "pointer",
@@ -593,8 +593,8 @@ const primaryButton = {
 const secondaryButton = {
   ...primaryButton,
   background: "#ffffff",
-  color: "#5b3df5",
-  border: "1px solid rgba(91, 61, 245, 0.22)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid rgba(31, 77, 52, 0.22)",
 };
 
 const backButton = {
@@ -643,7 +643,7 @@ const chip = {
 
 const selectedChip = {
   ...chip,
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   borderColor: "#a5b4fc",
   color: "#4338ca",
 };
@@ -666,7 +666,7 @@ const selectedServiceChip = {
   maxWidth: "100%",
   padding: "9px 11px",
   borderRadius: "999px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#4338ca",
   fontSize: "13px",
   lineHeight: 1.25,

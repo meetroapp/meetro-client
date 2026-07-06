@@ -96,7 +96,7 @@ function CustomerRelationshipsCenter({ setPage }) {
 
               <div>
                 <p style={fieldLabel}>
-                  {isSpanish ? "Linea de tiempo" : "Relationship Timeline"}
+                  {isSpanish ? "Historial de relación" : "Relationship History"}
                 </p>
                 <ol style={timelineList}>
                   {relationship.timeline.map((event, index) => (

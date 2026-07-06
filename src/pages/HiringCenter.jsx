@@ -271,7 +271,7 @@ function HiringCenter({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={copy.title}
         description={copy.subtitle}
@@ -280,7 +280,7 @@ function HiringCenter({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <div style={previewCard}>
+      <div className="meetro-visual-surface" style={previewCard}>
         <span style={previewIcon}>
           <MeetroIcon name="hiringCenter" size={20} decorative />
         </span>
@@ -315,6 +315,7 @@ function HiringCenter({ setPage }) {
           {positions.map((position) => (
             <article
               key={position.id}
+              className="meetro-visual-surface"
               style={{ ...recordCard, ...interactiveCard }}
               onClick={() => openPosition(position)}
             >
@@ -683,7 +684,7 @@ function HiringPageShell({
   children,
 }) {
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={titleText}
         description={subtitleText}
@@ -779,7 +780,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#4338ca",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -807,8 +808,8 @@ const previewCard = {
   gap: "10px",
   padding: "13px",
   borderRadius: "16px",
-  border: "1px solid #ddd6fe",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   color: "#334155",
   fontSize: "13px",
   lineHeight: 1.45,
@@ -821,13 +822,13 @@ const previewIcon = {
   borderRadius: "14px",
   display: "grid",
   placeItems: "center",
-  background: "#ede9fe",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const section = {
   display: "grid",
-  gap: "12px",
+  gap: "16px",
   marginBottom: "20px",
 };
 
@@ -864,11 +865,11 @@ const recordCard = {
   boxSizing: "border-box",
   display: "grid",
   gap: "12px",
-  padding: "14px",
+  padding: "18px",
   borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const interactiveCard = {
@@ -991,8 +992,8 @@ const baseBadge = {
 
 const applicantBadge = {
   ...baseBadge,
-  background: "#eef2ff",
-  color: "#3730a3",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const actionRow = {
@@ -1017,9 +1018,9 @@ const secondaryWideButton = {
   minHeight: "42px",
   width: "100%",
   borderRadius: "14px",
-  border: "1px solid #c4b5fd",
-  background: "#ffffff",
-  color: "#5b35f5",
+  border: "1px solid rgba(31,77,52,0.22)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: "950",
   cursor: "pointer",
@@ -1121,7 +1122,7 @@ const primarySheetButton = {
   minHeight: "46px",
   border: 0,
   borderRadius: "14px",
-  background: "#5b35f5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   fontSize: "15px",
   fontWeight: "950",

@@ -279,7 +279,7 @@ const sheet = {
   gridTemplateRows: "auto auto 1fr auto",
   gap: "12px",
   background: "rgba(255,255,255,0.94)",
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
   borderRadius: "24px",
   padding: "10px 14px 14px",
   boxShadow: "0 24px 70px rgba(15,23,42,0.22)",
@@ -396,8 +396,8 @@ const optionButton = {
 };
 
 const optionButtonSelected = {
-  borderColor: "rgba(91,61,245,0.22)",
-  background: "rgba(91,61,245,0.06)",
+  borderColor: "rgba(31,77,52,0.22)",
+  background: "rgba(31,77,52,0.06)",
 };
 
 const optionText = {
@@ -417,7 +417,7 @@ const optionLabel = {
 
 const optionStatus = {
   minWidth: "20px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "16px",
   fontWeight: 950,
   textAlign: "center",
@@ -447,15 +447,15 @@ const footerCancelButton = {
 
 const footerDoneButton = {
   minWidth: 0,
-  border: "1px solid rgba(91,61,245,0.42)",
+  border: "1px solid rgba(31,77,52,0.42)",
   borderRadius: "16px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   padding: "12px 14px",
   fontSize: "14px",
   fontWeight: 950,
   cursor: "pointer",
-  boxShadow: "0 12px 26px rgba(91,61,245,0.22)",
+  boxShadow: "0 12px 26px rgba(31,77,52,0.22)",
 };
 
 const footerDoneButtonDisabled = {

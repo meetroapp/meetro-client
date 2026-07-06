@@ -79,7 +79,7 @@ const button = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "16px",
   fontWeight: "700",

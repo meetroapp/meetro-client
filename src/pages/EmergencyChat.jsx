@@ -345,12 +345,12 @@ const contractorBubble = {
 };
 
 const userBubble = {
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   padding: "16px",
   borderRadius: "22px 22px 8px 22px",
   lineHeight: "1.5",
-  boxShadow: "0 10px 26px rgba(91,61,245,0.25)",
+  boxShadow: "0 10px 26px rgba(31,77,52,0.25)",
 };
 
 const contractorMeta = {
@@ -414,7 +414,7 @@ const input = {
 
 const sendButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   padding: "0 22px",
   borderRadius: "18px",

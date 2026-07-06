@@ -368,8 +368,8 @@ test("Send Request remains primary and Cancel Request is visually secondary", ()
   assert.match(uploadSource, /const requestActionBar = \{/);
   assert.match(uploadSource, /bottom: "calc\(78px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
   assert.match(uploadSource, /backdropFilter: "blur\(14px\)"/);
-  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*background: "rgba\(255,255,255,0\.64\)"/);
-  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*color: "#64748b"/);
+  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*background: "var\(--meetro-surface-paper\)"/);
+  assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*color: "var\(--meetro-color-muted\)"/);
   assert.equal(
     t("projectPostedSuccess", "en"),
     "Your request was sent. You can follow what happens next from Home."

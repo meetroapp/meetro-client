@@ -21,10 +21,10 @@ const contractorDashboardSource = readFileSync(
   "utf8"
 );
 
-test("Home messages action truthfully opens the messages inbox", () => {
+test("Home communication action truthfully opens the existing messages route", () => {
   assert.match(homeSource, /onClick=\{\(\) => setPage\("messagesInbox"\)\}/);
   assert.match(homeSource, /t\("homeOpenMessages"\)/);
-  assert.equal(t("homeOpenMessages", "en"), "Review Messages");
+  assert.equal(t("homeOpenMessages", "en"), "Open Communication Center");
 });
 
 test("Home emergency action routes to emergency progress or completion review", () => {
@@ -72,8 +72,15 @@ test("Work Center opportunity and emergency labels match their handlers", () => 
 });
 
 test("Work Center landing copy stays responsibility-first and avoids duplicate count summaries", () => {
-  assert.equal(t("workCenterPurposeStatement", "en"), "Start with what deserves attention now.");
-  assert.equal(t("workCenterPurposeStatement", "es"), "Empieza con lo que necesita atención ahora.");
+  assert.equal(
+    t("workCenterPurposeStatement", "en"),
+    "See what needs attention, what happens next, and where each customer relationship moves forward."
+  );
+  assert.equal(
+    t("workCenterPurposeStatement", "es"),
+    "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes."
+  );
+  assert.match(contractorDashboardSource, /workCenterProfessionalPerspectiveLine/);
   assert.match(contractorDashboardSource, /New requests that need a decision\./);
   assert.match(contractorDashboardSource, /Accepted work that still needs action\./);
   assert.match(contractorDashboardSource, /Upcoming visits and appointments\./);

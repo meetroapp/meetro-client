@@ -58,7 +58,7 @@ function BusinessAvailability({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-readable-page" style={page}>
+    <div className="app-page meetro-readable-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={isSpanish ? "Disponibilidad" : "Availability"}
         description={
@@ -70,7 +70,7 @@ function BusinessAvailability({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <section style={card}>
+      <section className="meetro-visual-surface" style={card}>
         <div style={statusGrid}>
           <button
             type="button"
@@ -111,7 +111,7 @@ function BusinessAvailability({ setPage }) {
           }
         />
 
-        <button type="button" style={saveButton} onClick={saveAvailability}>
+        <button type="button" className="meetro-visual-primary-button" style={saveButton} onClick={saveAvailability}>
           {isSpanish ? "Guardar disponibilidad" : "Save Availability"}
         </button>
 
@@ -127,7 +127,7 @@ const page = {
   minHeight: "100vh",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 20px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, #fbf6ed)",
   boxSizing: "border-box",
 };
 
@@ -148,14 +148,14 @@ const heroCard = {
   margin: "0 auto 14px",
   padding: "22px",
   borderRadius: "24px",
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  boxShadow: "0 16px 34px rgba(15,23,42,0.06)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const eyebrow = {
   margin: "0 0 8px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: 1000,
   textTransform: "uppercase",
@@ -163,14 +163,14 @@ const eyebrow = {
 
 const title = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: "30px",
   fontWeight: 1000,
 };
 
 const subtitle = {
   margin: "8px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   lineHeight: 1.45,
   fontWeight: 750,
 };
@@ -178,27 +178,27 @@ const subtitle = {
 const card = {
   maxWidth: "900px",
   margin: "0 auto",
-  padding: "18px",
+  padding: "clamp(18px, 4vw, 28px)",
   borderRadius: "24px",
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  boxShadow: "0 16px 34px rgba(15,23,42,0.06)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
   display: "grid",
-  gap: "14px",
+  gap: "18px",
 };
 
 const statusGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-  gap: "12px",
+  gap: "14px",
 };
 
 const statusButton = {
   minHeight: "92px",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: "18px",
-  background: "#f8fafc",
-  color: "#334155",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-ink, #172317)",
   display: "grid",
   gap: "8px",
   padding: "16px",
@@ -208,13 +208,13 @@ const statusButton = {
 };
 
 const activeStatusButton = {
-  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
-  borderColor: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
 };
 
 const fieldLabel = {
-  color: "#334155",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontWeight: 950,
 };
 
@@ -222,7 +222,7 @@ const textarea = {
   width: "100%",
   minHeight: "120px",
   boxSizing: "border-box",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: "16px",
   padding: "14px",
   font: "inherit",
@@ -233,7 +233,7 @@ const saveButton = {
   border: "none",
   borderRadius: "16px",
   padding: "14px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   fontWeight: 1000,
   cursor: "pointer",

@@ -58,10 +58,12 @@ The app should never be required to view public company information.
 
 Public pages may include:
 
-- Meetro
-- Community
-- Connect. Communicate. Complete.
-- Preparing for launch
+- Meetro Community canonical public naming
+- Built around trust. Powered by relationships.
+- Every trusted relationship begins with understanding.
+- Relationship-first public explanation before feature claims
+- Journey language that connects relationships, communication, understanding, decisions, work, history, and stronger relationships
+- Ask Meetro represented through guidance, presence, and light
 - Meetro Community is a product of WM FLEX LABS, LLC.
 - Developed and published by WM FLEX LABS, LLC.
 - Contact: william@flexlabs.com
@@ -91,6 +93,8 @@ Public pages must not include:
 - Roadmap details before approval
 - TestFlight details unless explicitly approved
 - Claims about App Store availability before launch
+- Cartoon or mascot depictions of Ask Meetro
+- Generic marketplace or SaaS category-first claims
 
 ## Future Evolution
 
@@ -98,7 +102,7 @@ Public pages must not include:
 
 The public website identifies Meetro Community, WM FLEX LABS, LLC, and the public contact path.
 
-This phase is quiet, factual, and minimal.
+This phase is quiet, factual, and relationship-first.
 
 ### Phase 2 — TestFlight
 
@@ -106,7 +110,7 @@ The public website may support TestFlight review needs only when the wording is 
 
 ### Phase 3 — Public Launch
 
-The public website may expand into official public launch marketing, support content, public legal policies, and App Store links only when those claims are true.
+The public website may expand into official public launch marketing, support content, public legal policies, and App Store links only when those claims are true. Public marketing should introduce philosophy before features and preserve Meetro Community as the canonical public name.
 
 ## Closing Principle
 

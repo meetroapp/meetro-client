@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getAccountModeForPage,
   getDashboardPageForAccountMode,
   hasBusinessProfileOwnership,
   isProfessionalSession,
   saveMeetroSession,
   setActiveAccountMode,
+  syncAccountModeForPage,
 } from "../src/utils/session.js";
 
 function installStorage() {
@@ -91,6 +93,34 @@ test("business profile ownership stays separate from current personal mode", () 
   assert.equal(isProfessionalSession(), true);
   assert.equal(setActiveAccountMode("business"), true);
   assert.equal(localStorage.getItem("activeAccountMode"), "business");
+});
+
+test("Discover preserves business account mode for professional users", () => {
+  installStorage();
+  localStorage.setItem("isProfessional", "true");
+  localStorage.setItem("accountType", "professional");
+  localStorage.setItem("userRole", "handyman");
+  localStorage.setItem("businessCategory", "handyman");
+  localStorage.setItem("activeAccountMode", "business");
+
+  assert.equal(getAccountModeForPage("discover", "business"), "business");
+  assert.equal(syncAccountModeForPage("discover"), true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "business");
+  assert.equal(localStorage.getItem("accountType"), "professional");
+  assert.equal(localStorage.getItem("userRole"), "handyman");
+});
+
+test("Discover preserves personal account mode for standard users", () => {
+  installStorage();
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem("userRole", "homeowner");
+  localStorage.setItem("activeAccountMode", "personal");
+
+  assert.equal(getAccountModeForPage("discover", "personal"), "personal");
+  assert.equal(syncAccountModeForPage("discover"), true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "personal");
+  assert.equal(localStorage.getItem("accountType"), "homeowner");
+  assert.equal(localStorage.getItem("userRole"), "homeowner");
 });
 
 test("saving a session does not erase an existing business profile when user payload is personal", () => {

@@ -366,7 +366,7 @@ function QuoteRequests({ setPage, currentPage }) {
                   ...primaryButton,
                   background: sending
                     ? "#999"
-                    : "#5b3df5",
+                    : "var(--meetro-color-forest, #1f4d34)",
                   cursor: sending
                     ? "not-allowed"
                     : "pointer",
@@ -392,7 +392,7 @@ function QuoteRequests({ setPage, currentPage }) {
 const backButton = {
   border: "none",
   background: "#eee7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 14px",
   borderRadius: "14px",
   fontWeight: "bold",
@@ -503,7 +503,7 @@ const primaryButton = {
   padding: "14px",
   border: "none",
   borderRadius: "14px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
@@ -517,7 +517,7 @@ const secondaryButton = {
   border: "none",
   borderRadius: "14px",
   background: "#eee7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "bold",
   cursor: "pointer",
   fontSize: "16px",

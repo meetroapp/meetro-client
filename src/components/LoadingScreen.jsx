@@ -32,14 +32,14 @@ const logoCircle = {
   width: "72px",
   height: "72px",
   borderRadius: "24px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "34px",
   fontWeight: "bold",
-  boxShadow: "0 12px 28px rgba(91,61,245,0.35)",
+  boxShadow: "0 12px 28px rgba(31,77,52,0.35)",
 };
 
 const title = {
@@ -65,7 +65,7 @@ const dot = {
   width: "9px",
   height: "9px",
   borderRadius: "50%",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
 };
 
 export default LoadingScreen;

@@ -511,8 +511,8 @@ function BusinessCommandCenter({ setPage }) {
   };
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
-      <div style={header}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
+      <div className="meetro-visual-hero" style={header}>
         <button style={backBtn} onClick={() => setPage("businessDashboard")}>
           ←
         </button>
@@ -529,7 +529,7 @@ function BusinessCommandCenter({ setPage }) {
             !group.collapsible || Boolean(expandedSections[group.id]);
 
           return (
-            <section key={group.id} style={toolGroupSection}>
+            <section key={group.id} className="meetro-visual-surface" style={toolGroupSection}>
               {group.collapsible ? (
                 <button
                   type="button"
@@ -626,7 +626,7 @@ function BusinessCommandCenter({ setPage }) {
 
       {futureTool && (
         <div style={sheetOverlay} onClick={() => setFutureTool(null)}>
-          <div style={futureSheet} onClick={(event) => event.stopPropagation()}>
+          <div className="meetro-visual-surface" style={futureSheet} onClick={(event) => event.stopPropagation()}>
             <div style={sheetHandle}></div>
             <div style={sheetHeader}>
               <div>
@@ -682,9 +682,9 @@ function toolBadgeTone(tone) {
   }
   if (tone === "readonly") {
     return {
-      background: "#eef2ff",
-      color: "#3730a3",
-      border: "1px solid rgba(55,48,163,0.14)",
+      background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+      color: "var(--meetro-color-forest, #1f4d34)",
+      border: "1px solid rgba(31,77,52,0.14)",
     };
   }
   if (tone === "preview") {
@@ -714,7 +714,7 @@ const page = {
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
   background:
-    "radial-gradient(circle at top, rgba(91,61,245,0.20), transparent 34%), #f8fafc",
+    "radial-gradient(circle at top, rgba(31,77,52,0.12), transparent 34%), var(--meetro-surface-warm, #fbf6ed)",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
 };
@@ -724,18 +724,25 @@ const header = {
   maxWidth: "100%",
   minWidth: 0,
   display: "flex",
-  gap: "14px",
+  gap: "16px",
   alignItems: "flex-start",
-  marginBottom: "18px",
+  marginBottom: "24px",
   boxSizing: "border-box",
+  padding: "clamp(18px, 4vw, 30px)",
+  borderRadius: "30px",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
 };
 
 const backBtn = {
   width: "42px",
   height: "42px",
   borderRadius: "14px",
-  border: "1px solid rgba(148,163,184,0.35)",
-  background: "rgba(255,255,255,0.92)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "22px",
   fontWeight: "900",
   cursor: "pointer",
@@ -745,7 +752,7 @@ const title = {
   margin: 0,
   fontSize: "23px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   letterSpacing: "-0.8px",
 };
 
@@ -753,7 +760,7 @@ const subtitle = {
   margin: "7px 0 0",
   fontSize: "14px",
   lineHeight: 1.45,
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   overflowWrap: "anywhere",
 };
 
@@ -765,9 +772,9 @@ const noticeCard = {
   marginTop: "12px",
   padding: "13px",
   borderRadius: "18px",
-  background: "#f8fafc",
-  border: "1px solid #cbd5e1",
-  color: "#334155",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "750",
@@ -778,7 +785,7 @@ const sectionStack = {
   maxWidth: "100%",
   minWidth: 0,
   display: "grid",
-  gap: "14px",
+  gap: "18px",
   boxSizing: "border-box",
 };
 
@@ -787,7 +794,12 @@ const toolGroupSection = {
   maxWidth: "100%",
   minWidth: 0,
   display: "grid",
-  gap: "10px",
+  gap: "12px",
+  padding: "16px",
+  borderRadius: "24px",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
   boxSizing: "border-box",
 };
 
@@ -801,14 +813,14 @@ const groupTitle = {
   margin: 0,
   fontSize: "15px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
 };
 
 const groupDesc = {
   margin: 0,
   fontSize: "12px",
   lineHeight: 1.4,
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   fontWeight: "750",
   overflowWrap: "anywhere",
 };
@@ -818,18 +830,19 @@ const accordionHeaderButton = {
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",
-  border: "1px solid rgba(226,232,240,0.92)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   borderRadius: "18px",
-  padding: "13px",
-  background: "rgba(255,255,255,0.94)",
-  color: "#0f172a",
+  padding: "15px",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "12px",
   textAlign: "left",
   fontFamily: "inherit",
-  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
   cursor: "pointer",
 };
 
@@ -851,8 +864,8 @@ const accordionCount = {
   height: "28px",
   padding: "0 8px",
   borderRadius: "999px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "950",
   display: "inline-flex",
@@ -862,7 +875,7 @@ const accordionCount = {
 };
 
 const accordionChevron = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "24px",
   lineHeight: 1,
   fontWeight: "950",
@@ -876,7 +889,7 @@ const toolsGrid = {
   boxSizing: "border-box",
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 148px), 1fr))",
-  gap: "10px",
+  gap: "12px",
 };
 
 const toolCard = {
@@ -885,35 +898,35 @@ const toolCard = {
   minWidth: 0,
   boxSizing: "border-box",
   textAlign: "left",
-  padding: "12px",
+  padding: "14px",
   borderRadius: "18px",
-  border: "1px solid rgba(226,232,240,0.9)",
-  background: "rgba(255,255,255,0.92)",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
-  color: "#0f172a",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
+  color: "var(--meetro-color-ink, #172317)",
   fontFamily: "inherit",
   cursor: "pointer",
 };
 
 const activeToolCard = {
-  border: "1px solid rgba(91,61,245,0.55)",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.12)",
+  border: "1px solid rgba(31,77,52,0.32)",
+  boxShadow: "0 14px 30px rgba(49,35,20,0.12)",
   background:
-    "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,243,255,0.95))",
+    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-sage, rgba(238,244,234,0.95)))",
 };
 
 const aiToolCard = {
-  border: "1px solid rgba(124,58,237,0.48)",
+  border: "1px solid rgba(183,121,31,0.28)",
   background:
-    "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,243,255,0.98))",
-  boxShadow: "0 10px 26px rgba(124,58,237,0.13)",
+    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-warm, rgba(251,246,237,0.96)))",
+  boxShadow: "0 10px 26px rgba(183,121,31,0.10)",
 };
 
 const featuredToolCard = {
-  border: "1px solid rgba(34,197,94,0.38)",
+  border: "1px solid rgba(31,77,52,0.24)",
   background:
-    "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,253,244,0.96))",
-  boxShadow: "0 10px 24px rgba(34,197,94,0.10)",
+    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-sage, rgba(238,244,234,0.96)))",
+  boxShadow: "0 10px 24px rgba(31,77,52,0.10)",
 };
 
 const toolTop = {
@@ -928,12 +941,12 @@ const toolIcon = {
   width: "30px",
   height: "30px",
   borderRadius: "9px",
-  border: "1px solid #cbd5e1",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#111827",
-  background: "#f8fafc",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
   fontSize: "16px",
   fontWeight: "900",
 };
@@ -958,7 +971,7 @@ const toolBadge = {
 };
 
 const toolChevron = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "18px",
   fontWeight: "800",
   lineHeight: 1,
@@ -968,7 +981,7 @@ const toolTitle = {
   margin: "10px 0 5px",
   fontSize: "15px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   overflowWrap: "anywhere",
 };
 
@@ -976,7 +989,7 @@ const toolDesc = {
   margin: 0,
   fontSize: "11.5px",
   lineHeight: 1.4,
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   overflowWrap: "anywhere",
 };
 
@@ -996,10 +1009,10 @@ const sheetOverlay = {
 const futureSheet = {
   width: "100%",
   maxWidth: "520px",
-  background: "#ffffff",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.98))",
   borderRadius: "28px 28px 22px 22px",
-  border: "1px solid rgba(226,232,240,0.95)",
-  boxShadow: "0 -18px 56px rgba(15,23,42,0.22)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
   padding: "10px 16px 18px",
   boxSizing: "border-box",
 };
@@ -1008,7 +1021,7 @@ const sheetHandle = {
   width: "44px",
   height: "5px",
   borderRadius: "999px",
-  background: "#cbd5e1",
+  background: "rgba(78,68,55,0.22)",
   margin: "0 auto 14px",
 };
 
@@ -1022,7 +1035,7 @@ const sheetHeader = {
 
 const sheetEyebrow = {
   margin: "0 0 5px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1031,7 +1044,7 @@ const sheetEyebrow = {
 
 const sheetTitle = {
   margin: 0,
-  color: "#111827",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: "21px",
   lineHeight: 1.15,
 };
@@ -1051,7 +1064,7 @@ const sheetClose = {
 
 const sheetBody = {
   margin: "0 0 12px",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "14px",
   lineHeight: 1.5,
   fontWeight: "750",
@@ -1062,9 +1075,9 @@ const futureDetailCard = {
   gap: "5px",
   padding: "12px",
   borderRadius: "16px",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  color: "#475569",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "750",
@@ -1076,7 +1089,7 @@ const sheetPrimaryButton = {
   marginTop: "12px",
   border: 0,
   borderRadius: "16px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   fontSize: "15px",
   fontWeight: "950",

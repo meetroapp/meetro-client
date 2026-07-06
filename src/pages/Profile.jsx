@@ -20,6 +20,11 @@ import {
   getScopedProfilePhotoKey,
 } from "../utils/profilePhotoScoping";
 import {
+  getMediaDeferredCopy,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
+import {
   areRelationshipInsightsEnabled,
   setRelationshipInsightsEnabled,
 } from "../utils/relationshipInsightSettings";
@@ -30,7 +35,7 @@ import {
   shouldRenderInsightTester,
 } from "../utils/relationshipInsightTester";
 
-function Profile({ setPage, currentPage }) {
+function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
   const isBusinessToolsReturn = sharedReturnPage === "businessCommandCenter";
   const [user, setUser] = useState(null);
@@ -74,6 +79,8 @@ function Profile({ setPage, currentPage }) {
   const [profilePhoto, setProfilePhoto] = useState(
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
   );
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
     setProfilePhoto(getScopedProfilePhoto(activeMode, businessProfile));
@@ -194,6 +201,16 @@ function Profile({ setPage, currentPage }) {
   }, [activeMode, language, setPage]);
 
   function handleProfilePhotoUpload(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setProfileNotice,
+      })
+    ) {
+      return;
+    }
+
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -740,11 +757,15 @@ function Profile({ setPage, currentPage }) {
     },
   };
   const profileCopy = profileCopyByLanguage[language] || profileCopyByLanguage.en;
+  const profileShellClassName = embedded
+    ? "profile-embedded-content"
+    : "app-page meetro-readable-page meetro-visual-page";
+  const profileShellStyle = embedded ? embeddedPageWrapper : pageWrapper;
 
   if (!isBusinessMode) {
     if (myProfessionalsOpen) {
       return (
-        <div className="app-page meetro-readable-page" style={pageWrapper}>
+        <div className={profileShellClassName} style={profileShellStyle}>
           <button
             type="button"
             style={compactBackButton}
@@ -824,10 +845,11 @@ function Profile({ setPage, currentPage }) {
                 </div>
               ))
             ) : (
-              <div style={identityEmptyState}>
+              <div className="meetro-visual-empty-state" style={identityEmptyState}>
                 <strong>{t("trustedProfessionalsEmpty")}</strong>
                 <button
                   type="button"
+                  className="meetro-visual-primary-button"
                   style={inlineSectionAction}
                   onClick={() => setPage("discover")}
                 >
@@ -837,13 +859,13 @@ function Profile({ setPage, currentPage }) {
             )}
           </SettingsGroup>
 
-          <BottomNav setPage={setPage} currentPage="profile" />
+          {!embedded && <BottomNav setPage={setPage} currentPage="profile" />}
         </div>
       );
     }
 
     return (
-      <div className="app-page meetro-readable-page" style={pageWrapper}>
+      <div className={profileShellClassName} style={profileShellStyle}>
         <div style={settingsHeader}>
           <div>
             <p style={settingsEyebrow}>{t("homeownerProfileEyebrow")}</p>
@@ -852,8 +874,14 @@ function Profile({ setPage, currentPage }) {
           </div>
         </div>
 
-        <section style={homeownerHeroCard}>
-          <label style={homeownerAvatarWrap}>
+        <section className="meetro-visual-hero" style={homeownerHeroCard}>
+          <label
+            style={{
+              ...homeownerAvatarWrap,
+              ...(mediaUploadDeferred ? deferredAvatarWrap : {}),
+            }}
+            title={mediaUploadDeferred ? mediaDeferredCopy.detail : undefined}
+          >
             {profilePhoto ? (
               <img src={profilePhoto} alt={t("profile")} style={homeownerAvatarImage} />
             ) : (
@@ -866,6 +894,7 @@ function Profile({ setPage, currentPage }) {
               type="file"
               accept="image/*"
               style={{ display: "none" }}
+              disabled={mediaUploadDeferred}
               onChange={handleProfilePhotoUpload}
             />
           </label>
@@ -902,6 +931,13 @@ function Profile({ setPage, currentPage }) {
         {profileNotice && <p style={profileNoticeText}>{profileNotice}</p>}
 
         <SettingsGroup title={t("myHome")} icon="home">
+          <SettingRow
+            icon="history"
+            label="Meetro Moments"
+            value={t("open")}
+            onClick={() => setPage("meetroMoments")}
+          />
+
           <SettingRow
             icon="location"
             label={t("savedAddresses")}
@@ -953,10 +989,11 @@ function Profile({ setPage, currentPage }) {
               />
             ))
           ) : (
-            <div style={identityEmptyState}>
+            <div className="meetro-visual-empty-state" style={identityEmptyState}>
               <strong>{t("trustedProfessionalsEmpty")}</strong>
               <button
                 type="button"
+                className="meetro-visual-primary-button"
                 style={inlineSectionAction}
                 onClick={() => setPage("discover")}
               >
@@ -1024,7 +1061,7 @@ function Profile({ setPage, currentPage }) {
               />
             ))
           ) : (
-            <div style={identityEmptyState}>
+            <div className="meetro-visual-empty-state" style={identityEmptyState}>
               <strong>{t("noReviewsWrittenYet")}</strong>
               <span>{t("reviewCompletedProjectsPrompt")}</span>
             </div>
@@ -1130,7 +1167,7 @@ function Profile({ setPage, currentPage }) {
           />
         </SettingsGroup>
 
-        <button onClick={handleLogout} style={logoutButton}>
+        <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
           {t("logout")}
         </button>
 
@@ -1251,13 +1288,13 @@ function Profile({ setPage, currentPage }) {
           </div>
         )}
 
-        <BottomNav setPage={setPage} currentPage="profile" />
+        {!embedded && <BottomNav setPage={setPage} currentPage="profile" />}
       </div>
     );
   }
 
   return (
-    <div className="app-page meetro-readable-page" style={pageWrapper}>
+    <div className={profileShellClassName} style={profileShellStyle}>
       {isBusinessToolsReturn && (
         <button
           type="button"
@@ -1272,12 +1309,22 @@ function Profile({ setPage, currentPage }) {
       )}
       <div style={settingsHeader}>
         <div>
-          <p style={settingsEyebrow}>{t("settings")}</p>
-          <h1 style={settingsTitle}>{t("settings")}</h1>
-          <p style={settingsSubtitle}>{t("settingsPageSubtitle")}</p>
+          <p style={settingsEyebrow}>{t("businessProfile")}</p>
+          <h1 style={settingsTitle}>{t("profile")}</h1>
+          <p style={settingsSubtitle}>
+            {hasBusinessAccess
+              ? `${t("businessMode")} · ${businessModeStatusLabel}`
+              : t("settingsPageSubtitle")}
+          </p>
         </div>
 
-        <label style={compactAvatarWrap}>
+        <label
+          style={{
+            ...compactAvatarWrap,
+            ...(mediaUploadDeferred ? deferredAvatarWrap : {}),
+          }}
+          title={mediaUploadDeferred ? mediaDeferredCopy.detail : undefined}
+        >
           {profilePhoto ? (
             <img src={profilePhoto} alt={t("profile")} style={compactAvatarImage} />
           ) : (
@@ -1294,12 +1341,64 @@ function Profile({ setPage, currentPage }) {
             type="file"
             accept="image/*"
             style={{ display: "none" }}
+            disabled={mediaUploadDeferred}
             onChange={handleProfilePhotoUpload}
           />
         </label>
       </div>
 
-      <div style={accountSummaryCard}>
+      <section className="meetro-visual-hero" style={businessIdentityHero}>
+        <div style={businessIdentityHeroTop}>
+          <div>
+            <p style={businessIdentityEyebrow}>{t("businessProfile")}</p>
+            <h2 style={businessIdentityTitle}>{displayName}</h2>
+            <p style={businessIdentitySubtitle}>
+              {businessCategory || t("businessProfile")}
+            </p>
+            <p style={businessIdentityMeta}>
+              {displayEmail} · {t("memberSince")} {memberSinceLabel}
+            </p>
+          </div>
+          <span style={businessIdentityStatusBadge}>{businessModeStatusLabel}</span>
+        </div>
+
+        <div style={businessIdentityMetricGrid}>
+          <div style={businessIdentityMetricCard}>
+            <strong style={businessIdentityMetricValue}>{completedRecords.length}</strong>
+            <span style={businessIdentityMetricLabel}>Meetro Moments</span>
+          </div>
+          <div style={businessIdentityMetricCard}>
+            <strong style={businessIdentityMetricValue}>{writtenReviews.length}</strong>
+            <span style={businessIdentityMetricLabel}>{t("reviewsWritten")}</span>
+          </div>
+          <div style={businessIdentityMetricCard}>
+            <strong style={businessIdentityMetricValue}>
+              {hasBusinessAccess ? t("available") : t("setupRequired")}
+            </strong>
+            <span style={businessIdentityMetricLabel}>{t("businessAvailability")}</span>
+          </div>
+        </div>
+      </section>
+
+      <section style={quickActionRow} aria-label={t("quickActions")}>
+        <ProfileActionButton
+          icon="businessProfile"
+          label={t("businessProfile")}
+          onClick={() => setPage("contractorProfile")}
+        />
+        <ProfileActionButton
+          icon="history"
+          label="Meetro Moments"
+          onClick={() => setPage("meetroMoments")}
+        />
+        <ProfileActionButton
+          icon="aiHelp"
+          label={t("aiBusinessHelp")}
+          onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
+        />
+      </section>
+
+      <div className="meetro-visual-surface" style={accountSummaryCard}>
         <div>
           <h2 style={summaryName}>{displayName}</h2>
           <p style={summaryEmail}>{displayEmail}</p>
@@ -1309,12 +1408,50 @@ function Profile({ setPage, currentPage }) {
         </span>
       </div>
 
+      <SettingsGroup title={t("business")} icon="businessTools">
+        <SettingRow
+          icon="availability"
+          label={t("businessAvailability")}
+          value={hasBusinessAccess ? t("open") : t("setupRequired")}
+          onClick={() =>
+            hasBusinessAccess
+              ? openProfessionalPage("businessAvailability")
+              : setPage("contractorProfile")
+          }
+        />
+
+        <SettingRow
+          icon="emergency"
+          label={t("emergencyReadiness")}
+          value={
+            localStorage.getItem("meetroDispatchReady") === "true"
+              ? t("ready")
+              : t("setupRequired")
+          }
+          onClick={() => setPage("emergencyBusinessSettings")}
+        />
+
+        <SettingRow
+          icon="businessTools"
+          label={t("connectedServices")}
+          value={t("future")}
+          disabled
+        />
+      </SettingsGroup>
+
       <SettingsGroup title={t("account")} icon="profile">
         <SettingRow
           icon="profile"
           label={t("personalInformation")}
           value={t("manage")}
           onClick={openPersonalInfoSheet}
+        />
+
+        <SettingRow
+          icon="history"
+          label="Meetro Moments"
+          value={t("open")}
+          onClick={() => setPage("meetroMoments")}
         />
 
         <div style={settingInlineBlock}>
@@ -1405,37 +1542,6 @@ function Profile({ setPage, currentPage }) {
         />
       </SettingsGroup>
 
-      <SettingsGroup title={t("business")} icon="businessTools">
-        <SettingRow
-          icon="availability"
-          label={t("availabilityShortcut")}
-          value={hasBusinessAccess ? t("open") : t("setupRequired")}
-          onClick={() =>
-            hasBusinessAccess
-              ? openProfessionalPage("businessAvailability")
-              : setPage("contractorProfile")
-          }
-        />
-
-        <SettingRow
-          icon="emergency"
-          label={t("emergencyReadiness")}
-          value={
-            localStorage.getItem("meetroDispatchReady") === "true"
-              ? t("ready")
-              : t("setupRequired")
-          }
-          onClick={() => setPage("emergencyBusinessSettings")}
-        />
-
-        <SettingRow
-          icon="businessTools"
-          label={t("connectedServices")}
-          value={t("future")}
-          disabled
-        />
-      </SettingsGroup>
-
       <SettingsGroup title={t("support")} icon="help">
         <SettingRow
           icon="aiHelp"
@@ -1496,7 +1602,7 @@ function Profile({ setPage, currentPage }) {
         />
       </SettingsGroup>
 
-      <div style={compactProCard}>
+      <div className="meetro-visual-surface" style={compactProCard}>
         <div>
           <span style={compactProBadge}>{t("meetroPro")}</span>
           <h2 style={compactProTitle}>{t("growWithMeetro")}</h2>
@@ -1505,6 +1611,7 @@ function Profile({ setPage, currentPage }) {
 
         <button
           type="button"
+          className="meetro-visual-primary-button"
           style={compactProButton}
           onClick={() => setProfileNotice(t("meetroProSettingsText"))}
         >
@@ -1514,7 +1621,7 @@ function Profile({ setPage, currentPage }) {
         {profileNotice && <p style={profileNoticeText}>{profileNotice}</p>}
       </div>
 
-      <button onClick={handleLogout} style={logoutButton}>
+      <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
         {t("logout")}
       </button>
 
@@ -1635,14 +1742,14 @@ function Profile({ setPage, currentPage }) {
         </div>
       )}
 
-      <BottomNav setPage={setPage} currentPage="profile" />
+      {!embedded && <BottomNav setPage={setPage} currentPage="profile" />}
     </div>
   );
 }
 
 function SettingsSection({ title, icon, open, onClick, children }) {
   return (
-    <div style={sectionCard}>
+    <div className="meetro-visual-surface" style={sectionCard}>
       <button onClick={onClick} style={sectionHeader}>
         <span style={sectionHeaderLeft}>
           <span style={sectionIcon}>
@@ -1663,7 +1770,7 @@ function SettingsGroup({ title, icon, children, onClick }) {
   const HeaderComponent = onClick ? "button" : "div";
 
   return (
-    <section style={sectionCard}>
+    <section className="meetro-visual-surface" style={sectionCard}>
       <HeaderComponent
         {...(onClick ? { type: "button", onClick } : {})}
         style={{
@@ -1795,6 +1902,7 @@ function ProfileActionButton({ icon, label, onClick, badge, disabled = false }) 
   return (
     <Component
       {...(isInteractive ? { type: "button", onClick } : {})}
+      className="meetro-visual-surface"
       style={{
         ...profileActionButton,
         ...(disabled ? profileActionButtonDisabled : {}),
@@ -1829,7 +1937,7 @@ function FeedbackField({ label, value, onChange }) {
 }
 
 const pageWrapper = {
-  background: "#f5f5f7",
+  background: "var(--meetro-gradient-community-page)",
   minHeight: "100dvh",
   padding:
     "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
@@ -1840,16 +1948,25 @@ const pageWrapper = {
   margin: "0 auto",
 };
 
+const embeddedPageWrapper = {
+  ...pageWrapper,
+  minHeight: "auto",
+  width: "100%",
+  maxWidth: "none",
+  margin: 0,
+  padding: "0",
+};
+
 const backButton = {
-  border: "none",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
   padding: "12px 14px",
   marginBottom: "14px",
-  background: "#ffffff",
-  color: "#111827",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   fontWeight: 900,
   cursor: "pointer",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const settingsHeader = {
@@ -1862,7 +1979,7 @@ const settingsHeader = {
 
 const settingsEyebrow = {
   margin: "0 0 4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-wood)",
   fontSize: "12px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1871,7 +1988,7 @@ const settingsEyebrow = {
 
 const settingsTitle = {
   margin: 0,
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "34px",
   lineHeight: 1,
   fontWeight: "950",
@@ -1879,7 +1996,7 @@ const settingsTitle = {
 
 const settingsSubtitle = {
   margin: "8px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "15px",
   lineHeight: 1.45,
   fontWeight: "700",
@@ -1893,30 +2010,35 @@ const compactAvatarWrap = {
   cursor: "pointer",
 };
 
+const deferredAvatarWrap = {
+  cursor: "not-allowed",
+  opacity: 0.82,
+};
+
 const compactAvatarImage = {
   width: "62px",
   height: "62px",
   borderRadius: "999px",
   objectFit: "cover",
-  border: "3px solid #ffffff",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+  border: "3px solid rgba(255, 253, 248, 0.95)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const compactAvatarFallback = {
   width: "62px",
   height: "62px",
   borderRadius: "999px",
-  background: "#ede9fe",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "3px solid #ffffff",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+  border: "3px solid rgba(255, 253, 248, 0.95)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const accountSummaryCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "22px",
   padding: "16px",
   marginBottom: "14px",
@@ -1924,12 +2046,13 @@ const accountSummaryCard = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: "14px",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const summaryName = {
   margin: "0 0 4px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "18px",
   fontWeight: "950",
   lineHeight: 1.2,
@@ -1937,15 +2060,15 @@ const summaryName = {
 
 const summaryEmail = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.35,
   overflowWrap: "anywhere",
 };
 
 const summaryBadge = {
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "8px 10px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -1954,15 +2077,16 @@ const summaryBadge = {
 };
 
 const homeownerHeroCard = {
-  background: "#ffffff",
+  background: "var(--meetro-gradient-community-hero)",
   borderRadius: "24px",
   padding: "18px",
   marginBottom: "14px",
   display: "flex",
   gap: "16px",
   alignItems: "center",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
-  border: "1px solid rgba(226,232,240,0.9)",
+  color: "#fffdf8",
+  boxShadow: "var(--meetro-shadow-lifted)",
+  border: "1px solid rgba(255,255,255,0.14)",
 };
 
 const homeownerAvatarWrap = {
@@ -1978,21 +2102,21 @@ const homeownerAvatarImage = {
   height: "76px",
   borderRadius: "999px",
   objectFit: "cover",
-  border: "3px solid #ffffff",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+  border: "3px solid rgba(255, 253, 248, 0.94)",
+  boxShadow: "0 14px 30px rgba(20,53,31,0.28)",
 };
 
 const homeownerAvatarFallback = {
   width: "76px",
   height: "76px",
   borderRadius: "999px",
-  background: "#ede9fe",
-  color: "#5b3df5",
+  background: "rgba(255,255,255,0.16)",
+  color: "#fffdf8",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "3px solid #ffffff",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
+  border: "3px solid rgba(255, 253, 248, 0.94)",
+  boxShadow: "0 14px 30px rgba(20,53,31,0.28)",
 };
 
 const homeownerHeroContent = {
@@ -2002,7 +2126,7 @@ const homeownerHeroContent = {
 
 const homeownerHeroName = {
   margin: "0 0 6px",
-  color: "#111827",
+  color: "#fffdf8",
   fontSize: "22px",
   lineHeight: 1.12,
   fontWeight: "950",
@@ -2011,7 +2135,7 @@ const homeownerHeroName = {
 
 const homeownerHeroMeta = {
   margin: 0,
-  color: "#64748b",
+  color: "rgba(255, 253, 248, 0.82)",
   fontSize: "14px",
   lineHeight: 1.4,
   fontWeight: "750",
@@ -2026,9 +2150,9 @@ const quickActionRow = {
 
 const profileActionButton = {
   minHeight: "86px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  color: "#111827",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   borderRadius: "18px",
   padding: "12px 10px",
   display: "grid",
@@ -2037,7 +2161,7 @@ const profileActionButton = {
   textAlign: "center",
   fontSize: "12px",
   fontWeight: "900",
-  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
@@ -2047,7 +2171,7 @@ const profileActionButtonDisabled = {
 };
 
 const profileActionIcon = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   display: "inline-flex",
 };
 
@@ -2063,8 +2187,8 @@ const profileActionLabel = {
 const profileActionBadge = {
   borderRadius: "999px",
   padding: "4px 7px",
-  background: "#f8fafc",
-  color: "#64748b",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-muted)",
   fontSize: "10px",
   fontWeight: "950",
 };
@@ -2073,9 +2197,9 @@ const identityEmptyState = {
   display: "grid",
   gap: "10px",
   borderRadius: "16px",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  color: "#64748b",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-muted)",
   padding: "14px",
   fontSize: "14px",
   lineHeight: 1.45,
@@ -2094,7 +2218,7 @@ const inlineSectionAction = {
   justifySelf: "start",
   border: "none",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action)",
   color: "#ffffff",
   padding: "9px 12px",
   fontSize: "12px",
@@ -2104,29 +2228,29 @@ const inlineSectionAction = {
 
 const inlineSecondaryAction = {
   ...inlineSectionAction,
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
 };
 
 const compactBackButton = {
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "18px",
   padding: "12px 14px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontWeight: "950",
   cursor: "pointer",
   justifySelf: "start",
   marginBottom: "14px",
-  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const professionalCard = {
   display: "grid",
   gap: "12px",
   borderRadius: "18px",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   padding: "14px",
   boxSizing: "border-box",
   maxWidth: "100%",
@@ -2143,15 +2267,15 @@ const professionalCardTop = {
 const professionalCardIdentity = {
   display: "grid",
   gap: "4px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   minWidth: 0,
   overflowWrap: "break-word",
 };
 
 const relationshipBadge = {
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "6px 9px",
   fontSize: "11px",
   fontWeight: "950",
@@ -2165,13 +2289,13 @@ const professionalActions = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, var(--meetro-color-forest, #1f4d34) 100%)",
   color: "white",
   borderRadius: "30px",
   padding: "34px 22px",
   marginBottom: "20px",
   textAlign: "center",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.28)",
+  boxShadow: "0 18px 40px rgba(31,77,52,0.28)",
 };
 
 
@@ -2199,7 +2323,7 @@ const uploadPhotoBadge = {
   width: "38px",
   height: "38px",
   borderRadius: "999px",
-  background: "#7c3aed",
+  background: "var(--meetro-color-charcoal, #172317)",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -2207,7 +2331,7 @@ const uploadPhotoBadge = {
   fontSize: "18px",
   fontWeight: "700",
   border: "3px solid white",
-  boxShadow: "0 8px 18px rgba(124,58,237,0.32)",
+  boxShadow: "0 8px 18px rgba(23,35,23,0.32)",
 };
 
 const avatarCircle = {
@@ -2289,7 +2413,7 @@ const modeButton = {
 };
 
 const activeModeButton = {
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
 };
 
@@ -2299,7 +2423,7 @@ const disabledModeButton = {
 };
 
 const helperText = {
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   lineHeight: 1.5,
   margin: "12px 0 0",
@@ -2307,18 +2431,19 @@ const helperText = {
 };
 
 const sectionCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "24px",
   marginBottom: "14px",
   overflow: "hidden",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const sectionHeader = {
   width: "100%",
   border: "none",
-  background: "white",
-  color: "#111",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   padding: "18px",
   display: "flex",
   justifyContent: "space-between",
@@ -2329,7 +2454,7 @@ const sectionHeader = {
 
 const staticSectionHeader = {
   width: "100%",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   padding: "16px 18px 8px",
   display: "flex",
   justifyContent: "space-between",
@@ -2351,7 +2476,7 @@ const sectionIcon = {
 const chevron = {
   fontSize: "26px",
   fontWeight: "900",
-  color: "#111",
+  color: "var(--meetro-color-forest)",
 };
 
 const sectionBody = {
@@ -2361,8 +2486,8 @@ const sectionBody = {
 const settingRow = {
   width: "100%",
   border: "none",
-  background: "#f8f7ff",
-  color: "#111",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-ink)",
   padding: "15px 16px",
   borderRadius: "16px",
   marginBottom: "10px",
@@ -2397,7 +2522,7 @@ const toggleSettingCopy = {
 };
 
 const toggleSettingDescription = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: "700",
@@ -2412,7 +2537,7 @@ const toggleSwitchTrack = (enabled) => ({
   padding: "3px",
   flex: "0 0 auto",
   boxSizing: "border-box",
-  background: enabled ? "#5b3df5" : "#cbd5e1",
+  background: enabled ? "var(--meetro-color-forest)" : "#cbd5e1",
   display: "flex",
   justifyContent: enabled ? "flex-end" : "flex-start",
   alignItems: "center",
@@ -2428,8 +2553,8 @@ const toggleSwitchKnob = () => ({
 });
 
 const relationshipInsightTesterCard = {
-  background: "#f8fafc",
-  border: "1px dashed #c4b5fd",
+  background: "var(--meetro-surface-sage)",
+  border: "1px dashed rgba(31, 77, 52, 0.28)",
   borderRadius: "16px",
   padding: "12px",
   marginBottom: "10px",
@@ -2442,7 +2567,7 @@ const relationshipInsightTesterHeader = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: "10px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "13px",
   fontWeight: "900",
 };
@@ -2459,7 +2584,7 @@ const relationshipInsightTesterGroup = {
 };
 
 const relationshipInsightTesterGroupTitle = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -2468,17 +2593,17 @@ const relationshipInsightTesterGroupTitle = {
 
 const relationshipInsightTesterNote = {
   margin: 0,
-  color: "#7c3aed",
+  color: "var(--meetro-color-forest)",
   fontSize: "12px",
   lineHeight: 1.35,
   fontWeight: "850",
 };
 
 const relationshipInsightTesterButton = {
-  border: "1px solid #ddd6fe",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "999px",
-  background: "#ffffff",
-  color: "#4c1d95",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   padding: "8px 10px",
   fontSize: "12px",
   fontWeight: "900",
@@ -2490,12 +2615,12 @@ const relationshipInsightTesterButtonDisabled = {
 };
 
 const relationshipInsightTesterClearButton = {
-  background: "#f3f0ff",
+  background: "var(--meetro-surface-sage)",
 };
 
 const settingInlineBlock = {
-  background: "#f8f7ff",
-  color: "#111",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-ink)",
   padding: "15px 16px",
   borderRadius: "16px",
   marginBottom: "10px",
@@ -2525,9 +2650,9 @@ const legalPurposeText = {
 
 const profileNoticeText = {
   margin: "12px 0 0",
-  color: "#4c1d95",
-  background: "#f3f0ff",
-  border: "1px solid #ddd6fe",
+  color: "var(--meetro-color-forest)",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "14px",
   padding: "10px",
   fontSize: "13px",
@@ -2589,7 +2714,7 @@ const testFlightCard = {
 
 const testFlightBadge = {
   display: "inline-block",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#4338ca",
   borderRadius: "999px",
   padding: "6px 10px",
@@ -2714,12 +2839,12 @@ const rowIcon = {
 };
 
 const settingValue = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   whiteSpace: "nowrap",
 };
 
 const lockedProBox = {
-  background: "#f8f7ff",
+  background: "var(--meetro-surface-warm)",
   borderRadius: "20px",
   padding: "22px",
   textAlign: "center",
@@ -2733,18 +2858,18 @@ const lockedIcon = {
 const lockedTitle = {
   margin: "0 0 10px",
   fontSize: "22px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const lockedText = {
   margin: "0 0 18px",
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.6,
 };
 
 const primaryButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action)",
   color: "white",
   padding: "14px 18px",
   borderRadius: "16px",
@@ -2753,27 +2878,27 @@ const primaryButton = {
 };
 
 const proCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, var(--meetro-color-forest, #1f4d34) 100%)",
   color: "white",
   borderRadius: "28px",
   padding: "24px",
   marginBottom: "16px",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.24)",
+  boxShadow: "0 18px 40px rgba(31,77,52,0.24)",
 };
 
 const compactProCard = {
-  background: "white",
-  border: "1px solid #ddd6fe",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "22px",
   padding: "16px",
   marginBottom: "14px",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const compactProBadge = {
   display: "inline-block",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "6px 10px",
   borderRadius: "999px",
   fontSize: "12px",
@@ -2782,14 +2907,14 @@ const compactProBadge = {
 
 const compactProTitle = {
   margin: "10px 0 6px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "18px",
   fontWeight: "950",
 };
 
 const compactProText = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.45,
   fontSize: "14px",
   fontWeight: "700",
@@ -2797,7 +2922,7 @@ const compactProText = {
 
 const compactProButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action)",
   color: "white",
   padding: "12px 14px",
   borderRadius: "16px",
@@ -2827,7 +2952,7 @@ const proText = {
 const proButton = {
   border: "none",
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "15px 18px",
   borderRadius: "18px",
   fontWeight: "bold",
@@ -2901,7 +3026,7 @@ const languageSheetHeader = {
 
 const languageSheetEyebrow = {
   margin: "0 0 4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "900",
   letterSpacing: "0.08em",
@@ -2955,13 +3080,13 @@ const languageOptionButton = {
 };
 
 const languageOptionButtonSelected = {
-  border: "2px solid #5b3df5",
+  border: "2px solid var(--meetro-color-forest, #1f4d34)",
   background: "#f4f1ff",
-  boxShadow: "0 10px 24px rgba(91, 61, 245, 0.16)",
+  boxShadow: "0 10px 24px rgba(31, 77, 52, 0.16)",
 };
 
 const languageSelectedIcon = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "inline-flex",
   alignItems: "center",
 };
@@ -2969,7 +3094,7 @@ const languageSelectedIcon = {
 const logoutButton = {
   width: "100%",
   padding: "15px 24px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action)",
   color: "white",
   border: "none",
   borderRadius: "16px",
@@ -2977,6 +3102,97 @@ const logoutButton = {
   fontWeight: "bold",
   cursor: "pointer",
   marginTop: "4px",
+};
+
+const businessIdentityHero = {
+  background: "var(--meetro-gradient-community-hero)",
+  borderRadius: "26px",
+  padding: "20px",
+  marginBottom: "14px",
+  color: "#fffdf8",
+  border: "1px solid rgba(255,255,255,0.14)",
+  boxShadow: "var(--meetro-shadow-lifted)",
+  display: "grid",
+  gap: "16px",
+};
+
+const businessIdentityHeroTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "14px",
+};
+
+const businessIdentityEyebrow = {
+  margin: "0 0 6px",
+  color: "rgba(251, 246, 237, 0.72)",
+  fontSize: "12px",
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const businessIdentityTitle = {
+  margin: 0,
+  color: "#fffdf8",
+  fontSize: "28px",
+  lineHeight: 1.08,
+  fontWeight: "950",
+};
+
+const businessIdentitySubtitle = {
+  margin: "8px 0 0",
+  color: "rgba(255, 253, 248, 0.86)",
+  fontSize: "15px",
+  lineHeight: 1.35,
+  fontWeight: "800",
+};
+
+const businessIdentityMeta = {
+  margin: "8px 0 0",
+  color: "rgba(255, 253, 248, 0.72)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "700",
+};
+
+const businessIdentityStatusBadge = {
+  padding: "8px 12px",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.14)",
+  color: "#fffdf8",
+  fontSize: "12px",
+  fontWeight: "900",
+  whiteSpace: "nowrap",
+};
+
+const businessIdentityMetricGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: "10px",
+};
+
+const businessIdentityMetricCard = {
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.12)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  padding: "14px",
+  display: "grid",
+  gap: "6px",
+};
+
+const businessIdentityMetricValue = {
+  color: "#fffdf8",
+  fontSize: "18px",
+  fontWeight: "950",
+  lineHeight: 1.1,
+};
+
+const businessIdentityMetricLabel = {
+  color: "rgba(255, 253, 248, 0.74)",
+  fontSize: "12px",
+  fontWeight: "800",
+  lineHeight: 1.4,
 };
 
 export default Profile;

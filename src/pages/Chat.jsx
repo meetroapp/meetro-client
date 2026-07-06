@@ -146,12 +146,12 @@ const pageWrapper = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #7b61ff 100%)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, #7b61ff 100%)",
   borderRadius: "30px",
   padding: "30px 24px",
   marginBottom: "28px",
   color: "white",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.28)",
+  boxShadow: "0 18px 40px rgba(31,77,52,0.28)",
 };
 
 const heroTitle = {
@@ -188,7 +188,7 @@ const avatarCircle = {
   height: "58px",
   borderRadius: "20px",
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -213,7 +213,7 @@ const conversationTitle = {
 const projectText = {
   marginTop: "6px",
   marginBottom: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "bold",
   fontSize: "14px",
 };
@@ -235,7 +235,7 @@ const unreadDot = {
   width: "12px",
   height: "12px",
   borderRadius: "50%",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   flexShrink: 0,
 };
 

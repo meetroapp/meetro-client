@@ -36,10 +36,12 @@ const WAKE_SUGGESTION_KEYS = {
 export const ASSISTANT_WAKE_DISMISS_MS = 8000;
 export const ASSISTANT_ORB_MARK = "M";
 export const COMPANION_STATES = Object.freeze({
-  idle: "idle",
-  briefing: "briefing",
+  presence: "presence",
+  guidance: "guidance",
   conversation: "conversation",
-  insights: "insights",
+  idle: "presence",
+  briefing: "guidance",
+  insights: "guidance",
 });
 
 function normalizeWakePage(currentPage = "") {

@@ -1496,7 +1496,8 @@ const page = {
   minHeight: "100vh",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
-  background: "linear-gradient(135deg,#f8fafc,#eef2ff)",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-warm, #fbf6ed), var(--meetro-surface-sage, #eef4ea))",
   boxSizing: "border-box",
   width: "100%",
   overflowX: "hidden",
@@ -1507,10 +1508,11 @@ const page = {
 const card = {
   maxWidth: "520px",
   margin: "0 auto",
-  background: "#ffffff",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   borderRadius: "32px",
   padding: "24px",
-  boxShadow: "0 20px 60px rgba(15,23,42,0.10)",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   boxSizing: "border-box",
   width: "100%",
   overflow: "hidden",
@@ -1518,8 +1520,8 @@ const card = {
 
 const backBtn = {
   border: "none",
-  background: "#f5f3ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "10px 14px",
   fontWeight: "900",
@@ -1531,7 +1533,7 @@ const icon = {
   width: "74px",
   height: "74px",
   borderRadius: "24px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1559,8 +1561,8 @@ const section = {
   marginTop: "18px",
   padding: "14px",
   borderRadius: "20px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   boxSizing: "border-box",
   maxWidth: "100%",
 };
@@ -1627,7 +1629,7 @@ const totalBox = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   borderRadius: "20px",
   padding: "16px",
   margin: "18px 0",
@@ -1638,7 +1640,7 @@ const summaryBox = {
   display: "grid",
   gap: "8px",
   borderRadius: "18px",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   padding: "12px",
 };
 
@@ -1659,9 +1661,9 @@ const sectionHint = {
 };
 
 const smallAddButton = {
-  border: "1px solid rgba(91,61,245,0.22)",
-  background: "#f5f3ff",
-  color: "#5b3df5",
+  border: "1px solid rgba(31,77,52,0.22)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "10px 13px",
   fontWeight: "950",
@@ -1679,7 +1681,7 @@ const lineItemCard = {
   padding: "12px",
   borderRadius: "18px",
   border: "1px solid #e2e8f0",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   minWidth: 0,
 };
 
@@ -1761,9 +1763,9 @@ const chipGrid = {
 };
 
 const chip = {
-  border: "1px solid rgba(91,61,245,0.2)",
+  border: "1px solid rgba(31,77,52,0.2)",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "10px 12px",
   fontWeight: "900",
@@ -1827,7 +1829,7 @@ const sheetHeader = {
 
 const sheetEyebrow = {
   margin: "0 0 4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1876,7 +1878,7 @@ const sendBtn = {
   padding: "16px",
   border: "none",
   borderRadius: "18px",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   fontWeight: "900",
   cursor: "pointer",
@@ -1885,8 +1887,8 @@ const sendBtn = {
 const secondaryBtn = {
   ...sendBtn,
   background: "#ffffff",
-  color: "#5b3df5",
-  border: "1px solid rgba(91,61,245,0.22)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid rgba(31,77,52,0.22)",
 };
 
 const statusText = {
@@ -1935,7 +1937,7 @@ const printHeader = {
 
 const printEyebrow = {
   margin: "0 0 4px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: "950",
   letterSpacing: "0.08em",

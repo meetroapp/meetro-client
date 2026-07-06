@@ -348,7 +348,7 @@ const backButton = {
   border: "none",
   borderRadius: "16px",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "24px",
   fontWeight: "900",
   display: "flex",
@@ -360,12 +360,12 @@ const backButton = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg,#5b3df5,#8b5cf6)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-forest, #1f4d34))",
   color: "white",
   borderRadius: "30px",
   padding: "24px",
   marginBottom: "16px",
-  boxShadow: "0 18px 42px rgba(91,61,245,0.26)",
+  boxShadow: "0 18px 42px rgba(31,77,52,0.26)",
 };
 
 const heroIcon = {
@@ -444,7 +444,7 @@ const urgencyButton = {
 const urgencyActive = {
   ...urgencyButton,
   background: "#efe7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   border: "1px solid #c4b5fd",
 };
 
@@ -458,13 +458,13 @@ const noticeBox = {
 };
 
 const primaryButton = {
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   fontWeight: "900",
 
   width: "100%",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "18px",
   padding: "14px",

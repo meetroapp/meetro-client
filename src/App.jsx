@@ -5,6 +5,10 @@ import {
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
 import { recoverStoredRequestRelationships } from "./utils/requestRelationshipRecovery";
+import {
+  getMeetroMomentRouteId,
+  getMeetroMomentRoutePage,
+} from "./utils/meetroMomentRoutes";
 import MeetroAssistant from "./components/MeetroAssistant";
 import GuideOverlay from "./components/GuideOverlay";
 import GlobalInsightLayer from "./components/GlobalInsightLayer";
@@ -16,6 +20,8 @@ import Assistant from "./pages/Assistant";
 const Discover = lazy(() => import("./pages/Discover"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Profile = lazy(() => import("./pages/Profile"));
+const MeetroMoments = lazy(() => import("./pages/MeetroMoments"));
+const MeetroMomentDetails = lazy(() => import("./pages/MeetroMomentDetails"));
 import ContractorProfile from "./pages/ContractorProfile";
 import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
@@ -126,6 +132,8 @@ const assistantEnabledPages = new Set([
   "conversationThread",
   "messagesInbox",
   "notifications",
+  "meetroMoments",
+  "meetroMomentDetails",
   "businessDashboard",
   "contractorDashboard",
   "contractorProfile",
@@ -228,14 +236,32 @@ function App() {
   const isPublicMarketingPage = (targetPage = "") =>
     publicMarketingRoutes.has(targetPage);
 
-  const getRoutePage = (route = "") => String(route || "").split("?")[0];
+  const persistRouteContext = (route = "") => {
+    const momentId = getMeetroMomentRouteId(route);
+    if (momentId) {
+      safeSetStorageItem("selectedMeetroMomentId", momentId);
+    }
+  };
+
+  const getRoutePage = (route = "") => {
+    const momentPage = getMeetroMomentRoutePage(route);
+    if (momentPage) return momentPage;
+    const cleanRoute = String(route || "").split("?")[0];
+    return cleanRoute;
+  };
 
   const getTipsPageForRoute = (targetPage = "") =>
     ["tips", "learn-meetro", "meetroJourney"].includes(targetPage)
       ? "meetroJourney"
       : targetPage;
 
-  const getHashRoute = () => window.location.hash.replace("#", "") || "";
+  const getHashRoute = () => {
+    const hashRoute = window.location.hash.replace("#", "") || "";
+    if (hashRoute) return hashRoute;
+
+    const pathRoute = window.location.pathname || "";
+    return getMeetroMomentRouteId(pathRoute) ? pathRoute : "";
+  };
 
   const isPublicProfileRoute = (route = "") => {
     const pageName = getRoutePage(route);
@@ -335,6 +361,7 @@ function App() {
 	
 	  const getInitialPage = () => {
     const currentRoute = getHashRoute();
+    persistRouteContext(currentRoute);
     const currentHash = getRoutePage(currentRoute);
 
     const hasToken =
@@ -454,6 +481,7 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hashRoute = getHashRoute();
+      persistRouteContext(hashRoute);
       const hashPage = getRoutePage(hashRoute);
 
       const hasToken =
@@ -497,6 +525,7 @@ function App() {
       const hasToken =
         safeGetStorageItem("token");
       const currentRoute = getHashRoute();
+      persistRouteContext(currentRoute);
       const currentHash = getRoutePage(currentRoute);
 
       if (currentHash && isPublicLegalPage(currentHash)) {
@@ -586,6 +615,24 @@ function App() {
   
 
   const setPage = (newPage) => {
+    const routePage = getRoutePage(newPage);
+    const routeMomentId = getMeetroMomentRouteId(newPage);
+
+    if (routeMomentId) {
+      persistRouteContext(newPage);
+
+      if (!safeGetStorageItem("token")) {
+        window.location.hash = "login";
+        setPageState("login");
+        return;
+      }
+
+      window.location.hash = newPage;
+      syncAccountModeForPage(routePage);
+      setPageState(routePage);
+      return;
+    }
+
     if (isPublicLegalPage(newPage)) {
       const legalPage = getLegalPageForRoute(newPage);
       window.location.hash = newPage === "legal" ? "legal" : newPage;
@@ -679,6 +726,14 @@ if (page === "upload") {
 
 if (page === "profile") {
   return withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage);
+}
+
+if (page === "meetroMoments") {
+  return withAssistantLayer(withSuspense(<MeetroMoments setPage={setPage} />), page, setPage);
+}
+
+if (page === "meetroMomentDetails") {
+  return withAssistantLayer(withSuspense(<MeetroMomentDetails setPage={setPage} />), page, setPage);
 }
 
 if (page === "meetroJourney" || page === "tips" || page === "learn-meetro") {

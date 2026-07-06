@@ -475,7 +475,7 @@ function EmergencyOperationsCenter({ setPage }) {
 
 const page = {
   minHeight: "100dvh",
-  background: "linear-gradient(180deg, #fff1f2 0%, #ffffff 48%, #eef2ff 100%)",
+  background: "linear-gradient(180deg, #fff1f2 0%, #ffffff 48%, var(--meetro-surface-sage, #eef4ea) 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -738,7 +738,7 @@ const activeButton = {
   padding: "15px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   cursor: "pointer",

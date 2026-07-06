@@ -526,12 +526,12 @@ function ContractorDetails({ setPage, currentPage }) {
 
   if (!profile) {
     return (
-      <div className="app-page meetro-readable-page" style={pageWrapper}>
+      <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
         <button onClick={returnToBusinessDirectory} style={backButton}>
           ← {t("backToContractors")}
         </button>
 
-        <div style={cardStyle}>
+        <div className="meetro-visual-surface" style={cardStyle}>
           <h2 style={sectionTitle}>{t("contractorNotFound")}</h2>
 
           <p style={mutedText}>{t("contractorNotFoundText")}</p>
@@ -593,12 +593,12 @@ function ContractorDetails({ setPage, currentPage }) {
 
   if (!allowedForHomeownerContext) {
     return (
-      <div className="app-page meetro-readable-page" style={pageWrapper}>
+      <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
         <button onClick={returnToBusinessDirectory} style={backButton}>
           ← {t("backToContractors")}
         </button>
 
-        <div style={cardStyle}>
+        <div className="meetro-visual-surface" style={cardStyle}>
           <h2 style={sectionTitle}>
             {isSpanish ? "Perfil no disponible" : "Profile unavailable"}
           </h2>
@@ -619,7 +619,7 @@ function ContractorDetails({ setPage, currentPage }) {
     const mainProjectImage = activeProjectImage || selectedImages[0] || "";
 
     return (
-      <div className="app-page meetro-readable-page" style={pageWrapper}>
+      <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
         <button
           onClick={() => {
             setSelectedProject(null);
@@ -630,7 +630,7 @@ function ContractorDetails({ setPage, currentPage }) {
           ← {t("back")}
         </button>
 
-        <div style={cardStyle}>
+        <div className="meetro-visual-surface" style={cardStyle}>
           <h1 style={businessTitle}>{selectedProject.title}</h1>
 
           <p style={mutedText}>
@@ -667,7 +667,7 @@ function ContractorDetails({ setPage, currentPage }) {
             </div>
           )}
 
-          <button onClick={messageContractor} style={primaryButton}>
+          <button onClick={messageContractor} className="meetro-visual-primary-button" style={primaryButton}>
             {t("messageContractor")}
           </button>
 
@@ -699,12 +699,12 @@ function ContractorDetails({ setPage, currentPage }) {
   }
 
   return (
-    <div className="app-page meetro-readable-page" style={pageWrapper}>
+    <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
       <button onClick={returnToBusinessDirectory} style={backButton}>
         ← {t("backToContractors")}
       </button>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         {businessIdentity.imageUrl ? (
           <img
             src={businessIdentity.imageUrl}
@@ -735,16 +735,16 @@ function ContractorDetails({ setPage, currentPage }) {
         <div style={ratingSummary}>
           {portfolioProof.reviewCount ? (
             <>
-              <strong style={{ color: "#111" }}>
+              <strong style={{ color: "var(--meetro-color-ink)" }}>
                  {portfolioProof.averageRating || profile.rating}
               </strong>
 
-              <span style={{ color: "#666", marginLeft: "8px" }}>
+              <span style={{ color: "var(--meetro-color-muted)", marginLeft: "8px" }}>
                 ({portfolioProof.reviewCount} {t("reviews")})
               </span>
             </>
           ) : (
-            <span style={{ color: "#666", fontWeight: "800" }}>
+            <span style={{ color: "var(--meetro-color-muted)", fontWeight: "800" }}>
               {isSpanish ? "Sin reseñas todavía" : "No reviews yet"}
             </span>
           )}
@@ -770,7 +770,7 @@ function ContractorDetails({ setPage, currentPage }) {
         <p style={bioStyle}>{description}</p>
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>
           {isSpanish ? "Vista previa del trabajo" : "Portfolio preview"}
         </h2>
@@ -784,7 +784,7 @@ function ContractorDetails({ setPage, currentPage }) {
             />
           </div>
         ) : (
-          <div style={mediaPlaceholder}>
+          <div className="meetro-visual-empty-state" style={mediaPlaceholder}>
             <span style={mediaPlaceholderIcon}>▻</span>
             <strong>
               {isSpanish ? "Medios próximamente" : "Media coming soon"}
@@ -798,7 +798,7 @@ function ContractorDetails({ setPage, currentPage }) {
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>
           {isSpanish ? "Servicios ofrecidos" : "Services offered"}
         </h2>
@@ -811,7 +811,7 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>
           {isSpanish ? "Disponibilidad y confianza" : "Availability & trust"}
         </h2>
@@ -844,7 +844,7 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>{t("projectGallery")}</h2>
 
         {publicPortfolioProjects.length === 0 && (
@@ -903,7 +903,7 @@ function ContractorDetails({ setPage, currentPage }) {
         })}
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>
           {isSpanish ? "Opciones existentes" : "Existing contact options"}
         </h2>
@@ -915,6 +915,7 @@ function ContractorDetails({ setPage, currentPage }) {
 
         <button
           onClick={() => setShowQuoteForm(!showQuoteForm)}
+          className="meetro-visual-primary-button"
           style={primaryButton}
         >
           {showQuoteForm ? t("cancelQuoteRequest") : t("requestQuote")}
@@ -926,7 +927,7 @@ function ContractorDetails({ setPage, currentPage }) {
       </div>
 
       {showQuoteForm && (
-        <div style={cardStyle}>
+        <div className="meetro-visual-surface" style={cardStyle}>
           <h2 style={sectionTitle}>{t("requestQuote")}</h2>
 
           <input
@@ -957,9 +958,12 @@ function ContractorDetails({ setPage, currentPage }) {
           <button
             onClick={submitQuoteRequest}
             disabled={submittingQuote}
+            className="meetro-visual-primary-button"
             style={{
               ...primaryButton,
-              background: submittingQuote ? "#999" : "#5b3df5",
+              background: submittingQuote
+                ? "rgba(100, 116, 139, 0.72)"
+                : "var(--meetro-gradient-community-action)",
               cursor: submittingQuote ? "not-allowed" : "pointer",
             }}
           >
@@ -968,7 +972,7 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
       )}
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>{t("leaveReview")}</h2>
 
         <div style={starRow}>
@@ -1000,9 +1004,12 @@ function ContractorDetails({ setPage, currentPage }) {
         <button
           onClick={submitReview}
           disabled={submittingReview}
+          className="meetro-visual-primary-button"
           style={{
             ...primaryButton,
-            background: submittingReview ? "#999" : "#5b3df5",
+            background: submittingReview
+              ? "rgba(100, 116, 139, 0.72)"
+              : "var(--meetro-gradient-community-action)",
             cursor: submittingReview ? "not-allowed" : "pointer",
           }}
         >
@@ -1010,7 +1017,7 @@ function ContractorDetails({ setPage, currentPage }) {
         </button>
       </div>
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <h2 style={sectionTitle}>{t("reviews")}</h2>
 
         {reviews.length === 0 && (
@@ -1226,7 +1233,7 @@ function BusinessNameTitle({ name }) {
 }
 
 const pageWrapper = {
-  background: "#f5f5f7",
+  background: "var(--meetro-gradient-community-page)",
   minHeight: "100dvh",
   width: "100%",
   maxWidth: "900px",
@@ -1234,14 +1241,15 @@ const pageWrapper = {
   padding:
     "calc(env(safe-area-inset-top, 0px) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(120px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   overflowX: "hidden",
 };
 
 const backButton = {
-  border: "none",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  boxShadow: "var(--meetro-shadow-soft)",
   padding: "10px 14px",
   borderRadius: "14px",
   fontWeight: "bold",
@@ -1253,8 +1261,9 @@ const imagePlaceholder = {
   width: "100%",
   height: "220px",
   borderRadius: "24px",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1266,7 +1275,7 @@ const imagePlaceholder = {
 const businessTitle = {
   margin: "0 auto 8px",
   maxWidth: "min(100%, 560px)",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   fontSize: "clamp(34px, 9vw, 42px)",
   lineHeight: 1.06,
   textAlign: "center",
@@ -1291,7 +1300,7 @@ const businessTitleAmpersand = {
 
 const categoryStyle = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontWeight: "bold",
   fontSize: "18px",
   display: "flex",
@@ -1306,15 +1315,16 @@ const domainPill = {
   alignItems: "center",
   borderRadius: "999px",
   padding: "5px 9px",
-  background: "#eef2ff",
-  color: "#4338ca",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "11px",
   fontWeight: "900",
   textTransform: "capitalize",
 };
 
 const locationStyle = {
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   marginTop: "10px",
 };
 
@@ -1332,8 +1342,8 @@ const badgeRow = {
 };
 
 const verifiedBadge = {
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "bold",
@@ -1341,8 +1351,8 @@ const verifiedBadge = {
 };
 
 const responseBadge = {
-  background: "#e8fff0",
-  color: "#12a150",
+  background: "rgba(31, 77, 52, 0.10)",
+  color: "var(--meetro-color-forest)",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "bold",
@@ -1350,8 +1360,8 @@ const responseBadge = {
 };
 
 const mutedBadge = {
-  background: "#f8fafc",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "bold",
@@ -1359,8 +1369,8 @@ const mutedBadge = {
 };
 
 const featuredBadge = {
-  background: "#fff7df",
-  color: "#c79b00",
+  background: "rgba(188, 122, 55, 0.14)",
+  color: "var(--meetro-color-wood)",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "bold",
@@ -1368,7 +1378,7 @@ const featuredBadge = {
 };
 
 const bioStyle = {
-  color: "#555",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.6,
   marginTop: "18px",
   fontSize: "16px",
@@ -1377,9 +1387,9 @@ const bioStyle = {
 const mediaPlaceholder = {
   minHeight: "190px",
   borderRadius: "22px",
-  border: "1px dashed #cbd5e1",
-  background: "linear-gradient(135deg,#f8fafc,#eef2ff)",
-  color: "#475569",
+  border: "1px dashed var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   display: "grid",
   placeItems: "center",
   textAlign: "center",
@@ -1391,8 +1401,9 @@ const mediaPlaceholderIcon = {
   width: "46px",
   height: "46px",
   borderRadius: "999px",
-  background: "rgba(91,61,245,0.12)",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1411,8 +1422,9 @@ const serviceChip = {
   maxWidth: "100%",
   borderRadius: "999px",
   padding: "9px 12px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: "900",
   overflowWrap: "anywhere",
@@ -1429,13 +1441,13 @@ const trustItem = {
   gap: "6px",
   padding: "13px",
   borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
   minWidth: 0,
 };
 
 const trustLabel = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "11px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -1443,28 +1455,29 @@ const trustLabel = {
 };
 
 const trustValue = {
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "13px",
   lineHeight: 1.35,
   overflowWrap: "anywhere",
 };
 
 const cardStyle = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "24px",
   padding: "22px",
   marginBottom: "22px",
-  color: "#111",
-  boxShadow: "0 10px 24px rgba(0,0,0,0.07)",
+  color: "var(--meetro-color-ink)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const sectionTitle = {
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   marginTop: 0,
 };
 
 const mutedText = {
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.5,
 };
 
@@ -1472,12 +1485,12 @@ const inputStyle = {
   width: "100%",
   padding: "14px",
   borderRadius: "16px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--meetro-color-line)",
   marginBottom: "14px",
   fontSize: "16px",
   boxSizing: "border-box",
-  background: "white",
-  color: "#111",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
 };
 
 const primaryButton = {
@@ -1486,8 +1499,9 @@ const primaryButton = {
   padding: "15px",
   border: "none",
   borderRadius: "16px",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
+  boxShadow: "0 14px 28px rgba(31, 77, 52, 0.18)",
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
@@ -1497,10 +1511,10 @@ const secondaryButton = {
   width: "100%",
   marginTop: "12px",
   padding: "15px",
-  border: "none",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
@@ -1532,8 +1546,8 @@ const closePreviewBtn = {
   height: "42px",
   borderRadius: "999px",
   border: "none",
-  background: "white",
-  color: "#111827",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   fontSize: "28px",
   fontWeight: "900",
   cursor: "pointer",
@@ -1560,7 +1574,7 @@ const publicGalleryGrid = {
 };
 
 const activeThumbnailImage = {
-  border: "3px solid #5b3df5",
+  border: "3px solid var(--meetro-color-forest)",
   opacity: 1,
 };
 
@@ -1576,12 +1590,12 @@ const publicGalleryImage = {
 };
 
 const portfolioCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "22px",
   overflow: "hidden",
   marginTop: "14px",
-  border: "1px solid #e5e7eb",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const portfolioCoverWrap = {
@@ -1620,7 +1634,7 @@ const portfolioTrustBadge = {
   alignItems: "center",
   gap: "6px",
   background: "transparent",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   padding: "0",
   borderRadius: "0",
   fontSize: "12px",
@@ -1633,9 +1647,9 @@ const portfolioTrustBadge = {
 const portfolioOpenButton = {
   width: "auto",
   alignSelf: "center",
-  border: "1px solid #ddd6fe",
-  background: "#fcfbff",
-  color: "#5b3df5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "10px 18px",
   borderRadius: "999px",
   fontWeight: "800",
@@ -1645,42 +1659,42 @@ const portfolioOpenButton = {
 };
 
 const innerCard = {
-  background: "#fafafa",
+  background: "var(--meetro-surface-warm)",
   borderRadius: "18px",
   padding: "14px",
   marginTop: "14px",
 };
 
 const reviewEmptyCard = {
-  background: "#fafafa",
-  border: "1px solid #e5e7eb",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "18px",
   padding: "14px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
 };
 
 const projectImage = {
   width: "100%",
   maxHeight: "280px",
   objectFit: "contain",
-  background: "#f4f4f4",
+  background: "var(--meetro-surface-warm)",
   borderRadius: "16px",
   padding: "10px",
   boxSizing: "border-box",
 };
 
 const innerTitle = {
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   marginBottom: "8px",
 };
 
 const innerText = {
-  color: "#555",
+  color: "var(--meetro-color-muted)",
   lineHeight: 1.6,
 };
 
 const smallText = {
-  color: "#777",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   marginBottom: 0,
 };

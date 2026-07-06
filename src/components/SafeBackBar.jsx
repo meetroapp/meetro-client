@@ -25,10 +25,10 @@ function SafeBackBar({
           background: "#eee7ff",
           padding: compact ? "8px 13px" : "10px 16px",
           borderRadius: "999px",
-          boxShadow: "0 8px 20px rgba(91,61,245,0.12)",
+          boxShadow: "0 8px 20px rgba(31,77,52,0.12)",
           fontSize: compact ? "14px" : "16px",
           fontWeight: "600",
-          color: "#5b3df5",
+          color: "var(--meetro-color-forest, #1f4d34)",
           cursor: "pointer",
         }}
       >

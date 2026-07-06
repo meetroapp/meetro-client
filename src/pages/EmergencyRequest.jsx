@@ -8,6 +8,12 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredCopy,
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 import { formatMessageTime } from "../utils/displayTime";
 
 function EmergencyRequest({ setPage }) {
@@ -115,6 +121,8 @@ const selectedService =
   };
 
   const t = text[language] || text.en;
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   function saveUrgency(value) {
     setUrgency(value);
@@ -155,6 +163,16 @@ const selectedService =
   }
 
   async function handlePhotoUpload(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setPhotoError,
+      })
+    ) {
+      return;
+    }
+
     const files = Array.from(event.target.files || []);
 
     if (!files.length) return;
@@ -184,9 +202,15 @@ const selectedService =
   async function openEmergencyPhotoPicker() {
     setPhotoError("");
 
+    if (mediaUploadDeferred) {
+      setPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
     await openJobPhotoPicker({
       inputRef: photoInputRef,
       fileNamePrefix: "emergency-photo",
+      language,
       onPhotos: (nativePhotos) =>
         handlePhotoUpload(createPhotoInputEvent(nativePhotos.map((photo) => photo.file))),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
@@ -512,7 +536,9 @@ const selectedService =
         <div style={uploadBox}>
           <strong>{t.upload}</strong>
           <p>
-            {photos.length
+            {mediaUploadDeferred
+              ? mediaDeferredCopy.detail
+              : photos.length
               ? `${photos.length} ${language === "es" ? "foto(s) agregada(s)" : "photo(s) added"}`
               : t.uploadNote}
           </p>
@@ -522,16 +548,26 @@ const selectedService =
             type="file"
             accept="image/*"
             multiple
+            disabled={mediaUploadDeferred}
             style={{ display: "none" }}
             onChange={handlePhotoUpload}
           />
 
           <button
             type="button"
-            style={uploadButton}
+            style={
+              mediaUploadDeferred
+                ? { ...uploadButton, ...disabledUploadButton }
+                : uploadButton
+            }
+            disabled={mediaUploadDeferred}
             onClick={openEmergencyPhotoPicker}
           >
-             {language === "es" ? "Agregar fotos" : "Add Photos"}
+             {mediaUploadDeferred
+               ? mediaDeferredCopy.title
+               : language === "es"
+                 ? "Agregar fotos"
+                 : "Add Photos"}
           </button>
 
           {photoError && <p style={photoErrorText}>{photoError}</p>}
@@ -642,7 +678,7 @@ const serviceBox = {
   background: "white",
   padding: "18px",
   borderRadius: "18px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   fontSize: "18px",
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
@@ -700,11 +736,17 @@ const uploadButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "16px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const disabledUploadButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const photoList = {
@@ -776,7 +818,7 @@ const optionButton = {
 const activeOptionButton = {
   ...optionButton,
   background: "#ede9fe",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   border: "1px solid #ddd6fe",
 };
 
@@ -807,7 +849,7 @@ const submitButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   fontSize: "16px",

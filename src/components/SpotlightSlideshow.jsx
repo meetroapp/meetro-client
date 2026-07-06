@@ -12,7 +12,7 @@ function SpotlightSlideshow({
   alt = "",
   className = "",
   photoCountLabel = "",
-  placeholderLabel = "Portfolio preview",
+  placeholderLabel = "Story preview",
   previousLabel = "Previous photo",
   nextLabel = "Next photo",
 }) {
@@ -121,8 +121,9 @@ function SpotlightSlideshow({
 
 const slideshowWrap = {
   width: "100%",
-  height: "220px",
-  background: "linear-gradient(135deg,#f8fafc,#eef2ff)",
+  height: "100%",
+  minHeight: "320px",
+  background: "linear-gradient(135deg,#111827,#1e293b)",
   display: "grid",
   placeItems: "center",
   overflow: "hidden",
@@ -133,10 +134,10 @@ const slideshowWrap = {
 const slideshowImage = {
   width: "100%",
   height: "100%",
-  objectFit: "contain",
+  objectFit: "cover",
   objectPosition: "center",
   display: "block",
-  backgroundColor: "#f8fafc",
+  backgroundColor: "#111827",
   transition: "opacity 220ms ease",
 };
 
@@ -194,7 +195,7 @@ const placeholder = {
   display: "grid",
   placeItems: "center",
   gap: "6px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "950",
   textAlign: "center",
@@ -207,9 +208,9 @@ const placeholderIcon = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "rgba(91,61,245,0.12)",
-  border: "1px solid rgba(91,61,245,0.20)",
-  color: "#5b3df5",
+  background: "rgba(31,77,52,0.12)",
+  border: "1px solid rgba(31,77,52,0.20)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "14px",
 };
 

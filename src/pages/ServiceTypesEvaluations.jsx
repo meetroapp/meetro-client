@@ -158,7 +158,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -290,8 +290,8 @@ const pillWrap = {
 const pill = {
   padding: "6px 8px",
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#3730a3",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "900",
 };

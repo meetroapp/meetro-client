@@ -323,7 +323,6 @@ const businessModePages = new Set([
 
 const personalModePages = new Set([
   "home",
-  "discover",
   "upload",
   "myRequests",
   "assistant",

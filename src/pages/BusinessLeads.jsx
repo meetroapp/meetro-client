@@ -483,8 +483,8 @@ function BusinessLeads({ setPage, currentPage }) {
     onClick={() => setPage("businessDashboard")}
     style={{
       border: "none",
-      background: "#eee7ff",
-      color: "#5b3df5",
+      background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+      color: "var(--meetro-color-forest, #1f4d34)",
       padding: "10px 14px",
       borderRadius: "14px",
       fontWeight: "bold",
@@ -610,7 +610,7 @@ function BusinessLeads({ setPage, currentPage }) {
 const pageWrapper = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, #eef0ff 0%, transparent 32%), linear-gradient(to bottom, #f7f7fb, #eef0f7)",
+    "radial-gradient(circle at top left, rgba(31,77,52,0.12) 0%, transparent 32%), linear-gradient(to bottom, var(--meetro-surface-warm, #fbf6ed), var(--meetro-surface-sage, #eef4ea))",
   padding:
     "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -622,12 +622,13 @@ const pageWrapper = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #111b46 0%, #263b92 45%, #5b3df5 100%)",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f) 0%, var(--meetro-color-forest, #1f4d34) 58%, var(--meetro-color-coffee, #4a3428) 100%)",
   borderRadius: "30px",
   padding: "22px",
   color: "white",
   marginBottom: "18px",
-  boxShadow: "0 24px 60px rgba(35,54,139,0.32)",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
   maxWidth: "100%",
   minWidth: 0,
   overflow: "hidden",
@@ -692,8 +693,8 @@ const sortSelect = {
 };
 
 const countBadge = {
-  background: "#ede9ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "8px 13px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -706,12 +707,12 @@ const leadList = {
 };
 
 const leadCard = {
-  background: "rgba(255,255,255,0.94)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   backdropFilter: "blur(18px)",
   border: "1px solid rgba(255,255,255,0.9)",
   borderRadius: "28px",
   padding: "18px",
-  boxShadow: "0 16px 42px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
   maxWidth: "100%",
   minWidth: 0,
   overflow: "hidden",
@@ -728,8 +729,8 @@ const leadTopLine = {
 };
 
 const categoryPill = {
-  background: "#eee7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "7px 10px",
   fontSize: "12px",
@@ -772,9 +773,9 @@ const leadExtraInfo = {
   marginTop: "10px",
   padding: "10px 12px",
   borderRadius: "14px",
-  background: "rgba(239,246,255,0.9)",
-  border: "1px solid rgba(147,197,253,0.45)",
-  color: "#1e3a8a",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: 800,
 };
@@ -787,7 +788,7 @@ const actionRow = {
 
 const primaryActionButton = {
   border: "none",
-  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   borderRadius: "18px",
   padding: "15px",
@@ -819,7 +820,7 @@ const lockedText = {
 
 const primaryButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   borderRadius: "18px",
   padding: "15px 18px",

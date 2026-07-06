@@ -80,7 +80,7 @@ const page = {
   minHeight: "100vh",
   width: "100%",
   background:
-    "linear-gradient(160deg, #eef2ff 0%, #ffffff 42%, #f5f3ff 100%)",
+    "linear-gradient(160deg, var(--meetro-surface-sage, #eef4ea) 0%, #ffffff 42%, #f5f3ff 100%)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -94,10 +94,10 @@ const card = {
   background: "rgba(255,255,255,0.94)",
   borderRadius: "36px",
   padding: "42px 28px",
-  boxShadow: "0 25px 65px rgba(91,61,245,0.18)",
+  boxShadow: "0 25px 65px rgba(31,77,52,0.18)",
   textAlign: "center",
   transition: "all 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-  border: "1px solid rgba(91,61,245,0.10)",
+  border: "1px solid rgba(31,77,52,0.10)",
   backdropFilter: "blur(14px)",
 };
 
@@ -107,14 +107,14 @@ const logoCircle = {
   borderRadius: "30px",
   margin: "0 auto 24px",
   background:
-    "linear-gradient(135deg, #5b3df5 0%, #7c4dff 45%, #9b6dff 100%)",
+    "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, #7c4dff 45%, #9b6dff 100%)",
   color: "white",
   fontSize: "44px",
   fontWeight: "900",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.35)",
+  boxShadow: "0 18px 40px rgba(31,77,52,0.35)",
   animation: "floatLogo 3s ease-in-out infinite",
 };
 
@@ -123,7 +123,7 @@ const badge = {
   padding: "8px 15px",
   borderRadius: "999px",
   background: "#f1efff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: "800",
   marginBottom: "16px",
@@ -150,12 +150,12 @@ const button = {
   border: "none",
   borderRadius: "20px",
   padding: "16px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "17px",
   fontWeight: "800",
   cursor: "pointer",
-  boxShadow: "0 14px 28px rgba(91,61,245,0.3)",
+  boxShadow: "0 14px 28px rgba(31,77,52,0.3)",
 };
 
 const small = {

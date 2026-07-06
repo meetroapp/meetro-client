@@ -313,14 +313,14 @@ test("Business Profile stewardship order keeps customer proof and services near 
   const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
 
   const heroIndex = source.indexOf("identityHeroLayout");
-  const readinessIndex = source.indexOf('t("businessHealth")');
-  const customerPreviewIndex = source.indexOf('t("customerPreview")');
+  const readinessIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessHealth")}</h2>');
+  const customerPreviewIndex = source.indexOf('<h2 style={compactCardTitle}>{t("customerPreview")}</h2>');
   const servicesIndex = source.indexOf("<ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly");
-  const reviewsIndex = source.indexOf('t("reviews")');
-  const quickActionsIndex = source.indexOf('t("quickActions")');
-  const informationIndex = source.indexOf('t("businessInformation")');
-  const verificationIndex = source.indexOf('t("businessVerification")');
-  const setupIndex = source.indexOf('t("businessSetup")');
+  const reviewsIndex = source.indexOf('<h3 style={bioTitle}>{t("reviews")}</h3>');
+  const quickActionsIndex = source.indexOf('<h2 style={compactCardTitle}>{t("quickActions")}</h2>');
+  const informationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessInformation")}</h2>');
+  const verificationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
+  const setupIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessSetup")}</h2>');
 
   [
     heroIndex,
@@ -365,12 +365,12 @@ test("Business Profile customer trust surfaces stay grouped without new truth ow
   const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
 
   const trustGroupIndex = source.indexOf("customerTrustGroup");
-  const customerPreviewIndex = source.indexOf('t("customerPreview")');
+  const customerPreviewIndex = source.indexOf('<h2 style={compactCardTitle}>{t("customerPreview")}</h2>');
   const servicesIndex = source.indexOf("<ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly");
-  const reviewsIndex = source.indexOf('t("reviews")');
-  const quickActionsIndex = source.indexOf('t("quickActions")');
-  const informationIndex = source.indexOf('t("businessInformation")');
-  const verificationIndex = source.indexOf('t("businessVerification")');
+  const reviewsIndex = source.indexOf('<h3 style={bioTitle}>{t("reviews")}</h3>');
+  const quickActionsIndex = source.indexOf('<h2 style={compactCardTitle}>{t("quickActions")}</h2>');
+  const informationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessInformation")}</h2>');
+  const verificationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
 
   [
     trustGroupIndex,
@@ -390,7 +390,25 @@ test("Business Profile customer trust surfaces stay grouped without new truth ow
   assert.ok(informationIndex < verificationIndex);
   assert.match(source, /t\("customerTrust"\)/);
   assert.match(source, /customerPreviewCard/);
+  assert.match(source, /portfolioProofCard/);
   assert.match(source, /reviewsAfterCompletedJobs/);
+  assert.doesNotMatch(source, /trustScore|customerTrustScore|newTrustMetric/);
+});
+
+test("Business Profile readiness and improvement guidance use existing truth without fake scoring", () => {
+  const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
+
+  assert.match(source, /businessReadinessItems/);
+  assert.match(source, /getBusinessPortfolioProofProjection/);
+  assert.match(source, /readBusinessPortfolioStorage/);
+  assert.match(source, /profileImprovementGuidance/);
+  assert.match(source, /visibleProfileGuidance/);
+  assert.match(source, /t\("publicPresenceGuidance"\)/);
+  assert.match(source, /t\("portfolioProof"\)/);
+  assert.match(source, /className="business-profile-shell"/);
+  assert.match(source, /grid-template-columns: minmax\(0, 1\.08fr\) minmax\(340px, 0\.92fr\)/);
+  assert.doesNotMatch(source, /profileCompletionPercent/);
+  assert.doesNotMatch(source, /92%/);
   assert.doesNotMatch(source, /trustScore|customerTrustScore|newTrustMetric/);
 });
 
@@ -402,6 +420,9 @@ test("Business Profile labels use business-native language", () => {
   assert.equal(t("businessSetup"), "Business Setup Review");
   assert.equal(t("viewPublicProfile"), "Preview Customer View");
   assert.equal(t("businessHealth"), "Business Readiness");
+  assert.equal(t("readyForCustomers"), "Ready for customers");
+  assert.equal(t("portfolioProof"), "Portfolio Proof");
+  assert.equal(t("publicPresenceGuidance"), "Improve Customer Presence");
   assert.equal(t("addBusinessHours"), "Add Business Hours");
   assert.equal(t("addLicenseInformation"), "Add License Information");
   assert.equal(t("editBusinessInformation"), "Edit Business Information");
@@ -466,8 +487,8 @@ test("Business Profile owns business hours and license information", () => {
 test("Business Verification section has an actionable owner path", () => {
   const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
 
-  const verificationSectionIndex = source.indexOf('t("businessVerification")');
-  const reviewActionIndex = source.indexOf('t("reviewVerification")');
+  const verificationSectionIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
+  const reviewActionIndex = source.indexOf('t("reviewVerification")', verificationSectionIndex);
 
   assert.ok(verificationSectionIndex > -1);
   assert.ok(reviewActionIndex > verificationSectionIndex);

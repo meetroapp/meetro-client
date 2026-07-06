@@ -300,7 +300,7 @@ function EmergencyBusinessSelection({ setPage }) {
 const page = {
   minHeight: "100dvh",
   background:
-    "linear-gradient(180deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
+    "linear-gradient(180deg, var(--meetro-surface-sage, #eef4ea) 0%, #ffffff 50%, #f5f3ff 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -316,7 +316,7 @@ const heroCard = {
   borderRadius: "30px",
   padding: "28px",
   marginBottom: "20px",
-  boxShadow: "0 18px 44px rgba(91,61,245,0.12)",
+  boxShadow: "0 18px 44px rgba(31,77,52,0.12)",
   textAlign: "center",
 };
 
@@ -507,7 +507,7 @@ const primaryButton = {
   padding: "16px",
   borderRadius: "20px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "15px",
   fontWeight: "900",
@@ -542,7 +542,7 @@ const ruleItem = {
 };
 
 const agreementBox = {
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#3730a3",
   padding: "16px",
   borderRadius: "18px",

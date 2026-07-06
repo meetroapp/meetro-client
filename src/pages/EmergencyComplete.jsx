@@ -297,7 +297,7 @@ function submitReview() {
 const page = {
   minHeight: "100dvh",
   background:
-    "linear-gradient(160deg, #eef2ff 0%, #ffffff 50%, #f5f3ff 100%)",
+    "linear-gradient(160deg, var(--meetro-surface-sage, #eef4ea) 0%, #ffffff 50%, #f5f3ff 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -370,7 +370,7 @@ const avatar = {
   width: "58px",
   height: "58px",
   borderRadius: "20px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -405,7 +405,7 @@ const label = {
 };
 
 const completedService = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "17px",
 };
 
@@ -474,7 +474,7 @@ const saveButton = {
   padding: "15px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "15px",
   fontWeight: "900",
@@ -510,7 +510,7 @@ const primaryButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "16px",
   fontWeight: "900",

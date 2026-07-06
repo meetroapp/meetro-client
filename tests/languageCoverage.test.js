@@ -55,11 +55,30 @@ const requiredCommonKeys = [
   "reportName",
   "includes",
   "businessHealth",
+  "readyForCustomers",
+  "readyForCustomersHelp",
+  "inactiveReadinessHelp",
   "quickActions",
   "businessInformation",
   "customerTrust",
   "customerPreview",
   "customerPreviewHelp",
+  "customerPreviewSummary",
+  "portfolioProof",
+  "portfolioProofHelp",
+  "portfolioProofEmpty",
+  "addPortfolioProof",
+  "publicPresenceGuidance",
+  "publicPresenceGuidanceHelp",
+  "addServiceArea",
+  "addServiceAreaGuidance",
+  "chooseServicesOffered",
+  "chooseServicesOfferedGuidance",
+  "addBusinessHoursGuidance",
+  "addPortfolioProofGuidance",
+  "reviewVerificationGuidance",
+  "previewCustomerView",
+  "previewCustomerViewGuidance",
   "businessAvailability",
   "currentlyAvailable",
   "currentlyInactive",
@@ -178,6 +197,30 @@ test("known high-risk labels are not mixed between English and Spanish", () => {
   assert.equal(translations["pt-BR"].businessTools, "Ferramentas do negócio");
   assert.equal(translations.fr.comingSoonStatus, "Bientôt disponible");
   assert.equal(translations["pt-BR"].comingSoonStatus, "Em breve");
+});
+
+test("public request discovery language avoids feed and post terminology", () => {
+  assert.equal(translations.en.discoverHeroTitle, "Local Work Near You");
+  assert.equal(translations.en.localProjectFeed, "Local Work Near You");
+  assert.equal(translations.en.posted1hAgo, "Shared 1h ago");
+  assert.equal(translations.en.posted2hAgo, "Shared 2h ago");
+  assert.equal(translations.en.posted3hAgo, "Shared 3h ago");
+  assert.equal(translations.en.dashboardRecentlyPosted, "Recently shared");
+  assert.equal(translations.en.posted, "Shared");
+  assert.equal(translations.en.postNotFound, "Request not found");
+
+  for (const key of [
+    "discoverHeroTitle",
+    "localProjectFeed",
+    "posted1hAgo",
+    "posted2hAgo",
+    "posted3hAgo",
+    "dashboardRecentlyPosted",
+    "posted",
+    "postNotFound",
+  ]) {
+    assert.doesNotMatch(translations.en[key], /\b(feed|post|posted)\b/i);
+  }
 });
 
 test("new language helpers normalize labels and fall back to English safely", () => {

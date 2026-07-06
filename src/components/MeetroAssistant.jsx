@@ -34,6 +34,7 @@ import {
   getCompanionObservationScopeKey,
   getAssistantIntentDisplayLabel,
   getAssistantWakeAnimation,
+  getAssistantWakeGreeting,
   getAssistantWakeInsightMessage,
   getAssistantLauncherWakeAction,
   isHighPriorityWakeInsight,
@@ -57,6 +58,13 @@ function stopNativeSpeechRecognitionQuietly() {
 function getAssistantReducedMotion() {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function getAssistantLauncherButtonSize() {
+  if (typeof window === "undefined" || !window.matchMedia) return 126;
+  return window.matchMedia("(min-width: 1180px) and (hover: hover) and (pointer: fine)").matches
+    ? 136
+    : 126;
 }
 
 const VOICE_PREFERENCE_KEY = "meetroAssistantVoicePreference";
@@ -120,14 +128,14 @@ const assistantCopy = {
       "What’s next today?",
       "What appointments do I have?",
       "Any quotes waiting?",
-      "Any new messages?",
+      "Any new conversations?",
       "What should I do next?",
     ],
     homeownerVoiceTips: [
       "When is my appointment?",
       "Do I have any quotes?",
       "What’s happening with my request?",
-      "Any new messages?",
+      "Any new conversations?",
       "What should I do next?",
     ],
     homeownerEmergencyTips: [
@@ -135,7 +143,7 @@ const assistantCopy = {
       "If there is immediate danger, call 911.",
       "Add clear photos only if safe.",
       "Keep your phone nearby for professional updates.",
-      "Use chat to share access instructions, gate codes, pets, or hazards.",
+      "Use the conversation to share access instructions, gate codes, pets, or hazards.",
       "Do not attempt dangerous repairs yourself.",
     ],
     professionalEmergencyTips: [
@@ -152,7 +160,7 @@ const assistantCopy = {
     actions: {
       requestService: "Request Service",
       myRequests: "My Requests",
-      messages: "Messages",
+      messages: "Communication Center",
       discover: "Find Businesses",
       workCenter: "Review Work Center",
       leads: "Review Opportunities",
@@ -169,7 +177,7 @@ const assistantCopy = {
     },
     actionRoutingReady: "I can help with that.",
     professionalActionUnavailable:
-      "That workflow is for professionals. I can open Messages, Profile, or Legal instead.",
+      "That workflow is for professionals. I can open Communication Center, Profile, or Legal instead.",
     feedbackCategories: [
       "I don’t know what to do next",
       "I can’t find something",
@@ -181,7 +189,7 @@ const assistantCopy = {
     screens: {
       home: {
         name: "Home",
-        purpose: "Start a request, review active service, check messages, and return to history.",
+        purpose: "Start a request, review active service, check conversations, and return to history.",
         next: "Choose Request Service if you need help, or open an active request to see its next step.",
         actions: ["requestService", "myRequests", "messages"],
       },
@@ -200,7 +208,7 @@ const assistantCopy = {
       myRequests: {
         name: "My Requests",
         purpose: "Track your request from communication through schedule, quote, work, completion, closure, and history.",
-        next: "Review a request to check details, appointments, quotes, messages, and next steps.",
+        next: "Review a request to check details, appointments, quotes, conversations, and next steps.",
         actions: ["messages", "requestService"],
       },
       projectDetails: {
@@ -284,7 +292,7 @@ const assistantCopy = {
       emergencyStatus: {
         name: "Emergency Status",
         purpose: "Track urgent service response and updates.",
-        next: "Watch status updates and use messages if coordination is needed.",
+        next: "Watch status updates and continue the conversation if coordination is needed.",
         actions: ["messages"],
       },
       emergencyOperationsCenter: {
@@ -352,14 +360,14 @@ const assistantCopy = {
       "¿Qué sigue hoy?",
       "¿Qué citas tengo?",
       "¿Hay cotizaciones pendientes?",
-      "¿Hay mensajes nuevos?",
+      "¿Hay conversaciones nuevas?",
       "¿Qué debo hacer después?",
     ],
     homeownerVoiceTips: [
       "¿Cuándo es mi cita?",
       "¿Tengo cotizaciones?",
       "¿Qué pasa con mi solicitud?",
-      "¿Hay mensajes nuevos?",
+      "¿Hay conversaciones nuevas?",
       "¿Qué debo hacer después?",
     ],
     homeownerEmergencyTips: [
@@ -367,7 +375,7 @@ const assistantCopy = {
       "Si hay peligro inmediato, llama al 911.",
       "Agrega fotos claras solo si es seguro.",
       "Mantén tu teléfono cerca para recibir actualizaciones.",
-      "Usa el chat para compartir acceso, códigos, mascotas o peligros.",
+      "Usa la conversación para compartir acceso, códigos, mascotas o peligros.",
       "No intentes reparaciones peligrosas por tu cuenta.",
     ],
     professionalEmergencyTips: [
@@ -384,7 +392,7 @@ const assistantCopy = {
     actions: {
       requestService: "Solicitar servicio",
       myRequests: "Mis solicitudes",
-      messages: "Mensajes",
+      messages: "Centro de comunicación",
       discover: "Buscar negocios",
       workCenter: "Abrir Work Center",
       leads: "Abrir oportunidades",
@@ -401,7 +409,7 @@ const assistantCopy = {
     },
     actionRoutingReady: "Puedo ayudarte con eso.",
     professionalActionUnavailable:
-      "Ese flujo es para profesionales. Puedo abrir Mensajes, Perfil o Legal.",
+      "Ese flujo es para profesionales. Puedo abrir Centro de comunicación, Perfil o Legal.",
     feedbackCategories: [
       "No sé qué hacer después",
       "No encuentro algo",
@@ -413,7 +421,7 @@ const assistantCopy = {
     screens: {
       home: {
         name: "Inicio",
-        purpose: "Inicia una solicitud, revisa servicios activos, mensajes e historial.",
+        purpose: "Inicia una solicitud, revisa servicios activos, conversaciones e historial.",
         next: "Elige Solicitar servicio si necesitas ayuda, o abre una solicitud activa.",
         actions: ["requestService", "myRequests", "messages"],
       },
@@ -432,7 +440,7 @@ const assistantCopy = {
       myRequests: {
         name: "Mis solicitudes",
         purpose: "Sigue tu solicitud desde comunicación hasta agenda, cotización, trabajo, cierre e historial.",
-        next: "Revisa una solicitud para ver detalles, citas, cotizaciones y mensajes.",
+        next: "Revisa una solicitud para ver detalles, citas, cotizaciones y conversaciones.",
         actions: ["messages", "requestService"],
       },
       projectDetails: {
@@ -1701,7 +1709,13 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
   const notificationRole = roleMode === "business" ? "professional" : "homeowner";
   const unreadNotificationCount = getMeetroUnreadNotificationCount(notificationRole);
   const latestNotification = getNotifications(notificationRole).find((item) => !item.read);
-  const openMessagesAction = { label: language === "es" ? "Revisar mensajes" : "Review Messages", target: "messagesInbox" };
+  const openMessagesAction = {
+    label:
+      language === "es"
+        ? "Continuar en Centro de Comunicación"
+        : "Continue in Communication Center",
+    target: "messagesInbox",
+  };
 
   if (intent === "notifications") {
     return makeResponse(
@@ -2278,6 +2292,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [readAloud, setReadAloud] = useState(false);
   const [assistantSpeaking, setAssistantSpeaking] = useState(false);
   const [voiceThinking, setVoiceThinking] = useState(false);
+  const [typedQuestion, setTypedQuestion] = useState("");
   const [voiceResponseUnavailable, setVoiceResponseUnavailable] = useState(false);
   const [showAllEmergencyTips, setShowAllEmergencyTips] = useState(false);
   const [showAdvancedHelp, setShowAdvancedHelp] = useState(false);
@@ -2312,8 +2327,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const isChat = currentPage === "conversationThread" || currentPage === "emergencyChat";
   const launcherBottomClearance = isChat ? 104 : 94;
   const launcherFallbackBottom = `calc(${launcherBottomClearance}px + env(safe-area-inset-bottom))`;
+  const launcherButtonSize = getAssistantLauncherButtonSize();
   const launcherPositionOptions = {
     ...AI_BUTTON_POSITION_DEFAULTS,
+    buttonSize: launcherButtonSize,
     bottomClearance: launcherBottomClearance,
   };
   const isBusinessMode =
@@ -2353,20 +2370,28 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     typeof window !== "undefined" &&
     Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
   const voiceStatusLabel = assistantSpeaking
-    ? t("speaking")
+    ? t("assistantResponding", language)
     : voiceListening
     ? copy.voiceListening
     : voiceThinking
     ? t("assistantThinking")
+    : voiceAnswer
+    ? t("assistantResponding", language)
     : t("assistantReady");
-  const assistantMode = assistantSpeaking
-    ? "speaking"
+  const isConversationMode = companionMode === COMPANION_STATES.conversation;
+  const isGuidanceMode = companionMode === COMPANION_STATES.guidance;
+  const assistantMode = !isConversationMode
+    ? "ready"
+    : assistantSpeaking
+    ? "responding"
     : voiceListening
     ? "listening"
     : voiceThinking
     ? "thinking"
+    : voiceAnswer
+    ? "responding"
     : "ready";
-  const assistantFirstName = getAssistantFirstName() || copy.assistantGreetingFallback;
+  const assistantFirstName = getAssistantFirstName();
   const companionTopInsight = useMemo(() => {
     try {
       if (!areRelationshipInsightsEnabled()) return null;
@@ -2419,8 +2444,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         currentPage: assistantContextPage,
         language,
         hasObservation: Boolean(wakeTopInsight),
+        storage: localStorage,
+        roleMode,
       }),
-    [assistantContextPage, language, wakeTopInsight]
+    [assistantContextPage, language, roleMode, wakeTopInsight]
   );
   const compactCompanionTitle = wakeTopInsight
     ? t("assistantCompanionINoticed", language)
@@ -2431,7 +2458,19 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     wakeObservationType === "emergency"
       ? t("openEmergencyChat", language)
       : lanternContext.primaryActionLabel;
-  const isConversationMode = companionMode === COMPANION_STATES.conversation;
+  const companionGreeting = getAssistantWakeGreeting({
+    name: assistantFirstName,
+    language,
+  }).greeting;
+  const companionWorkspaceGreeting = wakeTopInsight
+    ? compactCompanionMessage
+    : `${companionGreeting} ${lanternContext.message}`;
+  const companionGuidanceObservation =
+    !isConversationMode && voiceAnswer ? voiceAnswer : companionWorkspaceGreeting;
+  const companionGuidanceRecommendation = wakeTopInsight
+    ? lanternContext.message
+    : lanternContext.guidance?.recommendation ||
+      t("assistantCompanionRecommendationDefault", language);
 
   function getLauncherViewport() {
     return {
@@ -2625,6 +2664,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
     return true;
   });
+  const companionSuggestedActions = quickActions.slice(0, 4).map((actionKey) => ({
+    key: actionKey,
+    label: copy.actions[actionKey] || actionKey,
+  }));
+  const companionPrimaryGuidanceAction = companionSuggestedActions[0] || null;
 
   function getStoredFeedback(key) {
     try {
@@ -2792,6 +2836,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceActions(Array.isArray(response.actions) ? response.actions : []);
     setVoiceStatusChip(response.statusChip || null);
     setVoiceError("");
+    setTypedQuestion("");
 
     saveVoiceHistory({
       id: `voice-${Date.now()}`,
@@ -2816,6 +2861,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }
 
     lastInputModeRef.current = "typed";
+  }
+
+  function submitTypedQuestion(event) {
+    event.preventDefault();
+    const question = typedQuestion.trim();
+    if (!question) return;
+
+    processVoiceQuestion(question, { inputMode: "typed" });
   }
 
   function clearNativeSpeechTimeout() {
@@ -3207,6 +3260,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceActions([]);
     setVoiceStatusChip(null);
     setVoiceError("");
+    setTypedQuestion("");
     setVoiceResponseUnavailable(false);
     setShowAdvancedHelp(false);
     setCompanionMode(COMPANION_STATES.idle);
@@ -3215,6 +3269,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   function openAssistantFromLauncher(options = {}) {
     const initialQuestion = String(options.initialQuestion || "").trim();
+    const requestedConversation =
+      Boolean(initialQuestion) ||
+      options.mode === COMPANION_STATES.conversation ||
+      options.fullConversation === true;
     clearAssistantWake();
     if (assistantCloseTimerRef.current) {
       window.clearTimeout(assistantCloseTimerRef.current);
@@ -3230,15 +3288,22 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceActions([]);
     setVoiceStatusChip(null);
     setVoiceError("");
+    setTypedQuestion("");
     setVoiceResponseUnavailable(false);
     lastInputModeRef.current = "typed";
     setShowAdvancedHelp(false);
-    setCompanionMode(COMPANION_STATES.conversation);
+    setCompanionMode(
+      requestedConversation ? COMPANION_STATES.conversation : COMPANION_STATES.guidance
+    );
     setOpen(true);
     setFeedbackSaved(false);
     if (initialQuestion) {
       processVoiceQuestion(initialQuestion, { inputMode: "typed" });
     }
+  }
+
+  function enterCompanionConversation() {
+    setCompanionMode(COMPANION_STATES.conversation);
   }
 
   function handleLauncherPointerDown(event) {
@@ -3350,7 +3415,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function handleWakeAskMeetro() {
-    openAssistantFromLauncher();
+    openAssistantFromLauncher({ mode: COMPANION_STATES.conversation });
   }
 
   function handleWakeReviewInsights() {
@@ -3371,8 +3436,22 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setVoiceError("");
     setVoiceResponseUnavailable(false);
     setShowAdvancedHelp(false);
-    setCompanionMode(COMPANION_STATES.conversation);
+    setCompanionMode(COMPANION_STATES.guidance);
     setOpen(true);
+  }
+
+  function handleWorkspaceGuidancePrimaryAction() {
+    if (wakeTopInsight && wakeObservationType === "emergency") {
+      handleWakePrimaryObservation();
+      return;
+    }
+
+    if (companionPrimaryGuidanceAction?.key) {
+      handleQuickAction(companionPrimaryGuidanceAction.key);
+      return;
+    }
+
+    enterCompanionConversation();
   }
 
   const launcherPositionStyle = launcherPosition
@@ -3386,6 +3465,12 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         right: "max(12px, env(safe-area-inset-right, 0px))",
         bottom: launcherFallbackBottom,
       };
+  const companionAnchorStyle = getCompanionAnchorStyle({
+    launcherPosition,
+    launcherButtonSize,
+    viewport: getLauncherViewport(),
+    fallbackBottom: launcherBottomClearance,
+  });
 
   return (
     <>
@@ -3407,12 +3492,15 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         <span style={assistantButtonMark} aria-hidden="true">
           {ASSISTANT_ORB_MARK}
         </span>
+        <span style={assistantButtonText}>{t("assistantCompanionAskMeetro", language)}</span>
+        <span style={assistantPresenceDot} aria-hidden="true" />
       </button>
 
       {wakeOpen && !open && (
         <section
           style={getAssistantWakeBubbleStyle({
             launcherPosition,
+            launcherButtonSize,
             viewport: getLauncherViewport(),
             fallbackBottom: launcherBottomClearance,
             reducedMotion: getAssistantReducedMotion(),
@@ -3466,6 +3554,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
             className={`meetro-assistant-presence meetro-assistant-presence-${assistantMode} ${
               assistantClosing ? "meetro-assistant-presence-closing" : "meetro-assistant-presence-open"
             }`}
+            style={companionAnchorStyle}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="meetro-assistant-ambient-glow" aria-hidden="true" />
@@ -3488,8 +3577,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
             <div style={assistantHeader}>
               <div style={assistantHeaderCopy}>
-                <h2 style={assistantTitle}>{t("companionContextFallbackTitle", language)}</h2>
-                <p style={assistantPromptText}>{lanternContext.title}</p>
+                <span style={assistantEyebrow}>{lanternContext.title}</span>
+                <h2 style={assistantTitle}>{t("assistantCompanionPanelTitle", language)}</h2>
+                <p style={assistantPromptText}>{companionWorkspaceGreeting}</p>
               </div>
 
               <div style={assistantHeaderActions}>
@@ -3498,6 +3588,47 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                 </button>
               </div>
             </div>
+
+            {isGuidanceMode && (
+              <section
+                style={companionGuidancePanel}
+                aria-label={t("assistantCompanionWorkspaceGuidance", language)}
+              >
+                <div style={companionGuidanceItem}>
+                  <span style={companionGuidanceLabel}>
+                    {t("assistantCompanionObservation", language)}
+                  </span>
+                  <p style={companionGuidanceText}>{companionGuidanceObservation}</p>
+                </div>
+
+                <div style={companionGuidanceItem}>
+                  <span style={companionGuidanceLabel}>
+                    {t("assistantCompanionRecommendation", language)}
+                  </span>
+                  <p style={companionGuidanceText}>{companionGuidanceRecommendation}</p>
+                </div>
+
+                <div style={companionGuidanceActions}>
+                  <button
+                    type="button"
+                    style={companionGuidancePrimaryAction}
+                    onClick={handleWorkspaceGuidancePrimaryAction}
+                  >
+                    {companionPrimaryGuidanceAction?.label ||
+                      compactCompanionPrimaryLabel ||
+                      t("companionContextReviewNextStep", language)}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={companionGuidanceAskAction}
+                    onClick={enterCompanionConversation}
+                  >
+                    {t("assistantCompanionAskMeetro", language)}
+                  </button>
+                </div>
+              </section>
+            )}
 
             {isConversationMode && (
             <div style={voiceCard}>
@@ -3514,7 +3645,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                   disabled={voiceListening}
                   aria-label={copy.voiceButton}
                 >
-                  {voiceListening ? "…" : ""}
+                  {voiceListening ? "..." : "Mic"}
                 </button>
 
                 <div style={voiceHeroText}>
@@ -3533,6 +3664,26 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                   <p style={voiceHintText}>{t("assistantHeyMeetroHint")}</p>
                 </div>
               </div>
+
+              {companionSuggestedActions.length > 0 && (
+                <div style={companionSuggestionPanel}>
+                  <span style={companionSuggestionTitle}>
+                    {t("assistantCompanionSuggestedActions", language)}
+                  </span>
+                  <div style={companionSuggestionGrid}>
+                    {companionSuggestedActions.map((action) => (
+                      <button
+                        key={action.key}
+                        type="button"
+                        style={companionSuggestionButton}
+                        onClick={() => handleQuickAction(action.key)}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {voiceAnswer && (
                 <div style={voiceAnswerBox} ref={voiceAnswerRef}>
@@ -3617,6 +3768,26 @@ function MeetroAssistant({ currentPage = "", setPage }) {
               )}
 
               {voiceError && <p style={voiceErrorText}>{voiceError}</p>}
+
+              <form style={companionInputForm} onSubmit={submitTypedQuestion}>
+                <input
+                  value={typedQuestion}
+                  onChange={(event) => setTypedQuestion(event.target.value)}
+                  placeholder={t("assistantCompanionInputPlaceholder", language)}
+                  style={companionInput}
+                  aria-label={t("assistantCompanionInputPlaceholder", language)}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    ...companionInputSubmit,
+                    ...(!typedQuestion.trim() ? companionInputSubmitDisabled : {}),
+                  }}
+                  disabled={!typedQuestion.trim()}
+                >
+                  {t("assistantCompanionSend", language)}
+                </button>
+              </form>
 
             </div>
             )}
@@ -3760,54 +3931,79 @@ const assistantButton = {
   position: "fixed",
   right: "max(12px, env(safe-area-inset-right, 0px))",
   zIndex: 9998,
-  width: 52,
-  height: 52,
+  minWidth: 126,
+  height: 50,
+  padding: "7px 11px 7px 8px",
   maxWidth: "calc(100% - 24px)",
   boxSizing: "border-box",
   contain: "layout paint",
-  borderRadius: "50%",
-  border: "1px solid rgba(255, 255, 255, 0.34)",
+  borderRadius: 999,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   background:
-    "radial-gradient(circle at 32% 22%, rgba(255,255,255,0.72), rgba(255,255,255,0.18) 38%, rgba(124,92,255,0.18) 100%)",
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
   backdropFilter: "blur(20px)",
   WebkitBackdropFilter: "blur(20px)",
-  color: "#4c1d95",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 15,
   fontWeight: 950,
   boxShadow:
-    "0 12px 30px rgba(15, 23, 42, 0.18), 0 0 24px rgba(124, 92, 255, 0.18), inset 0 1px 0 rgba(255,255,255,0.58)",
+    "var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
   cursor: "pointer",
   touchAction: "none",
   userSelect: "none",
   WebkitUserSelect: "none",
-  display: "grid",
-  placeItems: "center",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
 };
 
 const assistantButtonWake = {
   boxShadow:
-    "0 0 0 8px rgba(124, 58, 237, 0.11), 0 18px 42px rgba(91, 61, 245, 0.26), 0 0 34px rgba(124, 92, 255, 0.28), inset 0 1px 0 rgba(255,255,255,0.72)",
+    "0 0 0 8px rgba(31, 77, 52, 0.10), 0 22px 44px rgba(49, 35, 20, 0.16), inset 0 1px 0 rgba(255,255,255,0.78)",
   transform: "scale(1.025)",
 };
 
 const assistantButtonMark = {
-  width: 34,
-  height: 34,
+  width: 32,
+  height: 32,
   display: "grid",
   placeItems: "center",
   borderRadius: "50%",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,0.82), rgba(221,214,254,0.48))",
-  color: "#5b21b6",
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 17,
   fontWeight: 950,
   letterSpacing: 0,
   lineHeight: 1,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 5px 14px rgba(91,61,245,0.18)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.9), 0 5px 14px rgba(49, 35, 20, 0.12)",
+};
+
+const assistantButtonText = {
+  display: "inline-flex",
+  alignItems: "center",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  fontSize: 13,
+  lineHeight: 1,
+  fontWeight: 950,
+  whiteSpace: "nowrap",
+};
+
+const assistantPresenceDot = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: "var(--meetro-color-forest, #1f4d34)",
+  boxShadow:
+    "0 0 0 4px rgba(31, 77, 52, 0.12), 0 0 14px rgba(31, 77, 52, 0.22)",
+  flexShrink: 0,
 };
 
 function getAssistantWakeBubbleStyle({
   launcherPosition = null,
+  launcherButtonSize = 52,
   viewport = { width: 390, height: 844 },
   fallbackBottom = 94,
   reducedMotion = false,
@@ -3823,7 +4019,7 @@ function getAssistantWakeBubbleStyle({
 
   if (launcherPosition) {
     const x = Math.min(
-      Math.max(12, Number(launcherPosition.x || 0) - width + 52),
+      Math.max(12, Number(launcherPosition.x || 0) - width + launcherButtonSize),
       Math.max(12, safeWidth - width - 12)
     );
     const y = Math.min(
@@ -3846,20 +4042,68 @@ function getAssistantWakeBubbleStyle({
   };
 }
 
+function getCompanionAnchorStyle({
+  launcherPosition = null,
+  launcherButtonSize = 126,
+  viewport = {},
+  fallbackBottom = 94,
+} = {}) {
+  const safeWidth = Math.max(320, Number(viewport.width || 0));
+  const safeHeight = Math.max(520, Number(viewport.height || 0));
+  const companionWidth = Math.min(388, Math.max(288, safeWidth - 32));
+  const launcherHeight = 50;
+  const viewportPadding = safeWidth < 520 ? 12 : 16;
+  const estimatedCompanionHeight = Math.min(
+    safeHeight - viewportPadding * 2,
+    safeWidth < 520 ? Math.max(420, safeHeight * 0.72) : 620
+  );
+  const fallbackLauncherPosition = {
+    x: safeWidth - 12 - launcherButtonSize,
+    y: safeHeight - fallbackBottom - launcherHeight,
+  };
+  const anchorPosition = launcherPosition || fallbackLauncherPosition;
+  const launcherY = Number(anchorPosition.y || 0);
+  const hasRoomAbove = launcherY - viewportPadding > estimatedCompanionHeight * 0.58;
+  const placeBelow = !hasRoomAbove;
+  const targetLeft =
+    Number(anchorPosition.x || 0) + launcherButtonSize / 2 < safeWidth / 2
+      ? Number(anchorPosition.x || 0)
+      : Number(anchorPosition.x || 0) + launcherButtonSize - companionWidth;
+  const maxLeft = Math.max(viewportPadding, safeWidth - companionWidth - viewportPadding);
+  const left = Math.min(Math.max(viewportPadding, targetLeft), maxLeft);
+  const top = placeBelow
+    ? Math.min(
+        Math.max(viewportPadding, safeHeight - estimatedCompanionHeight - viewportPadding),
+        launcherY + launcherHeight + 12
+      )
+    : Math.max(viewportPadding, launcherY - 12);
+
+  return {
+    position: "fixed",
+    left,
+    top,
+    right: "auto",
+    bottom: "auto",
+    margin: 0,
+    transform: placeBelow ? "none" : "translateY(-100%)",
+  };
+}
+
 const assistantWakeBubble = {
   position: "fixed",
   zIndex: 9999,
   maxWidth: "calc(100vw - 24px)",
   boxSizing: "border-box",
   borderRadius: 22,
-  border: "1px solid rgba(255, 255, 255, 0.46)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,0.76), rgba(248,250,255,0.62))",
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
   backdropFilter: "blur(22px)",
   WebkitBackdropFilter: "blur(22px)",
-  boxShadow: "0 16px 40px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255,255,255,0.74)",
+  boxShadow:
+    "var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
   padding: "14px 14px 13px",
-  color: "#111827",
+  color: "var(--meetro-color-ink, #172317)",
   overflow: "hidden",
   animation: "meetroAssistantWakeIn 180ms ease-out",
 };
@@ -3872,8 +4116,8 @@ const assistantWakeDismissButton = {
   height: 28,
   border: "none",
   borderRadius: "50%",
-  background: "rgba(15, 23, 42, 0.06)",
-  color: "#475569",
+  background: "rgba(31, 77, 52, 0.08)",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 18,
   lineHeight: "28px",
   cursor: "pointer",
@@ -3885,8 +4129,8 @@ const assistantWakeIcon = {
   display: "grid",
   placeItems: "center",
   borderRadius: "50%",
-  background: "rgba(255, 255, 255, 0.48)",
-  color: "#5b21b6",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 14,
   fontWeight: 950,
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
@@ -3898,8 +4142,8 @@ const assistantWakeStatus = {
   margin: "0 34px 6px 0",
   padding: "4px 8px",
   borderRadius: 999,
-  background: "rgba(124, 58, 237, 0.08)",
-  color: "#5b21b6",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 11,
   lineHeight: 1,
   fontWeight: 950,
@@ -3907,7 +4151,7 @@ const assistantWakeStatus = {
 
 const assistantWakeGreeting = {
   margin: "0 34px 3px 0",
-  color: "#1e1b4b",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 15,
   fontWeight: 850,
   lineHeight: 1.25,
@@ -3915,7 +4159,7 @@ const assistantWakeGreeting = {
 
 const assistantWakePrompt = {
   margin: "0 0 11px",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 13,
   fontWeight: 650,
   lineHeight: 1.35,
@@ -3928,10 +4172,10 @@ const assistantWakeActions = {
 };
 
 const assistantWakeAction = {
-  border: "1px solid rgba(124, 58, 237, 0.2)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   borderRadius: 999,
-  background: "rgba(255,255,255,0.78)",
-  color: "#5b21b6",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 12,
   fontWeight: 850,
   padding: "8px 10px",
@@ -3941,9 +4185,9 @@ const assistantWakeAction = {
 
 const assistantWakeSecondaryAction = {
   ...assistantWakeAction,
-  background: "rgba(255,255,255,0.54)",
-  color: "#475569",
-  border: "1px solid rgba(148, 163, 184, 0.26)",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-muted, #65705f)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const assistantOverlay = {
@@ -3958,7 +4202,7 @@ const assistantOverlay = {
   alignItems: "center",
   justifyContent: "center",
   background:
-    "radial-gradient(circle at 50% 24%, rgba(30, 41, 101, 0.56), transparent 36%), rgba(2, 6, 23, 0.76)",
+    "radial-gradient(circle at 50% 24%, rgba(20, 53, 31, 0.24), transparent 36%), rgba(20, 18, 14, 0.58)",
   backdropFilter: "blur(9px)",
   WebkitBackdropFilter: "blur(9px)",
   padding:
@@ -3976,26 +4220,23 @@ const assistantSheet = {
   overflowX: "hidden",
   boxSizing: "border-box",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,0.92), rgba(248,250,255,0.82))",
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
   backdropFilter: "blur(22px)",
   WebkitBackdropFilter: "blur(22px)",
-  border: "1px solid rgba(255,255,255,0.56)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   borderRadius: 34,
   padding: "20px max(18px, env(safe-area-inset-right)) 18px max(18px, env(safe-area-inset-left))",
   margin: 0,
   boxShadow:
-    "0 24px 80px rgba(2, 6, 23, 0.22), inset 0 1px 0 rgba(255,255,255,0.82)",
+    "var(--meetro-shadow-lifted, 0 24px 70px rgba(49, 35, 20, 0.14))",
   transition:
     "max-height 180ms ease, padding 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
   willChange: "max-height",
 };
 
 const companionStateStyles = {
-  [COMPANION_STATES.briefing]: {
+  [COMPANION_STATES.guidance]: {
     maxHeight: "min(72dvh, 520px)",
-  },
-  [COMPANION_STATES.insights]: {
-    maxHeight: "min(64dvh, 460px)",
   },
   [COMPANION_STATES.conversation]: {
     maxHeight: "min(86dvh, 720px)",
@@ -4005,22 +4246,27 @@ const companionStateStyles = {
 const assistantModeGlow = {
   ready: {
     boxShadow:
-      "0 24px 80px rgba(2, 6, 23, 0.22), 0 0 34px rgba(124, 58, 237, 0.12), inset 0 1px 0 rgba(255,255,255,0.82)",
+      "var(--meetro-shadow-lifted, 0 24px 70px rgba(49, 35, 20, 0.14))",
   },
   listening: {
-    border: "1px solid rgba(236, 72, 153, 0.34)",
+    border: "1px solid rgba(183, 121, 31, 0.24)",
     boxShadow:
-      "0 28px 96px rgba(2, 6, 23, 0.30), 0 0 54px rgba(124, 58, 237, 0.22), 0 0 42px rgba(236, 72, 153, 0.22), inset 0 1px 0 rgba(255,255,255,0.84)",
+      "0 28px 96px rgba(49, 35, 20, 0.18), 0 0 36px rgba(183, 121, 31, 0.12), inset 0 1px 0 rgba(255,255,255,0.84)",
   },
   thinking: {
-    border: "1px solid rgba(14, 165, 233, 0.30)",
+    border: "1px solid rgba(31, 77, 52, 0.24)",
     boxShadow:
-      "0 28px 96px rgba(2, 6, 23, 0.30), 0 0 48px rgba(14, 165, 233, 0.20), 0 0 42px rgba(124, 58, 237, 0.17), inset 0 1px 0 rgba(255,255,255,0.84)",
+      "0 28px 96px rgba(49, 35, 20, 0.18), 0 0 34px rgba(31, 77, 52, 0.12), inset 0 1px 0 rgba(255,255,255,0.84)",
   },
   speaking: {
-    border: "1px solid rgba(16, 185, 129, 0.32)",
+    border: "1px solid rgba(31, 77, 52, 0.26)",
     boxShadow:
-      "0 28px 96px rgba(2, 6, 23, 0.30), 0 0 48px rgba(16, 185, 129, 0.20), 0 0 42px rgba(124, 58, 237, 0.15), inset 0 1px 0 rgba(255,255,255,0.84)",
+      "0 28px 96px rgba(49, 35, 20, 0.18), 0 0 34px rgba(31, 77, 52, 0.13), inset 0 1px 0 rgba(255,255,255,0.84)",
+  },
+  responding: {
+    border: "1px solid rgba(31, 77, 52, 0.26)",
+    boxShadow:
+      "0 28px 96px rgba(49, 35, 20, 0.18), 0 0 34px rgba(31, 77, 52, 0.13), inset 0 1px 0 rgba(255,255,255,0.84)",
   },
 };
 
@@ -4028,7 +4274,7 @@ const assistantHandle = {
   width: 46,
   height: 5,
   borderRadius: 999,
-  background: "#cbd5e1",
+  background: "rgba(101, 112, 95, 0.26)",
   margin: "0 auto 14px",
 };
 
@@ -4059,7 +4305,7 @@ const assistantHeaderActions = {
 const assistantEyebrow = {
   display: "block",
   marginBottom: 4,
-  color: "#7c3aed",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: 12,
   fontWeight: 950,
   textTransform: "uppercase",
@@ -4068,7 +4314,7 @@ const assistantEyebrow = {
 
 const assistantTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 26,
   lineHeight: 1.1,
   fontWeight: 950,
@@ -4076,7 +4322,7 @@ const assistantTitle = {
 
 const assistantPurposeText = {
   margin: "5px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 13,
   lineHeight: 1.35,
   fontWeight: 800,
@@ -4085,7 +4331,7 @@ const assistantPurposeText = {
 
 const assistantGreetingText = {
   margin: "8px 0 0",
-  color: "#1e1b4b",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 17,
   lineHeight: 1.2,
   fontWeight: 950,
@@ -4093,7 +4339,7 @@ const assistantGreetingText = {
 
 const assistantPromptText = {
   margin: "3px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 15,
   lineHeight: 1.3,
   fontWeight: 850,
@@ -4103,9 +4349,9 @@ const companionNoticePanel = {
   padding: 14,
   borderRadius: 22,
   background:
-    "linear-gradient(145deg, rgba(255,255,255,0.72), rgba(238,242,255,0.58))",
-  border: "1px solid rgba(255,255,255,0.54)",
-  boxShadow: "0 14px 34px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.72)",
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
   marginBottom: 12,
 };
 
@@ -4119,7 +4365,7 @@ const companionNoticeList = {
 
 const companionNoticeItem = {
   margin: 0,
-  color: "#27364a",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: 14,
   lineHeight: 1.38,
   fontWeight: 760,
@@ -4134,10 +4380,10 @@ const companionIntentGrid = {
 
 const companionIntentButton = {
   minHeight: 42,
-  border: "1px solid rgba(124,58,237,0.16)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   borderRadius: 15,
-  background: "rgba(255,255,255,0.68)",
-  color: "#4338ca",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 12,
   lineHeight: 1.15,
   fontWeight: 900,
@@ -4146,22 +4392,22 @@ const companionIntentButton = {
 };
 
 const companionIntentButtonActive = {
-  background: "rgba(124,58,237,0.10)",
-  border: "1px solid rgba(124,58,237,0.34)",
-  color: "#4c1d95",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  border: "1px solid rgba(31, 77, 52, 0.22)",
+  color: "var(--meetro-color-forest-deep, #14351f)",
 };
 
 const companionInsightPanel = {
   padding: 13,
   borderRadius: 18,
-  background: "rgba(255,255,255,0.68)",
-  border: "1px solid rgba(226,232,240,0.9)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   marginBottom: 12,
 };
 
 const companionInsightText = {
   margin: 0,
-  color: "#334155",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: 14,
   lineHeight: 1.42,
   fontWeight: 760,
@@ -4172,17 +4418,17 @@ const assistantNotificationPill = {
   marginTop: 8,
   padding: "5px 8px",
   borderRadius: 999,
-  background: "#eef2ff",
-  color: "#5b21b6",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 11,
   lineHeight: 1.1,
   fontWeight: 950,
 };
 
 const assistantCloseButton = {
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-muted, #65705f)",
   borderRadius: 14,
   padding: "9px 11px",
   fontSize: 13,
@@ -4192,23 +4438,24 @@ const assistantCloseButton = {
 
 const assistantBackButton = {
   ...assistantCloseButton,
-  background: "rgba(255,255,255,0.68)",
-  color: "#5b21b6",
-  border: "1px solid rgba(124,58,237,0.18)",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const assistantInfoCard = {
   padding: 13,
   borderRadius: 18,
-  background: "linear-gradient(135deg,#f5f3ff,#eef2ff)",
-  border: "1px solid #ddd6fe",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
   marginBottom: 12,
 };
 
 const assistantLabel = {
   display: "block",
   marginBottom: 5,
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 11,
   fontWeight: 950,
   textTransform: "uppercase",
@@ -4217,7 +4464,7 @@ const assistantLabel = {
 
 const assistantScreenName = {
   display: "block",
-  color: "#312e81",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 17,
   lineHeight: 1.25,
   fontWeight: 950,
@@ -4231,13 +4478,13 @@ const assistantStack = {
 const assistantSection = {
   padding: 13,
   borderRadius: 18,
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const assistantText = {
   margin: 0,
-  color: "#334155",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: 14,
   lineHeight: 1.45,
   fontWeight: 700,
@@ -4299,9 +4546,9 @@ const voiceCard = {
   padding: 14,
   borderRadius: 24,
   background:
-    "radial-gradient(circle at top left, rgba(124,58,237,0.10), transparent 38%), rgba(255,255,255,0.66)",
-  border: "1px solid rgba(255,255,255,0.52)",
-  boxShadow: "0 14px 34px rgba(91,61,245,0.09)",
+    "radial-gradient(circle at top left, rgba(31,77,52,0.08), transparent 38%), linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
 };
 
 const voiceHeader = {
@@ -4325,37 +4572,40 @@ const voiceButton = {
   width: 56,
   height: 56,
   borderRadius: "50%",
-  border: "1px solid rgba(167,139,250,0.55)",
+  border: "1px solid rgba(31, 77, 52, 0.18)",
   background:
-    "radial-gradient(circle at 35% 25%, rgba(255,255,255,0.82), rgba(124,58,237,0.22))",
+    "radial-gradient(circle at 35% 25%, rgba(255,255,255,0.84), rgba(223,232,216,0.78) 58%, rgba(31,77,52,0.14))",
   backdropFilter: "blur(16px)",
   WebkitBackdropFilter: "blur(16px)",
-  color: "#5b21b6",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 24,
   fontWeight: 950,
   cursor: "pointer",
   flexShrink: 0,
   boxShadow:
-    "0 0 0 5px rgba(124,58,237,0.08), 0 12px 26px rgba(91,61,245,0.18)",
+    "0 0 0 5px rgba(31,77,52,0.08), 0 12px 26px rgba(49,35,20,0.14)",
 };
 
 const voiceButtonListening = {
-  background: "linear-gradient(135deg,#7c3aed,#ec4899)",
-  border: "1px solid #c4b5fd",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-wood, #b7791f), var(--meetro-color-coffee, #4a3428))",
+  border: "1px solid rgba(183, 121, 31, 0.34)",
   boxShadow:
-    "0 0 0 10px rgba(236,72,153,0.12), 0 18px 38px rgba(124,58,237,0.32)",
+    "0 0 0 10px rgba(183,121,31,0.10), 0 18px 38px rgba(74,52,40,0.20)",
 };
 
 const voiceButtonThinking = {
-  background: "linear-gradient(135deg,#2563eb,#7c3aed)",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), var(--meetro-color-forest-deep, #14351f))",
   boxShadow:
-    "0 0 0 9px rgba(37,99,235,0.11), 0 18px 38px rgba(91,61,245,0.28)",
+    "0 0 0 9px rgba(31,77,52,0.10), 0 18px 38px rgba(49,35,20,0.18)",
 };
 
 const voiceButtonSpeaking = {
-  background: "linear-gradient(135deg,#059669,#7c3aed)",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), var(--meetro-color-coffee, #4a3428))",
   boxShadow:
-    "0 0 0 9px rgba(16,185,129,0.12), 0 18px 38px rgba(5,150,105,0.24)",
+    "0 0 0 9px rgba(31,77,52,0.10), 0 18px 38px rgba(49,35,20,0.18)",
 };
 
 const voiceTitleRow = {
@@ -4368,7 +4618,7 @@ const voiceTitleRow = {
 
 const voiceTitle = {
   display: "inline-flex",
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 18,
   lineHeight: 1.2,
   fontWeight: 950,
@@ -4380,9 +4630,9 @@ const voiceStatusPill = {
   gap: 5,
   padding: "4px 8px",
   borderRadius: 999,
-  background: "#f5f3ff",
-  color: "#6d28d9",
-  border: "1px solid #ddd6fe",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid rgba(31, 77, 52, 0.14)",
   fontSize: 10,
   lineHeight: 1,
   fontWeight: 950,
@@ -4393,45 +4643,208 @@ const voiceStatusDot = {
   height: 6,
   borderRadius: 999,
   background: "currentColor",
-  boxShadow: "0 0 0 3px rgba(124,58,237,0.10)",
+  boxShadow: "0 0 0 3px rgba(31,77,52,0.10)",
 };
 
 const voiceStatusStyles = {
   ready: {
-    background: "#f5f3ff",
-    color: "#6d28d9",
-    border: "1px solid #ddd6fe",
+    background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+    color: "var(--meetro-color-forest, #1f4d34)",
+    border: "1px solid rgba(31, 77, 52, 0.14)",
   },
   listening: {
-    background: "#fdf2f8",
-    color: "#be185d",
-    border: "1px solid #fbcfe8",
+    background: "rgba(251, 246, 237, 0.96)",
+    color: "var(--meetro-color-wood, #b7791f)",
+    border: "1px solid rgba(183, 121, 31, 0.24)",
   },
   thinking: {
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
+    background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+    color: "var(--meetro-color-forest, #1f4d34)",
+    border: "1px solid rgba(31, 77, 52, 0.18)",
   },
   speaking: {
-    background: "#ecfdf5",
-    color: "#047857",
-    border: "1px solid #a7f3d0",
+    background: "rgba(223, 232, 216, 0.92)",
+    color: "var(--meetro-color-forest-deep, #14351f)",
+    border: "1px solid rgba(31, 77, 52, 0.18)",
+  },
+  responding: {
+    background: "rgba(223, 232, 216, 0.92)",
+    color: "var(--meetro-color-forest-deep, #14351f)",
+    border: "1px solid rgba(31, 77, 52, 0.18)",
   },
 };
 
 const voiceHintText = {
   margin: "0",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 13,
   lineHeight: 1.35,
   fontWeight: 850,
+};
+
+const companionGuidancePanel = {
+  display: "grid",
+  gap: 12,
+  borderRadius: 24,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background:
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.82), var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
+  padding: 14,
+};
+
+const companionGuidanceItem = {
+  display: "grid",
+  gap: 6,
+};
+
+const companionGuidanceLabel = {
+  color: "var(--meetro-color-coffee, #4a3428)",
+  fontSize: 11,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const companionGuidanceText = {
+  margin: 0,
+  color: "var(--meetro-color-ink, #172317)",
+  fontSize: 14,
+  lineHeight: 1.42,
+  fontWeight: 820,
+};
+
+const companionGuidanceActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: 9,
+  flexWrap: "wrap",
+  marginTop: 2,
+};
+
+const companionGuidancePrimaryAction = {
+  flex: "1 1 160px",
+  minHeight: 42,
+  border: "1px solid rgba(20, 53, 31, 0.24)",
+  borderRadius: 999,
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: 950,
+  padding: "0 15px",
+  cursor: "pointer",
+  boxShadow: "0 12px 26px rgba(49, 35, 20, 0.14)",
+};
+
+const companionGuidanceAskAction = {
+  flex: "0 0 auto",
+  minHeight: 42,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  borderRadius: 999,
+  background:
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: 13,
+  fontWeight: 950,
+  padding: "0 15px",
+  cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.84)",
+};
+
+const companionSuggestionPanel = {
+  borderRadius: 22,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+  padding: 12,
+};
+
+const companionSuggestionTitle = {
+  display: "block",
+  marginBottom: 8,
+  color: "var(--meetro-color-muted, #65705f)",
+  fontSize: 11,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const companionSuggestionGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 8,
+};
+
+const companionSuggestionButton = {
+  width: "100%",
+  minHeight: 38,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  borderRadius: 999,
+  background:
+    "linear-gradient(145deg, var(--meetro-surface-paper, rgba(255,253,248,0.94)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: 13,
+  fontWeight: 850,
+  textAlign: "left",
+  padding: "10px 13px",
+  cursor: "pointer",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.82)",
+};
+
+const companionInputForm = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  width: "100%",
+  minWidth: 0,
+  marginTop: 2,
+  boxSizing: "border-box",
+};
+
+const companionInput = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  height: 42,
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  borderRadius: 999,
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-ink, #172317)",
+  fontSize: 14,
+  fontWeight: 750,
+  padding: "0 14px",
+  outline: "none",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.84)",
+};
+
+const companionInputSubmit = {
+  flex: "0 0 auto",
+  minWidth: 58,
+  height: 42,
+  border: "1px solid rgba(20, 53, 31, 0.24)",
+  borderRadius: 999,
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: 900,
+  padding: "0 13px",
+  cursor: "pointer",
+  boxShadow: "0 10px 22px rgba(49, 35, 20, 0.14)",
+};
+
+const companionInputSubmitDisabled = {
+  opacity: 0.45,
+  cursor: "not-allowed",
+  boxShadow: "none",
 };
 
 const voiceReadAloudLabel = {
   display: "inline-flex",
   alignItems: "center",
   gap: 7,
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 12,
   fontWeight: 850,
 };
@@ -4443,7 +4856,7 @@ const voiceTipsSection = {
 const voiceTipsTitle = {
   display: "block",
   marginBottom: 8,
-  color: "#0369a1",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: 11,
   lineHeight: 1.1,
   fontWeight: 950,
@@ -4460,7 +4873,7 @@ const voiceTipsGrid = {
 const fieldPromptSection = {
   marginTop: 13,
   paddingTop: 12,
-  borderTop: "1px solid rgba(186, 230, 253, 0.72)",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const fieldPromptGrid = {
@@ -4472,9 +4885,9 @@ const fieldPromptGrid = {
 
 const fieldPromptChip = {
   maxWidth: "100%",
-  border: "1px solid #c4b5fd",
-  background: "#f5f3ff",
-  color: "#4c1d95",
+  border: "1px solid rgba(31, 77, 52, 0.16)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: 999,
   padding: "8px 10px",
   fontSize: 12,
@@ -4487,9 +4900,9 @@ const fieldPromptChip = {
 
 const voiceTipChip = {
   maxWidth: "100%",
-  border: "1px solid #bae6fd",
-  background: "#ffffff",
-  color: "#0369a1",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-coffee, #4a3428)",
   borderRadius: 999,
   padding: "8px 10px",
   fontSize: 12,
@@ -4501,31 +4914,31 @@ const voiceTipChip = {
 const assistantEmptySuggestions = {
   marginTop: 10,
   paddingTop: 11,
-  borderTop: "1px solid rgba(186, 230, 253, 0.75)",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const assistantStarterChip = {
   ...voiceTipChip,
-  border: "1px solid #ddd6fe",
-  background: "#f5f3ff",
-  color: "#5b21b6",
+  border: "1px solid rgba(31, 77, 52, 0.16)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const voiceResultBox = {
   marginTop: 11,
   padding: 11,
   borderRadius: 15,
-  background: "#ffffff",
-  border: "1px solid #e0f2fe",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const voiceAnswerBox = {
   marginTop: 10,
   padding: 13,
   borderRadius: 18,
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid rgba(226,232,240,0.92)",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08))",
 };
 
 const voiceAnswerHeader = {
@@ -4537,9 +4950,9 @@ const voiceAnswerHeader = {
 };
 
 const voiceSpeakButton = {
-  border: "1px solid #a7f3d0",
-  background: "#ffffff",
-  color: "#047857",
+  border: "1px solid rgba(31, 77, 52, 0.18)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: 999,
   padding: "7px 10px",
   fontSize: 11,
@@ -4550,8 +4963,8 @@ const voiceSpeakButton = {
 };
 
 const voiceSpeakButtonActive = {
-  background: "#047857",
-  borderColor: "#047857",
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
 };
 
@@ -4559,8 +4972,8 @@ const voiceUnavailablePill = {
   display: "inline-flex",
   padding: "6px 8px",
   borderRadius: 999,
-  background: "#f1f5f9",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: 10,
   lineHeight: 1.1,
   fontWeight: 900,
@@ -4571,8 +4984,8 @@ const voiceSpeakingPill = {
   marginBottom: 8,
   padding: "5px 8px",
   borderRadius: 999,
-  background: "#dcfce7",
-  color: "#047857",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 10,
   lineHeight: 1.1,
   fontWeight: 950,
@@ -4580,7 +4993,7 @@ const voiceSpeakingPill = {
 
 const voiceTranscriptText = {
   margin: 0,
-  color: "#334155",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: 13,
   lineHeight: 1.4,
   fontWeight: 800,
@@ -4588,7 +5001,7 @@ const voiceTranscriptText = {
 
 const voiceAnswerText = {
   margin: 0,
-  color: "#14532d",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: 14,
   lineHeight: 1.45,
   fontWeight: 850,
@@ -4599,8 +5012,8 @@ const voiceIntentPill = {
   display: "inline-flex",
   padding: "5px 8px",
   borderRadius: 999,
-  background: "#dcfce7",
-  color: "#166534",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 11,
   fontWeight: 950,
 };
@@ -4635,19 +5048,19 @@ const workflowStatusDot = {
 
 const workflowStatusChipStyles = {
   green: {
-    background: "#dcfce7",
-    borderColor: "#86efac",
-    color: "#166534",
+    background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+    borderColor: "rgba(31, 77, 52, 0.18)",
+    color: "var(--meetro-color-forest, #1f4d34)",
   },
   yellow: {
-    background: "#fef3c7",
-    borderColor: "#fcd34d",
-    color: "#92400e",
+    background: "rgba(251, 246, 237, 0.96)",
+    borderColor: "rgba(183, 121, 31, 0.24)",
+    color: "var(--meetro-color-wood, #b7791f)",
   },
   red: {
-    background: "#fee2e2",
-    borderColor: "#fca5a5",
-    color: "#991b1b",
+    background: "rgba(250, 228, 214, 0.96)",
+    borderColor: "rgba(143, 63, 18, 0.24)",
+    color: "#8f3f12",
   },
 };
 
@@ -4659,9 +5072,9 @@ const voiceActionGrid = {
 };
 
 const voiceActionButton = {
-  border: "1px solid #86efac",
-  background: "#ffffff",
-  color: "#166534",
+  border: "1px solid rgba(31, 77, 52, 0.18)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: 999,
   padding: "8px 11px",
   fontSize: 12,
@@ -4672,7 +5085,7 @@ const voiceActionButton = {
 
 const voiceErrorText = {
   margin: "10px 0 0",
-  color: "#b45309",
+  color: "var(--meetro-color-wood, #b7791f)",
   fontSize: 13,
   lineHeight: 1.4,
   fontWeight: 850,
@@ -4689,9 +5102,9 @@ const assistantActionGrid = {
 };
 
 const assistantActionButton = {
-  border: "1px solid #ddd6fe",
-  background: "#ffffff",
-  color: "#5b21b6",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: 15,
   padding: "11px 10px",
   fontSize: 13,
@@ -4702,9 +5115,9 @@ const assistantActionButton = {
 const advancedToggle = {
   width: "100%",
   marginTop: 12,
-  border: "1px solid rgba(148,163,184,0.32)",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-muted, #65705f)",
   borderRadius: 16,
   padding: "11px 12px",
   fontSize: 13,
@@ -4716,8 +5129,8 @@ const advancedPanel = {
   marginTop: 10,
   padding: 12,
   borderRadius: 20,
-  background: "#f8fafc",
-  border: "1px solid rgba(226,232,240,0.95)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.12))",
 };
 
 const feedbackButton = {
@@ -4842,7 +5255,7 @@ const feedbackCopyButton = {
 
 const feedbackCopiedText = {
   margin: "8px 0 0",
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: 12,
   fontWeight: 900,
   textAlign: "center",

@@ -29,6 +29,13 @@ import {
   readBusinessAvailability,
   setBusinessAvailability,
 } from "../utils/businessAvailability";
+import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
+import { readBusinessPortfolioStorage } from "../utils/businessPortfolioStorage";
+import {
+  getMediaDeferredCopy,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 
 function ContractorProfile({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -37,6 +44,7 @@ function ContractorProfile({ setPage, currentPage }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [language, updateLanguage] = useState(getLanguage());
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
 
   const [businessName, setBusinessName] = useState(
     localStorage.getItem("businessName") || ""
@@ -735,6 +743,16 @@ function ContractorProfile({ setPage, currentPage }) {
   }
 
   async function handleImageUpload(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: (message) => alert(message),
+      })
+    ) {
+      return;
+    }
+
     try {
       const file = event.target.files[0];
       if (!file) return;
@@ -1160,13 +1178,35 @@ function safeJsonArray(key) {
       "",
   };
   const profileLicenseSummary = formatLicenseSummary(profileLicenseFields);
-  const profileCompletionPercent = profile ? 92 : 0;
-  const healthItems = [
+  const profilePortfolioProjects = readBusinessPortfolioStorage().filter((project) =>
+    portfolioProjectBelongsToBusiness(project, profile || {}, businessIdentity.businessName)
+  );
+  const businessPortfolioProof = getBusinessPortfolioProofProjection(
     {
-      key: "profile",
+      ...profile,
+      businessPortfolio: profilePortfolioProjects,
+      projectGallery: profilePortfolioProjects,
+    },
+    {
+      reviews: profileReviews,
+      translate: (key) => t(key, language),
+    }
+  );
+  const businessIdentityReady = Boolean(
+    businessIdentity.businessName && profile?.category && profileDisplayAddress
+  );
+  const servicesReady = serviceSpecialties.length > 0;
+  const portfolioProofSummary = businessPortfolioProof.projectCount
+    ? `${businessPortfolioProof.projectCount} ${t("projects")}`
+    : businessPortfolioProof.reviewCount
+    ? `${businessPortfolioProof.reviewCount} ${t("reviews")}`
+    : t("portfolioProofEmpty");
+  const businessReadinessItems = [
+    {
+      key: "identity",
       icon: "profile",
-      label: t("profileComplete"),
-      value: `${profileCompletionPercent}%`,
+      label: t("businessInformation"),
+      value: businessIdentityReady ? t("ready") : t("notSet"),
     },
     {
       key: "availability",
@@ -1175,22 +1215,24 @@ function safeJsonArray(key) {
       value: availableNow ? t("currentlyAvailable") : t("currentlyInactive"),
     },
     {
+      key: "services",
+      icon: "serviceTypes",
+      label: t("servicesOffered"),
+      value: servicesReady
+        ? `${serviceSpecialties.length} ${t("activeCapabilities")}`
+        : t("notSet"),
+    },
+    {
+      key: "verification",
+      icon: "verified",
+      label: t("businessVerification"),
+      value: businessVerificationLabel,
+    },
+    {
       key: "portfolio",
       icon: "portfolio",
-      label: t("portfolioReady"),
-      value: imageUrl || profile?.image_url ? t("ready") : t("preview"),
-    },
-    {
-      key: "emergency",
-      icon: "emergency",
-      label: t("emergencyReady"),
-      value: dispatchReady ? t("ready") : t("notSet"),
-    },
-    {
-      key: "response",
-      icon: "messages",
-      label: t("fastResponse"),
-      value: t("ready"),
+      label: t("portfolioProof"),
+      value: businessPortfolioProof.hasPublicProof ? t("ready") : t("notSet"),
     },
   ];
 
@@ -1271,9 +1313,117 @@ function safeJsonArray(key) {
       window.prompt(t("copyPublicProfileLink"), sharePayload.url);
     }
   };
+  const openBusinessPortfolio = () => {
+    setPage("projectGallery");
+  };
+  const profileImprovementGuidance = [
+    !profileDisplayAddress && {
+      key: "service-area",
+      icon: "location",
+      title: t("addServiceArea"),
+      body: t("addServiceAreaGuidance"),
+      onClick: () => setEditing(true),
+    },
+    !servicesReady && {
+      key: "services",
+      icon: "serviceTypes",
+      title: t("chooseServicesOffered"),
+      body: t("chooseServicesOfferedGuidance"),
+      onClick: () => setEditing(true),
+    },
+    !profileBusinessHours && {
+      key: "hours",
+      icon: "availability",
+      title: t("addBusinessHours"),
+      body: t("addBusinessHoursGuidance"),
+      onClick: () => setEditing(true),
+    },
+    !businessPortfolioProof.hasPublicProof && {
+      key: "portfolio-proof",
+      icon: "portfolio",
+      title: t("addPortfolioProof"),
+      body: t("addPortfolioProofGuidance"),
+      onClick: openBusinessPortfolio,
+    },
+    !businessVerification.verified && {
+      key: "verification",
+      icon: "verified",
+      title: t("reviewVerification"),
+      body: t("reviewVerificationGuidance"),
+      onClick: () => setEditing(true),
+    },
+  ].filter(Boolean);
+  const visibleProfileGuidance =
+    profileImprovementGuidance.length > 0
+      ? profileImprovementGuidance.slice(0, 2)
+      : [
+          {
+            key: "preview",
+            icon: "preview",
+            title: t("previewCustomerView"),
+            body: t("previewCustomerViewGuidance"),
+            onClick: viewPublicProfile,
+          },
+        ];
 
   return (
-    <div className="app-page meetro-readable-page" style={pageWrapper}>
+    <div className="app-page business-profile-page meetro-readable-page" style={pageWrapper}>
+      <style>
+        {`
+          .business-profile-shell,
+          .business-profile-primary-column,
+          .business-profile-secondary-column {
+            display: contents;
+          }
+
+          .business-profile-proof-card {
+            margin-bottom: 0 !important;
+          }
+
+          @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
+            .app-page.business-profile-page.meetro-readable-page {
+              width: min(calc(100vw - var(--meetro-sidebar-width)), 1180px) !important;
+              max-width: min(calc(100vw - var(--meetro-sidebar-width)), 1180px) !important;
+              margin-left: var(--meetro-sidebar-width) !important;
+              margin-right: auto !important;
+              padding-top: clamp(24px, 2.8vw, 40px) !important;
+              padding-left: clamp(24px, 3vw, 46px) !important;
+              padding-right: clamp(24px, 3vw, 46px) !important;
+            }
+
+            .business-profile-shell {
+              display: grid;
+              grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+              gap: 18px;
+              align-items: start;
+            }
+
+            .business-profile-hero-span {
+              grid-column: 1 / -1;
+            }
+
+            .business-profile-primary-column,
+            .business-profile-secondary-column {
+              display: grid;
+              gap: 18px;
+              min-width: 0;
+              align-content: start;
+            }
+
+            .business-profile-card {
+              margin-bottom: 0 !important;
+            }
+
+            .business-profile-trust-group {
+              margin-bottom: 0 !important;
+            }
+
+            .business-profile-info-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+          }
+        `}
+      </style>
            
       <button
   onClick={() => {
@@ -1371,6 +1521,7 @@ function safeJsonArray(key) {
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
+          mediaUploadDeferred={mediaUploadDeferred}
           submitLabel={
   businessName || category || phone || location || bio || imageUrl
     ? t("saveChanges")
@@ -1381,240 +1532,312 @@ function safeJsonArray(key) {
       )}
 
       {profile && !editing && (
-        <>
-          <div style={heroCard}>
-            <div style={heroGlow}></div>
+        <div className="business-profile-shell">
+          <div className="business-profile-hero-span">
+            <div style={heroCard}>
+              <div style={heroGlow}></div>
 
-            <div style={identityHeroLayout}>
-              <div style={heroLogoFrame}>
-                {businessIdentity.imageUrl ? (
-                  <img
-                    src={businessIdentity.imageUrl}
-                    alt={businessIdentity.businessName}
-                    style={circleLogoImage}
+              <div style={identityHeroLayout}>
+                <div style={heroLogoFrame}>
+                  {businessIdentity.imageUrl ? (
+                    <img
+                      src={businessIdentity.imageUrl}
+                      alt={businessIdentity.businessName}
+                      style={circleLogoImage}
+                    />
+                  ) : (
+                    <div style={circleLogoPlaceholder}>
+                      <MeetroIcon name="businessProfile" size={30} decorative />
+                    </div>
+                  )}
+                </div>
+
+                <div style={identityHeroContent}>
+                  <p style={eyebrow}>{t("businessProfile")}</p>
+                  <BusinessNameTitle
+                    name={businessIdentity.businessName || t("businessNameNotSet")}
+                    variant="hero"
                   />
-                ) : (
-                  <div style={circleLogoPlaceholder}>
-                    <MeetroIcon name="businessProfile" size={30} decorative />
-                  </div>
-                )}
-              </div>
+                  <p style={identityHeroMeta}>
+                    {formatCategory(profile.category)}
+                  </p>
+                  <p style={identityHeroMeta}>
+                    <MeetroIcon name="location" size={14} decorative />{" "}
+                    {profileDisplayAddress || t("locationNotSet")}
+                  </p>
 
-              <div style={identityHeroContent}>
-                <p style={eyebrow}>{t("businessProfile")}</p>
-                <BusinessNameTitle
-                  name={businessIdentity.businessName || t("businessNameNotSet")}
-                  variant="hero"
-                />
-                <p style={identityHeroMeta}>
-                  {formatCategory(profile.category)}
-                </p>
-                <p style={identityHeroMeta}>
-                  <MeetroIcon name="location" size={14} decorative />{" "}
-                  {profileDisplayAddress || t("locationNotSet")}
-                </p>
-
-                <div style={heroVerificationRow}>
-                  <div style={verifiedBadge}>
-                    <MeetroIcon name="verified" size={14} decorative />{" "}
-                    {businessVerification.compactBadgeText}
+                  <div style={heroVerificationRow}>
+                    <div style={verifiedBadge}>
+                      <MeetroIcon name="verified" size={14} decorative />{" "}
+                      {businessVerification.compactBadgeText}
+                    </div>
+                    <div style={verifiedBadge}>
+                      <MeetroIcon name="availableNow" size={14} decorative />{" "}
+                      {availableNow ? t("currentlyAvailable") : t("currentlyInactive")}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={glassCard}>
-            <h2 style={compactCardTitle}>{t("businessHealth")}</h2>
-            <p style={bioStyle}>{t("businessReadinessSentence")}</p>
-            <div style={businessHealthGrid}>
-              {healthItems.map((item) => (
-                item.key === "availability" ? (
-                  <div
+          <div className="business-profile-primary-column">
+            <div className="business-profile-card" style={glassCard}>
+              <h2 style={compactCardTitle}>{t("businessHealth")}</h2>
+              <p style={bioStyle}>{t("businessReadinessSentence")}</p>
+              <div style={readinessSummaryCard}>
+                <strong style={verificationStatusText}>
+                  {availableNow ? t("readyForCustomers") : t("currentlyInactive")}
+                </strong>
+                <p style={bioStyle}>
+                  {availableNow
+                    ? t("readyForCustomersHelp")
+                    : t("inactiveReadinessHelp")}
+                </p>
+              </div>
+              <div style={businessHealthGrid}>
+                {businessReadinessItems.map((item) => (
+                  item.key === "availability" ? (
+                    <div
+                      key={item.key}
+                      style={businessHealthItem}
+                    >
+                      <span style={businessHealthIcon}>
+                        <MeetroIcon name={item.icon} size={16} decorative />
+                      </span>
+                      <span style={businessHealthLabel}>{item.label}</span>
+                      <strong style={businessHealthValue}>{item.value}</strong>
+                      <button
+                        type="button"
+                        onClick={() => updateBusinessAvailability(!availableNow)}
+                        style={availabilityInlineAction}
+                      >
+                        {availableNow ? t("setUnavailable") : t("setAvailable")}
+                      </button>
+                    </div>
+                  ) : (
+                    <div key={item.key} style={businessHealthItem}>
+                      <span style={businessHealthIcon}>
+                        <MeetroIcon name={item.icon} size={16} decorative />
+                      </span>
+                      <span style={businessHealthLabel}>{item.label}</span>
+                      <strong style={businessHealthValue}>{item.value}</strong>
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+
+            <div className="business-profile-trust-group" style={customerTrustGroup}>
+              <div style={{ ...glassCard, ...customerPreviewCard }}>
+                <div style={customerPreviewLauncher}>
+                  <div style={customerPreviewCopy}>
+                    <span style={customerTrustEyebrow}>{t("customerTrust")}</span>
+                    <h2 style={compactCardTitle}>{t("customerPreview")}</h2>
+                    <p style={bioStyle}>{t("customerPreviewHelp")}</p>
+                    <p style={customerPreviewSummaryText}>{t("customerPreviewSummary")}</p>
+                  </div>
+                  <button onClick={viewPublicProfile} style={smallEditButton}>
+                    {t("viewPublicProfile")} →
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className="business-profile-proof-card"
+                style={{ ...glassCard, ...portfolioProofCard }}
+              >
+                <div style={portfolioProofLayout}>
+                  <span style={businessHealthIcon}>
+                    <MeetroIcon name="portfolio" size={16} decorative />
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={compactCardTitle}>{t("portfolioProof")}</h2>
+                    <strong style={portfolioProofMetric}>{portfolioProofSummary}</strong>
+                    <p style={bioStyle}>{t("portfolioProofHelp")}</p>
+                    <button
+                      type="button"
+                      onClick={openBusinessPortfolio}
+                      style={{ ...secondaryActionButton, marginTop: "10px" }}
+                    >
+                      {businessPortfolioProof.hasPublicProof
+                        ? t("viewPublicPortfolio")
+                        : t("addPortfolioProof")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly />
+
+              <div className="business-profile-card" style={glassCard}>
+                <div style={bioCard}>
+                  <h3 style={bioTitle}>{t("reviews")}</h3>
+                  {profileReviews.length === 0 ? (
+                    <div style={emptyReviewsCard}>
+                      <span style={businessHealthIcon}>
+                        <MeetroIcon name="reviews" size={16} decorative />
+                      </span>
+                      <strong>{t("reviewsAfterCompletedJobs")}</strong>
+                    </div>
+                  ) : (
+                    profileReviews.slice(0, 3).map((item) => (
+                      <div key={item.id} style={reviewPreviewCard}>
+                        <strong>
+                          <MeetroIcon name="reviews" size={16} decorative />{" "}
+                          {Number(item.rating || 0).toFixed(1)}
+                        </strong>
+                        <p style={reviewPreviewText}>
+                          {item.comment || t("noReviewText")}
+                        </p>
+                        <span style={reviewPreviewMeta}>
+                          {item.customerDisplayName ||
+                            (language === "es" ? "Cliente" : "Customer")}
+                          {item.service ? ` • ${item.service}` : ""}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="business-profile-card" style={glassCard}>
+              <h2 style={compactCardTitle}>{t("quickActions")}</h2>
+              <div style={quickActionsGrid}>
+                <button onClick={() => setEditing(true)} style={primaryButton}>
+                  {t("editProfile")}
+                </button>
+                <button onClick={viewPublicProfile} style={secondaryActionButton}>
+                  {t("viewPublicProfile")}
+                </button>
+                <button onClick={sharePublicProfile} style={secondaryActionButton}>
+                  {t("shareProfile")}
+                </button>
+              </div>
+            </div>
+
+            <div className="business-profile-card" style={glassCard}>
+              <h2 style={compactCardTitle}>{t("businessInformation")}</h2>
+              <div style={bioCard}>
+                <h3 style={bioTitle}>{t("aboutBusiness")}</h3>
+                <p style={bioStyle}>{profile.bio || t("noBusinessDescription")}</p>
+              </div>
+
+              <div className="business-profile-info-grid" style={infoGrid}>
+                <InfoCard
+                  icon="serviceTypes"
+                  label={t("category")}
+                  value={formatCategory(profile.category)}
+                />
+                <InfoCard
+                  icon="location"
+                  label={
+                    profile.showBusinessAddressPublic
+                      ? t("businessAddress")
+                      : t("serviceArea")
+                  }
+                  value={profileDisplayAddress || t("locationNotSet")}
+                />
+                <InfoCard
+                  icon="phone"
+                  label={t("phone")}
+                  value={profile.phone || t("phoneNotSet")}
+                />
+                <InfoCard
+                  icon="availability"
+                  label={t("businessHours")}
+                  value={profileBusinessHours || t("addBusinessHours")}
+                />
+                <InfoCard
+                  icon="verified"
+                  label={t("licenseInformation")}
+                  value={profileLicenseSummary || t("addLicenseInformation")}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                style={{ ...secondaryActionButton, marginTop: "14px" }}
+              >
+                {t("editBusinessInformation")}
+              </button>
+            </div>
+          </div>
+
+          <div className="business-profile-secondary-column">
+            <div
+              className="business-profile-card business-profile-guidance-card"
+              style={{ ...glassCard, ...publicPresenceGuidanceCard }}
+            >
+              <h2 style={compactCardTitle}>{t("publicPresenceGuidance")}</h2>
+              <p style={bioStyle}>{t("publicPresenceGuidanceHelp")}</p>
+              <div style={guidanceList}>
+                {visibleProfileGuidance.map((item) => (
+                  <button
                     key={item.key}
-                    style={businessHealthItem}
+                    type="button"
+                    onClick={item.onClick}
+                    style={guidanceItem}
                   >
                     <span style={businessHealthIcon}>
                       <MeetroIcon name={item.icon} size={16} decorative />
                     </span>
-                    <span style={businessHealthLabel}>{item.label}</span>
-                    <strong style={businessHealthValue}>{item.value}</strong>
-                    <button
-                      type="button"
-                      onClick={() => updateBusinessAvailability(!availableNow)}
-                      style={availabilityInlineAction}
-                    >
-                      {availableNow ? t("setUnavailable") : t("setAvailable")}
-                    </button>
-                  </div>
-                ) : (
-                  <div key={item.key} style={businessHealthItem}>
-                    <span style={businessHealthIcon}>
-                      <MeetroIcon name={item.icon} size={16} decorative />
+                    <span style={guidanceCopy}>
+                      <strong>{item.title}</strong>
+                      <span>{item.body}</span>
                     </span>
-                    <span style={businessHealthLabel}>{item.label}</span>
-                    <strong style={businessHealthValue}>{item.value}</strong>
-                  </div>
-                )
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
 
-          </div>
-
-          <div style={customerTrustGroup}>
-            <div style={{ ...glassCard, ...customerPreviewCard }}>
-              <div style={customerPreviewLauncher}>
-                <div style={customerPreviewCopy}>
-                  <span style={customerTrustEyebrow}>{t("customerTrust")}</span>
-                  <h2 style={compactCardTitle}>{t("customerPreview")}</h2>
-                  <p style={bioStyle}>{t("customerPreviewHelp")}</p>
+            <div className="business-profile-card" style={glassCard}>
+              <h2 style={compactCardTitle}>{t("businessVerification")}</h2>
+              <p style={bioStyle}>{t("businessVerificationHelp")}</p>
+              <div style={{ ...verificationStatusCard, marginTop: "12px" }}>
+                <span style={businessHealthIcon}>
+                  <MeetroIcon name="verified" size={16} decorative />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <strong style={verificationStatusText}>
+                    {businessVerificationLabel}
+                  </strong>
+                  <p style={bioStyle}>{businessVerification.publicTrustSummary}</p>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    style={{ ...secondaryActionButton, marginTop: "10px" }}
+                  >
+                    {t("reviewVerification")}
+                  </button>
                 </div>
-                <button onClick={viewPublicProfile} style={smallEditButton}>
-                  {t("viewPublicProfile")} →
-                </button>
               </div>
             </div>
 
-            <ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly />
-
-            <div style={glassCard}>
-              <div style={bioCard}>
-                <h3 style={bioTitle}>{t("reviews")}</h3>
-                {profileReviews.length === 0 ? (
-                  <div style={emptyReviewsCard}>
-                    <span style={businessHealthIcon}>
-                      <MeetroIcon name="reviews" size={16} decorative />
-                    </span>
-                    <strong>{t("reviewsAfterCompletedJobs")}</strong>
-                  </div>
-                ) : (
-                  profileReviews.slice(0, 3).map((item) => (
-                    <div key={item.id} style={reviewPreviewCard}>
-                      <strong>
-                        <MeetroIcon name="reviews" size={16} decorative />{" "}
-                        {Number(item.rating || 0).toFixed(1)}
-                      </strong>
-                      <p style={reviewPreviewText}>
-                        {item.comment || t("noReviewText")}
-                      </p>
-                      <span style={reviewPreviewMeta}>
-                        {item.customerDisplayName ||
-                          (language === "es" ? "Cliente" : "Customer")}
-                        {item.service ? ` • ${item.service}` : ""}
-                      </span>
-                    </div>
-                  ))
-                )}
+            <div className="business-profile-card" style={glassCard}>
+              <h2 style={compactCardTitle}>{t("businessSetup")}</h2>
+              <div style={verificationStatusCard}>
+                <span style={businessHealthIcon}>
+                  <MeetroIcon name="settings" size={16} decorative />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <strong style={verificationStatusText}>
+                    {t("reviewBusinessSetup")}
+                  </strong>
+                  <p style={bioStyle}>{t("reviewBusinessSetupHelp")}</p>
+                  <button
+                    type="button"
+                    onClick={reviewBusinessSetup}
+                    style={{ ...secondaryActionButton, marginTop: "10px" }}
+                  >
+                    {t("reviewBusinessSetup")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-
-          <div style={glassCard}>
-            <h2 style={compactCardTitle}>{t("quickActions")}</h2>
-            <div style={quickActionsGrid}>
-              <button onClick={() => setEditing(true)} style={primaryButton}>
-                {t("editProfile")}
-              </button>
-              <button onClick={viewPublicProfile} style={secondaryActionButton}>
-                {t("viewPublicProfile")}
-              </button>
-              <button onClick={sharePublicProfile} style={secondaryActionButton}>
-                {t("shareProfile")}
-              </button>
-            </div>
-          </div>
-
-          <div style={glassCard}>
-            <h2 style={compactCardTitle}>{t("businessInformation")}</h2>
-            <div style={bioCard}>
-              <h3 style={bioTitle}>{t("aboutBusiness")}</h3>
-              <p style={bioStyle}>{profile.bio || t("noBusinessDescription")}</p>
-            </div>
-
-            <div style={infoGrid}>
-              <InfoCard
-                icon="serviceTypes"
-                label={t("category")}
-                value={formatCategory(profile.category)}
-              />
-              <InfoCard
-                icon="location"
-                label={
-                  profile.showBusinessAddressPublic
-                    ? t("businessAddress")
-                    : t("serviceArea")
-                }
-                value={profileDisplayAddress || t("locationNotSet")}
-              />
-              <InfoCard
-                icon="phone"
-                label={t("phone")}
-                value={profile.phone || t("phoneNotSet")}
-              />
-              <InfoCard
-                icon="availability"
-                label={t("businessHours")}
-                value={profileBusinessHours || t("addBusinessHours")}
-              />
-              <InfoCard
-                icon="verified"
-                label={t("licenseInformation")}
-                value={profileLicenseSummary || t("addLicenseInformation")}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              style={{ ...secondaryActionButton, marginTop: "14px" }}
-            >
-              {t("editBusinessInformation")}
-            </button>
-          </div>
-
-          <div style={glassCard}>
-            <h2 style={compactCardTitle}>{t("businessVerification")}</h2>
-            <div style={verificationStatusCard}>
-              <span style={businessHealthIcon}>
-                <MeetroIcon name="verified" size={16} decorative />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <strong style={verificationStatusText}>
-                  {businessVerificationLabel}
-                </strong>
-                <p style={bioStyle}>{businessVerification.publicTrustSummary}</p>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  style={{ ...secondaryActionButton, marginTop: "10px" }}
-                >
-                  {t("reviewVerification")}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div style={glassCard}>
-            <h2 style={compactCardTitle}>{t("businessSetup")}</h2>
-            <div style={verificationStatusCard}>
-              <span style={businessHealthIcon}>
-                <MeetroIcon name="settings" size={16} decorative />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <strong style={verificationStatusText}>
-                  {t("reviewBusinessSetup")}
-                </strong>
-                <p style={bioStyle}>{t("reviewBusinessSetupHelp")}</p>
-                <button
-                  type="button"
-                  onClick={reviewBusinessSetup}
-                  style={{ ...secondaryActionButton, marginTop: "10px" }}
-                >
-                  {t("reviewBusinessSetup")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {profile && editing && (
@@ -1668,6 +1891,7 @@ function safeJsonArray(key) {
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
+          mediaUploadDeferred={mediaUploadDeferred}
           submitLabel={t("saveChanges")}
           onSubmit={handleUpdateProfile}
           onCancel={() => setEditing(false)}
@@ -1729,11 +1953,13 @@ function ProfileForm({
   dispatchReady,
   setDispatchReady,
   handleImageUpload,
+  mediaUploadDeferred = false,
   submitLabel,
   onSubmit,
   onCancel,
 }) {
   const inputId = onCancel ? "contractorImageEditInput" : "contractorImageInput";
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   return (
     <div style={glassCard}>
@@ -1753,7 +1979,7 @@ function ProfileForm({
         <div style={uploadInfo}>
           <h3 style={uploadTitle}>{t("businessLogo")}</h3>
           <p style={uploadSubtext}>
-            {t("businessLogoHelp")}
+            {mediaUploadDeferred ? mediaDeferredCopy.detail : t("businessLogoHelp")}
           </p>
 
           <input
@@ -1761,15 +1987,28 @@ function ProfileForm({
             type="file"
             accept="image/*"
             style={{ display: "none" }}
+            disabled={mediaUploadDeferred}
             onChange={handleImageUpload}
           />
 
           <button
             type="button"
-            onClick={() => document.getElementById(inputId).click()}
-            style={uploadButton}
+            onClick={() => {
+              if (!mediaUploadDeferred) {
+                document.getElementById(inputId).click();
+              }
+            }}
+            style={{
+              ...uploadButton,
+              ...(mediaUploadDeferred ? disabledUploadButton : {}),
+            }}
+            disabled={mediaUploadDeferred}
           >
-            {imageUrl ? t("changeLogo") : t("uploadLogo")}
+            {mediaUploadDeferred
+              ? mediaDeferredCopy.title
+              : imageUrl
+              ? t("changeLogo")
+              : t("uploadLogo")}
           </button>
 
           {imageUrl && (
@@ -1893,7 +2132,7 @@ function ProfileForm({
               ...toggleButton,
               marginBottom: 0,
               background: showBusinessAddressPublic
-                ? "linear-gradient(135deg, #5b3df5, #7b61ff)"
+                ? "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))"
                 : "rgba(255,255,255,0.85)",
               color: showBusinessAddressPublic ? "white" : "#333",
             }}
@@ -1909,7 +2148,7 @@ function ProfileForm({
           onClick={() => onAvailabilityChange?.(!availableNow)}
           style={{
             ...toggleButton,
-            background: availableNow ? "linear-gradient(135deg, #5b3df5, #7b61ff)" : "rgba(255,255,255,0.75)",
+            background: availableNow ? "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))" : "rgba(255,255,255,0.75)",
             color: availableNow ? "white" : "#333",
           }}
         >
@@ -1922,7 +2161,7 @@ function ProfileForm({
           onClick={() => setDispatchReady(!dispatchReady)}
           style={{
             ...toggleButton,
-            background: dispatchReady ? "linear-gradient(135deg, #5b3df5, #7b61ff)" : "rgba(255,255,255,0.75)",
+            background: dispatchReady ? "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))" : "rgba(255,255,255,0.75)",
             color: dispatchReady ? "white" : "#333",
           }}
         >
@@ -2114,6 +2353,33 @@ function BusinessNameTitle({ name, variant = "hero" }) {
   );
 }
 
+function portfolioProjectBelongsToBusiness(project = {}, profile = {}, businessName = "") {
+  const normalize = (value) => String(value || "").trim().toLowerCase();
+  const profileId = normalize(profile.id || profile.contractor_id || profile.businessId);
+  const projectBusinessId = normalize(
+    project.businessId || project.business_id || project.contractorId || project.contractor_id
+  );
+  const profileName = normalize(
+    businessName || profile.business_name || profile.businessName || profile.name
+  );
+  const projectBusinessName = normalize(
+    project.businessName ||
+      project.business_name ||
+      project.contractorName ||
+      project.contractor_name
+  );
+
+  if (profileId && projectBusinessId) {
+    return profileId === projectBusinessId;
+  }
+
+  if (profileName && projectBusinessName) {
+    return profileName === projectBusinessName;
+  }
+
+  return false;
+}
+
 const pageWrapper = {
   background:
     "radial-gradient(circle at top left, #eef0ff 0%, transparent 28%), radial-gradient(circle at top right, #ede9ff 0%, transparent 22%), linear-gradient(to bottom, #f8f8fc 0%, #eef0f7 100%)",
@@ -2130,7 +2396,7 @@ const pageWrapper = {
 const backButton = {
   border: "none",
   background: "rgba(255,255,255,0.72)",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   marginBottom: "16px",
   cursor: "pointer",
@@ -2143,13 +2409,13 @@ const heroCard = {
   position: "relative",
   overflow: "hidden",
   background:
-    "linear-gradient(135deg, #111b46 0%, #243b8f 42%, #5b3df5 100%)",
+    "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f) 0%, var(--meetro-color-forest, #1f4d34) 58%, var(--meetro-color-coffee, #4a3428) 100%)",
   borderRadius: "38px",
   padding: "26px",
   color: "white",
   marginBottom: "22px",
   boxShadow:
-    "0 24px 60px rgba(35,54,139,0.38)",
+    "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
 };
 
 const heroGlow = {
@@ -2338,6 +2604,17 @@ const businessHealthGrid = {
   gap: "10px",
 };
 
+const readinessSummaryCard = {
+  display: "grid",
+  gap: "4px",
+  padding: "14px",
+  margin: "14px 0",
+  borderRadius: "20px",
+  background:
+    "linear-gradient(135deg, rgba(31,77,52,0.10), rgba(255,255,255,0.84))",
+  border: "1px solid rgba(31,77,52,0.12)",
+};
+
 const businessHealthItem = {
   minWidth: 0,
   display: "grid",
@@ -2355,8 +2632,8 @@ const businessHealthIcon = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#5b3df5",
-  background: "#f3f0ff",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
 };
 
 const businessHealthLabel = {
@@ -2374,10 +2651,10 @@ const businessHealthValue = {
 const availabilityInlineAction = {
   justifySelf: "start",
   marginTop: "3px",
-  border: "1px solid rgba(91,61,245,0.18)",
+  border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "999px",
   background: "rgba(255,255,255,0.82)",
-  color: "#4b32d1",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "8px 10px",
   fontSize: "12px",
   fontWeight: "900",
@@ -2396,8 +2673,8 @@ const secondaryActionButton = {
   padding: "16px",
   border: "none",
   borderRadius: "20px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   fontSize: "15px",
   cursor: "pointer",
@@ -2411,9 +2688,9 @@ const customerTrustGroup = {
 
 const customerPreviewCard = {
   marginBottom: 0,
-  border: "1px solid rgba(91,61,245,0.14)",
+  border: "1px solid rgba(31,77,52,0.14)",
   background:
-    "linear-gradient(135deg, rgba(255,255,255,0.86), rgba(243,240,255,0.78))",
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.86)), var(--meetro-surface-sage, rgba(238,244,234,0.78)))",
 };
 
 const customerPreviewLauncher = {
@@ -2430,8 +2707,16 @@ const customerPreviewCopy = {
   gap: "4px",
 };
 
+const customerPreviewSummaryText = {
+  margin: "2px 0 0",
+  color: "#4f5668",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  fontWeight: 750,
+};
+
 const customerTrustEyebrow = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: "950",
   letterSpacing: "0.2px",
@@ -2440,12 +2725,70 @@ const customerTrustEyebrow = {
 
 const smallEditButton = {
   border: "none",
-  background: "#f1edff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "10px 14px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const portfolioProofCard = {
+  border: "1px solid rgba(31,77,52,0.12)",
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.88), rgba(248,247,255,0.78))",
+};
+
+const portfolioProofLayout = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const portfolioProofMetric = {
+  display: "block",
+  color: "#111827",
+  fontSize: "14px",
+  lineHeight: 1.35,
+  fontWeight: 950,
+  margin: "-4px 0 6px",
+};
+
+const publicPresenceGuidanceCard = {
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.88), rgba(241,237,255,0.74))",
+  border: "1px solid rgba(31,77,52,0.13)",
+};
+
+const guidanceList = {
+  display: "grid",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const guidanceItem = {
+  width: "100%",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  border: "1px solid rgba(31,77,52,0.10)",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.78)",
+  color: "#111827",
+  padding: "13px",
+  textAlign: "left",
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
+
+const guidanceCopy = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  color: "#4f5668",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const logoPreviewWrap = {
@@ -2466,7 +2809,7 @@ const circleLogoFrame = {
   justifyContent: "center",
   overflow: "hidden",
   boxShadow:
-    "0 16px 38px rgba(91,61,245,0.22)",
+    "0 16px 38px rgba(31,77,52,0.22)",
   border: "4px solid rgba(255,255,255,0.92)",
 };
 
@@ -2519,7 +2862,7 @@ const businessTitleAmpersand = {
 
 const categoryStyle = {
   margin: "7px 0 0",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
 };
 
@@ -2546,7 +2889,7 @@ const logoUploadCard = {
   padding: "14px",
   marginBottom: "16px",
   border: "1px solid rgba(255,255,255,0.9)",
-  boxShadow: "0 10px 30px rgba(91,61,245,0.06)",
+  boxShadow: "0 10px 30px rgba(31,77,52,0.06)",
 };
 
 const uploadInfo = {
@@ -2568,12 +2911,19 @@ const uploadSubtext = {
 const uploadButton = {
   border: "none",
   borderRadius: "999px",
-  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   padding: "11px 15px",
   fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.24)",
+  boxShadow: "0 10px 24px rgba(49,35,20,0.16)",
+};
+
+const disabledUploadButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
+  boxShadow: "none",
 };
 
 const removeButton = {
@@ -2588,7 +2938,7 @@ const removeButton = {
 };
 
 const uploadingText = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   marginBottom: 0,
 };
@@ -2597,7 +2947,7 @@ const inputStyle = {
   width: "100%",
   padding: "16px",
   borderRadius: "18px",
-  border: "1px solid rgba(91,61,245,0.08)",
+  border: "1px solid rgba(31,77,52,0.08)",
   marginBottom: "12px",
   fontSize: "16px",
   boxSizing: "border-box",
@@ -2610,7 +2960,7 @@ const inputStyle = {
 
 const formSection = {
   background: "rgba(246,246,250,0.78)",
-  border: "1px solid rgba(91,61,245,0.08)",
+  border: "1px solid rgba(31,77,52,0.08)",
   borderRadius: "24px",
   padding: "14px",
   marginBottom: "14px",
@@ -2656,7 +3006,7 @@ const verificationStatusCard = {
   alignItems: "flex-start",
   gap: "12px",
   minWidth: 0,
-  border: "1px solid rgba(91,61,245,0.12)",
+  border: "1px solid rgba(31,77,52,0.12)",
   borderRadius: "20px",
   background: "rgba(255,255,255,0.72)",
   padding: "14px",
@@ -2673,10 +3023,10 @@ const verificationStatusText = {
 
 const serviceManageButton = {
   width: "100%",
-  border: "1px solid rgba(91,61,245,0.16)",
+  border: "1px solid rgba(31,77,52,0.16)",
   borderRadius: "18px",
   background: "rgba(255,255,255,0.86)",
-  color: "#4b32d1",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "13px 14px",
   fontSize: "15px",
   fontWeight: 950,
@@ -2709,7 +3059,7 @@ const serviceOptionGrid = {
 };
 
 const serviceOptionButton = {
-  border: "1px solid rgba(91,61,245,0.12)",
+  border: "1px solid rgba(31,77,52,0.12)",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.86)",
   color: "#3b4054",
@@ -2724,10 +3074,10 @@ const serviceOptionButton = {
 };
 
 const serviceOptionButtonSelected = {
-  background: "linear-gradient(135deg, #5b3df5, #7b61ff)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
-  borderColor: "rgba(91,61,245,0.42)",
-  boxShadow: "0 10px 22px rgba(91,61,245,0.18)",
+  borderColor: "rgba(31,77,52,0.42)",
+  boxShadow: "0 10px 22px rgba(49,35,20,0.14)",
 };
 
 const serviceChipGrid = {
@@ -2743,8 +3093,8 @@ const serviceReadOnlyChip = {
   maxWidth: "100%",
   padding: "9px 11px",
   borderRadius: "999px",
-  background: "rgba(91,61,245,0.1)",
-  color: "#4b32d1",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: "900",
   overflowWrap: "anywhere",
@@ -2817,8 +3167,8 @@ const messageButton = {
   justifyContent: "center",
   gap: "6px",
   border: "none",
-  background: "#eee7ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "15px",
   borderRadius: "18px",
   fontWeight: "900",
@@ -2925,7 +3275,7 @@ const emptyReviewsCard = {
   padding: "14px",
   borderRadius: "16px",
   background: "rgba(248,247,255,0.78)",
-  border: "1px solid rgba(91,61,245,0.12)",
+  border: "1px solid rgba(31,77,52,0.12)",
   color: "#334155",
 };
 
@@ -2960,13 +3310,13 @@ const trustGrid = {
 };
 
 const trustCard = {
-  background: "#f8f7ff",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   borderRadius: "18px",
   padding: "14px 8px",
   display: "grid",
   gap: "6px",
   textAlign: "center",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   fontSize: "12px",
 };
@@ -2977,13 +3327,13 @@ const primaryButton = {
   border: "none",
   borderRadius: "22px",
   background:
-    "linear-gradient(135deg, #5b3df5 0%, #7b61ff 100%)",
+    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontWeight: "900",
   fontSize: "16px",
   cursor: "pointer",
   boxShadow:
-    "0 16px 34px rgba(91,61,245,0.28)",
+    "0 16px 34px rgba(49,35,20,0.18)",
   transform: "translateY(0px)",
   transition: "all 0.2s ease",
 };
@@ -2995,7 +3345,7 @@ const floatingSaveGlow = {
   transform: "translateX(-50%)",
   width: "180px",
   height: "60px",
-  background: "rgba(91,61,245,0.22)",
+  background: "rgba(31,77,52,0.22)",
   filter: "blur(40px)",
   borderRadius: "999px",
   pointerEvents: "none",
@@ -3007,8 +3357,8 @@ const secondaryButtonFull = {
   padding: "16px",
   border: "none",
   borderRadius: "20px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   fontSize: "15px",
   cursor: "pointer",

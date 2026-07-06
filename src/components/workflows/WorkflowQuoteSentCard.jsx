@@ -649,7 +649,7 @@ const quoteEyebrow = {
   fontSize: "11px",
   fontWeight: 950,
   letterSpacing: "1px",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   textTransform: "uppercase",
 };
 

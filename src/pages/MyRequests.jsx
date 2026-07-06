@@ -5,6 +5,11 @@ import { formatScheduleTime } from "../utils/displayTime";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
 import {
+  getMediaDeferredCopy,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
+import {
   getHomeownerLifecycleStage,
   getHomeownerWorkflowPresentation,
   getHomeownerWorkflowTimeline,
@@ -83,7 +88,9 @@ function EditPhotoManager({
   onRemove,
   onPreview,
   language,
+  mediaUploadDeferred = false,
 }) {
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
   const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
   const getPhotoLabel = (index) =>
     language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
@@ -99,11 +106,22 @@ function EditPhotoManager({
 
         <button
           type="button"
-          style={addPhotoButton}
-          onClick={() => document.getElementById("editPhotoInput").click()}
-          disabled={uploading}
+          style={{
+            ...addPhotoButton,
+            ...(mediaUploadDeferred ? disabledAddPhotoButton : {}),
+          }}
+          onClick={() => {
+            if (!mediaUploadDeferred) {
+              document.getElementById("editPhotoInput").click();
+            }
+          }}
+          disabled={uploading || mediaUploadDeferred}
         >
-          {uploading ? t("uploading") : t("addPhotos")}
+          {mediaUploadDeferred
+            ? mediaDeferredCopy.title
+            : uploading
+            ? t("uploading")
+            : t("addPhotos")}
         </button>
       </div>
 
@@ -112,6 +130,7 @@ function EditPhotoManager({
         type="file"
         accept="image/*"
         multiple
+        disabled={mediaUploadDeferred}
         onChange={onUpload}
         style={{ display: "none" }}
       />
@@ -120,11 +139,7 @@ function EditPhotoManager({
         <div style={galleryEmpty}>
           <div style={galleryEmptyIcon}>IMG</div>
           <strong>{t("noPhotosYet")}</strong>
-          <span>
-            {language === "es"
-              ? t("addPhotosHelp")
-              : t("addPhotosHelp")}
-          </span>
+          <span>{mediaUploadDeferred ? mediaDeferredCopy.detail : t("addPhotosHelp")}</span>
         </div>
       ) : (
         <div style={swipeGalleryRow}>
@@ -412,6 +427,7 @@ function HomeownerWorkflowHub({
 
 function MyRequests({ setPage }) {
   const language = getLanguage();
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
 
   const [recoveryTick, setRecoveryTick] = useState(0);
 
@@ -1138,6 +1154,21 @@ function MyRequests({ setPage }) {
   }
 
   async function handleEditPhotoUpload(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: (message) =>
+          addNotification({
+            title: getMediaDeferredCopy(language).title,
+            message,
+            type: "media",
+          }),
+      })
+    ) {
+      return;
+    }
+
     try {
       const files = Array.from(event.target.files || []);
 
@@ -1290,7 +1321,7 @@ function MyRequests({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <button style={backButton} onClick={goBackFromRequests}>
         {t("myRequestsBack", language)}
       </button>
@@ -1305,8 +1336,24 @@ function MyRequests({ setPage }) {
         </p>
       </div>
 
+      <section
+        className="meetro-visual-hero"
+        style={workCenterPerspectiveCard}
+        aria-label={t("myRequestsPerspectiveTitle", language)}
+      >
+        <span style={workCenterPerspectiveEyebrow}>
+          {t("myRequestsPerspectiveEyebrow", language)}
+        </span>
+        <strong style={workCenterPerspectiveTitle}>
+          {t("myRequestsPerspectiveTitle", language)}
+        </strong>
+        <p style={workCenterPerspectiveText}>
+          {t("myRequestsPerspectiveText", language)}
+        </p>
+      </section>
+
       {sortedRequests.length === 0 ? (
-        <div style={emptyCard}>
+        <div className="meetro-visual-empty-state" style={emptyCard}>
           <div style={emptyIcon}>REQ</div>
 
           <h2>{t("myRequestsEmptyTitle", language)}</h2>
@@ -1315,7 +1362,7 @@ function MyRequests({ setPage }) {
             {t("myRequestsEmptyText", language)}
           </p>
 
-          <button style={primaryButton} onClick={() => setPage("upload")}>
+          <button className="meetro-visual-primary-button" style={primaryButton} onClick={() => setPage("upload")}>
             {t("myRequestsRequestHelp", language)}
           </button>
         </div>
@@ -1340,7 +1387,7 @@ function MyRequests({ setPage }) {
 
             return (
               <div
-                className={isSelected ? "meetro-selected-card" : ""}
+                className={`meetro-visual-surface${isSelected ? " meetro-selected-card" : ""}`}
                 style={{
                   ...requestCard,
                   ...(isSelected ? selectedRequestCard : {}),
@@ -1416,7 +1463,7 @@ function MyRequests({ setPage }) {
                         fontWeight: 900,
                         letterSpacing: "0.08em",
                         textTransform: "uppercase",
-                        color: "#4f46e5",
+                        color: "var(--meetro-color-charcoal, #172317)",
                       }}
                     >
                       {t("myRequestsNext", language)}
@@ -1456,7 +1503,7 @@ function MyRequests({ setPage }) {
                       width: "100%",
                       border: "1px solid rgba(99, 102, 241, 0.18)",
                       background: isSelected ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
-                      color: "#4f46e5",
+                      color: "var(--meetro-color-charcoal, #172317)",
                       borderRadius: 16,
                       padding: "12px 14px",
                       fontWeight: 900,
@@ -1573,6 +1620,7 @@ function MyRequests({ setPage }) {
                           onRemove={removeEditPhoto}
                           onPreview={setPreviewImage}
                           language={language}
+                          mediaUploadDeferred={mediaUploadDeferred}
                         />
                       ) : (
                         <PhotoStrip
@@ -2654,14 +2702,14 @@ function MyRequests({ setPage }) {
         </div>
       )}
 
-      <BottomNav setPage={setPage} currentPage="home" />
+      <BottomNav setPage={setPage} currentPage="myRequests" />
     </div>
   );
 }
 
 const page = {
   minHeight: "100dvh",
-  background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
+  background: "var(--meetro-gradient-community-page)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -2672,7 +2720,8 @@ const page = {
 
 const backButton = {
   border: "none",
-  background: "white",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "18px",
   padding: "12px 16px",
   fontWeight: "900",
@@ -2686,7 +2735,7 @@ const header = {
 
 const eyebrow = {
   margin: "0 0 8px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-wood)",
   fontWeight: "900",
 };
 
@@ -2694,25 +2743,62 @@ const title = {
   fontSize: "38px",
   fontWeight: "900",
   margin: "0 0 8px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
 };
 
 const subtitle = {
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontWeight: "700",
   lineHeight: 1.5,
   maxWidth: "640px",
   margin: "0 auto",
 };
 
+const workCenterPerspectiveCard = {
+  maxWidth: "760px",
+  margin: "0 auto 18px",
+  padding: "16px 18px",
+  borderRadius: "22px",
+  background: "linear-gradient(135deg, var(--meetro-color-forest), var(--meetro-color-forest-deep))",
+  border: "1px solid rgba(255, 253, 248, 0.16)",
+  boxShadow: "var(--meetro-shadow-lifted)",
+  textAlign: "left",
+};
+
+const workCenterPerspectiveEyebrow = {
+  display: "block",
+  marginBottom: "6px",
+  color: "var(--meetro-color-wood)",
+  fontSize: "11px",
+  fontWeight: 950,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+};
+
+const workCenterPerspectiveTitle = {
+  display: "block",
+  color: "var(--meetro-color-paper)",
+  fontSize: "17px",
+  lineHeight: 1.25,
+  fontWeight: 950,
+};
+
+const workCenterPerspectiveText = {
+  margin: "6px 0 0",
+  color: "var(--meetro-color-sage)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: 700,
+};
+
 const emptyCard = {
   maxWidth: "520px",
   margin: "0 auto",
-  background: "white",
+  background: "var(--meetro-surface-warm)",
   borderRadius: "28px",
   padding: "28px",
   textAlign: "center",
-  boxShadow: "0 14px 34px rgba(15,23,42,.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const emptyIcon = {
@@ -2733,8 +2819,8 @@ const miniTimeline = {
   marginTop: "12px",
   display: "grid",
   gap: "8px",
-  background: "#f8f7ff",
-  border: "1px solid #ede9fe",
+  background: "rgba(238, 244, 234, 0.78)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "18px",
   padding: "10px",
 };
@@ -2749,12 +2835,12 @@ const miniTimelineDot = {
   width: "28px",
   height: "28px",
   borderRadius: "999px",
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "13px",
-  boxShadow: "0 4px 10px rgba(91,61,245,0.08)",
+  boxShadow: "0 4px 10px rgba(20,53,31,0.08)",
   flexShrink: 0,
 };
 
@@ -2762,22 +2848,22 @@ const miniTimelineLabel = {
   display: "block",
   fontSize: "12px",
   fontWeight: "900",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
 };
 
 const miniTimelineDate = {
   margin: "2px 0 0",
   fontSize: "11px",
   fontWeight: "800",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
 };
 
 const requestCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "28px",
   padding: "22px",
-  boxShadow: "0 14px 34px rgba(15,23,42,.07)",
-  border: "1px solid #eef2ff",
+  boxShadow: "var(--meetro-shadow-soft)",
+  border: "1px solid var(--meetro-color-line)",
   maxWidth: "100%",
   minWidth: 0,
   overflow: "hidden",
@@ -2785,17 +2871,17 @@ const requestCard = {
 };
 
 const selectedRequestCard = {
-  border: "2px solid #a78bfa",
-  boxShadow: "0 18px 42px rgba(91,61,245,.14)",
+  border: "2px solid var(--meetro-color-forest)",
+  boxShadow: "0 18px 42px rgba(20,53,31,.14)",
 };
 
 const workflowHubCard = {
   marginTop: "14px",
   padding: "16px",
   borderRadius: "22px",
-  border: "1px solid #dfe6f1",
-  background: "#ffffff",
-  boxShadow: "0 12px 30px rgba(15,23,42,.06)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
   display: "grid",
   gap: "13px",
 };
@@ -2810,7 +2896,7 @@ const workflowHubHeader = {
 
 const workflowHubEyebrow = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -2820,7 +2906,7 @@ const workflowHubEyebrow = {
 
 const workflowHubTitle = {
   margin: 0,
-  color: "#050812",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   lineHeight: 1.15,
   fontWeight: "950",
@@ -2840,8 +2926,8 @@ const workflowHubStatusBadge = {
 const workflowHubNextStep = {
   padding: "12px 14px",
   borderRadius: "18px",
-  background: "#f7f4ff",
-  border: "1px solid #ddd6fe",
+  background: "rgba(238, 244, 234, 0.78)",
+  border: "1px solid var(--meetro-color-line)",
   display: "grid",
   gap: "4px",
 };
@@ -2857,8 +2943,8 @@ const workflowTimelinePill = {
   border: "1px solid #e2e8f0",
   borderRadius: "999px",
   padding: "6px 8px",
-  background: "#f8fafc",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   fontSize: "10px",
   fontWeight: "900",
 };
@@ -2870,9 +2956,9 @@ const workflowTimelinePillDone = {
 };
 
 const workflowTimelinePillCurrent = {
-  borderColor: "#8b7cff",
-  background: "#f7f4ff",
-  color: "#4f28e8",
+  borderColor: "var(--meetro-color-forest)",
+  background: "rgba(238, 244, 234, 0.85)",
+  color: "var(--meetro-color-forest)",
 };
 
 const workflowSectionList = {
@@ -2885,9 +2971,9 @@ const workflowSectionPill = {
   display: "inline-flex",
   borderRadius: "12px",
   padding: "8px 10px",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm)",
   border: "1px solid #e2e8f0",
-  color: "#334155",
+  color: "var(--meetro-color-ink)",
   fontSize: "12px",
   fontWeight: "850",
 };
@@ -2902,8 +2988,8 @@ const workflowHubPrimaryButton = {
   border: "none",
   borderRadius: "16px",
   padding: "13px 14px",
-  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   fontSize: "14px",
   fontWeight: "950",
 };
@@ -2912,8 +2998,8 @@ const workflowHubSecondaryButton = {
   border: "1px solid #dbe3ef",
   borderRadius: "16px",
   padding: "13px 14px",
-  background: "#ffffff",
-  color: "#371ce4",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   fontSize: "14px",
   fontWeight: "950",
 };
@@ -2933,8 +3019,8 @@ const requestMainPanel = {
 };
 
 const requestMediaPanel = {
-  background: "#f8fafc",
-  border: "1px solid #eef2ff",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "22px",
   padding: "18px",
   minWidth: 0,
@@ -2967,8 +3053,8 @@ const cardPillRow = {
 
 const statusPill = {
   display: "inline-flex",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "7px 11px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -3070,9 +3156,9 @@ const swipeEndCard = {
   borderRadius: "24px",
   flex: "0 0 auto",
   scrollSnapAlign: "start",
-  background: "linear-gradient(135deg,#f3f0ff,#eef2ff)",
+  background: "linear-gradient(135deg,#f3f0ff,var(--meetro-surface-sage, #eef4ea))",
   border: "1px dashed #c4b5fd",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -3296,13 +3382,13 @@ const metricBox = {
 const quoteAlertMetricBox = {
   ...metricBox,
   background: "linear-gradient(135deg,#f5f3ff,#ffffff)",
-  border: "2px solid #8b5cf6",
-  color: "#5b3df5",
-  boxShadow: "0 0 0 4px rgba(91,61,245,0.10), 0 0 28px rgba(91,61,245,0.35)",
+  border: "2px solid var(--meetro-color-forest, #1f4d34)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  boxShadow: "0 0 0 4px rgba(31,77,52,0.10), 0 0 28px rgba(31,77,52,0.35)",
 };
 
 const quoteAlertText = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "900",
 };
@@ -3322,7 +3408,7 @@ const timelineDot = {
   width: "12px",
   height: "12px",
   borderRadius: "50%",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   marginTop: "5px",
   flexShrink: 0,
 };
@@ -3423,7 +3509,7 @@ const quoteTitle = {
 
 const quoteCountBadge = {
   background: "#ede9fe",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "6px 12px",
   fontWeight: "900",
@@ -3466,7 +3552,7 @@ const quoteDate = {
 const quotePrice = {
   fontSize: "22px",
   fontWeight: "950",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   letterSpacing: "-0.03em",
 };
 
@@ -3498,7 +3584,7 @@ const quoteScopeCard = {
 };
 
 const quoteScopeEyebrow = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -3573,13 +3659,13 @@ const quoteSecondaryButton = {
 
 const acceptQuoteButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 0 0 4px rgba(91,61,245,0.12), 0 0 30px rgba(91,61,245,0.45)",
+  boxShadow: "0 0 0 4px rgba(31,77,52,0.12), 0 0 30px rgba(31,77,52,0.45)",
 };
 
 const rejectQuoteButton = {
@@ -3607,7 +3693,7 @@ const acceptConfirmIcon = {
   width: "42px",
   height: "42px",
   borderRadius: "50%",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -3651,7 +3737,7 @@ const acceptConfirmActions = {
 
 const confirmAcceptButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "14px",
   padding: "12px",
@@ -3698,7 +3784,7 @@ const revisionButtonRow = {
 const sendRevisionButton = {
   flex: 1,
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "14px",
   padding: "12px",
@@ -4011,13 +4097,19 @@ const editPhotoManager = {
 
 const addPhotoButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   padding: "9px 12px",
   borderRadius: "999px",
   fontSize: "12px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const disabledAddPhotoButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const editPhotoCard = {
@@ -4059,8 +4151,8 @@ const deletePhotoButton = {
 
 const primaryButton = {
   border: "none",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   borderRadius: "16px",
   padding: "14px 18px",
   fontWeight: "900",
@@ -4135,7 +4227,7 @@ const confirmKeepButton = {
   border: "none",
   borderRadius: "16px",
   padding: "13px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   cursor: "pointer",

@@ -156,7 +156,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#4338ca",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -194,14 +194,14 @@ const readOnlyCard = {
 const messageCard = {
   padding: "14px",
   borderRadius: "16px",
-  border: "1px solid #c7d2fe",
-  background: "#eef2ff",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
   marginBottom: "16px",
 };
 
 const messageTitle = {
   margin: "0 0 6px",
-  color: "#4338ca",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -267,8 +267,8 @@ const obligationKey = {
   overflowWrap: "anywhere",
   padding: "5px 7px",
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#3730a3",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "10px",
   fontWeight: "900",
 };
@@ -322,7 +322,7 @@ const stepNumber = {
   width: "26px",
   height: "26px",
   borderRadius: "999px",
-  background: "#4338ca",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "#ffffff",
   display: "inline-flex",
   alignItems: "center",

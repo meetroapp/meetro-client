@@ -16,6 +16,12 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredCopy,
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 import { formatMessageTime } from "../utils/displayTime";
 import { normalizePricingModel } from "../utils/pricingCalculations";
 import { updateProjectLifecycleState } from "../utils/projectLifecycleSync";
@@ -37,6 +43,8 @@ function CompletionSheet({ setPage }) {
 
   const language = getLanguage();
   const isSpanish = language === "es";
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   const savedJob = JSON.parse(localStorage.getItem("activeCompletionJob") || "{}");
 
@@ -140,6 +148,16 @@ function CompletionSheet({ setPage }) {
   }
 
   function handleCompletionPhotos(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setCompletionPhotoError,
+      })
+    ) {
+      return;
+    }
+
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
     setCompletionPhotoError("");
@@ -194,9 +212,15 @@ function CompletionSheet({ setPage }) {
   async function openCompletionPhotoPicker() {
     setCompletionPhotoError("");
 
+    if (mediaUploadDeferred) {
+      setCompletionPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
     await openJobPhotoPicker({
       inputRef: completionPhotoInputRef,
       fileNamePrefix: "completion-photo",
+      language,
       onPhotos: (photos) =>
         handleCompletionPhotos(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) =>
@@ -777,6 +801,7 @@ function CompletionSheet({ setPage }) {
             type="file"
             accept="image/*"
             multiple
+            disabled={mediaUploadDeferred}
             style={{ display: "none" }}
             onChange={handleCompletionPhotos}
           />
@@ -787,15 +812,22 @@ function CompletionSheet({ setPage }) {
             </strong>
 
             <p>
-              {t("completionPhotosHelp")}
+              {mediaUploadDeferred
+                ? mediaDeferredCopy.detail
+                : t("completionPhotosHelp")}
             </p>
 
             <button
               type="button"
-              style={photoUploadButton}
+              style={
+                mediaUploadDeferred
+                  ? { ...photoUploadButton, ...disabledPhotoUploadButton }
+                  : photoUploadButton
+              }
+              disabled={mediaUploadDeferred}
               onClick={openCompletionPhotoPicker}
             >
-               {t("addPhotos")}
+               {mediaUploadDeferred ? mediaDeferredCopy.title : t("addPhotos")}
             </button>
             {completionPhotoError && (
               <p style={photoErrorText}>{completionPhotoError}</p>
@@ -853,7 +885,7 @@ function CompletionSheet({ setPage }) {
 
 const page = {
   minHeight: "100vh",
-  background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
+  background: "linear-gradient(180deg,#f8fafc,var(--meetro-surface-sage, #eef4ea))",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -884,8 +916,8 @@ const header = {
 
 const eyebrow = {
   display: "inline-flex",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 12px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -943,7 +975,7 @@ const textarea = {
 
 const aiButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "16px",
   padding: "12px 14px",
@@ -961,7 +993,7 @@ const aiActionRow = {
 
 const aiSmallButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "12px",
   padding: "9px 11px",
@@ -971,8 +1003,8 @@ const aiSmallButton = {
 
 const aiGhostButton = {
   ...aiSmallButton,
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const aiBox = {
@@ -1001,12 +1033,18 @@ const photoUploadButton = {
   border: "none",
   borderRadius: "16px",
   padding: "14px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   fontSize: "15px",
   cursor: "pointer",
   marginTop: "12px",
+};
+
+const disabledPhotoUploadButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const photoErrorText = {
@@ -1071,8 +1109,8 @@ const saveButton = {
 
 const secondaryButton = {
   ...saveButton,
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 export default CompletionSheet;

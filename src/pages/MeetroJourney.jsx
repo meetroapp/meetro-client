@@ -685,7 +685,7 @@ const headerCopy = {
 
 const eyebrow = {
   margin: "0 0 8px",
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "0.78rem",
   fontWeight: 950,
   letterSpacing: "0.08em",
@@ -742,8 +742,8 @@ const slideIcon = {
   borderRadius: "18px",
   display: "grid",
   placeItems: "center",
-  color: "#4f46e5",
-  background: "linear-gradient(135deg, #eef2ff, #ffffff)",
+  color: "var(--meetro-color-charcoal, #172317)",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage, #eef4ea), #ffffff)",
   border: "1px solid rgba(99,102,241,0.18)",
   flex: "0 0 auto",
 };
@@ -781,7 +781,7 @@ const progressTrack = {
 const progressFill = {
   height: "100%",
   borderRadius: "999px",
-  background: "linear-gradient(90deg, #4f46e5, #7c3aed)",
+  background: "linear-gradient(90deg, var(--meetro-color-charcoal, #172317), var(--meetro-color-charcoal, #172317))",
   transition: "width 260ms ease",
 };
 
@@ -835,7 +835,7 @@ const mockScreen = {
 
 const mockEyebrow = {
   margin: 0,
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "0.72rem",
   fontWeight: 950,
   letterSpacing: "0.08em",
@@ -856,7 +856,7 @@ const spotlightCard = {
   borderRadius: "18px",
   padding: "12px",
   color: "#ffffff",
-  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+  background: "linear-gradient(135deg, var(--meetro-color-charcoal, #172317), var(--meetro-color-charcoal, #172317))",
   boxShadow: "0 16px 28px rgba(79,70,229,0.22)",
 };
 
@@ -909,8 +909,8 @@ const mockRow = {
 const categoryPill = {
   borderRadius: "999px",
   padding: "7px 10px",
-  color: "#4f46e5",
-  background: "#eef2ff",
+  color: "var(--meetro-color-charcoal, #172317)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   fontSize: "0.76rem",
   fontWeight: 950,
 };
@@ -944,7 +944,7 @@ const mockPrimaryButton = {
   minHeight: "42px",
   padding: "0 14px",
   color: "#ffffff",
-  background: "linear-gradient(135deg, #4f46e5, #6d28d9)",
+  background: "linear-gradient(135deg, var(--meetro-color-charcoal, #172317), var(--meetro-color-charcoal, #172317))",
   fontWeight: 950,
 };
 
@@ -978,7 +978,7 @@ const avatarDot = {
   display: "grid",
   placeItems: "center",
   color: "#ffffff",
-  background: "#4f46e5",
+  background: "var(--meetro-color-charcoal, #172317)",
   fontWeight: 950,
 };
 
@@ -1003,7 +1003,7 @@ const rightBubble = {
   borderRadius: "18px 18px 6px 18px",
   padding: "11px 12px",
   color: "#ffffff",
-  background: "#4f46e5",
+  background: "var(--meetro-color-charcoal, #172317)",
   fontWeight: 700,
 };
 
@@ -1057,7 +1057,7 @@ const lineItem = {
 };
 
 const lineItemStrong = {
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "1.05rem",
 };
 
@@ -1080,7 +1080,7 @@ const stagePill = {
 const activeStagePill = {
   ...stagePill,
   color: "#ffffff",
-  background: "#4f46e5",
+  background: "var(--meetro-color-charcoal, #172317)",
 };
 
 const mockBottomNav = {
@@ -1101,7 +1101,7 @@ const mockNavItem = {
 
 const mockNavActive = {
   ...mockNavItem,
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
 };
 
 const explanationBubble = {
@@ -1118,7 +1118,7 @@ const explanationBubble = {
 };
 
 const bubbleKicker = {
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "0.72rem",
   fontWeight: 950,
   letterSpacing: "0.08em",
@@ -1149,7 +1149,7 @@ const timelineDot = {
 };
 
 const timelineDotActive = {
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
 };
 
 const timelineDotComplete = {
@@ -1198,7 +1198,7 @@ const secondaryButton = {
 const primaryButton = {
   ...buttonBase,
   border: "1px solid transparent",
-  background: "linear-gradient(135deg, #4f46e5, #6d28d9)",
+  background: "linear-gradient(135deg, var(--meetro-color-charcoal, #172317), var(--meetro-color-charcoal, #172317))",
   color: "#ffffff",
   boxShadow: "0 14px 26px rgba(79,70,229,0.22)",
 };

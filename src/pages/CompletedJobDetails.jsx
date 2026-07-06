@@ -12,8 +12,23 @@ import {
   getConversationOriginContext,
   restoreConversationOriginContext,
 } from "../utils/conversationOrigin";
+import {
+  buildTimelineClosureOffer,
+  createTimelineMomentFromClosedProject,
+  getTimelineMomentsForProject,
+  readTimelineMoments,
+  TIMELINE_MOMENT_STATUSES,
+} from "../utils/meetroTimeline";
+import {
+  getMediaDeferredCopy,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 
 function CompletedJobDetails({ setPage }) {
+  const language = localStorage.getItem("language") || "en";
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
   const openedFromConversation = Boolean(getConversationOriginContext());
   const completedProject = JSON.parse(
     localStorage.getItem("lastCompletedProject") || "null"
@@ -40,6 +55,13 @@ function CompletedJobDetails({ setPage }) {
   const [concernError, setConcernError] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  const [timelineMomentNotice, setTimelineMomentNotice] = useState("");
+  const [timelineOfferDismissed, setTimelineOfferDismissed] = useState(false);
+  const [timelineOfferProject, setTimelineOfferProject] = useState(null);
+  const [createdTimelineMoment, setCreatedTimelineMoment] = useState(null);
+  const [momentPreviewTitle, setMomentPreviewTitle] = useState("");
+  const [momentPreviewReflection, setMomentPreviewReflection] = useState("");
+  const [momentCoverPhotoIndex, setMomentCoverPhotoIndex] = useState(0);
 
   const completedDateValue =
     completedProject?.completedAt ||
@@ -175,6 +197,75 @@ function CompletedJobDetails({ setPage }) {
         ""
     ).toLowerCase() === "closed";
 
+  function getProjectConversationId() {
+    return (
+      completedProject?.conversationId ||
+      completedProject?.activeConversationId ||
+      completedProject?.projectConversationId ||
+      requestId
+    );
+  }
+
+  const buildTimelineSourceProject = (sourceProject = {}) => ({
+    ...(sourceProject || {}),
+    projectId:
+      sourceProject.projectId ||
+      sourceProject.requestId ||
+      sourceProject.jobId ||
+      requestId,
+    relationshipId:
+      sourceProject.relationshipId ||
+      sourceProject.customerRelationshipId ||
+      sourceProject.conversationId ||
+      getProjectConversationId(),
+    conversationId: sourceProject.conversationId || getProjectConversationId(),
+    customerName: sourceProject.customerName || sourceProject.customer || customer,
+    businessName: sourceProject.businessName || businessName,
+    projectTitle: sourceProject.projectTitle || sourceProject.title || service,
+    projectCategory: sourceProject.projectCategory || sourceProject.category || type,
+    completionDate:
+      sourceProject.completionDate ||
+      sourceProject.completedAt ||
+      sourceProject.completionApprovedAt ||
+      completedDate?.toISOString?.() ||
+      "",
+    closureDate:
+      sourceProject.closureDate ||
+      sourceProject.closedAt ||
+      sourceProject.closeDate ||
+      "",
+  });
+
+  const timelineSourceProject = timelineOfferProject || buildTimelineSourceProject(completedProject || {});
+  const storedTimelineMoment = getTimelineMomentsForProject(
+    readTimelineMoments(localStorage),
+    timelineSourceProject.projectId || requestId
+  )[0];
+  const existingTimelineMoment = createdTimelineMoment || storedTimelineMoment || null;
+  const timelineClosureOffer =
+    !isHomeownerView && !timelineOfferDismissed && !existingTimelineMoment
+      ? buildTimelineClosureOffer(timelineSourceProject)
+      : { eligible: false };
+  const timelinePreviewMoment = timelineClosureOffer.offer?.momentPreview || null;
+  const timelinePreviewPhotos = getMomentPreviewPhotos(
+    timelinePreviewMoment,
+    completionPhotos
+  );
+  const selectedMomentPhoto =
+    timelinePreviewPhotos[
+      Math.min(momentCoverPhotoIndex, Math.max(timelinePreviewPhotos.length - 1, 0))
+    ] || null;
+  const selectedMomentPhotoUrl = getDisplayPhotoUrl(selectedMomentPhoto);
+  const printedMomentTitle =
+    momentPreviewTitle ||
+    timelinePreviewMoment?.projectTitle ||
+    service ||
+    "Completed Project";
+  const printedMomentReflection =
+    momentPreviewReflection ||
+    timelinePreviewMoment?.generatedMessage ||
+    "This completed work became part of a relationship, a promise kept, and a story worth remembering.";
+
   const shareRecord = () =>
     shareCompletionRecord(completedProject || {
       title: service,
@@ -225,12 +316,6 @@ function CompletedJobDetails({ setPage }) {
       });
     }
   };
-
-  const getProjectConversationId = () =>
-    completedProject?.conversationId ||
-    completedProject?.activeConversationId ||
-    completedProject?.projectConversationId ||
-    requestId;
 
   const appendProjectConversationMessage = (message) => {
     const conversationId = getProjectConversationId();
@@ -302,8 +387,47 @@ function CompletedJobDetails({ setPage }) {
     };
 
     syncCompletionRecord(approvedProject, { savedToHistory: true });
+    setTimelineOfferProject(
+      buildTimelineSourceProject({
+        ...approvedProject,
+        status: "closed",
+        workflowStatus: "closed",
+        workStatus: "closed",
+        closureStatus: "closed",
+        closedAt: approvedAt,
+        closeDate: approvedAt,
+      })
+    );
+    setTimelineOfferDismissed(false);
     setCompletionApproved(true);
     setResolutionState("");
+  };
+
+  const preserveMeetroMoment = () => {
+    const result = createTimelineMomentFromClosedProject(timelineSourceProject, {
+      storage: localStorage,
+      projectTitle: printedMomentTitle,
+      thankYouMessage: printedMomentReflection,
+      momentReflection: printedMomentReflection,
+      coverPhoto: selectedMomentPhoto,
+    });
+
+    if (!result.created) {
+      setTimelineMomentNotice("Close the project before preserving a Meetro Moment.");
+      return;
+    }
+
+    setCreatedTimelineMoment(result.moment);
+    setTimelineMomentNotice(
+      result.moment.status === TIMELINE_MOMENT_STATUSES.PENDING_CUSTOMER_CONFIRMATION
+        ? "Meetro Moment is waiting for customer confirmation."
+        : "Meetro Moment preserved."
+    );
+  };
+
+  const dismissMeetroMomentOffer = () => {
+    setTimelineOfferDismissed(true);
+    setTimelineMomentNotice("");
   };
 
   const openProjectConversation = (context = "completion") => {
@@ -336,6 +460,16 @@ function CompletedJobDetails({ setPage }) {
   };
 
   const readConcernPhotos = (event) => {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setConcernError,
+      })
+    ) {
+      return;
+    }
+
     const files = Array.from(event.target.files || []);
     files.forEach((file) => {
       const reader = new FileReader();
@@ -571,6 +705,115 @@ function CompletedJobDetails({ setPage }) {
     updateReviewedRecordInStorage("homeownerRequests", reviewedProject);
     setSavedReview(review);
   };
+
+  if (!isHomeownerView && timelineClosureOffer.eligible) {
+    return (
+      <div className="app-page meetro-readable-page" style={momentPreviewPage}>
+        <button
+          type="button"
+          style={momentPreviewBack}
+          onClick={dismissMeetroMomentOffer}
+        >
+          Keep in History
+        </button>
+
+        <main style={momentPreviewShell} aria-label="Meetro Moment preview">
+          <section style={momentPhotoCanvas}>
+            {selectedMomentPhotoUrl ? (
+              <img src={selectedMomentPhotoUrl} alt="" style={momentCanvasImage} />
+            ) : (
+              <div style={momentCanvasFallback}>
+                <span>Verified Meetro Moment</span>
+              </div>
+            )}
+            <div style={momentCanvasShade} />
+            <div style={momentCanvasStory}>
+              <span style={momentPrintedBadge}>Verified Meetro Moment</span>
+              <h1
+                style={momentPrintedTitle}
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Moment title"
+                onBlur={(event) => {
+                  const nextValue = event.currentTarget.textContent.trim();
+                  setMomentPreviewTitle(nextValue || timelinePreviewMoment?.projectTitle || service);
+                }}
+              >
+                {printedMomentTitle}
+              </h1>
+              <p style={momentPrintedMeta}>
+                {[date, customer, businessName].filter(Boolean).join(" · ")}
+              </p>
+              <p
+                style={momentPrintedReflection}
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Moment reflection"
+                onBlur={(event) => {
+                  const nextValue = event.currentTarget.textContent.trim();
+                  setMomentPreviewReflection(nextValue || printedMomentReflection);
+                }}
+              >
+                {printedMomentReflection}
+              </p>
+            </div>
+          </section>
+
+          {timelinePreviewPhotos.length > 1 && (
+            <section style={momentPhotoStrip} aria-label="Moment photographs">
+              <p style={momentPhotoHint}>
+                Swipe through the photographs. Tap the one that feels like the memory.
+              </p>
+              <div style={momentPhotoScroller}>
+                {timelinePreviewPhotos.map((photo, index) => {
+                  const photoUrl = getDisplayPhotoUrl(photo);
+                  return (
+                    <button
+                      key={photo.id || photo.dataUrl || photo.url || photoUrl || index}
+                      type="button"
+                      style={
+                        index === momentCoverPhotoIndex
+                          ? momentPhotoThumbActive
+                          : momentPhotoThumb
+                      }
+                      onClick={() => setMomentCoverPhotoIndex(index)}
+                      aria-label={`Use photograph ${index + 1}`}
+                    >
+                      {photoUrl ? (
+                        <img src={photoUrl} alt="" style={momentPhotoThumbImage} />
+                      ) : (
+                        <span />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          <p style={momentKeepsakeLine}>
+            Completed {date} with {customer} and {businessName}
+            {timelinePreviewMoment?.warranty ? " · Warranty included" : ""}
+          </p>
+
+          {timelineMomentNotice && (
+            <p style={momentPreviewNotice}>{timelineMomentNotice}</p>
+          )}
+
+          <div style={momentPreviewActions}>
+            <button type="button" style={momentPreserveButton} onClick={preserveMeetroMoment}>
+              Preserve Meetro Moment
+            </button>
+            <button type="button" style={momentQuietButton} onClick={dismissMeetroMomentOffer}>
+              Keep in History
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (isHomeownerView) {
     const isReadOnlyHistory =
@@ -808,9 +1051,17 @@ function CompletedJobDetails({ setPage }) {
                   type="file"
                   accept="image/*"
                   multiple
-                  style={fileInput}
+                  disabled={mediaUploadDeferred}
+                  style={
+                    mediaUploadDeferred
+                      ? { ...fileInput, ...disabledFileInput }
+                      : fileInput
+                  }
                   onChange={readConcernPhotos}
                 />
+                {mediaUploadDeferred && (
+                  <span style={deferredPhotoHelp}>{mediaDeferredCopy.detail}</span>
+                )}
               </label>
 
               {concernPhotos.length > 0 && (
@@ -1124,6 +1375,24 @@ function CompletedJobDetails({ setPage }) {
 
         </div>
 
+        {!isHomeownerView && existingTimelineMoment && (
+          <section style={timelineMomentCard}>
+            <div>
+              <span style={sectionEyebrow}>Verified Meetro Moment</span>
+              <h2 style={timelineMomentTitle}>Meetro Moments</h2>
+              <p style={completionSummaryText}>
+                {existingTimelineMoment.status ===
+                TIMELINE_MOMENT_STATUSES.PENDING_CUSTOMER_CONFIRMATION
+                  ? "This Meetro Moment is pending customer confirmation before public display."
+                  : "This completed project is part of your Meetro Moments."}
+              </p>
+            </div>
+            {timelineMomentNotice && (
+              <p style={timelineMomentNoticeStyle}>{timelineMomentNotice}</p>
+            )}
+          </section>
+        )}
+
         {!openedFromConversation && (
         <div style={actionGrid}>
           {isHomeownerView ? (
@@ -1209,6 +1478,29 @@ function recordIdentity(record = {}) {
     .map((value) => String(value));
 }
 
+function getDisplayPhotoUrl(photo) {
+  if (!photo) return "";
+  if (typeof photo === "string") return photo;
+  return photo.dataUrl || photo.url || photo.src || photo.previewUrl || photo.imageUrl || "";
+}
+
+function getMomentPreviewPhotos(moment = {}, completionPhotos = []) {
+  const photos = [
+    moment.coverPhoto,
+    ...(Array.isArray(moment.afterPhotos) ? moment.afterPhotos : []),
+    ...(Array.isArray(moment.beforePhotos) ? moment.beforePhotos : []),
+    ...(Array.isArray(completionPhotos) ? completionPhotos : []),
+  ].filter(Boolean);
+
+  const seen = new Set();
+  return photos.filter((photo) => {
+    const identity = getDisplayPhotoUrl(photo) || JSON.stringify(photo);
+    if (!identity || seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
 function updateReviewedRecordInStorage(key, reviewedProject) {
   try {
     const records = JSON.parse(localStorage.getItem(key) || "[]");
@@ -1288,7 +1580,7 @@ function updateCompletionRecordInStorage(key, projectRecord, options = {}) {
 
 const page = {
   minHeight: "100vh",
-  background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
+  background: "linear-gradient(180deg,#f8fafc,var(--meetro-surface-sage, #eef4ea))",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 16px) max(14px, env(safe-area-inset-right, 0px)) calc(164px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -1355,7 +1647,7 @@ const completionSummaryCard = {
 
 const sectionEyebrow = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1389,8 +1681,8 @@ const topRow = {
 
 const typePill = {
   display: "inline-flex",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 12px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -1589,6 +1881,20 @@ const fileInput = {
   boxSizing: "border-box",
 };
 
+const disabledFileInput = {
+  background: "#f1f5f9",
+  color: "#64748b",
+  cursor: "not-allowed",
+};
+
+const deferredPhotoHelp = {
+  display: "block",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "700",
+  lineHeight: 1.4,
+};
+
 const errorText = {
   margin: 0,
   color: "#b91c1c",
@@ -1619,7 +1925,7 @@ const primaryButton={
 border:"none",
 borderRadius:"16px",
 padding:"14px",
-background:"#5b3df5",
+background:"var(--meetro-color-forest, #1f4d34)",
 color:"white",
 fontWeight:"900",
 cursor:"pointer",
@@ -1649,6 +1955,252 @@ const issueButton = {
   border: "1px solid #fed7aa",
   background: "#fff7ed",
   color: "#c2410c",
+};
+
+const timelineMomentCard = {
+  marginTop: "22px",
+  background: "linear-gradient(135deg, rgba(248,250,252,0.96), rgba(238,242,255,0.9))",
+  borderRadius: "20px",
+  padding: "18px",
+  border: "1px solid rgba(99,102,241,0.18)",
+  boxShadow: "0 14px 34px rgba(79,70,229,0.08)",
+  display: "grid",
+  gap: "14px",
+};
+
+const timelineMomentTitle = {
+  margin: "6px 0",
+  color: "#111827",
+  fontSize: "1.35rem",
+};
+
+const timelineMomentNoticeStyle = {
+  margin: 0,
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "rgba(255,255,255,0.72)",
+  color: "#4338ca",
+  fontWeight: 800,
+};
+
+const momentPreviewPage = {
+  minHeight: "100vh",
+  width: "100%",
+  boxSizing: "border-box",
+  background:
+    "radial-gradient(circle at 18% 8%, rgba(245,158,11,0.16), transparent 30%), linear-gradient(180deg,#fffaf0,#f8fafc 58%,var(--meetro-surface-sage, #eef4ea))",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 16px) max(14px, env(safe-area-inset-right, 0px)) calc(34px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
+};
+
+const momentPreviewBack = {
+  border: "1px solid rgba(148,163,184,0.28)",
+  background: "rgba(255,255,255,0.72)",
+  color: "#334155",
+  borderRadius: "999px",
+  padding: "10px 14px",
+  fontWeight: 900,
+  cursor: "pointer",
+  boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  margin: "0 auto 14px",
+  display: "block",
+};
+
+const momentPreviewShell = {
+  width: "min(100%, 980px)",
+  margin: "0 auto",
+  display: "grid",
+  gap: "16px",
+};
+
+const momentPhotoCanvas = {
+  position: "relative",
+  minHeight: "min(72vh, 680px)",
+  borderRadius: "34px",
+  overflow: "hidden",
+  background: "#111827",
+  boxShadow: "0 28px 80px rgba(15,23,42,0.28)",
+};
+
+const momentCanvasImage = {
+  width: "100%",
+  height: "100%",
+  minHeight: "inherit",
+  objectFit: "cover",
+  display: "block",
+};
+
+const momentCanvasFallback = {
+  minHeight: "inherit",
+  display: "grid",
+  placeItems: "center",
+  color: "#fef3c7",
+  fontSize: "1.6rem",
+  fontWeight: 950,
+  background:
+    "linear-gradient(135deg, rgba(15,23,42,0.98), rgba(88,28,135,0.78))",
+};
+
+const momentCanvasShade = {
+  position: "absolute",
+  inset: 0,
+  background:
+    "linear-gradient(90deg, rgba(15,23,42,0.72), rgba(15,23,42,0.28) 44%, rgba(15,23,42,0.08)), linear-gradient(0deg, rgba(15,23,42,0.62), transparent 45%)",
+};
+
+const momentCanvasStory = {
+  position: "absolute",
+  left: "clamp(22px, 6vw, 64px)",
+  right: "clamp(22px, 16vw, 220px)",
+  bottom: "clamp(26px, 8vw, 72px)",
+  color: "white",
+  display: "grid",
+  gap: "12px",
+};
+
+const momentPrintedBadge = {
+  width: "fit-content",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.18)",
+  border: "1px solid rgba(255,255,255,0.24)",
+  fontSize: "0.72rem",
+  fontWeight: 950,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  backdropFilter: "blur(18px)",
+  WebkitBackdropFilter: "blur(18px)",
+};
+
+const momentPrintedTitle = {
+  margin: 0,
+  maxWidth: "720px",
+  fontFamily: "Georgia, 'Times New Roman', serif",
+  fontSize: "clamp(2.1rem, 6vw, 4.7rem)",
+  lineHeight: 1.02,
+  fontWeight: 800,
+  textShadow: "0 12px 36px rgba(0,0,0,0.38)",
+  outline: "none",
+  cursor: "text",
+};
+
+const momentPrintedMeta = {
+  margin: 0,
+  color: "rgba(255,255,255,0.86)",
+  fontSize: "clamp(0.92rem, 2.2vw, 1.12rem)",
+  lineHeight: 1.45,
+  fontWeight: 800,
+};
+
+const momentPrintedReflection = {
+  margin: 0,
+  maxWidth: "620px",
+  color: "rgba(255,255,255,0.94)",
+  fontFamily: "Georgia, 'Times New Roman', serif",
+  fontSize: "clamp(1.1rem, 2.8vw, 1.7rem)",
+  lineHeight: 1.42,
+  outline: "none",
+  cursor: "text",
+};
+
+const momentPhotoStrip = {
+  display: "grid",
+  gap: "10px",
+};
+
+const momentPhotoHint = {
+  margin: 0,
+  color: "#64748b",
+  fontWeight: 800,
+  textAlign: "center",
+};
+
+const momentPhotoScroller = {
+  display: "flex",
+  gap: "10px",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  padding: "2px 2px 8px",
+};
+
+const momentPhotoThumb = {
+  flex: "0 0 82px",
+  height: "70px",
+  border: "2px solid rgba(255,255,255,0.72)",
+  borderRadius: "18px",
+  overflow: "hidden",
+  padding: 0,
+  background: "rgba(255,255,255,0.74)",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.12)",
+  cursor: "pointer",
+};
+
+const momentPhotoThumbActive = {
+  ...momentPhotoThumb,
+  border: "3px solid #d97706",
+  boxShadow: "0 14px 34px rgba(217,119,6,0.24)",
+};
+
+const momentPhotoThumbImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const momentKeepsakeLine = {
+  margin: "0 auto",
+  width: "fit-content",
+  maxWidth: "100%",
+  color: "#334155",
+  background: "rgba(255,255,255,0.7)",
+  border: "1px solid rgba(148,163,184,0.2)",
+  borderRadius: "999px",
+  padding: "12px 16px",
+  fontWeight: 900,
+  textAlign: "center",
+  boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+};
+
+const momentPreviewNotice = {
+  margin: 0,
+  color: "#4338ca",
+  background: "rgba(255,255,255,0.76)",
+  borderRadius: "18px",
+  padding: "12px 14px",
+  fontWeight: 900,
+  textAlign: "center",
+};
+
+const momentPreviewActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+  gap: "10px",
+};
+
+const momentPreserveButton = {
+  border: "none",
+  borderRadius: "20px",
+  padding: "16px",
+  background: "linear-gradient(135deg,#d97706,#f59e0b)",
+  color: "white",
+  fontWeight: 950,
+  cursor: "pointer",
+  boxShadow: "0 18px 38px rgba(217,119,6,0.24)",
+};
+
+const momentQuietButton = {
+  border: "1px solid rgba(148,163,184,0.28)",
+  borderRadius: "20px",
+  padding: "16px",
+  background: "rgba(255,255,255,0.72)",
+  color: "#334155",
+  fontWeight: 950,
+  cursor: "pointer",
 };
 
 const section = {

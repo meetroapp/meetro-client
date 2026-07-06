@@ -11,7 +11,7 @@ function PricingLibrary({ setPage }) {
   const pricingGroups = getPricingLibrary();
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={t("pricingLibrary", language)}
         description={t("pricingLibraryDescription", language)}
@@ -19,18 +19,18 @@ function PricingLibrary({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <div style={readOnlyCard}>
+      <div className="meetro-visual-surface" style={readOnlyCard}>
         <strong>{t("readOnlyReference", language)}</strong>
         <span>{t("pricingLibraryReadOnlyText", language)}</span>
       </div>
 
-      <div style={disclaimerCard}>
+      <div className="meetro-visual-surface" style={disclaimerCard}>
         {language === "en" ? PRICING_GUIDANCE_DISCLAIMER : t("pricingGuidanceDisclaimer", language)}
       </div>
 
       <div style={pricingGrid}>
         {pricingGroups.map((group) => (
-          <article key={group.serviceType} style={pricingCard}>
+          <article key={group.serviceType} className="meetro-visual-surface" style={pricingCard}>
             <div style={cardHeader}>
               <div>
                 <p style={fieldLabel}>
@@ -98,7 +98,7 @@ const page = {
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, #fbf6ed)",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
 };
@@ -130,7 +130,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#7c2d12",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -140,13 +140,13 @@ const title = {
   margin: 0,
   fontSize: "23px",
   fontWeight: "950",
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   letterSpacing: 0,
 };
 
 const subtitle = {
   margin: "7px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "700",
@@ -157,9 +157,9 @@ const readOnlyCard = {
   gap: "4px",
   padding: "13px",
   borderRadius: "14px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#334155",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: "12px",
   lineHeight: 1.45,
   marginBottom: "10px",
@@ -169,8 +169,8 @@ const disclaimerCard = {
   padding: "12px",
   borderRadius: "14px",
   border: "1px solid #fed7aa",
-  background: "#fff7ed",
-  color: "#7c2d12",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   lineHeight: 1.45,
   fontWeight: "850",
@@ -180,7 +180,7 @@ const disclaimerCard = {
 const pricingGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 270px), 1fr))",
-  gap: "12px",
+  gap: "16px",
 };
 
 const pricingCard = {
@@ -190,11 +190,11 @@ const pricingCard = {
   boxSizing: "border-box",
   display: "grid",
   gap: "13px",
-  padding: "14px",
+  padding: "18px",
   borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const cardHeader = {
@@ -206,7 +206,7 @@ const cardHeader = {
 
 const fieldLabel = {
   margin: "0 0 6px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "11px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -214,7 +214,7 @@ const fieldLabel = {
 
 const serviceTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: "17px",
   fontWeight: "950",
 };

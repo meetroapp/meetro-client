@@ -6,6 +6,17 @@ const publicSitePath = "src/public/PublicSite.jsx";
 const appPath = "src/App.jsx";
 const mainPath = "src/main.jsx";
 
+function assertAppearsInOrder(source, phrases) {
+  let lastIndex = -1;
+
+  phrases.forEach((phrase) => {
+    const index = source.indexOf(phrase);
+    assert.notEqual(index, -1, `${phrase} should appear`);
+    assert.ok(index > lastIndex, `${phrase} should appear in order`);
+    lastIndex = index;
+  });
+}
+
 test("public website routes are separated from the authenticated app shell", () => {
   assert.equal(existsSync(publicSitePath), true);
   assert.equal(existsSync("public/_redirects"), true);
@@ -17,14 +28,40 @@ test("public website routes are separated from the authenticated app shell", () 
 
   assert.match(publicSite, /Meetro/);
   assert.match(publicSite, /Community/);
-  assert.match(publicSite, /Connect\. Communicate\. Complete\./);
-  assert.match(publicSite, /Preparing for launch/);
+  assert.match(publicSite, /Every trusted relationship begins with/);
+  assert.match(publicSite, /Built around trust\. Powered by relationships\./);
+  assert.match(publicSite, /People do not join Meetro Community because they need another app/);
+  assert.match(publicSite, /Why Meetro Community exists/);
+  assert.match(publicSite, /Every meaningful project begins with a person/);
+  assert.match(publicSite, /The Journey We Build Together/);
+  assert.match(publicSite, /Ask Meetro is your companion throughout Meetro Community/);
+  assert.match(publicSite, /Guided by Ask Meetro\. Powered by Meetro Intelligence\./);
+  assert.match(publicSite, /Meetro Community helps professionals become:/);
+  assert.match(publicSite, /People may arrive looking for help/);
+  assertAppearsInOrder(publicSite, [
+    'title: "Relationships"',
+    "Connections create opportunity.",
+    'title: "Communication"',
+    "Conversations create clarity.",
+    'title: "Understanding"',
+    "Understanding creates confidence.",
+    'title: "Decisions"',
+    "Decisions create direction.",
+    'title: "Work"',
+    "Work creates value.",
+    'title: "History"',
+    "History builds trust.",
+    "Stronger relationships create more good.",
+  ]);
+  assert.doesNotMatch(publicSite, /Connect\. Communicate\. Complete\./);
+  assert.doesNotMatch(publicSite, /Preparing for launch/);
+  assert.doesNotMatch(publicSite, /cartoon|mascot|smiling face|marketplace-first|modern platform/i);
   assert.match(publicSite, /WM FLEX LABS, LLC/);
   assert.match(publicSite, /william@flexlabs\.com/);
   assert.match(publicSite, /"\/privacy"/);
   assert.match(publicSite, /"\/terms"/);
   assert.match(publicSite, /"\/contact"/);
-  assert.match(publicSite, /Back to Meetro/);
+  assert.match(publicSite, /Back to Meetro Community/);
   assert.match(publicSite, /href="\/"/);
   assert.doesNotMatch(
     publicSite,

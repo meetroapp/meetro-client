@@ -173,9 +173,46 @@ test("portfolio proof projection counts only public-safe portfolio projects", ()
   assert.equal(proof.projectCount, 1);
   assert.equal(proof.featuredProjectCount, 1);
   assert.equal(proof.featuredProject.title, "Kitchen Remodel");
+  assert.deepEqual(proof.featuredProjectMediaUrls, [
+    "https://example.com/kitchen-1.jpg",
+  ]);
   assert.deepEqual(proof.mediaUrls, [
     "https://example.com/kitchen-1.jpg",
     "https://example.com/standalone.jpg",
+  ]);
+});
+
+test("portfolio proof keeps featured Spotlight media scoped to the featured story", () => {
+  const proof = getBusinessPortfolioProofProjection(
+    {
+      id: "business-spotlight-match",
+      businessName: "Story Match Business",
+      businessPortfolio: [
+        {
+          id: "leak-1",
+          title: "Kitchen plumbing leak",
+          image_urls: ["https://example.com/leak-repair.jpg"],
+          spotlightFeatured: true,
+        },
+        {
+          id: "kitchen-1",
+          title: "Kitchen remodel",
+          image_urls: ["https://example.com/sunday-dinner-kitchen.jpg"],
+        },
+      ],
+      portfolioImages: ["https://example.com/standalone-kitchen.jpg"],
+    },
+    { storage: createMemoryStorage() }
+  );
+
+  assert.equal(proof.featuredProject.title, "Kitchen plumbing leak");
+  assert.deepEqual(proof.featuredProjectMediaUrls, [
+    "https://example.com/leak-repair.jpg",
+  ]);
+  assert.deepEqual(proof.mediaUrls, [
+    "https://example.com/leak-repair.jpg",
+    "https://example.com/sunday-dinner-kitchen.jpg",
+    "https://example.com/standalone-kitchen.jpg",
   ]);
 });
 

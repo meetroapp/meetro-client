@@ -176,12 +176,12 @@ const backButton = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, var(--meetro-color-forest, #1f4d34) 100%)",
   color: "white",
   borderRadius: "28px",
   padding: "24px",
   marginBottom: "16px",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.25)",
+  boxShadow: "0 18px 40px rgba(31,77,52,0.25)",
 };
 
 const eyebrow = {
@@ -226,10 +226,10 @@ const documentButton = {
 };
 
 const activeDocumentButton = {
-  borderColor: "#7c3aed",
+  borderColor: "var(--meetro-color-charcoal, #172317)",
   background: "#f3f0ff",
-  color: "#5b3df5",
-  boxShadow: "0 10px 22px rgba(91,61,245,0.12)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  boxShadow: "0 10px 22px rgba(31,77,52,0.12)",
 };
 
 const documentCard = {

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
+import MeetroIcon from "../components/MeetroIcon";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
+import { getHiringLocalJobOpenings } from "../utils/hiringCenterRegistry";
+import { getLocalizedHiringJobDisplay } from "../utils/hiringDisplayTranslations";
 import { isProfessionalSession, professionalRoles } from "../utils/session";
 import {
   getStoredProfessionalMatchProfile,
@@ -17,16 +20,12 @@ import { getBusinessVerificationProjection } from "../utils/businessVerification
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 
 function Discover({ setPage, currentPage }) {
-  const [discoverMode, setDiscoverMode] = useState(
-    localStorage.getItem("activeDiscoverMode") || "businessDirectory"
-  );
+  const [discoverMode, setDiscoverMode] = useState("communityHub");
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState([]);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [language, updateLanguage] = useState(getLanguage());
-
-  const isBusinessDirectory = discoverMode === "businessDirectory";
 
   const userRole = localStorage.getItem("userRole") || "standard";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -316,6 +315,42 @@ function Discover({ setPage, currentPage }) {
       businessMatchesCategory(business, filter) &&
       businessMatchesSearch(business, searchQuery)
   );
+  const featuredBusinesses = businesses.filter((business) => !isPausedBusiness(business));
+  const communityBusinessPreview = (featuredBusinesses.length ? featuredBusinesses : businesses).slice(0, 3);
+  const hiringPreviewJobs = getHiringLocalJobOpenings().slice(0, 3);
+  const spotlightPreviewBusiness = communityBusinessPreview[0] || businesses[0] || null;
+  const spotlightBusinessCount = businesses.filter(
+    (business) => !isPausedBusiness(business)
+  ).length;
+  const hasSpotlightStory = Boolean(spotlightPreviewBusiness);
+  const spotlightBusinessName =
+    spotlightPreviewBusiness?.name ||
+    spotlightPreviewBusiness?.business_name ||
+    t("communitySpotlightLocalProfessional", language);
+  const communitySpotlightStory = spotlightPreviewBusiness
+    ? {
+        title: t("communitySpotlightStoryTitle", language),
+        text: t("communitySpotlightStoryText", language).replace(
+          "{business}",
+          spotlightBusinessName
+        ),
+        meta: `${getBusinessDisplayCategory(spotlightPreviewBusiness)} · ${getBusinessServiceArea(spotlightPreviewBusiness)}`,
+      }
+    : {
+        title: t("communitySpotlightStoryFallbackTitle", language),
+        text: t("communitySpotlightStoryFallbackText", language),
+        meta: t("communitySpotlightStoryFallbackMeta", language),
+      };
+  const communitySpotlightBusinessLabel =
+    spotlightBusinessCount === 1
+      ? t("communitySpotlightBusinessSingular", language)
+      : t("communitySpotlightBusinessPlural", language);
+  const communitySpotlightCountMeta = t(
+    "communitySpotlightCountMeta",
+    language
+  )
+    .replace("{count}", String(spotlightBusinessCount))
+    .replace("{businessLabel}", communitySpotlightBusinessLabel);
 
   function getBusinessStatus(business) {
     return business?.status || business?.businessStatus || "active";
@@ -573,11 +608,339 @@ function Discover({ setPage, currentPage }) {
     return <LoadingScreen />;
   }
 
-  return (
-    <div className="app-page meetro-wide-page" style={pageWrapper}>
+  const openCommunitySection = (section) => {
+    setSearchQuery("");
+    setFilter("all");
+    setDiscoverMode(section);
+  };
+
+  const renderBusinessCard = (business) => {
+    const businessStatus = getBusinessStatus(business);
+    const paused = businessStatus === "paused";
+    const category = getBusinessDisplayCategory(business);
+    const serviceArea = getBusinessServiceArea(business);
+    const verification = getBusinessVerificationProjection(business, {
+      translate: (key) => t(key, language),
+    });
+    const portfolioProof = getBusinessPortfolioProofProjection(business, {
+      translate: (key) => t(key, language),
+    });
+    const imageSource =
+      business.image_url ||
+      business.imageUrl ||
+      business.coverImage ||
+      business.cover_image ||
+      business.logo ||
+      "";
+
+    return (
+      <div
+        key={business.id || business.name || business.business_name}
+        style={{
+          ...businessDirectoryCard,
+          ...(paused ? pausedBusinessCard : {}),
+        }}
+        onClick={() => viewBusinessProfile(business)}
+      >
+        <div style={businessLogoWrap}>
+          {imageSource ? (
+            <img
+              src={imageSource}
+              alt={business.name || business.business_name}
+              style={businessLogo}
+            />
+          ) : (
+            <div style={businessLogoFallback}>
+              {String(business.name || business.business_name || "M")
+                .slice(0, 1)
+                .toUpperCase()}
+            </div>
+          )}
+        </div>
+
+        <div style={businessCardBody}>
+          <div style={businessCardTop}>
+            <h2 style={businessCardTitle}>
+              {business.name ||
+                business.business_name ||
+                t("businessNameNotSet")}
+            </h2>
+
+            <span style={ratingPill}>
+              ★ {portfolioProof.averageRating || t("discoverRatingPending", language)}
+            </span>
+          </div>
+
+          <p style={businessCategoryLine}>
+            {category}
+          </p>
+
+          <div style={businessTrustRow}>
+            <span style={verification.verified ? trustMini : pausedMini}>
+              ✓ {verification.compactBadgeText}
+            </span>
+
+            {paused ? (
+              <span style={pausedMini}>
+                {t("discoverNotAcceptingRequests", language)}
+              </span>
+            ) : (
+              <>
+                <span style={trustMini}>{t("discoverAvailable", language)}</span>
+                <span style={trustMini}>{t("discoverPortfolio", language)}</span>
+              </>
+            )}
+          </div>
+
+          <p style={businessCardLocation}>
+            {serviceArea}
+          </p>
+
+          <div style={businessActionRow}>
+            <button
+              style={businessSecondaryButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                viewBusinessProfile(business);
+              }}
+            >
+              {t("homeViewProfile", language)}
+            </button>
+
+            <button
+              style={{
+                ...businessPrimaryButton,
+                ...(paused ? disabledMessageButton : {}),
+              }}
+              onClick={(event) => requestServiceFromBusiness(event, business)}
+            >
+              {paused
+                ? t("discoverPaused", language)
+                : t("requestService", language)}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHiringPreviewCard = (job) => {
+    const jobDisplay = getLocalizedHiringJobDisplay(job, language);
+
+    return (
+      <article key={job.id} style={communityHiringCard}>
+        <div style={communityHiringTop}>
+          <span style={communityHiringIcon}>
+            <MeetroIcon name="jobsHiring" size={20} decorative />
+          </span>
+          <span style={communityHiringBadge}>{job.employmentType}</span>
+        </div>
+        <p style={communityHiringCategory}>{jobDisplay.category || job.category}</p>
+        <h3 style={communityHiringTitle}>{jobDisplay.title || job.title}</h3>
+        <p style={communityHiringBusiness}>{job.businessName}</p>
+        <p style={communityHiringDescription}>{jobDisplay.description || job.description}</p>
+        <div style={communityHiringMeta}>
+          <span>{job.payRange}</span>
+          <span>{job.location}</span>
+        </div>
+      </article>
+    );
+  };
+
+  const renderCommunityHub = () => (
+    <>
+      <section className="meetro-visual-hero" style={communityHero}>
+        <p style={headerEyebrow}>{t("communityTitle", language)}</p>
+        <h1 style={compactTitle}>{t("communityTitle", language)}</h1>
+        <p style={compactSubtitle}>
+          {t("communitySubtitle", language)}
+        </p>
+      </section>
+
+      <p style={communityGuideQuestion}>{t("communityGuideQuestion", language)}</p>
+
+      <section
+        style={communityPreviewStack}
+        aria-label={t("communityPreviewAria", language)}
+      >
+        <section className="meetro-visual-surface" style={communityPreviewSection}>
+          <div style={communityPreviewHeader}>
+            <div>
+              <h2 style={communityPreviewTitle}>
+                {t("communityBusinessesTitle", language)}
+              </h2>
+              <p style={communityPreviewCopy}>
+                {t("communityBusinessesCopy", language)}
+              </p>
+            </div>
+          </div>
+
+          <div style={communityBusinessPreviewGrid}>
+            {communityBusinessPreview.length > 0 ? (
+              communityBusinessPreview.map((business) => renderBusinessCard(business))
+            ) : (
+              <div className="meetro-visual-empty-state" style={communityWarmEmptyCard}>
+                <h3 style={emptyTitle}>
+                  {t("communityBusinessesEmptyTitle", language)}
+                </h3>
+                <p style={emptyText}>
+                  {t("communityBusinessesEmptyText", language)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={communitySectionAction}
+            onClick={() => openCommunitySection("businessDirectory")}
+          >
+            {t("communityViewAllBusinesses", language)} →
+          </button>
+        </section>
+
+        <section className="meetro-visual-surface" style={communityPreviewSection}>
+          <div style={communityPreviewHeader}>
+            <div>
+              <h2 style={communityPreviewTitle}>
+                {t("communityHiringTitle", language)}
+              </h2>
+              <p style={communityPreviewCopy}>
+                {t("communityHiringCopy", language)}
+              </p>
+            </div>
+          </div>
+
+          <div style={communityHiringGrid}>
+            {hiringPreviewJobs.length > 0 ? (
+              hiringPreviewJobs.map((job) => renderHiringPreviewCard(job))
+            ) : (
+              <div className="meetro-visual-empty-state" style={communityHiringEmptyCard}>
+                <h3 style={emptyTitle}>
+                  {t("communityHiringEmptyTitle", language)}
+                </h3>
+                <p style={emptyText}>
+                  {t("communityHiringEmptyText", language)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={communitySectionAction}
+            onClick={() => setPage("jobsHiring")}
+          >
+            {t("communityViewAllHiring", language)} →
+          </button>
+        </section>
+
+        <section className="meetro-visual-surface" style={communityPreviewSection}>
+          <div style={communityPreviewHeader}>
+            <div>
+              <h2 style={communityPreviewTitle}>
+                {t("communitySpotlightTitle", language)}
+              </h2>
+              <p style={communityPreviewCopy}>
+                {t("communitySpotlightCopy", language)}
+              </p>
+            </div>
+          </div>
+
+          <article style={communitySpotlightCard}>
+            <p style={communitySpotlightEyebrow}>
+              {t("communitySpotlightEyebrow", language)}
+            </p>
+            <h3 style={communitySpotlightTitle}>{communitySpotlightStory.title}</h3>
+            <p style={communitySpotlightText}>{communitySpotlightStory.text}</p>
+            <p style={communitySpotlightCue}>
+              {t("communitySpotlightCue", language)}
+            </p>
+            <p style={communitySpotlightMeta}>{communitySpotlightStory.meta}</p>
+          </article>
+
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={communitySectionAction}
+            onClick={() => openCommunitySection("spotlight")}
+          >
+            {t("communityExploreSpotlight", language)} →
+          </button>
+        </section>
+      </section>
+    </>
+  );
+
+  const renderSpotlightSection = () => (
+    <>
+      <button
+        type="button"
+        style={communityBackButton}
+        onClick={() => openCommunitySection("communityHub")}
+      >
+        ← {t("communityTitle", language)}
+      </button>
+
+      <section className="meetro-visual-hero" style={spotlightPanel}>
+        <p style={headerEyebrow}>{t("communitySpotlightTitle", language)}</p>
+        <h1 style={compactTitle}>{t("communitySpotlightPageTitle", language)}</h1>
+        <p style={compactSubtitle}>
+          {t("communitySpotlightPageSubtitle", language)}
+        </p>
+        <p style={spotlightMeta}>{communitySpotlightCountMeta}</p>
+      </section>
+
+      <section
+        style={spotlightStoryStack}
+        aria-label={t("communitySpotlightStoryAria", language)}
+      >
+        <article style={communitySpotlightCard}>
+          <p style={communitySpotlightEyebrow}>
+            {hasSpotlightStory
+              ? t("communitySpotlightFeaturedEyebrow", language)
+              : t("communitySpotlightWarmupEyebrow", language)}
+          </p>
+          <h2 style={communitySpotlightTitle}>{communitySpotlightStory.title}</h2>
+          <p style={communitySpotlightText}>{communitySpotlightStory.text}</p>
+          <p style={communitySpotlightCue}>
+            {hasSpotlightStory
+              ? t("communitySpotlightCue", language)
+              : t("communitySpotlightWarmupCue", language)}
+          </p>
+          <p style={communitySpotlightMeta}>{communitySpotlightStory.meta}</p>
+        </article>
+
+        <div style={spotlightPrincipleCard}>
+          <MeetroIcon name="history" size={22} decorative />
+          <div>
+            <h2 style={spotlightPrincipleTitle}>
+              {t("communitySpotlightPrincipleTitle", language)}
+            </h2>
+            <p style={spotlightPrincipleText}>
+              {t("communitySpotlightPrincipleText", language)}
+            </p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+
+  const renderBusinessesSection = () => (
+    <>
+      <button
+        type="button"
+        style={communityBackButton}
+        onClick={() => openCommunitySection("communityHub")}
+      >
+        ← Community
+      </button>
+
       <header style={compactHeader}>
         <p style={headerEyebrow}>{t("discoverMarketplaceEyebrow", language)}</p>
-        <h1 style={compactTitle}>{t("discover", language)}</h1>
+        <h1 style={compactTitle}>Businesses</h1>
         <p style={compactSubtitle}>{t("discoverMarketplaceSubtitle", language)}</p>
       </header>
 
@@ -643,117 +1006,17 @@ function Discover({ setPage, currentPage }) {
             <p style={emptyText}>{t("discoverNoProsText", language)}</p>
           </div>
         ) : (
-          marketplaceBusinesses.map((business) => {
-                const businessStatus = getBusinessStatus(business);
-                const paused = businessStatus === "paused";
-                const category = getBusinessDisplayCategory(business);
-                const serviceArea = getBusinessServiceArea(business);
-                const verification = getBusinessVerificationProjection(business, {
-                  translate: (key) => t(key, language),
-                });
-                const portfolioProof = getBusinessPortfolioProofProjection(business, {
-                  translate: (key) => t(key, language),
-                });
-                const imageSource =
-                  business.image_url ||
-                  business.imageUrl ||
-                  business.coverImage ||
-                  business.cover_image ||
-                  business.logo ||
-                  "";
-
-                return (
-                  <div
-                    key={business.id || business.name || business.business_name}
-                    style={{
-                      ...businessDirectoryCard,
-                      ...(paused ? pausedBusinessCard : {}),
-                    }}
-                    onClick={() => viewBusinessProfile(business)}
-                  >
-                    <div style={businessLogoWrap}>
-                      {imageSource ? (
-                        <img
-                          src={imageSource}
-                          alt={business.name || business.business_name}
-                          style={businessLogo}
-                        />
-                      ) : (
-                        <div style={businessLogoFallback}>
-                          {String(business.name || business.business_name || "M")
-                            .slice(0, 1)
-                            .toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={businessCardBody}>
-                      <div style={businessCardTop}>
-                        <h2 style={businessCardTitle}>
-                          {business.name ||
-                            business.business_name ||
-                            t("businessNameNotSet")}
-                        </h2>
-
-                        <span style={ratingPill}>
-                          ★ {portfolioProof.averageRating || t("discoverRatingPending", language)}
-                        </span>
-                      </div>
-
-                      <p style={businessCategoryLine}>
-                        {category}
-                      </p>
-
-                      <div style={businessTrustRow}>
-                        <span style={verification.verified ? trustMini : pausedMini}>
-                          ✓ {verification.compactBadgeText}
-                        </span>
-
-                        {paused ? (
-                          <span style={pausedMini}>
-                            {t("discoverNotAcceptingRequests", language)}
-                          </span>
-                        ) : (
-                          <>
-                            <span style={trustMini}>{t("discoverAvailable", language)}</span>
-                            <span style={trustMini}>{t("discoverPortfolio", language)}</span>
-                          </>
-                        )}
-                      </div>
-
-                      <p style={businessCardLocation}>
-                        {serviceArea}
-                      </p>
-
-                      <div style={businessActionRow}>
-                        <button
-                          style={businessSecondaryButton}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            viewBusinessProfile(business);
-                          }}
-                        >
-                          {t("homeViewProfile", language)}
-                        </button>
-
-                        <button
-                          style={{
-                            ...businessPrimaryButton,
-                            ...(paused ? disabledMessageButton : {}),
-                          }}
-                          onClick={(event) => requestServiceFromBusiness(event, business)}
-                        >
-                          {paused
-                            ? t("discoverPaused", language)
-                            : t("requestService", language)}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-          })
+          marketplaceBusinesses.map((business) => renderBusinessCard(business))
         )}
       </div>
+    </>
+  );
+
+  return (
+    <div className="app-page meetro-wide-page meetro-visual-page" style={pageWrapper}>
+      {discoverMode === "businessDirectory" && renderBusinessesSection()}
+      {discoverMode === "spotlight" && renderSpotlightSection()}
+      {discoverMode === "communityHub" && renderCommunityHub()}
 
       <BottomNav setPage={setPage} currentPage="discover" />
     </div>
@@ -761,7 +1024,8 @@ function Discover({ setPage, currentPage }) {
 }
 
 const businessDirectoryCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "22px",
   padding: "14px",
   marginBottom: "10px",
@@ -770,7 +1034,358 @@ const businessDirectoryCard = {
   gap: "12px",
   alignItems: "start",
   cursor: "pointer",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.07)",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const communityHero = {
+  background: "var(--meetro-gradient-community-hero)",
+  border: "1px solid rgba(255,253,248,0.14)",
+  borderRadius: "28px",
+  padding: "24px",
+  marginBottom: "18px",
+  boxShadow: "var(--meetro-shadow-lifted)",
+};
+
+const communityHubGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+  gap: "14px",
+};
+
+const communityGuideQuestion = {
+  margin: "0 0 12px",
+  color: "var(--meetro-color-coffee)",
+  fontSize: "14px",
+  fontWeight: "900",
+};
+
+const communityPreviewStack = {
+  display: "grid",
+  gap: "18px",
+  paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+};
+
+const communityPreviewSection = {
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "26px",
+  background: "var(--meetro-surface-paper)",
+  padding: "16px",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const communityPreviewHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  alignItems: "flex-start",
+  marginBottom: "14px",
+};
+
+const communityPreviewTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "22px",
+  lineHeight: 1.08,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const communityPreviewCopy = {
+  margin: "6px 0 0",
+  color: "var(--meetro-color-muted)",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: "700",
+};
+
+const communityBusinessPreviewGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+  gap: "12px",
+};
+
+const communityWarmEmptyCard = {
+  minHeight: "142px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg, var(--meetro-surface-warm), var(--meetro-surface-sage))",
+  padding: "18px",
+  display: "grid",
+  alignContent: "center",
+  gap: "8px",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const communitySectionAction = {
+  width: "100%",
+  minHeight: "46px",
+  marginTop: "14px",
+  border: "1px solid rgba(255,253,248,0.18)",
+  borderRadius: "999px",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
+  fontSize: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const communityHiringGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+  gap: "12px",
+};
+
+const communityHiringCard = {
+  display: "grid",
+  gap: "9px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const communityHiringTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const communityHiringIcon = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
+};
+
+const communityHiringBadge = {
+  padding: "5px 8px",
+  borderRadius: "999px",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const communityHiringCategory = {
+  margin: 0,
+  color: "var(--meetro-color-wood)",
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  letterSpacing: 0,
+};
+
+const communityHiringTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "18px",
+  lineHeight: 1.12,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const communityHiringBusiness = {
+  margin: 0,
+  color: "var(--meetro-color-coffee)",
+  fontSize: "13px",
+  fontWeight: "850",
+};
+
+const communityHiringDescription = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "650",
+};
+
+const communityHiringMeta = {
+  display: "grid",
+  gap: "6px",
+  color: "var(--meetro-color-coffee)",
+  fontSize: "12px",
+  fontWeight: "800",
+};
+
+const communityHiringEmptyCard = {
+  minHeight: "120px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "18px",
+  background: "var(--meetro-surface-warm)",
+  padding: "16px",
+  display: "grid",
+  alignContent: "center",
+  gap: "8px",
+  textAlign: "center",
+  color: "var(--meetro-color-muted)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "800",
+};
+
+const communitySpotlightCard = {
+  borderRadius: "22px",
+  border: "1px solid rgba(183,121,31,0.24)",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-warm), var(--meetro-surface-paper))",
+  padding: "18px",
+  boxShadow: "0 12px 30px rgba(180,83,9,0.08)",
+};
+
+const communitySpotlightEyebrow = {
+  margin: 0,
+  color: "#b7791f",
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  letterSpacing: 0,
+};
+
+const communitySpotlightTitle = {
+  margin: "8px 0 0",
+  color: "var(--meetro-color-ink)",
+  fontSize: "22px",
+  lineHeight: 1.12,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const communitySpotlightText = {
+  margin: "10px 0 0",
+  color: "var(--meetro-color-muted)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "700",
+};
+
+const communitySpotlightCue = {
+  margin: "14px 0 0",
+  color: "var(--meetro-color-coffee)",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: "900",
+};
+
+const communitySpotlightMeta = {
+  margin: "12px 0 0",
+  width: "fit-content",
+  maxWidth: "100%",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid rgba(183,121,31,0.24)",
+  color: "var(--meetro-color-coffee)",
+  padding: "8px 10px",
+  fontSize: "12px",
+  lineHeight: 1.25,
+  fontWeight: "900",
+};
+
+const communitySectionCard = {
+  width: "100%",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "24px",
+  background: "var(--meetro-surface-paper)",
+  padding: "18px",
+  display: "grid",
+  gridTemplateColumns: "48px 1fr auto",
+  alignItems: "center",
+  gap: "14px",
+  textAlign: "left",
+  cursor: "pointer",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const communitySectionIcon = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "16px",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
+  display: "grid",
+  placeItems: "center",
+  fontWeight: "950",
+  fontSize: "18px",
+};
+
+const communitySectionText = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  color: "var(--meetro-color-ink)",
+};
+
+const communitySectionArrow = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "20px",
+  fontWeight: "950",
+};
+
+const communityBackButton = {
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  padding: "10px 14px",
+  fontWeight: "900",
+  cursor: "pointer",
+  marginBottom: "14px",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const spotlightPanel = {
+  ...communityHero,
+  background: "linear-gradient(135deg, var(--meetro-color-forest-deep), var(--meetro-color-forest))",
+};
+
+const spotlightMeta = {
+  margin: "16px 0 0",
+  width: "fit-content",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-coffee)",
+  borderRadius: "999px",
+  padding: "9px 12px",
+  fontWeight: "900",
+};
+
+const spotlightStoryStack = {
+  display: "grid",
+  gap: "14px",
+  paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+};
+
+const spotlightPrincipleCard = {
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "22px",
+  background: "var(--meetro-surface-paper)",
+  padding: "16px",
+  display: "grid",
+  gridTemplateColumns: "34px 1fr",
+  gap: "12px",
+  alignItems: "start",
+  color: "var(--meetro-color-ink)",
+  boxShadow: "var(--meetro-shadow-soft)",
+};
+
+const spotlightPrincipleTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "16px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const spotlightPrincipleText = {
+  margin: "6px 0 0",
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "700",
 };
 
 const pausedBusinessCard = {
@@ -784,7 +1399,7 @@ const businessLogoWrap = {
   borderRadius: "16px",
   overflow: "hidden",
   marginTop: "2px",
-  background: "#f5f3ff",
+  background: "var(--meetro-surface-sage)",
 };
 
 const businessCardTitle = {
@@ -792,7 +1407,7 @@ const businessCardTitle = {
   fontSize: "16px",
   lineHeight: 1.15,
   fontWeight: "900",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
 };
 
 const businessLogo = {
@@ -807,7 +1422,7 @@ const businessLogoFallback = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#5b35f5",
+  color: "var(--meetro-color-forest)",
   fontSize: "24px",
   fontWeight: "900",
 };
@@ -825,8 +1440,8 @@ const businessCardTop = {
 };
 
 const ratingPill = {
-  background: "#fff7df",
-  color: "#8a6500",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-coffee)",
   padding: "4px 8px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -836,14 +1451,14 @@ const ratingPill = {
 
 const businessCategoryLine = {
   margin: "2px 0 6px",
-  color: "#4f46e5",
+  color: "var(--meetro-color-forest)",
   fontSize: "12px",
   fontWeight: "900",
 };
 
 const businessCardLocation = {
   margin: "6px 0 8px",
-  color: "#6b7280",
+  color: "var(--meetro-color-muted)",
   fontWeight: "700",
   fontSize: "12px",
   lineHeight: 1.25,
@@ -857,8 +1472,8 @@ const businessTrustRow = {
 };
 
 const trustMini = {
-  background: "#f5f3ff",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "4px 7px",
   borderRadius: "999px",
   fontSize: "11px",
@@ -884,8 +1499,8 @@ const businessPrimaryButton = {
   border: "none",
   borderRadius: "16px",
   padding: "12px",
-  background: "#5b35f5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -896,18 +1511,18 @@ const disabledMessageButton = {
 };
 
 const businessSecondaryButton = {
-  border: "none",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
   padding: "12px",
-  background: "#eee7ff",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   fontWeight: "900",
   cursor: "pointer",
 };
 
 const pageWrapper = {
   minHeight: "100vh",
-  background: "#f4f3f8",
+  background: "var(--meetro-gradient-community-page)",
   padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
   maxWidth: "1100px",
   margin: "0 auto",
@@ -921,7 +1536,7 @@ const compactHeader = {
 
 const headerEyebrow = {
   margin: "0 0 6px",
-  color: "#5b35f5",
+  color: "var(--meetro-color-wood)",
   fontSize: "12px",
   fontWeight: "900",
   letterSpacing: "0.08em",
@@ -930,7 +1545,7 @@ const headerEyebrow = {
 
 const compactTitle = {
   margin: "0 0 6px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "34px",
   lineHeight: 1,
   fontWeight: "950",
@@ -938,7 +1553,7 @@ const compactTitle = {
 
 const compactSubtitle = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "16px",
   lineHeight: 1.35,
   fontWeight: "750",
@@ -958,14 +1573,14 @@ const searchBox = {
   minHeight: "50px",
   padding: "0 12px",
   borderRadius: "18px",
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 8px 22px rgba(15,23,42,0.06)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
   boxSizing: "border-box",
 };
 
 const searchIcon = {
-  color: "#5b35f5",
+  color: "var(--meetro-color-forest)",
   fontSize: "18px",
   fontWeight: "900",
 };
@@ -976,7 +1591,7 @@ const searchInput = {
   border: "none",
   outline: "none",
   background: "transparent",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "15px",
   fontWeight: "750",
 };
@@ -986,8 +1601,8 @@ const clearSearchButton = {
   height: "30px",
   border: "none",
   borderRadius: "999px",
-  background: "#f1f5f9",
-  color: "#334155",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-ink)",
   fontSize: "20px",
   fontWeight: "900",
   lineHeight: 1,
@@ -995,12 +1610,12 @@ const clearSearchButton = {
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg, #5b35f5, #8257ff)",
+  background: "var(--meetro-gradient-community-hero)",
   borderRadius: "24px",
   padding: "18px 16px",
   color: "white",
   textAlign: "center",
-  boxShadow: "0 14px 30px rgba(91, 53, 245, 0.22)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const heroEyebrow = {
@@ -1027,9 +1642,9 @@ const heroText = {
 };
 
 const postButton = {
-  border: "none",
-  background: "white",
-  color: "#5b35f5",
+  border: "1px solid rgba(255,253,248,0.72)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "16px",
   padding: "11px 18px",
   fontSize: "15px",
@@ -1049,9 +1664,9 @@ const discoverCategoryNav = {
 const discoverCategoryButton = {
   flex: "0 0 auto",
   minHeight: "40px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  color: "#334155",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   borderRadius: "999px",
   padding: "0 14px",
   fontSize: "13px",
@@ -1062,9 +1677,9 @@ const discoverCategoryButton = {
 };
 
 const activeDiscoverCategoryButton = {
-  background: "#5b35f5",
-  borderColor: "#5b35f5",
-  color: "#ffffff",
+  background: "var(--meetro-color-forest)",
+  borderColor: "var(--meetro-color-forest)",
+  color: "#fffdf8",
 };
 
 const categoryRowWrapper = {
@@ -1088,30 +1703,30 @@ const scrollButton = {
   height: "42px",
   borderRadius: "50%",
   border: "none",
-  background: "white",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   fontSize: "28px",
   fontWeight: "900",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
 const categoryButton = {
-  border: "none",
-  background: "white",
-  color: "#333",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   borderRadius: "999px",
   padding: "13px 20px",
   fontSize: "14px",
   fontWeight: "800",
   whiteSpace: "nowrap",
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const activeCategoryButton = {
-  background: "#5b35f5",
-  color: "white",
+  background: "var(--meetro-color-forest)",
+  color: "#fffdf8",
 };
 
 const sectionHeader = {
@@ -1123,12 +1738,12 @@ const sectionTitle = {
   fontSize: "30px",
   fontWeight: "900",
   margin: "0 0 6px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const sectionSubtitle = {
   fontSize: "18px",
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   margin: 0,
 };
 
@@ -1139,10 +1754,11 @@ const feedList = {
 };
 
 const postCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "24px",
   overflow: "hidden",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const postImage = {
@@ -1164,8 +1780,8 @@ const postTopRow = {
 };
 
 const categoryPill = {
-  background: "#f0eaff",
-  color: "#5b35f5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "999px",
   padding: "10px 14px",
   fontSize: "13px",
@@ -1174,8 +1790,8 @@ const categoryPill = {
 };
 
 const datePill = {
-  background: "#f3f3f3",
-  color: "#555",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-coffee)",
   borderRadius: "999px",
   padding: "10px 14px",
   fontSize: "13px",
@@ -1187,12 +1803,12 @@ const postTitle = {
   fontWeight: "900",
   margin: "10px 0 6px",
   textAlign: "center",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
 };
 
 const postDescription = {
   fontSize: "17px",
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   margin: "0 0 14px",
   textAlign: "center",
 };
@@ -1200,7 +1816,7 @@ const postDescription = {
 const locationText = {
   fontSize: "16px",
   fontWeight: "800",
-  color: "#333",
+  color: "var(--meetro-color-ink)",
   textAlign: "center",
   margin: "8px 0",
 };
@@ -1208,7 +1824,7 @@ const locationText = {
 const statusText = {
   fontSize: "16px",
   fontWeight: "900",
-  color: "#333",
+  color: "var(--meetro-color-ink)",
   textAlign: "center",
   margin: "8px 0 18px",
 };
@@ -1220,9 +1836,9 @@ const actionRow = {
 };
 
 const secondaryButton = {
-  border: "none",
-  background: "#f0eaff",
-  color: "#5b35f5",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "14px",
   padding: "14px",
   fontSize: "15px",
@@ -1232,8 +1848,8 @@ const secondaryButton = {
 
 const primaryButton = {
   border: "none",
-  background: "#5b35f5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   borderRadius: "14px",
   padding: "14px",
   fontSize: "15px",
@@ -1242,11 +1858,12 @@ const primaryButton = {
 };
 
 const emptyCard = {
-  background: "white",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "24px",
   padding: "34px 20px",
   textAlign: "center",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const emptyTitle = {
@@ -1257,7 +1874,7 @@ const emptyTitle = {
 
 const emptyText = {
   fontSize: "16px",
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   margin: 0,
 };
 
@@ -1269,7 +1886,7 @@ const directoryHeader = {
 const directoryTitle = {
   fontSize: "28px",
   fontWeight: "900",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   marginBottom: "6px",
 };
 

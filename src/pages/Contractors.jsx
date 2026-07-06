@@ -156,13 +156,13 @@ function Contractors({ setPage, currentPage }) {
 
 const heroCard = {
   background:
-    "linear-gradient(135deg, #5b3df5 0%, #7b61ff 100%)",
+    "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, #7b61ff 100%)",
   borderRadius: "30px",
   padding: "30px 24px",
   marginBottom: "28px",
   color: "white",
   boxShadow:
-    "0 18px 40px rgba(91,61,245,0.28)",
+    "0 18px 40px rgba(31,77,52,0.28)",
 };
 
 const heroTitle = {
@@ -209,8 +209,8 @@ const badgeRow = {
 };
 
 const verifiedBadge = {
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "8px 14px",
   borderRadius: "999px",
   fontWeight: "bold",
@@ -234,7 +234,7 @@ const contractorTitle = {
 };
 
 const categoryText = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "bold",
   marginBottom: "10px",
 };
@@ -252,7 +252,7 @@ const buttonRow = {
 const primaryButton = {
   flex: 1,
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   padding: "15px",
   borderRadius: "16px",
@@ -265,7 +265,7 @@ const secondaryButton = {
   flex: 1,
   border: "none",
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "15px",
   borderRadius: "16px",
   fontWeight: "bold",

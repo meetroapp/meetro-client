@@ -288,7 +288,7 @@ const page = {
   minHeight: "100vh",
   padding: "calc(env(safe-area-inset-top, 0px) + 62px) 18px 110px",
   background:
-    "radial-gradient(circle at top, rgba(91,61,245,0.18), transparent 34%), #f8fafc",
+    "radial-gradient(circle at top, rgba(31,77,52,0.18), transparent 34%), #f8fafc",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
   boxSizing: "border-box",
@@ -306,7 +306,7 @@ const heroCard = {
   background: "rgba(255,255,255,0.72)",
   border: "1px solid rgba(255,255,255,0.86)",
   color: "#0f172a",
-  boxShadow: "0 18px 42px rgba(91,61,245,0.10)",
+  boxShadow: "0 18px 42px rgba(31,77,52,0.10)",
   marginBottom: "12px",
   overflow: "hidden",
   backdropFilter: "blur(18px)",
@@ -321,9 +321,9 @@ const heroOrbMark = {
   borderRadius: "50%",
   display: "grid",
   placeItems: "center",
-  background: "rgba(91,61,245,0.10)",
-  border: "1px solid rgba(91,61,245,0.14)",
-  color: "#5b3df5",
+  background: "rgba(31,77,52,0.10)",
+  border: "1px solid rgba(31,77,52,0.14)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "18px",
   fontWeight: 950,
 };
@@ -393,12 +393,12 @@ const prepareButton = {
   padding: "13px",
   borderRadius: "18px",
   border: "0",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 12px 26px rgba(91,61,245,0.18)",
+  boxShadow: "0 12px 26px rgba(31,77,52,0.18)",
 };
 
 const resultCard = {
@@ -420,10 +420,10 @@ const resultIcon = {
   width: "48px",
   height: "48px",
   borderRadius: "16px",
-  background: "rgba(91,61,245,0.10)",
+  background: "rgba(31,77,52,0.10)",
   display: "grid",
   placeItems: "center",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "18px",
   fontWeight: 950,
 };
@@ -432,7 +432,7 @@ const resultLabel = {
   margin: 0,
   fontSize: "12px",
   fontWeight: "950",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   textTransform: "uppercase",
 };
 
@@ -477,12 +477,12 @@ const askButton = {
   padding: "14px",
   borderRadius: "20px",
   border: "0",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.24)",
+  boxShadow: "0 14px 30px rgba(31,77,52,0.24)",
 };
 
 const actionRow = {

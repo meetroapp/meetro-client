@@ -1203,13 +1203,13 @@ const contentWrapper = {
 const backButton = {
   border: "none",
   background: "#eee7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 16px",
   borderRadius: "16px",
   fontWeight: "900",
   marginBottom: "18px",
   cursor: "pointer",
-  boxShadow: "0 6px 18px rgba(91,61,245,0.12)",
+  boxShadow: "0 6px 18px rgba(31,77,52,0.12)",
 };
 
 const professionalStatusCard = {
@@ -1307,13 +1307,13 @@ const aiSummaryBox = {
   display: "flex",
   gap: "10px",
   alignItems: "flex-start",
-  background: "linear-gradient(135deg,#eef2ff,#ffffff)",
-  border: "1px solid rgba(124,58,237,.12)",
+  background: "linear-gradient(135deg,var(--meetro-surface-sage, #eef4ea),#ffffff)",
+  border: "1px solid rgba(23,35,23,.12)",
   borderRadius: "20px",
   padding: "12px",
   marginBottom: "14px",
   textAlign: "left",
-  boxShadow: "0 8px 18px rgba(91,61,245,.05)",
+  boxShadow: "0 8px 18px rgba(31,77,52,.05)",
 };
 
 
@@ -1325,8 +1325,8 @@ const statusChipWrap = {
 };
 
 const infoChip = {
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "6px 9px",
   borderRadius: "999px",
   fontSize: "11px",
@@ -1364,7 +1364,7 @@ const aiSummaryIcon = {
   width: "38px",
   height: "38px",
   borderRadius: "14px",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -1461,13 +1461,13 @@ const memoryTimelineIcon = {
   width: "38px",
   height: "38px",
   borderRadius: "16px",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "18px",
-  boxShadow: "0 8px 16px rgba(91,61,245,0.12)",
+  boxShadow: "0 8px 16px rgba(31,77,52,0.12)",
 };
 
 const memoryTimelineBody = {
@@ -1511,14 +1511,14 @@ const acceptedQuoteBox = {
   marginBottom: "14px",
   display: "flex",
   justifyContent: "space-between",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
 };
 
 const cardStyle = {
   background: "rgba(255,255,255,0.96)",
   backdropFilter: "blur(18px)",
-  border: "1px solid rgba(124,58,237,.10)",
+  border: "1px solid rgba(23,35,23,.10)",
   borderRadius: "28px",
   padding: "20px",
   color: "#111827",
@@ -1555,7 +1555,7 @@ const tagRow = {
 
 const tagStyle = {
   background: "#f3efff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 11px",
   borderRadius: "999px",
   fontSize: "12px",
@@ -1704,7 +1704,7 @@ const projectLifecycleStep = {
 };
 
 const projectLifecycleStepActive = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "950",
 };
 
@@ -1721,7 +1721,7 @@ const journeyShell = {
   borderRadius: "24px",
   background: "linear-gradient(180deg,#ffffff,#f8f7ff)",
   border: "1px solid #ddd6fe",
-  boxShadow: "0 12px 28px rgba(91, 61, 245, 0.08)",
+  boxShadow: "0 12px 28px rgba(31, 77, 52, 0.08)",
   overflow: "hidden",
   maxWidth: "100%",
   boxSizing: "border-box",
@@ -1738,7 +1738,7 @@ const journeyHeaderRow = {
 
 const journeyEyebrow = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1795,7 +1795,7 @@ const journeyProgressDot = {
   borderRadius: "999px",
   display: "grid",
   placeItems: "center",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   border: "1px solid #dbeafe",
   color: "#94a3b8",
   fontSize: "10px",
@@ -1809,8 +1809,8 @@ const journeyProgressDotDone = {
 };
 
 const journeyProgressDotCurrent = {
-  background: "#5b3df5",
-  borderColor: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
 };
 
@@ -1857,7 +1857,7 @@ const journeyStageCardCurrent = {
 
 const journeyCardLabel = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "10px",
   letterSpacing: "0.08em",
   textTransform: "uppercase",
@@ -1892,7 +1892,7 @@ const journeyPrimaryButton = {
   border: "none",
   borderRadius: "15px",
   padding: "12px 14px",
-  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),#4f28e8)",
   color: "#ffffff",
   fontSize: "14px",
   fontWeight: "950",
@@ -1937,7 +1937,7 @@ const relationshipTimelineDot = {
   width: "10px",
   height: "10px",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   marginTop: "5px",
 };
 
@@ -2038,7 +2038,7 @@ const viewAllPhotosButton = {
   borderRadius: "999px",
   padding: "7px 12px",
   background: "#efe7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "900",
   cursor: "pointer",
@@ -2090,7 +2090,7 @@ const projectPhotoCount = {
   margin: "10px 0 8px",
   fontSize: "13px",
   fontWeight: "900",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   textAlign: "center",
 };
 
@@ -2185,7 +2185,7 @@ const secondaryButton = {
   marginTop: "12px",
   padding: "15px 20px",
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   border: "1px solid #ddd6fe",
   borderRadius: "18px",
   fontWeight: "900",
@@ -2212,14 +2212,14 @@ const messageButton = {
   width: "100%",
   marginTop: "4px",
   padding: "15px 18px",
-  background: "linear-gradient(135deg,#5b3df5,#7b61ff)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),#7b61ff)",
   color: "white",
   border: "none",
   borderRadius: "16px",
   fontWeight: "950",
   fontSize: "15px",
   cursor: "pointer",
-  boxShadow: "0 12px 22px rgba(91,61,245,0.22)",
+  boxShadow: "0 12px 22px rgba(31,77,52,0.22)",
 };
 
 export default ProjectDetails;

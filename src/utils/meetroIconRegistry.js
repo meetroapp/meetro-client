@@ -297,7 +297,7 @@ export const MEETRO_ICONS = {
   featuredSpotlight: {
     sfSymbol: "sparkles",
     fallback: "✦",
-    description: "Featured in Local Services Spotlight.",
+    description: "Featured in Today's Spotlight.",
   },
   beforeAfter: {
     sfSymbol: "rectangle.split.2x1",

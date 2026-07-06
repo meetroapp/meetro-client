@@ -11,7 +11,7 @@ function ReportsCenter({ setPage }) {
   const reports = getReportTypes();
 
   return (
-    <div className="app-page meetro-responsive-page" style={page}>
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
       <BusinessToolsPageHeader
         title={t("reportsCenter", language)}
         description={t("reportsCenterDescription", language)}
@@ -19,7 +19,7 @@ function ReportsCenter({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <div style={readOnlyCard}>
+      <div className="meetro-visual-surface" style={readOnlyCard}>
         <strong>{t("readOnlyReference", language)}</strong>
         <span>{t("reportsCenterReadOnlyText", language)}</span>
       </div>
@@ -30,7 +30,7 @@ function ReportsCenter({ setPage }) {
             report.status === REPORT_STATUS.AVAILABLE_FROM_JOB_HISTORY;
 
           return (
-            <article key={report.id} style={reportCard}>
+            <article key={report.id} className="meetro-visual-surface" style={reportCard}>
               <div style={cardHeader}>
                 <div>
                   <p style={fieldLabel}>
@@ -82,7 +82,7 @@ const page = {
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, #fbf6ed)",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
 };
@@ -114,7 +114,7 @@ const backBtn = {
 
 const eyebrow = {
   margin: "0 0 5px",
-  color: "#4338ca",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -141,9 +141,9 @@ const readOnlyCard = {
   gap: "4px",
   padding: "13px",
   borderRadius: "14px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#334155",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-ink, #172317)",
   fontSize: "12px",
   lineHeight: 1.45,
   marginBottom: "16px",
@@ -152,7 +152,7 @@ const readOnlyCard = {
 const reportsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 270px), 1fr))",
-  gap: "12px",
+  gap: "16px",
 };
 
 const reportCard = {
@@ -162,11 +162,11 @@ const reportCard = {
   boxSizing: "border-box",
   display: "grid",
   gap: "13px",
-  padding: "14px",
+  padding: "18px",
   borderRadius: "16px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const cardHeader = {
@@ -178,7 +178,7 @@ const cardHeader = {
 
 const fieldLabel = {
   margin: "0 0 6px",
-  color: "#64748b",
+  color: "var(--meetro-color-muted, #65705f)",
   fontSize: "11px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -186,7 +186,7 @@ const fieldLabel = {
 
 const reportTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: "17px",
   fontWeight: "950",
 };
@@ -206,15 +206,15 @@ const availableBadge = {
 };
 
 const plannedBadge = {
-  background: "#eef2ff",
-  color: "#3730a3",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const infoPanel = {
   padding: "10px",
   borderRadius: "12px",
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
 };
 
 const bodyText = {

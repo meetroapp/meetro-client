@@ -3046,9 +3046,9 @@ ${businessIdentity.businessName}`;
             style={{
               ...sendButton,
               background: "#ffffff",
-              color: "#5b3df5",
-              border: "1px solid rgba(91,61,245,0.22)",
-              boxShadow: "0 10px 24px rgba(91,61,245,0.10)",
+              color: "var(--meetro-color-forest, #1f4d34)",
+              border: "1px solid rgba(31,77,52,0.22)",
+              boxShadow: "0 10px 24px rgba(49,35,20,0.10)",
               marginBottom: "10px",
             }}
             onClick={saveDraftQuote}
@@ -3175,7 +3175,8 @@ ${businessIdentity.businessName}`;
 
 const page = {
   minHeight: "100dvh",
-  background: "linear-gradient(180deg,#f8fafc,#eef2ff)",
+  background:
+    "linear-gradient(180deg, var(--meetro-surface-warm, #fbf6ed), var(--meetro-surface-sage, #eef4ea))",
   padding:
     "max(24px, calc(env(safe-area-inset-top, 0px) + 18px)) max(18px, env(safe-area-inset-right, 0px)) calc(104px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -3187,8 +3188,8 @@ const page = {
 
 const backButton = {
   border: "none",
-  background: "white",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "12px 16px",
   borderRadius: "16px",
   fontWeight: "900",
@@ -3200,17 +3201,18 @@ const evaluationBackButton = {
   ...backButton,
   marginTop: "-8px",
   marginBottom: "14px",
-  background: "#eef2ff",
-  color: "#4338ca",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const hero = {
-  background: "linear-gradient(135deg,#111b46,#5b3df5)",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f), var(--meetro-color-forest, #1f4d34))",
   color: "white",
   borderRadius: "30px",
   padding: "28px 24px",
   marginBottom: "20px",
-  boxShadow: "0 22px 54px rgba(17,27,70,0.18)",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
 };
 
 const revisionBanner = {
@@ -3248,19 +3250,20 @@ const grid = {
 };
 
 const card = {
-  background: "white",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   borderRadius: "26px",
   padding: "20px",
-  boxShadow: "0 16px 38px rgba(15,23,42,0.075)",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
   boxSizing: "border-box",
   maxWidth: "100%",
-  border: "1px solid rgba(226,232,240,0.9)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
 };
 
 const proposalCard = {
   ...card,
-  border: "1px solid rgba(91,61,245,0.16)",
-  background: "linear-gradient(180deg,#ffffff,#faf7ff)",
+  border: "1px solid rgba(31,77,52,0.16)",
+  background:
+    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
 };
 
 const proposalHint = {
@@ -3356,7 +3359,7 @@ const compactSectionHeader = {
 
 const eyebrowDark = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: "950",
   textTransform: "uppercase",
@@ -3368,8 +3371,8 @@ const smallStatusPill = {
   alignItems: "center",
   width: "fit-content",
   borderRadius: "999px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "6px 10px",
   fontSize: "12px",
   fontWeight: "950",
@@ -3409,7 +3412,7 @@ const evaluationDetailsDisclosure = {
 };
 
 const evaluationDetailsSummary = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "950",
   cursor: "pointer",
   minHeight: "44px",
@@ -3496,8 +3499,9 @@ const materialReviewBox = {
   gap: "10px",
   padding: "14px",
   borderRadius: "18px",
-  border: "1px solid rgba(91, 61, 245, 0.16)",
-  background: "linear-gradient(180deg, #ffffff, #f8f7ff)",
+  border: "1px solid rgba(31,77,52,0.16)",
+  background:
+    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
 };
 
 const materialReviewTitle = {
@@ -3557,7 +3561,7 @@ const aiButton = {
   width: "100%",
   border: "none",
   background: "#eef2ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
@@ -3593,9 +3597,9 @@ const aiChipGrid = {
 };
 
 const aiChip = {
-  border: "1px solid rgba(91,61,245,0.2)",
+  border: "1px solid rgba(31,77,52,0.2)",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "10px 12px",
   fontWeight: "900",
@@ -3657,7 +3661,7 @@ const rowDetailsSummary = {
   minHeight: "40px",
   display: "flex",
   alignItems: "center",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -3686,9 +3690,9 @@ const inlineActionGrid = {
 };
 
 const secondaryActionButton = {
-  border: "1px solid rgba(91,61,245,0.22)",
+  border: "1px solid rgba(31,77,52,0.22)",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "14px",
   padding: "12px",
   fontWeight: "900",
@@ -3727,15 +3731,16 @@ const quotePreviewBox = {
 
 const deliveryChoiceBox = {
   marginTop: "18px",
-  background: "linear-gradient(180deg,#f8f7ff,#ffffff)",
-  border: "1px solid rgba(91,61,245,0.14)",
+  background:
+    "linear-gradient(180deg, var(--meetro-surface-warm, rgba(251,246,237,0.92)), var(--meetro-surface-paper, rgba(255,253,248,0.98)))",
+  border: "1px solid rgba(31,77,52,0.14)",
   borderRadius: "20px",
   padding: "16px",
 };
 
 const deliveryEyebrow = {
   margin: "0 0 6px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "12px",
   fontWeight: "900",
   textTransform: "uppercase",
@@ -3801,7 +3806,7 @@ const bottomResultSecondaryButton = {
 const sendButton = {
   width: "100%",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   borderRadius: "16px",
   padding: "15px",
@@ -3812,9 +3817,9 @@ const sendButton = {
 
 const externalShareButton = {
   width: "100%",
-  border: "1px solid rgba(91,61,245,0.22)",
+  border: "1px solid rgba(31,77,52,0.22)",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",

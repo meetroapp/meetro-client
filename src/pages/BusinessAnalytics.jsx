@@ -288,18 +288,18 @@ const pageWrapper = {
 const backButton = {
   border: "none",
   background: "#eee7ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "11px 16px",
   borderRadius: "999px",
   fontWeight: "900",
   marginBottom: "18px",
   cursor: "pointer",
-  boxShadow: "0 8px 22px rgba(91,61,245,0.12)",
+  boxShadow: "0 8px 22px rgba(31,77,52,0.12)",
 };
 
 const heroCard = {
   background:
-    "linear-gradient(135deg, #111b46 0%, #263b92 45%, #5b3df5 100%)",
+    "linear-gradient(135deg, #111b46 0%, #263b92 45%, var(--meetro-color-forest, #1f4d34) 100%)",
   borderRadius: "34px",
   padding: "26px",
   color: "white",
@@ -442,7 +442,7 @@ const positiveBadge = {
 
 const softBadge = {
   background: "#f1edff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "8px 12px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -475,7 +475,7 @@ const barTrack = {
 
 const barFill = {
   width: "100%",
-  background: "linear-gradient(180deg, #7b61ff, #5b3df5)",
+  background: "linear-gradient(180deg, #7b61ff, var(--meetro-color-forest, #1f4d34))",
   borderRadius: "999px",
 };
 
@@ -513,7 +513,7 @@ const serviceTrack = {
 
 const serviceFill = {
   height: "100%",
-  background: "linear-gradient(90deg, #5b3df5, #7b61ff)",
+  background: "linear-gradient(90deg, var(--meetro-color-forest, #1f4d34), #7b61ff)",
   borderRadius: "999px",
 };
 
@@ -553,7 +553,7 @@ const insightStatus = {
   marginTop: "9px",
   display: "inline-block",
   background: "#f1edff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "6px 9px",
   borderRadius: "999px",
   fontSize: "11px",

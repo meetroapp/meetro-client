@@ -68,7 +68,9 @@ test("assistant launcher uses two-stage wake before opening", () => {
   assert.equal(getAssistantLauncherWakeAction({ open: false, wakeOpen: true }), "open");
   assert.equal(getAssistantLauncherWakeAction({ open: true, wakeOpen: true }), "none");
   assert.equal(getAssistantLauncherWakeAction({ dragSuppressed: true }), "suppress");
-  assert.equal(COMPANION_STATES.briefing, "briefing");
+  assert.equal(COMPANION_STATES.presence, "presence");
+  assert.equal(COMPANION_STATES.guidance, "guidance");
+  assert.equal(COMPANION_STATES.briefing, "guidance");
   assert.equal(COMPANION_STATES.conversation, "conversation");
 });
 
@@ -189,8 +191,9 @@ test("wake bubble primary action and Ask Meetro use real companion paths", () =>
   assert.match(assistantSource, /function handleWakePrimaryObservation\(\)/);
   assert.match(assistantSource, /function handleWakeReviewInsights\(\)/);
   assert.match(assistantSource, /setVoiceAnswer\(answer\)/);
-  assert.match(assistantSource, /setCompanionMode\(COMPANION_STATES\.conversation\)/);
+  assert.match(assistantSource, /setCompanionMode\(COMPANION_STATES\.guidance\)/);
   assert.match(assistantSource, /function handleWakeAskMeetro\(\)/);
+  assert.match(assistantSource, /openAssistantFromLauncher\(\{ mode: COMPANION_STATES\.conversation \}\)/);
   assert.match(assistantSource, /onClick=\{handleWakePrimaryObservation\}/);
   assert.match(assistantSource, /onClick=\{handleWakeAskMeetro\}/);
 });
@@ -210,6 +213,8 @@ test("Lantern companion context maps routes to work-first guidance", () => {
   assert.equal(normalizeCompanionContextPage("home"), "home");
   assert.equal(normalizeCompanionContextPage("conversationThread"), "conversation");
   assert.equal(normalizeCompanionContextPage("contractorDashboard"), "workCenter");
+  assert.equal(normalizeCompanionContextPage("contractorProfile"), "businessProfile");
+  assert.equal(normalizeCompanionContextPage("projectDetails"), "project");
   assert.equal(normalizeCompanionContextPage("upload"), "request");
   assert.equal(normalizeCompanionContextPage("unknownThing"), "fallback");
 
@@ -218,8 +223,9 @@ test("Lantern companion context maps routes to work-first guidance", () => {
   assert.equal(getCompanionContext({ currentPage: "home" }).secondaryActionLabel, "Ask Meetro");
   assert.match(
     getCompanionContext({ currentPage: "conversationThread" }).message,
-    /Summarize this conversation/
+    /find schedule or proposal details/
   );
+  assert.equal(getCompanionContext({ currentPage: "messagesInbox" }).title, "Communication Center");
   assert.equal(getCompanionContext({ currentPage: "contractorDashboard" }).title, "Current Work");
   assert.equal(getCompanionContext({ currentPage: "upload" }).title, "Preparing Request");
   assert.equal(getCompanionContext({ currentPage: "unknownThing" }).title, "Meetro");
@@ -235,6 +241,104 @@ test("Lantern companion context maps routes to work-first guidance", () => {
     getCompanionContext({ currentPage: "home" }).secondaryActionLabel,
     "Continue to Meetro"
   );
+});
+
+test("Companion context projection is read-only and Communication Center aware", () => {
+  let writeCount = 0;
+  const storage = {
+    getItem(key) {
+      return {
+        activeConversationId: "thread-storage",
+        activeRelationshipName: "Sarah Johnson",
+        activeRelationshipType: "Customer",
+      }[key] || "";
+    },
+    setItem() {
+      writeCount += 1;
+      throw new Error("Companion context must not write storage");
+    },
+  };
+
+  const context = getCompanionContext({
+    currentPage: "conversationThread",
+    roleMode: "business",
+    storage,
+    conversation: {
+      id: "thread-1",
+      status: "Waiting for professional follow-up",
+      intent: "Schedule change",
+    },
+    nextAction: "Prepare a reply",
+    relatedWorkReferences: [{ id: "visit-1", type: "Schedule" }],
+  });
+
+  assert.equal(context.contextType, "conversation");
+  assert.equal(context.activeHomeBase, "Messages");
+  assert.equal(context.activeParentSurface, "Communication Center");
+  assert.equal(context.activeSurfaceType, "Workspace");
+  assert.equal(context.activeRoleMode, "business");
+  assert.equal(context.relationship.name, "Sarah Johnson");
+  assert.equal(context.relationship.type, "Customer");
+  assert.equal(context.conversation.id, "thread-1");
+  assert.equal(context.conversation.intent, "Schedule change");
+  assert.equal(context.currentStatus, "Waiting for professional follow-up");
+  assert.equal(context.nextAction.label, "Prepare a reply");
+  assert.equal(context.relatedWorkReferences[0].id, "visit-1");
+  assert.equal(context.isReadOnly, true);
+  assert.equal(context.ownsWorkflow, false);
+  assert.match(context.ownershipBoundary, /Companion guides/);
+  assert.match(context.message, /Sarah Johnson/);
+  assert.equal(writeCount, 0);
+});
+
+test("Companion context supports Work Center ownership without owning execution", () => {
+  const context = getCompanionContext({
+    currentPage: "contractorDashboard",
+    work: {
+      id: "job-7",
+      name: "Johnson Kitchen Project",
+      status: "Ready for evaluation notes",
+    },
+  });
+
+  assert.equal(context.contextType, "workCenter");
+  assert.equal(context.activeHomeBase, "Work");
+  assert.equal(context.activeParentSurface, "Work Center");
+  assert.equal(context.currentOwner, "Work Center");
+  assert.equal(context.work.id, "job-7");
+  assert.equal(context.ownsWorkflow, false);
+  assert.match(context.message, /Work Center owns the next step/);
+});
+
+test("Companion context supports Business Profile and request interpretation", () => {
+  const businessContext = getCompanionContext({
+    currentPage: "contractorProfile",
+    business: {
+      name: "Bgone Home Renovation",
+      status: "Portfolio proof could be stronger",
+    },
+  });
+  const requestContext = getCompanionContext({
+    currentPage: "upload",
+    request: {
+      id: "request-1",
+      intent: "Kitchen sink leaking under the cabinet",
+    },
+  });
+  const discoverContext = getCompanionContext({ currentPage: "discover" });
+
+  assert.equal(businessContext.contextType, "businessProfile");
+  assert.equal(businessContext.activeHomeBase, "Business");
+  assert.equal(businessContext.activeSurfaceType, "Business Management Page");
+  assert.equal(businessContext.currentOwner, "Business Profile");
+  assert.equal(businessContext.ownsWorkflow, false);
+  assert.match(businessContext.message, /Bgone Home Renovation/);
+  assert.match(businessContext.message, /Business Profile owns readiness and trust/);
+
+  assert.equal(requestContext.currentOwner, "Request Creation");
+  assert.match(requestContext.message, /Kitchen sink leaking/);
+  assert.equal(discoverContext.activeParentSurface, "Discover");
+  assert.equal(discoverContext.ownsWorkflow, false);
 });
 
 test("companion sheet title and intent actions use Meetro language", () => {
@@ -305,16 +409,18 @@ test("companion sheet high-priority insight appears in I noticed", () => {
 test("companion sheet source hides old AI-first hero and keeps capabilities reachable", () => {
   assert.doesNotMatch(assistantSource, /<span style=\{assistantEyebrow\}>\{roleLabel\}<\/span>/);
   assert.doesNotMatch(assistantSource, /<strong style=\{voiceTitle\}>\{copy\.tapToTalk\}<\/strong>/);
+  assert.match(assistantSource, /COMPANION_STATES\.guidance/);
   assert.match(assistantSource, /COMPANION_STATES\.conversation/);
-  assert.match(assistantSource, /COMPANION_STATES\.insights/);
   assert.match(assistantSource, /handleWakeAskMeetro/);
   assert.match(assistantSource, /handleWakeReviewInsights/);
 });
 
-test("full sheet no longer renders a separate companion briefing", () => {
+test("workspace guidance is intentional and full conversation stays gated", () => {
   assert.doesNotMatch(assistantSource, /isBriefingMode && \(/);
   assert.doesNotMatch(assistantSource, /<section style=\{companionNoticePanel\}>/);
   assert.doesNotMatch(assistantSource, /<div style=\{companionIntentGrid\}>/);
+  assert.match(assistantSource, /isGuidanceMode && \(/);
+  assert.match(assistantSource, /companionGuidancePanel/);
   assert.match(assistantSource, /setCompanionMode\(COMPANION_STATES\.conversation\)/);
   assert.doesNotMatch(assistantSource, /style=\{companionInlineAction\}/);
 });
@@ -333,10 +439,9 @@ test("Review Insights from bubble stays separate from passive insight overlay", 
   assert.doesNotMatch(assistantSource, /GlobalInsightLayer[\s\S]{0,240}companion/i);
 });
 
-test("companion state styles keep briefing compact and conversation scrollable", () => {
+test("companion state styles keep guidance compact and conversation scrollable", () => {
   assert.match(assistantSource, /const companionStateStyles = \{/);
-  assert.match(assistantSource, /\[COMPANION_STATES\.briefing\]: \{\s*maxHeight: "min\(72dvh, 520px\)"/);
-  assert.match(assistantSource, /\[COMPANION_STATES\.insights\]: \{\s*maxHeight: "min\(64dvh, 460px\)"/);
+  assert.match(assistantSource, /\[COMPANION_STATES\.guidance\]: \{\s*maxHeight: "min\(72dvh, 520px\)"/);
   assert.match(assistantSource, /\[COMPANION_STATES\.conversation\]: \{\s*maxHeight: "min\(86dvh, 720px\)"/);
   assert.match(assistantSource, /overflowY: "auto"/);
 });

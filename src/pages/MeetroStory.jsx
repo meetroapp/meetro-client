@@ -773,7 +773,7 @@ const heroCopy = {
 
 const eyebrow = {
   margin: "0 0 8px",
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: 13,
   fontWeight: 900,
   letterSpacing: 1.6,
@@ -806,7 +806,7 @@ const progressTrack = {
 const progressFill = {
   height: "100%",
   borderRadius: 999,
-  background: "linear-gradient(90deg, #5837f5, #2563eb)",
+  background: "linear-gradient(90deg, var(--meetro-color-forest, #1f4d34), #2563eb)",
   transition: "width 280ms ease",
 };
 
@@ -835,8 +835,8 @@ const slideIcon = {
   borderRadius: 18,
   display: "grid",
   placeItems: "center",
-  color: "#4f46e5",
-  background: "linear-gradient(135deg, #eef2ff, #ffffff)",
+  color: "var(--meetro-color-charcoal, #172317)",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage, #eef4ea), #ffffff)",
   border: "1px solid rgba(99, 102, 241, 0.18)",
   flex: "0 0 auto",
 };
@@ -901,7 +901,7 @@ const mockScreen = {
 
 const mockEyebrow = {
   margin: "0 0 8px",
-  color: "#4f46e5",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: 12,
   fontWeight: 950,
   letterSpacing: 1.1,
@@ -923,7 +923,7 @@ const mockTitleRow = {
 };
 
 const linkText = {
-  color: "#5837f5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 14,
   fontWeight: 900,
 };
@@ -935,7 +935,7 @@ const emergencyBanner = {
   padding: 14,
   borderRadius: 20,
   color: "#fff",
-  background: "linear-gradient(135deg, #5837f5, #8b5cf6)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), var(--meetro-color-forest, #1f4d34))",
   boxShadow: "0 18px 34px rgba(88, 55, 245, 0.24)",
   marginBottom: 16,
 };
@@ -994,7 +994,7 @@ const categoryPill = {
   borderRadius: 999,
   padding: "7px 10px",
   background: "#f1edff",
-  color: "#5837f5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: 13,
   fontWeight: 900,
 };
@@ -1033,7 +1033,7 @@ const mockPrimaryButton = {
   minHeight: 44,
   borderRadius: 14,
   border: "none",
-  background: "linear-gradient(135deg, #5837f5, #312eeb)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), #312eeb)",
   color: "#fff",
   fontSize: 15,
   fontWeight: 900,
@@ -1042,7 +1042,7 @@ const mockPrimaryButton = {
 const mockSecondaryButton = {
   ...mockPrimaryButton,
   background: "#fff",
-  color: "#5837f5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   border: "1px solid #ddd6fe",
 };
 
@@ -1077,7 +1077,7 @@ const avatarDot = {
   borderRadius: "50%",
   display: "grid",
   placeItems: "center",
-  background: "#5837f5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#fff",
   fontWeight: 900,
 };
@@ -1104,7 +1104,7 @@ const rightBubble = {
   ...leftBubble,
   justifySelf: "end",
   borderRadius: "18px 18px 6px 18px",
-  background: "#5837f5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#fff",
 };
 
@@ -1181,8 +1181,8 @@ const stagePill = {
 const activeStagePill = {
   ...stagePill,
   color: "#fff",
-  background: "#5837f5",
-  borderColor: "#5837f5",
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const emergencyRoute = {
@@ -1241,7 +1241,7 @@ const mockNavItem = {
 
 const mockNavActive = {
   ...mockNavItem,
-  color: "#5837f5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   background: "#f0edff",
   borderRadius: 12,
   padding: "7px 2px",
@@ -1263,7 +1263,7 @@ const bubbleKicker = {
   borderRadius: 999,
   padding: "8px 11px",
   background: "rgba(255,255,255,0.14)",
-  color: "#c7d2fe",
+  color: "rgba(31,77,52,0.18)",
   fontSize: 12,
   fontWeight: 950,
   letterSpacing: 1.1,
@@ -1292,11 +1292,11 @@ const timelinePill = {
 
 const timelineComplete = {
   background: "#ede9fe",
-  color: "#5837f5",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const timelineActive = {
-  background: "#5837f5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#fff",
   boxShadow: "0 10px 24px rgba(88, 55, 245, 0.22)",
 };
@@ -1336,7 +1336,7 @@ const dot = {
 
 const activeDot = {
   width: 26,
-  background: "#5837f5",
+  background: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const baseButton = {
@@ -1352,7 +1352,7 @@ const baseButton = {
 const primaryButton = {
   ...baseButton,
   color: "#fff",
-  background: "linear-gradient(135deg, #5837f5, #312eeb)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), #312eeb)",
 };
 
 const secondaryButton = {

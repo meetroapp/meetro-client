@@ -409,7 +409,7 @@ const insightIcon = {
   height: "38px",
   borderRadius: "14px",
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -429,7 +429,7 @@ const insightHeader = {
 };
 
 const insightEyebrow = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: 950,
   textTransform: "uppercase",
@@ -467,7 +467,7 @@ const insightActions = {
 const primaryAction = {
   border: "none",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   padding: "9px 12px",
   fontWeight: 900,

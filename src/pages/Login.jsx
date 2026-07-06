@@ -48,13 +48,18 @@ function Login({ setPage }) {
 
   const text = {
     en: {
-      login: "Login",
+      login: "Welcome back",
       signup: "Sign Up",
-      getStarted: "Get Started",
-      welcomeTagline: "The modern platform for home and business services.",
-      welcomeBack: "Welcome back",
-      createYourAccount: "Create your Meetro account",
-      startHelper: "Choose your language, then continue into Meetro.",
+      getStarted: "Join Meetro Community",
+      continueAction: "Continue",
+      welcomeTagline: "Continue the work that matters.",
+      welcomeBack: "Welcome back.",
+      createYourAccount: "Start your journey",
+      startHelper: "Sign in to continue where you left off.",
+      arrivalSupport: "Built around trust, meaningful work, and lasting relationships.",
+      supportHeading: "We're here to support you and the people you serve.",
+      supportBody:
+        "Meetro Community is built around trust, relationships, and the work that matters most.",
       chooseAccountType: "Choose Account Type",
       homeowner: "User Account",
       homeownerDescription:
@@ -94,13 +99,18 @@ function Login({ setPage }) {
         "Please agree to the Terms of Use and Privacy Policy to create your account.",
     },
     es: {
-      login: "Iniciar sesión",
+      login: "Bienvenido de nuevo",
       signup: "Crear cuenta",
-      getStarted: "Comenzar",
-      welcomeTagline: "La plataforma moderna para servicios del hogar y negocios.",
-      welcomeBack: "Bienvenido de nuevo",
-      createYourAccount: "Crea tu cuenta de Meetro",
-      startHelper: "Elige tu idioma y continúa en Meetro.",
+      getStarted: "Únete a Meetro Community",
+      continueAction: "Continuar",
+      welcomeTagline: "Continúa el trabajo que importa.",
+      welcomeBack: "Bienvenido de nuevo.",
+      createYourAccount: "Comienza tu camino",
+      startHelper: "Inicia sesión para continuar donde te quedaste.",
+      arrivalSupport: "Creado alrededor de confianza, trabajo significativo y relaciones duraderas.",
+      supportHeading: "Estamos aquí para apoyarte a ti y a las personas a las que sirves.",
+      supportBody:
+        "Meetro Community está construido alrededor de la confianza, las relaciones y el trabajo que más importa.",
       chooseAccountType: "Elige el tipo de cuenta",
       homeowner: "Cuenta de usuario",
       homeownerDescription:
@@ -143,14 +153,20 @@ function Login({ setPage }) {
         "Acepta los Términos de Uso y la Política de Privacidad para crear tu cuenta.",
     },
     fr: {
-      login: "Connexion",
+      login: "Bon retour",
       signup: "Créer un compte",
-      getStarted: "Commencer",
-      welcomeTagline:
-        "La plateforme moderne pour les services à domicile et professionnels.",
-      welcomeBack: "Bon retour",
-      createYourAccount: "Créez votre compte Meetro",
-      startHelper: "Choisissez votre langue, puis continuez dans Meetro.",
+      getStarted: "Rejoindre Meetro Community",
+      continueAction: "Continuer",
+      welcomeTagline: "Continuez le travail qui compte.",
+      welcomeBack: "Bon retour.",
+      createYourAccount: "Commencez votre parcours",
+      startHelper: "Connectez-vous pour reprendre là où vous vous étiez arrêté.",
+      arrivalSupport:
+        "Conçu autour de la confiance, du travail utile et des relations durables.",
+      supportHeading:
+        "Nous sommes là pour vous soutenir, vous et les personnes que vous servez.",
+      supportBody:
+        "Meetro Community repose sur la confiance, les relations et le travail qui compte le plus.",
       chooseAccountType: "Choisissez le type de compte",
       homeowner: "Compte utilisateur",
       homeownerDescription:
@@ -192,14 +208,19 @@ function Login({ setPage }) {
         "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour créer votre compte.",
     },
     "pt-BR": {
-      login: "Entrar",
+      login: "Bem-vindo de volta",
       signup: "Criar conta",
-      getStarted: "Começar",
-      welcomeTagline:
-        "A plataforma moderna para serviços residenciais e profissionais.",
-      welcomeBack: "Bem-vindo de volta",
-      createYourAccount: "Crie sua conta Meetro",
-      startHelper: "Escolha seu idioma e continue no Meetro.",
+      getStarted: "Junte-se ao Meetro Community",
+      continueAction: "Continuar",
+      welcomeTagline: "Continue o trabalho que importa.",
+      welcomeBack: "Bem-vindo de volta.",
+      createYourAccount: "Comece sua jornada",
+      startHelper: "Entre para continuar de onde parou.",
+      arrivalSupport:
+        "Criado em torno de confiança, trabalho significativo e relações duradouras.",
+      supportHeading: "Estamos aqui para apoiar você e as pessoas que você atende.",
+      supportBody:
+        "Meetro Community foi criado em torno de confiança, relações e do trabalho que mais importa.",
       chooseAccountType: "Escolha o tipo de conta",
       homeowner: "Conta de usuário",
       homeownerDescription:
@@ -645,7 +666,7 @@ function Login({ setPage }) {
     const maskedEmail = email.replace(/^(.{2})(.*)(@.*)$/, "$1***$3");
 
     return (
-      <div style={pageWrapper}>
+      <div className="meetro-visual-page" style={pageWrapper}>
         <div style={heroCard}>
           <div style={heroBubble}></div>
           <div style={logoCircle}></div>
@@ -691,13 +712,15 @@ function Login({ setPage }) {
                 style={{
                   ...codeBox,
                   borderColor:
-                    index === twoFactorCode.length ? "#5b3df5" : "#ddd",
+                    index === twoFactorCode.length
+                      ? "var(--meetro-color-forest, #1f4d34)"
+                      : "rgba(78,68,55,0.16)",
                   transform:
                     index === twoFactorCode.length ? "scale(1.04)" : "scale(1)",
                   boxShadow:
                     index === twoFactorCode.length
-                      ? "0 0 0 4px rgba(91,61,245,0.12)"
-                      : "0 4px 12px rgba(0,0,0,0.04)",
+                      ? "0 0 0 4px rgba(31,77,52,0.12)"
+                      : "0 4px 12px rgba(49,35,20,0.06)",
                 }}
               >
                 {digit.trim()}
@@ -742,7 +765,7 @@ function Login({ setPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
+    <div className="meetro-visual-page" style={pageWrapper}>
       <div style={languageBar}>
         <div style={languageBox} aria-label={t("language")}>
           {SUPPORTED_LANGUAGES.map((item) => {
@@ -759,6 +782,7 @@ function Login({ setPage }) {
                 onClick={() => changeLanguage(item.code)}
                 aria-pressed={isActive}
               >
+                <MeetroIcon name="language" size={18} decorative />
                 {getLanguageLabel(item.code)}
               </button>
             );
@@ -766,38 +790,51 @@ function Login({ setPage }) {
         </div>
       </div>
 
-      <div style={heroCard}>
+      <div style={heroCard} className="meetro-visual-hero">
         <div style={heroBubble}></div>
+        <div style={heroNeighborhood} aria-hidden="true">
+          <span style={porchLightLeft}></span>
+          <span style={homeSilhouetteLeft}></span>
+          <span style={homeSilhouetteRight}></span>
+          <span style={sidewalkPath}></span>
+          <span style={communityLightOne}></span>
+          <span style={communityLightTwo}></span>
+        </div>
         <div style={heroWaveOne}></div>
         <div style={heroWaveTwo}></div>
-        <h1 style={heroTitle}>
-          meetro<span style={heroTrademark}>TM</span>
-        </h1>
+        <div style={brandLockup}>
+          <div>
+            <p style={brandWordmark}>
+              meetro<span style={heroTrademark}>TM</span>
+            </p>
+            <p style={brandCommunity}>Community</p>
+          </div>
+        </div>
+        <h1 style={heroTitle}>{T.welcomeBack}</h1>
         <p style={heroSubtitle}>{T.welcomeTagline}</p>
       </div>
 
-      <div style={cardStyle}>
+      <div style={cardStyle} className="meetro-visual-surface">
         {mode !== "reset" && (
           <div style={toggleRow}>
             <button
               style={{
                 ...toggleButton,
-                background: mode === "signup" ? "#5b3df5" : "#f3f4f6",
-                color: mode === "signup" ? "white" : "#111827",
+                ...(mode === "signup" ? activeToggleButton : inactiveToggleButton),
               }}
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "signup");
                 setMode("signup");
               }}
             >
+              <MeetroIcon name="profile" size={18} decorative />
               {T.getStarted}
             </button>
 
             <button
               style={{
                 ...toggleButton,
-                background: mode === "login" ? "#5b3df5" : "#f3f4f6",
-                color: mode === "login" ? "white" : "#111827",
+                ...(mode === "login" ? activeToggleButton : inactiveToggleButton),
               }}
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "login");
@@ -805,6 +842,7 @@ function Login({ setPage }) {
                 setLegalAccepted(false);
               }}
             >
+              <MeetroIcon name="lock" size={18} decorative />
               {T.login}
             </button>
           </div>
@@ -1020,7 +1058,7 @@ function Login({ setPage }) {
               {loading
                 ? T.pleaseWait
                 : mode === "login"
-                ? T.login
+                ? T.continueAction
                 : T.createAccount}
             </button>
 
@@ -1067,6 +1105,13 @@ function Login({ setPage }) {
           {t("aiAssistanceDisclaimer")}
         </button>
       </nav>
+
+      <section style={supportPanel} aria-label={T.arrivalSupport}>
+        <div>
+          <h2 style={supportHeading}>{T.supportHeading}</h2>
+          <p style={supportBody}>{T.supportBody}</p>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1074,24 +1119,25 @@ function Login({ setPage }) {
 const pageWrapper = {
   minHeight: "100dvh",
   background:
-    "radial-gradient(circle at 50% 88%, rgba(91,61,245,0.26), transparent 28%), linear-gradient(180deg,#050719 0%,#080a22 52%,#030414 100%)",
+    "radial-gradient(circle at 12% 30%, rgba(247,186,93,0.28), transparent 13%), radial-gradient(circle at 88% 32%, rgba(183,121,31,0.18), transparent 17%), radial-gradient(circle at 50% 92%, rgba(31,77,52,0.42), transparent 34%), linear-gradient(180deg, #0f1c1a 0%, #1b2c22 45%, #18271e 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 18px) max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 18px) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
   width: "100%",
-  maxWidth: "760px",
+  maxWidth: "980px",
   margin: "0 auto",
-  color: "#ffffff",
+  color: "var(--meetro-color-paper, #fffdf8)",
   overflowX: "hidden",
 };
 
 const languageBar = {
   display: "flex",
   justifyContent: "center",
-  marginBottom: "22px",
+  margin: "0 auto 22px",
   width: "100%",
+  maxWidth: "620px",
 };
 
 const languageBox = {
@@ -1101,53 +1147,140 @@ const languageBox = {
   gap: "8px",
   padding: "4px",
   borderRadius: "18px",
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: "rgba(255,253,248,0.12)",
+  border: "1px solid rgba(255,253,248,0.18)",
   boxSizing: "border-box",
 };
 
 const languageButton = {
-  minHeight: "38px",
-  border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: "14px",
-  background: "rgba(255,255,255,0.04)",
-  color: "#cbd5e1",
-  fontSize: "13px",
+  minHeight: "54px",
+  border: "1px solid rgba(255,253,248,0.22)",
+  borderRadius: "20px",
+  background: "rgba(12,20,18,0.34)",
+  color: "rgba(255,253,248,0.9)",
+  fontSize: "18px",
   fontWeight: "850",
   cursor: "pointer",
-  padding: "8px 9px",
+  padding: "12px 16px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "12px",
 };
 
 const languageButtonActive = {
-  background: "linear-gradient(135deg,#6d4dff,#5b3df5)",
-  borderColor: "rgba(167,139,250,0.65)",
-  color: "#ffffff",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.24)",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.96)), var(--meetro-surface-sage, rgba(238,244,234,0.92)))",
+  borderColor: "rgba(255,253,248,0.48)",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  boxShadow: "0 10px 24px rgba(49,35,20,0.14)",
 };
 
 const heroCard = {
-  background: "transparent",
-  borderRadius: "30px",
-  padding: "42px 22px 64px",
-  color: "white",
-  marginBottom: "10px",
+  background:
+    "linear-gradient(180deg, rgba(255,253,248,0.09), rgba(255,253,248,0.025))",
+  borderRadius: "32px 32px 18px 18px",
+  padding: "34px 22px 72px",
+  color: "var(--meetro-color-paper, #fffdf8)",
+  marginBottom: "-34px",
   position: "relative",
   overflow: "hidden",
-  minHeight: "270px",
+  minHeight: "386px",
   display: "grid",
   alignContent: "center",
 };
 
 const heroBubble = {
   position: "absolute",
-  bottom: "18px",
+  bottom: "14px",
   left: "50%",
   transform: "translateX(-50%)",
-  width: "260px",
-  height: "100px",
+  width: "520px",
+  height: "170px",
   borderRadius: "50%",
-  background: "rgba(91,61,245,0.18)",
-  filter: "blur(2px)",
+  background: "rgba(247,186,93,0.14)",
+  filter: "blur(3px)",
+};
+
+const heroNeighborhood = {
+  position: "absolute",
+  inset: 0,
+  zIndex: 1,
+  opacity: 0.72,
+  pointerEvents: "none",
+};
+
+const homeSilhouetteLeft = {
+  position: "absolute",
+  left: "4%",
+  bottom: "74px",
+  width: "132px",
+  height: "76px",
+  borderRadius: "10px 10px 6px 6px",
+  background:
+    "linear-gradient(180deg, rgba(12,20,18,0.52), rgba(12,20,18,0.34))",
+  boxShadow:
+    "20px -18px 0 -8px rgba(12,20,18,0.5), 36px -28px 0 -18px rgba(12,20,18,0.44), inset 18px 22px 0 -15px rgba(247,186,93,0.58)",
+};
+
+const homeSilhouetteRight = {
+  position: "absolute",
+  right: "5%",
+  bottom: "78px",
+  width: "118px",
+  height: "68px",
+  borderRadius: "10px 10px 6px 6px",
+  background:
+    "linear-gradient(180deg, rgba(12,20,18,0.42), rgba(12,20,18,0.28))",
+  boxShadow:
+    "-18px -14px 0 -9px rgba(12,20,18,0.44), inset -18px 20px 0 -15px rgba(247,186,93,0.48)",
+};
+
+const porchLightLeft = {
+  position: "absolute",
+  left: "9%",
+  bottom: "160px",
+  width: "22px",
+  height: "54px",
+  borderRadius: "999px",
+  background:
+    "radial-gradient(circle at 50% 28%, rgba(255,229,164,0.86), rgba(247,186,93,0.34) 28%, transparent 58%)",
+  boxShadow: "0 0 34px rgba(247,186,93,0.28)",
+};
+
+const sidewalkPath = {
+  position: "absolute",
+  left: "42%",
+  bottom: "26px",
+  width: "18%",
+  height: "145px",
+  borderRadius: "50% 50% 0 0",
+  background:
+    "linear-gradient(180deg, rgba(255,253,248,0.12), rgba(255,253,248,0.02))",
+  transform: "perspective(220px) rotateX(54deg)",
+  transformOrigin: "bottom",
+};
+
+const communityLightOne = {
+  position: "absolute",
+  right: "26%",
+  bottom: "146px",
+  width: "7px",
+  height: "7px",
+  borderRadius: "999px",
+  background: "rgba(255,229,164,0.84)",
+  boxShadow: "0 0 22px rgba(247,186,93,0.42)",
+};
+
+const communityLightTwo = {
+  position: "absolute",
+  left: "26%",
+  bottom: "136px",
+  width: "6px",
+  height: "6px",
+  borderRadius: "999px",
+  background: "rgba(255,229,164,0.74)",
+  boxShadow: "0 0 18px rgba(247,186,93,0.34)",
 };
 
 const heroWaveOne = {
@@ -1158,7 +1291,7 @@ const heroWaveOne = {
   height: "92px",
   borderRadius: "50%",
   background:
-    "linear-gradient(135deg, transparent 8%, rgba(91,61,245,0.34) 42%, rgba(124,58,237,0.18) 72%, transparent 100%)",
+    "linear-gradient(135deg, transparent 8%, rgba(223,232,216,0.32) 42%, rgba(183,121,31,0.18) 72%, transparent 100%)",
   transform: "rotate(-8deg)",
 };
 
@@ -1170,7 +1303,7 @@ const heroWaveTwo = {
   height: "86px",
   borderRadius: "50%",
   background:
-    "linear-gradient(135deg, transparent 10%, rgba(76,29,149,0.28) 46%, rgba(91,61,245,0.16) 80%, transparent 100%)",
+    "linear-gradient(135deg, transparent 10%, rgba(74,52,40,0.22) 46%, rgba(31,77,52,0.22) 80%, transparent 100%)",
   transform: "rotate(7deg)",
 };
 
@@ -1178,26 +1311,58 @@ const logoCircle = {
   width: "68px",
   height: "68px",
   borderRadius: "24px",
-  background: "rgba(139,92,246,0.18)",
-  border: "1px solid rgba(167,139,250,0.22)",
+  background: "rgba(255,253,248,0.14)",
+  border: "1px solid rgba(255,253,248,0.24)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   margin: "0 auto 18px",
   position: "relative",
   zIndex: 2,
-  boxShadow: "0 14px 34px rgba(91,61,245,0.18)",
+  boxShadow: "0 14px 34px rgba(49,35,20,0.18)",
 };
 
-const heroTitle = {
-  fontSize: "40px",
-  fontWeight: "950",
-  margin: "0 0 14px",
+const brandWordmark = {
+  margin: 0,
   textAlign: "center",
   position: "relative",
   zIndex: 2,
-  color: "#8b5cf6",
+  color: "rgba(255,253,248,0.84)",
+  fontSize: "50px",
+  fontWeight: "950",
   letterSpacing: 0,
+  lineHeight: 0.92,
+};
+
+const brandLockup = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "0 0 34px",
+  position: "relative",
+  zIndex: 2,
+};
+
+const brandCommunity = {
+  margin: "6px 0 0",
+  color: "var(--meetro-color-sage, #93a982)",
+  fontSize: "18px",
+  lineHeight: 1,
+  fontWeight: "950",
+  letterSpacing: "0.22em",
+  textTransform: "uppercase",
+};
+
+const heroTitle = {
+  fontSize: "clamp(42px, 9vw, 64px)",
+  fontWeight: "950",
+  margin: "0 0 18px",
+  textAlign: "center",
+  position: "relative",
+  zIndex: 2,
+  color: "var(--meetro-color-paper, #fffdf8)",
+  letterSpacing: 0,
+  lineHeight: 1.02,
 };
 
 const heroTrademark = {
@@ -1218,11 +1383,11 @@ const securityTitle = {
 
 const heroSubtitle = {
   textAlign: "center",
-  fontSize: "16px",
+  fontSize: "18px",
   lineHeight: "1.5",
   opacity: 0.98,
   margin: "0 auto",
-  maxWidth: "250px",
+  maxWidth: "340px",
   position: "relative",
   zIndex: 2,
   color: "#f8fafc",
@@ -1238,45 +1403,65 @@ const securityText = {
 };
 
 const cardStyle = {
-  background: "rgba(255,255,255,0.96)",
-  borderRadius: "26px",
-  padding: "18px",
-  boxShadow: "0 18px 50px rgba(0,0,0,0.28)",
-  border: "1px solid rgba(255,255,255,0.16)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.96))",
+  borderRadius: "28px",
+  padding: "28px 32px",
+  boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  position: "relative",
+  zIndex: 3,
+  maxWidth: "760px",
+  margin: "0 auto",
 };
 
 const toggleRow = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
-  marginBottom: "22px",
+  gap: "8px",
+  marginBottom: "24px",
 };
 
 const toggleButton = {
-  border: "1px solid rgba(91,61,245,0.18)",
+  border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "16px",
-  padding: "14px",
+  minHeight: "58px",
+  padding: "14px 16px",
   fontWeight: "900",
   cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
+};
+
+const activeToggleButton = {
+  background: "var(--meetro-gradient-selected-control, linear-gradient(135deg, #172317, #273326))",
+  color: "var(--meetro-color-paper, #fffdf8)",
+  boxShadow: "0 10px 24px rgba(49,35,20,0.14)",
+};
+
+const inactiveToggleButton = {
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest-deep, #14351f)",
 };
 
 const authIntro = {
   textAlign: "center",
-  margin: "2px 0 18px",
+  margin: "8px 0 24px",
 };
 
 const authIntroTitle = {
   margin: "0 0 5px",
-  color: "#0f172a",
-  fontSize: "22px",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  fontSize: "clamp(28px, 6vw, 42px)",
   fontWeight: "950",
   letterSpacing: 0,
 };
 
 const authIntroText = {
   margin: 0,
-  color: "#64748b",
-  fontSize: "14px",
+  color: "var(--meetro-color-muted, #65705f)",
+  fontSize: "18px",
   lineHeight: 1.4,
   fontWeight: "750",
 };
@@ -1313,31 +1498,32 @@ const accountCard = {
 
 const selectedAccountCard = {
   ...accountCard,
-  border: "2px solid #6d4dff",
-  background: "#f3f0ff",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.14)",
+  border: "2px solid var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  boxShadow: "0 10px 24px rgba(49,35,20,0.12)",
 };
 
 const accountIcon = {
   width: "fit-content",
   borderRadius: "999px",
   padding: "5px 9px",
-  background: "#ede9fe",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "950",
 };
 
 const input = {
   width: "100%",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  padding: "15px 16px",
+  border: "1px solid rgba(78,68,55,0.16)",
+  borderRadius: "20px",
+  padding: "20px 22px",
   fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
-  marginBottom: "14px",
-  background: "white",
+  marginBottom: "18px",
+  background: "rgba(255,253,248,0.72)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
 };
 
 const fieldHelperText = {
@@ -1366,7 +1552,7 @@ const sentCodeBox = {
 
 const maskedEmailStyle = {
   marginTop: "6px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
 };
 
@@ -1379,7 +1565,7 @@ const codeBoxRow = {
 
 const codeBox = {
   height: "62px",
-  borderRadius: "18px",
+  borderRadius: "20px",
   border: "2px solid #ddd",
   display: "flex",
   alignItems: "center",
@@ -1409,13 +1595,13 @@ const submitButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "linear-gradient(135deg, #5b3df5 0%, #6d4dff 100%)",
+  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontSize: "16px",
   fontWeight: "900",
   cursor: "pointer",
-  marginTop: "6px",
-  boxShadow: "0 12px 24px rgba(91,61,245,0.28)",
+  marginTop: "10px",
+  boxShadow: "0 12px 24px rgba(49,35,20,0.18)",
 };
 
 const forgotPasswordButton = {
@@ -1423,7 +1609,7 @@ const forgotPasswordButton = {
   width: "100%",
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "14px",
   fontWeight: "900",
   textAlign: "right",
@@ -1469,7 +1655,7 @@ const disabledSubmitButton = {
 
 const legalAcceptanceCard = {
   border: "1px solid #e2e8f0",
-  background: "#f8fafc",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   borderRadius: "18px",
   padding: "13px",
   margin: "2px 0 12px",
@@ -1489,14 +1675,14 @@ const legalCheckbox = {
   width: "18px",
   height: "18px",
   marginTop: "1px",
-  accentColor: "#5b3df5",
+  accentColor: "var(--meetro-color-forest, #1f4d34)",
   flexShrink: 0,
 };
 
 const inlineLegalLink = {
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   padding: 0,
   textDecoration: "underline",
@@ -1509,19 +1695,52 @@ const legalFooter = {
   flexWrap: "wrap",
   justifyContent: "center",
   gap: "8px 12px",
-  marginTop: "18px",
-  paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+  margin: "30px auto 16px",
+  paddingTop: "22px",
+  borderTop: "1px solid rgba(255,253,248,0.22)",
+  maxWidth: "780px",
 };
 
 const footerLegalLink = {
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
-  fontSize: "12px",
+  color: "rgba(255,253,248,0.82)",
+  fontSize: "14px",
   fontWeight: "800",
   textDecoration: "underline",
   cursor: "pointer",
   padding: "6px",
+};
+
+const supportPanel = {
+  maxWidth: "780px",
+  margin: "0 auto calc(10px + env(safe-area-inset-bottom, 0px))",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  alignItems: "center",
+  color: "var(--meetro-color-paper, #fffdf8)",
+  background: "rgba(255,253,248,0.08)",
+  border: "1px solid rgba(255,253,248,0.18)",
+  borderRadius: "18px",
+  padding: "26px 32px",
+  boxShadow: "0 18px 48px rgba(0,0,0,0.18)",
+};
+
+const supportHeading = {
+  margin: "0 0 10px",
+  color: "var(--meetro-color-paper, #fffdf8)",
+  fontSize: "clamp(24px, 5vw, 32px)",
+  lineHeight: 1.12,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const supportBody = {
+  margin: 0,
+  color: "rgba(255,253,248,0.86)",
+  fontSize: "17px",
+  lineHeight: 1.35,
+  fontWeight: "650",
 };
 
 const guestButton = {
@@ -1529,8 +1748,8 @@ const guestButton = {
   padding: "15px",
   borderRadius: "18px",
   border: "none",
-  background: "#111827",
-  color: "white",
+  background: "var(--meetro-color-forest-deep, #14351f)",
+  color: "var(--meetro-color-paper, #fffdf8)",
   fontSize: "15px",
   fontWeight: "800",
   cursor: "pointer",
@@ -1541,9 +1760,9 @@ const qaSeedButton = {
   width: "100%",
   padding: "13px",
   borderRadius: "16px",
-  border: "1px solid #c4b5fd",
-  background: "#f5f3ff",
-  color: "#4c1d95",
+  border: "1px solid rgba(31,77,52,0.18)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "14px",
   fontWeight: "900",
   cursor: "pointer",

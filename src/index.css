@@ -11,12 +11,64 @@ body,
 
 body {
   position: relative;
+  color: var(--meetro-color-ink, #111827);
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+:root {
+  --meetro-layout-breakpoint-medium: 768px;
+  --meetro-layout-breakpoint-desktop: 1180px;
+  --meetro-layout-sidebar-width: 284px;
+  --meetro-sidebar-width: var(--meetro-layout-sidebar-width);
+  --meetro-layout-content-max: 1120px;
+  --meetro-layout-wide-mid-max: 1280px;
+  --meetro-layout-wide-max: 1360px;
+  --meetro-layout-readable-mid-max: 920px;
+  --meetro-layout-readable-max: 960px;
+  --meetro-layout-form-max: 860px;
+  --meetro-layout-grid-gap-compact: 14px;
+  --meetro-layout-grid-gap: 16px;
+  --meetro-layout-section-gap: 24px;
+  --meetro-layout-card-gap: 16px;
+  --meetro-layout-card-padding: 18px;
+  --meetro-layout-card-radius: 24px;
+  --meetro-layout-hosted-width: 414px;
+  --meetro-layout-hosted-max-height: 720px;
+  --meetro-layout-companion-width: 388px;
+  --meetro-layout-companion-max-height: 680px;
+  --meetro-layout-desktop-gutter: 32px;
+  --meetro-color-forest: #1f4d34;
+  --meetro-color-forest-deep: #14351f;
+  --meetro-color-sage: #dfe8d8;
+  --meetro-color-sage-soft: #eef4ea;
+  --meetro-color-cream: #fbf6ed;
+  --meetro-color-paper: #fffdf8;
+  --meetro-color-wood: #b7791f;
+  --meetro-color-coffee: #4a3428;
+  --meetro-color-ink: #172317;
+  --meetro-color-charcoal: #172317;
+  --meetro-color-charcoal-soft: #273326;
+  --meetro-color-muted: #65705f;
+  --meetro-color-line: rgba(78, 68, 55, 0.12);
+  --meetro-gradient-community-page:
+    radial-gradient(circle at 12% 0%, rgba(183, 121, 31, 0.13), transparent 30%),
+    linear-gradient(180deg, #fffaf1 0%, #fbf6ed 44%, #eef4ea 100%);
+  --meetro-gradient-community-hero:
+    linear-gradient(135deg, rgba(20, 53, 31, 0.96), rgba(31, 77, 52, 0.9));
+  --meetro-gradient-community-action:
+    linear-gradient(135deg, #14351f, #1f4d34);
+  --meetro-gradient-selected-control:
+    linear-gradient(135deg, #172317, #273326);
+  --meetro-surface-paper: rgba(255, 253, 248, 0.94);
+  --meetro-surface-warm: rgba(251, 246, 237, 0.92);
+  --meetro-surface-sage: rgba(238, 244, 234, 0.9);
+  --meetro-shadow-soft: 0 16px 38px rgba(49, 35, 20, 0.08);
+  --meetro-shadow-lifted: 0 24px 70px rgba(49, 35, 20, 0.14);
 }
 
 img,
@@ -116,6 +168,12 @@ h6 {
 
 .meetro-assistant-launcher {
   animation: none;
+}
+
+@media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
+  .meetro-assistant-launcher {
+    animation: meetro-assistant-presence-pill 5.8s ease-in-out infinite;
+  }
 }
 
 .spotlight-showcase-image {
@@ -233,6 +291,45 @@ h6 {
   border-color: rgba(16, 185, 129, 0.42);
 }
 
+.meetro-assistant-presence-responding .meetro-assistant-ambient-ring {
+  opacity: 0.8;
+  animation-name: meetro-assistant-speaking-ring;
+  animation-duration: 2.8s;
+  border-color: rgba(16, 185, 129, 0.42);
+}
+
+.meetro-assistant-presence-responding .meetro-assistant-ambient-glow {
+  opacity: 0.7;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(168, 85, 247, 0.52), transparent 34%),
+    radial-gradient(circle at 78% 16%, rgba(14, 165, 233, 0.38), transparent 32%),
+    radial-gradient(circle at 50% 92%, rgba(16, 185, 129, 0.28), transparent 38%),
+    linear-gradient(135deg, rgba(124, 58, 237, 0.24), rgba(14, 165, 233, 0.14), rgba(16, 185, 129, 0.18));
+}
+
+@media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
+  .meetro-assistant-overlay {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 24px var(--meetro-layout-desktop-gutter) var(--meetro-layout-desktop-gutter) !important;
+    overflow: hidden !important;
+  }
+
+  .meetro-assistant-presence {
+    width: min(var(--meetro-layout-companion-width), calc(100vw - var(--meetro-sidebar-width, 0px) - (var(--meetro-layout-desktop-gutter) * 2))) !important;
+    max-width: min(var(--meetro-layout-companion-width), calc(100vw - (var(--meetro-layout-desktop-gutter) * 2))) !important;
+    margin: 0 !important;
+  }
+
+  .meetro-assistant-sheet {
+    max-height: min(82dvh, var(--meetro-layout-companion-max-height)) !important;
+    border-radius: 28px !important;
+  }
+}
+
 @media (max-width: 430px) {
   .meetro-assistant-presence {
     width: min(100%, 430px);
@@ -268,24 +365,24 @@ h6 {
 .meetro-responsive-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: var(--meetro-layout-grid-gap-compact);
   width: 100%;
   min-width: 0;
 }
 
 .meetro-selected-card {
-  border: 2px solid #5b3df5 !important;
+  border: 2px solid var(--meetro-color-forest) !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 243, 255, 0.96)) !important;
+    linear-gradient(180deg, var(--meetro-surface-paper), var(--meetro-surface-sage)) !important;
   box-shadow:
-    0 16px 38px rgba(91, 61, 245, 0.18),
-    0 0 0 4px rgba(91, 61, 245, 0.08) !important;
+    0 16px 38px rgba(31, 77, 52, 0.16),
+    0 0 0 4px rgba(31, 77, 52, 0.08) !important;
 }
 
 .meetro-selected-card-soft {
-  border: 2px solid rgba(91, 61, 245, 0.78) !important;
-  background: rgba(246, 243, 255, 0.92) !important;
-  box-shadow: 0 10px 24px rgba(91, 61, 245, 0.14) !important;
+  border: 2px solid rgba(31, 77, 52, 0.72) !important;
+  background: var(--meetro-surface-sage) !important;
+  box-shadow: 0 10px 24px rgba(31, 77, 52, 0.12) !important;
 }
 
 @media (max-width: 520px) and (orientation: portrait) {
@@ -306,12 +403,12 @@ h6 {
   max-width: 100%;
   border-radius: 999px;
   padding: 6px 10px;
-  background: #5b3df5;
-  color: #ffffff;
+  background: var(--meetro-color-forest);
+  color: #fffdf8;
   font-size: 11px;
   font-weight: 950;
   line-height: 1;
-  box-shadow: 0 8px 18px rgba(91, 61, 245, 0.18);
+  box-shadow: 0 8px 18px rgba(31, 77, 52, 0.18);
 }
 
 .meetro-icon {
@@ -348,6 +445,39 @@ h6 {
   overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
+}
+
+.meetro-visual-page {
+  background: var(--meetro-gradient-community-page);
+  color: var(--meetro-color-ink);
+}
+
+.meetro-visual-surface {
+  background: var(--meetro-surface-paper);
+  border: 1px solid var(--meetro-color-line);
+  border-radius: var(--meetro-layout-card-radius);
+  box-shadow: var(--meetro-shadow-soft);
+}
+
+.meetro-visual-hero {
+  background: var(--meetro-gradient-community-hero);
+  color: #fffdf8;
+  box-shadow: var(--meetro-shadow-lifted);
+}
+
+.meetro-visual-primary-button {
+  background: var(--meetro-gradient-community-action);
+  color: #fffdf8;
+  border: 1px solid rgba(255, 253, 248, 0.18);
+  box-shadow: 0 14px 30px rgba(20, 53, 31, 0.20);
+}
+
+.meetro-visual-empty-state {
+  background: var(--meetro-surface-warm);
+  border: 1px solid var(--meetro-color-line);
+  border-radius: var(--meetro-layout-card-radius);
+  box-shadow: var(--meetro-shadow-soft);
+  color: var(--meetro-color-ink);
 }
 
 .business-tools-child-header {
@@ -397,31 +527,31 @@ h6 {
 
 @media (min-width: 768px) {
   .meetro-responsive-page {
-    max-width: 1120px !important;
+    max-width: var(--meetro-layout-content-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
   .meetro-wide-page {
-    max-width: 1280px !important;
+    max-width: var(--meetro-layout-wide-mid-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
   .meetro-readable-page,
   .meetro-form-page {
-    max-width: 920px !important;
+    max-width: var(--meetro-layout-readable-mid-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
   .meetro-form-page {
-    max-width: 860px !important;
+    max-width: var(--meetro-layout-form-max) !important;
   }
 
   .meetro-responsive-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: var(--meetro-layout-grid-gap);
   }
 
   .meetro-grid-2 {
@@ -431,7 +561,7 @@ h6 {
 
 @media (min-width: 1100px) {
   .meetro-wide-page {
-    max-width: 1360px !important;
+    max-width: var(--meetro-layout-wide-max) !important;
   }
 
   .meetro-responsive-grid.meetro-grid-3,
@@ -445,7 +575,7 @@ h6 {
   }
 
   .meetro-readable-page {
-    max-width: 960px !important;
+    max-width: var(--meetro-layout-readable-max) !important;
   }
 }
 
@@ -587,6 +717,26 @@ h6 {
   }
 }
 
+@keyframes meetro-assistant-presence-pill {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 30px rgba(15, 23, 42, 0.18),
+      0 0 24px rgba(124, 92, 255, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.58);
+    transform: translateZ(0) scale(1);
+  }
+
+  50% {
+    box-shadow:
+      0 16px 38px rgba(15, 23, 42, 0.20),
+      0 0 34px rgba(124, 92, 255, 0.27),
+      0 0 22px rgba(14, 165, 233, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    transform: translateZ(0) scale(1.015);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .meetro-assistant-launcher,
   .meetro-assistant-overlay,
@@ -718,8 +868,8 @@ body {
 .bottom-nav-item.active {
   min-height: 50px;
   transform: none;
-  background: rgba(124, 58, 237, 0.10);
-  color: #6d28d9;
+  background: rgba(23, 35, 23, 0.10);
+  color: var(--meetro-color-charcoal, #172317);
 }
 
 .bottom-nav-icon {
@@ -845,7 +995,7 @@ body {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #a78bfa, #6d28d9);
+  background: linear-gradient(135deg, #a78bfa, var(--meetro-color-charcoal, #172317));
   color: #ffffff;
 }
 

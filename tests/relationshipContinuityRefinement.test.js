@@ -153,6 +153,29 @@ test("schedule updates resend a replacement card without creating a duplicate vi
   assert.doesNotMatch(contractorDashboardSource, /if \(!editingScheduleId && conversationId\) \{/);
 });
 
+test("linked Meetro visit save auto-sends while external visits keep delivery choice", () => {
+  const saveVisitBlock = sourceBlock(
+    contractorDashboardSource,
+    "async function saveManualScheduleVisit() {",
+    "function startEditScheduleVisit"
+  );
+  const deliveryChoiceBlock = sourceBlock(
+    contractorDashboardSource,
+    "async function handleScheduleDeliveryChoice(method) {",
+    "function readManualCustomerContacts"
+  );
+
+  assert.match(saveVisitBlock, /if \(isLinkedMeetroScheduleCustomer\(newVisit\)\) \{/);
+  assert.match(saveVisitBlock, /sendScheduleVisitToMeetroChat\(newVisit\)/);
+  assert.match(saveVisitBlock, /confirmScheduleSentInMeetroChat\(newVisit\)/);
+  assert.match(saveVisitBlock, /openScheduleDeliveryChoice\(newVisit\)/);
+  assert.doesNotMatch(saveVisitBlock, /shareExternalScheduleVisit\(newVisit\)/);
+  assert.match(deliveryChoiceBlock, /if \(method === "chat"\)/);
+  assert.match(deliveryChoiceBlock, /sendScheduleVisitToMeetroChat\(visit\)/);
+  assert.match(deliveryChoiceBlock, /shareExternalScheduleVisit\(visit\)/);
+  assert.match(contractorDashboardSource, /Share by Text \/ iOS Message/);
+});
+
 test("schedule edit handoff preserves relationship and conversation linkage", () => {
   assert.match(contractorDashboardSource, /localStorage\.getItem\("meetroScheduleEditId"\)/);
   assert.match(contractorDashboardSource, /startEditScheduleVisit\(visit\)/);

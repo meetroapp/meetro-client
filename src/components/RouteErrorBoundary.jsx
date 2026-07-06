@@ -151,7 +151,7 @@ const primaryButton = {
   minHeight: "48px",
   border: "none",
   borderRadius: "14px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   fontWeight: 950,
 };
@@ -159,8 +159,8 @@ const primaryButton = {
 const secondaryButton = {
   ...primaryButton,
   background: "#ffffff",
-  color: "#5b3df5",
-  border: "1px solid rgba(91,61,245,0.24)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  border: "1px solid rgba(31,77,52,0.24)",
 };
 
 export default RouteErrorBoundary;

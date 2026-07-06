@@ -18,6 +18,12 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredCopy,
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 
 function buildSuggestedRequestTitle(value = "", fallback = "") {
   const source = String(value || fallback || "").trim();
@@ -37,6 +43,8 @@ function Upload({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -232,6 +240,16 @@ function Upload({ setPage, currentPage }) {
   }
 
   async function handleImageUpload(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language,
+        onDeferred: setPhotoError,
+      })
+    ) {
+      return;
+    }
+
     try {
       const files = Array.from(event.target.files || []);
 
@@ -292,10 +310,16 @@ function Upload({ setPage, currentPage }) {
   }
 
   async function openRequestPhotoPicker() {
+    if (mediaUploadDeferred) {
+      setPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
     setPhotoError("");
 
     await openJobPhotoPicker({
       inputRef: photoInputRef,
+      language,
       fileNamePrefix: "request-photo",
       onPhotos: (photos) =>
         handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
@@ -522,7 +546,7 @@ function Upload({ setPage, currentPage }) {
   }
 
   return (
-    <div style={pageWrapper}>
+    <div className="app-page meetro-form-page meetro-visual-page" style={pageWrapper}>
       <button onClick={handleCancelRequest} style={backButton}>
         ←
       </button>
@@ -541,7 +565,7 @@ function Upload({ setPage, currentPage }) {
         </div>
       )}
 
-      <div style={cardStyle}>
+      <div className="meetro-visual-surface" style={cardStyle}>
         <label style={fieldLabel}>{t("requestIntelligencePrompt")}</label>
         <input
           placeholder={t("requestIntelligencePlaceholder")}
@@ -662,20 +686,30 @@ function Upload({ setPage, currentPage }) {
           </>
         )}
 
-        <div style={uploadBox}>
+        <div className="meetro-visual-empty-state" style={uploadBox}>
           <button
             onClick={openRequestPhotoPicker}
-            style={plusUploadButton}
+            style={{
+              ...plusUploadButton,
+              ...(mediaUploadDeferred ? disabledUploadButton : {}),
+            }}
             type="button"
+            disabled={mediaUploadDeferred}
           >
             +
           </button>
 
           <p style={uploadText}>
-            {imageUrl ? t("projectPhotoAdded") : t("addProjectPhoto")}
+            {mediaUploadDeferred
+              ? mediaDeferredCopy.title
+              : imageUrl
+              ? t("projectPhotoAdded")
+              : t("addProjectPhoto")}
           </p>
 
-          <p style={uploadSubText}>{t("photoHelpsPros")}</p>
+          <p style={uploadSubText}>
+            {mediaUploadDeferred ? mediaDeferredCopy.detail : t("photoHelpsPros")}
+          </p>
 
           <input
             ref={photoInputRef}
@@ -683,6 +717,7 @@ function Upload({ setPage, currentPage }) {
             type="file"
             accept="image/*"
             multiple
+            disabled={mediaUploadDeferred}
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
@@ -734,9 +769,12 @@ function Upload({ setPage, currentPage }) {
           <button
             onClick={handleCreatePost}
             disabled={creating || uploading}
+            className="meetro-visual-primary-button"
             style={{
               ...primaryButton,
-              background: creating || uploading ? "#999" : "#5b3df5",
+              background: creating || uploading
+                ? "rgba(100, 116, 139, 0.72)"
+                : "var(--meetro-gradient-community-action)",
               cursor: creating || uploading ? "not-allowed" : "pointer",
             }}
           >
@@ -770,7 +808,7 @@ function Upload({ setPage, currentPage }) {
 }
 
 const pageWrapper = {
-  background: "linear-gradient(180deg,#f8f7ff 0%,#eef2ff 100%)",
+  background: "var(--meetro-gradient-community-page)",
   minHeight: "100dvh",
   padding:
     "calc(env(safe-area-inset-top) + 24px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
@@ -788,27 +826,27 @@ const pageWrapper = {
 const backButton = {
   width: "44px",
   height: "44px",
-  border: "none",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
-  background: "#ffffff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
   fontSize: "24px",
   fontWeight: "900",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   marginBottom: "12px",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
 };
 
 const heroCard = {
-  background: "linear-gradient(135deg,#5b3df5,#8b5cf6)",
+  background: "var(--meetro-gradient-community-hero)",
   color: "white",
   borderRadius: "26px",
   padding: "24px 22px",
   marginBottom: "14px",
-  boxShadow: "0 14px 32px rgba(91,61,245,0.24)",
+  boxShadow: "var(--meetro-shadow-lifted)",
   maxWidth: "100%",
   minWidth: 0,
   overflowWrap: "anywhere",
@@ -836,13 +874,13 @@ const pageSubtitle = {
 };
 
 const tipCard = {
-  background: "rgba(255,255,255,.92)",
-  border: "1px solid rgba(124,58,237,.10)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "20px",
   padding: "14px 16px",
   marginBottom: "14px",
-  boxShadow: "0 8px 20px rgba(15,23,42,.04)",
-  color: "#111827",
+  boxShadow: "var(--meetro-shadow-soft)",
+  color: "var(--meetro-color-ink)",
   maxWidth: "100%",
   minWidth: 0,
   overflowWrap: "anywhere",
@@ -850,12 +888,12 @@ const tipCard = {
 
 const preparedRequestBanner = {
   position: "relative",
-  background: "rgba(255,255,255,0.82)",
-  border: "1px solid rgba(91,61,245,0.14)",
+  background: "rgba(255, 253, 248, 0.88)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "20px",
   padding: "14px 14px 14px 56px",
   marginBottom: "12px",
-  boxShadow: "0 10px 24px rgba(91,61,245,0.08)",
+  boxShadow: "var(--meetro-shadow-soft)",
   maxWidth: "100%",
   width: "100%",
   boxSizing: "border-box",
@@ -874,16 +912,16 @@ const preparedRequestOrb = {
   borderRadius: "50%",
   display: "grid",
   placeItems: "center",
-  background: "rgba(91,61,245,0.10)",
-  border: "1px solid rgba(91,61,245,0.14)",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: 950,
 };
 
 const preparedRequestBannerTitle = {
   display: "block",
-  color: "#312e81",
+  color: "var(--meetro-color-forest)",
   fontSize: "14px",
   fontWeight: 950,
   marginBottom: "4px",
@@ -891,20 +929,20 @@ const preparedRequestBannerTitle = {
 
 const preparedRequestBannerText = {
   margin: 0,
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: 700,
 };
 
 const cardStyle = {
-  background: "rgba(255,255,255,.96)",
-  border: "1px solid rgba(124,58,237,.10)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "24px",
   padding: "16px",
   display: "grid",
   gap: "9px",
-  boxShadow: "0 12px 28px rgba(15,23,42,.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
   maxWidth: "100%",
   width: "100%",
   boxSizing: "border-box",
@@ -916,7 +954,7 @@ const cardStyle = {
 
 const fieldLabel = {
   fontWeight: "900",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   fontSize: "14px",
   marginTop: "4px",
 };
@@ -925,12 +963,12 @@ const inputStyle = {
   width: "100%",
   padding: "14px 15px",
   borderRadius: "16px",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--meetro-color-line)",
   fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
-  background: "#ffffff",
-  color: "#111827",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   maxWidth: "100%",
   minWidth: 0,
   overflowWrap: "anywhere",
@@ -947,10 +985,10 @@ const serviceSuggestionGrid = {
 };
 
 const serviceSuggestionButton = {
-  border: "1px solid rgba(91,61,245,0.12)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "999px",
-  background: "rgba(255,255,255,0.82)",
-  color: "#4b5563",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-coffee)",
   padding: "9px 11px",
   fontSize: "13px",
   fontWeight: "900",
@@ -960,9 +998,9 @@ const serviceSuggestionButton = {
 };
 
 const serviceSuggestionButtonActive = {
-  background: "rgba(91,61,245,0.11)",
-  borderColor: "rgba(91,61,245,0.32)",
-  color: "#4b32d1",
+  background: "var(--meetro-surface-sage)",
+  borderColor: "rgba(31, 77, 52, 0.28)",
+  color: "var(--meetro-color-forest)",
 };
 
 const selectedServiceCard = {
@@ -970,9 +1008,9 @@ const selectedServiceCard = {
   gridTemplateColumns: "minmax(0, 1fr) auto",
   gap: "6px 12px",
   alignItems: "center",
-  border: "1px solid rgba(91,61,245,0.13)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "18px",
-  background: "rgba(91,61,245,0.05)",
+  background: "var(--meetro-surface-warm)",
   padding: "13px",
   maxWidth: "100%",
   minWidth: 0,
@@ -980,13 +1018,13 @@ const selectedServiceCard = {
 
 const selectedServiceLabelText = {
   gridColumn: "1 / -1",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   fontWeight: 950,
 };
 
 const selectedServiceValue = {
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "15px",
   lineHeight: 1.25,
   fontWeight: 950,
@@ -996,10 +1034,10 @@ const selectedServiceValue = {
 };
 
 const changeServiceButton = {
-  border: "1px solid rgba(91,61,245,0.18)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "999px",
-  background: "rgba(255,255,255,0.82)",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "8px 11px",
   fontSize: "13px",
   fontWeight: 950,
@@ -1012,20 +1050,20 @@ const requestReviewIntroCard = {
   gap: "4px",
   padding: "12px 13px",
   borderRadius: "16px",
-  border: "1px solid rgba(91,61,245,0.12)",
-  background: "rgba(91,61,245,0.045)",
-  color: "#334155",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-coffee)",
 };
 
 const requestReviewIntroTitle = {
-  color: "#312e81",
+  color: "var(--meetro-color-forest)",
   fontSize: "14px",
   fontWeight: 950,
 };
 
 const requestReviewIntroText = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: 750,
@@ -1040,8 +1078,8 @@ const requestActionBar = {
   marginTop: "8px",
   padding: "10px",
   borderRadius: "18px",
-  border: "1px solid rgba(226,232,240,0.95)",
-  background: "rgba(255,255,255,0.9)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "rgba(255, 253, 248, 0.92)",
   boxShadow: "0 14px 32px rgba(15,23,42,0.10)",
   backdropFilter: "blur(14px)",
   WebkitBackdropFilter: "blur(14px)",
@@ -1061,17 +1099,17 @@ const textareaStyle = {
 const propertyManagementFoundationNote = {
   padding: "13px 14px",
   borderRadius: "16px",
-  background: "#eff6ff",
-  border: "1px solid #bfdbfe",
-  color: "#1e3a8a",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: 700,
   lineHeight: 1.5,
 };
 
 const aiGuidanceCard = {
-  background: "linear-gradient(135deg,#f5f3ff,#eef2ff)",
-  border: "1px solid #ddd6fe",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "20px",
   padding: "16px",
   margin: "4px 0 8px",
@@ -1094,16 +1132,16 @@ const aiGuidanceIcon = {
   display: "grid",
   placeItems: "center",
   borderRadius: "10px",
-  background: "#ffffff",
-  border: "1px solid #ddd6fe",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-forest)",
   fontSize: "15px",
   fontWeight: 950,
 };
 
 const aiGuidanceTitle = {
   display: "block",
-  color: "#312e81",
+  color: "var(--meetro-color-forest)",
   fontSize: "16px",
   fontWeight: "900",
   lineHeight: 1.3,
@@ -1111,7 +1149,7 @@ const aiGuidanceTitle = {
 };
 
 const aiGuidanceText = {
-  color: "#4b5563",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
   margin: 0,
@@ -1121,7 +1159,7 @@ const aiGuidanceText = {
 const aiGuidanceExamplesLabel = {
   display: "block",
   margin: "13px 0 7px",
-  color: "#4338ca",
+  color: "var(--meetro-color-wood)",
   fontSize: "11px",
   fontWeight: 950,
   letterSpacing: "0.06em",
@@ -1137,9 +1175,9 @@ const aiGuidanceExamples = {
 const aiGuidanceExample = {
   padding: "7px 9px",
   borderRadius: "11px",
-  background: "#ffffff",
-  border: "1px solid #e0e7ff",
-  color: "#4b5563",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-coffee)",
   fontSize: "12px",
   lineHeight: 1.3,
   fontWeight: 700,
@@ -1149,27 +1187,27 @@ const aiGuidanceNextStep = {
   marginTop: "13px",
   padding: "10px 11px",
   borderRadius: "12px",
-  background: "rgba(255,255,255,0.72)",
-  border: "1px solid #ddd6fe",
-  color: "#4338ca",
+  background: "rgba(255, 253, 248, 0.72)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   lineHeight: 1.5,
 };
 
 const requestDetailsHeading = {
   margin: "8px 0 2px",
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
   fontSize: "18px",
   lineHeight: 1.3,
   fontWeight: 950,
 };
 
 const uploadBox = {
-  border: "1px dashed rgba(91,61,245,0.24)",
+  border: "1px dashed var(--meetro-color-line)",
   borderRadius: "22px",
   padding: "20px",
   textAlign: "center",
-  background: "rgba(255,255,255,0.68)",
+  background: "var(--meetro-surface-warm)",
   maxWidth: "100%",
   width: "100%",
   boxSizing: "border-box",
@@ -1185,30 +1223,37 @@ const plusUploadButton = {
   height: "54px",
   borderRadius: "18px",
   border: "none",
-  background: "rgba(91,61,245,0.92)",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
   fontSize: "30px",
   fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 10px 24px rgba(91,61,245,.22)",
+  boxShadow: "0 10px 24px rgba(31, 77, 52, 0.18)",
+};
+
+const disabledUploadButton = {
+  background: "rgba(148,163,184,0.35)",
+  color: "var(--meetro-color-muted)",
+  cursor: "not-allowed",
+  boxShadow: "none",
 };
 
 const uploadText = {
   marginTop: "14px",
   marginBottom: "4px",
-  color: "#111",
+  color: "var(--meetro-color-ink)",
   fontWeight: "900",
 };
 
 const uploadSubText = {
   margin: 0,
-  color: "#666",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
 };
 
 const uploadingText = {
   marginTop: "10px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontWeight: "bold",
 };
 
@@ -1241,7 +1286,7 @@ const previewImage = {
   height: "120px",
   borderRadius: "22px",
   objectFit: "cover",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--meetro-color-line)",
 };
 
 const photoTagRow = {
@@ -1253,9 +1298,9 @@ const photoTagRow = {
 
 const photoTagButton = {
   flex: 1,
-  border: "1px solid #ede9fe",
-  background: "#f8f7ff",
-  color: "#6b6478",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-coffee)",
   borderRadius: "999px",
   padding: "5px 6px",
   fontSize: "10px",
@@ -1264,9 +1309,9 @@ const photoTagButton = {
 };
 
 const photoTagButtonActive = {
-  background: "#5b3df5",
-  color: "white",
-  border: "1px solid #5b3df5",
+  background: "var(--meetro-color-forest)",
+  color: "#fffdf8",
+  border: "1px solid var(--meetro-color-forest)",
 };
 
 const removePhotoButton = {
@@ -1286,7 +1331,7 @@ const removePhotoButton = {
 
 const photoCountText = {
   margin: 0,
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontWeight: "900",
   fontSize: "13px",
 };
@@ -1294,11 +1339,11 @@ const photoCountText = {
 
 const cancelRequestButton = {
   width: "100%",
-  border: "1px solid rgba(148,163,184,0.26)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "18px",
   padding: "13px",
-  background: "rgba(255,255,255,0.64)",
-  color: "#64748b",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-muted)",
   fontWeight: "900",
   fontSize: "15px",
   marginTop: "8px",
@@ -1307,12 +1352,13 @@ const cancelRequestButton = {
 
 const primaryButton = {
   border: "none",
-  color: "white",
+  color: "#fffdf8",
   padding: "15px",
   borderRadius: "18px",
   fontWeight: "900",
   fontSize: "15px",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.20)",
+  background: "var(--meetro-gradient-community-action)",
+  boxShadow: "0 14px 30px rgba(31, 77, 52, 0.18)",
 };
 
 export default Upload;

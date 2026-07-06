@@ -416,7 +416,7 @@ const iconBox={
 width:"72px",
 height:"72px",
 borderRadius:"30px",
-background:"#eef2ff",
+background:"var(--meetro-surface-sage, #eef4ea)",
 fontSize:"34px",
 display:"flex",
 alignItems:"center",
@@ -557,7 +557,7 @@ width:"100%",
 padding:"16px",
 border:"none",
 borderRadius:"18px",
-background:"#5b3df5",
+background:"var(--meetro-color-forest, #1f4d34)",
 color:"white",
 fontWeight:"900"
 };

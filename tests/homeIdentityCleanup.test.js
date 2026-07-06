@@ -83,7 +83,7 @@ test("homeowner labels stay next-step oriented", () => {
   assert.equal(t("homeOpenRequest", "en"), "Review Request");
   assert.equal(t("viewVisit", "en"), "Review Visit");
   assert.equal(t("homeViewRecord", "en"), "Review Record");
-  assert.equal(t("homeViewProfile", "en"), "Review Profile");
+  assert.equal(t("homeViewProfile", "en"), "Meet the Professional");
   assert.equal(t("viewEmergencyProgress", "en"), "View Progress");
   assert.equal(t("manageEmergency", "en"), "View Progress");
   assert.doesNotMatch(t("homeOpenRequest", "en"), /^(Open|Manage)\b/);

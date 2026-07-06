@@ -13,6 +13,12 @@ import {
   createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
+import {
+  getMediaDeferredCopy,
+  getMediaDeferredNotice,
+  guardFriendsAndFamilyMediaUpload,
+  isFriendsAndFamilyMediaDeferred,
+} from "../utils/mediaDeferral";
 import { getNotifications } from "../utils/notifications";
 import {
   getStoredProfessionalMatchProfile,
@@ -282,6 +288,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState(null);
   const [appointmentReminderNotice, setAppointmentReminderNotice] = useState(null);
+  const [pendingScheduleDelivery, setPendingScheduleDelivery] = useState(null);
   const [evaluationTarget, setEvaluationTarget] = useState(null);
   const [evaluationForm, setEvaluationForm] = useState({
     serviceType: "",
@@ -347,6 +354,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     status: "needed",
   });
   const activeLanguage = language;
+  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaDeferredCopy = getMediaDeferredCopy(activeLanguage);
   const ui = (key) => translate(key, activeLanguage);
   const isPropertyManagementBusiness =
     String(userRole).toLowerCase().replace(/[\s_-]/g, "") ===
@@ -1691,6 +1700,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function addEvaluationPhotos(event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language: activeLanguage,
+        onDeferred: setEvaluationSaveError,
+      })
+    ) {
+      return;
+    }
+
     const files = Array.from(event.target.files || []).slice(0, 8);
     if (files.length === 0) return;
 
@@ -1758,6 +1777,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function addEvaluationWorkItemPhotos(index, event) {
+    if (
+      !guardFriendsAndFamilyMediaUpload({
+        event,
+        language: activeLanguage,
+        onDeferred: setEvaluationSaveError,
+      })
+    ) {
+      return;
+    }
+
     const files = Array.from(event.target.files || []).slice(0, 8);
     if (files.length === 0) return;
 
@@ -1798,8 +1827,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
   async function openEvaluationWorkItemPhotoPicker(index) {
     setEvaluationSaveError("");
 
+    if (mediaUploadDeferred) {
+      setEvaluationSaveError(getMediaDeferredNotice(activeLanguage));
+      return;
+    }
+
     await openJobPhotoPicker({
       fileNamePrefix: "evaluation-photo",
+      language: activeLanguage,
       onPhotos: (photos) =>
         addEvaluationWorkItemPhotos(
           index,
@@ -3576,12 +3611,250 @@ function ContractorDashboard({ setPage, language = "en" }) {
     }
 
     setAppointmentReminderNotice({
+      title:
+        activeLanguage === "es"
+          ? "Comparte por Mensajes"
+          : "Share by Text",
+      actions: false,
       message:
         activeLanguage === "es"
           ? "Visita guardada. Agrega un teléfono del cliente para compartirla por Mensajes."
           : "Visit saved. Add the customer's phone number to share it through Messages.",
     });
     return false;
+  }
+
+  function isLinkedMeetroScheduleCustomer(visit = {}) {
+    const conversationId = visit.conversationId || visit.projectConversationId || "";
+    if (visit.isExternalCustomer) return false;
+    if (!conversationId) return false;
+    return Boolean(
+      conversationId ||
+        visit.customerAccountId ||
+        visit.customerId ||
+        visit.isMeetroUser
+    );
+  }
+
+  function sendScheduleVisitToMeetroChat(visit = {}) {
+    const conversationId = visit.conversationId || visit.projectConversationId || "";
+    if (!conversationId) return false;
+
+    const storageKey = `meetro_conversation_${conversationId}`;
+    const existingMessages = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    const isWorkSchedule = visit.appointmentType === "work_visit";
+    const isScheduleUpdate = Boolean(visit.scheduleUpdate || visit.isScheduleUpdate);
+    const serviceLines = Array.isArray(visit.services) && visit.services.length > 0
+      ? visit.services
+      : [visit.requestTitle || visit.title].filter(Boolean);
+    const customerScheduleTitle = isWorkSchedule
+      ? activeLanguage === "es"
+        ? "Trabajo programado"
+        : "Work Scheduled"
+      : isScheduleUpdate
+        ? activeLanguage === "es"
+          ? "Cita actualizada"
+          : "Appointment Updated"
+        : activeLanguage === "es"
+          ? "Cita programada"
+          : "Appointment Scheduled";
+    const displayVisitTime = formatScheduleTime(visit.time);
+    const customerScheduleText = isWorkSchedule
+      ? isScheduleUpdate
+        ? activeLanguage === "es"
+          ? `Trabajo actualizado para ${visit.date} a las ${displayVisitTime}.`
+          : `Work schedule updated for ${visit.date} at ${displayVisitTime}.`
+        : activeLanguage === "es"
+          ? `Trabajo programado para ${visit.date} a las ${displayVisitTime}.`
+          : `Work scheduled for ${visit.date} at ${displayVisitTime}.`
+      : isScheduleUpdate
+        ? activeLanguage === "es"
+          ? `Cita actualizada: ${visit.title} — ${visit.date} a las ${displayVisitTime}.`
+          : `Appointment updated: ${visit.title} — ${visit.date} at ${displayVisitTime}.`
+        : activeLanguage === "es"
+          ? ` ${visit.appointmentLabel}: ${visit.title} — ${visit.date} a las ${displayVisitTime}.`
+          : ` ${visit.appointmentLabel}: ${visit.title} — ${visit.date} at ${displayVisitTime}.`;
+    const scheduleMessageId = isScheduleUpdate
+      ? `schedule-update-msg-${visit.id}-${Date.now()}`
+      : Date.now();
+    const replacedScheduleMessageIds = [];
+    const updatedExistingMessages = isScheduleUpdate
+      ? existingMessages.map((message) => {
+          const messageVisitId =
+            message.schedule?.visitId ||
+            message.visitId ||
+            message.schedule?.id ||
+            message.scheduleId ||
+            message.appointmentId ||
+            "";
+
+          if (
+            message.type !== "schedule" ||
+            String(messageVisitId) !== String(visit.id) ||
+            message.replacedAt
+          ) {
+            return message;
+          }
+
+          replacedScheduleMessageIds.push(message.id);
+
+          return {
+            ...message,
+            isOutdated: true,
+            replacedAt: visit.updatedAt,
+            replacedByScheduleMessageId: scheduleMessageId,
+            customerConfirmationStatus: "replaced",
+            confirmationStatus: "replaced",
+            status: "replaced",
+            subtitle: `${message.schedule?.date || ""} • ${formatScheduleTime(
+              message.schedule?.time
+            )} • ${activeLanguage === "es" ? "Horario actualizado" : "Schedule updated"}`,
+            schedule: {
+              ...(message.schedule || {}),
+              customerConfirmationStatus: "replaced",
+              confirmationStatus: "replaced",
+              status: "replaced",
+              replacedAt: visit.updatedAt,
+              replacedByVisitId: visit.id,
+              replacedByScheduleMessageId: scheduleMessageId,
+            },
+          };
+        })
+      : existingMessages;
+
+    const scheduleMessage = {
+      id: scheduleMessageId,
+      sender: "business",
+      role: "business",
+      type: "schedule",
+      workflowSource: "work-center-schedule",
+      workflowType: isWorkSchedule
+        ? "work_scheduled"
+        : isScheduleUpdate
+          ? "appointment_updated"
+          : "appointment_scheduled",
+      conversationId,
+      appointmentId: visit.id,
+      scheduleId: visit.id,
+      visitId: visit.visitId || visit.id,
+      relationshipId: visit.relationshipId || "",
+      customerAccountId: visit.customerAccountId || "",
+      customerId: visit.customerId || "",
+      externalContactId: visit.externalContactId || "",
+      businessId: visit.businessId || "",
+      customerConfirmationStatus: "pending_customer_confirmation",
+      confirmationStatus: "pending_customer_confirmation",
+      scheduleUpdate: isScheduleUpdate,
+      isScheduleUpdate,
+      replacesScheduleMessageIds: replacedScheduleMessageIds,
+      title: customerScheduleTitle,
+      subtitle: `${visit.date || ""} • ${displayVisitTime} • ${translate("appointmentPendingConfirmation")}`,
+      text: customerScheduleText,
+      services: serviceLines,
+      schedule: visit,
+      time: formatDisplayScheduleTime(new Date()),
+      createdAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify([...updatedExistingMessages, scheduleMessage])
+    );
+
+    markConversationUnreadForRecipient(conversationId, "business", {
+      id: conversationId,
+      conversationId,
+      relationshipId: visit.relationshipId || "",
+      project_title: visit.requestTitle || visit.title || customerScheduleTitle,
+      project_description: customerScheduleText,
+    });
+    window.dispatchEvent(new Event("meetro-messages-updated"));
+    return true;
+  }
+
+  function openScheduleDeliveryChoice(visit = {}) {
+    setPendingScheduleDelivery({
+      visit,
+      visitId: visit.visitId || visit.id || "",
+      conversationId: visit.conversationId || visit.projectConversationId || "",
+      isScheduleUpdate: Boolean(visit.scheduleUpdate || visit.isScheduleUpdate),
+      linkedMeetroCustomer: false,
+      primaryMethod: "share",
+    });
+  }
+
+  function confirmScheduleSentInMeetroChat(visit = {}) {
+    const isScheduleUpdate = Boolean(visit.scheduleUpdate || visit.isScheduleUpdate);
+    setPendingScheduleDelivery(null);
+    setAppointmentReminderNotice({
+      title: isScheduleUpdate
+        ? activeLanguage === "es"
+          ? "Cita actualizada"
+          : "Appointment Updated"
+        : activeLanguage === "es"
+          ? "Cita enviada"
+          : "Appointment Sent",
+      actions: false,
+      message:
+        activeLanguage === "es"
+          ? "Tarjeta de cita enviada en el mismo Meetro Chat."
+          : "Appointment card sent in the same Meetro Chat.",
+    });
+  }
+
+  async function handleScheduleDeliveryChoice(method) {
+    const visit = pendingScheduleDelivery?.visit;
+    if (!visit) return;
+
+    if (method === "chat") {
+      const sent = sendScheduleVisitToMeetroChat(visit);
+      if (!sent) {
+        setAppointmentReminderNotice({
+          title:
+            activeLanguage === "es"
+              ? "Elige otra forma de enviar"
+              : "Choose Another Delivery Method",
+          actions: false,
+          message:
+            activeLanguage === "es"
+              ? "Esta visita no tiene un chat de Meetro vinculado. Compártela por Mensajes."
+              : "This visit does not have a linked Meetro Chat. Share it by text instead.",
+        });
+        return;
+      }
+
+      setPendingScheduleDelivery(null);
+      setAppointmentReminderNotice({
+        title:
+          activeLanguage === "es"
+            ? "Cita enviada"
+            : "Appointment Sent",
+        actions: false,
+        message:
+          activeLanguage === "es"
+            ? "Tarjeta de cita enviada en Meetro Chat."
+            : "Appointment card sent in Meetro Chat.",
+      });
+      setRefreshKey((prev) => prev + 1);
+      return;
+    }
+
+    const shared = await shareExternalScheduleVisit(visit);
+    if (shared) {
+      setPendingScheduleDelivery(null);
+      setAppointmentReminderNotice({
+        title:
+          activeLanguage === "es"
+            ? "Compartir cita"
+            : "Share Appointment",
+        actions: false,
+        message:
+          activeLanguage === "es"
+            ? "Opciones de Mensajes abiertas para compartir la cita."
+            : "Message sharing opened for this appointment.",
+      });
+      setRefreshKey((prev) => prev + 1);
+    }
   }
 
   function readManualCustomerContacts() {
@@ -4187,137 +4460,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
       console.warn("Work Center shadow schedule link failed.", error);
     }
 
-    if (conversationId) {
-      const storageKey = `meetro_conversation_${conversationId}`;
-      const existingMessages = JSON.parse(
-        localStorage.getItem(storageKey) || "[]"
-      );
-
-      const serviceLines = Array.isArray(newVisit.services) && newVisit.services.length > 0
-        ? newVisit.services
-        : [newVisit.requestTitle || newVisit.title].filter(Boolean);
-      const customerScheduleTitle = isWorkSchedule
-        ? activeLanguage === "es"
-          ? "Trabajo programado"
-          : "Work Scheduled"
-        : isScheduleUpdate
-          ? activeLanguage === "es"
-            ? "Cita actualizada"
-            : "Appointment Updated"
-        : activeLanguage === "es"
-          ? "Cita programada"
-          : "Appointment Scheduled";
-      const displayVisitTime = formatScheduleTime(newVisit.time);
-      const customerScheduleText = isWorkSchedule
-        ? isScheduleUpdate
-          ? activeLanguage === "es"
-            ? `Trabajo actualizado para ${newVisit.date} a las ${displayVisitTime}.`
-            : `Work schedule updated for ${newVisit.date} at ${displayVisitTime}.`
-          : activeLanguage === "es"
-            ? `Trabajo programado para ${newVisit.date} a las ${displayVisitTime}.`
-            : `Work scheduled for ${newVisit.date} at ${displayVisitTime}.`
-        : isScheduleUpdate
-          ? activeLanguage === "es"
-            ? `Cita actualizada: ${newVisit.title} — ${newVisit.date} a las ${displayVisitTime}.`
-            : `Appointment updated: ${newVisit.title} — ${newVisit.date} at ${displayVisitTime}.`
-        : activeLanguage === "es"
-          ? ` ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} a las ${displayVisitTime}.`
-          : ` ${newVisit.appointmentLabel}: ${newVisit.title} — ${newVisit.date} at ${displayVisitTime}.`;
-      const scheduleMessageId = isScheduleUpdate
-        ? `schedule-update-msg-${newVisit.id}-${Date.now()}`
-        : Date.now();
-      const replacedScheduleMessageIds = [];
-      const updatedExistingMessages = isScheduleUpdate
-        ? existingMessages.map((message) => {
-            const messageVisitId =
-              message.schedule?.visitId ||
-              message.visitId ||
-              message.schedule?.id ||
-              message.scheduleId ||
-              message.appointmentId ||
-              "";
-
-            if (
-              message.type !== "schedule" ||
-              String(messageVisitId) !== String(newVisit.id) ||
-              message.replacedAt
-            ) {
-              return message;
-            }
-
-            replacedScheduleMessageIds.push(message.id);
-
-            return {
-              ...message,
-              isOutdated: true,
-              replacedAt: newVisit.updatedAt,
-              replacedByScheduleMessageId: scheduleMessageId,
-              customerConfirmationStatus: "replaced",
-              confirmationStatus: "replaced",
-              status: "replaced",
-              subtitle: `${message.schedule?.date || ""} • ${formatScheduleTime(
-                message.schedule?.time
-              )} • ${activeLanguage === "es" ? "Horario actualizado" : "Schedule updated"}`,
-              schedule: {
-                ...(message.schedule || {}),
-                customerConfirmationStatus: "replaced",
-                confirmationStatus: "replaced",
-                status: "replaced",
-                replacedAt: newVisit.updatedAt,
-                replacedByVisitId: newVisit.id,
-                replacedByScheduleMessageId: scheduleMessageId,
-              },
-            };
-          })
-        : existingMessages;
-
-      const scheduleMessage = {
-        id: scheduleMessageId,
-        sender: "business",
-        role: "business",
-        type: "schedule",
-        workflowSource: "work-center-schedule",
-        workflowType: isWorkSchedule
-          ? "work_scheduled"
-          : isScheduleUpdate
-            ? "appointment_updated"
-            : "appointment_scheduled",
-        conversationId,
-        appointmentId: newVisit.id,
-        scheduleId: newVisit.id,
-        visitId: newVisit.visitId || newVisit.id,
-        relationshipId: newVisit.relationshipId || "",
-        customerAccountId: newVisit.customerAccountId || "",
-        customerId: newVisit.customerId || "",
-        externalContactId: newVisit.externalContactId || "",
-        businessId: newVisit.businessId || "",
-        customerConfirmationStatus: "pending_customer_confirmation",
-        confirmationStatus: "pending_customer_confirmation",
-        scheduleUpdate: isScheduleUpdate,
-        isScheduleUpdate,
-        replacesScheduleMessageIds: replacedScheduleMessageIds,
-        title: customerScheduleTitle,
-        subtitle: `${newVisit.date || ""} • ${displayVisitTime} • ${translate("appointmentPendingConfirmation")}`,
-        text:
-          customerScheduleText,
-        services: serviceLines,
-        schedule: newVisit,
-        time: formatDisplayScheduleTime(new Date()),
-        createdAt: new Date().toISOString(),
-      };
-
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify([...updatedExistingMessages, scheduleMessage])
-      );
-
-      window.dispatchEvent(new Event("meetro-messages-updated"));
+    if (isLinkedMeetroScheduleCustomer(newVisit)) {
+      const sent = sendScheduleVisitToMeetroChat(newVisit);
+      if (sent) {
+        confirmScheduleSentInMeetroChat(newVisit);
+      } else {
+        openScheduleDeliveryChoice(newVisit);
+      }
+    } else {
+      openScheduleDeliveryChoice(newVisit);
     }
-
-    if (newVisit.isExternalCustomer) {
-      await shareExternalScheduleVisit(newVisit);
-    }
-
     resetScheduleForm();
     setRefreshKey((prev) => prev + 1);
   }
@@ -6760,7 +6912,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       toast: activeLanguage === "es" ? "Primer contacto guardado." : "First contact saved.",
       storageStage: "new_request",
       primaryActionType: "schedule_visit",
-      tone: { background: "#eef2ff", color: "#4f46e5", border: "#c7d2fe" },
+      tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "var(--meetro-color-charcoal, #172317)", border: "rgba(31,77,52,0.18)" },
     },
     visit_scheduled: {
       statusLabel: activeLanguage === "es" ? "Visita confirmada" : "Visit Confirmed",
@@ -6774,7 +6926,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       toast: activeLanguage === "es" ? "Visita programada." : "Visit scheduled.",
       storageStage: "visit_scheduled",
       primaryActionType: "start_evaluation",
-      tone: { background: "#eef2ff", color: "#4f46e5", border: "#c7d2fe" },
+      tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "var(--meetro-color-charcoal, #172317)", border: "rgba(31,77,52,0.18)" },
     },
     evaluation_complete: {
       statusLabel: activeLanguage === "es" ? "Evaluación completada" : "Evaluation Complete",
@@ -6822,7 +6974,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       toast: activeLanguage === "es" ? "Propuesta enviada." : "Proposal sent.",
       storageStage: "proposal_sent",
       primaryActionType: "open_conversation",
-      tone: { background: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe" },
+      tone: { background: "#f5f3ff", color: "var(--meetro-color-charcoal, #172317)", border: "#ddd6fe" },
     },
     approved: {
       statusLabel: activeLanguage === "es" ? "Aprobado" : "Approved",
@@ -6864,7 +7016,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       toast: activeLanguage === "es" ? "Trabajo programado." : "Work scheduled.",
       storageStage: "work_scheduled",
       primaryActionType: "mark_en_route",
-      tone: { background: "#f5f3ff", color: "#6d28d9", border: "#ddd6fe" },
+      tone: { background: "#f5f3ff", color: "var(--meetro-color-charcoal, #172317)", border: "#ddd6fe" },
     },
     en_route: {
       statusLabel: activeLanguage === "es" ? "En camino" : "On The Way",
@@ -6878,7 +7030,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       toast: activeLanguage === "es" ? "En camino guardado." : "On the way saved.",
       storageStage: "on_the_way",
       primaryActionType: "mark_arrived",
-      tone: { background: "#eef2ff", color: "#2563eb", border: "#bfdbfe" },
+      tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "#2563eb", border: "#bfdbfe" },
     },
     arrived: {
       statusLabel: activeLanguage === "es" ? "Llegó" : "Arrived",
@@ -8120,7 +8272,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           : `${quoteHistory.length} records`,
       actionLabel: activeLanguage === "es" ? "Revisar propuestas" : "Review Proposals",
       tone: "#f5f3ff",
-      accent: "#7c3aed",
+      accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkTab("quotes"),
     },
     {
@@ -8153,8 +8305,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
           ? `${workCenterHistoryJobs.length} cerrados`
           : `${workCenterHistoryJobs.length} closed`,
       actionLabel: activeLanguage === "es" ? "Revisar historial" : "Review History",
-      tone: "#eef2ff",
-      accent: "#4f46e5",
+      tone: "var(--meetro-surface-sage, #eef4ea)",
+      accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkCenterJobsPage("history"),
     },
     {
@@ -9998,7 +10150,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             ),
       isPriority: acceptedQuoteReadyItems.length > 0,
       tone: "#f5f3ff",
-      accent: "#7c3aed",
+      accent: "var(--meetro-color-charcoal, #172317)",
     },
     {
       key: "active",
@@ -10099,8 +10251,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
         historyRecordCount,
         "workCenterBadgeRecords"
       ),
-      tone: "#eef2ff",
-      accent: "#4f46e5",
+      tone: "var(--meetro-surface-sage, #eef4ea)",
+      accent: "var(--meetro-color-charcoal, #172317)",
     },
     {
       key: "revenue",
@@ -10147,13 +10299,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
     isWorkCenterSectionOpen && compactWorkCenterChildTabs.includes(activeTab);
 
   return (
-    <div className="app-page contractor-dashboard meetro-wide-page" style={page}>
+    <div className="app-page contractor-dashboard meetro-wide-page meetro-visual-page" style={page}>
       <style>
         {`
           .revenue-spark span {
             flex: 1;
             border-radius: 999px;
-            background: rgba(91,61,245,0.35);
+            background: rgba(31,77,52,0.35);
             display: block;
           }
         `}
@@ -10194,7 +10346,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       <div ref={workCenterPanelRef}>
         {!isWorkCenterSectionOpen ? (
           <section className="work-center-dashboard" style={workCenterDashboard}>
-            <div className="work-center-dashboard-hero" style={workCenterDashboardIntro}>
+            <div className="work-center-dashboard-hero meetro-visual-hero" style={workCenterDashboardIntro}>
               <span style={workCenterDashboardEyebrow}>
                 {translate("workCenterHeaderEyebrow")}
               </span>
@@ -10204,6 +10356,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <p style={workCenterDashboardPurpose}>
                 {translate("workCenterPurposeStatement")}
               </p>
+              <p style={workCenterDashboardPerspective}>
+                {translate("workCenterProfessionalPerspectiveLine")}
+              </p>
               {isPropertyManagementBusiness && (
                 <p style={propertyManagementWorkCenterFoundationNote}>
                   {translate("propertyManagementWorkCenterNote")}
@@ -10212,7 +10367,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             </div>
 
             {workCenterLandingAlert && (
-              <section style={workCenterAlertGuidanceCard}>
+              <section className="meetro-visual-surface" style={workCenterAlertGuidanceCard}>
                 <div style={workCenterAlertGuidanceTop}>
                   <span style={workCenterAlertGuidanceIcon}>!</span>
                   <div style={workCenterAlertGuidanceText}>
@@ -10233,6 +10388,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <div style={workCenterAlertGuidanceActions}>
                   <button
                     type="button"
+                    className="meetro-visual-primary-button"
                     style={workCenterAlertPrimaryButton}
                     onClick={workCenterLandingAlert.onPrimary}
                   >
@@ -10255,7 +10411,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <button
                   key={card.key}
                   type="button"
-                  className={activeTab === card.key ? "meetro-selected-card" : ""}
+                  className={`meetro-visual-surface${activeTab === card.key ? " meetro-selected-card" : ""}`}
                   style={{
                     ...workCenterPrimaryNavCard,
                     ...(card.alert ? workCenterPrimaryNavCardAlert : {}),
@@ -10391,7 +10547,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               };
 
               return (
-              <div style={jobWorkspacePanel}>
+              <div className="meetro-visual-surface" style={jobWorkspacePanel}>
                 <button
                   type="button"
                   style={workCenterBackButton}
@@ -11440,7 +11596,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                        <span>{getHistoryClosureNotes(scopedJob) || "—"}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Línea de tiempo" : "Timeline"}</strong>
+	                        <strong>{activeLanguage === "es" ? "Historial del proyecto" : "Project History"}</strong>
 	                        <span>
 	                          {getWorkCenterJobSavedTimelineEvents(scopedJob).length > 0
 	                            ? getWorkCenterJobSavedTimelineEvents(scopedJob)
@@ -11905,10 +12061,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 </label>
                                 <button
                                   type="button"
-                                  style={evaluationAddPhotoButton}
+                                  style={
+                                    mediaUploadDeferred
+                                      ? {
+                                          ...evaluationAddPhotoButton,
+                                          ...disabledEvaluationAddPhotoButton,
+                                        }
+                                      : evaluationAddPhotoButton
+                                  }
+                                  disabled={mediaUploadDeferred}
                                   onClick={() => openEvaluationWorkItemPhotoPicker(itemIndex)}
                                 >
-                                  {activeLanguage === "es" ? "+ Agregar fotos" : "+ Add Photos"}
+                                  {mediaUploadDeferred
+                                    ? mediaDeferredCopy.title
+                                    : activeLanguage === "es"
+                                      ? "+ Agregar fotos"
+                                      : "+ Add Photos"}
                                 </button>
                                 {(workItem.photos || []).length > 0 ? (
                                   <div style={evaluationPhotoGrid}>
@@ -12241,6 +12409,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         ) : ["currentJobs", "jobHistory"].includes(activeTab) ? (
           <section
             ref={dynamicSectionRef}
+            className="meetro-visual-surface"
             style={
               activeTab === "jobHistory"
                 ? section
@@ -12283,6 +12452,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         <button
                           key={job.id}
                           type="button"
+                          className="meetro-visual-surface"
                           style={jobListCard}
                           onClick={() => openWorkCenterRelationshipConversation(job, "currentJobs")}
                         >
@@ -12320,7 +12490,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       );
                     })
                   ) : (
-                    <div style={jobListEmpty}>
+                    <div className="meetro-visual-empty-state" style={jobListEmpty}>
                       {activeLanguage === "es"
                         ? "Los trabajos actuales aparecerán aquí."
                         : "Current jobs will appear here."}
@@ -12347,6 +12517,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <button
                         key={`history-${job.id}`}
                         type="button"
+                        className="meetro-visual-surface"
                         style={jobListCard}
                         onClick={() => {
                           setSelectedJobDetailView("");
@@ -12386,7 +12557,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       </button>
                     ))
                   ) : (
-                    <div style={jobListEmpty}>
+                    <div className="meetro-visual-empty-state" style={jobListEmpty}>
                       {activeLanguage === "es"
                         ? "Los trabajos cerrados aparecerán aquí."
                         : "Closed jobs will appear here."}
@@ -12417,6 +12588,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         ) : ["pending", "quotes", "active", "revenue", "completed"].includes(activeTab) ? null : (
           <section
             ref={dynamicSectionRef}
+            className="meetro-visual-surface"
             style={{
               ...workCenterOpenedSection,
               borderColor: `${activeSection.accent}2f`,
@@ -12483,6 +12655,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <button
                       key={action.label}
                       type="button"
+                      className="meetro-visual-primary-button"
                       style={{
                         ...workCenterOpenedSectionActionButton,
                         background: activeSection.accent,
@@ -12613,29 +12786,73 @@ function ContractorDashboard({ setPage, language = "en" }) {
             <div style={appointmentReminderNoticeCard}>
               <div>
                 <strong>
-                  {activeLanguage === "es"
-                    ? "Notificaciones necesarias"
-                    : "Notifications Needed"}
+                  {appointmentReminderNotice.title ||
+                    (activeLanguage === "es"
+                      ? "Notificaciones necesarias"
+                      : "Notifications Needed")}
                 </strong>
                 <p>{appointmentReminderNotice.message}</p>
               </div>
 
-              <div style={appointmentReminderNoticeActions}>
+              {appointmentReminderNotice.actions !== false && (
+                <div style={appointmentReminderNoticeActions}>
+                  <button
+                    type="button"
+                    style={appointmentReminderSettingsButton}
+                    onClick={openNotificationSettings}
+                  >
+                    {activeLanguage === "es" ? "Abrir Configuración" : "Open Settings"}
+                  </button>
+                  <button
+                    type="button"
+                    style={appointmentReminderContinueButton}
+                    onClick={() => setAppointmentReminderNotice(null)}
+                  >
+                    {activeLanguage === "es"
+                      ? "Continuar sin recordatorios"
+                      : "Continue Without Reminders"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {pendingScheduleDelivery && (
+            <div style={scheduleDeliveryChoiceCard}>
+              <div>
+                <strong>
+                  {pendingScheduleDelivery.isScheduleUpdate
+                    ? activeLanguage === "es"
+                      ? "Cita actualizada"
+                      : "Appointment Updated"
+                    : activeLanguage === "es"
+                      ? "Visita guardada"
+                      : "Visit Saved"}
+                </strong>
+                <p style={scheduleDeliveryChoiceText}>
+                  {activeLanguage === "es"
+                    ? "Este cliente todavía no está vinculado en Meetro. Comparte la cita por Mensajes cuando estés listo."
+                    : "This customer is not linked in Meetro yet. Share the appointment by text when you are ready."}
+                </p>
+              </div>
+
+              <div style={scheduleDeliverySummary}>
+                <span>{pendingScheduleDelivery.visit?.customerName || "Customer"}</span>
+                <span>
+                  {pendingScheduleDelivery.visit?.date || "—"} ·{" "}
+                  {formatScheduleTime(pendingScheduleDelivery.visit?.time || "") || "—"}
+                </span>
+              </div>
+
+              <div style={scheduleDeliveryActions}>
                 <button
                   type="button"
-                  style={appointmentReminderSettingsButton}
-                  onClick={openNotificationSettings}
-                >
-                  {activeLanguage === "es" ? "Abrir Configuración" : "Open Settings"}
-                </button>
-                <button
-                  type="button"
-                  style={appointmentReminderContinueButton}
-                  onClick={() => setAppointmentReminderNotice(null)}
+                  style={scheduleDeliveryPrimaryButton}
+                  onClick={() => handleScheduleDeliveryChoice("share")}
                 >
                   {activeLanguage === "es"
-                    ? "Continuar sin recordatorios"
-                    : "Continue Without Reminders"}
+                    ? "Compartir por Mensajes"
+                    : "Share by Text / iOS Message"}
                 </button>
               </div>
             </div>
@@ -12932,10 +13149,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         </h4>
                         <button
                           type="button"
-                          style={evaluationAddPhotoButton}
+                          style={
+                            mediaUploadDeferred
+                              ? {
+                                  ...evaluationAddPhotoButton,
+                                  ...disabledEvaluationAddPhotoButton,
+                                }
+                              : evaluationAddPhotoButton
+                          }
+                          disabled={mediaUploadDeferred}
                           onClick={() => openEvaluationWorkItemPhotoPicker(itemIndex)}
                         >
-                          + {activeLanguage === "es" ? "Agregar foto" : "Add Photo"}
+                          {mediaUploadDeferred
+                            ? mediaDeferredCopy.title
+                            : `+ ${activeLanguage === "es" ? "Agregar foto" : "Add Photo"}`}
                         </button>
                       </div>
                       {workItem.photos?.length > 0 ? (
@@ -13944,7 +14171,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   </div>
                 </div>
               ) : (
-                <div style={emptyCard}>
+                <div className="meetro-visual-empty-state" style={emptyCard}>
                   <div style={emptyIcon}>CAL</div>
 
                   <strong>
@@ -14260,7 +14487,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         {!hasPendingRequest &&
         pendingProjectRequests.length === 0 &&
         !localStorage.getItem("pendingWorkStatus") ? (
-          <div style={emptyCard}>
+          <div className="meetro-visual-empty-state" style={emptyCard}>
             <div style={emptyIcon}>LEAD</div>
 
             <strong>
@@ -14562,7 +14789,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             return combinedActiveJobs.length === 0 &&
               (!universalActiveWork.status ||
                 universalActiveWork.status === "completed") ? (
-            <div style={emptyCard}>
+            <div className="meetro-visual-empty-state" style={emptyCard}>
               <div style={emptyIcon}>JOB</div>
 
               <strong>
@@ -14963,7 +15190,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               )}
 
               {visibleCombinedActiveJobs.length === 0 && activeWorkFilter !== "all" && (
-                <div style={jobListEmpty}>
+                <div className="meetro-visual-empty-state" style={jobListEmpty}>
                   {ui("wcNoActiveWorkFilter")}
                 </div>
               )}
@@ -15123,7 +15350,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
           <div style={closureReviewList}>
             {closureReviews.length === 0 ? (
-              <div style={emptyCard}>
+              <div className="meetro-visual-empty-state" style={emptyCard}>
                 <div style={emptyIcon}>OK</div>
 
                 <strong>
@@ -15274,7 +15501,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           </div>
 
           {filteredQuoteHistory.length === 0 ? (
-            <div style={emptyCard}>
+            <div className="meetro-visual-empty-state" style={emptyCard}>
               <div style={emptyIcon}>QUOTE</div>
 
               <strong>
@@ -16710,7 +16937,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
             if (recordGroups.length === 0) {
               return (
-                <div style={emptyCard}>
+                <div className="meetro-visual-empty-state" style={emptyCard}>
                   <div style={emptyIcon}>REC</div>
 
                   <strong>
@@ -16911,7 +17138,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               });
 
             return timelineItems.length === 0 ? (
-              <div style={emptyCard}>
+              <div className="meetro-visual-empty-state" style={emptyCard}>
                 <div style={emptyIcon}>TIME</div>
 
                 <strong>
@@ -17158,7 +17385,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
 const page = {
   minHeight: "100dvh",
-  background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
+  background: "var(--meetro-gradient-community-page)",
   padding:
     "72px max(16px, env(safe-area-inset-right)) calc(68px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   boxSizing: "border-box",
@@ -17216,7 +17443,7 @@ const subtitle = {
 const rolePill = {
   display: "inline-flex",
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px 9px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -17248,7 +17475,7 @@ const missionSectionHeader = {
 
 const missionEyebrow = {
   display: "block",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "10px",
   fontWeight: 950,
   letterSpacing: "0.12em",
@@ -17306,7 +17533,7 @@ const missionAlertContent = {
 };
 
 const missionArrow = {
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "24px",
   fontWeight: 900,
 };
@@ -17314,9 +17541,9 @@ const missionArrow = {
 const missionCurrentCard = {
   borderRadius: "22px",
   padding: "16px",
-  background: "linear-gradient(135deg, #1e1b4b, #5b3df5)",
+  background: "linear-gradient(135deg, #1e1b4b, var(--meetro-color-forest, #1f4d34))",
   color: "#ffffff",
-  boxShadow: "0 18px 38px rgba(91,61,245,0.22)",
+  boxShadow: "0 18px 38px rgba(31,77,52,0.22)",
 };
 
 const missionCurrentTop = {
@@ -17371,7 +17598,7 @@ const missionPrimaryButton = {
 const missionTextButton = {
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: 900,
   cursor: "pointer",
@@ -17477,7 +17704,7 @@ const overviewCard = {
   borderRadius: "18px",
   padding: "13px",
   boxShadow: "0 14px 30px rgba(15,23,42,0.08)",
-  border: "1px solid rgba(91,61,245,0.10)",
+  border: "1px solid rgba(31,77,52,0.10)",
 };
 
 const dispatchOverviewCard = {
@@ -17525,7 +17752,7 @@ const summaryEyebrow = {
   fontSize: "12px",
   fontWeight: 900,
   letterSpacing: "1.5px",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   marginBottom: "4px",
 };
 
@@ -17536,9 +17763,9 @@ const summaryMainTitle = {
 };
 
 const summaryActionButton = {
-  border: "1px solid rgba(124,58,237,0.20)",
+  border: "1px solid rgba(23,35,23,0.20)",
   background: "#ffffff",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   borderRadius: "999px",
   padding: "12px 24px",
   fontWeight: 800,
@@ -17600,8 +17827,8 @@ const miniPill={
 display:"inline-flex",
 padding:"8px 9px",
 borderRadius:"999px",
-background:"#eef2ff",
-color:"#5b3df5",
+background:"var(--meetro-surface-sage, #eef4ea)",
+color:"var(--meetro-color-forest, #1f4d34)",
 fontWeight:"800",
 marginBottom:"9px",
 };
@@ -17611,7 +17838,7 @@ width:"100%",
 padding:"10px 9px",
 border:"none",
 borderRadius:"10px",
-background:"#5b3df5",
+background:"var(--meetro-color-forest, #1f4d34)",
 color:"white",
 fontWeight:"900",
 cursor:"pointer",
@@ -17646,7 +17873,7 @@ const quoteStatusFilterButtonActive = {
   background: "#f7f4ff",
   color: "#4f28e8",
   border: "1px solid #8b7cff",
-  boxShadow: "0 10px 22px rgba(91,61,245,0.12)",
+  boxShadow: "0 10px 22px rgba(31,77,52,0.12)",
 };
 
 const quoteLifecycleBadge = {
@@ -17781,11 +18008,11 @@ const externalDeclineButton = {
 };
 
 const externalInviteButton = {
-  border: "1px solid rgba(91,61,245,0.22)",
+  border: "1px solid rgba(31,77,52,0.22)",
   borderRadius: "999px",
   padding: "9px 12px",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: 900,
   cursor: "pointer",
@@ -17799,11 +18026,11 @@ const acceptedQuoteNextStepGrid = {
 };
 
 const acceptedQuoteSecondaryButton = {
-  border: "1px solid rgba(91,61,245,0.20)",
+  border: "1px solid rgba(31,77,52,0.20)",
   borderRadius: "16px",
   padding: "12px 10px",
   background: "#ffffff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "13px",
   fontWeight: 900,
   cursor: "pointer",
@@ -17997,12 +18224,12 @@ const workflowPrimaryActionButton = {
   border: "none",
   borderRadius: "14px",
   padding: "12px 14px",
-  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),#4f28e8)",
   color: "#ffffff",
   fontSize: "15px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 12px 22px rgba(91,61,245,0.18)",
+  boxShadow: "0 12px 22px rgba(31,77,52,0.18)",
 };
 
 const quoteCardFooterRow = {
@@ -18078,12 +18305,12 @@ const workCenterDashboard = {
 };
 
 const workCenterDashboardIntro = {
-  background: "#ffffff",
-  border: "1px solid rgba(124,58,237,0.12)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest-deep), var(--meetro-color-forest))",
+  border: "1px solid rgba(255, 253, 248, 0.16)",
   borderRadius: "18px",
   padding: "14px 15px",
-  color: "#111827",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  color: "var(--meetro-color-paper)",
+  boxShadow: "var(--meetro-shadow-lifted)",
   marginBottom: "10px",
 };
 
@@ -18093,7 +18320,7 @@ const workCenterDashboardEyebrow = {
   fontWeight: 950,
   letterSpacing: "0.12em",
   textTransform: "uppercase",
-  color: "#5b3df5",
+  color: "var(--meetro-color-wood)",
   marginBottom: "5px",
 };
 
@@ -18102,7 +18329,7 @@ const workCenterDashboardTitle = {
   fontSize: "24px",
   lineHeight: 1.15,
   fontWeight: 950,
-  color: "#0f172a",
+  color: "var(--meetro-color-paper)",
 };
 
 const workCenterDashboardPurpose = {
@@ -18111,12 +18338,21 @@ const workCenterDashboardPurpose = {
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: 650,
-  color: "#475569",
+  color: "rgba(255,253,248,0.82)",
+};
+
+const workCenterDashboardPerspective = {
+  margin: "8px 0 0",
+  maxWidth: "640px",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 800,
+  color: "var(--meetro-color-sage)",
 };
 
 const workCenterDashboardSummary = {
   margin: "8px 0 0",
-  color: "#334155",
+  color: "rgba(255,253,248,0.82)",
   fontSize: "12px",
   lineHeight: 1.3,
   fontWeight: 900,
@@ -18161,18 +18397,18 @@ const workCenterPrimaryNavCard = {
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "20px",
-  background: "#ffffff",
+  background: "var(--meetro-surface-paper)",
   padding: "15px",
   display: "grid",
   gridTemplateColumns: "40px minmax(0, 1fr)",
   gap: "10px",
   alignItems: "start",
   textAlign: "left",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   cursor: "pointer",
-  boxShadow: "0 14px 30px rgba(15,23,42,0.07)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const workCenterPrimaryNavCardAlert = {
@@ -18233,7 +18469,7 @@ const workCenterPrimaryNavMetaAlert = {
 };
 
 const workCenterPrimaryNavPurpose = {
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   lineHeight: 1.35,
   fontWeight: 750,
@@ -18256,7 +18492,7 @@ const workCenterAlertGuidanceCard = {
   margin: "0 0 12px",
   padding: "14px",
   borderRadius: "20px",
-  background: "linear-gradient(135deg, #fff7ed, #ffffff)",
+  background: "linear-gradient(135deg, rgba(251,246,237,0.98), var(--meetro-surface-paper))",
   border: "1px solid rgba(239, 68, 68, 0.28)",
   boxShadow:
     "0 0 0 3px rgba(239, 68, 68, 0.08), 0 16px 34px rgba(127, 29, 29, 0.12)",
@@ -18329,7 +18565,7 @@ const workCenterAlertPrimaryButton = {
   minHeight: "44px",
   border: "none",
   borderRadius: "14px",
-  background: "#ef4444",
+  background: "var(--meetro-gradient-community-action)",
   color: "#ffffff",
   fontSize: "13px",
   fontWeight: 950,
@@ -18400,18 +18636,18 @@ const workCenterDashboardCard = {
   minWidth: 0,
   boxSizing: "border-box",
   minHeight: "124px",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "20px",
-  background: "#ffffff",
+  background: "var(--meetro-surface-paper)",
   padding: "13px",
   display: "grid",
   gridTemplateColumns: "42px minmax(0, 1fr) 18px",
   alignItems: "center",
   gap: "10px",
   textAlign: "left",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   cursor: "pointer",
-  boxShadow: "0 12px 30px rgba(15,23,42,0.07)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const workCenterDashboardCardPriority = {
@@ -18462,7 +18698,7 @@ const workCenterDashboardBadge = {
 };
 
 const workCenterDashboardDescription = {
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: 650,
@@ -18486,9 +18722,9 @@ const workCenterDashboardPrimaryAction = {
   marginTop: "2px",
   padding: "6px 9px",
   borderRadius: "999px",
-  background: "#f8fafc",
-  color: "#111827",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-forest)",
+  border: "1px solid var(--meetro-color-line)",
   fontSize: "11px",
   fontWeight: 950,
 };
@@ -18503,9 +18739,9 @@ const workCenterOpenedSection = {
   margin: "12px 0 14px",
   padding: "17px 17px calc(68px + env(safe-area-inset-bottom))",
   borderRadius: "24px",
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
   scrollMarginTop: "76px",
 };
 
@@ -18515,8 +18751,8 @@ const scheduleOpenedPage = {
 
 const workCenterBackButton = {
   border: "none",
-  background: "#f1f5f9",
-  color: "#334155",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "999px",
   padding: "9px 13px",
   display: "inline-flex",
@@ -18543,7 +18779,7 @@ const opportunitiesCompactHeader = {
 
 const opportunitiesCompactTitle = {
   margin: "0 0 4px",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "26px",
   lineHeight: 1.12,
   fontWeight: 950,
@@ -18552,7 +18788,7 @@ const opportunitiesCompactTitle = {
 
 const opportunitiesCompactSummary = {
   margin: 0,
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: 850,
@@ -18588,7 +18824,7 @@ const workCenterOpenedSectionIcon = {
 
 const workCenterOpenedSectionEyebrow = {
   display: "block",
-  color: "#7c3aed",
+  color: "var(--meetro-color-wood)",
   fontSize: "10px",
   fontWeight: 950,
   letterSpacing: "0.11em",
@@ -18598,7 +18834,7 @@ const workCenterOpenedSectionEyebrow = {
 
 const workCenterOpenedSectionTitle = {
   margin: "0 0 5px",
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "24px",
   lineHeight: 1.15,
   fontWeight: 950,
@@ -18606,7 +18842,7 @@ const workCenterOpenedSectionTitle = {
 
 const workCenterOpenedSectionDescription = {
   margin: 0,
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "15px",
   lineHeight: 1.55,
   fontWeight: 650,
@@ -18614,7 +18850,7 @@ const workCenterOpenedSectionDescription = {
 
 const workCenterOpenedSectionNextStep = {
   marginTop: "14px",
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "16px",
   padding: "12px 14px",
   display: "grid",
@@ -18629,7 +18865,7 @@ const workCenterOpenedSectionNextStepLabel = {
 };
 
 const workCenterOpenedSectionNextStepText = {
-  color: "#1e293b",
+  color: "var(--meetro-color-ink)",
   fontSize: "14px",
   lineHeight: 1.45,
   fontWeight: 900,
@@ -18645,7 +18881,7 @@ const workCenterOpenedSectionActions = {
 const workCenterOpenedSectionActionButton = {
   border: "none",
   borderRadius: "14px",
-  color: "#ffffff",
+  color: "var(--meetro-color-paper)",
   padding: "11px 14px",
   fontSize: "13px",
   fontWeight: 950,
@@ -18659,13 +18895,13 @@ const workCenterSubNavigation = {
   flexWrap: "wrap",
   marginTop: "18px",
   paddingTop: "16px",
-  borderTop: "1px solid #e2e8f0",
+  borderTop: "1px solid var(--meetro-color-line)",
 };
 
 const workCenterSubNavigationButton = {
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-muted)",
   borderRadius: "999px",
   padding: "9px 13px",
   display: "inline-flex",
@@ -18678,17 +18914,17 @@ const workCenterSubNavigationButton = {
 
 const workCenterSubNavigationActive = {
   ...workCenterSubNavigationButton,
-  background: "#ede9fe",
-  borderColor: "#8b5cf6",
-  color: "#5b21b6",
+  background: "var(--meetro-color-sage)",
+  borderColor: "var(--meetro-color-forest)",
+  color: "var(--meetro-color-forest)",
 };
 
 const workCenterControlPanel = {
-  background: "linear-gradient(135deg, #fbfaff, #ffffff)",
+  background: "linear-gradient(135deg, var(--meetro-surface-warm), var(--meetro-surface-paper))",
   borderRadius: "24px",
   padding: "16px",
-  boxShadow: "0 18px 45px rgba(91, 61, 245, 0.10)",
-  border: "1px solid rgba(124,58,237,0.14)",
+  boxShadow: "var(--meetro-shadow-soft)",
+  border: "1px solid var(--meetro-color-line)",
   marginBottom: "16px",
 };
 
@@ -18738,10 +18974,10 @@ const workflowStep = {
 
 const workflowStepActive = {
   ...workflowStep,
-  background: "linear-gradient(135deg, #5b3df5, #7c3aed)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), var(--meetro-color-charcoal, #172317))",
   color: "#ffffff",
   border: "1px solid #6d5dfc",
-  boxShadow: "0 14px 30px rgba(91, 61, 245, 0.28)",
+  boxShadow: "0 14px 30px rgba(31, 77, 52, 0.28)",
 };
 
 const workflowStepNumber = {
@@ -18776,19 +19012,19 @@ const businessTool = {
 const businessToolActive = {
   ...businessTool,
   background: "#f0ecff",
-  border: "1px solid #7c3aed",
+  border: "1px solid var(--meetro-color-charcoal, #172317)",
   color: "#4c1d95",
-  boxShadow: "0 6px 14px rgba(124, 58, 237, 0.10)",
+  boxShadow: "0 6px 14px rgba(23, 35, 23, 0.10)",
 };
 
 const dynamicSectionCard = {
   background: "linear-gradient(135deg, #ffffff, #f4f1ff)",
   scrollMarginTop: "92px",
-  border: "1px solid rgba(124,58,237,0.16)",
+  border: "1px solid rgba(23,35,23,0.16)",
   borderRadius: "16px",
   padding: "10px",
   margin: "10px 0",
-  boxShadow: "0 7px 17px rgba(91,61,245,0.10)",
+  boxShadow: "0 7px 17px rgba(31,77,52,0.10)",
 };
 
 const dynamicSectionSchedule = {
@@ -18805,8 +19041,8 @@ const dynamicSectionPending = {
 
 const dynamicSectionQuotes = {
   background: "linear-gradient(135deg, #f5f3ff, #ffffff)",
-  border: "1px solid rgba(124,58,237,0.22)",
-  boxShadow: "0 14px 34px rgba(124,58,237,0.12)",
+  border: "1px solid rgba(23,35,23,0.22)",
+  boxShadow: "0 14px 34px rgba(23,35,23,0.12)",
 };
 
 const dynamicSectionActive = {
@@ -18828,7 +19064,7 @@ const dynamicSectionMaterials = {
 };
 
 const dynamicSectionRecords = {
-  background: "linear-gradient(135deg, #eef2ff, #ffffff)",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage, #eef4ea), #ffffff)",
   border: "1px solid rgba(99,102,241,0.20)",
   boxShadow: "0 14px 34px rgba(99,102,241,0.10)",
 };
@@ -18845,7 +19081,7 @@ const dispatchBadge = {
   justifyContent: "center",
   padding: "7px 11px",
   borderRadius: "999px",
-  background: "linear-gradient(135deg, #e0f2fe, #eef2ff)",
+  background: "linear-gradient(135deg, #e0f2fe, var(--meetro-surface-sage, #eef4ea))",
   color: "#334155",
   fontSize: "11px",
   fontWeight: 950,
@@ -18948,7 +19184,7 @@ const quoteViewTitle = {
 
 const quoteViewCloseButton = {
   border: "none",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#4338ca",
   borderRadius: "14px",
   width: "44px",
@@ -19018,7 +19254,7 @@ const quoteViewActions = {
 
 const quoteViewPrimaryButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   borderRadius: "16px",
   padding: "13px",
@@ -19112,7 +19348,7 @@ const liveTabBadge = {
 
 const quoteAlertTab = {
   border: "1px solid #818cf8",
-  background: "linear-gradient(135deg, #eef2ff, #f5f3ff)",
+  background: "linear-gradient(135deg, var(--meetro-surface-sage, #eef4ea), #f5f3ff)",
   color: "#3730a3",
   boxShadow: "0 12px 26px rgba(99,102,241,0.24)",
 };
@@ -19203,7 +19439,7 @@ const workTab = {
 
 const workTabActive = {
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
   borderRadius: "18px",
   padding: "12px 16px",
@@ -19216,7 +19452,7 @@ const workTabActive = {
   gap: "7px",
   cursor: "pointer",
   whiteSpace: "nowrap",
-  boxShadow: "0 14px 30px rgba(91,61,245,0.28)",
+  boxShadow: "0 14px 30px rgba(31,77,52,0.28)",
 };
 
 
@@ -19231,7 +19467,7 @@ const sectionHeaderRow = {
 
 const smallPrimaryButton = {
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   borderRadius: "999px",
   padding: "10px 10px",
@@ -19276,7 +19512,7 @@ const scheduleCompactPurpose = {
 const schedulePrimaryAction = {
   ...smallPrimaryButton,
   padding: "11px 15px",
-  boxShadow: "0 12px 26px rgba(91,61,245,0.22)",
+  boxShadow: "0 12px 26px rgba(31,77,52,0.22)",
 };
 
 
@@ -19391,14 +19627,14 @@ const manualCustomerFieldsCard = {
   gap: "10px",
   padding: "12px",
   borderRadius: "16px",
-  border: "1px solid rgba(124, 58, 237, 0.16)",
+  border: "1px solid rgba(23, 35, 23, 0.16)",
   background: "linear-gradient(135deg, #ffffff, #f8f5ff)",
 };
 
 const manualCustomerInviteNotice = {
   padding: "10px 12px",
   borderRadius: "14px",
-  background: "#eef2ff",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   color: "#4338ca",
   fontSize: "13px",
   fontWeight: "800",
@@ -19452,8 +19688,8 @@ const scheduleWorkflowCount = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontWeight: "900",
   fontSize: "13px",
 };
@@ -19475,7 +19711,7 @@ const scheduleNextStepNotice = {
   borderRadius: "14px",
   background: "#f5f3ff",
   color: "#4c1d95",
-  border: "1px solid rgba(124, 58, 237, 0.18)",
+  border: "1px solid rgba(23, 35, 23, 0.18)",
   fontSize: "13px",
   fontWeight: "750",
   lineHeight: 1.4,
@@ -19518,7 +19754,7 @@ const scheduleTimeBlock = {
   minWidth: "82px",
   borderRadius: "10px",
   background: "#f3f0ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "9px 8px",
   textAlign: "center",
   display: "grid",
@@ -19605,7 +19841,7 @@ const appointmentReminderSettingsButton = {
   border: "none",
   borderRadius: "14px",
   padding: "11px 12px",
-  background: "#7c3aed",
+  background: "var(--meetro-color-charcoal, #172317)",
   color: "#ffffff",
   fontWeight: 900,
   cursor: "pointer",
@@ -19617,6 +19853,57 @@ const appointmentReminderContinueButton = {
   padding: "11px 12px",
   background: "#ffffff",
   color: "#92400e",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const scheduleDeliveryChoiceCard = {
+  margin: "0 0 14px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(79, 70, 229, 0.16)",
+  background: "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(238,242,255,0.9))",
+  color: "#172033",
+  display: "grid",
+  gap: "12px",
+  boxShadow: "0 18px 40px rgba(79, 70, 229, 0.08)",
+  boxSizing: "border-box",
+};
+
+const scheduleDeliveryChoiceText = {
+  margin: "7px 0 0",
+  color: "#475569",
+  lineHeight: 1.45,
+  fontWeight: "700",
+  fontSize: "13px",
+};
+
+const scheduleDeliverySummary = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  flexWrap: "wrap",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "rgba(255, 255, 255, 0.74)",
+  border: "1px solid rgba(148, 163, 184, 0.18)",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "850",
+};
+
+const scheduleDeliveryActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "8px",
+};
+
+const scheduleDeliveryPrimaryButton = {
+  border: "none",
+  borderRadius: "14px",
+  padding: "12px",
+  background: "var(--meetro-color-charcoal, #172317)",
+  color: "#ffffff",
   fontWeight: 900,
   cursor: "pointer",
 };
@@ -19641,8 +19928,8 @@ const scheduleCardActions = {
 
 const secondaryScheduleBtn = {
   border: "none",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "9px",
   padding: "8px 9px",
   fontWeight: "800",
@@ -19651,8 +19938,8 @@ const secondaryScheduleBtn = {
 
 const startScheduleBtn = {
   border: "none",
-  background: "#5b3df5",
-  color: "white",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   borderRadius: "9px",
   padding: "8px 9px",
   fontWeight: "800",
@@ -19804,12 +20091,18 @@ const evaluationAddPhotoButton = {
   justifyContent: "center",
   border: "none",
   borderRadius: "999px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
   padding: "10px 14px",
   fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const disabledEvaluationAddPhotoButton = {
+  background: "#e2e8f0",
+  color: "#64748b",
+  cursor: "not-allowed",
 };
 
 const evaluationPhotoGrid = {
@@ -19913,23 +20206,23 @@ const visitDetailHero = {
   gap: "12px",
   padding: "16px",
   borderRadius: "22px",
-  border: "1px solid rgba(124, 58, 237, 0.16)",
+  border: "1px solid rgba(23, 35, 23, 0.16)",
   background: "linear-gradient(135deg, #ffffff, #f8f5ff)",
-  boxShadow: "0 14px 34px rgba(91, 61, 245, 0.10)",
+  boxShadow: "0 14px 34px rgba(31, 77, 52, 0.10)",
 };
 
 const jobWorkspaceHero = {
   ...visitDetailHero,
-  background: "linear-gradient(135deg, #ffffff, #f8fafc)",
-  border: "1px solid rgba(226, 232, 240, 0.95)",
-  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
+  background: "linear-gradient(135deg, var(--meetro-surface-paper), var(--meetro-surface-warm))",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const jobWorkflowFirstHero = {
   ...jobWorkspaceHero,
   gap: "16px",
-  border: "1px solid rgba(124, 58, 237, 0.18)",
-  boxShadow: "0 18px 42px rgba(91, 61, 245, 0.10)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const jobPersistentContextRegion = {
@@ -19986,7 +20279,7 @@ const jobPersistentContextNextText = {
 };
 
 const jobPersistentContextAction = {
-  border: "1px solid #c7d2fe",
+  border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "12px",
   background: "#ffffff",
   justifySelf: "start",
@@ -20014,10 +20307,10 @@ const jobWorkflowCurrentStepCard = {
   gap: "12px",
   padding: "18px",
   borderRadius: "22px",
-  border: "2px solid rgba(124, 58, 237, 0.18)",
+  border: "2px solid rgba(23, 35, 23, 0.18)",
   background: "linear-gradient(135deg, #f5f3ff, #ffffff 72%)",
   color: "#0f172a",
-  boxShadow: "0 16px 34px rgba(91, 61, 245, 0.08)",
+  boxShadow: "0 16px 34px rgba(31, 77, 52, 0.08)",
 };
 
 const jobWorkflowPrimaryButton = {
@@ -20027,7 +20320,7 @@ const jobWorkflowPrimaryButton = {
   minWidth: 0,
   maxWidth: "100%",
   borderRadius: "16px",
-  boxShadow: "0 12px 26px rgba(91, 61, 245, 0.18)",
+  boxShadow: "0 12px 26px rgba(31, 77, 52, 0.18)",
 };
 
 const jobWorkflowActionStack = {
@@ -20191,7 +20484,7 @@ const jobWorkspaceHeaderRow = {
 const jobWorkspaceEyebrow = {
   display: "inline-flex",
   marginBottom: "6px",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -20212,9 +20505,9 @@ const jobWorkspaceStatusPill = {
   justifyContent: "center",
   borderRadius: "999px",
   padding: "8px 12px",
-  background: "#eef2ff",
-  color: "#4f46e5",
-  border: "1px solid #c7d2fe",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
+  border: "1px solid rgba(31,77,52,0.18)",
   fontSize: "12px",
   fontWeight: "950",
   whiteSpace: "nowrap",
@@ -20225,8 +20518,8 @@ const jobWorkspaceNextStepCard = {
   gap: "8px",
   padding: "14px",
   borderRadius: "18px",
-  border: "1px solid rgba(124, 58, 237, 0.18)",
-  background: "linear-gradient(135deg, #f5f3ff, #eef2ff)",
+  border: "1px solid rgba(23, 35, 23, 0.18)",
+  background: "linear-gradient(135deg, #f5f3ff, var(--meetro-surface-sage, #eef4ea))",
   color: "#312e81",
 };
 
@@ -20420,8 +20713,8 @@ const jobScopedDetailPanel = {
   padding: "14px",
   borderRadius: "20px",
   background: "#ffffff",
-  border: "1px solid rgba(124, 58, 237, 0.18)",
-  boxShadow: "0 12px 28px rgba(91, 61, 245, 0.08)",
+  border: "1px solid rgba(23, 35, 23, 0.18)",
+  boxShadow: "0 12px 28px rgba(31, 77, 52, 0.08)",
 };
 
 const jobScopedDetailHeader = {
@@ -20575,8 +20868,8 @@ const jobTimeline = {
   flexWrap: "wrap",
   padding: "12px",
   borderRadius: "18px",
-  border: "1px solid rgba(226, 232, 240, 0.95)",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
 };
 
 const jobTimelineStep = {
@@ -20584,9 +20877,9 @@ const jobTimelineStep = {
   alignItems: "center",
   borderRadius: "999px",
   padding: "7px 10px",
-  background: "#f8fafc",
-  color: "#64748b",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
+  border: "1px solid var(--meetro-color-line)",
   fontSize: "12px",
   fontWeight: "900",
 };
@@ -20604,9 +20897,9 @@ const jobSavedTimelinePanel = {
   gap: "9px",
   padding: "12px",
   borderRadius: "18px",
-  border: "1px solid rgba(226, 232, 240, 0.95)",
-  background: "#ffffff",
-  color: "#0f172a",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-ink)",
   fontSize: "14px",
   fontWeight: "900",
 };
@@ -20623,9 +20916,9 @@ const jobSavedTimelineItem = {
   gap: "3px",
   padding: "10px",
   borderRadius: "14px",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  color: "#334155",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   fontWeight: "850",
 };
@@ -20637,9 +20930,9 @@ const jobListHeader = {
   gap: "12px",
   padding: "14px",
   borderRadius: "20px",
-  background: "#ffffff",
-  border: "1px solid rgba(226, 232, 240, 0.95)",
-  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const jobMenuTabRow = {
@@ -20648,15 +20941,15 @@ const jobMenuTabRow = {
   gap: "8px",
   padding: "6px",
   borderRadius: "18px",
-  background: "#eef2f7",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
 };
 
 const jobMenuTabButton = {
   border: "1px solid transparent",
   borderRadius: "14px",
   background: "transparent",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   minHeight: "44px",
   padding: "10px 12px",
   display: "flex",
@@ -20669,9 +20962,9 @@ const jobMenuTabButton = {
 };
 
 const jobMenuTabButtonActive = {
-  background: "#ffffff",
-  border: "1px solid #cbd5e1",
-  color: "#0f172a",
+  background: "var(--meetro-surface-paper)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-ink)",
   boxShadow: "0 8px 18px rgba(15, 23, 42, 0.08)",
 };
 
@@ -20682,22 +20975,22 @@ const jobMenuTabCount = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#f5f3ff",
-  color: "#6d28d9",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
   fontSize: "12px",
   fontWeight: "950",
 };
 
 const jobListTitle = {
   margin: 0,
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "22px",
   fontWeight: "950",
 };
 
 const jobListSubtitle = {
   margin: "5px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   fontWeight: "750",
   lineHeight: 1.45,
@@ -20710,8 +21003,8 @@ const jobCountPill = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#f5f3ff",
-  color: "#6d28d9",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
   fontWeight: "950",
 };
 
@@ -20723,8 +21016,8 @@ const jobListGrid = {
 
 const jobListCard = {
   width: "100%",
-  border: "1px solid rgba(226, 232, 240, 0.95)",
-  background: "#ffffff",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "22px",
   padding: "15px",
   textAlign: "left",
@@ -20732,7 +21025,7 @@ const jobListCard = {
   gridTemplateColumns: "1fr",
   gap: "12px",
   cursor: "pointer",
-  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const jobListCardMain = {
@@ -20742,14 +21035,14 @@ const jobListCardMain = {
 };
 
 const jobListCustomer = {
-  color: "#0f172a",
+  color: "var(--meetro-color-ink)",
   fontSize: "19px",
   lineHeight: 1.1,
   fontWeight: "950",
 };
 
 const jobListMeta = {
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: "750",
@@ -20758,9 +21051,9 @@ const jobListMeta = {
 const jobListStatus = {
   width: "fit-content",
   maxWidth: "100%",
-  color: "#4c1d95",
-  background: "#f5f3ff",
-  border: "1px solid #ddd6fe",
+  color: "var(--meetro-color-forest)",
+  background: "var(--meetro-color-sage)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "999px",
   padding: "7px 10px",
   fontSize: "13px",
@@ -20769,7 +21062,7 @@ const jobListStatus = {
 };
 
 const jobListNextStep = {
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest)",
   fontSize: "13px",
   fontWeight: "950",
   lineHeight: 1.35,
@@ -20779,8 +21072,8 @@ const jobListAction = {
   justifySelf: "start",
   borderRadius: "14px",
   padding: "11px 14px",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   fontSize: "13px",
   fontWeight: "950",
   whiteSpace: "nowrap",
@@ -20798,9 +21091,9 @@ const jobProgressItem = {
   alignItems: "center",
   gap: "5px",
   borderRadius: "999px",
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
-  color: "#64748b",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   padding: "6px 9px",
   fontSize: "11px",
   fontWeight: "900",
@@ -20808,16 +21101,16 @@ const jobProgressItem = {
 
 const jobProgressItemDone = {
   borderColor: "#c4b5fd",
-  background: "#f5f3ff",
-  color: "#5b3df5",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
 };
 
 const jobListEmpty = {
-  border: "1px dashed #cbd5e1",
+  border: "1px dashed var(--meetro-color-line)",
   borderRadius: "20px",
   padding: "18px",
-  background: "#f8fafc",
-  color: "#64748b",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "800",
   lineHeight: 1.45,
@@ -21007,8 +21300,8 @@ const materialLineTotalPill = {
 const materialsTotalSummary = {
   justifySelf: "end",
   borderRadius: "14px",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   padding: "10px 12px",
   fontSize: "13px",
   fontWeight: "900",
@@ -21022,9 +21315,9 @@ const visitMeasurementGrid = {
 };
 
 const miniInlineButton = {
-  border: "1px solid #c7d2fe",
-  background: "#eef2ff",
-  color: "#4f46e5",
+  border: "1px solid rgba(31,77,52,0.18)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-charcoal, #172317)",
   borderRadius: "999px",
   padding: "7px 10px",
   fontSize: "12px",
@@ -21117,13 +21410,13 @@ const activeJobsList = {
 
 const jobCard = {
   width: "100%",
-  border: "1px solid #e5e7eb",
-  background: "white",
-  borderRadius: "11px",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
+  borderRadius: "18px",
   padding: "9px",
   textAlign: "left",
   cursor: "pointer",
-  boxShadow: "0 10px 10px rgba(15,23,42,0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const jobCardTop = {
@@ -21135,14 +21428,14 @@ const jobCardTop = {
 
 const jobMeta = {
   margin: "6px 0 0",
-  color: "#475569",
+  color: "var(--meetro-color-muted)",
   fontSize: "12px",
   lineHeight: 1.4,
 };
 
 const statusPill = {
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-color-sage)",
+  color: "var(--meetro-color-forest)",
   borderRadius: "999px",
   padding: "7px 10px",
   fontSize: "12px",
@@ -21155,7 +21448,7 @@ const tabNoticeHidden = {
 };
 
 const tabNotice = {
-  background: "white",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "9px",
   padding: "11px 10px",
   marginBottom: "9px",
@@ -21186,12 +21479,12 @@ const sectionTitle = {
   fontWeight: "950",
   textAlign: "left",
   margin: 0,
-  color: "#111827",
+  color: "var(--meetro-color-ink)",
 };
 
 const sectionSubtitle = {
   margin: "6px 0 0",
-  color: "#64748b",
+  color: "var(--meetro-color-muted)",
   fontSize: "14px",
   fontWeight: "750",
   lineHeight: 1.45,
@@ -21212,16 +21505,16 @@ const workCenterPageTitleBar = {
   width: "100%",
 };
 
-const purpleCompactButton = {
+const compactPrimaryButton = {
   border: "none",
   borderRadius: "14px",
   padding: "12px 14px",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   fontSize: "13px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 12px 22px rgba(91,61,245,0.18)",
+  boxShadow: "0 12px 22px rgba(20,53,31,0.18)",
 };
 
 const workCenterFullWidthPrimaryButton = {
@@ -21234,21 +21527,21 @@ const workCenterFullWidthPrimaryButton = {
   alignItems: "center",
   justifyContent: "center",
   gap: "10px",
-  background: "linear-gradient(135deg,#5b3df5,#4f28e8)",
-  color: "#ffffff",
+  background: "var(--meetro-gradient-community-action)",
+  color: "var(--meetro-color-paper)",
   fontSize: "18px",
   fontWeight: "950",
   cursor: "pointer",
-  boxShadow: "0 16px 30px rgba(91,61,245,0.22)",
+  boxShadow: "0 16px 30px rgba(20,53,31,0.22)",
 };
 
 const emptyCard = {
-  background: "white",
-  border: "1px solid #e2e8f0",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
   borderRadius: "22px",
   padding: "18px",
   textAlign: "center",
-  boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const emptyIcon = {
@@ -21257,7 +21550,7 @@ const emptyIcon = {
 };
 
 const emptyText = {
-  color: "#667085",
+  color: "var(--meetro-color-muted)",
   fontSize: "15px",
   fontWeight: "700",
   lineHeight: 1.4,
@@ -21272,26 +21565,26 @@ const emptyActionGrid = {
 };
 
 const emptyActionButton = {
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-paper)",
   borderRadius: "10px",
   padding: "11px",
   fontWeight: "900",
   cursor: "pointer",
-  color: "#111827",
+  color: "var(--meetro-color-forest)",
   fontSize: "12px",
 };
 
 
 
 const pendingReviewCard = {
-  background: "linear-gradient(135deg,#eef2ff,#ffffff)",
-  border: "1px solid rgba(124,58,237,0.16)",
+  background: "linear-gradient(135deg,var(--meetro-surface-sage, #eef4ea),#ffffff)",
+  border: "1px solid rgba(23,35,23,0.16)",
   borderRadius: "24px",
   padding: "calc(env(safe-area-inset-top, 0px) + 95px) 18px calc(env(safe-area-inset-bottom, 0px) + 135px)",
   overflowY: "auto",
   marginBottom: "10px",
-  boxShadow: "0 12px 30px rgba(124,58,237,0.10)",
+  boxShadow: "0 12px 30px rgba(23,35,23,0.10)",
 };
 
 const pendingReviewTop = {
@@ -21359,7 +21652,7 @@ const pendingSecondaryButton = {
 const pendingPrimaryButton = {
   flex: "1 1 150px",
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
   borderRadius: "16px",
   padding: "12px",
@@ -21418,7 +21711,7 @@ const requestIcon = {
   height: "58px",
   borderRadius: "10px",
   background: "#ede9ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -21647,12 +21940,12 @@ const jobActivityNote = {
 
 const activeEtaBox = {
   minWidth: "84px",
-  background: "linear-gradient(135deg,#f5f3ff,#eef2ff)",
-  border: "1px solid rgba(91,61,245,.10)",
+  background: "linear-gradient(135deg,#f5f3ff,var(--meetro-surface-sage, #eef4ea))",
+  border: "1px solid rgba(31,77,52,.10)",
   borderRadius: "14px",
   padding: "10px 9px",
   textAlign: "center",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   display: "flex",
   flexDirection: "column",
@@ -21745,7 +22038,7 @@ const activeWorkFilterChipActive = {
   borderColor: "#8b7cff",
   background: "#f7f4ff",
   color: "#4f28e8",
-  boxShadow: "0 8px 18px rgba(91,61,245,0.12)",
+  boxShadow: "0 8px 18px rgba(31,77,52,0.12)",
 };
 
 const secondaryActionButton = {
@@ -21839,7 +22132,7 @@ const startedStatusPill = {
 const completedStatusPill = {
   background: "#e0e7ff",
   color: "#3730a3",
-  border: "1px solid #c7d2fe",
+  border: "1px solid rgba(31,77,52,0.18)",
 };
 
 const cancelledStatusPill = {
@@ -21860,7 +22153,7 @@ display:"flex",
 alignItems:"center",
 justifyContent:"center",
 fontWeight:"900",
-color:"#5b3df5",
+color:"var(--meetro-color-forest, #1f4d34)",
 fontSize:"10px",
 };
 
@@ -22257,13 +22550,13 @@ gap:"10px",
 };
 
 const historyFilterActive={
-background:"#5b3df5",
-border:"1px solid #5b3df5",
+background:"var(--meetro-color-forest, #1f4d34)",
+border:"1px solid var(--meetro-color-forest, #1f4d34)",
 borderRadius:"10px",
 padding:"9px",
 fontWeight:"900",
 color:"white",
-boxShadow:"0 8px 11px rgba(91,61,245,0.18)",
+boxShadow:"0 8px 11px rgba(31,77,52,0.18)",
 cursor:"pointer",
 };
 
@@ -22303,8 +22596,8 @@ const historySmallIcon={
 width:"10px",
 height:"10px",
 borderRadius:"10px",
-background:"#eef2ff",
-color:"#5b3df5",
+background:"var(--meetro-surface-sage, #eef4ea)",
+color:"var(--meetro-color-forest, #1f4d34)",
 display:"flex",
 alignItems:"center",
 justifyContent:"center",
@@ -22368,7 +22661,7 @@ margin:"0 auto",
 border:"none",
 borderRadius:"10px",
 padding:"9px 9px",
-background:"#5b3df5",
+background:"var(--meetro-color-forest, #1f4d34)",
 color:"white",
 fontWeight:"900",
 cursor:"pointer",
@@ -22395,8 +22688,8 @@ display:"inline-flex",
 alignSelf:"flex-start",
 padding:"5px 10px",
 borderRadius:"999px",
-background:"#eef2ff",
-color:"#5b3df5",
+background:"var(--meetro-surface-sage, #eef4ea)",
+color:"var(--meetro-color-forest, #1f4d34)",
 fontWeight:"900",
 fontSize:"11px",
 marginBottom:"4px",
@@ -22468,7 +22761,7 @@ const projectRecordCard = {
   borderRadius: "22px",
   padding: "16px",
   boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
-  border: "1px solid rgba(124,58,237,0.12)",
+  border: "1px solid rgba(23,35,23,0.12)",
   display: "flex",
   flexDirection: "column",
   gap: "12px",
@@ -22486,7 +22779,7 @@ const projectRecordIcon = {
   height: "46px",
   borderRadius: "16px",
   background: "linear-gradient(135deg,#f3f0ff,#faf7ff)",
-  border: "1px solid rgba(124,58,237,0.12)",
+  border: "1px solid rgba(23,35,23,0.12)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
@@ -22538,7 +22831,7 @@ const projectRecordActions = {
 const projectRecordPrimary = {
   flex: 1,
   border: "none",
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
   borderRadius: "14px",
   padding: "12px",
@@ -22647,7 +22940,7 @@ const revenueFakeLine = {
   bottom: "10px",
   fontSize: "58px",
   fontWeight: "900",
-  color: "rgba(91,61,245,0.45)",
+  color: "rgba(31,77,52,0.45)",
   letterSpacing: "-8px",
   transform: "rotate(-8deg)",
 };
@@ -22914,7 +23207,7 @@ const materialThumb = {
   height: "42px",
   borderRadius: "14px",
   background: "#fbfaff",
-  border: "1px solid rgba(124, 58, 237, 0.18)",
+  border: "1px solid rgba(23, 35, 23, 0.18)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
@@ -22955,7 +23248,7 @@ const materialCancelEditButton = {
 const materialEditButton = {
   border: "1px solid #ddd6fe",
   background: "#f5f3ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "12px",
   padding: "10px 12px",
   fontWeight: "1000",
@@ -22972,9 +23265,9 @@ const materialDeleteButton = {
 };
 
 const compactMaterialActionButton = {
-  border: "1px solid rgba(124, 58, 237, 0.18)",
+  border: "1px solid rgba(23, 35, 23, 0.18)",
   background: "#f5f3ff",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   borderRadius: "12px",
   width: "42px",
   height: "42px",
@@ -23028,7 +23321,7 @@ const addMaterialInlineButton = {
   width: "100%",
   border: "none",
   background: "white",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "10px",
   fontWeight: "900",
   cursor: "pointer",
@@ -23042,7 +23335,7 @@ const materialsSummaryPanel = {
   alignItems: "flex-start",
   marginTop: "16px",
   background: "linear-gradient(135deg,#ffffff,#faf7ff)",
-  border: "1px solid rgba(124,58,237,.12)",
+  border: "1px solid rgba(23,35,23,.12)",
   borderRadius: "26px",
   padding: "20px",
   boxShadow: "0 16px 40px rgba(15,23,42,.06)",
@@ -23086,7 +23379,7 @@ const progressBarOuter = {
 const progressBarInner = {
   height: "100%",
   borderRadius: "999px",
-  background: "linear-gradient(90deg,#8b5cf6,#22c55e)",
+  background: "linear-gradient(90deg,var(--meetro-color-forest, #1f4d34),#22c55e)",
   transition: "width .35s ease",
   boxShadow: "0 0 18px rgba(34,197,94,.25)",
 };
@@ -23111,7 +23404,7 @@ const activeProjectContextCard = {
   padding: "calc(env(safe-area-inset-top, 0px) + 12px) 14px 14px",
   borderRadius: "24px",
   background: "linear-gradient(135deg,#ffffff,#f8f5ff)",
-  border: "1px solid rgba(124,58,237,.14)",
+  border: "1px solid rgba(23,35,23,.14)",
   boxShadow: "0 14px 34px rgba(15,23,42,.06)",
   display: "flex",
   alignItems: "flex-start",
@@ -23128,7 +23421,7 @@ const activeProjectContextCard = {
 const activeProjectContextLabel = {
   fontSize: "11px",
   fontWeight: 950,
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   textTransform: "uppercase",
   letterSpacing: "0.08em",
 };
@@ -23154,13 +23447,13 @@ const activeProjectContextStatus = {
   borderRadius: "999px",
   background: "rgba(255,255,255,.85)",
   backdropFilter: "blur(10px)",
-  border: "1px solid rgba(124,58,237,.16)",
-  color: "#6d28d9",
+  border: "1px solid rgba(23,35,23,.16)",
+  color: "var(--meetro-color-charcoal, #172317)",
   fontSize: "11px",
   fontWeight: 950,
   whiteSpace: "nowrap",
   textTransform: "capitalize",
-  boxShadow: "0 8px 20px rgba(91,61,245,.10)",
+  boxShadow: "0 8px 20px rgba(31,77,52,.10)",
 };
 
 const materialsPageShell = {
@@ -23213,7 +23506,7 @@ const materialsSectionEyebrow = {
   padding: "7px 11px",
   marginBottom: "12px",
   background: "#f5f3ff",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   border: "1px solid #ddd6fe",
   fontSize: "12px",
   fontWeight: 1000,
@@ -23237,7 +23530,7 @@ const materialsMicCircle = {
   height: "92px",
   borderRadius: "999px",
   background: "linear-gradient(180deg,#ede9fe,#f5f3ff)",
-  color: "#6d28d9",
+  color: "var(--meetro-color-charcoal, #172317)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
@@ -23290,7 +23583,7 @@ const materialsInputModeButtonActive = {
   ...materialsInputModeButton,
   border: "1px solid #c4b5fd",
   background: "#f5f3ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const materialsMicErrorBox = {
@@ -23369,7 +23662,7 @@ const catalogMatchCard = {
   padding: "12px",
   borderRadius: "16px",
   background: "#ffffff",
-  border: "1px solid rgba(124, 58, 237, 0.16)",
+  border: "1px solid rgba(23, 35, 23, 0.16)",
   boxShadow: "0 8px 18px rgba(15, 23, 42, 0.05)",
   minHeight: "150px",
   display: "flex",
@@ -23403,7 +23696,7 @@ const catalogAddButton = {
   border: "none",
   borderRadius: "12px",
   padding: "10px 12px",
-  background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34), var(--meetro-color-charcoal, #172317))",
   color: "#ffffff",
   fontWeight: 900,
   cursor: "pointer",
@@ -23416,14 +23709,14 @@ const generateMaterialsButton = {
   minWidth: 0,
   boxSizing: "border-box",
   border: "none",
-  background: "linear-gradient(135deg,#7c3aed,#5b3df5)",
+  background: "linear-gradient(135deg,var(--meetro-color-charcoal, #172317),var(--meetro-color-forest, #1f4d34))",
   color: "white",
   borderRadius: "16px",
   padding: "14px 18px",
   fontWeight: "1000",
   cursor: "pointer",
   fontSize: "16px",
-  boxShadow: "0 16px 38px rgba(91,61,245,.24)",
+  boxShadow: "0 16px 38px rgba(31,77,52,.24)",
 };
 
 const materialsManualBar = {
@@ -23452,8 +23745,8 @@ const manualAddIcon = {
   width: "46px",
   height: "46px",
   borderRadius: "999px",
-  border: "1px dashed #7c3aed",
-  color: "#5b3df5",
+  border: "1px dashed var(--meetro-color-charcoal, #172317)",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
@@ -23506,13 +23799,13 @@ const materialsFloatingMic = {
   borderRadius: "999px",
   border: "none",
   background: "linear-gradient(180deg,#f5f3ff,#ede9fe)",
-  color: "#7c3aed",
+  color: "var(--meetro-color-charcoal, #172317)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "22px",
   cursor: "pointer",
-  boxShadow: "0 10px 28px rgba(124,58,237,.10)",
+  boxShadow: "0 10px 28px rgba(23,35,23,.10)",
 };
 
 const materialsFloatingMicActive = {
@@ -23543,14 +23836,14 @@ const micMiniButton = {
   minWidth: 0,
   boxSizing: "border-box",
   border: "none",
-  background: "linear-gradient(135deg,#7c3aed,#5b3df5)",
+  background: "linear-gradient(135deg,var(--meetro-color-charcoal, #172317),var(--meetro-color-forest, #1f4d34))",
   color: "white",
   borderRadius: "16px",
   padding: "18px 28px",
   fontWeight: "1000",
   cursor: "pointer",
   fontSize: "18px",
-  boxShadow: "0 14px 34px rgba(91,61,245,.20)",
+  boxShadow: "0 14px 34px rgba(31,77,52,.20)",
 };
 
 const materialsMicHint = {
@@ -23566,7 +23859,7 @@ const materialsAssistantCard = {
   borderRadius: "22px",
   padding: "18px",
   border: "1px solid #ddd6fe",
-  boxShadow: "0 18px 48px rgba(91,61,245,.08)",
+  boxShadow: "0 18px 48px rgba(31,77,52,.08)",
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
@@ -23637,7 +23930,7 @@ const sendMaterialsButton = {
   boxSizing: "border-box",
   border: "1px solid #c4b5fd",
   background: "#f5f3ff",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "16px",
   padding: "13px 16px",
   fontWeight: "1000",
@@ -23653,7 +23946,7 @@ const materialsSharePanel = {
   overflowX: "hidden",
   margin: "12px 0 14px",
   padding: "14px",
-  border: "1px solid rgba(91,61,245,0.16)",
+  border: "1px solid rgba(31,77,52,0.16)",
   borderRadius: "20px",
   background: "linear-gradient(135deg,#ffffff,#f8fafc)",
   display: "grid",
@@ -23914,10 +24207,10 @@ const stageActions = {
 
 
 const activeStageButton = {
-  background: "linear-gradient(135deg,#5b3df5,#7c3aed)",
+  background: "linear-gradient(135deg,var(--meetro-color-forest, #1f4d34),var(--meetro-color-charcoal, #172317))",
   color: "white",
-  border: "1px solid rgba(91,61,245,.22)",
-  boxShadow: "0 10px 20px rgba(91,61,245,.18)",
+  border: "1px solid rgba(31,77,52,.22)",
+  boxShadow: "0 10px 20px rgba(31,77,52,.18)",
 };
 
 const pausedStageButton = {
@@ -23972,12 +24265,12 @@ const dispatchButton = {
   padding: "13px",
   borderRadius: "9px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontWeight: "900",
   fontSize: "12px",
   cursor: "pointer",
-  boxShadow: "0 10px 9px rgba(91,61,245,0.22)",
+  boxShadow: "0 10px 9px rgba(31,77,52,0.22)",
 };
 
 

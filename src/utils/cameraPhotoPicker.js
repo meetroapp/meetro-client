@@ -1,3 +1,8 @@
+import {
+  getMediaDeferredNotice,
+  isFriendsAndFamilyMediaDeferred,
+} from "./mediaDeferral.js";
+
 const CAMERA_PERMISSION_MESSAGE = "Camera access is needed to add job photos.";
 
 function isCancelError(error) {
@@ -99,7 +104,13 @@ export async function openJobPhotoPicker({
   onError,
   fileNamePrefix,
   quality,
+  language,
 } = {}) {
+  if (isFriendsAndFamilyMediaDeferred()) {
+    onError?.(getMediaDeferredNotice(language));
+    return { deferred: true };
+  }
+
   try {
     const result = await pickNativeJobPhoto({ fileNamePrefix, quality });
 

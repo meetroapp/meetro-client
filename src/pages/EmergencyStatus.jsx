@@ -494,7 +494,7 @@ function EmergencyStatus({ setPage }) {
 
 const page = {
   minHeight: "100dvh",
-  background: "linear-gradient(180deg, #eef2ff 0%, #ffffff 55%, #f5f3ff 100%)",
+  background: "linear-gradient(180deg, var(--meetro-surface-sage, #eef4ea) 0%, #ffffff 55%, #f5f3ff 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -555,7 +555,7 @@ const label = {
 
 const service = {
   display: "block",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "18px",
   fontWeight: "900",
 };
@@ -593,7 +593,7 @@ const panel = {
   background: "white",
   borderRadius: "28px",
   padding: "28px 22px",
-  boxShadow: "0 18px 44px rgba(91,61,245,0.12)",
+  boxShadow: "0 18px 44px rgba(31,77,52,0.12)",
   marginBottom: "20px",
 };
 
@@ -648,7 +648,7 @@ const proCard = {
   borderRadius: "28px",
   padding: "22px",
   textAlign: "left",
-  boxShadow: "0 18px 44px rgba(91,61,245,0.12)",
+  boxShadow: "0 18px 44px rgba(31,77,52,0.12)",
   marginBottom: "20px",
 };
 
@@ -663,7 +663,7 @@ const avatar = {
   width: "58px",
   height: "58px",
   borderRadius: "20px",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   display: "flex",
   alignItems: "center",
@@ -765,7 +765,7 @@ const activePill = {
 const completedPill = {
   background: "#e0e7ff",
   color: "#3730a3",
-  border: "1px solid #c7d2fe",
+  border: "1px solid rgba(31,77,52,0.18)",
 };
 
 const reassuranceNote = {
@@ -796,7 +796,7 @@ const primaryButton = {
   padding: "16px",
   borderRadius: "18px",
   border: "none",
-  background: "#5b3df5",
+  background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",
   fontSize: "16px",
   fontWeight: "900",

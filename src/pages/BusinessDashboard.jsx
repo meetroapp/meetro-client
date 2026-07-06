@@ -357,7 +357,7 @@ function BusinessDashboard({ setPage }) {
       offline: "Offline",
       available: "Available now",
       notAvailable: "Not accepting jobs",
-      messages: "Messages",
+      messages: "Communication",
       unread: "Unread",
       todayJobs: "Today's Jobs",
       activeJobs: "Active Jobs",
@@ -377,6 +377,30 @@ function BusinessDashboard({ setPage }) {
       customerLocation: "Customer location",
       quickActions: "Quick Actions",
       allTools: "All tools",
+      todayFocus: "Today's Focus",
+      workTheSchedule: "Work the schedule",
+      reviewOpportunities: "Review opportunities",
+      nextAction: "Next Action",
+      reviewPendingQuotes: "Review pending quotes",
+      continueWork: "Continue Work",
+      quickAccessTitle: "Quick Access",
+      quickAccessHiring: "Hiring",
+      quickAccessHiringNote: "Find & hire help",
+      quickAccessQuoteBuilder: "Quote Builder",
+      quickAccessQuoteBuilderNote: "Prepare quotes",
+      quickAccessInvoiceBuilder: "Invoice Builder",
+      quickAccessInvoiceBuilderNote: "Prepare invoices",
+      quickAccessSchedule: "Schedule",
+      quickAccessScheduleNote: "Review visits",
+      quickAccessMessages: "Communication",
+      quickAccessMessagesNote: "Customer conversations",
+      quickAccessCustomers: "Customers",
+      quickAccessCustomersNote: "Relationship list",
+      quickAccessBusinessProfileNote: "Readiness and public presence",
+      respondToMessages: "Respond to conversations",
+      reviewTodayVisit: "Review today's visit",
+      reviewBusinessReadiness: "Review business readiness",
+      openNextAction: "Open next action",
       workCenter: "Work Center",
       workSubtitle: "Active jobs, quotes, and work records.",
       openWorkCenter: "Continue Work",
@@ -394,7 +418,7 @@ function BusinessDashboard({ setPage }) {
       offline: "Desconectado",
       available: "Disponible ahora",
       notAvailable: "No aceptando trabajos",
-      messages: "Mensajes",
+      messages: "Comunicación",
       unread: "Sin leer",
       todayJobs: "Trabajos de hoy",
       activeJobs: "Trabajos activos",
@@ -414,6 +438,30 @@ function BusinessDashboard({ setPage }) {
       customerLocation: "Ubicación del cliente",
       quickActions: "Acciones Rápidas",
       allTools: "Todas",
+      todayFocus: "Enfoque de hoy",
+      workTheSchedule: "Atender la agenda",
+      reviewOpportunities: "Revisar oportunidades",
+      nextAction: "Siguiente acción",
+      reviewPendingQuotes: "Revisar cotizaciones",
+      continueWork: "Continuar trabajo",
+      quickAccessTitle: "Acceso rápido",
+      quickAccessHiring: "Contratación",
+      quickAccessHiringNote: "Encuentra ayuda",
+      quickAccessQuoteBuilder: "Cotizaciones",
+      quickAccessQuoteBuilderNote: "Preparar cotizaciones",
+      quickAccessInvoiceBuilder: "Facturas",
+      quickAccessInvoiceBuilderNote: "Preparar facturas",
+      quickAccessSchedule: "Agenda",
+      quickAccessScheduleNote: "Revisar visitas",
+      quickAccessMessages: "Comunicación",
+      quickAccessMessagesNote: "Conversaciones con clientes",
+      quickAccessCustomers: "Clientes",
+      quickAccessCustomersNote: "Lista de relaciones",
+      quickAccessBusinessProfileNote: "Preparación y presencia pública",
+      respondToMessages: "Responder conversaciones",
+      reviewTodayVisit: "Revisar visita de hoy",
+      reviewBusinessReadiness: "Revisar preparación del negocio",
+      openNextAction: "Abrir siguiente acción",
       workCenter: "Centro de Trabajo",
       workSubtitle: "Trabajos activos, cotizaciones e historial.",
       openWorkCenter: "Continuar trabajo",
@@ -431,7 +479,7 @@ function BusinessDashboard({ setPage }) {
       offline: "Hors ligne",
       available: "Disponible maintenant",
       notAvailable: "N’accepte pas de travaux",
-      messages: "Messages",
+      messages: "Communication",
       unread: "Non lus",
       todayJobs: "Travaux du jour",
       activeJobs: "Travaux actifs",
@@ -451,6 +499,30 @@ function BusinessDashboard({ setPage }) {
       customerLocation: "Adresse du client",
       quickActions: "Actions rapides",
       allTools: "Tous les outils",
+      todayFocus: "Priorité du jour",
+      workTheSchedule: "Traiter le calendrier",
+      reviewOpportunities: "Examiner les prospects",
+      nextAction: "Prochaine action",
+      reviewPendingQuotes: "Examiner les devis",
+      continueWork: "Continuer le travail",
+      quickAccessTitle: "Accès rapide",
+      quickAccessHiring: "Recrutement",
+      quickAccessHiringNote: "Trouver de l’aide",
+      quickAccessQuoteBuilder: "Créateur de devis",
+      quickAccessQuoteBuilderNote: "Préparer des devis",
+      quickAccessInvoiceBuilder: "Créateur de factures",
+      quickAccessInvoiceBuilderNote: "Préparer des factures",
+      quickAccessSchedule: "Calendrier",
+      quickAccessScheduleNote: "Examiner les visites",
+      quickAccessMessages: "Communication",
+      quickAccessMessagesNote: "Conversations client",
+      quickAccessCustomers: "Clients",
+      quickAccessCustomersNote: "Liste des relations",
+      quickAccessBusinessProfileNote: "Préparation et présence publique",
+      respondToMessages: "Répondre aux conversations",
+      reviewTodayVisit: "Revoir la visite du jour",
+      reviewBusinessReadiness: "Revoir la préparation de l’activité",
+      openNextAction: "Ouvrir la prochaine action",
       workCenter: "Centre de travail",
       workSubtitle: "Travaux actifs, devis et dossiers.",
       openWorkCenter: "Continuer le travail",
@@ -468,7 +540,7 @@ function BusinessDashboard({ setPage }) {
       offline: "Offline",
       available: "Disponível agora",
       notAvailable: "Não aceitando trabalhos",
-      messages: "Mensagens",
+      messages: "Comunicação",
       unread: "Não lidas",
       todayJobs: "Trabalhos de hoje",
       activeJobs: "Trabalhos ativos",
@@ -488,6 +560,30 @@ function BusinessDashboard({ setPage }) {
       customerLocation: "Local do cliente",
       quickActions: "Ações rápidas",
       allTools: "Todas as ferramentas",
+      todayFocus: "Foco de hoje",
+      workTheSchedule: "Cuidar da agenda",
+      reviewOpportunities: "Revisar oportunidades",
+      nextAction: "Próxima ação",
+      reviewPendingQuotes: "Revisar orçamentos",
+      continueWork: "Continuar trabalho",
+      quickAccessTitle: "Acesso rápido",
+      quickAccessHiring: "Contratação",
+      quickAccessHiringNote: "Encontre ajuda",
+      quickAccessQuoteBuilder: "Criador de orçamentos",
+      quickAccessQuoteBuilderNote: "Preparar orçamentos",
+      quickAccessInvoiceBuilder: "Criador de faturas",
+      quickAccessInvoiceBuilderNote: "Preparar faturas",
+      quickAccessSchedule: "Agenda",
+      quickAccessScheduleNote: "Revisar visitas",
+      quickAccessMessages: "Comunicação",
+      quickAccessMessagesNote: "Conversas com clientes",
+      quickAccessCustomers: "Clientes",
+      quickAccessCustomersNote: "Lista de relações",
+      quickAccessBusinessProfileNote: "Prontidão e presença pública",
+      respondToMessages: "Responder conversas",
+      reviewTodayVisit: "Revisar visita de hoje",
+      reviewBusinessReadiness: "Revisar prontidão do negócio",
+      openNextAction: "Abrir próxima ação",
       workCenter: "Centro de trabalho",
       workSubtitle: "Trabalhos ativos, orçamentos e registros.",
       openWorkCenter: "Continuar trabalho",
@@ -500,6 +596,100 @@ function BusinessDashboard({ setPage }) {
     },
   };
   const text = dashboardText[language] || dashboardText.en;
+  const openBusinessProfile = () => {
+    localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
+    setPage("contractorProfile");
+  };
+  const dashboardNextAction =
+    unreadMessages > 0
+      ? {
+          label: text.respondToMessages,
+          note: `${unreadMessages} ${text.unread}`,
+          onClick: () => setPage("messagesInbox"),
+        }
+      : pendingQuotesCount > 0
+      ? {
+          label: text.reviewPendingQuotes,
+          note: text.awaitingResponse,
+          onClick: () =>
+            openWorkCenterSection("quotes", {
+              quoteStatusFilter:
+                quoteResponseAlertCount > 0 ? "accepted" : undefined,
+            }),
+        }
+      : todayScheduleCount > 0
+      ? {
+          label: text.reviewTodayVisit,
+          note: text.scheduledToday,
+          onClick: openFirstScheduledConversation,
+        }
+      : activeProjectsCount > 0
+      ? {
+          label: text.continueWork,
+          note: text.inProgress,
+          onClick: openFirstActiveProjectConversation,
+        }
+      : {
+          label: text.reviewBusinessReadiness,
+          note: availableNow ? text.available : text.notAvailable,
+          onClick: openBusinessProfile,
+        };
+  const dashboardQuickAccessItems = [
+    {
+      key: "schedule",
+      icon: "schedule",
+      label: text.quickAccessSchedule,
+      note: text.quickAccessScheduleNote,
+      tone: "#0284c7",
+      toneBg: "rgba(2,132,199,0.13)",
+      onClick: () => openWorkCenterSection("schedule", { filter: "today" }),
+    },
+    {
+      key: "messages",
+      icon: "messages",
+      label: text.quickAccessMessages,
+      note: text.quickAccessMessagesNote,
+      tone: "#1f4d34",
+      toneBg: "rgba(31,77,52,0.12)",
+      onClick: () => setPage("messagesInbox"),
+    },
+    {
+      key: "hiring",
+      icon: "hiringCenter",
+      label: text.quickAccessHiring,
+      note: text.quickAccessHiringNote,
+      tone: "#1f4d34",
+      toneBg: "rgba(31,77,52,0.12)",
+      onClick: () => setPage("hiringCenter"),
+    },
+    {
+      key: "quote-builder",
+      icon: "quickQuote",
+      label: text.quickAccessQuoteBuilder,
+      note: text.quickAccessQuoteBuilderNote,
+      tone: "#d97706",
+      toneBg: "rgba(217,119,6,0.13)",
+      onClick: () => setPage("quoteBuilder"),
+    },
+    {
+      key: "invoice-builder",
+      icon: "quickInvoice",
+      label: text.quickAccessInvoiceBuilder,
+      note: text.quickAccessInvoiceBuilderNote,
+      tone: "#16a34a",
+      toneBg: "rgba(22,163,74,0.13)",
+      onClick: () => setPage("invoiceBuilder"),
+    },
+    {
+      key: "business-profile",
+      icon: "businessProfile",
+      label: t("businessProfile", language),
+      note: text.quickAccessBusinessProfileNote,
+      tone: "#14351f",
+      toneBg: "rgba(31,77,52,0.13)",
+      onClick: openBusinessProfile,
+    },
+  ];
 
   return (
     <div className="app-page business-dashboard meetro-wide-page" style={pageWrapper}>
@@ -519,306 +709,500 @@ function BusinessDashboard({ setPage }) {
               transform: scale(1);
             }
           }
+
+          .business-dashboard-quick-access {
+            display: none;
+          }
+
+          .business-dashboard-community-entry {
+            display: block;
+          }
+
+          .business-dashboard-quick-access-item:hover {
+            background: rgba(31,77,52,0.06) !important;
+          }
+
+          .business-dashboard-quick-access-item:focus-visible {
+            outline: 3px solid rgba(31,77,52,0.28);
+            outline-offset: 2px;
+          }
+
+          @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
+            .app-page.business-dashboard.meetro-wide-page {
+              width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
+              max-width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
+              margin-left: var(--meetro-sidebar-width) !important;
+              margin-right: auto !important;
+              padding-top: clamp(24px, 2.8vw, 40px) !important;
+              padding-left: clamp(24px, 3vw, 48px) !important;
+              padding-right: clamp(24px, 3vw, 48px) !important;
+            }
+
+            .business-dashboard-content-lane {
+              display: block !important;
+              width: 100%;
+              max-width: 1180px;
+              margin: 0;
+            }
+
+            .business-dashboard-header-section {
+              padding: 18px !important;
+              margin-bottom: 18px !important;
+              border-radius: 28px !important;
+            }
+
+            .business-dashboard-hero-card {
+              padding: 18px !important;
+              border-radius: 24px !important;
+            }
+
+            .business-dashboard-hero-card h1 {
+              font-size: clamp(24px, 2.1vw, 30px) !important;
+            }
+
+            .business-dashboard-status-strip {
+              margin-bottom: 14px !important;
+            }
+
+            .business-dashboard-today-focus {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+              padding: 10px !important;
+              margin-bottom: 10px !important;
+            }
+
+            .business-dashboard-hero-context,
+            .business-dashboard-primary-action {
+              display: flex !important;
+            }
+
+            .business-dashboard-quick-access {
+              display: grid;
+            }
+
+            .business-dashboard-community-entry {
+              display: none !important;
+            }
+
+            .business-dashboard-quick-access-grid {
+              grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+            }
+
+            .business-dashboard-glance-grid {
+              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+              gap: 10px !important;
+            }
+
+            .business-dashboard-main-grid {
+              display: grid !important;
+              grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+              gap: 18px;
+              align-items: start;
+            }
+
+            .business-dashboard-primary-column,
+            .business-dashboard-secondary-column {
+              display: grid !important;
+              gap: 18px;
+              min-width: 0;
+            }
+
+            .business-dashboard-section-card,
+            .business-dashboard-leads-card {
+              margin-bottom: 0 !important;
+              padding: 18px !important;
+              border-radius: 22px !important;
+            }
+
+            .business-dashboard-tools-row {
+              display: grid !important;
+              grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+              gap: 18px;
+              align-items: stretch;
+              margin-top: 18px;
+            }
+
+            .business-dashboard-tools-section {
+              margin-bottom: 0 !important;
+            }
+
+            .business-dashboard-tools-section > button,
+            .business-dashboard-upgrade-card {
+              min-height: 100%;
+            }
+          }
         `}
       </style>
-      <section style={dashboardHeaderSection}>
-        <div style={topBar}>
-          <div style={brandWrap}>
-            <span style={brandMain}>Meetro</span>
-            <span style={brandBadge}>Business</span>
-          </div>
-
-          <button
-            onClick={() => {
-              localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
-              setPage("contractorProfile");
-            }}
-            style={profileMini}
-          >
-            {profile?.image_url ? (
-              <img src={profile.image_url} alt={businessName} style={miniAvatar} />
-            ) : (
-              <span style={profileInitial}>
-                {String(businessName || "B").charAt(0).toUpperCase()}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {hasActiveEmergency && (
-          <div
-            style={emergencyChatBanner}
-            role="button"
-            tabIndex={0}
-            onClick={() =>
-              openActiveEmergencyConversation(setPage, "businessDashboard")
-            }
-          >
-            <div>
-              <strong style={emergencyChatTitle}>
-                <span style={emergencyAlertMark}>!</span>
-                {t("emergencyNeedsAttention")}
-              </strong>
-              <p style={emergencyChatText}>{dashboardEmergencyService}</p>
+      <div className="business-dashboard-content-lane" style={dashboardContentLane}>
+        <section className="business-dashboard-header-section" style={dashboardHeaderSection}>
+          <div style={topBar}>
+            <div style={brandWrap}>
+              <span style={brandMain}>Meetro</span>
+              <span style={brandBadge}>Business</span>
             </div>
 
             <button
-              style={emergencyChatButton}
-              onClick={(event) => {
-                event.stopPropagation();
-                openActiveEmergencyConversation(setPage, "businessDashboard")
+              onClick={() => {
+                openBusinessProfile();
               }}
+              style={profileMini}
             >
-              {t("openEmergencyChat")}
+              {profile?.image_url ? (
+                <img src={profile.image_url} alt={businessName} style={miniAvatar} />
+              ) : (
+                <span style={profileInitial}>
+                  {String(businessName || "B").charAt(0).toUpperCase()}
+                </span>
+              )}
             </button>
           </div>
-        )}
 
-        <div style={statusStrip}>
-          <button
-            style={statusItem}
-            onClick={() => {
-              const next = setBusinessAvailability(!availableNow);
-              setAvailableNow(next);
-            }}
-          >
-            <span style={statusDot(availableNow)}></span>
-            <div>
-              <strong>{availableNow ? text.online : text.offline}</strong>
-              <p>{availableNow ? text.available : text.notAvailable}</p>
-            </div>
-          </button>
-
-          <button style={statusItem} onClick={() => setPage("messagesInbox")}>
-            <span style={messageIcon} aria-hidden="true">
-              <span style={messageIconLine} />
-            </span>
-            <div>
-              <strong>{text.messages}</strong>
-              <p>
-                {unreadMessages} {text.unread}
-              </p>
-            </div>
-          </button>
-        </div>
-
-        <section className="business-dashboard-hero-card" style={heroCard}>
-          <div style={heroHeader}>
-            <div>
-              <h1 style={heroTitle}>{text.dashboard}</h1>
-
-              <p style={heroSubtitle}>{text.subtitle}</p>
-              <p style={businessNameLine}>{businessName}</p>
-            </div>
-          </div>
-
-          <div style={todayFocusPanel}>
-            <div style={todayFocusItem}>
-              <span>{language === "es" ? "Enfoque de hoy" : "Today's Focus"}</span>
-              <strong>
-                {todayScheduleCount > 0
-                  ? language === "es"
-                    ? "Atender la agenda"
-                    : "Work the schedule"
-                  : language === "es"
-                  ? "Revisar oportunidades"
-                  : "Review opportunities"}
-              </strong>
-            </div>
-            <div style={todayFocusItem}>
-              <span>{language === "es" ? "Siguiente acción" : "Next Action"}</span>
-              <strong>
-                {pendingQuotesCount > 0
-                  ? language === "es"
-                    ? "Revisar cotizaciones"
-                    : "Review pending quotes"
-                  : language === "es"
-                  ? "Continuar trabajo"
-                  : "Continue Work"}
-              </strong>
-            </div>
-          </div>
-
-          <div className="business-dashboard-glance-grid" style={glanceGrid}>
+          {hasActiveEmergency && (
             <div
-              style={
-                scheduleResponseAlertCount > 0
-                  ? pendingQuoteGlowWrap
-                  : {}
+              style={emergencyChatBanner}
+              role="button"
+              tabIndex={0}
+              onClick={() =>
+                openActiveEmergencyConversation(setPage, "businessDashboard")
               }
             >
-              <GlanceItem
-                title={text.todayJobs}
-                value={todayScheduleCount}
-                note={
-                  scheduleResponseAlertCount > 0
-                    ? language === "es"
-                      ? "Respuesta de cita"
-                      : "Appointment response"
-                    : text.scheduledToday
-                }
-                onClick={openFirstScheduledConversation}
-              />
-            </div>
-
-            <GlanceItem
-              title={text.activeJobs}
-              value={activeProjectsCount}
-              note={text.inProgress}
-              onClick={openFirstActiveProjectConversation}
-            />
-
-            <div
-              style={
-                quoteResponseAlertCount > 0
-                  ? pendingQuoteGlowWrap
-                  : {}
-              }
-            >
-              <GlanceItem
-                title={text.pendingQuotes}
-                value={pendingQuotesCount}
-                note={text.awaitingResponse}
-                onClick={() =>
-                  openWorkCenterSection("quotes", {
-                    quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
-                  })
-                }
-              />
-            </div>
-          </div>
-        </section>
-      </section>
-
-      <section style={sectionCard}>
-        <div style={sectionTop}>
-          <div>
-            <h2 style={sectionTitle}>
-              {text.nextUpToday}
-            </h2>
-            <p style={sectionSub}>{text.nextUpDescription}</p>
-          </div>
-
-          <button
-            style={linkButton}
-            onClick={() => {
-              openWorkCenterSection("schedule", { filter: "today" });
-            }}
-          >
-            {text.viewFullSchedule} →
-          </button>
-        </div>
-
-        <div style={activeWorkList}>
-          {businessSchedule.length > 0 ? (
-            businessSchedule.slice(0, 4).map((item) => {
-              const scheduleItem = formatDashboardScheduleItem(item, language);
-
-              return (
-                <WorkRow
-                  key={item.id}
-                  title={scheduleItem.title}
-                  meta={
-                    scheduleItem.meta ||
-                    text.customerLocation
-                  }
-                  status={scheduleItem.status}
-                  time={scheduleItem.time}
-                  dateLabel={scheduleItem.dateLabel}
-                  onClick={() => {
-                    if (openRelationshipConversation(item, "schedule")) return;
-                    openWorkCenterSection("schedule", { filter: "today" });
-                  }}
-                />
-              );
-            })
-          ) : (
-            <div style={emptyScheduleCard}>
               <div>
-                <strong>{t("businessNoAppointmentsToday")}</strong>
-                <p>{t("businessNoAppointmentsTodayText")}</p>
+                <strong style={emergencyChatTitle}>
+                  <span style={emergencyAlertMark}>!</span>
+                  {t("emergencyNeedsAttention")}
+                </strong>
+                <p style={emergencyChatText}>{dashboardEmergencyService}</p>
               </div>
+
+              <button
+                style={emergencyChatButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openActiveEmergencyConversation(setPage, "businessDashboard")
+                }}
+              >
+                {t("openEmergencyChat")}
+              </button>
             </div>
           )}
-        </div>
-      </section>
 
-      <section style={leadsCard}>
-        <div style={sectionTop}>
-          <h2 style={sectionTitle}>{text.newLeads}</h2>
+          <div className="business-dashboard-status-strip" style={statusStrip}>
+            <button
+              style={statusItem}
+              onClick={() => {
+                const next = setBusinessAvailability(!availableNow);
+                setAvailableNow(next);
+              }}
+            >
+              <span style={statusDot(availableNow)}></span>
+              <div>
+                <strong>{availableNow ? text.online : text.offline}</strong>
+                <p>{availableNow ? text.available : text.notAvailable}</p>
+              </div>
+            </button>
 
-          <button
-            style={linkButton}
-            onClick={() => openWorkCenterSection("pending")}
-          >
-            {text.viewAllLeads} →
-          </button>
-        </div>
-
-        {matchingDashboardLeads.length > 0 ? (
-          matchingDashboardLeads.map((request) => (
-            <LeadCard
-              key={request.id || request.requestId || formatLeadTitle(request)}
-              request={request}
-              category={formatLeadCategory(request)}
-              title={formatLeadTitle(request)}
-              location={formatLeadLocation(request)}
-              time={request.posted || request.date || t("dashboardRecentlyPosted")}
-              setPage={setPage}
-              openWorkCenterSection={openWorkCenterSection}
-            />
-          ))
-        ) : (
-          <div style={emptyLeadsState}>
-            <strong>{t("dashboardNoNewLeads")}</strong>
-
-            <p>{t("dashboardNoNewLeadsText")}</p>
-          </div>
-        )}
-      </section>
-
-      <section style={singleActionSection}>
-        <button
-          style={quoteActionButton}
-          onClick={() => setPage("businessCommandCenter")}
-        >
-          <div style={quoteActionIcon}>
-            <MeetroIcon name="businessTools" size={34} decorative />
+            <button style={statusItem} onClick={() => setPage("messagesInbox")}>
+              <span style={messageIcon} aria-hidden="true">
+                <span style={messageIconLine} />
+              </span>
+              <div>
+                <strong>{text.messages}</strong>
+                <p>
+                  {unreadMessages} {text.unread}
+                </p>
+              </div>
+            </button>
           </div>
 
-          <div style={quoteActionContent}>
-            <span style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
+          <section className="business-dashboard-hero-card" style={heroCard}>
+            <div style={heroHeader}>
+              <div>
+                <h1 style={heroTitle}>{text.dashboard}</h1>
 
-            <strong style={{ fontSize: "18px" }}>
-              {text.businessToolsTitle}
-            </strong>
+                <p style={heroSubtitle}>{text.subtitle}</p>
+                <p style={businessNameLine}>{businessName}</p>
+              </div>
 
-            <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
-              {text.businessToolsDescription}
-            </span>
-
-            <div style={businessToolsFeatureList} aria-hidden="true">
-              {text.businessToolsFeatures.map((feature) => (
-                <span key={feature} style={businessToolsFeatureChip}>
-                  {feature}
+              <div
+                className="business-dashboard-hero-context"
+                style={heroDesktopContext}
+                aria-label={text.dashboard}
+              >
+                <span style={heroContextPill}>{formatCategory(businessCategory)}</span>
+                <span style={heroAvailabilityPill(availableNow)}>
+                  {availableNow ? text.available : text.notAvailable}
                 </span>
-              ))}
+              </div>
             </div>
 
-            <span style={businessToolsCta}>
-              {text.openBusinessTools} →
-            </span>
-          </div>
-        </button>
-      </section>
+            <div className="business-dashboard-today-focus" style={todayFocusPanel}>
+              <div style={todayFocusItem}>
+                <span>{text.todayFocus}</span>
+                <strong>
+                  {todayScheduleCount > 0
+                    ? text.workTheSchedule
+                    : text.reviewOpportunities}
+                </strong>
+              </div>
+              <div style={todayFocusItem}>
+                <span>{text.nextAction}</span>
+                <strong>
+                  {pendingQuotesCount > 0
+                    ? text.reviewPendingQuotes
+                    : text.continueWork}
+                </strong>
+              </div>
+            </div>
 
-      <section style={upgradeCard}>
-        <div>
-          <span style={upgradeBadge}>Founding Pro</span>
-          <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
-          <p style={upgradeText}>{text.upgradeText}</p>
+            <div
+              className="business-dashboard-primary-action"
+              style={primaryActionPanel}
+            >
+              <div style={primaryActionCopy}>
+                <span style={primaryActionEyebrow}>{text.nextAction}</span>
+                <strong style={primaryActionTitle}>{dashboardNextAction.label}</strong>
+                <p style={primaryActionNote}>{dashboardNextAction.note}</p>
+              </div>
+
+              <button
+                type="button"
+                style={primaryActionButton}
+                onClick={dashboardNextAction.onClick}
+              >
+                {text.openNextAction} →
+              </button>
+            </div>
+
+            <section
+              className="business-dashboard-quick-access"
+              style={quickAccessPanel}
+              aria-label={text.quickAccessTitle}
+            >
+              <div style={quickAccessHeader}>
+                <span>{text.quickAccessTitle}</span>
+              </div>
+
+              <div className="business-dashboard-quick-access-grid" style={quickAccessGrid}>
+                {dashboardQuickAccessItems.map((item) => (
+                  <DashboardQuickAccessShortcut key={item.key} {...item} />
+                ))}
+              </div>
+            </section>
+
+            <div className="business-dashboard-glance-grid" style={glanceGrid}>
+              <div
+                style={
+                  scheduleResponseAlertCount > 0
+                    ? pendingQuoteGlowWrap
+                    : {}
+                }
+              >
+                <GlanceItem
+                  title={text.todayJobs}
+                  value={todayScheduleCount}
+                  note={
+                    scheduleResponseAlertCount > 0
+                      ? language === "es"
+                        ? "Respuesta de cita"
+                        : "Appointment response"
+                      : text.scheduledToday
+                  }
+                  onClick={openFirstScheduledConversation}
+                />
+              </div>
+
+              <GlanceItem
+                title={text.activeJobs}
+                value={activeProjectsCount}
+                note={text.inProgress}
+                onClick={openFirstActiveProjectConversation}
+              />
+
+              <div
+                style={
+                  quoteResponseAlertCount > 0
+                    ? pendingQuoteGlowWrap
+                    : {}
+                }
+              >
+                <GlanceItem
+                  title={text.pendingQuotes}
+                  value={pendingQuotesCount}
+                  note={text.awaitingResponse}
+                  onClick={() =>
+                    openWorkCenterSection("quotes", {
+                      quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section
+          className="business-dashboard-community-entry"
+          style={communityEntrySection}
+        >
+          <button
+            type="button"
+            style={communityEntryCard}
+            onClick={() => setPage("discover")}
+          >
+            <span style={communityEntryIcon}>
+              <MeetroIcon name="discover" size={24} decorative />
+            </span>
+            <span style={communityEntryCopy}>
+              <strong style={communityEntryTitle}>
+                {t("communityEntryTitle", language)}
+              </strong>
+              <span style={communityEntryText}>
+                {t("communityEntryBusinessCopy", language)}
+              </span>
+            </span>
+            <span style={communityEntryAction}>
+              {t("communityOpenAction", language)} →
+            </span>
+          </button>
+        </section>
+
+        <div className="business-dashboard-main-grid" style={dashboardDesktopFlow}>
+          <div className="business-dashboard-primary-column" style={dashboardDesktopFlow}>
+            <section className="business-dashboard-section-card" style={sectionCard}>
+              <div style={sectionTop}>
+                <div>
+                  <h2 style={sectionTitle}>
+                    {text.nextUpToday}
+                  </h2>
+                  <p style={sectionSub}>{text.nextUpDescription}</p>
+                </div>
+
+                <button
+                  style={linkButton}
+                  onClick={() => {
+                    openWorkCenterSection("schedule", { filter: "today" });
+                  }}
+                >
+                  {text.viewFullSchedule} →
+                </button>
+              </div>
+
+              <div style={activeWorkList}>
+                {businessSchedule.length > 0 ? (
+                  businessSchedule.slice(0, 4).map((item) => {
+                    const scheduleItem = formatDashboardScheduleItem(item, language);
+
+                    return (
+                      <WorkRow
+                        key={item.id}
+                        title={scheduleItem.title}
+                        meta={
+                          scheduleItem.meta ||
+                          text.customerLocation
+                        }
+                        status={scheduleItem.status}
+                        time={scheduleItem.time}
+                        dateLabel={scheduleItem.dateLabel}
+                        onClick={() => {
+                          if (openRelationshipConversation(item, "schedule")) return;
+                          openWorkCenterSection("schedule", { filter: "today" });
+                        }}
+                      />
+                    );
+                  })
+                ) : (
+                  <div style={emptyScheduleCard}>
+                    <div>
+                      <strong>{t("businessNoAppointmentsToday")}</strong>
+                      <p>{t("businessNoAppointmentsTodayText")}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="business-dashboard-secondary-column" style={dashboardDesktopFlow}>
+            <section className="business-dashboard-leads-card" style={leadsCard}>
+              <div style={sectionTop}>
+                <h2 style={sectionTitle}>{text.newLeads}</h2>
+
+                <button
+                  style={linkButton}
+                  onClick={() => openWorkCenterSection("pending")}
+                >
+                  {text.viewAllLeads} →
+                </button>
+              </div>
+
+              {matchingDashboardLeads.length > 0 ? (
+                matchingDashboardLeads.map((request) => (
+                  <LeadCard
+                    key={request.id || request.requestId || formatLeadTitle(request)}
+                    request={request}
+                    category={formatLeadCategory(request)}
+                    title={formatLeadTitle(request)}
+                    location={formatLeadLocation(request)}
+                    time={request.posted || request.date || t("dashboardRecentlyPosted")}
+                    setPage={setPage}
+                    openWorkCenterSection={openWorkCenterSection}
+                  />
+                ))
+              ) : (
+                <div style={emptyLeadsState}>
+                  <strong>{t("dashboardNoNewLeads")}</strong>
+
+                  <p>{t("dashboardNoNewLeadsText")}</p>
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-      </section>
+
+        <div className="business-dashboard-tools-row" style={dashboardDesktopFlow}>
+          <section className="business-dashboard-tools-section" style={singleActionSection}>
+            <button
+              style={quoteActionButton}
+              onClick={() => setPage("businessCommandCenter")}
+            >
+              <div style={quoteActionIcon}>
+                <MeetroIcon name="businessTools" size={34} decorative />
+              </div>
+
+              <div style={quoteActionContent}>
+                <span style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
+
+                <strong style={{ fontSize: "18px" }}>
+                  {text.businessToolsTitle}
+                </strong>
+
+                <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
+                  {text.businessToolsDescription}
+                </span>
+
+                <div style={businessToolsFeatureList} aria-hidden="true">
+                  {text.businessToolsFeatures.map((feature) => (
+                    <span key={feature} style={businessToolsFeatureChip}>
+                      {feature}
+                    </span>
+                  ))}
+                </div>
+
+                <span style={businessToolsCta}>
+                  {text.openBusinessTools} →
+                </span>
+              </div>
+            </button>
+          </section>
+
+          <section className="business-dashboard-upgrade-card" style={upgradeCard}>
+            <div>
+              <span style={upgradeBadge}>Founding Pro</span>
+              <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
+              <p style={upgradeText}>{text.upgradeText}</p>
+            </div>
+          </section>
+        </div>
+      </div>
 
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
     </div>
@@ -854,6 +1238,33 @@ function QuickAction({ icon, label, note, badge, onClick }) {
 
       <strong>{label}</strong>
       <span>{note}</span>
+    </button>
+  );
+}
+
+function DashboardQuickAccessShortcut({ icon, label, note, tone, toneBg, onClick }) {
+  return (
+    <button
+      type="button"
+      className="business-dashboard-quick-access-item"
+      style={quickAccessShortcut}
+      onClick={onClick}
+    >
+      <span
+        style={{
+          ...quickAccessIcon,
+          color: tone,
+          background: toneBg,
+        }}
+        aria-hidden="true"
+      >
+        <MeetroIcon name={icon} size={19} decorative />
+      </span>
+
+      <span style={quickAccessCopy}>
+        <strong>{label}</strong>
+        <span>{note}</span>
+      </span>
     </button>
   );
 }
@@ -960,6 +1371,14 @@ const pageWrapper = {
   color: "#111827",
   maxWidth: "100%",
   overflowX: "hidden",
+};
+
+const dashboardContentLane = {
+  display: "contents",
+};
+
+const dashboardDesktopFlow = {
+  display: "contents",
 };
 
 const dashboardHeaderSection = {
@@ -1101,7 +1520,53 @@ const heroHeader = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
+  gap: "16px",
 };
+
+const heroDesktopContext = {
+  display: "none",
+  alignItems: "flex-end",
+  justifyContent: "flex-start",
+  flexDirection: "column",
+  gap: "8px",
+  flexShrink: 0,
+  maxWidth: "260px",
+};
+
+const heroContextPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  maxWidth: "100%",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  background: "rgba(255,255,255,0.10)",
+  color: "#dbeafe",
+  padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: "900",
+  lineHeight: 1,
+  whiteSpace: "normal",
+  textAlign: "right",
+};
+
+const heroAvailabilityPill = (available) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  maxWidth: "100%",
+  borderRadius: "999px",
+  border: available
+    ? "1px solid rgba(34,197,94,0.34)"
+    : "1px solid rgba(148,163,184,0.34)",
+  background: available ? "rgba(34,197,94,0.16)" : "rgba(148,163,184,0.14)",
+  color: available ? "#bbf7d0" : "#e2e8f0",
+  padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: "950",
+  lineHeight: 1,
+  textAlign: "right",
+});
 
 const heroTitle = {
   margin: "0 0 8px",
@@ -1142,6 +1607,121 @@ const todayFocusItem = {
   color: "#ffffff",
 };
 
+const primaryActionPanel = {
+  display: "none",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
+  marginBottom: "12px",
+  padding: "12px 14px",
+  borderRadius: "20px",
+  border: "1px solid rgba(255,255,255,0.14)",
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.07))",
+  color: "#ffffff",
+};
+
+const primaryActionCopy = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+};
+
+const primaryActionEyebrow = {
+  color: "#bfdbfe",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const primaryActionTitle = {
+  color: "#ffffff",
+  fontSize: "16px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+};
+
+const primaryActionNote = {
+  margin: 0,
+  color: "#cbd5e1",
+  fontSize: "12px",
+  lineHeight: 1.3,
+  fontWeight: "800",
+};
+
+const primaryActionButton = {
+  border: "1px solid rgba(255,255,255,0.20)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.94)",
+  color: "#312e81",
+  padding: "10px 13px",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  boxShadow: "0 10px 22px rgba(15,23,42,0.16)",
+};
+
+const quickAccessPanel = {
+  marginBottom: "12px",
+  padding: "10px 12px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.94)",
+  color: "#0f172a",
+  border: "1px solid rgba(255,255,255,0.82)",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.10)",
+};
+
+const quickAccessHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  marginBottom: "8px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "12px",
+  fontWeight: "950",
+};
+
+const quickAccessGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))",
+  gap: "8px",
+};
+
+const quickAccessShortcut = {
+  border: "none",
+  background: "transparent",
+  borderRadius: "16px",
+  padding: "8px",
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  textAlign: "left",
+  cursor: "pointer",
+  minWidth: 0,
+  fontFamily: "inherit",
+  color: "#0f172a",
+};
+
+const quickAccessIcon = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "13px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const quickAccessCopy = {
+  display: "grid",
+  gap: "2px",
+  minWidth: 0,
+  lineHeight: 1.2,
+  fontSize: "12px",
+};
+
 const glanceGrid = {
   display: "grid",
   gap: "14px",
@@ -1180,6 +1760,69 @@ const glanceNote = {
   fontSize: "12px",
 };
 
+const communityEntrySection = {
+  marginBottom: "18px",
+};
+
+const communityEntryCard = {
+  width: "100%",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  borderRadius: "24px",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.97)), var(--meetro-surface-sage, rgba(238,244,234,0.9)))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
+  padding: "16px",
+  display: "grid",
+  gridTemplateColumns: "48px 1fr",
+  gap: "12px",
+  alignItems: "center",
+  textAlign: "left",
+  color: "#0f172a",
+  cursor: "pointer",
+  boxSizing: "border-box",
+};
+
+const communityEntryIcon = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "18px",
+  background:
+    "linear-gradient(135deg, var(--meetro-surface-sage, rgba(238,244,234,0.9)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  display: "grid",
+  placeItems: "center",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+};
+
+const communityEntryCopy = {
+  display: "grid",
+  gap: "5px",
+  minWidth: 0,
+};
+
+const communityEntryTitle = {
+  color: "#111827",
+  fontSize: "18px",
+  lineHeight: 1.1,
+  fontWeight: "950",
+};
+
+const communityEntryText = {
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: "700",
+};
+
+const communityEntryAction = {
+  gridColumn: "1 / -1",
+  justifySelf: "start",
+  marginTop: "2px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "14px",
+  fontWeight: "950",
+};
+
 const singleActionSection = {
   marginTop: 0,
   marginBottom: "20px",
@@ -1187,9 +1830,9 @@ const singleActionSection = {
 
 const quoteActionButton = {
   width: "100%",
-  border: "1px solid rgba(124,92,255,0.42)",
+  border: "1px solid rgba(31,77,52,0.28)",
   background:
-    "linear-gradient(135deg, #ffffff 0%, #f8f7ff 44%, #eef2ff 100%)",
+    "linear-gradient(135deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)) 0%, var(--meetro-surface-warm, rgba(251,246,237,0.92)) 44%, var(--meetro-surface-sage, rgba(238,244,234,0.9)) 100%)",
   borderRadius: "26px",
   padding: "20px",
   display: "flex",
@@ -1199,7 +1842,7 @@ const quoteActionButton = {
   cursor: "pointer",
   color: "#111827",
   boxShadow:
-    "0 18px 42px rgba(79,70,229,0.18), 0 1px 0 rgba(255,255,255,0.92) inset",
+    "0 18px 42px rgba(49,35,20,0.12), 0 1px 0 rgba(255,255,255,0.92) inset",
   textAlign: "left",
   boxSizing: "border-box",
   minWidth: 0,
@@ -1209,13 +1852,14 @@ const quoteActionIcon = {
   width: "58px",
   height: "58px",
   borderRadius: "20px",
-  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+  background:
+    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   color: "#ffffff",
   flexShrink: 0,
-  boxShadow: "0 14px 26px rgba(79,70,229,0.28)",
+  boxShadow: "0 14px 26px rgba(49,35,20,0.18)",
 };
 
 
@@ -1229,7 +1873,7 @@ const quoteActionContent = {
 };
 
 const quoteActionEyebrow = {
-  color: "#4f46e5",
+  color: "var(--meetro-color-coffee, #4a3428)",
   fontSize: "11px",
   fontWeight: "950",
   letterSpacing: "0.08em",
@@ -1245,9 +1889,9 @@ const businessToolsFeatureList = {
 };
 
 const businessToolsFeatureChip = {
-  border: "1px solid rgba(79,70,229,0.16)",
-  background: "rgba(255,255,255,0.72)",
-  color: "#4338ca",
+  border: "1px solid rgba(31,77,52,0.16)",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.72))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   borderRadius: "999px",
   padding: "5px 8px",
   fontSize: "11px",
@@ -1258,19 +1902,19 @@ const businessToolsFeatureChip = {
 
 const businessToolsCta = {
   marginTop: "4px",
-  color: "#312e81",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   fontSize: "14px",
   fontWeight: "950",
 };
 
 
 const sectionCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   borderRadius: "26px",
   padding: "20px",
   marginBottom: "18px",
-  border: "1px solid rgba(203,213,225,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.10)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const sectionTop = {
@@ -1301,7 +1945,7 @@ const sectionSub = {
 const linkButton = {
   border: "none",
   background: "transparent",
-  color: "#5b3df5",
+  color: "var(--meetro-color-forest, #1f4d34)",
   fontWeight: "900",
   cursor: "pointer",
   whiteSpace: "nowrap",
@@ -1507,8 +2151,8 @@ const scheduleTimeBadge = {
   width: "70px",
   minWidth: "70px",
   borderRadius: "16px",
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -1521,8 +2165,8 @@ const workStatus = {
   gridArea: "status",
   justifySelf: "start",
   maxWidth: "100%",
-  background: "#eef2ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 10px",
   borderRadius: "999px",
   fontSize: "12px",
@@ -1551,12 +2195,12 @@ const emptyLeadsState = {
 };
 
 const leadsCard = {
-  background: "white",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   borderRadius: "26px",
   padding: "20px",
   marginBottom: "16px",
-  border: "1px solid rgba(203,213,225,0.95)",
-  boxShadow: "0 18px 42px rgba(15,23,42,0.10)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
 };
 
 const leadCard = {
@@ -1578,7 +2222,7 @@ const leadThumb = {
   width: "58px",
   height: "58px",
   borderRadius: "18px",
-  background: "#f3f0ff",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1586,8 +2230,8 @@ const leadThumb = {
 };
 
 const leadBadge = {
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "4px 8px",
   borderRadius: "999px",
   fontSize: "12px",
@@ -1606,8 +2250,8 @@ const leadMeta = {
 };
 
 const newBadge = {
-  background: "#f3f0ff",
-  color: "#5b3df5",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
   padding: "7px 10px",
   borderRadius: "999px",
   fontWeight: "900",
@@ -1615,14 +2259,15 @@ const newBadge = {
 };
 
 const upgradeCard = {
-  background: "linear-gradient(135deg, #5b3df5 0%, #8b5cf6 100%)",
+  background:
+    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   borderRadius: "26px",
   padding: "20px",
   display: "flex",
   gap: "14px",
   alignItems: "center",
-  boxShadow: "0 18px 40px rgba(91,61,245,0.22)",
+  boxShadow: "0 18px 40px rgba(49,35,20,0.18)",
 };
 
 const upgradeBadge = {
