@@ -61,8 +61,18 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /"\/privacy"/);
   assert.match(publicSite, /"\/terms"/);
   assert.match(publicSite, /"\/contact"/);
+  assert.match(publicSite, /MEETRO_COMMUNITY_PRIVACY_POLICY\.md\?raw/);
+  assert.match(publicSite, /MEETRO_COMMUNITY_TERMS_OF_USE\.md\?raw/);
+  assert.match(publicSite, /content=\{PUBLIC_DOCUMENTS\.privacy\.content\}/);
+  assert.match(publicSite, /content=\{PUBLIC_DOCUMENTS\.terms\.content\}/);
+  assert.match(publicSite, /function PublicMarkdownDocument/);
   assert.match(publicSite, /Back to Meetro Community/);
   assert.match(publicSite, /href="\/"/);
+  assert.match(publicSite, /public-hero-actions/);
+  assert.match(publicSite, /public-hero-lamp-post/);
+  assert.match(publicSite, /@media \(max-width: 480px\)/);
+  assert.match(publicSite, /max-width: 337px !important/);
+  assert.match(publicSite, /@media \(max-width: 380px\)/);
   assert.doesNotMatch(
     publicSite,
     /BottomNav|MeetroAssistant|BusinessDashboard|MessagesInbox|Work Center|WorkCenter|AuthProvider|SessionProvider|Login|TestFlight|roadmap|pricing|AI details/i
@@ -81,6 +91,21 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(main, /if \(isNativeRuntime\(\)\) return false/);
   assert.match(main, /shouldUsePublicSite \? \(/);
   assert.match(main, /Do not merge these experiences without explicit architectural approval/);
+});
+
+test("public legal links route to existing public legal documents", () => {
+  const publicSite = readFileSync(publicSitePath, "utf8");
+
+  assert.match(publicSite, /const PUBLIC_LINKS = \[/);
+  assert.match(publicSite, /\{ label: "Privacy Policy", href: "\/privacy" \}/);
+  assert.match(publicSite, /\{ label: "Terms of Service", href: "\/terms" \}/);
+  assert.match(publicSite, /\{ label: "Contact Us", href: "\/contact" \}/);
+  assert.match(publicSite, /const PUBLIC_ROUTES = new Set\(\["\/", "\/privacy", "\/terms", "\/contact"\]\)/);
+  assert.match(publicSite, /if \(path === "\/privacy"\)/);
+  assert.match(publicSite, /if \(path === "\/terms"\)/);
+  assert.match(publicSite, /if \(path === "\/contact"\)/);
+  assert.doesNotMatch(publicSite, /Privacy Policy"\s+text="Meetro Community privacy information is maintained/);
+  assert.doesNotMatch(publicSite, /Terms of Service"\s+text="Meetro Community terms of service are maintained/);
 });
 
 test("public presence standard documents the public and app boundary", () => {

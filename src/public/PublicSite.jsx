@@ -1,3 +1,6 @@
+import termsOfUse from "../../docs/KnowledgeBase/MEETRO_COMMUNITY_TERMS_OF_USE.md?raw";
+import privacyPolicy from "../../docs/KnowledgeBase/MEETRO_COMMUNITY_PRIVACY_POLICY.md?raw";
+
 const PUBLIC_LINKS = [
   { label: "Privacy Policy", href: "/privacy" },
   { label: "Terms of Service", href: "/terms" },
@@ -12,6 +15,17 @@ const PUBLIC_NAV_LINKS = [
 ];
 
 const PUBLIC_ROUTES = new Set(["/", "/privacy", "/terms", "/contact"]);
+
+const PUBLIC_DOCUMENTS = {
+  privacy: {
+    title: "Privacy Policy",
+    content: privacyPolicy,
+  },
+  terms: {
+    title: "Terms of Service",
+    content: termsOfUse,
+  },
+};
 
 const journeySteps = [
   {
@@ -108,8 +122,8 @@ function PublicSite() {
   if (path === "/privacy") {
     return (
       <PublicDocumentPage
-        title="Privacy Policy"
-        text="Meetro Community privacy information is maintained by WM FLEX LABS, LLC."
+        title={PUBLIC_DOCUMENTS.privacy.title}
+        content={PUBLIC_DOCUMENTS.privacy.content}
       />
     );
   }
@@ -117,8 +131,8 @@ function PublicSite() {
   if (path === "/terms") {
     return (
       <PublicDocumentPage
-        title="Terms of Service"
-        text="Meetro Community terms of service are maintained by WM FLEX LABS, LLC."
+        title={PUBLIC_DOCUMENTS.terms.title}
+        content={PUBLIC_DOCUMENTS.terms.content}
       />
     );
   }
@@ -141,24 +155,25 @@ function PublicSite() {
 function PublicLanding() {
   return (
     <main style={page}>
-      <section style={heroSection}>
+      <style>{publicResponsiveStyles}</style>
+      <section className="public-hero-section" style={heroSection}>
         <div style={heroSky} aria-hidden="true" />
         <div style={heroNeighborhood} aria-hidden="true">
           <span style={heroHouseLeft} />
           <span style={heroHouseMiddle} />
           <span style={heroHouseRight} />
           <span style={heroStreet} />
-          <span style={heroLampPost} />
-          <span style={heroLampGlow} />
+          <span className="public-hero-lamp-post" style={heroLampPost} />
+          <span className="public-hero-lamp-glow" style={heroLampGlow} />
         </div>
 
-        <nav style={nav} aria-label="Meetro Community public site">
+        <nav className="public-nav" style={nav} aria-label="Meetro Community public site">
           <a href="/" style={brandLink} aria-label="Meetro Community home">
             <span style={wordmark}>meetro</span>
             <span style={communityMark}>Community</span>
           </a>
 
-          <div style={navLinks}>
+          <div className="public-nav-links" style={navLinks}>
             {PUBLIC_NAV_LINKS.map((link) => (
               <a key={link.label} href={link.href} style={navLink}>
                 {link.label}
@@ -170,7 +185,7 @@ function PublicLanding() {
           </div>
         </nav>
 
-        <div style={heroContent}>
+        <div className="public-hero-content" style={heroContent}>
           <p style={trustBadge}>
             <span style={badgeDot} aria-hidden="true" />
             Built around trust. Powered by relationships.
@@ -188,7 +203,7 @@ function PublicLanding() {
             They join because they need someone to understand what they are
             trying to accomplish.
           </p>
-          <div style={heroActions}>
+          <div className="public-hero-actions" style={heroActions}>
             <a href="/contact" style={primaryAction}>
               Join the Journey
             </a>
@@ -318,19 +333,21 @@ function PublicLanding() {
 
 function PublicDocumentPage({
   title,
-  text,
+  text = "",
+  content = "",
   detailText = "",
   closingText = "",
   showEmail = false,
 }) {
   return (
     <main style={documentPage}>
-      <nav style={documentNav} aria-label="Meetro Community public site">
+      <style>{publicResponsiveStyles}</style>
+      <nav className="public-nav" style={documentNav} aria-label="Meetro Community public site">
         <a href="/" style={brandLink}>
           <span style={wordmark}>meetro</span>
           <span style={communityMark}>Community</span>
         </a>
-        <div style={navLinks}>
+        <div className="public-nav-links" style={navLinks}>
           {PUBLIC_LINKS.map((link) => (
             <a key={link.label} href={link.href} style={navLink}>
               {link.label}
@@ -345,7 +362,11 @@ function PublicDocumentPage({
           Built around trust. Powered by relationships.
         </p>
         <h1 style={documentTitle}>{title}</h1>
-        <p style={documentText}>{text}</p>
+        {content ? (
+          <PublicMarkdownDocument content={content} title={title} />
+        ) : (
+          <p style={documentText}>{text}</p>
+        )}
         {detailText && <p style={documentText}>{detailText}</p>}
         {showEmail && (
           <p style={documentText}>
@@ -368,6 +389,59 @@ function PublicDocumentPage({
 
       <PublicFooter />
     </main>
+  );
+}
+
+function PublicMarkdownDocument({ content, title }) {
+  let skippedFirstTitle = false;
+
+  return (
+    <div style={documentContent}>
+      {content.split("\n").map((line, index) => {
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          return <div key={`space-${index}`} style={spacer} />;
+        }
+
+        if (trimmed.startsWith("# ")) {
+          const headingText = trimmed.replace(/^# /, "");
+
+          if (!skippedFirstTitle) {
+            skippedFirstTitle = true;
+            return null;
+          }
+
+          return (
+            <h2 key={index} style={documentHeading}>
+              {headingText}
+            </h2>
+          );
+        }
+
+        if (trimmed.startsWith("## ")) {
+          return (
+            <h2 key={index} style={documentHeading}>
+              {trimmed.replace(/^## /, "")}
+            </h2>
+          );
+        }
+
+        if (trimmed.startsWith("- ")) {
+          return (
+            <p key={index} style={documentListItem}>
+              {"\u2022"} {trimmed.replace(/^- /, "")}
+            </p>
+          );
+        }
+
+        return (
+          <p key={index} style={documentParagraph}>
+            {trimmed}
+          </p>
+        );
+      })}
+    </div>
   );
 }
 
@@ -417,6 +491,88 @@ const fontStack =
 
 const serifStack =
   "Georgia, 'Times New Roman', Times, serif";
+
+const publicResponsiveStyles = `
+  @media (max-width: 480px) {
+    .public-hero-section {
+      align-content: start !important;
+      min-height: 100svh !important;
+      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .public-nav {
+      align-items: flex-start !important;
+      gap: 12px !important;
+    }
+
+    .public-nav-links {
+      gap: 0 !important;
+      margin-left: auto !important;
+    }
+
+    .public-nav-links a:not(:last-child) {
+      display: none !important;
+    }
+
+    .public-hero-content {
+      margin-left: 0 !important;
+      margin-right: auto !important;
+      max-width: min(100%, 337px) !important;
+      padding-top: clamp(14px, 3.2vh, 22px) !important;
+    }
+
+    .public-hero-actions {
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      flex-wrap: nowrap !important;
+      gap: 8px !important;
+      margin-top: 20px !important;
+      max-width: 337px !important;
+    }
+
+    .public-hero-actions a {
+      box-sizing: border-box !important;
+      min-height: 48px !important;
+      padding-left: 14px !important;
+      padding-right: 14px !important;
+    }
+
+    .public-hero-lamp-post {
+      right: 10px !important;
+      top: 48% !important;
+      height: 330px !important;
+      opacity: 0.58 !important;
+    }
+
+    .public-hero-lamp-glow {
+      right: -12px !important;
+      top: calc(48% - 42px) !important;
+      opacity: 0.72 !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .public-hero-content {
+      padding-top: 0 !important;
+    }
+
+    .public-hero-content > p:first-child {
+      margin-bottom: 12px !important;
+    }
+
+    .public-hero-content > p:nth-of-type(2) {
+      margin-top: 16px !important;
+    }
+
+    .public-hero-content > p:nth-of-type(3) {
+      margin-top: 8px !important;
+    }
+
+    .public-hero-actions {
+      margin-top: 12px !important;
+    }
+  }
+`;
 
 const page = {
   minHeight: "100vh",
@@ -1084,6 +1240,36 @@ const documentText = {
   fontSize: "18px",
   lineHeight: 1.58,
   fontWeight: 650,
+};
+
+const documentContent = {
+  marginTop: "22px",
+};
+
+const spacer = {
+  height: "10px",
+};
+
+const documentHeading = {
+  margin: "24px 0 10px",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  fontFamily: serifStack,
+  fontSize: "clamp(22px, 4vw, 30px)",
+  lineHeight: 1.18,
+  fontWeight: 800,
+};
+
+const documentParagraph = {
+  margin: "0 0 12px",
+  color: "var(--meetro-color-ink, #172317)",
+  fontSize: "16px",
+  lineHeight: 1.62,
+  fontWeight: 600,
+};
+
+const documentListItem = {
+  ...documentParagraph,
+  paddingLeft: "10px",
 };
 
 const companyLine = {
