@@ -38,6 +38,14 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /Guided by Ask Meetro\. Powered by Meetro Intelligence\./);
   assert.match(publicSite, /Meetro Community helps professionals become:/);
   assert.match(publicSite, /People may arrive looking for help/);
+  assert.match(publicSite, /Know someone who would appreciate this vision\?/);
+  assert.match(publicSite, /Join the Journey/);
+  assert.match(publicSite, /Invite Someone to the Journey/);
+  assert.match(publicSite, /navigator\.share/);
+  assert.match(publicSite, /navigator\.clipboard\.writeText/);
+  assert.match(publicSite, /function copyPublicShareUrl/);
+  assert.match(publicSite, /Invitation link copied\./);
+  assert.doesNotMatch(publicSite, /referral|invite credits|Share Now|social counters|signup incentives/i);
   assertAppearsInOrder(publicSite, [
     'title: "Relationships"',
     "Connections create opportunity.",

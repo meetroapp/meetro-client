@@ -1,3 +1,4 @@
+import { useState } from "react";
 import termsOfUse from "../../docs/KnowledgeBase/MEETRO_COMMUNITY_TERMS_OF_USE.md?raw";
 import privacyPolicy from "../../docs/KnowledgeBase/MEETRO_COMMUNITY_PRIVACY_POLICY.md?raw";
 
@@ -15,6 +16,10 @@ const PUBLIC_NAV_LINKS = [
 ];
 
 const PUBLIC_ROUTES = new Set(["/", "/privacy", "/terms", "/contact"]);
+
+const JOURNEY_SHARE_TITLE = "Meetro Community";
+const JOURNEY_SHARE_TEXT =
+  "Every trusted relationship begins with understanding.";
 
 const PUBLIC_DOCUMENTS = {
   privacy: {
@@ -153,6 +158,32 @@ function PublicSite() {
 }
 
 function PublicLanding() {
+  const [inviteStatus, setInviteStatus] = useState("");
+
+  async function inviteSomeoneToJourney() {
+    const shareUrl = getPublicShareUrl();
+    const shareData = {
+      title: JOURNEY_SHARE_TITLE,
+      text: JOURNEY_SHARE_TEXT,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator?.share) {
+        await navigator.share(shareData);
+        setInviteStatus("Invitation ready.");
+        return;
+      }
+
+      await copyPublicShareUrl(shareUrl);
+      setInviteStatus("Invitation link copied.");
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+
+      setInviteStatus("Copy this page link to invite someone.");
+    }
+  }
+
   return (
     <main style={page}>
       <style>{publicResponsiveStyles}</style>
@@ -324,11 +355,55 @@ function PublicLanding() {
           People may arrive looking for help. They stay because they found
           people they trust.
         </p>
+        <div style={promiseActions}>
+          <a href="/contact" style={primaryAction}>
+            Join the Journey
+          </a>
+          <div style={inviteBlock}>
+            <p style={inviteIntro}>
+              Know someone who would appreciate this vision?
+            </p>
+            <button
+              type="button"
+              style={inviteAction}
+              onClick={inviteSomeoneToJourney}
+            >
+              Invite Someone to the Journey
+            </button>
+            {inviteStatus && (
+              <p role="status" aria-live="polite" style={inviteStatusText}>
+                {inviteStatus}
+              </p>
+            )}
+          </div>
+        </div>
       </section>
 
       <PublicFooter />
     </main>
   );
+}
+
+function getPublicShareUrl() {
+  const origin = window.location.origin || "https://getmeetro.com";
+  return `${origin}/`;
+}
+
+async function copyPublicShareUrl(shareUrl) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(shareUrl);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = shareUrl;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.left = "-9999px";
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
 }
 
 function PublicDocumentPage({
@@ -1202,6 +1277,43 @@ const promiseText = {
   fontFamily: serifStack,
   fontSize: "clamp(25px, 4vw, 38px)",
   lineHeight: 1.18,
+  fontWeight: 800,
+};
+
+const promiseActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexWrap: "wrap",
+  gap: "18px",
+  marginTop: "26px",
+};
+
+const inviteBlock = {
+  display: "grid",
+  justifyItems: "center",
+  gap: "8px",
+};
+
+const inviteIntro = {
+  margin: 0,
+  color: "var(--meetro-color-muted, #65705f)",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: 750,
+};
+
+const inviteAction = {
+  ...secondaryAction,
+  fontFamily: fontStack,
+  cursor: "pointer",
+};
+
+const inviteStatusText = {
+  margin: 0,
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "13px",
+  lineHeight: 1.3,
   fontWeight: 800,
 };
 
