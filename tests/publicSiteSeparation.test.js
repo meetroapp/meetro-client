@@ -41,23 +41,35 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /Know someone who would appreciate this vision\?/);
   assert.match(publicSite, /Join the Journey/);
   assert.match(publicSite, /Invite Someone to the Journey/);
+  assert.match(publicSite, /PUBLIC_LANGUAGES/);
+  assert.match(publicSite, /English/);
+  assert.match(publicSite, /Español/);
+  assert.match(publicSite, /Português/);
+  assert.match(publicSite, /Français/);
+  assert.match(publicSite, /meetroPublicLanguage/);
+  assert.match(publicSite, /PublicLanguageSwitcher/);
+  assert.match(publicSite, /Cada relación de confianza comienza con/);
+  assert.match(publicSite, /Toda relação de confiança começa com/);
+  assert.match(publicSite, /Toute relation de confiance commence par/);
+  assert.match(publicSite, /Ask Meetro/);
+  assert.match(publicSite, /Meetro Intelligence/);
   assert.match(publicSite, /navigator\.share/);
   assert.match(publicSite, /navigator\.clipboard\.writeText/);
   assert.match(publicSite, /function copyPublicShareUrl/);
   assert.match(publicSite, /Invitation link copied\./);
   assert.doesNotMatch(publicSite, /referral|invite credits|Share Now|social counters|signup incentives/i);
   assertAppearsInOrder(publicSite, [
-    'title: "Relationships"',
+    '["1", "Relationships", "Connections create opportunity."]',
     "Connections create opportunity.",
-    'title: "Communication"',
+    '["2", "Communication", "Conversations create clarity."]',
     "Conversations create clarity.",
-    'title: "Understanding"',
+    '["3", "Understanding", "Understanding creates confidence."]',
     "Understanding creates confidence.",
-    'title: "Decisions"',
+    '["4", "Decisions", "Decisions create direction."]',
     "Decisions create direction.",
-    'title: "Work"',
+    '["5", "Work", "Work creates value."]',
     "Work creates value.",
-    'title: "History"',
+    '["6", "History", "History builds trust."]',
     "History builds trust.",
     "Stronger relationships create more good.",
   ]);
@@ -81,11 +93,12 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /@media \(max-width: 480px\)/);
   assert.match(publicSite, /max-width: 337px !important/);
   assert.match(publicSite, /@media \(max-width: 380px\)/);
+  assert.match(publicSite, /public-language-switcher/);
   assert.doesNotMatch(
     publicSite,
     /BottomNav|MeetroAssistant|BusinessDashboard|MessagesInbox|Work Center|WorkCenter|AuthProvider|SessionProvider|Login|TestFlight|roadmap|pricing|AI details/i
   );
-  assert.doesNotMatch(publicSite, /#login|setPage|localStorage|sessionStorage/);
+  assert.doesNotMatch(publicSite, /#login|setPage|sessionStorage|meetroLanguage/);
 
   assert.doesNotMatch(app, /PublicLanding/);
   assert.doesNotMatch(app, /publicLanding/);
@@ -105,9 +118,9 @@ test("public legal links route to existing public legal documents", () => {
   const publicSite = readFileSync(publicSitePath, "utf8");
 
   assert.match(publicSite, /const PUBLIC_LINKS = \[/);
-  assert.match(publicSite, /\{ label: "Privacy Policy", href: "\/privacy" \}/);
-  assert.match(publicSite, /\{ label: "Terms of Service", href: "\/terms" \}/);
-  assert.match(publicSite, /\{ label: "Contact Us", href: "\/contact" \}/);
+  assert.match(publicSite, /\{ id: "privacy", label: "Privacy Policy", href: "\/privacy" \}/);
+  assert.match(publicSite, /\{ id: "terms", label: "Terms of Service", href: "\/terms" \}/);
+  assert.match(publicSite, /\{ id: "contact", label: "Contact Us", href: "\/contact" \}/);
   assert.match(publicSite, /const PUBLIC_ROUTES = new Set\(\["\/", "\/privacy", "\/terms", "\/contact"\]\)/);
   assert.match(publicSite, /if \(path === "\/privacy"\)/);
   assert.match(publicSite, /if \(path === "\/terms"\)/);
