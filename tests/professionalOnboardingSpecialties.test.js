@@ -321,14 +321,14 @@ test("category-first selector is wired to onboarding and Business Profile only",
   assert.match(selectorSource, /professionalCapabilityCantFind/);
   assert.match(selectorSource, /filteredCategories/);
   assert.match(selectorSource, /activeCategoryId/);
-  assert.match(onboardingSource, /getProfessionalCapabilityCategories/);
-  assert.match(onboardingSource, /t\(category\.labelKey\)/);
+  assert.match(onboardingSource, /getBusinessProfileCapabilityOptionsFromTaxonomy/);
+  assert.match(onboardingSource, /translated === key \? fallback : translated/);
   assert.match(onboardingSource, /professionalCapabilityPrimaryCategory/);
   assert.match(onboardingSource, /primaryServiceCategory/);
   assert.match(onboardingSource, /categories=\{primaryCategoryOptions\}/);
   assert.match(onboardingSource, /selectedCategoryId=\{selectedPrimaryCategory\}/);
-  assert.match(profileSource, /getProfessionalCapabilityCategories/);
-  assert.match(profileSource, /t\(category\.labelKey\)/);
+  assert.match(profileSource, /getBusinessProfileCapabilityOptionsFromTaxonomy/);
+  assert.match(profileSource, /getBusinessProfileCategoryOptionsFromTaxonomy/);
   assert.match(profileSource, /professionalCapabilitySelectedCount/);
   assert.match(profileSource, /categories=\{primaryCategoryOptions\}/);
   assert.match(profileSource, /selectedCategoryId=\{selectedPrimaryCategory\}/);

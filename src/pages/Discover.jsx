@@ -20,8 +20,17 @@ import { getBusinessVerificationProjection } from "../utils/businessVerification
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
   getCommunityDiscoveryInterestsFromTaxonomy,
+  resolveCommunityDiscoveryInterestForSearch,
   searchCommunityTaxonomyAliases,
 } from "../utils/communityTaxonomy";
+
+const COMMUNITY_PREVIEW_LIMIT = 3;
+const COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT = 1;
+const collapsedCommunitySections = Object.freeze({
+  professionals: false,
+  hiring: false,
+  spotlight: false,
+});
 
 function Discover({ setPage, currentPage }) {
   const [discoverMode, setDiscoverMode] = useState("communityHub");
@@ -44,6 +53,9 @@ function Discover({ setPage, currentPage }) {
   );
   const [showDiscoveryInterestPrompt, setShowDiscoveryInterestPrompt] = useState(
     () => localStorage.getItem("meetroCommunityDiscoveryInterestsSeen") !== "true"
+  );
+  const [expandedCommunitySections, setExpandedCommunitySections] = useState(
+    collapsedCommunitySections
   );
 
   const userRole = localStorage.getItem("userRole") || "standard";
@@ -342,13 +354,18 @@ function Discover({ setPage, currentPage }) {
 
     const taxonomyMatches = searchCommunityTaxonomyAliases(query);
     const taxonomyBusinessTerms = taxonomyMatches.flatMap((ecosystem) =>
-      ecosystem.children.flatMap((item) => [
-        item.id,
-        item.label,
-        item.capabilityGroupId,
-        item.legacySignupValue,
-        ...item.aliases,
-      ])
+      [
+        ecosystem.id,
+        ecosystem.label,
+        ...ecosystem.aliases,
+        ...ecosystem.children.flatMap((item) => [
+          item.id,
+          item.label,
+          item.capabilityGroupId,
+          item.legacySignupValue,
+          ...item.aliases,
+        ]),
+      ]
     );
 
     return taxonomyBusinessTerms.some((term) =>
@@ -402,6 +419,36 @@ function Discover({ setPage, currentPage }) {
 
   function getDiscoveryInterest(interestId) {
     return discoveryInterests.find((interest) => interest.id === interestId);
+  }
+
+  function getDiscoveryContext() {
+    const selectedInterests = selectedDiscoveryInterests
+      .map((interestId) => getDiscoveryInterest(interestId))
+      .filter(Boolean);
+
+    if (selectedInterests.length === 0) {
+      return {
+        title: t("communityDiscoveryContextAllTitle", language),
+        copy: t("communityDiscoveryContextAllCopy", language),
+      };
+    }
+
+    const selectedLabels = selectedInterests.map((interest) => interest.label);
+    const selectedLabelText = selectedLabels.join(", ");
+    const copyKey =
+      selectedInterests.length === 1
+        ? "communityDiscoveryContextSingleCopy"
+        : "communityDiscoveryContextMultiCopy";
+
+    return {
+      title: t("communityDiscoveryContextExploring", language).replace(
+        "{interest}",
+        selectedLabelText
+      ),
+      copy: t(copyKey, language)
+        .replace("{interest}", selectedLabelText)
+        .replace("{interests}", selectedLabelText),
+    };
   }
 
   function entryMatchesDiscoveryInterest(entry, interestId, matcher) {
@@ -504,6 +551,13 @@ function Discover({ setPage, currentPage }) {
     setShowDiscoveryInterestPrompt(false);
   }
 
+  function toggleCommunitySectionExpansion(sectionId) {
+    setExpandedCommunitySections((current) => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  }
+
   const marketplaceBusinesses = visibleBusinesses.filter(
     (business) =>
       businessMatchesCategory(business, filter) &&
@@ -516,18 +570,40 @@ function Discover({ setPage, currentPage }) {
     : featuredBusinesses.length
     ? featuredBusinesses
     : businesses;
-  const communityBusinessPreview = orderByDiscoveryInterests(
+  const communityBusinessResults = orderByDiscoveryInterests(
     communitySearchBusinesses,
     businessMatchesSearch
-  ).slice(0, 3);
+  );
+  const communityBusinessPreview = communityBusinessResults.slice(
+    0,
+    expandedCommunitySections.professionals
+      ? communityBusinessResults.length
+      : COMMUNITY_PREVIEW_LIMIT
+  );
   const communitySearchHiringJobs = searchQuery.trim()
     ? allHiringJobs.filter((job) => jobMatchesSearch(job, searchQuery))
     : allHiringJobs;
-  const hiringPreviewJobs = orderByDiscoveryInterests(
+  const communityHiringResults = orderByDiscoveryInterests(
     communitySearchHiringJobs,
     jobMatchesSearch
-  ).slice(0, 3);
-  const spotlightPreviewBusiness = communityBusinessPreview[0] || businesses[0] || null;
+  );
+  const hiringPreviewJobs = communityHiringResults.slice(
+    0,
+    expandedCommunitySections.hiring
+      ? communityHiringResults.length
+      : COMMUNITY_PREVIEW_LIMIT
+  );
+  const communitySpotlightBusinessResults = communityBusinessResults.filter(
+    (business) => !isPausedBusiness(business)
+  );
+  const communitySpotlightPreviewBusinesses = communitySpotlightBusinessResults.slice(
+    0,
+    expandedCommunitySections.spotlight
+      ? communitySpotlightBusinessResults.length
+      : COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT
+  );
+  const spotlightPreviewBusiness =
+    communitySpotlightPreviewBusinesses[0] || businesses[0] || null;
   const spotlightBusinessCount = businesses.filter(
     (business) => !isPausedBusiness(business)
   ).length;
@@ -536,20 +612,14 @@ function Discover({ setPage, currentPage }) {
     spotlightPreviewBusiness?.name ||
     spotlightPreviewBusiness?.business_name ||
     t("communitySpotlightLocalProfessional", language);
-  const communitySpotlightStory = spotlightPreviewBusiness
-    ? {
-        title: t("communitySpotlightStoryTitle", language),
-        text: t("communitySpotlightStoryText", language).replace(
-          "{business}",
-          spotlightBusinessName
-        ),
-        meta: `${getBusinessDisplayCategory(spotlightPreviewBusiness)} · ${getBusinessServiceArea(spotlightPreviewBusiness)}`,
-      }
-    : {
-        title: t("communitySpotlightStoryFallbackTitle", language),
-        text: t("communitySpotlightStoryFallbackText", language),
-        meta: t("communitySpotlightStoryFallbackMeta", language),
-      };
+  const communitySpotlightStory = buildCommunitySpotlightStory(
+    spotlightPreviewBusiness
+  );
+  const communitySpotlightStories = communitySpotlightPreviewBusinesses.length
+    ? communitySpotlightPreviewBusinesses.map((business) =>
+        buildCommunitySpotlightStory(business)
+      )
+    : [communitySpotlightStory];
   const communitySpotlightBusinessLabel =
     spotlightBusinessCount === 1
       ? t("communitySpotlightBusinessSingular", language)
@@ -567,6 +637,30 @@ function Discover({ setPage, currentPage }) {
 
   function isPausedBusiness(business) {
     return getBusinessStatus(business) === "paused";
+  }
+
+  function buildCommunitySpotlightStory(business) {
+    if (!business) {
+      return {
+        title: t("communitySpotlightStoryFallbackTitle", language),
+        text: t("communitySpotlightStoryFallbackText", language),
+        meta: t("communitySpotlightStoryFallbackMeta", language),
+      };
+    }
+
+    const businessName =
+      business.name ||
+      business.business_name ||
+      t("communitySpotlightLocalProfessional", language);
+
+    return {
+      title: t("communitySpotlightStoryTitle", language),
+      text: t("communitySpotlightStoryText", language).replace(
+        "{business}",
+        businessName
+      ),
+      meta: `${getBusinessDisplayCategory(business)} · ${getBusinessServiceArea(business)}`,
+    };
   }
 
   const categories = [
@@ -656,6 +750,26 @@ function Discover({ setPage, currentPage }) {
       );
     };
   }, []);
+
+  useEffect(() => {
+    const taxonomyMatch = resolveCommunityDiscoveryInterestForSearch(searchQuery);
+    if (!taxonomyMatch?.ecosystemId) return;
+    if (!discoveryInterests.some((interest) => interest.id === taxonomyMatch.ecosystemId)) {
+      return;
+    }
+    if (
+      selectedDiscoveryInterests.length === 1 &&
+      selectedDiscoveryInterests[0] === taxonomyMatch.ecosystemId
+    ) {
+      return;
+    }
+
+    saveDiscoveryInterests([taxonomyMatch.ecosystemId]);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setExpandedCommunitySections(collapsedCommunitySections);
+  }, [searchQuery, selectedDiscoveryInterests.join("|")]);
 
   useEffect(() => {
     async function loadPosts() {
@@ -991,54 +1105,70 @@ function Discover({ setPage, currentPage }) {
     );
   };
 
-  const renderDiscoveryBar = () => (
-    <section style={communityDiscoveryBar} aria-label={t("communityDiscoveryBarAria", language)}>
-      <div style={searchBox}>
-        <span style={searchIcon} aria-hidden="true">⌕</span>
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={t("communityDiscoverySearchPlaceholder", language)}
-          style={searchInput}
-        />
-        {searchQuery && (
-          <button
-            type="button"
-            style={clearSearchButton}
-            onClick={() => setSearchQuery("")}
-            aria-label={t("discoverClearSearch", language)}
+  const renderDiscoveryBar = () => {
+    const discoveryContext = getDiscoveryContext();
+
+    return (
+      <>
+        <section
+          style={communityDiscoveryBar}
+          aria-label={t("communityDiscoveryBarAria", language)}
+        >
+          <div style={searchBox}>
+            <span style={searchIcon} aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t("communityDiscoverySearchPlaceholder", language)}
+              style={searchInput}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                style={clearSearchButton}
+                onClick={() => setSearchQuery("")}
+                aria-label={t("discoverClearSearch", language)}
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <div
+            style={communityInterestScroller}
+            aria-label={t("communityDiscoveryInterestsAria", language)}
           >
-            ×
-          </button>
-        )}
-      </div>
+            {discoveryInterests.map((interest) => {
+              const selected = selectedDiscoveryInterests.includes(interest.id);
 
-      <div style={communityInterestScroller} aria-label={t("communityDiscoveryInterestsAria", language)}>
-        {discoveryInterests.map((interest) => {
-          const selected = selectedDiscoveryInterests.includes(interest.id);
+              return (
+                <button
+                  key={interest.id}
+                  type="button"
+                  aria-pressed={selected}
+                  style={{
+                    ...communityInterestChip,
+                    ...(selected ? communityInterestChipActive : {}),
+                  }}
+                  onClick={() => toggleDiscoveryInterest(interest.id)}
+                >
+                  {interest.label}
+                </button>
+              );
+            })}
+            <span style={communityInterestMore}>
+              {t("communityInterestMore", language)}
+            </span>
+          </div>
 
-          return (
-            <button
-              key={interest.id}
-              type="button"
-              aria-pressed={selected}
-              style={{
-                ...communityInterestChip,
-                ...(selected ? communityInterestChipActive : {}),
-              }}
-              onClick={() => toggleDiscoveryInterest(interest.id)}
-            >
-              {interest.label}
-            </button>
-          );
-        })}
-        <span style={communityInterestMore}>
-          {t("communityInterestMore", language)}
-        </span>
-      </div>
+          <div style={communityDiscoveryContext} aria-live="polite">
+            <p style={communityDiscoveryContextTitle}>{discoveryContext.title}</p>
+            <p style={communityDiscoveryContextCopy}>{discoveryContext.copy}</p>
+          </div>
+        </section>
 
-      {showDiscoveryInterestPrompt && (
+        {showDiscoveryInterestPrompt && (
         <div style={communityInterestPrompt}>
           <div>
             <h2 style={communityInterestPromptTitle}>
@@ -1057,8 +1187,9 @@ function Discover({ setPage, currentPage }) {
           </button>
         </div>
       )}
-    </section>
-  );
+      </>
+    );
+  };
 
   const renderCommunityHub = () => (
     <>
@@ -1110,14 +1241,18 @@ function Discover({ setPage, currentPage }) {
             )}
           </div>
 
-          <button
-            type="button"
-            className="meetro-visual-primary-button"
-            style={communitySectionAction}
-            onClick={() => openCommunitySection("businessDirectory")}
-          >
-            {t("communityViewAllBusinesses", language)} →
-          </button>
+          {communityBusinessResults.length > COMMUNITY_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              className="meetro-visual-primary-button"
+              style={communitySectionAction}
+              onClick={() => toggleCommunitySectionExpansion("professionals")}
+            >
+              {expandedCommunitySections.professionals
+                ? t("communityShowFewerProfessionals", language)
+                : t("communityExploreMoreProfessionals", language)}
+            </button>
+          )}
         </section>
 
         <section
@@ -1153,14 +1288,18 @@ function Discover({ setPage, currentPage }) {
             )}
           </div>
 
-          <button
-            type="button"
-            className="meetro-visual-primary-button"
-            style={communitySectionAction}
-            onClick={() => setPage("jobsHiring")}
-          >
-            {t("communityViewAllHiring", language)} →
-          </button>
+          {communityHiringResults.length > COMMUNITY_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              className="meetro-visual-primary-button"
+              style={communitySectionAction}
+              onClick={() => toggleCommunitySectionExpansion("hiring")}
+            >
+              {expandedCommunitySections.hiring
+                ? t("communityShowFewerOpportunities", language)
+                : t("communityExploreMoreOpportunities", language)}
+            </button>
+          )}
         </section>
 
         <section
@@ -1181,26 +1320,34 @@ function Discover({ setPage, currentPage }) {
             </div>
           </div>
 
-          <article style={communitySpotlightCard}>
-            <p style={communitySpotlightEyebrow}>
-              {t("communitySpotlightEyebrow", language)}
-            </p>
-            <h3 style={communitySpotlightTitle}>{communitySpotlightStory.title}</h3>
-            <p style={communitySpotlightText}>{communitySpotlightStory.text}</p>
-            <p style={communitySpotlightCue}>
-              {t("communitySpotlightCue", language)}
-            </p>
-            <p style={communitySpotlightMeta}>{communitySpotlightStory.meta}</p>
-          </article>
+          <div style={communitySpotlightStack}>
+            {communitySpotlightStories.map((story) => (
+              <article key={`${story.title}-${story.meta}`} style={communitySpotlightCard}>
+                <p style={communitySpotlightEyebrow}>
+                  {t("communitySpotlightEyebrow", language)}
+                </p>
+                <h3 style={communitySpotlightTitle}>{story.title}</h3>
+                <p style={communitySpotlightText}>{story.text}</p>
+                <p style={communitySpotlightCue}>
+                  {t("communitySpotlightCue", language)}
+                </p>
+                <p style={communitySpotlightMeta}>{story.meta}</p>
+              </article>
+            ))}
+          </div>
 
-          <button
-            type="button"
-            className="meetro-visual-primary-button"
-            style={communitySectionAction}
-            onClick={() => openCommunitySection("spotlight")}
-          >
-            {t("communityExploreSpotlight", language)} →
-          </button>
+          {communitySpotlightBusinessResults.length > COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              className="meetro-visual-primary-button"
+              style={communitySectionAction}
+              onClick={() => toggleCommunitySectionExpansion("spotlight")}
+            >
+              {expandedCommunitySections.spotlight
+                ? t("communityShowFewerStories", language)
+                : t("communityExploreMoreStories", language)}
+            </button>
+          )}
         </section>
       </section>
     </>
@@ -1393,16 +1540,29 @@ const communityGuideQuestion = {
 
 const communityDiscoveryBar = {
   display: "grid",
-  gap: "12px",
-  marginBottom: "18px",
+  gap: "10px",
+  position: "sticky",
+  top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+  zIndex: 20,
+  marginBottom: "20px",
+  padding: "12px",
+  border: "1px solid rgba(74,52,40,0.10)",
+  borderRadius: "22px",
+  background: "rgba(255,253,248,0.96)",
+  boxShadow: "0 10px 24px rgba(49,35,20,0.08)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
 };
 
 const communityInterestScroller = {
   display: "flex",
-  gap: "8px",
+  flexWrap: "nowrap",
+  gap: "9px",
   overflowX: "auto",
+  overflowY: "hidden",
   WebkitOverflowScrolling: "touch",
-  paddingBottom: "4px",
+  padding: "2px 1px 6px",
+  scrollbarWidth: "thin",
 };
 
 const communityInterestChip = {
@@ -1411,17 +1571,20 @@ const communityInterestChip = {
   borderRadius: "999px",
   background: "var(--meetro-surface-paper)",
   color: "var(--meetro-color-coffee)",
-  padding: "10px 12px",
+  minHeight: "42px",
+  padding: "10px 14px",
   fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "var(--meetro-shadow-soft)",
+  boxShadow: "0 6px 14px rgba(49,35,20,0.05)",
+  whiteSpace: "nowrap",
 };
 
 const communityInterestChipActive = {
   border: "1px solid var(--meetro-color-forest)",
   background: "var(--meetro-color-forest)",
   color: "var(--meetro-surface-paper)",
+  boxShadow: "0 8px 18px rgba(11,58,44,0.16)",
 };
 
 const communityInterestMore = {
@@ -1431,6 +1594,31 @@ const communityInterestMore = {
   fontSize: "13px",
   fontWeight: "900",
   padding: "0 4px",
+  whiteSpace: "nowrap",
+};
+
+const communityDiscoveryContext = {
+  borderTop: "1px solid rgba(74,52,40,0.08)",
+  paddingTop: "9px",
+  display: "grid",
+  gap: "2px",
+  transition: "opacity 160ms ease",
+};
+
+const communityDiscoveryContextTitle = {
+  margin: 0,
+  color: "var(--meetro-color-forest-deep)",
+  fontSize: "13px",
+  lineHeight: 1.3,
+  fontWeight: "950",
+};
+
+const communityDiscoveryContextCopy = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "12px",
+  lineHeight: 1.45,
+  fontWeight: "700",
 };
 
 const communityInterestPrompt = {
@@ -1476,16 +1664,20 @@ const communityInterestSkipButton = {
 
 const communityPreviewStack = {
   display: "grid",
-  gap: "18px",
+  gap: "20px",
   paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+  transition: "opacity 160ms ease, transform 160ms ease",
 };
 
 const communityPreviewSection = {
   border: "1px solid var(--meetro-color-line)",
   borderRadius: "26px",
   background: "var(--meetro-surface-paper)",
-  padding: "16px",
+  padding: "18px",
+  display: "grid",
+  gap: "14px",
   boxShadow: "var(--meetro-shadow-soft)",
+  transition: "opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease",
 };
 
 const communityPreviewHeader = {
@@ -1493,7 +1685,7 @@ const communityPreviewHeader = {
   justifyContent: "space-between",
   gap: "12px",
   alignItems: "flex-start",
-  marginBottom: "14px",
+  marginBottom: 0,
 };
 
 const communityPreviewTitle = {
@@ -1534,7 +1726,7 @@ const communityWarmEmptyCard = {
 const communitySectionAction = {
   width: "100%",
   minHeight: "46px",
-  marginTop: "14px",
+  marginTop: "2px",
   border: "1px solid rgba(255,253,248,0.18)",
   borderRadius: "999px",
   background: "var(--meetro-gradient-community-action)",
@@ -1552,7 +1744,7 @@ const communityHiringGrid = {
 
 const communityHiringCard = {
   display: "grid",
-  gap: "9px",
+  gap: "10px",
   padding: "14px",
   borderRadius: "18px",
   border: "1px solid var(--meetro-color-line)",
@@ -1650,6 +1842,11 @@ const communitySpotlightCard = {
     "linear-gradient(135deg, var(--meetro-surface-warm), var(--meetro-surface-paper))",
   padding: "18px",
   boxShadow: "0 12px 30px rgba(180,83,9,0.08)",
+};
+
+const communitySpotlightStack = {
+  display: "grid",
+  gap: "14px",
 };
 
 const communitySpotlightEyebrow = {

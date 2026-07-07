@@ -67,9 +67,33 @@ test("Community visual adoption preserves progressive discovery destinations", (
   assert.match(discoverSource, /communityBusinessPreview\.map\(\(business\) => renderBusinessCard\(business\)\)/);
   assert.match(discoverSource, /hiringPreviewJobs\.map\(\(job\) => renderHiringPreviewCard\(job\)\)/);
   assert.match(discoverSource, /style=\{communitySpotlightCard\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("businessDirectory"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => setPage\("jobsHiring"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("spotlight"\)\}/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("hiring"\)/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
+  assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
+  assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
+});
+
+test("Community visual refinement keeps sticky discovery calm and mobile tappable", () => {
+  const discoveryStyleBlock = discoverSource.slice(
+    discoverSource.indexOf("const communityDiscoveryBar = {"),
+    discoverSource.indexOf("const communityInterestPrompt = {")
+  );
+  const previewStyleBlock = discoverSource.slice(
+    discoverSource.indexOf("const communityPreviewStack = {"),
+    discoverSource.indexOf("const communityHiringGrid = {")
+  );
+
+  assert.match(discoveryStyleBlock, /top: "calc\(env\(safe-area-inset-top, 0px\) \+ 10px\)"/);
+  assert.match(discoveryStyleBlock, /background: "rgba\(255,253,248,0\.96\)"/);
+  assert.match(discoveryStyleBlock, /boxShadow: "0 10px 24px rgba\(49,35,20,0\.08\)"/);
+  assert.match(discoveryStyleBlock, /WebkitBackdropFilter: "blur\(16px\)"/);
+  assert.match(discoveryStyleBlock, /minHeight: "42px"/);
+  assert.match(discoveryStyleBlock, /whiteSpace: "nowrap"/);
+  assert.match(discoveryStyleBlock, /lineHeight: 1\.45/);
+  assert.match(previewStyleBlock, /gap: "20px"/);
+  assert.match(previewStyleBlock, /display: "grid"/);
+  assert.match(previewStyleBlock, /marginTop: "2px"/);
 });
 
 test("Community remains a shared destination without mobile bottom navigation ownership", () => {

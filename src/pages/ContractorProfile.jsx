@@ -20,7 +20,10 @@ import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
   getProfessionalSpecialtyLabel,
 } from "../utils/professionalOnboardingSpecialties";
-import { getProfessionalCapabilityCategories } from "../utils/professionalCapabilityLibrary";
+import {
+  getBusinessProfileCapabilityOptionsFromTaxonomy,
+  getBusinessProfileCategoryOptionsFromTaxonomy,
+} from "../utils/communityTaxonomy";
 import {
   readBusinessServiceProfile,
   writeBusinessServiceProfile,
@@ -121,43 +124,13 @@ function ContractorProfile({ setPage, currentPage }) {
   const profileReviewStats = getProfessionalReviewStats(profileReviews);
 
   const categories = [
-    ["", t("selectBusinessCategory")],
-    ["professional", t("professionalUser")],
-    ["contractor", t("generalContractor")],
-    ["handyman", t("handyman")],
-    ["applianceRepair", t("applianceRepair")],
-    ["automotiveServices", t("automotiveServices")],
-    ["carDetailing", t("carDetailing")],
-    ["carpentry", t("carpentry")],
-    ["cleaning", t("cleaning")],
-    ["concrete", t("concrete")],
-    ["demolition", t("demolition")],
-    ["doorsWindows", t("doorsWindows")],
-    ["drywall", t("drywall")],
-    ["electrical", t("electrical")],
-    ["fencing", t("fencing")],
-    ["flooring", t("flooring")],
-    ["homeHealthCare", t("homeHealthCare")],
-    ["hvac", t("hvac")],
-    ["junkRemoval", t("junkRemoval")],
-    ["landscaping", t("landscaping")],
-    ["lawnCare", t("lawnCare")],
-    ["mechanic", t("mechanic")],
-    ["mobileServices", t("mobileServices")],
-    ["moving", t("movingCompany")],
-    ["painting", t("painting")],
-    ["paverSealing", t("paverSealing")],
-    ["pestControl", t("pestControl")],
-    ["plumbing", t("plumbing")],
-    ["poolService", t("poolService")],
-    ["pressureWashing", t("pressureWashing")],
-    ["privateTransportation", t("privateTransportation")],
-    ["realEstate", t("realEstate")],
-    ["propertyManagement", t("propertyManagement")],
-    ["roofing", t("roofing")],
-    ["tile", t("tile")],
-    ["treeService", t("treeService")],
-    ["other", t("otherService")],
+    { value: "", label: t("selectBusinessCategory") },
+    ...getBusinessProfileCategoryOptionsFromTaxonomy({
+      translate: (key, fallback) => {
+        const translated = t(key);
+        return translated === key ? fallback : translated;
+      },
+    }),
   ];
 
   useEffect(() => {
@@ -2081,9 +2054,9 @@ function ProfileForm({
   onChange={(e) => setCategory(e.target.value)}
   style={inputStyle}
 >
-  {categories.map(([value, label]) => (
-    <option key={value || "empty"} value={value}>
-      {label}
+  {categories.map((option) => (
+    <option key={option.value || "empty"} value={option.value}>
+      {option.label}
     </option>
   ))}
 </select>
@@ -2354,11 +2327,12 @@ function ServicesOfferedSection({
     PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
     t
   );
-  const primaryCategoryOptions = getProfessionalCapabilityCategories().map((category) => ({
-    id: category.id,
-    label: t(category.labelKey),
-    aliases: category.aliases || [],
-  }));
+  const primaryCategoryOptions = getBusinessProfileCapabilityOptionsFromTaxonomy({
+    translate: (key, fallback) => {
+      const translated = t(key);
+      return translated === key ? fallback : translated;
+    },
+  });
   const selectedPrimaryCategory =
     serviceOptions.find((option) =>
       selectedSpecialties.includes(option.value)

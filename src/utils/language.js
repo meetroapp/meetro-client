@@ -4275,6 +4275,14 @@ const highTrafficParityLabels = {
     communityDiscoverySearchPlaceholder:
       "Search professionals, businesses, specialties, or services...",
     communityDiscoveryInterestsAria: "Discovery interests",
+    communityDiscoveryContextAllTitle: "Exploring Community",
+    communityDiscoveryContextAllCopy:
+      "Discover trusted professionals, local opportunities, and community stories across Meetro Community.",
+    communityDiscoveryContextExploring: "Exploring {interest}",
+    communityDiscoveryContextSingleCopy:
+      "Discover trusted professionals, local opportunities, and community stories related to {interest}.",
+    communityDiscoveryContextMultiCopy:
+      "Discover trusted professionals, local opportunities, and community stories related to {interests}.",
     communityInterestPromptTitle: "What interests you most?",
     communityInterestPromptCopy:
       "Choose a few interests to help Community place what matters near the top. You can still discover everything.",
@@ -4301,6 +4309,8 @@ const highTrafficParityLabels = {
     communityBusinessesEmptyText:
       "Soon, this space will introduce trusted professionals serving your community.",
     communityViewAllBusinesses: "Explore More Businesses",
+    communityExploreMoreProfessionals: "Explore More Professionals",
+    communityShowFewerProfessionals: "Show Fewer Professionals",
     communityHiringTitle: "Hiring",
     communityHiringCopy:
       "Find your next teammate, opportunity, or collaboration.",
@@ -4308,12 +4318,16 @@ const highTrafficParityLabels = {
     communityHiringEmptyText:
       "As local teams grow, Meetro will show opportunities to work, collaborate, and build together.",
     communityViewAllHiring: "Explore More Opportunities",
+    communityExploreMoreOpportunities: "Explore More Opportunities",
+    communityShowFewerOpportunities: "Show Fewer Opportunities",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Discover today’s featured community story.",
     communitySpotlightEyebrow: "Today’s Spotlight",
     communitySpotlightCue:
       "Meet the professional who helped make it possible.",
     communityExploreSpotlight: "Explore Spotlight",
+    communityExploreMoreStories: "Explore More Stories",
+    communityShowFewerStories: "Show Fewer Stories",
     communitySpotlightLocalProfessional: "a local professional",
     communitySpotlightStoryTitle:
       "Trusted work is already shaping your community.",
@@ -4641,6 +4655,14 @@ const highTrafficParityLabels = {
     communityDiscoverySearchPlaceholder:
       "Busca profesionales, negocios, especialidades o servicios...",
     communityDiscoveryInterestsAria: "Intereses de descubrimiento",
+    communityDiscoveryContextAllTitle: "Explorando Comunidad",
+    communityDiscoveryContextAllCopy:
+      "Descubre profesionales confiables, oportunidades locales e historias comunitarias en Meetro Community.",
+    communityDiscoveryContextExploring: "Explorando {interest}",
+    communityDiscoveryContextSingleCopy:
+      "Descubre profesionales confiables, oportunidades locales e historias comunitarias relacionadas con {interest}.",
+    communityDiscoveryContextMultiCopy:
+      "Descubre profesionales confiables, oportunidades locales e historias comunitarias relacionadas con {interests}.",
     communityInterestPromptTitle: "¿Qué te interesa más?",
     communityInterestPromptCopy:
       "Elige algunos intereses para que Comunidad coloque lo importante cerca del inicio. Aún puedes descubrir todo.",
@@ -4667,6 +4689,8 @@ const highTrafficParityLabels = {
     communityBusinessesEmptyText:
       "Pronto, este espacio presentará profesionales de confianza que sirven a tu comunidad.",
     communityViewAllBusinesses: "Explorar más negocios",
+    communityExploreMoreProfessionals: "Explorar más profesionales",
+    communityShowFewerProfessionals: "Mostrar menos profesionales",
     communityHiringTitle: "Contratación",
     communityHiringCopy:
       "Encuentra tu próximo compañero de equipo, oportunidad o colaboración.",
@@ -4674,12 +4698,16 @@ const highTrafficParityLabels = {
     communityHiringEmptyText:
       "A medida que los equipos locales crezcan, Meetro mostrará oportunidades para trabajar, colaborar y construir juntos.",
     communityViewAllHiring: "Explorar más oportunidades",
+    communityExploreMoreOpportunities: "Explorar más oportunidades",
+    communityShowFewerOpportunities: "Mostrar menos oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubre la historia destacada de la comunidad de hoy.",
     communitySpotlightEyebrow: "Spotlight de hoy",
     communitySpotlightCue:
       "Conoce al profesional que ayudó a hacerlo posible.",
     communityExploreSpotlight: "Explorar Spotlight",
+    communityExploreMoreStories: "Explorar más historias",
+    communityShowFewerStories: "Mostrar menos historias",
     communitySpotlightLocalProfessional: "un profesional local",
     communitySpotlightStoryTitle:
       "El trabajo confiable ya está dando forma a tu comunidad.",
@@ -5009,6 +5037,14 @@ const highTrafficParityLabels = {
     communityDiscoverySearchPlaceholder:
       "Rechercher des professionnels, entreprises, spécialités ou services...",
     communityDiscoveryInterestsAria: "Centres d’intérêt de découverte",
+    communityDiscoveryContextAllTitle: "Explorer la communauté",
+    communityDiscoveryContextAllCopy:
+      "Découvrez des professionnels de confiance, des opportunités locales et des histoires communautaires dans Meetro Community.",
+    communityDiscoveryContextExploring: "Explorer {interest}",
+    communityDiscoveryContextSingleCopy:
+      "Découvrez des professionnels de confiance, des opportunités locales et des histoires communautaires liées à {interest}.",
+    communityDiscoveryContextMultiCopy:
+      "Découvrez des professionnels de confiance, des opportunités locales et des histoires communautaires liées à {interests}.",
     communityInterestPromptTitle: "Qu’est-ce qui vous intéresse le plus ?",
     communityInterestPromptCopy:
       "Choisissez quelques centres d’intérêt pour aider la Communauté à placer l’important en premier. Vous pouvez toujours tout découvrir.",
@@ -5035,6 +5071,8 @@ const highTrafficParityLabels = {
     communityBusinessesEmptyText:
       "Bientôt, cet espace présentera des professionnels de confiance au service de votre communauté.",
     communityViewAllBusinesses: "Explorer plus d’entreprises",
+    communityExploreMoreProfessionals: "Explorer plus de professionnels",
+    communityShowFewerProfessionals: "Afficher moins de professionnels",
     communityHiringTitle: "Recrutement",
     communityHiringCopy:
       "Trouvez votre prochain coéquipier, une opportunité ou une collaboration.",
@@ -5042,6 +5080,8 @@ const highTrafficParityLabels = {
     communityHiringEmptyText:
       "À mesure que les équipes locales grandiront, Meetro montrera des opportunités pour travailler, collaborer et construire ensemble.",
     communityViewAllHiring: "Explorer plus d’opportunités",
+    communityExploreMoreOpportunities: "Explorer plus d’opportunités",
+    communityShowFewerOpportunities: "Afficher moins d’opportunités",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy:
       "Découvrez l’histoire communautaire mise en lumière aujourd’hui.",
@@ -5049,6 +5089,8 @@ const highTrafficParityLabels = {
     communitySpotlightCue:
       "Rencontrez le professionnel qui a aidé à rendre cela possible.",
     communityExploreSpotlight: "Explorer Spotlight",
+    communityExploreMoreStories: "Explorer plus d’histoires",
+    communityShowFewerStories: "Afficher moins d’histoires",
     communitySpotlightLocalProfessional: "un professionnel local",
     communitySpotlightStoryTitle:
       "Le travail de confiance façonne déjà votre communauté.",
@@ -5400,6 +5442,14 @@ const highTrafficParityLabels = {
     communityDiscoverySearchPlaceholder:
       "Busque profissionais, empresas, especialidades ou serviços...",
     communityDiscoveryInterestsAria: "Interesses de descoberta",
+    communityDiscoveryContextAllTitle: "Explorando a Comunidade",
+    communityDiscoveryContextAllCopy:
+      "Descubra profissionais confiáveis, oportunidades locais e histórias da comunidade em Meetro Community.",
+    communityDiscoveryContextExploring: "Explorando {interest}",
+    communityDiscoveryContextSingleCopy:
+      "Descubra profissionais confiáveis, oportunidades locais e histórias da comunidade relacionadas a {interest}.",
+    communityDiscoveryContextMultiCopy:
+      "Descubra profissionais confiáveis, oportunidades locais e histórias da comunidade relacionadas a {interests}.",
     communityInterestPromptTitle: "O que mais interessa a você?",
     communityInterestPromptCopy:
       "Escolha alguns interesses para ajudar a Comunidade a colocar o que importa mais perto do topo. Você ainda pode descobrir tudo.",
@@ -5426,6 +5476,8 @@ const highTrafficParityLabels = {
     communityBusinessesEmptyText:
       "Em breve, este espaço apresentará profissionais de confiança que atendem sua comunidade.",
     communityViewAllBusinesses: "Explorar mais empresas",
+    communityExploreMoreProfessionals: "Explorar mais profissionais",
+    communityShowFewerProfessionals: "Mostrar menos profissionais",
     communityHiringTitle: "Contratação",
     communityHiringCopy:
       "Encontre seu próximo colega de equipe, oportunidade ou colaboração.",
@@ -5433,12 +5485,16 @@ const highTrafficParityLabels = {
     communityHiringEmptyText:
       "À medida que equipes locais crescerem, o Meetro mostrará oportunidades para trabalhar, colaborar e construir juntos.",
     communityViewAllHiring: "Explorar mais oportunidades",
+    communityExploreMoreOpportunities: "Explorar mais oportunidades",
+    communityShowFewerOpportunities: "Mostrar menos oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubra a história em destaque da comunidade de hoje.",
     communitySpotlightEyebrow: "Spotlight de hoje",
     communitySpotlightCue:
       "Conheça o profissional que ajudou a tornar isso possível.",
     communityExploreSpotlight: "Explorar Spotlight",
+    communityExploreMoreStories: "Explorar mais histórias",
+    communityShowFewerStories: "Mostrar menos histórias",
     communitySpotlightLocalProfessional: "um profissional local",
     communitySpotlightStoryTitle:
       "Trabalho confiável já está moldando sua comunidade.",

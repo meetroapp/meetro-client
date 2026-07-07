@@ -60,12 +60,16 @@ export const COMMUNITY_TAXONOMY_ECOSYSTEMS = Object.freeze([
       "maintenance",
       "contractor",
       "cabinet",
+      "cabinets",
+      "kitchen remodel",
+      "kitchen remodeling",
+      "remodeling",
       "pool",
     ],
     discoveryLabelKey: "communityInterestHomeServices",
     children: [
-      child({ id: "general_contractor", capabilityGroupId: "general_contractor", label: "General Contractor", labelKey: "signupCategoryGeneralContractor", aliases: ["contractor", "builder", "remodel"], legacySignupValue: "contractor" }),
-      child({ id: "carpentry", capabilityGroupId: "handyman", label: "Carpentry", labelKey: "carpentry", aliases: ["carpentry", "woodwork", "trim"], legacySignupValue: "carpentry" }),
+      child({ id: "general_contractor", capabilityGroupId: "general_contractor", label: "General Contractor", labelKey: "signupCategoryGeneralContractor", aliases: ["contractor", "builder", "remodel", "kitchen remodel", "kitchen remodeling"], legacySignupValue: "contractor" }),
+      child({ id: "carpentry", capabilityGroupId: "handyman", label: "Carpentry", labelKey: "carpentry", aliases: ["carpentry", "woodwork", "trim", "cabinet", "cabinets"], legacySignupValue: "carpentry" }),
       child({ id: "concrete", capabilityGroupId: "general_contractor", label: "Concrete", labelKey: "concrete", aliases: ["concrete", "slab", "masonry"], legacySignupValue: "concrete" }),
       child({ id: "demolition", capabilityGroupId: "general_contractor", label: "Demolition", labelKey: "demolition", aliases: ["demolition", "demo", "tear out"], legacySignupValue: "demolition" }),
       child({ id: "fencing", capabilityGroupId: "handyman", label: "Fencing", labelKey: "fencing", aliases: ["fence", "fencing", "gate"], legacySignupValue: "fencing" }),
@@ -123,7 +127,7 @@ export const COMMUNITY_TAXONOMY_ECOSYSTEMS = Object.freeze([
     label: "Business Services",
     description:
       "Capabilities that help organizations operate, support customers, hire, and stay organized.",
-    aliases: ["business services", "admin", "operations", "bookkeeping", "consulting"],
+    aliases: ["business services", "admin", "operations", "consulting"],
     discoveryLabelKey: "communityInterestBusinessServices",
     discoverySection: "hiring",
     children: [
@@ -135,7 +139,7 @@ export const COMMUNITY_TAXONOMY_ECOSYSTEMS = Object.freeze([
     label: "Marketing",
     description:
       "Capabilities that help businesses get discovered, earn attention, and reach the right customers.",
-    aliases: ["marketing", "seo", "ads", "customers", "more customers", "restaurant marketing"],
+    aliases: ["marketing", "seo", "ads", "customers", "more customers", "restaurant marketing", "branding", "brand strategy", "logo", "photography"],
     discoveryLabelKey: "communityInterestMarketing",
     children: [],
   }),
@@ -144,7 +148,7 @@ export const COMMUNITY_TAXONOMY_ECOSYSTEMS = Object.freeze([
     label: "Creative",
     description:
       "Capabilities for design, visual identity, content, spaces, and creative expression.",
-    aliases: ["creative", "logo", "design", "brand", "photography", "interior design"],
+    aliases: ["creative", "logo", "design", "brand", "branding", "photography", "interior design"],
     discoveryLabelKey: "communityInterestCreative",
     discoverySection: "spotlight",
     children: [
@@ -298,6 +302,61 @@ export function getProfessionalSignupCategoriesFromTaxonomy({
   return categories;
 }
 
+export function getProfessionalSignupOptions({
+  translate = (key, fallback) => fallback || key,
+} = {}) {
+  return getProfessionalSignupCategoriesFromTaxonomy({ translate });
+}
+
+export function getBusinessProfileCategoryOptionsFromTaxonomy({
+  translate = (key, fallback) => fallback || key,
+} = {}) {
+  return getProfessionalSignupCategoriesFromTaxonomy({ translate }).map(
+    (category) => ({
+      value: category.value,
+      label: category.label,
+      labelKey: category.labelKey,
+      taxonomyEcosystemId: category.taxonomyEcosystemId,
+      capabilityGroupId: category.capabilityGroupId,
+      aliases: [...category.aliases],
+    })
+  );
+}
+
+export function getBusinessProfileCapabilityOptionsFromTaxonomy({
+  translate = (key, fallback) => fallback || key,
+} = {}) {
+  const seenCapabilityGroups = new Set();
+  const options = [];
+
+  getCommunityTaxonomyEcosystems().forEach((ecosystem) => {
+    ecosystem.children.forEach((item) => {
+      if (!item.capabilityGroupId || seenCapabilityGroups.has(item.capabilityGroupId)) {
+        return;
+      }
+
+      seenCapabilityGroups.add(item.capabilityGroupId);
+      options.push({
+        id: item.capabilityGroupId,
+        labelKey: item.labelKey,
+        label: item.labelKey ? translate(item.labelKey, item.label) : item.label,
+        taxonomyEcosystemId: ecosystem.id,
+        legacySignupValue: item.legacySignupValue,
+        aliases: [
+          ecosystem.label,
+          ...ecosystem.aliases,
+          item.label,
+          item.id,
+          item.legacySignupValue,
+          ...item.aliases,
+        ],
+      });
+    });
+  });
+
+  return options;
+}
+
 export function searchCommunityTaxonomyAliases(query = "") {
   const normalizedQuery = normalizeCapabilitySearchText(query);
   if (!normalizedQuery) return [];
@@ -325,6 +384,73 @@ export function searchCommunityTaxonomyAliases(query = "") {
       );
     });
   });
+}
+
+function getTaxonomySearchTerms(ecosystem) {
+  return [
+    { value: ecosystem.id, source: "ecosystem_id" },
+    { value: ecosystem.label, source: "ecosystem_label" },
+    { value: ecosystem.description, source: "description" },
+    ...ecosystem.aliases.map((alias) => ({ value: alias, source: "ecosystem_alias" })),
+    ...ecosystem.children.flatMap((item) => [
+      { value: item.id, source: "child_id" },
+      { value: item.label, source: "child_label" },
+      { value: item.capabilityGroupId, source: "capability_group" },
+      { value: item.legacySignupValue, source: "legacy_signup_value" },
+      ...item.aliases.map((alias) => ({ value: alias, source: "child_alias" })),
+    ]),
+  ].filter((term) => normalizeCapabilitySearchText(term.value));
+}
+
+function scoreTaxonomySearchTerm(normalizedQuery, normalizedTerm, source) {
+  if (!normalizedQuery || !normalizedTerm) return 0;
+  if (normalizedQuery === normalizedTerm) {
+    return source === "ecosystem_alias" || source === "child_alias" ? 100 : 90;
+  }
+  if (normalizedQuery.includes(normalizedTerm) && normalizedTerm.length >= 4) {
+    return source === "ecosystem_alias" || source === "child_alias" ? 86 : 78;
+  }
+  if (normalizedTerm.includes(normalizedQuery) && normalizedQuery.length >= 4) {
+    return source === "ecosystem_alias" || source === "child_alias" ? 72 : 64;
+  }
+  return 0;
+}
+
+export function resolveCommunityDiscoveryInterestForSearch(query = "") {
+  const normalizedQuery = normalizeCapabilitySearchText(query);
+  if (!normalizedQuery) return null;
+
+  const rankedMatches = getCommunityTaxonomyEcosystems()
+    .filter((ecosystem) => ecosystem.id !== "other")
+    .map((ecosystem) => {
+      const bestTermMatch = getTaxonomySearchTerms(ecosystem).reduce(
+        (best, term) => {
+          const normalizedTerm = normalizeCapabilitySearchText(term.value);
+          const score = scoreTaxonomySearchTerm(
+            normalizedQuery,
+            normalizedTerm,
+            term.source
+          );
+
+          return score > best.score
+            ? { score, matchedTerm: term.value, source: term.source }
+            : best;
+        },
+        { score: 0, matchedTerm: "", source: "" }
+      );
+
+      return {
+        ecosystemId: ecosystem.id,
+        label: ecosystem.label,
+        confidence: bestTermMatch.score,
+        matchedTerm: bestTermMatch.matchedTerm,
+        source: bestTermMatch.source,
+      };
+    })
+    .filter((match) => match.confidence >= 72)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  return rankedMatches[0] || null;
 }
 
 export function getCommunityTaxonomyEcosystemForCapabilityGroup(

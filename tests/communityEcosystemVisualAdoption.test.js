@@ -103,9 +103,11 @@ test("Community connected routes and handoffs remain preserved", () => {
   assert.match(appSource, /if \(page === "upload"\)/);
   assert.match(appSource, /<Upload setPage=\{setPage\} \/>/);
 
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("businessDirectory"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => setPage\("jobsHiring"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("spotlight"\)\}/);
+  assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
+  assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("hiring"\)/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.match(discoverSource, /setPage\("contractorDetails"\)/);
   assert.match(discoverSource, /setPage\("upload"\)/);
   assert.match(contractorDetailsSource, /setPage\("discover"\)/);

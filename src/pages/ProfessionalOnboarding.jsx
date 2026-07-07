@@ -7,7 +7,7 @@ import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
   inferProfessionalSpecialtiesFromLegacyCategories,
 } from "../utils/professionalOnboardingSpecialties";
-import { getProfessionalCapabilityCategories } from "../utils/professionalCapabilityLibrary";
+import { getBusinessProfileCapabilityOptionsFromTaxonomy } from "../utils/communityTaxonomy";
 import {
   readBusinessServiceProfile,
   writeBusinessServiceProfile,
@@ -131,11 +131,13 @@ function ProfessionalOnboarding({ setPage }) {
     [language]
   );
   const primaryCategoryOptions = useMemo(
-    () => getProfessionalCapabilityCategories().map((category) => ({
-      id: category.id,
-      label: t(category.labelKey),
-      aliases: category.aliases || [],
-    })),
+    () =>
+      getBusinessProfileCapabilityOptionsFromTaxonomy({
+        translate: (key, fallback) => {
+          const translated = t(key);
+          return translated === key ? fallback : translated;
+        },
+      }),
     [language]
   );
   const selectedPrimaryCategory =

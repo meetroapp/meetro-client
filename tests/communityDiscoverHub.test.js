@@ -8,6 +8,7 @@ import {
 import { t } from "../src/utils/language.js";
 import {
   getCommunityDiscoveryInterestsFromTaxonomy,
+  resolveCommunityDiscoveryInterestForSearch,
   searchCommunityTaxonomyAliases,
 } from "../src/utils/communityTaxonomy.js";
 
@@ -127,16 +128,30 @@ test("Community landing renders human Community copy and progressive preview sec
   assert.match(discoverSource, /style=\{communitySpotlightMeta\}/);
 });
 
-test("Community preview actions preserve child destination routing", () => {
-  assert.match(discoverSource, /t\("communityViewAllBusinesses", language\)/);
-  assert.match(discoverSource, /t\("communityViewAllHiring", language\)/);
-  assert.match(discoverSource, /t\("communityExploreSpotlight", language\)/);
-  assert.equal(t("communityViewAllBusinesses", "en"), "Explore More Businesses");
-  assert.equal(t("communityViewAllHiring", "en"), "Explore More Opportunities");
-  assert.equal(t("communityExploreSpotlight", "en"), "Explore Spotlight");
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("businessDirectory"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => setPage\("jobsHiring"\)\}/);
-  assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("spotlight"\)\}/);
+test("Community preview actions expand progressively without route changes", () => {
+  const hubBlock = discoverSource.slice(
+    discoverSource.indexOf("const renderCommunityHub = () =>"),
+    discoverSource.indexOf("const renderSpotlightSection = () =>")
+  );
+
+  assert.match(discoverSource, /const COMMUNITY_PREVIEW_LIMIT = 3/);
+  assert.match(discoverSource, /const COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT = 1/);
+  assert.match(discoverSource, /expandedCommunitySections/);
+  assert.match(discoverSource, /toggleCommunitySectionExpansion/);
+  assert.match(discoverSource, /setExpandedCommunitySections\(collapsedCommunitySections\)/);
+  assert.match(hubBlock, /toggleCommunitySectionExpansion\("professionals"\)/);
+  assert.match(hubBlock, /toggleCommunitySectionExpansion\("hiring"\)/);
+  assert.match(hubBlock, /toggleCommunitySectionExpansion\("spotlight"\)/);
+  assert.doesNotMatch(hubBlock, /openCommunitySection\("businessDirectory"\)/);
+  assert.doesNotMatch(hubBlock, /setPage\("jobsHiring"\)/);
+  assert.doesNotMatch(hubBlock, /openCommunitySection\("spotlight"\)/);
+  assert.doesNotMatch(discoverSource, /IntersectionObserver|onscroll|onScroll|infinite/i);
+  assert.equal(t("communityExploreMoreProfessionals", "en"), "Explore More Professionals");
+  assert.equal(t("communityShowFewerProfessionals", "en"), "Show Fewer Professionals");
+  assert.equal(t("communityExploreMoreOpportunities", "en"), "Explore More Opportunities");
+  assert.equal(t("communityShowFewerOpportunities", "en"), "Show Fewer Opportunities");
+  assert.equal(t("communityExploreMoreStories", "en"), "Explore More Stories");
+  assert.equal(t("communityShowFewerStories", "en"), "Show Fewer Stories");
 });
 
 test("Community Discovery Bar renders search, interests, and first-visit prompt", () => {
@@ -154,13 +169,30 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
   assert.ok(discoveryInterests.find((interest) => interest.id === "healthcare"));
   assert.ok(discoveryInterests.find((interest) => interest.id === "transportation"));
   assert.match(discoverSource, /const renderDiscoveryBar = \(\) =>/);
+  assert.match(discoverSource, /position: "sticky"/);
+  assert.match(discoverSource, /top: "calc\(env\(safe-area-inset-top, 0px\) \+ 10px\)"/);
+  assert.match(discoverSource, /WebkitBackdropFilter: "blur\(16px\)"/);
+  assert.match(discoverSource, /flexWrap: "nowrap"/);
+  assert.match(discoverSource, /overflowX: "auto"/);
+  assert.match(discoverSource, /minHeight: "42px"/);
   assert.match(discoverSource, /t\("communityDiscoverySearchPlaceholder", language\)/);
+  assert.match(discoverSource, /getDiscoveryContext/);
+  assert.match(discoverSource, /communityDiscoveryContext/);
+  assert.match(discoverSource, /aria-live="polite"/);
+  assert.match(discoverSource, /gap: "20px"/);
+  assert.match(discoverSource, /marginTop: "2px"/);
   assert.match(discoverSource, /aria-pressed=\{selected\}/);
   assert.match(discoverSource, /toggleDiscoveryInterest\(interest\.id\)/);
   assert.match(discoverSource, /skipDiscoveryInterests/);
+  assert.doesNotMatch(discoverSource, /scrollTo\(/);
   assert.equal(
     t("communityDiscoverySearchPlaceholder", "en"),
     "Search professionals, businesses, specialties, or services..."
+  );
+  assert.equal(t("communityDiscoveryContextExploring", "en"), "Exploring {interest}");
+  assert.match(
+    t("communityDiscoveryContextSingleCopy", "en"),
+    /related to \{interest\}/
   );
   assert.equal(t("communityInterestPromptTitle", "en"), "What interests you most?");
   assert.equal(t("communityInterestSkip", "en"), "Skip for now");
@@ -177,9 +209,18 @@ test("Community discovery search filters businesses, specialties, and hiring wit
   assert.match(discoverSource, /\.\.\.services\.matchingKeywords/);
   assert.match(discoverSource, /searchRequestServices\(query/);
   assert.match(discoverSource, /searchCommunityTaxonomyAliases\(query\)/);
+  assert.match(discoverSource, /resolveCommunityDiscoveryInterestForSearch\(searchQuery\)/);
+  assert.match(discoverSource, /saveDiscoveryInterests\(\[taxonomyMatch\.ecosystemId\]\)/);
+  assert.match(discoverSource, /ecosystem\.label/);
+  assert.match(discoverSource, /\.\.\.ecosystem\.aliases/);
+  assert.doesNotMatch(discoverSource, /OpenAI|providerAdapter|companion\/ask|\/api\/companion/i);
   assert.equal(searchCommunityTaxonomyAliases("SEO")[0]?.id, "marketing");
   assert.equal(searchCommunityTaxonomyAliases("taxes")[0]?.id, "financial");
-  assert.equal(searchCommunityTaxonomyAliases("logo")[0]?.id, "creative");
+  assert.equal(resolveCommunityDiscoveryInterestForSearch("SEO")?.ecosystemId, "marketing");
+  assert.equal(resolveCommunityDiscoveryInterestForSearch("taxes")?.ecosystemId, "financial");
+  assert.equal(resolveCommunityDiscoveryInterestForSearch("kitchen remodel")?.ecosystemId, "home_services");
+  assert.equal(resolveCommunityDiscoveryInterestForSearch("cabinets")?.ecosystemId, "home_services");
+  assert.equal(resolveCommunityDiscoveryInterestForSearch("unknown community phrase"), null);
   assert.match(discoverSource, /function jobMatchesSearch\(job = \{\}, query = ""\)/);
   assert.match(discoverSource, /jobDisplay\.title/);
   assert.match(discoverSource, /jobDisplay\.category/);
@@ -194,6 +235,7 @@ test("Community discovery search filters businesses, specialties, and hiring wit
   assert.match(discoverSource, /getCommunitySectionOrder\("hiring"\)/);
   assert.match(discoverSource, /getCommunitySectionOrder\("spotlight"\)/);
   assert.match(discoverSource, /orderByDiscoveryInterests/);
+  assert.match(discoverSource, /transition: "opacity 160ms ease/);
 });
 
 test("Community discovery keeps one destination and supports Companion handoff", () => {
@@ -201,6 +243,8 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /meetroCommunityDiscoveryQuery/);
   assert.match(discoverSource, /setSearchQuery\(String\(detail\.query\)\)/);
   assert.match(discoverSource, /saveDiscoveryInterests\(validInterestIds\)/);
+  assert.match(discoverSource, /selectedDiscoveryInterests\[0\] === taxonomyMatch\.ecosystemId/);
+  assert.match(discoverSource, /copy: t\(copyKey, language\)/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
   assert.match(discoverSource, /discoverMode === "communityHub" && renderCommunityHub\(\)/);
@@ -230,8 +274,11 @@ test("Businesses preview reuses existing business cards and full Businesses page
 
 test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
   assert.match(discoverSource, /const allHiringJobs = getHiringLocalJobOpenings\(\)/);
-  assert.match(discoverSource, /hiringPreviewJobs = orderByDiscoveryInterests/);
-  assert.match(discoverSource, /\)\.slice\(0, 3\)/);
+  assert.match(discoverSource, /communityHiringResults = orderByDiscoveryInterests/);
+  assert.match(discoverSource, /hiringPreviewJobs = communityHiringResults\.slice/);
+  assert.match(discoverSource, /COMMUNITY_PREVIEW_LIMIT/);
+  assert.match(discoverSource, /COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT/);
+  assert.match(discoverSource, /communitySpotlightStories\.map/);
   assert.match(discoverSource, /const renderHiringPreviewCard = \(job\) =>/);
   assert.match(discoverSource, /getLocalizedHiringJobDisplay\(job, language\)/);
   assert.match(discoverSource, /t\("communityHiringEmptyTitle", language\)/);
