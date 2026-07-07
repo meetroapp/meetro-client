@@ -83,6 +83,12 @@ const PageLoader = () => (
   </div>
 );
 
+const SessionRestoringScreen = () => (
+  <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
+    Restoring your Meetro session...
+  </div>
+);
+
 function withSuspense(component) {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -162,6 +168,13 @@ const publicLegalDocumentRoutes = {
 };
 
 const publicMarketingRoutes = new Set(["meetroStory"]);
+const SESSION_HYDRATION = Object.freeze({
+  restoring: "restoring",
+  authenticated: "authenticated",
+  unauthenticated: "unauthenticated",
+  invalid: "invalid",
+  public: "public",
+});
 
 function withAssistantLayer(component, currentPage, setPage) {
   return withRouteBoundary(
@@ -413,11 +426,58 @@ function App() {
 	    return "home";
 	  };
 
-  const [page, setPageState] = useState(getInitialPage());
+  const getInitialSessionHydration = () => {
+    const currentRoute = getHashRoute();
+    const currentHash = getRoutePage(currentRoute);
+
+    if (
+      (currentHash && (isPublicLegalPage(currentHash) || isPublicMarketingPage(currentHash))) ||
+      (currentRoute && isPublicProfileRoute(currentRoute))
+    ) {
+      return { status: SESSION_HYDRATION.public };
+    }
+
+    return safeGetStorageItem("token")
+      ? { status: SESSION_HYDRATION.restoring }
+      : { status: SESSION_HYDRATION.unauthenticated };
+  };
+
+  const initialSessionHydration = getInitialSessionHydration();
+  const [sessionHydration, setSessionHydration] = useState(initialSessionHydration);
+  const [page, setPageState] = useState(() =>
+    initialSessionHydration.status === SESSION_HYDRATION.restoring
+      ? "sessionRestoring"
+      : getInitialPage()
+  );
 
   useEffect(() => {
+    if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
+
+    const timer = window.setTimeout(() => {
+      const currentRoute = getHashRoute();
+      persistRouteContext(currentRoute);
+      const currentHash = getRoutePage(currentRoute);
+      const routedHash = getTipsPageForRoute(currentHash);
+      const hasToken = safeGetStorageItem("token");
+
+      if (!hasToken) {
+        setSessionHydration({ status: SESSION_HYDRATION.unauthenticated });
+        setPageState("login");
+        return;
+      }
+
+      restoreAuthenticatedSessionFromStorage(routedHash);
+      setSessionHydration({ status: SESSION_HYDRATION.authenticated });
+      setPageState(getInitialPage());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [sessionHydration.status]);
+
+  useEffect(() => {
+    if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
     syncAccountModeForPage(page);
-  }, [page]);
+  }, [page, sessionHydration.status]);
 
   useEffect(() => {
     const handleAccountModeChange = () => {
@@ -625,7 +685,11 @@ function App() {
 
   
 
-  const setPage = (newPage) => {
+	  const setPage = (newPage) => {
+    if (sessionHydration.status === SESSION_HYDRATION.restoring) {
+      return;
+    }
+
     const routePage = getRoutePage(newPage);
     const routeMomentId = getMeetroMomentRouteId(newPage);
 
@@ -697,6 +761,10 @@ function App() {
 	    window.location.hash = finalPage;
 	    setPageState(finalPage);
 	  };
+
+if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "sessionRestoring") {
+  return withRouteBoundary(<SessionRestoringScreen />, "sessionRestoring", setPage);
+}
 
 if (page === "login") {
   return withRouteBoundary(<Login setPage={setPage} />, page, setPage);

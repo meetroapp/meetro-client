@@ -59,10 +59,19 @@ test("startup repairs authenticated professional route state before redirecting 
   const appSource = fs.readFileSync("src/App.jsx", "utf8");
   const sessionSource = fs.readFileSync("src/utils/session.js", "utf8");
 
+  assert.match(appSource, /SESSION_HYDRATION/);
+  assert.match(appSource, /status: SESSION_HYDRATION\.restoring/);
+  assert.match(appSource, /"sessionRestoring"/);
+  assert.match(appSource, /SessionRestoringScreen/);
+  assert.match(appSource, /setPageState\(getInitialPage\(\)\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(targetPage\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(routedHash\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(hashPage\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(currentHash\)/);
+  assert.match(
+    appSource,
+    /if \(sessionHydration\.status === SESSION_HYDRATION\.restoring\) \{\s*return;\s*\}/
+  );
   assert.doesNotMatch(
     appSource,
     /isProfessionalOnlyPage\(targetPage\)[\s\S]{0,160}activeAccountMode[\s\S]{0,80}return "home"/
