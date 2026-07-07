@@ -1726,6 +1726,9 @@ const communityDiscoveryBar = {
   position: "sticky",
   top: "calc(env(safe-area-inset-top, 0px) + 10px)",
   zIndex: 20,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   marginBottom: "20px",
   padding: "12px",
   border: "1px solid rgba(74,52,40,0.10)",
@@ -2392,11 +2395,15 @@ const businessSecondaryButton = {
 };
 
 const pageWrapper = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "var(--meetro-gradient-community-page)",
-  padding: "calc(env(safe-area-inset-top) + 64px) 18px 120px",
+  padding: "calc(env(safe-area-inset-top, 0px) + 64px) 18px calc(120px + env(safe-area-inset-bottom, 0px))",
+  width: "100%",
   maxWidth: "1100px",
+  minWidth: 0,
   margin: "0 auto",
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
 const compactHeader = {

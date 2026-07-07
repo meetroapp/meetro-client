@@ -5,6 +5,8 @@ body,
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 100%;
+  margin: 0;
   overflow-x: hidden;
   overscroll-behavior-x: none;
 }
@@ -12,6 +14,8 @@ body,
 body {
   position: relative;
   color: var(--meetro-color-ink, #111827);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 *,
@@ -120,11 +124,28 @@ h6 {
 }
 
 @media (max-width: 768px) {
+  :root {
+    --meetro-mobile-page-inline: max(14px, env(safe-area-inset-left, 0px));
+    --meetro-mobile-page-inline-end: max(14px, env(safe-area-inset-right, 0px));
+    --meetro-mobile-bottom-nav-clearance: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
   .app-page,
   .page-shell,
   .business-dashboard,
   .business-command-center,
   .contractor-dashboard,
+  .business-profile-page,
+  .conversation-thread-page,
   .work-center-dashboard,
   .profile-page,
   .home-page,
@@ -147,7 +168,9 @@ h6 {
   .meetro-responsive-page,
   .meetro-readable-page,
   .meetro-form-page,
-  .meetro-wide-page {
+  .meetro-wide-page,
+  .meetro-visual-page,
+  .meetro-mobile-fit-page {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
@@ -159,10 +182,75 @@ h6 {
   .meetro-responsive-page > *,
   .meetro-readable-page > *,
   .meetro-form-page > *,
-  .meetro-wide-page > * {
+  .meetro-wide-page > *,
+  .meetro-visual-page > *,
+  .meetro-mobile-fit-page > * {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+  }
+
+  .app-page *,
+  .page-shell *,
+  .meetro-responsive-page *,
+  .meetro-readable-page *,
+  .meetro-form-page *,
+  .meetro-wide-page *,
+  .meetro-mobile-fit-page * {
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .app-page button,
+  .app-page input,
+  .app-page select,
+  .app-page textarea,
+  .meetro-mobile-fit-page input,
+  .meetro-mobile-fit-page select,
+  .meetro-mobile-fit-page textarea {
+    min-height: 44px;
+  }
+
+  .meetro-mobile-fit-page {
+    padding-left: var(--meetro-mobile-page-inline) !important;
+    padding-right: var(--meetro-mobile-page-inline-end) !important;
+  }
+
+  .bottom-nav-dock,
+  .bottom-nav,
+  .bottom-nav-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .bottom-nav-item {
+    min-width: 0 !important;
+    min-height: 44px !important;
+  }
+
+  .bottom-nav-label,
+  .bottom-nav-subtitle {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meetro-visual-surface,
+  .meetro-visual-hero,
+  .meetro-responsive-card,
+  .business-dashboard-section-card,
+  .business-dashboard-hero-card,
+  .business-profile-card,
+  .conversation-thread-page,
+  .messages-inbox-page {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden;
   }
 }
 

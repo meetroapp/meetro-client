@@ -747,7 +747,7 @@ function Login({ setPage }) {
   }
 
   return (
-    <div className="meetro-visual-page" style={pageWrapper}>
+    <div className="meetro-visual-page meetro-mobile-fit-page meetro-auth-arrival-page" style={pageWrapper}>
       <div style={languageBar}>
         <div style={languageBox} aria-label={t("language")}>
           {SUPPORTED_LANGUAGES.map((item) => {

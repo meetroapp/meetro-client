@@ -1,0 +1,884 @@
+# 🏮 MASTER HANDOFF — MEETRO COMMUNITY INTELLIGENCE ARCHITECTURE
+
+## Version 1.0
+
+Status:
+Foundation Established
+
+Purpose:
+Define the permanent architecture for Meetro Community’s intelligence system so every future AI feature protects the product’s character, trust boundaries, and long-term purpose.
+
+This document must travel with all future Companion, AI, automation, memory, knowledge, capability, workflow, relationship, community, and business intelligence work.
+
+---
+
+# THE CORE PROMISE
+
+Meetro Community is not building ChatGPT inside an app.
+
+Meetro Community is building a trusted local intelligence system.
+
+OpenAI reasons.
+Meetro Community understands.
+The Companion protects trust.
+
+The Companion must never become a generic chatbot, a marketplace assistant, a sales bot, or an uncontrolled automation layer.
+
+It exists to reduce uncertainty, preserve continuity, strengthen relationships, and guide users toward the next safe action.
+
+---
+
+# FOUNDATIONAL PRINCIPLE
+
+Meetro Community owns intelligence.
+
+AI providers supply reasoning.
+
+The frontend supplies interaction.
+
+The backend owns truth.
+
+No provider key, model decision, usage rule, trusted context, private memory, knowledge packet, capability reasoning, workflow guidance, relationship guidance, or internal diagnostic belongs in the UI.
+
+---
+
+# CURRENT INTELLIGENCE PIPELINE
+
+The current backend intelligence flow is:
+
+```txt
+POST /api/companion/ask
+        ↓
+Controller
+        ↓
+Intelligence Gateway
+        ↓
+Companion Orchestrator
+        ↓
+Usage Limit Check
+        ↓
+Intent Engine
+        ↓
+Companion Context Engine
+        ↓
+Session Memory
+        ↓
+Knowledge Engine
+        ↓
+Capability Engine
+        ↓
+Workflow Intelligence Engine
+        ↓
+Relationship Intelligence Engine
+        ↓
+Provider Adapter
+        ↓
+OpenAI Provider
+        ↓
+Normalized Response
+        ↓
+Usage Record
+        ↓
+Session Memory Write
+        ↓
+Safe UI Response
+```
+
+The Gateway is the door.
+The Orchestrator is the conductor.
+The engines provide understanding.
+The provider reasons.
+Meetro Community remains the source of truth.
+
+---
+
+# COMPLETED FOUNDATION
+
+## 1. Intelligence Gateway
+
+Status: Complete
+
+Purpose:
+Ensure all Companion requests flow through the backend.
+
+Rules:
+
+* No direct frontend AI calls.
+* No provider exposure to UI.
+* No frontend-owned intelligence flow.
+* Safe top-level error handling only.
+
+---
+
+## 2. OpenAI Provider Path
+
+Status: Complete
+
+Purpose:
+Connect real OpenAI reasoning through a provider adapter.
+
+Rules:
+
+* `OPENAI_API_KEY` lives server-side only.
+* Provider errors are normalized.
+* Raw provider output is not exposed to UI.
+* Provider can be swapped later without changing frontend behavior.
+
+---
+
+## 3. Usage Metering Foundation
+
+Status: Complete
+
+Purpose:
+Record and control Ask Meetro usage.
+
+Rules:
+
+* Usage limits are backend-owned.
+* Limits block before provider invocation.
+* Successes and failures are recorded.
+* Billing is not implemented yet.
+* UI does not calculate credits or limits.
+
+---
+
+## 4. Companion Context Engine
+
+Status: Complete
+
+Purpose:
+Build safe backend-owned context for the authenticated user.
+
+Context may include:
+
+* user identity
+* account type
+* current role
+* source page/surface
+* active request/job if backend-owned
+* workflow state if backend-owned
+* business profile context for professionals
+
+Rules:
+
+* Frontend cannot inject trusted context.
+* Fake userId, role, accountType, jobId, requestId, business data, or workflow status must be ignored.
+* Only backend-owned data is trusted.
+
+---
+
+## 5. Session Memory
+
+Status: Complete
+
+Purpose:
+Give the Companion short-term conversation continuity.
+
+Rules:
+
+* Session memory is user-scoped.
+* Forged session IDs are ignored.
+* Expired sessions are not reused.
+* Memory window is limited.
+* UI receives only an opaque `companionSessionId`.
+* Internal memory is not exposed to UI.
+
+---
+
+## 6. Companion Orchestrator
+
+Status: Complete
+
+Purpose:
+Coordinate intelligence engines without overloading the Gateway.
+
+Rules:
+
+* Gateway delegates.
+* Orchestrator owns the intelligence sequence.
+* Future engines plug into the orchestrator.
+* Diagnostics are internal only.
+
+---
+
+## 7. Knowledge Engine
+
+Status: Complete
+
+Purpose:
+Give the Companion Meetro Community’s internal truth.
+
+Knowledge includes:
+
+* Meetro Community purpose
+* trust principles
+* universal lifecycle
+* Completion vs Closure
+* quote/proposal/approval boundaries
+* emergency safety boundaries
+* provider-blind AI rules
+
+Rules:
+
+* Curated backend-owned knowledge only.
+* Frontend cannot inject trusted knowledge.
+* Provider receives selected knowledge, not the full knowledge base.
+* UI never receives the internal knowledge packet.
+
+---
+
+## 8. Capability Engine
+
+Status: Complete
+
+Purpose:
+Teach the Companion to reason from problems to capabilities.
+
+Meetro Community does not think:
+
+```txt
+problem → category → listing
+```
+
+It thinks:
+
+```txt
+problem → capabilities needed → possible professional fit → relationship → decision
+```
+
+Rules:
+
+* No ranking.
+* No matching.
+* No professional recommendation yet.
+* No marketplace logic.
+* Provider receives selected capability context only.
+* UI does not receive capability internals.
+
+---
+
+## 9. Workflow Intelligence Engine
+
+Status: Complete
+
+Purpose:
+Teach the Companion where the user is in the lifecycle and what the next safe action is.
+
+Lifecycle:
+
+```txt
+Relationship
+→ Communication
+→ Schedule
+→ Evaluation
+→ Quote
+→ Approval
+→ Work
+→ Completion
+→ Closure
+→ History
+```
+
+Rules:
+
+* AI cannot change workflow state.
+* AI cannot approve quotes.
+* AI cannot close jobs.
+* AI cannot auto-create invoices, proposals, or schedules.
+* Completion is not Closure.
+* Provider receives safe workflow guidance only.
+
+---
+
+## 10. Relationship Intelligence Engine
+
+Status: Complete
+
+Purpose:
+Teach the Companion that work happens inside human relationships.
+
+Relationship chain:
+
+```txt
+Relationships create communication.
+Communication creates understanding.
+Understanding creates decisions.
+Decisions create work.
+Work creates history.
+History strengthens relationships.
+```
+
+Rules:
+
+* No auto-messaging.
+* No trust scoring.
+* No ranking people or businesses.
+* No relationship mutation.
+* Provider receives safe relationship guidance only.
+* UI does not receive relationship internals.
+
+---
+
+## 11. Intelligence Engine Contract
+
+Status: Complete
+
+Purpose:
+Define the shared result shape future intelligence engines should use as they are incrementally adapted.
+
+The contract standardizes:
+
+* success results
+* failure results
+* engine name
+* contract version
+* safe data payload
+* internal diagnostics
+* recoverability for failures
+* warnings when needed
+
+Rules:
+
+* The contract is a backend engine pattern.
+* Existing engines may be adapted incrementally.
+* Do not refactor all engines simply because the contract exists.
+* Contract internals do not belong in the UI.
+* Gateway and Orchestrator behavior must not change unless explicitly tasked.
+
+---
+
+## 12. Intelligence Engine Registry
+
+Status: Complete
+
+Purpose:
+Define the backend metadata registry for intelligence engines so current and future engines have one source of truth for engine identity and order.
+
+Registry metadata includes:
+
+* name
+* version
+* execution order
+* enabled flag
+
+Current enabled engines:
+
+```txt
+Intent
+→ Context
+→ Session Memory
+→ Knowledge
+→ Capability
+→ Workflow
+→ Relationship
+```
+
+Disabled future extension points:
+
+```txt
+Community Intelligence
+Business Intelligence
+Document Intelligence
+Portfolio Intelligence
+Persistent Companion Memory
+```
+
+Rules:
+
+* The registry is metadata-only for now.
+* The registry must not execute engines yet.
+* The registry must preserve current orchestration order.
+* Orchestrator behavior must not change unless explicitly tasked.
+* Gateway behavior must not change because the registry exists.
+* Future engines should be registered before they are wired into execution.
+
+---
+
+# SAFE UI RESPONSE CONTRACT
+
+The UI may receive only:
+
+```txt
+answer
+requestId
+intent
+companionSessionId
+errorCode when needed
+```
+
+The UI must never receive:
+
+```txt
+provider
+model
+token details
+raw provider response
+internal context payload
+internal memory payload
+internal knowledge packet
+internal capability reasoning
+internal workflow intelligence
+internal relationship intelligence
+internal diagnostics
+billing internals
+usage internals
+```
+
+---
+
+# ENGINE RESPONSIBILITIES
+
+## Intent Engine
+
+Determines what the user is asking.
+
+It should answer:
+
+```txt
+What kind of help is this?
+```
+
+It must not:
+
+* perform workflow actions
+* select providers
+* mutate data
+* own business rules
+
+---
+
+## Context Engine
+
+Determines where the user is.
+
+It should answer:
+
+```txt
+Who is asking, from what role, on what surface, with what backend-owned context?
+```
+
+It must not:
+
+* trust frontend identity
+* over-fetch unrelated records
+* expose raw data
+
+---
+
+## Session Memory
+
+Determines what just happened in this conversation.
+
+It should answer:
+
+```txt
+What recent exchange matters for this session?
+```
+
+It must not:
+
+* become permanent memory
+* mix users
+* expose raw memory
+* store unnecessary sensitive data
+
+---
+
+## Knowledge Engine
+
+Determines what Meetro Community believes.
+
+It should answer:
+
+```txt
+What platform truth should guide this response?
+```
+
+It must not:
+
+* send the full knowledge base
+* allow frontend knowledge injection
+* let AI invent rules when Meetro rules exist
+
+---
+
+## Capability Engine
+
+Determines what capabilities the problem requires.
+
+It should answer:
+
+```txt
+What skills or capability families may be needed?
+```
+
+It must not:
+
+* rank professionals
+* route leads
+* recommend businesses
+* behave like a marketplace search
+
+---
+
+## Workflow Engine
+
+Determines where the work is in the lifecycle.
+
+It should answer:
+
+```txt
+What stage is this, what is missing, and what is the next safe action?
+```
+
+It must not:
+
+* mutate workflow state
+* approve quotes
+* close jobs
+* create schedules
+* create invoices
+* create proposals
+
+---
+
+## Relationship Engine
+
+Determines how guidance should protect trust.
+
+It should answer:
+
+```txt
+What relationship is involved, and how should communication preserve clarity and trust?
+```
+
+It must not:
+
+* score trust
+* rank people
+* auto-message
+* mutate relationships
+
+---
+
+## Provider Adapter
+
+Translates Meetro intelligence into provider-safe reasoning input.
+
+It should answer:
+
+```txt
+What selected context should the AI reason from?
+```
+
+It must not:
+
+* expose provider details to UI
+* send raw unrelated data
+* bypass orchestration rules
+
+---
+
+# PERMANENT TRUST BOUNDARIES
+
+## Frontend Boundary
+
+The frontend may send:
+
+* user message
+* optional source/page metadata
+* opaque session ID
+
+The frontend may not send trusted:
+
+* userId
+* account type
+* role
+* business identity
+* request/job ownership
+* workflow state
+* knowledge
+* capabilities
+* relationship context
+* billing status
+* provider choice
+
+---
+
+## Backend Boundary
+
+The backend owns:
+
+* authentication truth
+* role/account truth
+* usage truth
+* context truth
+* memory truth
+* knowledge truth
+* capability truth
+* workflow truth
+* relationship truth
+* provider routing
+* safe response normalization
+
+---
+
+## Provider Boundary
+
+The provider may receive:
+
+* selected safe context
+* selected memory
+* selected knowledge
+* selected capability context
+* selected workflow guidance
+* selected relationship guidance
+
+The provider must not receive:
+
+* raw database dumps
+* unrelated records
+* hidden permissions
+* provider/billing internals
+* trust scores
+* rankings
+* frontend-injected trusted data
+* private records from other users
+
+---
+
+# NEXT INTELLIGENCE PHASES
+
+## Phase 11 — Community Intelligence
+
+Purpose:
+Understand the community as a living capability network.
+
+Questions it should help answer:
+
+* What can this community collectively accomplish?
+* What capabilities are missing locally?
+* What kinds of help are common in this area?
+* Where can relationships be strengthened?
+
+Hard rules:
+
+* No lead selling.
+* No marketplace ranking.
+* No exploiting community data.
+* Community intelligence must strengthen local trust.
+
+---
+
+## Phase 12 — Business Intelligence
+
+Purpose:
+Help professionals understand and improve their business.
+
+Examples:
+
+* workload clarity
+* revenue summaries
+* quote follow-up awareness
+* customer communication guidance
+* service capability gaps
+* scheduling pressure
+* operational health
+
+Hard rules:
+
+* Do not give financial/legal/tax certainty.
+* Do not mutate business data without explicit user action.
+* Do not expose private business analytics to customers.
+
+---
+
+## Phase 13 — Persistent Companion Memory
+
+Purpose:
+Allow the Companion to remember across days and weeks with user control.
+
+Examples:
+
+* user preferences
+* active long-term projects
+* known business capabilities
+* recurring customer relationships
+* prior decisions
+* ongoing unresolved obligations
+
+Hard rules:
+
+* Must be user-controlled.
+* Must be inspectable.
+* Must be erasable.
+* Must avoid unnecessary sensitive storage.
+* Must never replace backend system-of-record truth.
+
+---
+
+## Phase 14 — Document Intelligence
+
+Purpose:
+Understand platform documents and user-provided documents.
+
+Examples:
+
+* proposals
+* invoices
+* contracts
+* warranties
+* permits
+* inspections
+* manuals
+* receipts
+* reports
+
+Hard rules:
+
+* Document access must respect ownership.
+* Do not expose private documents across users.
+* Do not treat extracted text as verified truth without context.
+* Legal/financial/medical documents require disclaimers and boundaries.
+
+---
+
+## Phase 15 — Portfolio Intelligence
+
+Purpose:
+Infer professional capabilities from completed work and portfolio media.
+
+This is critical to the Meetro Community vision because professionals should not have to spend hours listing every capability manually.
+
+Hard rules:
+
+* Portfolio inference should assist, not falsely certify.
+* Professionals should confirm inferred capabilities.
+* Do not overstate skill.
+* Do not rank businesses from portfolio alone.
+
+---
+
+## Phase 16 — Companion Specialization
+
+Purpose:
+One intelligence platform, role-specific behavior.
+
+Possible modes:
+
+* Homeowner Companion
+* Professional Companion
+* Business Companion
+* Community Companion
+* Admin Companion
+
+Hard rules:
+
+* Same backend trust boundaries.
+* Same provider-blind UI contract.
+* Different guidance, not different truth.
+
+---
+
+## Phase 17 — Proactive Companion
+
+Purpose:
+Help before the user asks, only when appropriate.
+
+Examples:
+
+* unresolved quote follow-up
+* schedule conflict warning
+* completion missing closure
+* permit or inspection reminder
+* customer communication nudge
+* business opportunity awareness
+
+Hard rules:
+
+* No spam.
+* No manipulation.
+* No automatic action without permission.
+* Must be dismissible.
+* Must be relationship-safe.
+
+---
+
+## Phase 18 — AI Membership & Credits
+
+Purpose:
+Connect AI usage to sustainable business tiers.
+
+Examples:
+
+* free monthly Ask Meetro limit
+* professional usage allowance
+* business tier usage
+* credit packs
+* team quotas
+* abuse protection
+* admin monitoring
+
+Hard rules:
+
+* Billing must never live in frontend logic.
+* Credits must be backend-owned.
+* Provider cost must be abstracted.
+* AI cannot be fully unlimited without business guardrails.
+
+---
+
+# WHAT MUST NEVER HAPPEN
+
+Meetro Community must never become:
+
+```txt
+a generic chatbot wrapper
+a lead-selling platform
+a pay-to-rank marketplace
+an uncontrolled automation bot
+a trust score machine
+a hidden surveillance system
+a provider-dependent AI product
+a UI-owned AI system
+a feature pile without architecture
+```
+
+---
+
+# THE LANTER PROMISE
+
+Every intelligence feature must answer:
+
+```txt
+Does this strengthen relationships?
+Does this reduce uncertainty?
+Does this preserve continuity?
+Does this protect trust?
+Does this keep Meetro Community as the source of truth?
+```
+
+If the answer is unclear, do not build it yet.
+
+Let the discovery mature.
+
+---
+
+# FINAL ARCHITECTURAL STATEMENT
+
+Meetro Community Intelligence is not artificial intelligence pasted onto a product.
+
+It is the product learning how to understand its own purpose.
+
+The Companion does not replace people.
+
+It helps people move through work, trust, responsibility, and community with less confusion.
+
+OpenAI reasons.
+
+Meetro Community understands.
+
+The Companion protects the relationship.
+
+The lantern stays lit.

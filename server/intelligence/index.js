@@ -1,12 +1,53 @@
+export {
+  buildCompanionCapabilities,
+  COMPANION_CAPABILITY_LIBRARY,
+} from "./capability/companionCapabilityEngine.js";
 export { handleCompanionAsk } from "./companionController.js";
 export { COMPANION_ASK_ROUTE, registerCompanionRoutes } from "./companionRoutes.js";
+export {
+  createIntelligenceEngineFailure,
+  createIntelligenceEngineSuccess,
+  INTELLIGENCE_ENGINE_CONTRACT_VERSION,
+  isIntelligenceEngineResult,
+} from "./contracts/intelligenceEngineContract.js";
+export {
+  getEnabledIntelligenceEngines,
+  getIntelligenceEngineMetadata,
+  getRegisteredIntelligenceEngines,
+  INTELLIGENCE_ENGINE_NAMES,
+  INTELLIGENCE_ENGINE_REGISTRY,
+  INTELLIGENCE_ENGINE_REGISTRY_VERSION,
+} from "./contracts/intelligenceEngineRegistry.js";
 export { buildCompanionContext } from "./contextBuilder.js";
+export { buildCompanionContextEngine } from "./context/companionContextEngine.js";
 export {
   askCompanionGateway,
+  recordCompanionUsage,
   validateCredits,
   validateMembership,
   validatePermissions,
+  validateUsageLimit,
 } from "./gateway.js";
 export { classifyCompanionIntent } from "./intentEngine.js";
+export {
+  buildCompanionKnowledge,
+  MEETRO_KNOWLEDGE_BASE,
+} from "./knowledge/companionKnowledgeEngine.js";
+export {
+  appendCompanionSessionMemory,
+  createInMemoryCompanionSessionMemory,
+  getSafeRecentCompanionMemory,
+  resolveCompanionSessionMemory,
+} from "./memory/companionSessionMemory.js";
+export { orchestrateCompanionAsk } from "./orchestrator/companionOrchestrator.js";
 export { invokeProvider } from "./providerAdapter.js";
 export { getCompanionSystemPrompt } from "./prompts/companionSystemPrompt.js";
+export {
+  buildCompanionRelationship,
+  RELATIONSHIP_RULES,
+} from "./relationship/companionRelationshipEngine.js";
+export {
+  buildCompanionWorkflow,
+  MEETRO_WORKFLOW_STAGES,
+  WORKFLOW_LIFECYCLE_RULES,
+} from "./workflow/companionWorkflowEngine.js";
