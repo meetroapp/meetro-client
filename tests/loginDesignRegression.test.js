@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getProfessionalSignupCategoriesFromTaxonomy } from "../src/utils/communityTaxonomy.js";
 
 test("Login keeps the Meetro Community arrival surface while using backend 2FA", () => {
   const source = readFileSync(
@@ -73,8 +74,22 @@ test("professional signup category search renders results and clears only search
 
   assert.match(source, /const \[professionalCategory, setProfessionalCategory\] = useState\("contractor"\)/);
   assert.match(source, /const \[categorySearch, setCategorySearch\] = useState\(""\)/);
-  assert.match(source, /item\.label\.toLowerCase\(\)\.includes\(categorySearch\.toLowerCase\(\)\)/);
-  assert.match(source, /\{ value: "propertyManagement", labelKey: "propertyManagement" \}/);
+  assert.match(source, /getProfessionalSignupCategoriesFromTaxonomy/);
+  assert.match(source, /normalizedCategorySearch/);
+  assert.match(source, /item\.taxonomyEcosystemId/);
+  assert.match(source, /\.\.\.\(Array\.isArray\(item\.aliases\) \? item\.aliases : \[\]\)/);
+  const signupCategories = getProfessionalSignupCategoriesFromTaxonomy({
+    translate: (_key, fallback) => fallback,
+  });
+  const propertyManagement = signupCategories.find(
+    (category) => category.value === "propertyManagement"
+  );
+  assert.ok(propertyManagement);
+  assert.ok(
+    propertyManagement.aliases.some((alias) =>
+      String(alias).toLowerCase().includes("property")
+    )
+  );
   assert.match(source, /const hasCategorySearch = categorySearch\.trim\(\)\.length > 0/);
   assert.match(source, /function selectProfessionalCategory\(value\) \{\s*setProfessionalCategory\(value\);\s*setCategorySearch\(""\);\s*\}/);
   assert.match(source, /hasCategorySearch && \(/);

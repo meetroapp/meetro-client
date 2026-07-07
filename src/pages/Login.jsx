@@ -21,6 +21,7 @@ import {
   verifyTwoFactorCode,
 } from "../utils/twoFactorVerification";
 import { getAccountConnectionStateFromLoginData } from "../utils/accountConnection";
+import { getProfessionalSignupCategoriesFromTaxonomy } from "../utils/communityTaxonomy";
 import MeetroIcon from "../components/MeetroIcon";
 
 function Login({ setPage }) {
@@ -315,50 +316,25 @@ function Login({ setPage }) {
     }
   }
 
-  const professionalCategories = [
-    { value: "professional", labelKey: "signupCategoryProfessionalServices" },
-    { value: "contractor", labelKey: "signupCategoryGeneralContractor" },
-    { value: "handyman", labelKey: "handyman" },
-    { value: "applianceRepair", labelKey: "applianceRepair" },
-    { value: "automotiveServices", labelKey: "automotiveServices" },
-    { value: "carDetailing", labelKey: "carDetailing" },
-    { value: "carpentry", labelKey: "carpentry" },
-    { value: "cleaning", labelKey: "signupCategoryCleaningServices" },
-    { value: "concrete", labelKey: "concrete" },
-    { value: "demolition", labelKey: "demolition" },
-    { value: "doorsWindows", labelKey: "doorsWindows" },
-    { value: "drywall", labelKey: "signupCategoryDrywallRepair" },
-    { value: "electrical", labelKey: "electrical" },
-    { value: "fencing", labelKey: "fencing" },
-    { value: "flooring", labelKey: "flooring" },
-    { value: "homeHealthCare", labelKey: "homeHealthCare" },
-    { value: "hvac", labelKey: "hvac" },
-    { value: "junkRemoval", labelKey: "junkRemoval" },
-    { value: "landscaping", labelKey: "landscaping" },
-    { value: "lawnCare", labelKey: "lawnCare" },
-    { value: "mechanic", labelKey: "mechanic" },
-    { value: "mobileServices", labelKey: "mobileServices" },
-    { value: "moving", labelKey: "signupCategoryMovingServices" },
-    { value: "painting", labelKey: "painting" },
-    { value: "paverSealing", labelKey: "paverSealing" },
-    { value: "pestControl", labelKey: "pestControl" },
-    { value: "plumbing", labelKey: "plumbing" },
-    { value: "poolService", labelKey: "poolService" },
-    { value: "pressureWashing", labelKey: "pressureWashing" },
-    { value: "privateTransportation", labelKey: "privateTransportation" },
-    { value: "realEstate", labelKey: "realEstate" },
-    { value: "propertyManagement", labelKey: "propertyManagement" },
-    { value: "roofing", labelKey: "roofing" },
-    { value: "tile", labelKey: "signupCategoryTileInstallation" },
-    { value: "treeService", labelKey: "treeService" },
-    { value: "other", labelKey: "signupCategoryOtherServices" },
-  ].map((item) => ({
-    ...item,
-    label: t(item.labelKey, normalizedLanguage),
-  }));
+  const professionalCategories = getProfessionalSignupCategoriesFromTaxonomy({
+    translate: (key, fallback) => {
+      const translated = t(key, normalizedLanguage);
+      return translated === key ? fallback : translated;
+    },
+  });
 
+  const normalizedCategorySearch = categorySearch.trim().toLowerCase();
   const filteredProfessionalCategories = professionalCategories.filter((item) =>
-    item.label.toLowerCase().includes(categorySearch.toLowerCase())
+    [
+      item.label,
+      item.value,
+      item.labelKey,
+      item.taxonomyEcosystemId,
+      item.capabilityGroupId,
+      ...(Array.isArray(item.aliases) ? item.aliases : []),
+    ].some((field) =>
+      String(field || "").toLowerCase().includes(normalizedCategorySearch)
+    )
   );
   const hasCategorySearch = categorySearch.trim().length > 0;
 

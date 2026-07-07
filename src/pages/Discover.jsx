@@ -18,6 +18,10 @@ import { searchRequestServices } from "../utils/requestIntelligence";
 import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
 import { getBusinessVerificationProjection } from "../utils/businessVerification";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
+import {
+  getCommunityDiscoveryInterestsFromTaxonomy,
+  searchCommunityTaxonomyAliases,
+} from "../utils/communityTaxonomy";
 
 function Discover({ setPage, currentPage }) {
   const [discoverMode, setDiscoverMode] = useState("communityHub");
@@ -217,76 +221,12 @@ function Discover({ setPage, currentPage }) {
     { value: "jobsHiring", label: t("jobsHiringTitle", language), route: "jobsHiring" },
   ];
 
-  const discoveryInterests = [
-    {
-      id: "home_services",
-      label: t("communityInterestHomeServices", language),
-      section: "businesses",
-      keywords: [
-        "home services",
-        "handyman",
-        "cleaning",
-        "cabinet",
-        "plumbing",
-        "electrical",
-        "pool",
-      ],
+  const discoveryInterests = getCommunityDiscoveryInterestsFromTaxonomy({
+    translate: (key, fallback) => {
+      const translated = t(key, language);
+      return translated === key ? fallback : translated;
     },
-    {
-      id: "property_management",
-      label: t("communityInterestPropertyManagement", language),
-      section: "businesses",
-      keywords: ["property management", "rental", "tenant", "inspection"],
-    },
-    {
-      id: "real_estate",
-      label: t("communityInterestRealEstate", language),
-      section: "businesses",
-      keywords: ["real estate", "realtor", "property", "listing"],
-    },
-    {
-      id: "marketing",
-      label: t("communityInterestMarketing", language),
-      section: "businesses",
-      keywords: ["marketing", "seo", "restaurant marketing", "social media"],
-    },
-    {
-      id: "business_services",
-      label: t("communityInterestBusinessServices", language),
-      section: "hiring",
-      keywords: ["business services", "admin", "operations", "bookkeeping"],
-    },
-    {
-      id: "legal",
-      label: t("communityInterestLegal", language),
-      section: "businesses",
-      keywords: ["legal", "law", "contract", "attorney"],
-    },
-    {
-      id: "creative",
-      label: t("communityInterestCreative", language),
-      section: "spotlight",
-      keywords: ["creative", "design", "photography", "brand"],
-    },
-    {
-      id: "healthcare",
-      label: t("communityInterestHealthcare", language),
-      section: "businesses",
-      keywords: ["healthcare", "caregiver", "nursing", "medical"],
-    },
-    {
-      id: "transportation",
-      label: t("communityInterestTransportation", language),
-      section: "businesses",
-      keywords: ["transportation", "driver", "delivery", "ride"],
-    },
-    {
-      id: "education",
-      label: t("communityInterestEducation", language),
-      section: "hiring",
-      keywords: ["education", "tutor", "training", "teacher"],
-    },
-  ];
+  });
 
   function getBusinessDisplayCategory(business = {}) {
     const services = getBusinessServicesProjection(business, {
@@ -395,8 +335,26 @@ function Discover({ setPage, currentPage }) {
       ...(Array.isArray(business.serviceCities) ? business.serviceCities : []),
     ];
 
-    return searchableFields.some((field) =>
+    const directMatch = searchableFields.some((field) =>
       String(field || "").toLowerCase().includes(normalizedQuery)
+    );
+    if (directMatch) return true;
+
+    const taxonomyMatches = searchCommunityTaxonomyAliases(query);
+    const taxonomyBusinessTerms = taxonomyMatches.flatMap((ecosystem) =>
+      ecosystem.children.flatMap((item) => [
+        item.id,
+        item.label,
+        item.capabilityGroupId,
+        item.legacySignupValue,
+        ...item.aliases,
+      ])
+    );
+
+    return taxonomyBusinessTerms.some((term) =>
+      searchableFields.some((field) =>
+        String(field || "").toLowerCase().includes(String(term || "").toLowerCase())
+      )
     );
   }
 

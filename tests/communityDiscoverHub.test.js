@@ -6,6 +6,10 @@ import {
   syncAccountModeForPage,
 } from "../src/utils/session.js";
 import { t } from "../src/utils/language.js";
+import {
+  getCommunityDiscoveryInterestsFromTaxonomy,
+  searchCommunityTaxonomyAliases,
+} from "../src/utils/communityTaxonomy.js";
 
 const discoverSource = readFileSync(
   new URL("../src/pages/Discover.jsx", import.meta.url),
@@ -139,12 +143,16 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
   assert.match(discoverSource, /const \[selectedDiscoveryInterests, setSelectedDiscoveryInterests\] = useState/);
   assert.match(discoverSource, /meetroCommunityDiscoveryInterests/);
   assert.match(discoverSource, /meetroCommunityDiscoveryInterestsSeen/);
-  assert.match(discoverSource, /const discoveryInterests = \[/);
-  assert.match(discoverSource, /id: "home_services"/);
-  assert.match(discoverSource, /id: "property_management"/);
-  assert.match(discoverSource, /id: "marketing"/);
-  assert.match(discoverSource, /id: "healthcare"/);
-  assert.match(discoverSource, /id: "transportation"/);
+  assert.match(discoverSource, /getCommunityDiscoveryInterestsFromTaxonomy/);
+  assert.doesNotMatch(discoverSource, /const discoveryInterests = \[/);
+  const discoveryInterests = getCommunityDiscoveryInterestsFromTaxonomy({
+    translate: (_key, fallback) => fallback,
+  });
+  assert.ok(discoveryInterests.find((interest) => interest.id === "home_services"));
+  assert.ok(discoveryInterests.find((interest) => interest.id === "property_management"));
+  assert.ok(discoveryInterests.find((interest) => interest.id === "marketing"));
+  assert.ok(discoveryInterests.find((interest) => interest.id === "healthcare"));
+  assert.ok(discoveryInterests.find((interest) => interest.id === "transportation"));
   assert.match(discoverSource, /const renderDiscoveryBar = \(\) =>/);
   assert.match(discoverSource, /t\("communityDiscoverySearchPlaceholder", language\)/);
   assert.match(discoverSource, /aria-pressed=\{selected\}/);
@@ -168,6 +176,10 @@ test("Community discovery search filters businesses, specialties, and hiring wit
   assert.match(discoverSource, /\.\.\.services\.capabilities/);
   assert.match(discoverSource, /\.\.\.services\.matchingKeywords/);
   assert.match(discoverSource, /searchRequestServices\(query/);
+  assert.match(discoverSource, /searchCommunityTaxonomyAliases\(query\)/);
+  assert.equal(searchCommunityTaxonomyAliases("SEO")[0]?.id, "marketing");
+  assert.equal(searchCommunityTaxonomyAliases("taxes")[0]?.id, "financial");
+  assert.equal(searchCommunityTaxonomyAliases("logo")[0]?.id, "creative");
   assert.match(discoverSource, /function jobMatchesSearch\(job = \{\}, query = ""\)/);
   assert.match(discoverSource, /jobDisplay\.title/);
   assert.match(discoverSource, /jobDisplay\.category/);
