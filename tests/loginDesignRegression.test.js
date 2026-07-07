@@ -64,3 +64,36 @@ test("Arrival Experience documentation preserves auth guardrails", () => {
   assert.match(source, /Do not change legal routing/);
   assert.match(source, /Do not change backend\/API calls/);
 });
+
+test("professional signup category search renders results and clears only search after selection", () => {
+  const source = readFileSync(
+    new URL("../src/pages/Login.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /const \[professionalCategory, setProfessionalCategory\] = useState\("contractor"\)/);
+  assert.match(source, /const \[categorySearch, setCategorySearch\] = useState\(""\)/);
+  assert.match(source, /item\.label\.toLowerCase\(\)\.includes\(categorySearch\.toLowerCase\(\)\)/);
+  assert.match(source, /\{ value: "propertyManagement", labelKey: "propertyManagement" \}/);
+  assert.match(source, /const hasCategorySearch = categorySearch\.trim\(\)\.length > 0/);
+  assert.match(source, /function selectProfessionalCategory\(value\) \{\s*setProfessionalCategory\(value\);\s*setCategorySearch\(""\);\s*\}/);
+  assert.match(source, /hasCategorySearch && \(/);
+  assert.match(source, /style=\{categorySearchResults\}/);
+  assert.match(source, /filteredProfessionalCategories\.map\(\(item\) => \(/);
+  assert.match(source, /onClick=\{\(\) => selectProfessionalCategory\(item\.value\)\}/);
+  assert.match(source, /value=\{professionalCategory\}/);
+  assert.match(source, /onChange=\{\(e\) => selectProfessionalCategory\(e\.target\.value\)\}/);
+  assert.match(source, /professionalCategories\.map\(\(item\) => \(/);
+  assert.doesNotMatch(source, /professionalCategorySelectValue/);
+  assert.doesNotMatch(source, /<option value="" disabled>/);
+
+  const handlerBody = source.match(
+    /function selectProfessionalCategory\(value\) \{([\s\S]*?)\n  \}/
+  )?.[1] || "";
+
+  assert.doesNotMatch(handlerBody, /setName\(/);
+  assert.doesNotMatch(handlerBody, /setBusinessName\(/);
+  assert.doesNotMatch(handlerBody, /setEmail\(/);
+  assert.doesNotMatch(handlerBody, /setPassword\(/);
+  assert.doesNotMatch(handlerBody, /setMobileNumber\(/);
+});

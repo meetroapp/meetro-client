@@ -4271,22 +4271,41 @@ const highTrafficParityLabels = {
     communitySubtitle:
       "Explore the people, opportunities, and stories that make your community stronger.",
     communityGuideQuestion: "What would you like to discover today?",
+    communityDiscoveryBarAria: "Community discovery search and interests",
+    communityDiscoverySearchPlaceholder:
+      "Search professionals, businesses, specialties, or services...",
+    communityDiscoveryInterestsAria: "Discovery interests",
+    communityInterestPromptTitle: "What interests you most?",
+    communityInterestPromptCopy:
+      "Choose a few interests to help Community place what matters near the top. You can still discover everything.",
+    communityInterestSkip: "Skip for now",
+    communityInterestMore: "More...",
+    communityInterestHomeServices: "Home Services",
+    communityInterestPropertyManagement: "Property Management",
+    communityInterestRealEstate: "Real Estate",
+    communityInterestMarketing: "Marketing",
+    communityInterestBusinessServices: "Business Services",
+    communityInterestLegal: "Legal",
+    communityInterestCreative: "Creative",
+    communityInterestHealthcare: "Healthcare",
+    communityInterestTransportation: "Transportation",
+    communityInterestEducation: "Education",
     communityPreviewAria: "Community discovery previews",
     communityBusinessesTitle: "Businesses",
     communityBusinessesCopy:
-      "Discover trusted professionals and local businesses serving your community.",
+      "Discover people and businesses ready to help your community.",
     communityBusinessesEmptyTitle:
       "Local businesses will appear here as Meetro grows.",
     communityBusinessesEmptyText:
       "Soon, this space will introduce trusted professionals serving your community.",
-    communityViewAllBusinesses: "View All Businesses",
+    communityViewAllBusinesses: "Explore More Businesses",
     communityHiringTitle: "Hiring",
     communityHiringCopy:
       "Find your next teammate, opportunity, or collaboration.",
     communityHiringEmptyTitle: "Hiring opportunities will appear here.",
     communityHiringEmptyText:
       "As local teams grow, Meetro will show opportunities to work, collaborate, and build together.",
-    communityViewAllHiring: "View All Hiring",
+    communityViewAllHiring: "Explore More Opportunities",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Discover today’s featured community story.",
     communitySpotlightEyebrow: "Today’s Spotlight",
@@ -4616,22 +4635,41 @@ const highTrafficParityLabels = {
     communitySubtitle:
       "Explora las personas, oportunidades e historias que fortalecen tu comunidad.",
     communityGuideQuestion: "¿Qué te gustaría descubrir hoy?",
+    communityDiscoveryBarAria: "Búsqueda e intereses de descubrimiento comunitario",
+    communityDiscoverySearchPlaceholder:
+      "Busca profesionales, negocios, especialidades o servicios...",
+    communityDiscoveryInterestsAria: "Intereses de descubrimiento",
+    communityInterestPromptTitle: "¿Qué te interesa más?",
+    communityInterestPromptCopy:
+      "Elige algunos intereses para que Comunidad coloque lo importante cerca del inicio. Aún puedes descubrir todo.",
+    communityInterestSkip: "Omitir por ahora",
+    communityInterestMore: "Más...",
+    communityInterestHomeServices: "Servicios del hogar",
+    communityInterestPropertyManagement: "Administración de propiedades",
+    communityInterestRealEstate: "Bienes raíces",
+    communityInterestMarketing: "Marketing",
+    communityInterestBusinessServices: "Servicios empresariales",
+    communityInterestLegal: "Legal",
+    communityInterestCreative: "Creativo",
+    communityInterestHealthcare: "Salud",
+    communityInterestTransportation: "Transporte",
+    communityInterestEducation: "Educación",
     communityPreviewAria: "Vistas previas de descubrimiento comunitario",
     communityBusinessesTitle: "Negocios",
     communityBusinessesCopy:
-      "Descubre profesionales de confianza y negocios locales que sirven a tu comunidad.",
+      "Descubre personas y negocios listos para ayudar a tu comunidad.",
     communityBusinessesEmptyTitle:
       "Los negocios locales aparecerán aquí a medida que Meetro crezca.",
     communityBusinessesEmptyText:
       "Pronto, este espacio presentará profesionales de confianza que sirven a tu comunidad.",
-    communityViewAllBusinesses: "Ver todos los negocios",
+    communityViewAllBusinesses: "Explorar más negocios",
     communityHiringTitle: "Contratación",
     communityHiringCopy:
       "Encuentra tu próximo compañero de equipo, oportunidad o colaboración.",
     communityHiringEmptyTitle: "Las oportunidades aparecerán aquí.",
     communityHiringEmptyText:
       "A medida que los equipos locales crezcan, Meetro mostrará oportunidades para trabajar, colaborar y construir juntos.",
-    communityViewAllHiring: "Ver contratación",
+    communityViewAllHiring: "Explorar más oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubre la historia destacada de la comunidad de hoy.",
     communitySpotlightEyebrow: "Spotlight de hoy",
@@ -4963,22 +5001,41 @@ const highTrafficParityLabels = {
     communitySubtitle:
       "Explorez les personnes, les opportunités et les histoires qui renforcent votre communauté.",
     communityGuideQuestion: "Que souhaitez-vous découvrir aujourd’hui ?",
+    communityDiscoveryBarAria: "Recherche et centres d’intérêt de découverte communautaire",
+    communityDiscoverySearchPlaceholder:
+      "Rechercher des professionnels, entreprises, spécialités ou services...",
+    communityDiscoveryInterestsAria: "Centres d’intérêt de découverte",
+    communityInterestPromptTitle: "Qu’est-ce qui vous intéresse le plus ?",
+    communityInterestPromptCopy:
+      "Choisissez quelques centres d’intérêt pour aider la Communauté à placer l’important en premier. Vous pouvez toujours tout découvrir.",
+    communityInterestSkip: "Ignorer pour le moment",
+    communityInterestMore: "Plus...",
+    communityInterestHomeServices: "Services à domicile",
+    communityInterestPropertyManagement: "Gestion immobilière",
+    communityInterestRealEstate: "Immobilier",
+    communityInterestMarketing: "Marketing",
+    communityInterestBusinessServices: "Services aux entreprises",
+    communityInterestLegal: "Juridique",
+    communityInterestCreative: "Créatif",
+    communityInterestHealthcare: "Santé",
+    communityInterestTransportation: "Transport",
+    communityInterestEducation: "Éducation",
     communityPreviewAria: "Aperçus de découverte communautaire",
     communityBusinessesTitle: "Entreprises",
     communityBusinessesCopy:
-      "Découvrez des professionnels de confiance et des entreprises locales au service de votre communauté.",
+      "Découvrez des personnes et des entreprises prêtes à aider votre communauté.",
     communityBusinessesEmptyTitle:
       "Les entreprises locales apparaîtront ici à mesure que Meetro grandira.",
     communityBusinessesEmptyText:
       "Bientôt, cet espace présentera des professionnels de confiance au service de votre communauté.",
-    communityViewAllBusinesses: "Voir toutes les entreprises",
+    communityViewAllBusinesses: "Explorer plus d’entreprises",
     communityHiringTitle: "Recrutement",
     communityHiringCopy:
       "Trouvez votre prochain coéquipier, une opportunité ou une collaboration.",
     communityHiringEmptyTitle: "Les opportunités de recrutement apparaîtront ici.",
     communityHiringEmptyText:
       "À mesure que les équipes locales grandiront, Meetro montrera des opportunités pour travailler, collaborer et construire ensemble.",
-    communityViewAllHiring: "Voir le recrutement",
+    communityViewAllHiring: "Explorer plus d’opportunités",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy:
       "Découvrez l’histoire communautaire mise en lumière aujourd’hui.",
@@ -5333,22 +5390,41 @@ const highTrafficParityLabels = {
     communitySubtitle:
       "Explore as pessoas, oportunidades e histórias que fortalecem sua comunidade.",
     communityGuideQuestion: "O que você gostaria de descobrir hoje?",
+    communityDiscoveryBarAria: "Busca e interesses de descoberta da comunidade",
+    communityDiscoverySearchPlaceholder:
+      "Busque profissionais, empresas, especialidades ou serviços...",
+    communityDiscoveryInterestsAria: "Interesses de descoberta",
+    communityInterestPromptTitle: "O que mais interessa a você?",
+    communityInterestPromptCopy:
+      "Escolha alguns interesses para ajudar a Comunidade a colocar o que importa mais perto do topo. Você ainda pode descobrir tudo.",
+    communityInterestSkip: "Pular por enquanto",
+    communityInterestMore: "Mais...",
+    communityInterestHomeServices: "Serviços domésticos",
+    communityInterestPropertyManagement: "Administração de propriedades",
+    communityInterestRealEstate: "Imóveis",
+    communityInterestMarketing: "Marketing",
+    communityInterestBusinessServices: "Serviços empresariais",
+    communityInterestLegal: "Jurídico",
+    communityInterestCreative: "Criativo",
+    communityInterestHealthcare: "Saúde",
+    communityInterestTransportation: "Transporte",
+    communityInterestEducation: "Educação",
     communityPreviewAria: "Prévias de descoberta da comunidade",
     communityBusinessesTitle: "Empresas",
     communityBusinessesCopy:
-      "Descubra profissionais de confiança e empresas locais que atendem sua comunidade.",
+      "Descubra pessoas e empresas prontas para ajudar sua comunidade.",
     communityBusinessesEmptyTitle:
       "Empresas locais aparecerão aqui à medida que o Meetro crescer.",
     communityBusinessesEmptyText:
       "Em breve, este espaço apresentará profissionais de confiança que atendem sua comunidade.",
-    communityViewAllBusinesses: "Ver todas as empresas",
+    communityViewAllBusinesses: "Explorar mais empresas",
     communityHiringTitle: "Contratação",
     communityHiringCopy:
       "Encontre seu próximo colega de equipe, oportunidade ou colaboração.",
     communityHiringEmptyTitle: "Oportunidades de contratação aparecerão aqui.",
     communityHiringEmptyText:
       "À medida que equipes locais crescerem, o Meetro mostrará oportunidades para trabalhar, colaborar e construir juntos.",
-    communityViewAllHiring: "Ver contratação",
+    communityViewAllHiring: "Explorar mais oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubra a história em destaque da comunidade de hoje.",
     communitySpotlightEyebrow: "Spotlight de hoje",

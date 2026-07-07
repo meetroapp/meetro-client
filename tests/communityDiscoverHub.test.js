@@ -100,7 +100,7 @@ test("Community landing renders human Community copy and progressive preview sec
   assert.equal(t("communityBusinessesTitle", "en"), "Businesses");
   assert.equal(
     t("communityBusinessesCopy", "en"),
-    "Discover trusted professionals and local businesses serving your community."
+    "Discover people and businesses ready to help your community."
   );
   assert.match(discoverSource, /t\("communityHiringTitle", language\)/);
   assert.match(discoverSource, /t\("communityHiringCopy", language\)/);
@@ -114,7 +114,7 @@ test("Community landing renders human Community copy and progressive preview sec
   assert.equal(t("communitySpotlightTitle", "en"), "Spotlight");
   assert.equal(t("communitySpotlightCopy", "en"), "Discover today’s featured community story.");
   assert.match(discoverSource, /style=\{communityPreviewStack\}/);
-  assert.match(discoverSource, /style=\{communityPreviewSection\}/);
+  assert.match(discoverSource, /\.\.\.communityPreviewSection/);
   assert.match(discoverSource, /style=\{communityBusinessPreviewGrid\}/);
   assert.match(discoverSource, /style=\{communityWarmEmptyCard\}/);
   assert.match(discoverSource, /style=\{communityHiringGrid\}/);
@@ -127,12 +127,71 @@ test("Community preview actions preserve child destination routing", () => {
   assert.match(discoverSource, /t\("communityViewAllBusinesses", language\)/);
   assert.match(discoverSource, /t\("communityViewAllHiring", language\)/);
   assert.match(discoverSource, /t\("communityExploreSpotlight", language\)/);
-  assert.equal(t("communityViewAllBusinesses", "en"), "View All Businesses");
-  assert.equal(t("communityViewAllHiring", "en"), "View All Hiring");
+  assert.equal(t("communityViewAllBusinesses", "en"), "Explore More Businesses");
+  assert.equal(t("communityViewAllHiring", "en"), "Explore More Opportunities");
   assert.equal(t("communityExploreSpotlight", "en"), "Explore Spotlight");
   assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("businessDirectory"\)\}/);
   assert.match(discoverSource, /onClick=\{\(\) => setPage\("jobsHiring"\)\}/);
   assert.match(discoverSource, /onClick=\{\(\) => openCommunitySection\("spotlight"\)\}/);
+});
+
+test("Community Discovery Bar renders search, interests, and first-visit prompt", () => {
+  assert.match(discoverSource, /const \[selectedDiscoveryInterests, setSelectedDiscoveryInterests\] = useState/);
+  assert.match(discoverSource, /meetroCommunityDiscoveryInterests/);
+  assert.match(discoverSource, /meetroCommunityDiscoveryInterestsSeen/);
+  assert.match(discoverSource, /const discoveryInterests = \[/);
+  assert.match(discoverSource, /id: "home_services"/);
+  assert.match(discoverSource, /id: "property_management"/);
+  assert.match(discoverSource, /id: "marketing"/);
+  assert.match(discoverSource, /id: "healthcare"/);
+  assert.match(discoverSource, /id: "transportation"/);
+  assert.match(discoverSource, /const renderDiscoveryBar = \(\) =>/);
+  assert.match(discoverSource, /t\("communityDiscoverySearchPlaceholder", language\)/);
+  assert.match(discoverSource, /aria-pressed=\{selected\}/);
+  assert.match(discoverSource, /toggleDiscoveryInterest\(interest\.id\)/);
+  assert.match(discoverSource, /skipDiscoveryInterests/);
+  assert.equal(
+    t("communityDiscoverySearchPlaceholder", "en"),
+    "Search professionals, businesses, specialties, or services..."
+  );
+  assert.equal(t("communityInterestPromptTitle", "en"), "What interests you most?");
+  assert.equal(t("communityInterestSkip", "en"), "Skip for now");
+});
+
+test("Community discovery search filters businesses, specialties, and hiring without removing sections", () => {
+  assert.match(discoverSource, /function businessMatchesSearch\(business = \{\}, query = ""\)/);
+  assert.match(discoverSource, /services\.shortSummary/);
+  assert.match(discoverSource, /services\.publicSummary/);
+  assert.match(discoverSource, /\.\.\.services\.serviceIds/);
+  assert.match(discoverSource, /\.\.\.services\.categories/);
+  assert.match(discoverSource, /\.\.\.services\.displayLabels/);
+  assert.match(discoverSource, /\.\.\.services\.capabilities/);
+  assert.match(discoverSource, /\.\.\.services\.matchingKeywords/);
+  assert.match(discoverSource, /searchRequestServices\(query/);
+  assert.match(discoverSource, /function jobMatchesSearch\(job = \{\}, query = ""\)/);
+  assert.match(discoverSource, /jobDisplay\.title/);
+  assert.match(discoverSource, /jobDisplay\.category/);
+  assert.match(discoverSource, /jobDisplay\.description/);
+  assert.match(discoverSource, /\.\.\.\(Array\.isArray\(job\.skillsNeeded\)/);
+  assert.match(discoverSource, /communitySearchBusinesses = searchQuery\.trim\(\)/);
+  assert.match(discoverSource, /businesses\.filter\(\(business\) => businessMatchesSearch\(business, searchQuery\)\)/);
+  assert.match(discoverSource, /communitySearchHiringJobs = searchQuery\.trim\(\)/);
+  assert.match(discoverSource, /allHiringJobs\.filter\(\(job\) => jobMatchesSearch\(job, searchQuery\)\)/);
+  assert.match(discoverSource, /spotlightMatchesSearch\(searchTerm\)/);
+  assert.match(discoverSource, /getCommunitySectionOrder\("businesses"\)/);
+  assert.match(discoverSource, /getCommunitySectionOrder\("hiring"\)/);
+  assert.match(discoverSource, /getCommunitySectionOrder\("spotlight"\)/);
+  assert.match(discoverSource, /orderByDiscoveryInterests/);
+});
+
+test("Community discovery keeps one destination and supports Companion handoff", () => {
+  assert.match(discoverSource, /window\.addEventListener\("meetro:community-discovery"/);
+  assert.match(discoverSource, /meetroCommunityDiscoveryQuery/);
+  assert.match(discoverSource, /setSearchQuery\(String\(detail\.query\)\)/);
+  assert.match(discoverSource, /saveDiscoveryInterests\(validInterestIds\)/);
+  assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
+  assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
+  assert.match(discoverSource, /discoverMode === "communityHub" && renderCommunityHub\(\)/);
 });
 
 test("Businesses preview reuses existing business cards and full Businesses page remains unchanged", () => {
@@ -158,7 +217,9 @@ test("Businesses preview reuses existing business cards and full Businesses page
 });
 
 test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
-  assert.match(discoverSource, /getHiringLocalJobOpenings\(\)\.slice\(0, 3\)/);
+  assert.match(discoverSource, /const allHiringJobs = getHiringLocalJobOpenings\(\)/);
+  assert.match(discoverSource, /hiringPreviewJobs = orderByDiscoveryInterests/);
+  assert.match(discoverSource, /\)\.slice\(0, 3\)/);
   assert.match(discoverSource, /const renderHiringPreviewCard = \(job\) =>/);
   assert.match(discoverSource, /getLocalizedHiringJobDisplay\(job, language\)/);
   assert.match(discoverSource, /t\("communityHiringEmptyTitle", language\)/);

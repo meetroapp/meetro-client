@@ -360,6 +360,12 @@ function Login({ setPage }) {
   const filteredProfessionalCategories = professionalCategories.filter((item) =>
     item.label.toLowerCase().includes(categorySearch.toLowerCase())
   );
+  const hasCategorySearch = categorySearch.trim().length > 0;
+
+  function selectProfessionalCategory(value) {
+    setProfessionalCategory(value);
+    setCategorySearch("");
+  }
 
   function changeLanguage(value) {
     const nextLanguage = normalizeLanguage(value);
@@ -953,12 +959,32 @@ function Login({ setPage }) {
                       onChange={(e) => setCategorySearch(e.target.value)}
                     />
 
+                    {hasCategorySearch && (
+                      <div style={categorySearchResults}>
+                        {filteredProfessionalCategories.map((item) => (
+                          <button
+                            key={item.value}
+                            type="button"
+                            style={{
+                              ...categorySearchResultButton,
+                              ...(professionalCategory === item.value
+                                ? selectedCategorySearchResultButton
+                                : {}),
+                            }}
+                            onClick={() => selectProfessionalCategory(item.value)}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <select
                       style={input}
                       value={professionalCategory}
-                      onChange={(e) => setProfessionalCategory(e.target.value)}
+                      onChange={(e) => selectProfessionalCategory(e.target.value)}
                     >
-                      {filteredProfessionalCategories.map((item) => (
+                      {professionalCategories.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
                         </option>
@@ -1524,6 +1550,32 @@ const input = {
   marginBottom: "18px",
   background: "rgba(255,253,248,0.72)",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
+};
+
+const categorySearchResults = {
+  display: "grid",
+  gap: "8px",
+  margin: "-10px 0 18px",
+};
+
+const categorySearchResultButton = {
+  width: "100%",
+  border: "1px solid rgba(78,68,55,0.16)",
+  borderRadius: "16px",
+  background: "var(--meetro-surface-paper, #fffdf8)",
+  color: "var(--meetro-color-ink, #10231a)",
+  padding: "12px 14px",
+  textAlign: "left",
+  fontSize: "14px",
+  fontWeight: "850",
+  cursor: "pointer",
+  boxShadow: "var(--meetro-shadow-soft, 0 8px 20px rgba(49,35,20,0.08))",
+};
+
+const selectedCategorySearchResultButton = {
+  border: "1px solid var(--meetro-color-forest, #1f4d34)",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const fieldHelperText = {
