@@ -226,6 +226,7 @@ test("professional capability library exposes required searchable primary catego
     "Appliance Repair",
     "Junk Removal",
     "Professional Services",
+    "Marketing Services",
   ].forEach((label) => assert.ok(categoryLabels.includes(label), label));
 
   assert.deepEqual(
@@ -236,6 +237,77 @@ test("professional capability library exposes required searchable primary catego
     searchProfessionalCapabilityCategories("office cleaning")
       .map((category) => category.label)
       .includes("Cleaning Services")
+  );
+});
+
+test("marketing capability completeness reaches Professional Signup without identity labels", () => {
+  const values = getProfessionalOnboardingSpecialtyValues();
+  const marketingCategory = getProfessionalCapabilityCategories().find(
+    (category) => category.id === "marketing_services"
+  );
+  const marketingSpecialties = searchProfessionalCapabilitySpecialties(
+    "marketing_services",
+    ""
+  );
+  const marketingLabels = marketingSpecialties.map((specialty) => specialty.label);
+
+  assert.ok(marketingCategory);
+  assert.equal(marketingCategory.industry, "marketing");
+  [
+    "marketing_strategy",
+    "digital_marketing",
+    "seo",
+    "local_seo",
+    "ppc_advertising",
+    "social_media_marketing",
+    "content_marketing",
+    "email_marketing",
+    "brand_strategy",
+    "brand_identity",
+    "graphic_design",
+    "website_design",
+    "website_development",
+    "copywriting",
+    "photography",
+    "videography",
+    "marketing_analytics",
+    "public_relations",
+    "marketing_consulting",
+  ].forEach((specialtyId) => assert.ok(values.includes(specialtyId), specialtyId));
+  [
+    "Marketing Strategy",
+    "Digital Marketing",
+    "SEO",
+    "Local SEO",
+    "PPC Advertising",
+    "Social Media Marketing",
+    "Content Marketing",
+    "Email Marketing",
+    "Brand Strategy",
+    "Brand Identity",
+    "Graphic Design",
+    "Website Design",
+    "Website Development",
+    "Copywriting",
+    "Photography",
+    "Videography",
+    "Analytics",
+    "Public Relations",
+    "Marketing Consulting",
+  ].forEach((label) => assert.ok(marketingLabels.includes(label), label));
+  ["Marketing Agency", "Marketing Firm", "Studio", "LLC", "Corporation"].forEach(
+    (identityLabel) => assert.equal(marketingLabels.includes(identityLabel), false)
+  );
+  assert.deepEqual(
+    searchProfessionalCapabilitySpecialties("marketing_services", "local seo").map(
+      (specialty) => specialty.id
+    ),
+    ["local_seo"]
+  );
+  assert.ok(
+    searchProfessionalCapabilitySpecialties("marketing_services", "website")
+      .map((specialty) => specialty.id)
+      .includes("website_development")
   );
 });
 
@@ -266,6 +338,22 @@ test("professional capability labels resolve through language.js without changin
   assert.equal(
     t(getProfessionalCapabilitySpecialtyLabelKey("pool_builders"), "es"),
     "Constructores de piscinas"
+  );
+  assert.equal(
+    t(getProfessionalCapabilityCategoryLabelKey("marketing_services"), "en"),
+    "Marketing Services"
+  );
+  assert.equal(
+    t(getProfessionalCapabilitySpecialtyLabelKey("local_seo"), "es"),
+    "SEO local"
+  );
+  assert.equal(
+    t(getProfessionalCapabilitySpecialtyLabelKey("website_development"), "fr"),
+    "Développement de sites web"
+  );
+  assert.equal(
+    t(getProfessionalCapabilitySpecialtyLabelKey("marketing_consulting"), "pt-BR"),
+    "Consultoria de marketing"
   );
   assert.equal(
     t(getProfessionalCapabilitySectionLabelKey("Planning & Design"), "en"),
@@ -402,6 +490,39 @@ test("business service profile persists selected specialties for Business Profil
     "Office Cleaning Services",
     "Pool Repair",
   ]);
+});
+
+test("marketing capabilities persist for profiles without broadening home-service matching", () => {
+  const profile = buildProfessionalSpecialtyProfile({
+    serviceSpecialties: ["local_seo", "website_development"],
+  });
+
+  assert.equal(profile.serviceDomain, "marketing");
+  assert.deepEqual(profile.serviceDomains, ["marketing"]);
+  assert.deepEqual(profile.serviceSpecialties, [
+    "local_seo",
+    "website_development",
+  ]);
+  assert.deepEqual(profile.serviceCategories, ["Marketing Services"]);
+  assert.equal(
+    canProfessionalReceiveRequest(
+      {
+        serviceDomain: profile.serviceDomain,
+        serviceCategories: profile.serviceCategories,
+        businessServiceSpecialties: profile.serviceSpecialties,
+        serviceCapabilities: buildBusinessServiceCapabilities(
+          profile.serviceSpecialties
+        ),
+        zipCodes: "33904",
+      },
+      {
+        service_specialty: "painting",
+        category: "Painting",
+        zipCode: "33904",
+      }
+    ),
+    false
+  );
 });
 
 test("handyman allows multiple detailed capabilities", () => {

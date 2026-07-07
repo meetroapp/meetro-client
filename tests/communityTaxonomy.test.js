@@ -65,12 +65,61 @@ test("taxonomy references existing capability groups without renaming IDs", () =
     "pool_services",
     "property_management",
     "professional_services",
+    "marketing_services",
     "healthcare",
     "transportation",
   ].forEach((capabilityId) => {
     assert.equal(capabilityIds.has(capabilityId), true);
     assert.ok(getCommunityTaxonomyEcosystemForCapabilityGroup(capabilityId));
   });
+});
+
+test("Marketing ecosystem represents capabilities without identity labels", () => {
+  const marketing = getCommunityTaxonomyEcosystem("marketing");
+  const marketingCapabilityIds = marketing.children.map((child) => child.id);
+  const forbiddenIdentityLabels = [
+    "marketing_agency",
+    "marketing_firm",
+    "consulting_company",
+    "llc",
+    "corporation",
+    "studio",
+    "agency",
+    "business_owner",
+  ];
+
+  [
+    "marketing_strategy",
+    "digital_marketing",
+    "seo",
+    "local_seo",
+    "ppc_advertising",
+    "social_media_marketing",
+    "content_marketing",
+    "email_marketing",
+    "brand_strategy",
+    "brand_identity",
+    "graphic_design",
+    "website_design",
+    "website_development",
+    "copywriting",
+    "photography",
+    "videography",
+    "marketing_analytics",
+    "public_relations",
+    "marketing_consulting",
+  ].forEach((capabilityId) => {
+    assert.ok(marketingCapabilityIds.includes(capabilityId), capabilityId);
+  });
+
+  forbiddenIdentityLabels.forEach((identityLabel) => {
+    assert.equal(marketingCapabilityIds.includes(identityLabel), false);
+  });
+  assert.ok(
+    marketing.children.every(
+      (child) => child.capabilityGroupId === "marketing_services"
+    )
+  );
 });
 
 test("Community Discovery Interests project from taxonomy", () => {
@@ -172,6 +221,14 @@ test("Business Profile category and capability options share the taxonomy vocabu
     )
   );
   assert.ok(profileCapabilities.find((category) => category.id === "pool_services"));
+  assert.ok(
+    profileCapabilities.find(
+      (category) =>
+        category.id === "marketing_services" &&
+        category.legacySignupValue === "marketingServices" &&
+        category.taxonomyEcosystemId === "marketing"
+    )
+  );
   assert.equal(
     new Set(profileCapabilities.map((category) => category.id)).size,
     profileCapabilities.length
@@ -212,6 +269,9 @@ test("professional setup surfaces consume taxonomy projections instead of duplic
 test("taxonomy aliases translate problem language into ecosystems", () => {
   assert.equal(searchCommunityTaxonomyAliases("I need more customers")[0]?.id, "marketing");
   assert.equal(searchCommunityTaxonomyAliases("I need help with taxes")[0]?.id, "financial");
+  assert.equal(searchCommunityTaxonomyAliases("I need local SEO")[0]?.id, "marketing");
+  assert.equal(searchCommunityTaxonomyAliases("I need PPC ads")[0]?.id, "marketing");
+  assert.equal(searchCommunityTaxonomyAliases("I need website development")[0]?.id, "marketing");
   assert.ok(
     searchCommunityTaxonomyAliases("I need a logo").some(
       (ecosystem) => ecosystem.id === "creative" || ecosystem.id === "marketing"
