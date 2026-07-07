@@ -35,6 +35,7 @@ function normalizeError(error, intent = "reasoning", provider = "openai") {
     membership_inactive: "Your Meetro membership must be active to ask Meetro.",
     provider_timeout: "Ask Meetro is taking longer than expected. Please try again.",
     provider_unavailable: "Ask Meetro is unavailable right now. Please try again soon.",
+    provider_authentication_failed: "Ask Meetro is unavailable right now. Please try again soon.",
     provider_failure: "Ask Meetro could not complete that request right now.",
   };
 
@@ -48,6 +49,28 @@ function normalizeError(error, intent = "reasoning", provider = "openai") {
       message: messages[code] || messages.provider_failure,
     },
   };
+}
+
+function getSafeRequestId(body = {}, context = {}) {
+  return (
+    body.requestId ||
+    body.request_id ||
+    context?.request?.requestId ||
+    context?.request?.projectId ||
+    context?.request?.conversationId ||
+    "companion-request"
+  );
+}
+
+function logGatewayEvent(logger, event = {}) {
+  if (!logger || typeof logger.info !== "function") return;
+
+  const level = event.success ? "info" : "warn";
+  const log =
+    typeof logger[level] === "function"
+      ? logger[level].bind(logger)
+      : logger.info.bind(logger);
+  log("meetro_intelligence_gateway", event);
 }
 
 function buildMessages({ question, context, language, intent }) {
@@ -73,9 +96,12 @@ export async function askCompanionGateway({
   providerName = "openai",
   providers,
   timeoutMs,
+  logger = console,
 } = {}) {
   const question = String(body.question || body.prompt || body.message || "").trim();
   const intent = classifyCompanionIntent(question);
+  const startedAt = Date.now();
+  let context = null;
 
   if (!question) {
     return normalizeError({ code: "invalid_request" }, intent, providerName);
@@ -90,7 +116,7 @@ export async function askCompanionGateway({
   const credits = validateCredits({ user, body, intent });
   if (!credits.ok) return normalizeError({ code: credits.code }, intent, providerName);
 
-  const context = buildCompanionContext({ body, user });
+  context = buildCompanionContext({ body, user });
   const messages = buildMessages({
     question,
     context,
@@ -106,15 +132,31 @@ export async function askCompanionGateway({
       timeoutMs,
     });
 
-    return {
+    const response = {
       answer: result.answer,
       intent,
       provider: result.provider || providerName,
       success: true,
       context,
     };
+    logGatewayEvent(logger, {
+      requestId: getSafeRequestId(body, context),
+      provider: response.provider,
+      responseTimeMs: Date.now() - startedAt,
+      success: true,
+      intent,
+    });
+    return response;
   } catch (error) {
-    return normalizeError(error, intent, providerName);
+    const response = normalizeError(error, intent, providerName);
+    logGatewayEvent(logger, {
+      requestId: getSafeRequestId(body, context),
+      provider: providerName,
+      responseTimeMs: Date.now() - startedAt,
+      success: false,
+      intent,
+      errorCode: response.error.code,
+    });
+    return response;
   }
 }
-

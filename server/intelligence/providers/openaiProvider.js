@@ -1,19 +1,51 @@
-const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+import OpenAI from "openai";
 
-function getFetch(fetchImpl = globalThis.fetch) {
-  if (typeof fetchImpl !== "function") {
-    throw Object.assign(new Error("OpenAI provider requires fetch"), {
-      code: "provider_unavailable",
-    });
+const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
+
+function normalizeOpenAIError(error) {
+  const status = error?.status || error?.response?.status;
+  const code =
+    status === 401 || status === 403
+      ? "provider_authentication_failed"
+      : "provider_failure";
+
+  return Object.assign(new Error("OpenAI provider request failed"), {
+    code,
+    status,
+  });
+}
+
+function getResponseText(response = {}) {
+  if (typeof response.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
   }
 
-  return fetchImpl;
+  const output = Array.isArray(response.output) ? response.output : [];
+  return output
+    .flatMap((item) => (Array.isArray(item.content) ? item.content : []))
+    .map((content) => content.text || content.output_text || "")
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function splitMessages(messages = []) {
+  const systemMessage = messages.find((message) => message?.role === "system");
+  const userMessages = messages.filter((message) => message?.role !== "system");
+
+  return {
+    instructions: String(systemMessage?.content || ""),
+    input: userMessages
+      .map((message) => String(message?.content || ""))
+      .filter(Boolean)
+      .join("\n\n"),
+  };
 }
 
 export function createOpenAIProvider({
   apiKey = process.env.OPENAI_API_KEY,
   model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-  fetchImpl = globalThis.fetch,
+  client,
 } = {}) {
   return {
     name: "openai",
@@ -24,32 +56,24 @@ export function createOpenAIProvider({
         });
       }
 
-      const fetchClient = getFetch(fetchImpl);
-      const response = await fetchClient("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const openai = client || new OpenAI({ apiKey });
+      const { instructions, input } = splitMessages(messages);
+
+      try {
+        const response = await openai.responses.create({
           model,
-          messages,
+          instructions,
+          input,
           temperature: 0.2,
-        }),
-      });
-
-      if (!response.ok) {
-        throw Object.assign(new Error(`OpenAI provider failed with ${response.status}`), {
-          code: "provider_failure",
-          status: response.status,
         });
-      }
 
-      const data = await response.json();
-      return {
-        answer: data?.choices?.[0]?.message?.content || "",
-        raw: data,
-      };
+        return {
+          answer: getResponseText(response),
+          raw: response,
+        };
+      } catch (error) {
+        throw normalizeOpenAIError(error);
+      }
     },
   };
 }

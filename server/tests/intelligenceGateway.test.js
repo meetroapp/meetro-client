@@ -6,6 +6,7 @@ import { buildCompanionContext } from "../intelligence/contextBuilder.js";
 import { askCompanionGateway } from "../intelligence/gateway.js";
 import { classifyCompanionIntent } from "../intelligence/intentEngine.js";
 import { invokeProvider } from "../intelligence/providerAdapter.js";
+import { createOpenAIProvider } from "../intelligence/providers/openaiProvider.js";
 import { handleCompanionAsk } from "../intelligence/companionController.js";
 import {
   COMPANION_ASK_ROUTE,
@@ -92,6 +93,62 @@ test("Provider Adapter invokes mocked OpenAI provider through abstraction", asyn
   assert.deepEqual(calls[0].messages, [{ role: "user", content: "Hello" }]);
 });
 
+test("OpenAI provider uses official Responses API client and normalizes success", async () => {
+  const calls = [];
+  const provider = createOpenAIProvider({
+    apiKey: "test-key",
+    model: "test-model",
+    client: {
+      responses: {
+        async create(payload) {
+          calls.push(payload);
+          return { output_text: "A normalized OpenAI answer." };
+        },
+      },
+    },
+  });
+
+  const result = await provider.complete({
+    messages: [
+      { role: "system", content: "System prompt" },
+      { role: "user", content: "{\"question\":\"What happens next?\"}" },
+    ],
+  });
+
+  assert.equal(result.answer, "A normalized OpenAI answer.");
+  assert.deepEqual(calls, [
+    {
+      model: "test-model",
+      instructions: "System prompt",
+      input: "{\"question\":\"What happens next?\"}",
+      temperature: 0.2,
+    },
+  ]);
+});
+
+test("OpenAI provider handles invalid API key failures without exposing provider details", async () => {
+  const provider = createOpenAIProvider({
+    apiKey: "bad-key",
+    client: {
+      responses: {
+        async create() {
+          throw Object.assign(new Error("invalid_api_key"), { status: 401 });
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => provider.complete({ messages: [{ role: "user", content: "Hello" }] }),
+    (error) => {
+      assert.equal(error.code, "provider_authentication_failed");
+      assert.equal(error.status, 401);
+      assert.doesNotMatch(error.message, /invalid_api_key/);
+      return true;
+    }
+  );
+});
+
 test("Gateway receives request and returns normalized provider response", async () => {
   const { provider, calls } = mockProvider("Visible next step: prepare for the visit.");
   const result = await askCompanionGateway({
@@ -107,6 +164,7 @@ test("Gateway receives request and returns normalized provider response", async 
       },
     },
     providers: { openai: provider },
+    logger: null,
   });
 
   assert.equal(result.success, true);
@@ -130,6 +188,7 @@ test("Gateway handles provider failure with normalized fallback error", async ()
         },
       },
     },
+    logger: null,
   });
 
   assert.equal(result.success, false);
@@ -137,6 +196,64 @@ test("Gateway handles provider failure with normalized fallback error", async ()
   assert.equal(result.provider, "openai");
   assert.equal(result.error.code, "provider_unavailable");
   assert.match(result.answer, /unavailable/i);
+});
+
+test("Gateway handles provider timeout with normalized fallback error", async () => {
+  const result = await askCompanionGateway({
+    user: { id: "user-1" },
+    body: { question: "What happens next?", pageContext: "request_detail" },
+    timeoutMs: 1,
+    providers: {
+      openai: {
+        name: "openai",
+        async complete() {
+          return new Promise(() => {});
+        },
+      },
+    },
+    logger: null,
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error.code, "provider_timeout");
+  assert.equal(result.intent, "workflow_guidance");
+  assert.match(result.answer, /longer than expected/i);
+});
+
+test("Gateway logs only safe operational metadata", async () => {
+  const { provider } = mockProvider("Logged answer");
+  const events = [];
+  const logger = {
+    info(message, event) {
+      events.push({ message, event });
+    },
+  };
+
+  const result = await askCompanionGateway({
+    user: { id: "user-1" },
+    body: {
+      question: "What happens next?",
+      context: {
+        requestId: "req-logs",
+        privateNotes: "do not log",
+      },
+    },
+    providers: { openai: provider },
+    logger,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].message, "meetro_intelligence_gateway");
+  assert.deepEqual(Object.keys(events[0].event).sort(), [
+    "intent",
+    "provider",
+    "requestId",
+    "responseTimeMs",
+    "success",
+  ]);
+  assert.equal(events[0].event.requestId, "req-logs");
+  assert.equal(JSON.stringify(events[0]), JSON.stringify(events[0]).replace("do not log", ""));
 });
 
 test("Gateway rejects missing authentication before provider invocation", async () => {
@@ -152,6 +269,7 @@ test("Gateway rejects missing authentication before provider invocation", async 
         },
       },
     },
+    logger: null,
   });
 
   assert.equal(invoked, false);
@@ -180,7 +298,7 @@ test("Companion Controller exposes POST /api/companion/ask contract shape", asyn
       body: { question: "Explain this request", pageContext: "request_detail" },
     },
     res,
-    { providers: { openai: provider } }
+    { providers: { openai: provider }, logger: null }
   );
 
   assert.equal(statusCode, 200);
@@ -213,4 +331,28 @@ test("Existing frontend integration does not call OpenAI directly", () => {
   );
 
   assert.doesNotMatch(assistantSource, /api\.openai\.com|OPENAI_API_KEY|chat\.completions/);
+});
+
+test("Gateway remains provider independent while OpenAI stays behind provider boundary", () => {
+  const gatewaySource = fs.readFileSync(
+    new URL("../intelligence/gateway.js", import.meta.url),
+    "utf8"
+  );
+  const adapterSource = fs.readFileSync(
+    new URL("../intelligence/providerAdapter.js", import.meta.url),
+    "utf8"
+  );
+  const providerSource = fs.readFileSync(
+    new URL("../intelligence/providers/openaiProvider.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(gatewaySource, /from "openai"|responses\.create|OPENAI_API_KEY/);
+  assert.match(adapterSource, /createProviderRegistry/);
+  assert.match(providerSource, /from "openai"/);
+  assert.match(providerSource, /responses\.create/);
+  assert.match(providerSource, /OPENAI_API_KEY/);
+  assert.match(providerSource, /OPENAI_MODEL/);
+  assert.match(providerSource, /gpt-4\.1-mini/);
+  assert.doesNotMatch(providerSource, /chat\/completions|chat\.completions/);
 });
