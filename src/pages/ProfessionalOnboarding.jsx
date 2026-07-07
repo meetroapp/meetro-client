@@ -7,6 +7,7 @@ import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
   inferProfessionalSpecialtiesFromLegacyCategories,
 } from "../utils/professionalOnboardingSpecialties";
+import { getProfessionalCapabilityCategories } from "../utils/professionalCapabilityLibrary";
 import {
   readBusinessServiceProfile,
   writeBusinessServiceProfile,
@@ -96,6 +97,7 @@ function createInitialDraft() {
       "",
     serviceCategories: savedServiceCategories,
     serviceSpecialties: savedServiceSpecialties,
+    primaryServiceCategory: saved.primaryServiceCategory || saved.primary_service_category || "",
     otherService: saved.otherService || "",
     primaryCity: saved.primaryCity || readStorageValue("businessPrimaryCity") || "",
     zipCodes: saved.zipCodes || readStorageValue("businessZipCodes") || "",
@@ -128,6 +130,20 @@ function ProfessionalOnboarding({ setPage }) {
     () => flattenServiceGroups(PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS, t),
     [language]
   );
+  const primaryCategoryOptions = useMemo(
+    () => getProfessionalCapabilityCategories().map((category) => ({
+      id: category.id,
+      label: t(category.labelKey),
+      aliases: category.aliases || [],
+    })),
+    [language]
+  );
+  const selectedPrimaryCategory =
+    draft.primaryServiceCategory ||
+    serviceOptions.find((option) =>
+      draft.serviceSpecialties.includes(option.value)
+    )?.categoryId ||
+    "";
   const selectedServiceLabels = draft.serviceSpecialties
     .map((specialty) => serviceOptions.find((option) => option.value === specialty)?.label)
     .filter(Boolean);
@@ -156,6 +172,21 @@ function ProfessionalOnboarding({ setPage }) {
         : [...current[field], value];
 
       return { ...current, [field]: nextValues };
+    });
+  };
+
+  const toggleServiceSpecialty = (value, option = {}) => {
+    setDraft((current) => {
+      const nextValues = current.serviceSpecialties.includes(value)
+        ? current.serviceSpecialties.filter((item) => item !== value)
+        : [...current.serviceSpecialties, value];
+
+      return {
+        ...current,
+        serviceSpecialties: nextValues,
+        primaryServiceCategory:
+          option.categoryId || current.primaryServiceCategory || "",
+      };
     });
   };
 
@@ -224,6 +255,7 @@ function ProfessionalOnboarding({ setPage }) {
           serviceSpecialties: specialtyProfile.serviceSpecialties,
           serviceDomains: specialtyProfile.serviceDomains,
           serviceDomain: specialtyProfile.serviceDomain,
+          primaryServiceCategory: draft.primaryServiceCategory,
         })
       );
       writeStorageValue(
@@ -329,6 +361,12 @@ function ProfessionalOnboarding({ setPage }) {
             <p style={helperText}>
               {t("professionalOnboardingSpecialtyHelp")}
             </p>
+            {selectedPrimaryCategory && (
+              <p style={helperText}>
+                {t("professionalCapabilityPrimaryCategory")}:{" "}
+                {primaryCategoryOptions.find((category) => category.id === selectedPrimaryCategory)?.label}
+              </p>
+            )}
             <button
               type="button"
               style={servicePickerButton}
@@ -353,6 +391,11 @@ function ProfessionalOnboarding({ setPage }) {
               open={serviceSelectorOpen}
               title={t("servicesOffered")}
               subtitle={t("servicesOfferedSubtitle")}
+              categories={primaryCategoryOptions}
+              selectedCategoryId={selectedPrimaryCategory}
+              categorySearchPlaceholder={t("professionalCapabilitySearchCategories")}
+              emptyCategoryText={t("professionalCapabilityChooseCategoryEmpty")}
+              cantFindLabel={t("professionalCapabilityCantFind")}
               searchPlaceholder={t("searchServices")}
               options={serviceOptions}
               selectedValues={draft.serviceSpecialties}
@@ -361,7 +404,8 @@ function ProfessionalOnboarding({ setPage }) {
               doneDisabled={
                 draft.serviceSpecialties.length === 0 && !draft.otherService.trim()
               }
-              onToggle={(value) => toggleArrayValue("serviceSpecialties", value)}
+              onSelect={(categoryId) => updateDraft("primaryServiceCategory", categoryId)}
+              onToggle={toggleServiceSpecialty}
               onDone={() => setStep(4)}
               onClose={() => setServiceSelectorOpen(false)}
             />

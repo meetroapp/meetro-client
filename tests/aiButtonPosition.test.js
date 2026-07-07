@@ -43,6 +43,70 @@ test("clamps AI button inside visible screen and above BottomNav", () => {
   );
 });
 
+test("clamps AI button inside mobile safe-area insets on both docked sides", () => {
+  assert.deepEqual(
+    clampAiButtonPosition(
+      { x: -40, y: 220 },
+      { width: 390, height: 844, safeAreaLeft: 24, safeAreaRight: 16 },
+      { buttonSize: 126, edgeMargin: 12, bottomClearance: 94 }
+    ),
+    { x: 36, y: 220 }
+  );
+
+  assert.deepEqual(
+    clampAiButtonPosition(
+      { x: 999, y: 220 },
+      { width: 390, height: 844, safeAreaLeft: 24, safeAreaRight: 16 },
+      { buttonSize: 126, edgeMargin: 12, bottomClearance: 94 }
+    ),
+    { x: 236, y: 220 }
+  );
+});
+
+test("snapped AI button respects right safe-area inset", () => {
+  assert.deepEqual(
+    snapAiButtonPosition(
+      { x: 300, y: 300 },
+      { width: 390, height: 844, safeAreaRight: 20 },
+      { buttonSize: 126, edgeMargin: 12, bottomClearance: 94 }
+    ),
+    { x: 232, y: 300 }
+  );
+});
+
+test("Ask Meetro launcher margin is symmetrical at 18px on left and right", () => {
+  const options = { buttonSize: 126, edgeMargin: 18, bottomClearance: 94 };
+
+  assert.deepEqual(
+    snapAiButtonPosition(
+      { x: 20, y: 280 },
+      { width: 390, height: 844 },
+      options
+    ),
+    { x: 18, y: 280 }
+  );
+
+  assert.deepEqual(
+    snapAiButtonPosition(
+      { x: 320, y: 280 },
+      { width: 390, height: 844 },
+      options
+    ),
+    { x: 246, y: 280 }
+  );
+});
+
+test("Ask Meetro right dock keeps visual margin outside safe-area inset", () => {
+  assert.deepEqual(
+    snapAiButtonPosition(
+      { x: 320, y: 280 },
+      { width: 390, height: 844, safeAreaLeft: 0, safeAreaRight: 20 },
+      { buttonSize: 126, edgeMargin: 18, bottomClearance: 94 }
+    ),
+    { x: 226, y: 280 }
+  );
+});
+
 test("snaps AI button to the nearest horizontal edge while keeping vertical position", () => {
   assert.deepEqual(
     snapAiButtonPosition(

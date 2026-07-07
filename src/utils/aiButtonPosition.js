@@ -26,15 +26,33 @@ export function getAiButtonBounds(viewport = {}, options = {}) {
     options.bottomClearance,
     AI_BUTTON_POSITION_DEFAULTS.bottomClearance
   );
+  const safeAreaLeft = Math.max(
+    0,
+    toFiniteNumber(options.safeAreaLeft, toFiniteNumber(viewport.safeAreaLeft, 0))
+  );
+  const safeAreaRight = Math.max(
+    0,
+    toFiniteNumber(options.safeAreaRight, toFiniteNumber(viewport.safeAreaRight, 0))
+  );
+  const safeAreaTop = Math.max(
+    0,
+    toFiniteNumber(options.safeAreaTop, toFiniteNumber(viewport.safeAreaTop, 0))
+  );
+  const horizontalLeftInset = edgeMargin + safeAreaLeft;
+  const horizontalRightInset = edgeMargin + safeAreaRight;
+  const topInset = edgeMargin + safeAreaTop;
 
   return {
-    minX: edgeMargin,
-    maxX: Math.max(edgeMargin, width - edgeMargin - buttonSize),
-    minY: edgeMargin,
+    minX: horizontalLeftInset,
+    maxX: Math.max(horizontalLeftInset, width - horizontalRightInset - buttonSize),
+    minY: topInset,
     maxY: Math.max(edgeMargin, height - bottomClearance - buttonSize),
     buttonSize,
     edgeMargin,
     bottomClearance,
+    safeAreaLeft,
+    safeAreaRight,
+    safeAreaTop,
   };
 }
 

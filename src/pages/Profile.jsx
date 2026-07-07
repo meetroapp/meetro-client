@@ -52,7 +52,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
       "",
   });
   const [activeSection, setActiveSection] = useState(
-    localStorage.getItem("meetroProfileOpenSection") || "account"
+    localStorage.getItem("meetroProfileOpenSection") || ""
   );
   const [activeMode, setActiveMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
@@ -930,7 +930,13 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
         {profileNotice && <p style={profileNoticeText}>{profileNotice}</p>}
 
-        <SettingsGroup title={t("myHome")} icon="home">
+        <SettingsSection
+          title={t("myHome")}
+          icon="home"
+          open={activeSection === "home"}
+          onClick={() => toggleSection("home")}
+          summary={primaryAddress || t("savedAddresses")}
+        >
           <SettingRow
             icon="history"
             label="Meetro Moments"
@@ -971,12 +977,18 @@ function Profile({ setPage, currentPage, embedded = false }) {
             value={t("future")}
             disabled
           />
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup
+        <SettingsSection
           title={t("myProfessionals")}
           icon="customerRelationships"
-          onClick={() => setMyProfessionalsOpen(true)}
+          open={activeSection === "professionals"}
+          onClick={() => toggleSection("professionals")}
+          summary={
+            trustedProfessionals.length
+              ? `${trustedProfessionals.length} ${t("trusted")}`
+              : t("trustedProfessionalsEmpty")
+          }
         >
           {trustedProfessionals.length > 0 ? (
             trustedProfessionals.slice(0, 3).map((professional) => (
@@ -1001,9 +1013,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
               </button>
             </div>
           )}
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup title={t("preferences")} icon="settings">
+        <SettingsSection
+          title={t("preferences")}
+          icon="settings"
+          open={activeSection === "preferences"}
+          onClick={() => toggleSection("preferences")}
+          summary={getLanguageLabel(language)}
+        >
           <SettingRow
             icon="language"
             label={t("language")}
@@ -1047,9 +1065,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
             value={t("future")}
             disabled
           />
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup title={t("reviewsWritten")} icon="reviews">
+        <SettingsSection
+          title={t("reviewsWritten")}
+          icon="reviews"
+          open={activeSection === "reviews"}
+          onClick={() => toggleSection("reviews")}
+          summary={`${writtenReviews.length}`}
+        >
           {writtenReviews.length > 0 ? (
             writtenReviews.slice(0, 2).map((review, index) => (
               <SettingRow
@@ -1066,9 +1090,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
               <span>{t("reviewCompletedProjectsPrompt")}</span>
             </div>
           )}
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup title={t("account")} icon="profile">
+        <SettingsSection
+          title={t("account")}
+          icon="profile"
+          open={activeSection === "account"}
+          onClick={() => toggleSection("account")}
+          summary={businessModeStatusLabel}
+        >
           <SettingRow
             icon="profile"
             label={t("personalInformation")}
@@ -1119,9 +1149,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
             value={t("comingSoon")}
             disabled
           />
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup title={t("support")} icon="help">
+        <SettingsSection
+          title={t("support")}
+          icon="help"
+          open={activeSection === "support"}
+          onClick={() => toggleSection("support")}
+          summary={t("learnMeetro")}
+        >
           <SettingRow
             icon="aiHelp"
             label={t("learnMeetro")}
@@ -1142,9 +1178,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
             value={t("comingSoon")}
             disabled
           />
-        </SettingsGroup>
+        </SettingsSection>
 
-        <SettingsGroup title={t("legal")} icon="legal">
+        <SettingsSection
+          title={t("legal")}
+          icon="legal"
+          open={activeSection === "legal"}
+          onClick={() => toggleSection("legal")}
+          summary={`${t("privacyPolicy")} · ${t("termsOfUse")}`}
+        >
           <SettingRow
             icon="privacy"
             label={t("privacyPolicy")}
@@ -1165,7 +1207,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
             value={t("open")}
             onClick={() => openLegalDocument("guidelines")}
           />
-        </SettingsGroup>
+        </SettingsSection>
 
         <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
           {t("logout")}
@@ -1408,7 +1450,13 @@ function Profile({ setPage, currentPage, embedded = false }) {
         </span>
       </div>
 
-      <SettingsGroup title={t("business")} icon="businessTools">
+      <SettingsSection
+        title={t("business")}
+        icon="businessTools"
+        open={activeSection === "business"}
+        onClick={() => toggleSection("business")}
+        summary={hasBusinessAccess ? t("open") : t("setupRequired")}
+      >
         <SettingRow
           icon="availability"
           label={t("businessAvailability")}
@@ -1437,9 +1485,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("future")}
           disabled
         />
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("account")} icon="profile">
+      <SettingsSection
+        title={t("account")}
+        icon="profile"
+        open={activeSection === "account"}
+        onClick={() => toggleSection("account")}
+        summary={businessModeStatusLabel}
+      >
         <SettingRow
           icon="profile"
           label={t("personalInformation")}
@@ -1501,9 +1555,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("comingSoon")}
           disabled
         />
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("preferences")} icon="settings">
+      <SettingsSection
+        title={t("preferences")}
+        icon="settings"
+        open={activeSection === "preferences"}
+        onClick={() => toggleSection("preferences")}
+        summary={getLanguageLabel(language)}
+      >
         <SettingRow
           icon="language"
           label={t("language")}
@@ -1540,9 +1600,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("future")}
           disabled
         />
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("support")} icon="help">
+      <SettingsSection
+        title={t("support")}
+        icon="help"
+        open={activeSection === "support"}
+        onClick={() => toggleSection("support")}
+        summary={t("aiBusinessHelp")}
+      >
         <SettingRow
           icon="aiHelp"
           label={t("learnMeetro")}
@@ -1570,9 +1636,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("open")}
           onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
         />
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("legal")} icon="legal">
+      <SettingsSection
+        title={t("legal")}
+        icon="legal"
+        open={activeSection === "legal"}
+        onClick={() => toggleSection("legal")}
+        summary={`${t("privacyPolicy")} · ${t("termsOfUse")}`}
+      >
         <SettingRow
           icon="privacy"
           label={t("privacyPolicy")}
@@ -1600,7 +1672,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("comingSoon")}
           disabled
         />
-      </SettingsGroup>
+      </SettingsSection>
 
       <div className="meetro-visual-surface" style={compactProCard}>
         <div>
@@ -1747,21 +1819,44 @@ function Profile({ setPage, currentPage, embedded = false }) {
   );
 }
 
-function SettingsSection({ title, icon, open, onClick, children }) {
+function SettingsSection({ title, icon, open, onClick, summary, children }) {
+  const sectionId = `profile-section-${String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")}`;
+
   return (
     <div className="meetro-visual-surface" style={sectionCard}>
-      <button onClick={onClick} style={sectionHeader}>
+      <button
+        type="button"
+        onClick={onClick}
+        style={sectionHeader}
+        aria-expanded={open}
+        aria-controls={sectionId}
+      >
         <span style={sectionHeaderLeft}>
           <span style={sectionIcon}>
             <ProfileIcon name={icon} size={22} />
           </span>
-          <strong>{title}</strong>
+          <span style={sectionHeaderText}>
+            <strong>{title}</strong>
+            {!open && summary && <span style={sectionSummary}>{summary}</span>}
+          </span>
         </span>
 
-        <span style={chevron}>{open ? "⌃" : "⌄"}</span>
+        <span style={chevron} aria-hidden="true">{open ? "⌃" : "⌄"}</span>
       </button>
 
-      {open && <div style={sectionBody}>{children}</div>}
+      <div
+        id={sectionId}
+        style={{
+          ...collapsibleSectionBody,
+          ...(open ? collapsibleSectionBodyOpen : {}),
+        }}
+        hidden={!open}
+      >
+        <div style={sectionBody}>{children}</div>
+      </div>
     </div>
   );
 }
@@ -2467,6 +2562,24 @@ const sectionHeaderLeft = {
   display: "flex",
   alignItems: "center",
   gap: "12px",
+  minWidth: 0,
+};
+
+const sectionHeaderText = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  textAlign: "left",
+};
+
+const sectionSummary = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  fontWeight: 750,
+  lineHeight: 1.35,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 const sectionIcon = {
@@ -2481,6 +2594,18 @@ const chevron = {
 
 const sectionBody = {
   padding: "0 16px 16px",
+};
+
+const collapsibleSectionBody = {
+  maxHeight: 0,
+  opacity: 0,
+  overflow: "hidden",
+  transition: "max-height 220ms ease, opacity 180ms ease",
+};
+
+const collapsibleSectionBodyOpen = {
+  maxHeight: "1600px",
+  opacity: 1,
 };
 
 const settingRow = {

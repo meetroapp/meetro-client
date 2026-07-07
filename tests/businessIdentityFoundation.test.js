@@ -302,7 +302,7 @@ test("Business Profile shows business verification and service area ownership", 
   assert.match(source, /businessVerificationLabel/);
   assert.match(source, /t\("businessVerification"\)/);
   assert.match(source, /verificationStatusCard/);
-  assert.match(source, /<h2 style=\{compactCardTitle\}>\{t\("businessVerification"\)\}<\/h2>/);
+  assert.match(source, /title=\{t\("businessVerification"\)\}/);
   assert.doesNotMatch(source, /label=\{t\("verification"\)\}/);
   assert.doesNotMatch(source, /value=\{businessVerificationLabel\}/);
   assert.match(source, /t\("serviceArea"\)/);
@@ -313,14 +313,14 @@ test("Business Profile stewardship order keeps customer proof and services near 
   const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
 
   const heroIndex = source.indexOf("identityHeroLayout");
-  const readinessIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessHealth")}</h2>');
+  const readinessIndex = source.indexOf('title={t("businessHealth")}');
   const customerPreviewIndex = source.indexOf('<h2 style={compactCardTitle}>{t("customerPreview")}</h2>');
-  const servicesIndex = source.indexOf("<ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly");
-  const reviewsIndex = source.indexOf('<h3 style={bioTitle}>{t("reviews")}</h3>');
+  const servicesIndex = source.indexOf("<ServicesOfferedSection");
+  const reviewsIndex = source.indexOf('title={t("reviews")}');
   const quickActionsIndex = source.indexOf('<h2 style={compactCardTitle}>{t("quickActions")}</h2>');
-  const informationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessInformation")}</h2>');
-  const verificationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
-  const setupIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessSetup")}</h2>');
+  const informationIndex = source.indexOf('title={t("businessInformation")}');
+  const verificationIndex = source.indexOf('title={t("businessVerification")}');
+  const setupIndex = source.indexOf('title={t("businessSetup")}');
 
   [
     heroIndex,
@@ -366,11 +366,11 @@ test("Business Profile customer trust surfaces stay grouped without new truth ow
 
   const trustGroupIndex = source.indexOf("customerTrustGroup");
   const customerPreviewIndex = source.indexOf('<h2 style={compactCardTitle}>{t("customerPreview")}</h2>');
-  const servicesIndex = source.indexOf("<ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly");
-  const reviewsIndex = source.indexOf('<h3 style={bioTitle}>{t("reviews")}</h3>');
+  const servicesIndex = source.indexOf("<ServicesOfferedSection");
+  const reviewsIndex = source.indexOf('title={t("reviews")}');
   const quickActionsIndex = source.indexOf('<h2 style={compactCardTitle}>{t("quickActions")}</h2>');
-  const informationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessInformation")}</h2>');
-  const verificationIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
+  const informationIndex = source.indexOf('title={t("businessInformation")}');
+  const verificationIndex = source.indexOf('title={t("businessVerification")}');
 
   [
     trustGroupIndex,
@@ -410,6 +410,21 @@ test("Business Profile readiness and improvement guidance use existing truth wit
   assert.doesNotMatch(source, /profileCompletionPercent/);
   assert.doesNotMatch(source, /92%/);
   assert.doesNotMatch(source, /trustScore|customerTrustScore|newTrustMetric/);
+});
+
+test("Business Profile uses accessible collapsible cards for detail-heavy sections", () => {
+  const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
+
+  assert.match(source, /function BusinessProfileCollapsibleCard/);
+  assert.match(source, /aria-expanded=\{open\}/);
+  assert.match(source, /aria-controls=\{sectionId\}/);
+  assert.match(source, /businessProfileCollapseBodyOpen/);
+  assert.match(source, /title=\{t\("businessHealth"\)\}/);
+  assert.match(source, /title=\{t\("businessInformation"\)\}/);
+  assert.match(source, /title=\{t\("businessVerification"\)\}/);
+  assert.match(source, /title=\{t\("businessSetup"\)\}/);
+  assert.match(source, /collapsible\s+open=\{isBusinessProfileSectionOpen\("services", !servicesReady\)\}/);
+  assert.match(source, /visibleProfileGuidance\.map/);
 });
 
 test("Business Profile labels use business-native language", () => {
@@ -487,7 +502,7 @@ test("Business Profile owns business hours and license information", () => {
 test("Business Verification section has an actionable owner path", () => {
   const source = fs.readFileSync("src/pages/ContractorProfile.jsx", "utf8");
 
-  const verificationSectionIndex = source.indexOf('<h2 style={compactCardTitle}>{t("businessVerification")}</h2>');
+  const verificationSectionIndex = source.indexOf('title={t("businessVerification")}');
   const reviewActionIndex = source.indexOf('t("reviewVerification")', verificationSectionIndex);
 
   assert.ok(verificationSectionIndex > -1);
@@ -504,7 +519,7 @@ test("Business Profile links Review Business Setup to the existing onboarding fl
   assert.match(source, /reviewBusinessSetup/);
   assert.match(source, /t\("businessSetup"\)/);
   assert.match(source, /t\("reviewBusinessSetupHelp"\)/);
-  assert.match(source, /<h2 style=\{compactCardTitle\}>\{t\("businessSetup"\)\}<\/h2>/);
+  assert.match(source, /title=\{t\("businessSetup"\)\}/);
   assert.match(source, /t\("reviewBusinessSetup"\)/);
   assert.match(source, /meetroProfessionalOnboardingReturnPage", "contractorProfile"/);
   assert.match(source, /setPage\("professionalOnboarding"\)/);

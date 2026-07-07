@@ -3,36 +3,61 @@ const CATEGORY_ALIASES = {
   applianceinstallation: "appliance_installation",
   applianceInstallation: "appliance_installation",
   automotiveServices: "automotive_services",
+  biohazardCleaning: "biohazard_cleaning",
   cabinetRepair: "cabinetry",
+  cabinetRepairReplacement: "cabinet_repair_replacement",
   cabinetReplacement: "cabinetry",
   cabinetry: "cabinetry",
+  carpetCleaning: "carpet_cleaning",
   carDetailing: "car_detailing",
+  cleaningServices: "cleaning",
+  cleaning_services: "cleaning",
   door: "door_repair",
   doorsWindows: "door_installation",
   doorswindows: "door_installation",
   doorInstallation: "door_installation",
   doorRepair: "door_repair",
+  doorRepairReplacement: "door_repair_replacement",
   doorReplacement: "door_replacement",
   doorreplacement: "door_replacement",
   drywallRepair: "drywall",
+  drywallrepair: "drywall_repair",
   ceilingFanInstallation: "ceiling_fan_installation",
   ceilingfaninstallation: "ceiling_fan_installation",
+  fenceRepair: "fence_repair",
   garageDoorOpenerInstallation: "garage_door_opener_installation",
   garagedooropenerinstallation: "garage_door_opener_installation",
   generalContractor: "contractor",
   generalMaintenance: "general_maintenance",
   generalmaintenance: "general_maintenance",
+  greenCleaningServices: "green_cleaning_services",
   homeHealth: "home_health",
   homeHealthCare: "home_health",
   home_healthcare: "home_health",
   homehealthcare: "home_health",
+  housekeeping: "housekeeping",
+  hotelHospitalityCleaning: "hotel_hospitality_cleaning",
+  industrialCleaning: "industrial_cleaning",
   medicalTransport: "medical_transport",
   medical_transport: "medical_transport",
   medicaltransport: "medical_transport",
+  minorElectrical: "minor_electrical",
+  minorPlumbing: "minor_plumbing",
+  mountingHanging: "mounting_hanging",
+  newPoolConstruction: "new_pool_construction",
+  officeCleaningServices: "office_cleaning_services",
   lawnCare: "lawn_care",
   medicalCare: "medical_care",
+  medicalFacilityCleaning: "medical_facility_cleaning",
   mobileServices: "mobile_services",
   paverSealing: "paver_sealing",
+  petCleaningServices: "pet_cleaning_services",
+  poolBuilders: "pool_builders",
+  poolCleaning: "pool_cleaning",
+  poolEquipmentInstallation: "pool_equipment_installation",
+  poolMaintenance: "pool_maintenance",
+  poolRepair: "pool_repair",
+  poolResurfacing: "pool_resurfacing",
   poolService: "pool_service",
   pressureWashing: "pressure_washing",
   plumbingRepairs: "plumbing_repairs",
@@ -42,20 +67,29 @@ const CATEGORY_ALIASES = {
   propertymanagement: "property_management",
   propertyMaintenance: "property_maintenance",
   rentalMaintenance: "rental_maintenance",
+  restaurantKitchenCleaning: "restaurant_kitchen_cleaning",
+  retailCleaning: "retail_cleaning",
+  schoolCleaning: "school_cleaning",
   seniorCare: "senior_care",
   tenantTicket: "tenant_ticket",
+  tileRepairInstallation: "tile_repair_installation",
+  trimBaseboards: "trim_baseboards",
   unitTurnover: "unit_turnover",
   turnover: "unit_turnover",
   treeService: "tree_service",
   vendorDispatch: "vendor_dispatch",
   vendordispatch: "vendor_dispatch",
+  windowCleaning: "window_cleaning",
 };
 
 export const SERVICE_DOMAIN_CATEGORIES = Object.freeze({
   home_services: Object.freeze([
     "appliance_repair",
     "appliance_installation",
+    "biohazard_cleaning",
+    "cabinet_repair_replacement",
     "carpentry",
+    "carpet_cleaning",
     "cabinetry",
     "ceiling_fan_installation",
     "cleaning",
@@ -64,33 +98,61 @@ export const SERVICE_DOMAIN_CATEGORIES = Object.freeze({
     "demolition",
     "door_installation",
     "door_repair",
+    "door_repair_replacement",
     "door_replacement",
     "drywall",
+    "drywall_repair",
     "electrical",
+    "event_venue_cleaning",
+    "fence_repair",
     "fencing",
     "flooring",
     "garage_door_opener_installation",
     "general",
     "general_maintenance",
+    "graffiti_removal_services",
+    "green_cleaning_services",
     "handyman",
+    "hotel_hospitality_cleaning",
+    "housekeeping",
     "hvac",
+    "industrial_cleaning",
     "junk_removal",
     "landscaping",
     "lawn_care",
     "locksmith",
+    "medical_facility_cleaning",
+    "minor_electrical",
+    "minor_plumbing",
+    "mounting_hanging",
+    "new_pool_construction",
+    "office_cleaning_services",
     "painting",
     "paver_sealing",
     "pest_control",
+    "pet_cleaning_services",
     "plumbing",
     "plumbing_repairs",
+    "pool_builders",
+    "pool_cleaning",
+    "pool_equipment_installation",
+    "pool_maintenance",
+    "pool_repair",
+    "pool_resurfacing",
     "pool_service",
     "pressure_washing",
     "property_maintenance",
     "repair",
+    "restaurant_kitchen_cleaning",
     "roofing",
+    "retail_cleaning",
+    "school_cleaning",
     "storm",
     "tile",
+    "tile_repair_installation",
+    "trim_baseboards",
     "tree_service",
+    "window_cleaning",
   ]),
   healthcare: Object.freeze([
     "caregiver",
@@ -153,25 +215,55 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
     "door_replacement",
     "drywall",
     "ceiling_fan_installation",
+    "cabinet_repair_replacement",
     "flooring",
     "garage_door_opener_installation",
+    "mounting_hanging",
     "painting",
     "repair",
+    "trim_baseboards",
     "tile",
+    "tile_repair_installation",
+  ]),
+  cleaning: Object.freeze([
+    "biohazard_cleaning",
+    "carpet_cleaning",
+    "cleaning",
+    "event_venue_cleaning",
+    "graffiti_removal_services",
+    "green_cleaning_services",
+    "hotel_hospitality_cleaning",
+    "housekeeping",
+    "industrial_cleaning",
+    "medical_facility_cleaning",
+    "office_cleaning_services",
+    "pet_cleaning_services",
+    "restaurant_kitchen_cleaning",
+    "retail_cleaning",
+    "school_cleaning",
+    "window_cleaning",
   ]),
   door_installation: Object.freeze([
     "door_installation",
     "door_repair",
+    "door_repair_replacement",
     "door_replacement",
     "garage_door_opener_installation",
   ]),
   door_repair: Object.freeze([
     "door_installation",
     "door_repair",
+    "door_repair_replacement",
     "garage_door_opener_installation",
   ]),
-  door_replacement: Object.freeze(["door_replacement", "door_installation"]),
-  electrical: Object.freeze(["electrical", "ceiling_fan_installation"]),
+  door_repair_replacement: Object.freeze([
+    "door_installation",
+    "door_repair",
+    "door_repair_replacement",
+    "door_replacement",
+  ]),
+  door_replacement: Object.freeze(["door_replacement", "door_installation", "door_repair_replacement"]),
+  electrical: Object.freeze(["electrical", "ceiling_fan_installation", "minor_electrical"]),
   garage_door_opener_installation: Object.freeze([
     "garage_door_opener_installation",
     "door_installation",
@@ -183,20 +275,30 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
     "cabinetry",
     "carpentry",
     "ceiling_fan_installation",
+    "cabinet_repair_replacement",
     "door_installation",
     "door_repair",
+    "door_repair_replacement",
     "door_replacement",
     "drywall",
+    "drywall_repair",
     "electrical",
+    "fence_repair",
     "flooring",
     "general",
     "general_maintenance",
     "locksmith",
+    "minor_electrical",
+    "minor_plumbing",
+    "mounting_hanging",
     "painting",
     "plumbing",
     "plumbing_repairs",
+    "pressure_washing",
     "repair",
     "tile",
+    "tile_repair_installation",
+    "trim_baseboards",
   ]),
   healthcare: Object.freeze([
     "caregiver",
@@ -217,8 +319,17 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
   ]),
   landscaping: Object.freeze(["landscaping", "lawn_care", "tree_service"]),
   painting: Object.freeze(["painting"]),
-  plumbing: Object.freeze(["plumbing", "plumbing_repairs"]),
-  plumbing_repairs: Object.freeze(["plumbing", "plumbing_repairs"]),
+  plumbing: Object.freeze(["plumbing", "plumbing_repairs", "minor_plumbing"]),
+  plumbing_repairs: Object.freeze(["plumbing", "plumbing_repairs", "minor_plumbing"]),
+  pool_service: Object.freeze([
+    "pool_cleaning",
+    "pool_equipment_installation",
+    "pool_maintenance",
+    "pool_repair",
+    "pool_resurfacing",
+    "pool_service",
+  ]),
+  pool_builders: Object.freeze(["new_pool_construction", "pool_builders"]),
   property_management: Object.freeze([
     "inspection",
     "maintenance",
@@ -239,8 +350,10 @@ const CATEGORY_ELIGIBILITY = Object.freeze({
     "vendor_dispatch",
   ]),
   roofing: Object.freeze(["roofing", "storm"]),
-  cleaning: Object.freeze(["cleaning"]),
   drywall: Object.freeze(["drywall"]),
+  drywall_repair: Object.freeze(["drywall", "drywall_repair"]),
+  tile: Object.freeze(["tile", "tile_repair_installation"]),
+  tile_repair_installation: Object.freeze(["tile", "tile_repair_installation"]),
 });
 
 export function normalizeServiceCategory(value = "") {
@@ -265,16 +378,35 @@ export function normalizeServiceCategory(value = "") {
   if (normalized.includes("nursing") || normalized.includes("nurse")) return "nursing";
   if (normalized.includes("painting") || normalized.includes("paint")) return "painting";
   if (normalized.includes("drywall")) return "drywall";
+  if (normalized.includes("biohazard_cleaning")) return "biohazard_cleaning";
+  if (normalized.includes("carpet_cleaning")) return "carpet_cleaning";
+  if (normalized.includes("office_cleaning")) return "office_cleaning_services";
+  if (normalized.includes("window_cleaning")) return "window_cleaning";
+  if (normalized.includes("pool_builder")) return "pool_builders";
+  if (normalized.includes("new_pool")) return "new_pool_construction";
+  if (normalized.includes("pool_maintenance")) return "pool_maintenance";
+  if (normalized.includes("pool_cleaning")) return "pool_cleaning";
+  if (normalized.includes("pool_repair")) return "pool_repair";
+  if (normalized.includes("pool_equipment")) return "pool_equipment_installation";
+  if (normalized.includes("pool_resurfacing")) return "pool_resurfacing";
+  if (normalized.includes("pool")) return "pool_service";
   if (normalized.includes("garage") && normalized.includes("opener")) {
     return "garage_door_opener_installation";
   }
   if (normalized.includes("ceiling_fan")) return "ceiling_fan_installation";
   if (normalized.includes("door_replacement")) return "door_replacement";
+  if (normalized.includes("door_repair_replacement")) return "door_repair_replacement";
   if (normalized.includes("door_installation")) return "door_installation";
   if (normalized.includes("door")) return "door_repair";
   if (normalized.includes("general_maintenance")) return "general_maintenance";
   if (normalized.includes("appliance_installation")) return "appliance_installation";
+  if (normalized.includes("cabinet_repair_replacement")) return "cabinet_repair_replacement";
   if (normalized.includes("cabinet")) return "cabinetry";
+  if (normalized.includes("minor_electrical")) return "minor_electrical";
+  if (normalized.includes("minor_plumbing")) return "minor_plumbing";
+  if (normalized.includes("fence_repair")) return "fence_repair";
+  if (normalized.includes("trim") || normalized.includes("baseboard")) return "trim_baseboards";
+  if (normalized.includes("mounting") || normalized.includes("hanging")) return "mounting_hanging";
   if (normalized.includes("faucet") || normalized.includes("plumbing_repair")) {
     return "plumbing_repairs";
   }
@@ -343,6 +475,18 @@ function inferCategoryFromText(value = "") {
   if (text.includes("drywall")) return "drywall";
   if (text.includes("paint")) return "painting";
   if (text.includes("door replacement")) return "door_replacement";
+  if (text.includes("pool builder")) return "pool_builders";
+  if (text.includes("new pool")) return "new_pool_construction";
+  if (text.includes("pool maintenance")) return "pool_maintenance";
+  if (text.includes("pool cleaning")) return "pool_cleaning";
+  if (text.includes("pool repair")) return "pool_repair";
+  if (text.includes("pool equipment")) return "pool_equipment_installation";
+  if (text.includes("pool resurfacing")) return "pool_resurfacing";
+  if (text.includes("pool")) return "pool_service";
+  if (text.includes("biohazard")) return "biohazard_cleaning";
+  if (text.includes("carpet cleaning")) return "carpet_cleaning";
+  if (text.includes("office cleaning")) return "office_cleaning_services";
+  if (text.includes("window cleaning")) return "window_cleaning";
   if (text.includes("door")) return "door_repair";
   if (text.includes("clean")) return "cleaning";
   if (text.includes("landscap") || text.includes("lawn")) return "landscaping";

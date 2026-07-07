@@ -1,57 +1,11 @@
-export const PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS = Object.freeze([
-  {
-    domain: "home_services",
-    labelKey: "professionalOnboardingDomainHomeServices",
-    options: Object.freeze([
-      { value: "handyman", labelKey: "professionalOnboardingSpecialtyHandyman" },
-      { value: "garage_door_opener_installation", labelKey: "professionalOnboardingSpecialtyGarageDoorOpenerInstallation" },
-      { value: "door_replacement", labelKey: "professionalOnboardingSpecialtyDoorReplacement" },
-      { value: "painting", labelKey: "professionalOnboardingSpecialtyPainting" },
-      { value: "drywall", labelKey: "professionalOnboardingSpecialtyDrywall" },
-      { value: "plumbing_repairs", labelKey: "professionalOnboardingSpecialtyPlumbingRepairs" },
-      { value: "plumbing", labelKey: "professionalOnboardingSpecialtyPlumbing" },
-      { value: "ceiling_fan_installation", labelKey: "professionalOnboardingSpecialtyCeilingFanInstallation" },
-      { value: "electrical", labelKey: "professionalOnboardingSpecialtyElectrical" },
-      { value: "tile", labelKey: "professionalOnboardingSpecialtyTile" },
-      { value: "cabinetry", labelKey: "professionalOnboardingSpecialtyCabinetry" },
-      { value: "flooring", labelKey: "professionalOnboardingSpecialtyFlooring" },
-      { value: "pressure_washing", labelKey: "professionalOnboardingSpecialtyPressureWashing" },
-      { value: "appliance_installation", labelKey: "professionalOnboardingSpecialtyApplianceInstallation" },
-      { value: "general_maintenance", labelKey: "professionalOnboardingSpecialtyGeneralMaintenance" },
-    ]),
-  },
-  {
-    domain: "healthcare",
-    labelKey: "professionalOnboardingDomainHealthcare",
-    options: Object.freeze([
-      { value: "home_health", labelKey: "professionalOnboardingSpecialtyHomeHealth" },
-      { value: "senior_care", labelKey: "professionalOnboardingSpecialtySeniorCare" },
-      { value: "nursing", labelKey: "professionalOnboardingSpecialtyNursing" },
-      { value: "caregiver", labelKey: "professionalOnboardingSpecialtyCaregiver" },
-      { value: "medical_transport", labelKey: "professionalOnboardingSpecialtyMedicalTransport" },
-    ]),
-  },
-  {
-    domain: "property_management",
-    labelKey: "professionalOnboardingDomainPropertyManagement",
-    options: Object.freeze([
-      { value: "tenant_ticket", labelKey: "professionalOnboardingSpecialtyTenantTicket" },
-      { value: "rental_maintenance", labelKey: "professionalOnboardingSpecialtyRentalMaintenance" },
-      { value: "inspection", labelKey: "professionalOnboardingSpecialtyInspection" },
-      { value: "unit_turnover", labelKey: "professionalOnboardingSpecialtyTurnover" },
-      { value: "vendor_dispatch", labelKey: "professionalOnboardingSpecialtyVendorDispatch" },
-    ]),
-  },
-  {
-    domain: "transportation",
-    labelKey: "professionalOnboardingDomainTransportation",
-    options: Object.freeze([
-      { value: "mechanic", labelKey: "professionalOnboardingSpecialtyMechanic" },
-      { value: "mobile_services", labelKey: "professionalOnboardingSpecialtyMobileServices" },
-      { value: "private_transportation", labelKey: "professionalOnboardingSpecialtyPrivateTransportation" },
-    ]),
-  },
-]);
+import { buildProfessionalCapabilityGroups } from "./professionalCapabilityLibrary.js";
+
+export const PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS = Object.freeze(
+  buildProfessionalCapabilityGroups().map((group) => ({
+    ...group,
+    options: Object.freeze(group.options),
+  }))
+);
 
 const LEGACY_CATEGORY_BY_DOMAIN = Object.freeze({
   healthcare: "Home Health Care",
@@ -60,36 +14,33 @@ const LEGACY_CATEGORY_BY_DOMAIN = Object.freeze({
   transportation: "Private Transportation",
 });
 
-const LEGACY_CATEGORY_BY_SPECIALTY = Object.freeze({
-  appliance_installation: "Appliance Installation",
-  cabinetry: "Cabinetry",
-  caregiver: "Home Health Care",
-  ceiling_fan_installation: "Ceiling Fan Installation",
-  door_replacement: "Door Replacement",
-  drywall: "Drywall",
-  electrical: "Electrical",
-  flooring: "Flooring",
-  garage_door_opener_installation: "Garage Door Opener Installation",
-  general_maintenance: "General Maintenance",
-  handyman: "Handyman",
-  home_health: "Home Health Care",
-  inspection: "Property Maintenance",
-  medical_transport: "Home Health Care",
-  nursing: "Home Health Care",
-  painting: "Painting",
-  plumbing: "Plumbing",
-  plumbing_repairs: "Plumbing Repairs",
-  pressure_washing: "Pressure Washing",
-  private_transportation: "Private Transportation",
-  mechanic: "Mechanic",
-  mobile_services: "Mobile Services",
-  rental_maintenance: "Property Maintenance",
-  senior_care: "Home Health Care",
-  tenant_ticket: "Property Maintenance",
-  tile: "Tile",
-  unit_turnover: "Property Maintenance",
-  vendor_dispatch: "Property Maintenance",
-});
+const LEGACY_CATEGORY_BY_SPECIALTY = Object.freeze(
+  Object.assign(
+    PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.reduce((accumulator, group) => {
+      group.options.forEach((option) => {
+        if (!accumulator[option.value]) {
+          accumulator[option.value] = option.categoryLabel || group.label || LEGACY_CATEGORY_BY_DOMAIN[group.domain] || "";
+        }
+      });
+      return accumulator;
+    }, {}),
+    {
+      appliance_installation: "Appliance Installation",
+      cabinetry: "Cabinetry",
+      ceiling_fan_installation: "Ceiling Fan Installation",
+      door_replacement: "Door Replacement",
+      drywall: "Drywall",
+      electrical: "Electrical",
+      flooring: "Flooring",
+      garage_door_opener_installation: "Garage Door Opener Installation",
+      painting: "Painting",
+      plumbing: "Plumbing",
+      plumbing_repairs: "Plumbing Repairs",
+      pressure_washing: "Pressure Washing",
+      tile: "Tile",
+    }
+  )
+);
 
 const SPECIALTY_TO_DOMAIN = Object.freeze(
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.reduce((accumulator, group) => {
@@ -102,27 +53,82 @@ const SPECIALTY_TO_DOMAIN = Object.freeze(
 
 const LEGACY_SPECIALTY_BY_CATEGORY = Object.freeze({
   "appliance installation": "appliance_installation",
+  "biohazard cleaning": "biohazard_cleaning",
   cabinetry: "cabinetry",
+  "cabinet repair replacement": "cabinet_repair_replacement",
+  "cabinet repair/replacement": "cabinet_repair_replacement",
+  "carpet cleaning": "carpet_cleaning",
   carpentry: "cabinetry",
   "ceiling fan installation": "ceiling_fan_installation",
+  cleaning: "cleaning",
+  "cleaning services": "cleaning",
   "door replacement": "door_replacement",
+  "door repair replacement": "door_repair_replacement",
+  "door repair/replacement": "door_repair_replacement",
   drywall: "drywall",
+  "drywall repair": "drywall_repair",
   electrical: "electrical",
+  "event venue cleaning": "event_venue_cleaning",
+  "fence repair": "fence_repair",
   flooring: "flooring",
   "garage door opener installation": "garage_door_opener_installation",
   "general maintenance": "general_maintenance",
+  "graffiti removal services": "graffiti_removal_services",
+  "green cleaning services": "green_cleaning_services",
   handyman: "handyman",
+  "hotel and hospitality cleaning": "hotel_hospitality_cleaning",
+  housekeeping: "housekeeping",
   "home health care": "home_health",
+  "industrial cleaning": "industrial_cleaning",
+  landscaping: "landscaping",
+  "lawn care": "lawn_care",
+  "medical facility cleaning": "medical_facility_cleaning",
+  "minor electrical": "minor_electrical",
+  "minor plumbing": "minor_plumbing",
   painting: "painting",
+  "pet cleaning services": "pet_cleaning_services",
   plumbing: "plumbing",
   "plumbing repairs": "plumbing_repairs",
+  "pool builders": "pool_builders",
+  "pool cleaning": "pool_cleaning",
+  "pool equipment installation": "pool_equipment_installation",
+  "pool maintenance": "pool_maintenance",
+  "pool repair": "pool_repair",
+  "pool resurfacing": "pool_resurfacing",
+  "pool service": "pool_service",
+  "pool services": "pool_service",
   "pressure washing": "pressure_washing",
   "private transportation": "private_transportation",
+  "restaurant and kitchen cleaning": "restaurant_kitchen_cleaning",
+  "retail cleaning": "retail_cleaning",
+  "school cleaning": "school_cleaning",
   mechanic: "mechanic",
   "mobile services": "mobile_services",
   "property maintenance": "rental_maintenance",
   tile: "tile",
+  "tile repair installation": "tile_repair_installation",
+  "tile repair/installation": "tile_repair_installation",
+  "trim baseboards": "trim_baseboards",
+  "trim/baseboards": "trim_baseboards",
+  "window cleaning": "window_cleaning",
 });
+
+const LIBRARY_SPECIALTY_BY_LABEL = Object.freeze(
+  PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.reduce((accumulator, group) => {
+    group.options.forEach((option) => {
+      [option.label, option.value, ...(option.aliases || [])].forEach((label) => {
+        const key = String(label || "").trim().toLowerCase();
+        if (key && !accumulator[key]) accumulator[key] = option.value;
+      });
+    });
+    if (group.label) {
+      const key = String(group.label).trim().toLowerCase();
+      const firstOption = group.options[0]?.value || "";
+      if (key && firstOption && !accumulator[key]) accumulator[key] = firstOption;
+    }
+    return accumulator;
+  }, {})
+);
 
 export function getProfessionalOnboardingSpecialtyValues() {
   return PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS.flatMap((group) =>
@@ -139,7 +145,11 @@ export function getProfessionalSpecialtyLabel(specialty = "", translate = (key) 
     (group) => group.options
   ).find((item) => item.value === specialty);
 
-  if (option) return translate(option.labelKey);
+  if (option) {
+    const translated = option.labelKey ? translate(option.labelKey) : "";
+    if (translated && translated !== option.labelKey) return translated;
+    return option.label || "";
+  }
 
   return "";
 }
@@ -163,7 +173,8 @@ export function inferProfessionalSpecialtiesFromLegacyCategories(values = []) {
   return normalizeSelectedSpecialties(
     categories
       .map((category) =>
-        LEGACY_SPECIALTY_BY_CATEGORY[String(category || "").trim().toLowerCase()]
+        LEGACY_SPECIALTY_BY_CATEGORY[String(category || "").trim().toLowerCase()] ||
+        LIBRARY_SPECIALTY_BY_LABEL[String(category || "").trim().toLowerCase()]
       )
       .filter(Boolean)
   );

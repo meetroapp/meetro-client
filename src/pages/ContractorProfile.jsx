@@ -20,6 +20,7 @@ import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
   getProfessionalSpecialtyLabel,
 } from "../utils/professionalOnboardingSpecialties";
+import { getProfessionalCapabilityCategories } from "../utils/professionalCapabilityLibrary";
 import {
   readBusinessServiceProfile,
   writeBusinessServiceProfile,
@@ -55,6 +56,7 @@ function ContractorProfile({ setPage, currentPage }) {
   const [serviceSpecialties, setServiceSpecialties] = useState(
     () => readBusinessServiceProfile().serviceSpecialties
   );
+  const [expandedProfileSections, setExpandedProfileSections] = useState({});
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
   const [country, setCountry] = useState(
@@ -1196,6 +1198,16 @@ function safeJsonArray(key) {
     businessIdentity.businessName && profile?.category && profileDisplayAddress
   );
   const servicesReady = serviceSpecialties.length > 0;
+  const isBusinessProfileSectionOpen = (sectionKey, defaultOpen = false) =>
+    Object.prototype.hasOwnProperty.call(expandedProfileSections, sectionKey)
+      ? expandedProfileSections[sectionKey]
+      : defaultOpen;
+  const toggleBusinessProfileSection = (sectionKey) => {
+    setExpandedProfileSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
+    }));
+  };
   const portfolioProofSummary = businessPortfolioProof.projectCount
     ? `${businessPortfolioProof.projectCount} ${t("projects")}`
     : businessPortfolioProof.reviewCount
@@ -1582,8 +1594,13 @@ function safeJsonArray(key) {
           </div>
 
           <div className="business-profile-primary-column">
-            <div className="business-profile-card" style={glassCard}>
-              <h2 style={compactCardTitle}>{t("businessHealth")}</h2>
+            <BusinessProfileCollapsibleCard
+              title={t("businessHealth")}
+              icon="availableNow"
+              summary={availableNow ? t("readyForCustomers") : t("currentlyInactive")}
+              open={isBusinessProfileSectionOpen("businessHealth")}
+              onToggle={() => toggleBusinessProfileSection("businessHealth")}
+            >
               <p style={bioStyle}>{t("businessReadinessSentence")}</p>
               <div style={readinessSummaryCard}>
                 <strong style={verificationStatusText}>
@@ -1626,7 +1643,7 @@ function safeJsonArray(key) {
                   )
                 ))}
               </div>
-            </div>
+            </BusinessProfileCollapsibleCard>
 
             <div className="business-profile-trust-group" style={customerTrustGroup}>
               <div style={{ ...glassCard, ...customerPreviewCard }}>
@@ -1643,9 +1660,14 @@ function safeJsonArray(key) {
                 </div>
               </div>
 
-              <div
+              <BusinessProfileCollapsibleCard
                 className="business-profile-proof-card"
-                style={{ ...glassCard, ...portfolioProofCard }}
+                title={t("portfolioProof")}
+                icon="portfolio"
+                summary={portfolioProofSummary}
+                style={portfolioProofCard}
+                open={isBusinessProfileSectionOpen("portfolio")}
+                onToggle={() => toggleBusinessProfileSection("portfolio")}
               >
                 <div style={portfolioProofLayout}>
                   <span style={businessHealthIcon}>
@@ -1666,13 +1688,24 @@ function safeJsonArray(key) {
                     </button>
                   </div>
                 </div>
-              </div>
+              </BusinessProfileCollapsibleCard>
 
-              <ServicesOfferedSection selectedSpecialties={serviceSpecialties} readOnly />
+              <ServicesOfferedSection
+                selectedSpecialties={serviceSpecialties}
+                readOnly
+                collapsible
+                open={isBusinessProfileSectionOpen("services", !servicesReady)}
+                onToggleSection={() => toggleBusinessProfileSection("services")}
+              />
 
-              <div className="business-profile-card" style={glassCard}>
+              <BusinessProfileCollapsibleCard
+                title={t("reviews")}
+                icon="reviews"
+                summary={`${profileReviews.length} ${t("reviews")}`}
+                open={isBusinessProfileSectionOpen("reviews")}
+                onToggle={() => toggleBusinessProfileSection("reviews")}
+              >
                 <div style={bioCard}>
-                  <h3 style={bioTitle}>{t("reviews")}</h3>
                   {profileReviews.length === 0 ? (
                     <div style={emptyReviewsCard}>
                       <span style={businessHealthIcon}>
@@ -1699,7 +1732,7 @@ function safeJsonArray(key) {
                     ))
                   )}
                 </div>
-              </div>
+              </BusinessProfileCollapsibleCard>
             </div>
 
             <div className="business-profile-card" style={glassCard}>
@@ -1717,8 +1750,13 @@ function safeJsonArray(key) {
               </div>
             </div>
 
-            <div className="business-profile-card" style={glassCard}>
-              <h2 style={compactCardTitle}>{t("businessInformation")}</h2>
+            <BusinessProfileCollapsibleCard
+              title={t("businessInformation")}
+              icon="businessProfile"
+              summary={profileDisplayAddress || profile.phone || t("locationNotSet")}
+              open={isBusinessProfileSectionOpen("businessInformation")}
+              onToggle={() => toggleBusinessProfileSection("businessInformation")}
+            >
               <div style={bioCard}>
                 <h3 style={bioTitle}>{t("aboutBusiness")}</h3>
                 <p style={bioStyle}>{profile.bio || t("noBusinessDescription")}</p>
@@ -1762,7 +1800,7 @@ function safeJsonArray(key) {
               >
                 {t("editBusinessInformation")}
               </button>
-            </div>
+            </BusinessProfileCollapsibleCard>
           </div>
 
           <div className="business-profile-secondary-column">
@@ -1792,8 +1830,13 @@ function safeJsonArray(key) {
               </div>
             </div>
 
-            <div className="business-profile-card" style={glassCard}>
-              <h2 style={compactCardTitle}>{t("businessVerification")}</h2>
+            <BusinessProfileCollapsibleCard
+              title={t("businessVerification")}
+              icon="verified"
+              summary={businessVerificationLabel}
+              open={isBusinessProfileSectionOpen("verification")}
+              onToggle={() => toggleBusinessProfileSection("verification")}
+            >
               <p style={bioStyle}>{t("businessVerificationHelp")}</p>
               <div style={{ ...verificationStatusCard, marginTop: "12px" }}>
                 <span style={businessHealthIcon}>
@@ -1813,10 +1856,15 @@ function safeJsonArray(key) {
                   </button>
                 </div>
               </div>
-            </div>
+            </BusinessProfileCollapsibleCard>
 
-            <div className="business-profile-card" style={glassCard}>
-              <h2 style={compactCardTitle}>{t("businessSetup")}</h2>
+            <BusinessProfileCollapsibleCard
+              title={t("businessSetup")}
+              icon="settings"
+              summary={t("reviewBusinessSetup")}
+              open={isBusinessProfileSectionOpen("businessSetup")}
+              onToggle={() => toggleBusinessProfileSection("businessSetup")}
+            >
               <div style={verificationStatusCard}>
                 <span style={businessHealthIcon}>
                   <MeetroIcon name="settings" size={16} decorative />
@@ -1835,7 +1883,7 @@ function safeJsonArray(key) {
                   </button>
                 </div>
               </div>
-            </div>
+            </BusinessProfileCollapsibleCard>
           </div>
         </div>
       )}
@@ -2236,10 +2284,67 @@ function ProfileForm({
   );
 }
 
+function BusinessProfileCollapsibleCard({
+  title,
+  icon = "businessProfile",
+  summary = "",
+  open = false,
+  onToggle,
+  children,
+  style,
+  className = "business-profile-card",
+}) {
+  const sectionId = `business-profile-section-${String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")}`;
+
+  return (
+    <section className={className} style={{ ...glassCard, ...style }}>
+      <button
+        type="button"
+        style={businessProfileCollapseHeader}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={sectionId}
+      >
+        <span style={businessProfileCollapseHeaderLeft}>
+          <span style={businessHealthIcon}>
+            <MeetroIcon name={icon} size={16} decorative />
+          </span>
+          <span style={businessProfileCollapseTitleGroup}>
+            <strong style={compactCardTitle}>{title}</strong>
+            {!open && summary && (
+              <span style={businessProfileCollapseSummary}>{summary}</span>
+            )}
+          </span>
+        </span>
+        <span style={businessProfileCollapseChevron} aria-hidden="true">
+          {open ? "⌃" : "⌄"}
+        </span>
+      </button>
+
+      <div
+        id={sectionId}
+        style={{
+          ...businessProfileCollapseBody,
+          ...(open ? businessProfileCollapseBodyOpen : {}),
+        }}
+        hidden={!open}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function ServicesOfferedSection({
   selectedSpecialties = [],
   onToggle,
   readOnly = false,
+  collapsible = false,
+  open = true,
+  onToggleSection,
 }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const selectedLabels = selectedSpecialties
@@ -2249,15 +2354,21 @@ function ServicesOfferedSection({
     PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
     t
   );
+  const primaryCategoryOptions = getProfessionalCapabilityCategories().map((category) => ({
+    id: category.id,
+    label: t(category.labelKey),
+    aliases: category.aliases || [],
+  }));
+  const selectedPrimaryCategory =
+    serviceOptions.find((option) =>
+      selectedSpecialties.includes(option.value)
+    )?.categoryId || "";
 
-  return (
-    <div style={readOnly ? servicesOfferedReadOnlyCard : formSection}>
-      <h3 style={readOnly ? compactCardTitle : formSectionTitle}>
-        {t("servicesOffered")}
-      </h3>
+  const content = (
+    <>
       <p style={helperText}>{t("servicesOfferedSubtitle")}</p>
       <p style={capabilityCountText}>
-        {selectedSpecialties.length} {t("activeCapabilities")}
+        {selectedSpecialties.length} {t("professionalCapabilitySelectedCount")}
       </p>
 
       {readOnly ? (
@@ -2296,18 +2407,51 @@ function ServicesOfferedSection({
             open={selectorOpen}
             title={t("servicesOffered")}
             subtitle={t("servicesOfferedSubtitle")}
+            categories={primaryCategoryOptions}
+            selectedCategoryId={selectedPrimaryCategory}
+            categorySearchPlaceholder={t("professionalCapabilitySearchCategories")}
+            emptyCategoryText={t("professionalCapabilityChooseCategoryEmpty")}
+            cantFindLabel={t("professionalCapabilityCantFind")}
             searchPlaceholder={t("searchServices")}
             options={serviceOptions}
             selectedValues={selectedSpecialties}
             multiple
             placement="center"
             doneLabel={t("save")}
+            onSelect={() => {}}
             onToggle={(value) => onToggle?.(value)}
             onDone={() => setSelectorOpen(false)}
             onClose={() => setSelectorOpen(false)}
           />
         </>
       )}
+    </>
+  );
+
+  if (collapsible) {
+    return (
+      <BusinessProfileCollapsibleCard
+        title={t("servicesOffered")}
+        icon="serviceTypes"
+        summary={
+          selectedLabels.length
+            ? selectedLabels.slice(0, 3).join(", ")
+            : t("servicesOfferedEmpty")
+        }
+        open={open}
+        onToggle={onToggleSection}
+      >
+        {content}
+      </BusinessProfileCollapsibleCard>
+    );
+  }
+
+  return (
+    <div style={readOnly ? servicesOfferedReadOnlyCard : formSection}>
+      <h3 style={readOnly ? compactCardTitle : formSectionTitle}>
+        {t("servicesOffered")}
+      </h3>
+      {content}
     </div>
   );
 }
@@ -2596,6 +2740,64 @@ const compactCardTitle = {
   color: "#111",
   fontSize: "20px",
   lineHeight: 1.2,
+};
+
+const businessProfileCollapseHeader = {
+  width: "100%",
+  border: "none",
+  background: "transparent",
+  color: "#111",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: 0,
+  cursor: "pointer",
+  textAlign: "left",
+  fontFamily: "inherit",
+};
+
+const businessProfileCollapseHeaderLeft = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const businessProfileCollapseTitleGroup = {
+  display: "grid",
+  gap: "2px",
+  minWidth: 0,
+};
+
+const businessProfileCollapseSummary = {
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: 800,
+  lineHeight: 1.35,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const businessProfileCollapseChevron = {
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "24px",
+  fontWeight: 950,
+  lineHeight: 1,
+};
+
+const businessProfileCollapseBody = {
+  maxHeight: 0,
+  opacity: 0,
+  overflow: "hidden",
+  transition: "max-height 220ms ease, opacity 180ms ease",
+};
+
+const businessProfileCollapseBodyOpen = {
+  maxHeight: "1800px",
+  opacity: 1,
+  paddingTop: "12px",
 };
 
 const businessHealthGrid = {

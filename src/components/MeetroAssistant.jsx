@@ -44,6 +44,7 @@ import { getCompanionContext } from "../utils/companionContext";
 import { getConversationParticipantIdentity } from "../utils/conversationIdentity";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
+const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
 
 function stopNativeSpeechRecognitionQuietly() {
   try {
@@ -65,6 +66,31 @@ function getAssistantLauncherButtonSize() {
   return window.matchMedia("(min-width: 1180px) and (hover: hover) and (pointer: fine)").matches
     ? 136
     : 126;
+}
+
+function getViewportSafeAreaInsets() {
+  if (typeof document === "undefined") {
+    return { safeAreaTop: 0, safeAreaRight: 0, safeAreaBottom: 0, safeAreaLeft: 0 };
+  }
+
+  const probe = document.createElement("div");
+  probe.style.cssText = [
+    "position:fixed",
+    "visibility:hidden",
+    "pointer-events:none",
+    "inset:0",
+    "padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)",
+  ].join(";");
+  document.body.appendChild(probe);
+  const style = window.getComputedStyle(probe);
+  const insets = {
+    safeAreaTop: parseFloat(style.paddingTop) || 0,
+    safeAreaRight: parseFloat(style.paddingRight) || 0,
+    safeAreaBottom: parseFloat(style.paddingBottom) || 0,
+    safeAreaLeft: parseFloat(style.paddingLeft) || 0,
+  };
+  document.body.removeChild(probe);
+  return insets;
 }
 
 const VOICE_PREFERENCE_KEY = "meetroAssistantVoicePreference";
@@ -2332,6 +2358,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     ...AI_BUTTON_POSITION_DEFAULTS,
     buttonSize: launcherButtonSize,
     bottomClearance: launcherBottomClearance,
+    edgeMargin: ASSISTANT_LAUNCHER_EDGE_MARGIN,
   };
   const isBusinessMode =
     getAccountModeForPage(
@@ -2473,9 +2500,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       t("assistantCompanionRecommendationDefault", language);
 
   function getLauncherViewport() {
+    const safeAreaInsets = getViewportSafeAreaInsets();
     return {
       width: typeof window === "undefined" ? 0 : window.innerWidth,
       height: typeof window === "undefined" ? 0 : window.innerHeight,
+      ...safeAreaInsets,
     };
   }
 
@@ -3462,7 +3491,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         bottom: "auto",
       }
     : {
-        right: "max(12px, env(safe-area-inset-right, 0px))",
+        right: "max(18px, env(safe-area-inset-right, 0px))",
         bottom: launcherFallbackBottom,
       };
   const companionAnchorStyle = getCompanionAnchorStyle({
@@ -3929,7 +3958,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
 const assistantButton = {
   position: "fixed",
-  right: "max(12px, env(safe-area-inset-right, 0px))",
+  right: "max(18px, env(safe-area-inset-right, 0px))",
   zIndex: 9998,
   minWidth: 126,
   height: 50,
@@ -4037,7 +4066,7 @@ function getAssistantWakeBubbleStyle({
 
   return {
     ...base,
-    right: "max(12px, env(safe-area-inset-right, 0px))",
+    right: "max(18px, env(safe-area-inset-right, 0px))",
     bottom: `calc(${fallbackBottom + 64}px + env(safe-area-inset-bottom, 0px))`,
   };
 }

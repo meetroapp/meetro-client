@@ -39,10 +39,20 @@ test("Profile business mode is identity-first while preserving the existing rout
   assert.match(profileSource, /setPage\("meetroMoments"\)/);
   assert.match(profileSource, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
   assert.ok(
-    businessBranch.indexOf('<SettingsGroup title={t("business")} icon="businessTools">') <
-      businessBranch.indexOf('<SettingsGroup title={t("account")} icon="profile">'),
+    businessBranch.indexOf('title={t("business")}') <
+      businessBranch.indexOf('title={t("account")}'),
     "business identity surfaces should appear before account/settings controls"
   );
+});
+
+test("Profile settings use accessible collapsible sections after the identity area", () => {
+  assert.match(profileSource, /function SettingsSection\(\{ title, icon, open, onClick, summary, children \}\)/);
+  assert.match(profileSource, /aria-expanded=\{open\}/);
+  assert.match(profileSource, /aria-controls=\{sectionId\}/);
+  assert.match(profileSource, /collapsibleSectionBodyOpen/);
+  assert.match(profileSource, /summary=\{primaryAddress \|\| t\("savedAddresses"\)\}/);
+  assert.match(profileSource, /summary=\{businessModeStatusLabel\}/);
+  assert.match(profileSource, /open=\{activeSection === "preferences"\}/);
 });
 
 test("Profile Identity Wonder Pass is documented in the visual constitution knowledge base", () => {

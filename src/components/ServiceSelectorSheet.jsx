@@ -11,11 +11,23 @@ function normalizeText(value = "") {
 
 export function flattenServiceGroups(groups = [], translate = t) {
   return groups.flatMap((group) =>
-    (group.options || []).map((option) => ({
-      ...option,
-      groupLabel: group.labelKey ? translate(group.labelKey) : group.label || "",
-      label: option.label || (option.labelKey ? translate(option.labelKey) : option.value),
-    }))
+    (group.options || []).map((option) => {
+      const categoryLabel = group.labelKey
+        ? translate(group.labelKey)
+        : group.label || "";
+      const sectionLabel = option.sectionLabelKey
+        ? translate(option.sectionLabelKey)
+        : option.section || "";
+
+      return {
+        ...option,
+        categoryLabel,
+        groupLabel: sectionLabel || categoryLabel,
+        label: option.labelKey
+          ? translate(option.labelKey)
+          : option.label || option.value,
+      };
+    })
   );
 }
 
@@ -23,6 +35,11 @@ function ServiceSelectorSheet({
   open,
   title,
   subtitle,
+  categories = [],
+  selectedCategoryId = "",
+  categorySearchPlaceholder,
+  emptyCategoryText,
+  cantFindLabel,
   options = [],
   selectedValues = [],
   searchPlaceholder,
@@ -36,13 +53,23 @@ function ServiceSelectorSheet({
   onClose,
 }) {
   const [query, setQuery] = useState("");
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState(selectedCategoryId);
   const [viewport, setViewport] = useState({ height: 0, offsetTop: 0, keyboardInset: 0 });
   const scrollPositionRef = useRef(null);
   const language = getLanguage();
 
   useEffect(() => {
-    if (open) setQuery("");
+    if (open) {
+      setQuery("");
+      setCategoryQuery("");
+      setActiveCategoryId(selectedCategoryId);
+    }
   }, [open]);
+
+  useEffect(() => {
+    setActiveCategoryId(selectedCategoryId);
+  }, [selectedCategoryId]);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return undefined;
@@ -92,14 +119,36 @@ function ServiceSelectorSheet({
 
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
   const showMultiSelectFooter = Boolean(multiple);
+  const categoryMode = categories.length > 0;
+  const filteredCategories = useMemo(() => {
+    const normalizedQuery = normalizeText(categoryQuery);
+    if (!categoryMode || !normalizedQuery) return categories;
+
+    return categories.filter((category) => {
+      const haystack = [
+        category.label,
+        category.id,
+        ...(category.aliases || []),
+      ].map(normalizeText).join(" ");
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [categories, categoryMode, categoryQuery]);
+  const visibleOptions = useMemo(() => {
+    if (!categoryMode || !activeCategoryId) return options;
+
+    return options.filter((option) => option.categoryId === activeCategoryId);
+  }, [activeCategoryId, categoryMode, options]);
   const filteredOptions = useMemo(() => {
     const normalizedQuery = normalizeText(query);
-    if (!normalizedQuery) return options;
+    if (!normalizedQuery) return visibleOptions;
 
-    return options.filter((option) => {
+    return visibleOptions.filter((option) => {
       const haystack = [
         option.label,
         option.groupLabel,
+        option.categoryLabel,
+        option.section,
         option.value,
         ...(option.aliases || []),
       ]
@@ -108,7 +157,7 @@ function ServiceSelectorSheet({
 
       return haystack.includes(normalizedQuery);
     });
-  }, [options, query]);
+  }, [visibleOptions, query]);
   const groupedOptions = useMemo(() => {
     const groups = [];
     const groupIndexes = new Map();
@@ -179,48 +228,95 @@ function ServiceSelectorSheet({
         </div>
 
         <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={searchPlaceholder || t("searchServices", language)}
+          value={categoryMode && !activeCategoryId ? categoryQuery : query}
+          onChange={(event) => {
+            if (categoryMode && !activeCategoryId) {
+              setCategoryQuery(event.target.value);
+              return;
+            }
+            setQuery(event.target.value);
+          }}
+          placeholder={
+            categoryMode && !activeCategoryId
+              ? categorySearchPlaceholder || t("professionalCapabilitySearchCategories", language)
+              : searchPlaceholder || t("searchServices", language)
+          }
           style={searchInput}
         />
 
-        <div style={optionList}>
-          {groupedOptions.map((group) => (
-            <div key={group.key} style={optionGroupSection}>
-              {group.label && <div style={categoryHeader}>{group.label}</div>}
-              <div style={optionGroupList}>
-                {group.options.map((option) => {
-                  const selected = selectedSet.has(option.value);
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      style={{
-                        ...optionButton,
-                        ...(selected ? optionButtonSelected : {}),
-                      }}
-                      onClick={() => {
-                        if (multiple) {
-                          onToggle?.(option.value, option);
-                        } else {
-                          onSelect?.(option.value, option);
-                          onClose?.();
-                        }
-                      }}
-                      aria-pressed={selected}
-                    >
-                      <span style={optionText}>
-                        <strong style={optionLabel}>{option.label}</strong>
-                      </span>
-                      <span style={optionStatus}>{selected ? "✓" : ""}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        {categoryMode && (
+          <div style={categoryChooser}>
+            <div style={categoryPillList}>
+              {filteredCategories.map((category) => {
+                const selected = category.id === activeCategoryId;
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    style={{
+                      ...categoryPill,
+                      ...(selected ? categoryPillSelected : {}),
+                    }}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setActiveCategoryId(category.id);
+                      setQuery("");
+                      onSelect?.(category.id, category);
+                    }}
+                  >
+                    {category.label}
+                  </button>
+                );
+              })}
             </div>
-          ))}
+          </div>
+        )}
+
+        <div style={optionList}>
+          {categoryMode && !activeCategoryId ? (
+            <p style={emptySelectionText}>
+              {emptyCategoryText || t("professionalCapabilityChooseCategoryEmpty", language)}
+            </p>
+          ) : (
+            groupedOptions.map((group) => (
+              <div key={group.key} style={optionGroupSection}>
+                {group.label && <div style={categoryHeader}>{group.label}</div>}
+                <div style={optionGroupList}>
+                  {group.options.map((option) => {
+                    const selected = selectedSet.has(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        style={{
+                          ...optionButton,
+                          ...(selected ? optionButtonSelected : {}),
+                        }}
+                        onClick={() => {
+                          if (multiple) {
+                            onToggle?.(option.value, option);
+                          } else {
+                            onSelect?.(option.value, option);
+                            onClose?.();
+                          }
+                        }}
+                        aria-pressed={selected}
+                      >
+                        <span style={optionText}>
+                          <strong style={optionLabel}>{option.label}</strong>
+                        </span>
+                        <span style={optionStatus}>{selected ? "✓" : ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
+        <p style={cantFindText}>
+          {cantFindLabel || t("professionalCapabilityCantFind", language)}
+        </p>
 
         {showMultiSelectFooter && (
           <div style={sheetFooter}>
@@ -354,6 +450,55 @@ const optionList = {
   minHeight: 0,
   WebkitOverflowScrolling: "touch",
   touchAction: "pan-y",
+};
+
+const categoryChooser = {
+  minWidth: 0,
+  overflowX: "auto",
+  paddingBottom: "2px",
+};
+
+const categoryPillList = {
+  display: "flex",
+  gap: "8px",
+  minWidth: 0,
+  overflowX: "auto",
+  paddingBottom: "2px",
+  WebkitOverflowScrolling: "touch",
+};
+
+const categoryPill = {
+  flex: "0 0 auto",
+  border: "1px solid rgba(31,77,52,0.18)",
+  borderRadius: "999px",
+  background: "rgba(255,255,255,0.86)",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  padding: "9px 12px",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const categoryPillSelected = {
+  background: "var(--meetro-color-forest-deep, #14351f)",
+  color: "var(--meetro-color-paper, #fffdf8)",
+  borderColor: "rgba(20,53,31,0.22)",
+};
+
+const emptySelectionText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: 750,
+};
+
+const cantFindText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: 750,
 };
 
 const optionGroupSection = {
