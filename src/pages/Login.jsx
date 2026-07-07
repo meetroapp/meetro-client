@@ -360,6 +360,16 @@ function Login({ setPage }) {
   const filteredProfessionalCategories = professionalCategories.filter((item) =>
     item.label.toLowerCase().includes(categorySearch.toLowerCase())
   );
+  const professionalCategoryVisibleInSearch = filteredProfessionalCategories.some(
+    (item) => item.value === professionalCategory
+  );
+  const professionalCategorySelectValue =
+    categorySearch && !professionalCategoryVisibleInSearch ? "" : professionalCategory;
+
+  function handleProfessionalCategoryChange(event) {
+    setProfessionalCategory(event.target.value);
+    setCategorySearch("");
+  }
 
   function changeLanguage(value) {
     const nextLanguage = normalizeLanguage(value);
@@ -955,9 +965,14 @@ function Login({ setPage }) {
 
                     <select
                       style={input}
-                      value={professionalCategory}
-                      onChange={(e) => setProfessionalCategory(e.target.value)}
+                      value={professionalCategorySelectValue}
+                      onChange={handleProfessionalCategoryChange}
                     >
+                      {categorySearch && !professionalCategoryVisibleInSearch && (
+                        <option value="" disabled>
+                          {T.searchServiceCategory}
+                        </option>
+                      )}
                       {filteredProfessionalCategories.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
