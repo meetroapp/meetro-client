@@ -168,7 +168,16 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
   assert.ok(discoveryInterests.find((interest) => interest.id === "marketing"));
   assert.ok(discoveryInterests.find((interest) => interest.id === "healthcare"));
   assert.ok(discoveryInterests.find((interest) => interest.id === "transportation"));
+  assert.equal(discoveryInterests.some((interest) => interest.id === "hiring"), false);
+  assert.equal(
+    discoveryInterests.some((interest) => /hiring/i.test(interest.label)),
+    false
+  );
   assert.match(discoverSource, /const renderDiscoveryBar = \(\) =>/);
+  const discoveryBarBlock = discoverSource.slice(
+    discoverSource.indexOf("const renderDiscoveryBar = () =>"),
+    discoverSource.indexOf("const renderCommunityHub = () =>")
+  );
   assert.match(discoverSource, /position: "sticky"/);
   assert.match(discoverSource, /top: "calc\(env\(safe-area-inset-top, 0px\) \+ 10px\)"/);
   assert.match(discoverSource, /WebkitBackdropFilter: "blur\(16px\)"/);
@@ -184,6 +193,9 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
   assert.match(discoverSource, /aria-pressed=\{selected\}/);
   assert.match(discoverSource, /toggleDiscoveryInterest\(interest\.id\)/);
   assert.match(discoverSource, /skipDiscoveryInterests/);
+  assert.doesNotMatch(discoveryBarBlock, /communityInterestMore/);
+  assert.doesNotMatch(discoveryBarBlock, /communityInterestMore", language/);
+  assert.doesNotMatch(discoveryBarBlock, /jobsHiringTitle|communityHiringTitle/);
   assert.doesNotMatch(discoverSource, /scrollTo\(/);
   assert.equal(
     t("communityDiscoverySearchPlaceholder", "en"),

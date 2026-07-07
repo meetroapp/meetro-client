@@ -1328,9 +1328,6 @@ function Discover({ setPage, currentPage }) {
                 </button>
               );
             })}
-            <span style={communityInterestMore}>
-              {t("communityInterestMore", language)}
-            </span>
           </div>
 
           <div style={communityDiscoveryContext} aria-live="polite">
@@ -1770,16 +1767,6 @@ const communityInterestChipActive = {
   background: "var(--meetro-color-forest)",
   color: "var(--meetro-surface-paper)",
   boxShadow: "0 8px 18px rgba(11,58,44,0.16)",
-};
-
-const communityInterestMore = {
-  flex: "0 0 auto",
-  alignSelf: "center",
-  color: "var(--meetro-color-muted)",
-  fontSize: "13px",
-  fontWeight: "900",
-  padding: "0 4px",
-  whiteSpace: "nowrap",
 };
 
 const communityDiscoveryContext = {
