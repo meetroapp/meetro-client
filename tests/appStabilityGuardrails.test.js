@@ -59,6 +59,10 @@ test("startup repairs authenticated professional route state before redirecting 
   const appSource = fs.readFileSync("src/App.jsx", "utf8");
   const sessionSource = fs.readFileSync("src/utils/session.js", "utf8");
 
+  assert.match(appSource, /coordinateAppStartup/);
+  assert.match(appSource, /STARTUP_READINESS/);
+  assert.match(appSource, /startupReadiness/);
+  assert.match(appSource, /isStartupReady/);
   assert.match(appSource, /SESSION_HYDRATION/);
   assert.match(appSource, /status: SESSION_HYDRATION\.restoring/);
   assert.match(appSource, /"sessionRestoring"/);
@@ -70,13 +74,59 @@ test("startup repairs authenticated professional route state before redirecting 
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(currentHash\)/);
   assert.match(
     appSource,
-    /if \(sessionHydration\.status === SESSION_HYDRATION\.restoring\) \{\s*return;\s*\}/
+    /sessionHydration\.status === SESSION_HYDRATION\.restoring \|\|\s*startupReadiness\.status === STARTUP_READINESS\.restoring/
   );
   assert.doesNotMatch(
     appSource,
     /isProfessionalOnlyPage\(targetPage\)[\s\S]{0,160}activeAccountMode[\s\S]{0,80}return "home"/
   );
   assert.match(sessionSource, /function restoreAuthenticatedSessionFromStorage/);
+});
+
+test("app startup coordinator blocks protected rendering and logs safe dev steps", () => {
+  const appSource = fs.readFileSync("src/App.jsx", "utf8");
+  const startupSource = fs.readFileSync("src/utils/appStartup.js", "utf8");
+
+  assert.match(appSource, /needsBusinessProfile: isProfessionalOnlyPage\(routedHash\)/);
+  assert.match(appSource, /readBusinessProfile: \(\) => readBusinessServiceProfile\(\)/);
+  assert.match(appSource, /readLanguage: getLanguage/);
+  assert.match(appSource, /companionEnabled: assistantEnabledPages\.has\(routedHash\)/);
+  assert.match(appSource, /dev: import\.meta\.env\.DEV/);
+  assert.match(appSource, /startupReadiness\.status === STARTUP_READINESS\.restoring/);
+  assert.match(startupSource, /STARTUP_DIAGNOSTIC_STEPS/);
+  assert.match(startupSource, /"session restored"/);
+  assert.match(startupSource, /"user ready"/);
+  assert.match(startupSource, /"business profile ready"/);
+  assert.match(startupSource, /"language ready"/);
+  assert.match(startupSource, /"companion ready"/);
+  assert.match(startupSource, /"routes ready"/);
+  assert.match(startupSource, /"app ready"/);
+  assert.match(startupSource, /console\.info\(`\[Meetro startup\] \$\{step\}`\)/);
+  assert.doesNotMatch(startupSource, /userEmail|businessName|API_KEY|full prompt/i);
+});
+
+test("update available notice is build-based and preserves session data", () => {
+  const appSource = fs.readFileSync("src/App.jsx", "utf8");
+  const startupSource = fs.readFileSync("src/utils/appStartup.js", "utf8");
+  const viteSource = fs.readFileSync("vite.config.js", "utf8");
+
+  assert.match(appSource, /function AppUpdateNotice/);
+  assert.match(appSource, /Update available/);
+  assert.match(appSource, /A newer version of Meetro Community is ready/);
+  assert.match(appSource, /Update now/);
+  assert.match(appSource, /Later/);
+  assert.match(appSource, /detectAvailableAppUpdate/);
+  assert.match(appSource, /applyAppUpdateNow/);
+  assert.match(appSource, /dismissAppUpdateNotice/);
+  assert.match(appSource, /withStartupChrome/);
+  assert.match(startupSource, /APP_BUILD_STORAGE_KEY/);
+  assert.match(startupSource, /APP_BUILD_DISMISSED_KEY/);
+  assert.match(startupSource, /reload\(\)/);
+  assert.match(appSource, /TestFlight or the App Store/);
+  assert.doesNotMatch(startupSource, /removeItem\("token"\)|clear\(\)/);
+  assert.match(viteSource, /globalThis\.__MEETRO_BUILD_ID__/);
+  assert.match(viteSource, /VITE_APP_BUILD_ID/);
+  assert.match(viteSource, /VITE_APP_VERSION/);
 });
 
 test("startup avoids importing high-risk route modules eagerly", () => {

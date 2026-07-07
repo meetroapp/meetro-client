@@ -232,7 +232,7 @@ test("desktop hosted Profile card dismisses without route changes", () => {
 test("mobile Profile page route remains available while desktop context card enhances Sidebar", () => {
   assert.match(
     appSource,
-    /if \(page === "profile"\) \{\s*return withAssistantLayer\(withSuspense\(<Profile setPage=\{setPage\} \/>\), page, setPage\);/
+    /if \(page === "profile"\) \{\s*return withStartupChrome\(withAssistantLayer\(withSuspense\(<Profile setPage=\{setPage\} \/>\), page, setPage\), updateNotice\);/
   );
   assert.match(
     bottomNavSource,

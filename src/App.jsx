@@ -6,14 +6,24 @@ import {
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
 import { recoverStoredRequestRelationships } from "./utils/requestRelationshipRecovery";
+import { getLanguage } from "./utils/language";
 import {
   getMeetroMomentRouteId,
   getMeetroMomentRoutePage,
 } from "./utils/meetroMomentRoutes";
+import {
+  STARTUP_READINESS,
+  applyAppUpdateNow,
+  coordinateAppStartup,
+  detectAvailableAppUpdate,
+  dismissAppUpdateNotice,
+  getCurrentAppBuildId,
+} from "./utils/appStartup";
 import MeetroAssistant from "./components/MeetroAssistant";
 import GuideOverlay from "./components/GuideOverlay";
 import GlobalInsightLayer from "./components/GlobalInsightLayer";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
+import LoadingScreen from "./components/LoadingScreen";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -84,10 +94,41 @@ const PageLoader = () => (
 );
 
 const SessionRestoringScreen = () => (
-  <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-    Restoring your Meetro session...
-  </div>
+  <LoadingScreen text="Restoring your Meetro session..." />
 );
+
+function AppUpdateNotice({ onUpdateNow, onLater }) {
+  return (
+    <div style={updateNoticeWrap} role="status" aria-live="polite">
+      <div style={updateNoticeCard}>
+        <div>
+          <h2 style={updateNoticeTitle}>Update available</h2>
+          <p style={updateNoticeCopy}>
+            A newer version of Meetro Community is ready. Update to continue
+            with the latest improvements.
+          </p>
+        </div>
+        <div style={updateNoticeActions}>
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={updateNoticePrimary}
+            onClick={onUpdateNow}
+          >
+            Update now
+          </button>
+          <button
+            type="button"
+            style={updateNoticeSecondary}
+            onClick={onLater}
+          >
+            Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function withSuspense(component) {
   return (
@@ -126,6 +167,15 @@ function withRouteBoundary(component, currentPage, setPage) {
     <RouteErrorBoundary resetKey={currentPage} currentPage={currentPage} setPage={setPage}>
       {component}
     </RouteErrorBoundary>
+  );
+}
+
+function withStartupChrome(component, updateNotice) {
+  return (
+    <>
+      {component}
+      {updateNotice}
+    </>
   );
 }
 
@@ -444,11 +494,23 @@ function App() {
 
   const initialSessionHydration = getInitialSessionHydration();
   const [sessionHydration, setSessionHydration] = useState(initialSessionHydration);
+  const [startupReadiness, setStartupReadiness] = useState(() =>
+    initialSessionHydration.status === SESSION_HYDRATION.restoring
+      ? { status: STARTUP_READINESS.restoring, steps: [] }
+      : { status: STARTUP_READINESS.ready, steps: [] }
+  );
+  const [updateNoticeState, setUpdateNoticeState] = useState({
+    available: false,
+    currentBuildId: getCurrentAppBuildId(),
+  });
   const [page, setPageState] = useState(() =>
     initialSessionHydration.status === SESSION_HYDRATION.restoring
       ? "sessionRestoring"
       : getInitialPage()
   );
+  const isStartupReady =
+    startupReadiness.status === STARTUP_READINESS.ready &&
+    sessionHydration.status !== SESSION_HYDRATION.restoring;
 
   useEffect(() => {
     if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
@@ -462,12 +524,32 @@ function App() {
 
       if (!hasToken) {
         setSessionHydration({ status: SESSION_HYDRATION.unauthenticated });
+        setStartupReadiness({ status: STARTUP_READINESS.ready, steps: [] });
         setPageState("login");
         return;
       }
 
-      restoreAuthenticatedSessionFromStorage(routedHash);
+      const startupResult = coordinateAppStartup({
+        targetPage: routedHash,
+        hasToken: Boolean(hasToken),
+        restoreSession: restoreAuthenticatedSessionFromStorage,
+        syncAccountMode: syncAccountModeForPage,
+        needsBusinessProfile: isProfessionalOnlyPage(routedHash),
+        readBusinessProfile: () => readBusinessServiceProfile(),
+        readLanguage: getLanguage,
+        companionEnabled: assistantEnabledPages.has(routedHash),
+        dev: import.meta.env.DEV,
+      });
+
+      if (startupResult.status === STARTUP_READINESS.invalid) {
+        setSessionHydration({ status: SESSION_HYDRATION.invalid });
+        setStartupReadiness(startupResult);
+        setPageState("login");
+        return;
+      }
+
       setSessionHydration({ status: SESSION_HYDRATION.authenticated });
+      setStartupReadiness(startupResult);
       setPageState(getInitialPage());
     }, 0);
 
@@ -478,6 +560,11 @@ function App() {
     if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
     syncAccountModeForPage(page);
   }, [page, sessionHydration.status]);
+
+  useEffect(() => {
+    if (!isStartupReady) return;
+    setUpdateNoticeState(detectAvailableAppUpdate());
+  }, [isStartupReady]);
 
   useEffect(() => {
     const handleAccountModeChange = () => {
@@ -547,6 +634,7 @@ function App() {
 
   useEffect(() => {
     const handleHashChange = () => {
+      if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const hashRoute = getHashRoute();
       persistRouteContext(hashRoute);
       const hashPage = getRoutePage(hashRoute);
@@ -591,6 +679,7 @@ function App() {
     };
 
     const handleVisibilityResume = () => {
+      if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const hasToken =
         safeGetStorageItem("token");
       const currentRoute = getHashRoute();
@@ -630,6 +719,7 @@ function App() {
     };
 
     const handleNativePageChange = (event) => {
+      if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const nextPage = event?.detail?.page;
 
       if (nextPage) {
@@ -680,13 +770,48 @@ function App() {
         handleVisibilityResume
       );
     };
-  }, []);
+  }, [sessionHydration.status]);
 
 
   
 
+  const handleUpdateNow = () => {
+    applyAppUpdateNow({
+      currentBuildId: updateNoticeState.currentBuildId,
+      notifyNativeUpdate: () => {
+        window.dispatchEvent(
+          new CustomEvent("meetroPremiumNotice", {
+            detail: {
+              title: "Update available",
+              message:
+                "A newer version is ready. Please update Meetro Community from TestFlight or the App Store.",
+              type: "info",
+            },
+          })
+        );
+      },
+    });
+  };
+
+  const handleUpdateLater = () => {
+    dismissAppUpdateNotice({
+      currentBuildId: updateNoticeState.currentBuildId,
+    });
+    setUpdateNoticeState((current) => ({ ...current, available: false }));
+  };
+
+  const updateNotice = updateNoticeState.available ? (
+    <AppUpdateNotice
+      onUpdateNow={handleUpdateNow}
+      onLater={handleUpdateLater}
+    />
+  ) : null;
+
 	  const setPage = (newPage) => {
-    if (sessionHydration.status === SESSION_HYDRATION.restoring) {
+    if (
+      sessionHydration.status === SESSION_HYDRATION.restoring ||
+      startupReadiness.status === STARTUP_READINESS.restoring
+    ) {
       return;
     }
 
@@ -767,289 +892,365 @@ if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "session
 }
 
 if (page === "login") {
-  return withRouteBoundary(<Login setPage={setPage} />, page, setPage);
+  return withStartupChrome(withRouteBoundary(<Login setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "legal") {
-  return <Legal setPage={setPage} />;
+  return withStartupChrome(<Legal setPage={setPage} />, updateNotice);
 }
 
 if (page === "welcome") {
-  return <Welcome setPage={setPage} />;
+  return withStartupChrome(<Welcome setPage={setPage} />, updateNotice);
 }
 
 if (page === "welcomeIntro") {
-  return <WelcomeIntro setPage={setPage} />;
+  return withStartupChrome(<WelcomeIntro setPage={setPage} />, updateNotice);
 }
 
 if (page === "home") {
-  return withAssistantLayer(withSuspense(<Home setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<Home setPage={setPage} />), page, setPage), updateNotice);
 }
 
 if (page === "myRequests") {
-  return withAssistantLayer(<MyRequests setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<MyRequests setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "assistant") {
-  return withGuideLayer(<Assistant setPage={setPage} />, page, setPage);
+  return withStartupChrome(withGuideLayer(<Assistant setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "discover") {
-  return withAssistantLayer(withSuspense(<Discover setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<Discover setPage={setPage} />), page, setPage), updateNotice);
 }
 
 if (page === "upload") {
-  return withAssistantLayer(withSuspense(<Upload setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<Upload setPage={setPage} />), page, setPage), updateNotice);
 }
 
 
 if (page === "profile") {
-  return withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage), updateNotice);
 }
 
 if (page === "meetroMoments") {
-  return withAssistantLayer(withSuspense(<MeetroMoments setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<MeetroMoments setPage={setPage} />), page, setPage), updateNotice);
 }
 
 if (page === "meetroMomentDetails") {
-  return withAssistantLayer(withSuspense(<MeetroMomentDetails setPage={setPage} />), page, setPage);
+  return withStartupChrome(withAssistantLayer(withSuspense(<MeetroMomentDetails setPage={setPage} />), page, setPage), updateNotice);
 }
 
 if (page === "meetroJourney" || page === "tips" || page === "learn-meetro") {
-  return <MeetroJourney setPage={setPage} />;
+  return withStartupChrome(<MeetroJourney setPage={setPage} />, updateNotice);
 }
 
 if (page === "meetroStory") {
-  return <MeetroStory setPage={setPage} />;
+  return withStartupChrome(<MeetroStory setPage={setPage} />, updateNotice);
 }
 
 if (page === "contractorProfile") {
-  return withRouteBoundary(<ContractorProfile setPage={setPage} />, page, setPage);
+  return withStartupChrome(withRouteBoundary(<ContractorProfile setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "chat") {
-  return <Chat setPage={setPage} />;
+  return withStartupChrome(<Chat setPage={setPage} />, updateNotice);
 }
 
 if (page === "conversation") {
-  return withRouteBoundary(<Conversation setPage={setPage} />, page, setPage);
+  return withStartupChrome(withRouteBoundary(<Conversation setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "projectDetails") {
-  return withAssistantLayer(<ProjectDetails setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<ProjectDetails setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "contractors") {
   safeSetStorageItem("activeDiscoverMode", "businessDirectory");
-  return withSuspense(<Discover setPage={setPage} />);
+  return withStartupChrome(withSuspense(<Discover setPage={setPage} />), updateNotice);
 }
 
 if (page === "contractorDetails") {
-  return <ContractorDetails setPage={setPage} />;
+  return withStartupChrome(<ContractorDetails setPage={setPage} />, updateNotice);
 }
 
 if (page === "quoteRequests") {
-  return withAssistantLayer(<QuoteRequests setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<QuoteRequests setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "conversationThread") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     withSuspense(<ConversationThread setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
  
 if (page === "businessDashboard") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     withSuspense(<BusinessDashboard setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "professionalOnboarding") {
-  return withRouteBoundary(
+  return withStartupChrome(withRouteBoundary(
     withSuspense(<ProfessionalOnboarding setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "businessAnalytics") {
-  return <BusinessAnalytics setPage={setPage} currentPage={page} />;
+  return withStartupChrome(<BusinessAnalytics setPage={setPage} currentPage={page} />, updateNotice);
 }
 
 if (page === "businessLeads") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     withSuspense(<BusinessLeads setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "quoteBuilder") {
-  return withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "changeOrderRequest") {
-  return <ChangeOrderRequest setPage={setPage} />;
+  return withStartupChrome(<ChangeOrderRequest setPage={setPage} />, updateNotice);
 }
 
 if (page === "businessCommandCenter") {
-  return withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage);
+  return withStartupChrome(withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "businessAvailability") {
-  return <BusinessAvailability setPage={setPage} />;
+  return withStartupChrome(<BusinessAvailability setPage={setPage} />, updateNotice);
 }
 
 if (page === "customerRelationshipsCenter") {
-  return <CustomerRelationshipsCenter setPage={setPage} />;
+  return withStartupChrome(<CustomerRelationshipsCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "hiringCenter") {
-  return <HiringCenter setPage={setPage} />;
+  return withStartupChrome(<HiringCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "assetCenter") {
-  return <AssetCenter setPage={setPage} />;
+  return withStartupChrome(<AssetCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "serviceTypesEvaluations") {
-  return <ServiceTypesEvaluations setPage={setPage} />;
+  return withStartupChrome(<ServiceTypesEvaluations setPage={setPage} />, updateNotice);
 }
 
 if (page === "materialsLibrary") {
-  return <MaterialsLibrary setPage={setPage} />;
+  return withStartupChrome(<MaterialsLibrary setPage={setPage} />, updateNotice);
 }
 
 if (page === "pricingLibrary") {
-  return <PricingLibrary setPage={setPage} />;
+  return withStartupChrome(<PricingLibrary setPage={setPage} />, updateNotice);
 }
 
 if (page === "contractTemplates") {
-  return <ContractTemplates setPage={setPage} />;
+  return withStartupChrome(<ContractTemplates setPage={setPage} />, updateNotice);
 }
 
 if (page === "reportsCenter") {
-  return <ReportsCenter setPage={setPage} />;
+  return withStartupChrome(<ReportsCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "permitCenter") {
-  return <PermitCenter setPage={setPage} />;
+  return withStartupChrome(<PermitCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "complianceCenter") {
-  return <ComplianceCenter setPage={setPage} />;
+  return withStartupChrome(<ComplianceCenter setPage={setPage} />, updateNotice);
 }
 
 if (page === "businessIntelligence") {
-  return <BusinessIntelligencePage setPage={setPage} />;
+  return withStartupChrome(<BusinessIntelligencePage setPage={setPage} />, updateNotice);
 }
 
 if (page === "jobsHiring") {
-  return withAssistantLayer(<JobsHiring setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<JobsHiring setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "jobUpdate") {
-  return <JobUpdate setPage={setPage} />;
+  return withStartupChrome(<JobUpdate setPage={setPage} />, updateNotice);
 }
 
 if (page === "projectGallery") {
-  return withAssistantLayer(<ProjectGallery setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<ProjectGallery setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "messagesInbox") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     withSuspense(<MessagesInbox setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "notifications") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     withSuspense(<Notifications setPage={setPage} />),
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "favorites") {
-  return <Favorites setPage={setPage} />;
+  return withStartupChrome(<Favorites setPage={setPage} />, updateNotice);
 }
 
 if (page === "emergency") {
-  return withAssistantLayer(<Emergency setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<Emergency setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "emergencyBusinessSelection") {
-  return <EmergencyBusinessSelection setPage={setPage} />;
+  return withStartupChrome(<EmergencyBusinessSelection setPage={setPage} />, updateNotice);
 }
 
 if (page === "emergencyBusinessSettings") {
-  return <EmergencyBusinessSettings setPage={setPage} />;
+  return withStartupChrome(<EmergencyBusinessSettings setPage={setPage} />, updateNotice);
 }
 
 if (page === "emergencyRequest") {
-  return (
+  return withStartupChrome((
     <EmergencyRequest
       setPage={setPage}
       selectedService={safeGetStorageItem("selectedEmergencyService")}
     />
-  );
+  ), updateNotice);
 }
 
 if (page === "emergencyStatus") {
-  return withAssistantLayer(<EmergencyStatus setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<EmergencyStatus setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "emergencyDispatch") {
-  return <EmergencyDispatch setPage={setPage} />;
+  return withStartupChrome(<EmergencyDispatch setPage={setPage} />, updateNotice);
 }
 
 if (page === "emergencyCompletionActions") {
-  return <EmergencyCompletionActions setPage={setPage} />;
+  return withStartupChrome(<EmergencyCompletionActions setPage={setPage} />, updateNotice);
 }
 
 if (page === "invoiceBuilder") {
-  return withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage);
+  return withStartupChrome(withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "emergencyOperationsCenter") {
-  return withAssistantLayer(
+  return withStartupChrome(withAssistantLayer(
     <EmergencyOperationsCenter setPage={setPage} />,
     page,
     setPage
-  );
+  ), updateNotice);
 }
 
 if (page === "completionSheet") {
-  return withAssistantLayer(<CompletionSheet setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<CompletionSheet setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "emergencyChat") {
-  return <EmergencyChat setPage={setPage} />;
+  return withStartupChrome(<EmergencyChat setPage={setPage} />, updateNotice);
 }
 
 if (page === "emergencyComplete") {
-  return <EmergencyComplete setPage={setPage} />;
+  return withStartupChrome(<EmergencyComplete setPage={setPage} />, updateNotice);
 }
 
 if (page === "contractorDashboard" || page === "workCenter") {
-  return withAssistantLayer(<ContractorDashboard setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<ContractorDashboard setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "completedJobDetails") {
-  return withAssistantLayer(<CompletedJobDetails setPage={setPage} />, page, setPage);
+  return withStartupChrome(withAssistantLayer(<CompletedJobDetails setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "contractorJobAccepted") {
-  return <ContractorJobAccepted setPage={setPage} />;
+  return withStartupChrome(<ContractorJobAccepted setPage={setPage} />, updateNotice);
 }
 
-return withSuspense(<Home setPage={setPage} />);
+return withStartupChrome(withSuspense(<Home setPage={setPage} />), updateNotice);
 }
+
+const updateNoticeWrap = {
+  position: "fixed",
+  left: "max(16px, env(safe-area-inset-left))",
+  right: "max(16px, env(safe-area-inset-right))",
+  bottom: "calc(18px + env(safe-area-inset-bottom))",
+  zIndex: 7000,
+  pointerEvents: "none",
+  display: "flex",
+  justifyContent: "center",
+};
+
+const updateNoticeCard = {
+  width: "min(100%, 560px)",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.16))",
+  borderRadius: "22px",
+  background: "var(--meetro-surface-paper, #fffdf8)",
+  color: "var(--meetro-color-ink, #10231a)",
+  boxShadow: "var(--meetro-shadow-lifted, 0 18px 44px rgba(49,35,20,0.16))",
+  padding: "16px",
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: "14px",
+  alignItems: "center",
+  pointerEvents: "auto",
+};
+
+const updateNoticeTitle = {
+  margin: 0,
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "17px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+  letterSpacing: 0,
+};
+
+const updateNoticeCopy = {
+  margin: "5px 0 0",
+  color: "var(--meetro-color-muted, #64748b)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "750",
+};
+
+const updateNoticeActions = {
+  display: "flex",
+  gap: "8px",
+  alignItems: "center",
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+};
+
+const updateNoticePrimary = {
+  border: "1px solid rgba(255,253,248,0.18)",
+  borderRadius: "999px",
+  background: "var(--meetro-gradient-community-action, #1f4d34)",
+  color: "#fffdf8",
+  padding: "10px 14px",
+  fontSize: "13px",
+  fontWeight: "950",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const updateNoticeSecondary = {
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.16))",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-warm, #f7f1e8)",
+  color: "var(--meetro-color-coffee, #4a3428)",
+  padding: "10px 14px",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
   export default App;
