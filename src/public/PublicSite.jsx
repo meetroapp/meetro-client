@@ -91,7 +91,7 @@ const PUBLIC_COPY = {
       footer: "Human-centered. Relationship-first. Purpose-driven.",
       small: "Guided by Ask Meetro. Powered by Meetro Intelligence.",
     },
-    outcomesHeading: "Meetro Community helps professionals become:",
+    outcomesHeading: "Meetro Community helps professionals:",
     outcomes: [
       ["Build lasting trust.", "Show up prepared and deliver with confidence."],
       ["Stay organized with confidence.", "Manage your work with clarity."],
@@ -191,7 +191,7 @@ const PUBLIC_COPY = {
       footer: "Humano. Primero las relaciones. Con propósito.",
       small: "Guiado por Ask Meetro. Impulsado por Meetro Intelligence.",
     },
-    outcomesHeading: "Meetro Community ayuda a los profesionales a ser:",
+    outcomesHeading: "Meetro Community ayuda a los profesionales:",
     outcomes: [
       ["Más confiables.", "Llegar preparados y entregar con confianza."],
       ["Más organizados.", "Gestionar el trabajo con claridad."],
@@ -291,7 +291,7 @@ const PUBLIC_COPY = {
       footer: "Humano. Relações em primeiro lugar. Com propósito.",
       small: "Guiado por Ask Meetro. Impulsionado por Meetro Intelligence.",
     },
-    outcomesHeading: "A Meetro Community ajuda profissionais a se tornarem:",
+    outcomesHeading: "A Meetro Community ajuda profissionais:",
     outcomes: [
       ["Mais confiáveis.", "Chegar preparados e entregar com confiança."],
       ["Mais organizados.", "Gerenciar o trabalho com clareza."],
@@ -391,7 +391,7 @@ const PUBLIC_COPY = {
       footer: "Humain. Les relations d'abord. Guidé par le sens.",
       small: "Guidé par Ask Meetro. Propulsé par Meetro Intelligence.",
     },
-    outcomesHeading: "Meetro Community aide les professionnels à devenir :",
+    outcomesHeading: "Meetro Community aide les professionnels :",
     outcomes: [
       ["Plus dignes de confiance.", "Arriver préparés et livrer avec confiance."],
       ["Plus organisés.", "Gérer leur travail avec clarté."],
@@ -682,7 +682,6 @@ function PublicLanding({ copy, language, onLanguageChange }) {
 
         <div className="public-hero-content" style={heroContent}>
           <p style={trustBadge}>
-            <span style={badgeDot} aria-hidden="true" />
             {copy.hero.badge}
           </p>
           <h1 style={heroTitle}>
@@ -873,7 +872,6 @@ function PublicDocumentPage({
 
       <section style={documentCard}>
         <p style={trustBadge}>
-          <span style={badgeDot} aria-hidden="true" />
           {copy.hero.badge}
         </p>
         <h1 style={documentTitle}>{title}</h1>
@@ -1039,8 +1037,8 @@ const publicResponsiveStyles = `
   @media (max-width: 480px) {
     .public-hero-section {
       align-content: start !important;
-      min-height: 100svh !important;
-      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+      min-height: auto !important;
+      padding: calc(env(safe-area-inset-top, 0px) + 16px) 18px calc(144px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
     .public-nav {
@@ -1066,8 +1064,30 @@ const publicResponsiveStyles = `
     .public-hero-content {
       margin-left: 0 !important;
       margin-right: auto !important;
-      max-width: min(100%, 337px) !important;
-      padding-top: clamp(14px, 3.2vh, 22px) !important;
+      max-width: min(100%, 352px) !important;
+      padding-top: clamp(22px, 4.5vh, 38px) !important;
+    }
+
+    .public-hero-content h1 {
+      font-size: clamp(38px, 11vw, 50px) !important;
+      line-height: 1.03 !important;
+    }
+
+    .public-hero-content > p:first-child {
+      margin-bottom: 16px !important;
+      max-width: 100% !important;
+    }
+
+    .public-hero-content > p:nth-of-type(2) {
+      margin-top: 18px !important;
+      font-size: clamp(16px, 4.4vw, 18px) !important;
+      line-height: 1.5 !important;
+    }
+
+    .public-hero-content > p:nth-of-type(3) {
+      margin-top: 10px !important;
+      font-size: clamp(14px, 3.9vw, 16px) !important;
+      line-height: 1.48 !important;
     }
 
     .public-hero-actions {
@@ -1075,8 +1095,8 @@ const publicResponsiveStyles = `
       justify-content: flex-start !important;
       flex-wrap: nowrap !important;
       gap: 8px !important;
-      margin-top: 20px !important;
-      max-width: 337px !important;
+      margin-top: 18px !important;
+      max-width: 352px !important;
     }
 
     .public-hero-actions a {
@@ -1088,25 +1108,27 @@ const publicResponsiveStyles = `
 
     .public-hero-lamp-post {
       right: 10px !important;
-      top: 48% !important;
-      height: 330px !important;
-      opacity: 0.58 !important;
+      top: auto !important;
+      bottom: 14px !important;
+      height: 230px !important;
+      opacity: 0.5 !important;
     }
 
     .public-hero-lamp-glow {
       right: -12px !important;
-      top: calc(48% - 42px) !important;
-      opacity: 0.72 !important;
+      top: auto !important;
+      bottom: 194px !important;
+      opacity: 0.6 !important;
     }
   }
 
   @media (max-width: 380px) {
     .public-hero-content {
-      padding-top: 0 !important;
+      padding-top: 18px !important;
     }
 
     .public-hero-content > p:first-child {
-      margin-bottom: 12px !important;
+      margin-bottom: 14px !important;
     }
 
     .public-hero-content > p:nth-of-type(2) {
@@ -1118,7 +1140,7 @@ const publicResponsiveStyles = `
     }
 
     .public-hero-actions {
-      margin-top: 12px !important;
+      margin-top: 14px !important;
     }
   }
 `;
@@ -1351,9 +1373,8 @@ const heroContent = {
 const trustBadge = {
   display: "inline-flex",
   alignItems: "center",
-  gap: "8px",
   margin: "0 0 20px",
-  padding: "9px 14px",
+  padding: "9px 16px",
   border: "1px solid rgba(74,52,40,0.18)",
   borderRadius: "999px",
   background: "rgba(255,253,248,0.72)",
@@ -1361,13 +1382,6 @@ const trustBadge = {
   fontSize: "14px",
   fontWeight: 850,
   backdropFilter: "blur(14px)",
-};
-
-const badgeDot = {
-  width: "8px",
-  height: "8px",
-  borderRadius: "999px",
-  background: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const heroTitle = {
@@ -1554,14 +1568,17 @@ const journeyIcon = {
   width: "68px",
   height: "68px",
   borderRadius: "999px",
-  display: "grid",
-  placeItems: "center",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   margin: "0 auto 8px",
+  boxSizing: "border-box",
   background: "rgba(238,244,234,0.86)",
   border: "1px solid rgba(74,52,40,0.12)",
   color: "var(--meetro-color-wood, #b7791f)",
   fontFamily: serifStack,
   fontSize: "24px",
+  lineHeight: 1,
   fontWeight: 800,
 };
 

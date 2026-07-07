@@ -36,7 +36,11 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /The Journey We Build Together/);
   assert.match(publicSite, /Ask Meetro is your companion throughout Meetro Community/);
   assert.match(publicSite, /Guided by Ask Meetro\. Powered by Meetro Intelligence\./);
-  assert.match(publicSite, /Meetro Community helps professionals become:/);
+  assert.match(publicSite, /Meetro Community helps professionals:/);
+  assert.match(publicSite, /Meetro Community ayuda a los profesionales:/);
+  assert.match(publicSite, /A Meetro Community ajuda profissionais:/);
+  assert.match(publicSite, /Meetro Community aide les professionnels :/);
+  assert.doesNotMatch(publicSite, /outcomesHeading: "Meetro Community helps professionals become:/);
   assert.match(publicSite, /People may arrive looking for help/);
   assert.match(publicSite, /Know someone who would appreciate this vision\?/);
   assert.match(publicSite, /Join the Journey/);
@@ -81,6 +85,7 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /"\/privacy"/);
   assert.match(publicSite, /"\/terms"/);
   assert.match(publicSite, /"\/contact"/);
+  assert.doesNotMatch(publicSite, /badgeDot/);
   assert.match(publicSite, /MEETRO_COMMUNITY_PRIVACY_POLICY\.md\?raw/);
   assert.match(publicSite, /MEETRO_COMMUNITY_TERMS_OF_USE\.md\?raw/);
   assert.match(publicSite, /content=\{PUBLIC_DOCUMENTS\.privacy\.content\}/);
@@ -91,7 +96,12 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.match(publicSite, /public-hero-actions/);
   assert.match(publicSite, /public-hero-lamp-post/);
   assert.match(publicSite, /@media \(max-width: 480px\)/);
-  assert.match(publicSite, /max-width: 337px !important/);
+  assert.match(publicSite, /min-height: auto !important/);
+  assert.match(publicSite, /font-size: clamp\(38px, 11vw, 50px\) !important/);
+  assert.match(publicSite, /max-width: min\(100%, 352px\) !important/);
+  assert.match(publicSite, /alignItems: "center"/);
+  assert.match(publicSite, /justifyContent: "center"/);
+  assert.match(publicSite, /lineHeight: 1/);
   assert.match(publicSite, /@media \(max-width: 380px\)/);
   assert.match(publicSite, /public-language-switcher/);
   assert.doesNotMatch(
