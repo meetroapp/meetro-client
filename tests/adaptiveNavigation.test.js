@@ -22,6 +22,14 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
+const assetCenterSource = readFileSync(
+  new URL("../src/pages/AssetCenter.jsx", import.meta.url),
+  "utf8"
+);
+const customerRelationshipsCenterSource = readFileSync(
+  new URL("../src/pages/CustomerRelationshipsCenter.jsx", import.meta.url),
+  "utf8"
+);
 const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
   "utf8"
@@ -163,6 +171,34 @@ test("desktop sidebar and mobile dock share active state and navigation handlers
   assert.match(bottomNavSource, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(bottomNavSource, /renderNavItem\(item, "sidebar"\)/);
   assert.match(bottomNavSource, /renderNavItem\(item, "bottom"\)/);
+});
+
+test("desktop Property and Relationships actions report their own active page state", () => {
+  const businessDesktopBlock = bottomNavSource.slice(
+    bottomNavSource.indexOf("const businessDesktopNavItems = ["),
+    bottomNavSource.indexOf("useEffect(() => {\n    setKeyboardOpen")
+  );
+
+  assert.match(
+    businessDesktopBlock,
+    /page: "assetCenter"[\s\S]*aliases: \["assetCenter"\][\s\S]*label: "Properties"/
+  );
+  assert.match(
+    businessDesktopBlock,
+    /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: "Relationships"/
+  );
+  assert.match(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="assetCenter" \/>/);
+  assert.match(
+    customerRelationshipsCenterSource,
+    /<BottomNav setPage=\{setPage\} currentPage="customerRelationshipsCenter" \/>/
+  );
+  assert.doesNotMatch(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="businessDashboard" \/>/);
+  assert.doesNotMatch(
+    customerRelationshipsCenterSource,
+    /<BottomNav setPage=\{setPage\} currentPage="businessDashboard" \/>/
+  );
+  assert.match(appSource, /if \(page === "assetCenter"\) \{/);
+  assert.match(appSource, /if \(page === "customerRelationshipsCenter"\) \{/);
 });
 
 test("desktop layout removes BottomNav reservation without changing mobile safe area rules", () => {

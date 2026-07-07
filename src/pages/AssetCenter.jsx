@@ -141,7 +141,7 @@ function AssetCenter({ setPage }) {
         </div>
       </section>
 
-      <BottomNav setPage={setPage} currentPage="businessDashboard" />
+      <BottomNav setPage={setPage} currentPage="assetCenter" />
     </div>
   );
 }

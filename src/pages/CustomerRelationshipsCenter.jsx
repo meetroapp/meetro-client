@@ -126,7 +126,7 @@ function CustomerRelationshipsCenter({ setPage }) {
         </div>
       </section>
 
-      <BottomNav setPage={setPage} currentPage="businessDashboard" />
+      <BottomNav setPage={setPage} currentPage="customerRelationshipsCenter" />
     </div>
   );
 }
