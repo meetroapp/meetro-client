@@ -42,6 +42,7 @@ import {
 } from "../utils/assistantWakeExperience";
 import { getCompanionContext } from "../utils/companionContext";
 import { getConversationParticipantIdentity } from "../utils/conversationIdentity";
+import { readRequestCompanionContext } from "../utils/requestCompanionContext";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
@@ -560,13 +561,23 @@ const actionTargets = {
 };
 
 function getSelectedContext() {
+  const requestDetailContext = readRequestCompanionContext();
+
   return {
-    selectedRequestId: localStorage.getItem("selectedHomeownerRequestId") || "",
+    selectedRequestId:
+      requestDetailContext?.requestId ||
+      localStorage.getItem("selectedHomeownerRequestId") ||
+      "",
+    selectedProjectId: requestDetailContext?.projectId || "",
     selectedJobId:
+      requestDetailContext?.projectId ||
       localStorage.getItem("activeJobId") ||
       localStorage.getItem("activeWorkRequestId") ||
       "",
-    conversationId: localStorage.getItem("activeConversationId") || "",
+    conversationId:
+      requestDetailContext?.conversationId ||
+      localStorage.getItem("activeConversationId") ||
+      "",
     appointmentId:
       localStorage.getItem("activeWorkScheduleId") ||
       localStorage.getItem("selectedScheduleId") ||
@@ -973,6 +984,39 @@ function getServiceRequestContext(currentPage, roleMode, language) {
     return { active: false };
   }
 
+  const requestDetailContext = readRequestCompanionContext();
+  if (
+    requestDetailContext &&
+    requestDetailContext.pageContext === "request_detail" &&
+    ["projectDetails", "myRequests"].includes(String(currentPage || ""))
+  ) {
+    return {
+      active: true,
+      pageContext: "request_detail",
+      request: null,
+      requestId: String(requestDetailContext.requestId || ""),
+      projectId: String(requestDetailContext.projectId || ""),
+      conversationId: String(requestDetailContext.conversationId || ""),
+      title: requestDetailContext.title || requestDetailContext.serviceType || "Service Request",
+      status: String(requestDetailContext.status || "visible").toLowerCase(),
+      statusLabel: requestDetailContext.status || "",
+      nextStep: requestDetailContext.nextStep || "",
+      serviceType: requestDetailContext.serviceType || "",
+      rolePerspective: requestDetailContext.rolePerspective || roleMode,
+      quoteStatus: requestDetailContext.quoteStatus || "",
+      scheduleStatus: requestDetailContext.scheduleStatus || "",
+      photoCount: 0,
+      appointment: null,
+      appointmentStatus: requestDetailContext.scheduleStatus || "",
+      quote: requestDetailContext.quoteStatus
+        ? { status: requestDetailContext.quoteStatus }
+        : null,
+      professionalName: "",
+      unreadCount: getUnreadConversationCount(),
+      source: "request_detail_context",
+    };
+  }
+
   const request =
     roleMode === "business"
       ? getProfessionalRequestContext()
@@ -1157,6 +1201,7 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
   const isSpanish = language === "es";
   const hasAppointment = Boolean(context.appointment);
   const hasQuote = Boolean(context.quote);
+  const isRequestDetailContext = context.pageContext === "request_detail";
   const isCompleted = /completed|complete|done|finalizado|completado/.test(context.status);
   const isWaiting =
     /open|new|submitted|requested|pending|review|waiting|solicitado|pendiente/.test(
@@ -1170,6 +1215,32 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
   const asksNext = /(next|what should|what happens|siguiente|despu[eé]s|hacer)/.test(text);
 
   if (roleMode === "business") {
+    if (isRequestDetailContext) {
+      const visibleSummary = [
+        context.statusLabel && `${isSpanish ? "Estado" : "Status"}: ${context.statusLabel}`,
+        context.nextStep && `${isSpanish ? "Siguiente paso" : "Next step"}: ${context.nextStep}`,
+        context.serviceType && `${isSpanish ? "Servicio" : "Service"}: ${context.serviceType}`,
+        context.quoteStatus && `${isSpanish ? "Propuesta" : "Proposal"}: ${context.quoteStatus}`,
+        context.scheduleStatus && `${isSpanish ? "Visita" : "Visit"}: ${context.scheduleStatus}`,
+      ].filter(Boolean);
+
+      return makeResponse(
+        "professional_request_detail_context",
+        visibleSummary.length > 0
+          ? isSpanish
+            ? `Puedo ayudarte a avanzar este trabajo con lo visible aquí. ${visibleSummary.join(". ")}.`
+            : `I can help you move this job forward using what is visible here. ${visibleSummary.join(". ")}.`
+          : isSpanish
+          ? "Puedo ayudarte con este trabajo, pero no veo detalles verificados suficientes para afirmar el siguiente paso."
+          : "I can help with this job, but I do not see enough verified visible detail to claim the next step.",
+        [
+          makeRequestAssistantAction("contactCustomer", language, context),
+          makeRequestAssistantAction("reviewDetails", language, context),
+        ],
+        visibleSummary.length > 0
+      );
+    }
+
     if (/(quote|cotiz|propuesta)/.test(text)) {
       return makeResponse(
         "request_create_quote",
@@ -1206,6 +1277,32 @@ function getServiceRequestGuidanceResponse(question, roleMode, language, current
         makeRequestAssistantAction("scheduleEvaluation", language, context),
         makeRequestAssistantAction("createQuote", language, context),
       ]
+    );
+  }
+
+  if (isRequestDetailContext) {
+    const visibleSummary = [
+      context.statusLabel && `${isSpanish ? "Estado" : "Status"}: ${context.statusLabel}`,
+      context.nextStep && `${isSpanish ? "Siguiente paso" : "Next step"}: ${context.nextStep}`,
+      context.serviceType && `${isSpanish ? "Servicio" : "Service"}: ${context.serviceType}`,
+      context.quoteStatus && `${isSpanish ? "Cotización" : "Quote"}: ${context.quoteStatus}`,
+      context.scheduleStatus && `${isSpanish ? "Visita" : "Visit"}: ${context.scheduleStatus}`,
+    ].filter(Boolean);
+
+    return makeResponse(
+      "homeowner_request_detail_context",
+      visibleSummary.length > 0
+        ? isSpanish
+          ? `Puedo ayudarte a entender dónde está esta solicitud. ${visibleSummary.join(". ")}.`
+          : `I can help you understand where this request stands. ${visibleSummary.join(". ")}.`
+        : isSpanish
+        ? "Puedo ayudarte con esta solicitud, pero no veo detalles verificados suficientes para afirmar el siguiente paso."
+        : "I can help with this request, but I do not see enough verified visible detail to claim the next step.",
+      [
+        makeRequestAssistantAction("openConversation", language, context),
+        makeRequestAssistantAction("backToRequests", language, context),
+      ],
+      visibleSummary.length > 0
     );
   }
 
@@ -2880,6 +2977,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         ? response.actions.map((action) => action.label || action.target || action.action)
         : [],
       requestId: context.selectedRequestId,
+      projectId: context.selectedProjectId,
       conversationId: context.conversationId,
       appointmentId: context.appointmentId,
       quoteId: context.quoteId,

@@ -18,6 +18,11 @@ import {
   getConversationOriginContext,
   restoreConversationOriginContext,
 } from "../utils/conversationOrigin";
+import {
+  buildRequestCompanionContext,
+  clearRequestCompanionContext,
+  writeRequestCompanionContext,
+} from "../utils/requestCompanionContext";
 
 function ProjectDetails({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -277,6 +282,34 @@ if (data.post) {
 
     fetchPost();
   }, []);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
+    if (!post) {
+      clearRequestCompanionContext();
+      return undefined;
+    }
+
+    const safeNextStep = isBusinessLeadReviewPage
+      ? t("opportunityNextStep", language)
+      : isProfessionalProject
+      ? t("projectReviewWorkCenterNote", language)
+      : getHomeownerProjectJourney(post, language).nextStep;
+    const context = buildRequestCompanionContext({
+      request: post,
+      rolePerspective:
+        isProfessionalProject || isBusinessLeadReviewPage ? "professional" : "homeowner",
+      nextStep: safeNextStep,
+      pageContext: "request_detail",
+    });
+
+    writeRequestCompanionContext(context);
+
+    return () => {
+      clearRequestCompanionContext();
+    };
+  }, [loading, post, language, isBusinessLeadReviewPage, isProfessionalProject]);
 
   return (
     <div className="app-page meetro-readable-page" style={pageWrapper}>

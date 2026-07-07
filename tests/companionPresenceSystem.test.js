@@ -16,6 +16,10 @@ const companionContextSource = fs.readFileSync(
   new URL("../src/utils/companionContext.js", import.meta.url),
   "utf8"
 );
+const projectDetailsSource = fs.readFileSync(
+  new URL("../src/pages/ProjectDetails.jsx", import.meta.url),
+  "utf8"
+);
 const docsPath = path.join(
   "docs",
   "KnowledgeBase",
@@ -99,6 +103,21 @@ test("Companion presence language is localized", () => {
     assert.notEqual(t("assistantCompanionSend", language), "assistantCompanionSend");
     assert.notEqual(t("assistantResponding", language), "assistantResponding");
   });
+});
+
+test("Companion receives request detail context from Project Details", () => {
+  assert.match(projectDetailsSource, /buildRequestCompanionContext/);
+  assert.match(projectDetailsSource, /writeRequestCompanionContext\(context\)/);
+  assert.match(projectDetailsSource, /clearRequestCompanionContext\(\)/);
+  assert.match(projectDetailsSource, /pageContext: "request_detail"/);
+  assert.match(projectDetailsSource, /request: post/);
+  assert.match(projectDetailsSource, /rolePerspective:[\s\S]*"professional"[\s\S]*"homeowner"/);
+  assert.match(assistantSource, /readRequestCompanionContext/);
+  assert.match(assistantSource, /pageContext: "request_detail"/);
+  assert.match(assistantSource, /professional_request_detail_context/);
+  assert.match(assistantSource, /homeowner_request_detail_context/);
+  assert.match(assistantSource, /selectedProjectId: requestDetailContext\?\.projectId/);
+  assert.match(companionContextSource, /readRequestCompanionContext/);
 });
 
 test("Companion Presence knowledge base records the law", () => {

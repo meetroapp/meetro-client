@@ -1,4 +1,5 @@
 import { t } from "./language.js";
+import { readRequestCompanionContext } from "./requestCompanionContext.js";
 
 function hasText(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -304,6 +305,7 @@ const SURFACE_PROFILES = Object.freeze({
 });
 
 function buildStorageContext(storage) {
+  const requestCompanionContext = readRequestCompanionContext(storage);
   const contractorProfile =
     readStorageRecord(storage, "contractorProfile") ||
     readStorageRecord(storage, "businessProfile") ||
@@ -315,11 +317,13 @@ function buildStorageContext(storage) {
     readStorageValue(storage, "activeThreadId")
   );
   const activeRequestId = firstText(
+    requestCompanionContext?.requestId,
     readStorageValue(storage, "selectedHomeownerRequestId"),
     readStorageValue(storage, "activeEmergencyRequestId"),
     readStorageValue(storage, "activeRequestId")
   );
   const activeWorkId = firstText(
+    requestCompanionContext?.projectId,
     readStorageValue(storage, "activeJobId"),
     readStorageValue(storage, "activeWorkRequestId"),
     readStorageValue(storage, "activeVisitId")
@@ -342,12 +346,23 @@ function buildStorageContext(storage) {
     }),
     request: normalizeEntity({
       id: activeRequestId,
-      status: firstText(readStorageValue(storage, "activeRequestStatus")),
+      status: firstText(
+        requestCompanionContext?.status,
+        readStorageValue(storage, "activeRequestStatus")
+      ),
+      name: firstText(requestCompanionContext?.title, requestCompanionContext?.serviceType),
+      nextAction: firstText(requestCompanionContext?.nextStep),
+      type: firstText(requestCompanionContext?.serviceType),
     }),
     work: normalizeEntity({
       id: activeWorkId,
-      type: workSection,
-      status: firstText(readStorageValue(storage, "activeWorkStatus")),
+      type: firstText(requestCompanionContext?.serviceType, workSection),
+      status: firstText(
+        requestCompanionContext?.status,
+        readStorageValue(storage, "activeWorkStatus")
+      ),
+      name: firstText(requestCompanionContext?.title, requestCompanionContext?.serviceType),
+      nextAction: firstText(requestCompanionContext?.nextStep),
     }),
     relationship: normalizeEntity({
       id: firstText(readStorageValue(storage, "activeRelationshipId")),
