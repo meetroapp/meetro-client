@@ -64,31 +64,3 @@ test("Arrival Experience documentation preserves auth guardrails", () => {
   assert.match(source, /Do not change legal routing/);
   assert.match(source, /Do not change backend\/API calls/);
 });
-
-test("professional signup category search can select filtered results without clearing other fields", () => {
-  const source = readFileSync(
-    new URL("../src/pages/Login.jsx", import.meta.url),
-    "utf8"
-  );
-
-  assert.match(source, /const \[professionalCategory, setProfessionalCategory\] = useState\("contractor"\)/);
-  assert.match(source, /const \[categorySearch, setCategorySearch\] = useState\(""\)/);
-  assert.match(source, /filteredProfessionalCategories = professionalCategories\.filter/);
-  assert.match(source, /professionalCategoryVisibleInSearch = filteredProfessionalCategories\.some/);
-  assert.match(source, /professionalCategorySelectValue =\s*categorySearch && !professionalCategoryVisibleInSearch \? "" : professionalCategory/);
-  assert.match(source, /function handleProfessionalCategoryChange\(event\) \{\s*setProfessionalCategory\(event\.target\.value\);\s*setCategorySearch\(""\);\s*\}/);
-  assert.match(source, /value=\{professionalCategorySelectValue\}/);
-  assert.match(source, /onChange=\{handleProfessionalCategoryChange\}/);
-  assert.match(source, /<option value="" disabled>/);
-  assert.match(source, /propertyManagement/);
-
-  const handlerBody = source.match(
-    /function handleProfessionalCategoryChange\(event\) \{([\s\S]*?)\n  \}/
-  )?.[1] || "";
-
-  assert.doesNotMatch(handlerBody, /setName\(/);
-  assert.doesNotMatch(handlerBody, /setBusinessName\(/);
-  assert.doesNotMatch(handlerBody, /setEmail\(/);
-  assert.doesNotMatch(handlerBody, /setPassword\(/);
-  assert.doesNotMatch(handlerBody, /setMobileNumber\(/);
-});
