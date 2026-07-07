@@ -55,6 +55,21 @@ test("Business Profile is treated as a professional route", () => {
   assert.match(sessionSource, /"contractorProfile"/);
 });
 
+test("startup repairs authenticated professional route state before redirecting home", () => {
+  const appSource = fs.readFileSync("src/App.jsx", "utf8");
+  const sessionSource = fs.readFileSync("src/utils/session.js", "utf8");
+
+  assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(targetPage\)/);
+  assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(routedHash\)/);
+  assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(hashPage\)/);
+  assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(currentHash\)/);
+  assert.doesNotMatch(
+    appSource,
+    /isProfessionalOnlyPage\(targetPage\)[\s\S]{0,160}activeAccountMode[\s\S]{0,80}return "home"/
+  );
+  assert.match(sessionSource, /function restoreAuthenticatedSessionFromStorage/);
+});
+
 test("startup avoids importing high-risk route modules eagerly", () => {
   const appSource = fs.readFileSync("src/App.jsx", "utf8");
 

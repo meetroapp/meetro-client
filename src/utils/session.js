@@ -337,6 +337,73 @@ export function getAccountModeForPage(page = "", fallbackMode = "personal") {
   return fallbackMode === "business" ? "business" : "personal";
 }
 
+export function restoreAuthenticatedSessionFromStorage(targetPage = "") {
+  if (typeof localStorage === "undefined") {
+    return { authenticated: false, repaired: false, isProfessional: false };
+  }
+
+  const token = localStorage.getItem("token") || "";
+  if (!token) {
+    return { authenticated: false, repaired: false, isProfessional: false };
+  }
+
+  const user = safeReadStoredUser();
+  const ownsBusinessProfile = hasBusinessProfileOwnership(user);
+  const isProfessional = isProfessionalSession() || ownsBusinessProfile;
+  let repaired = false;
+
+  if (isProfessional && localStorage.getItem("isProfessional") !== "true") {
+    localStorage.setItem("isProfessional", "true");
+    repaired = true;
+  }
+
+  if (ownsBusinessProfile && localStorage.getItem("hasBusinessProfile") !== "true") {
+    localStorage.setItem("hasBusinessProfile", "true");
+    repaired = true;
+  }
+
+  if (ownsBusinessProfile && localStorage.getItem("contractorProfileComplete") !== "true") {
+    localStorage.setItem("contractorProfileComplete", "true");
+    repaired = true;
+  }
+
+  if (!localStorage.getItem("userEmail") && user.email) {
+    localStorage.setItem("userEmail", user.email);
+    repaired = true;
+  }
+
+  if (!localStorage.getItem("userId") && user.id) {
+    localStorage.setItem("userId", user.id);
+    repaired = true;
+  }
+
+  if (!localStorage.getItem("userName") && (user.username || user.name)) {
+    localStorage.setItem("userName", user.username || user.name);
+    repaired = true;
+  }
+
+  const shouldUseBusinessMode = isProfessional && businessModePages.has(targetPage);
+
+  if (shouldUseBusinessMode && localStorage.getItem("activeAccountMode") !== "business") {
+    localStorage.setItem("activeAccountMode", "business");
+    localStorage.setItem("accountType", "professional");
+    localStorage.setItem(
+      "userRole",
+      localStorage.getItem("businessCategory") ||
+        user.business_category ||
+        user.businessCategory ||
+        user.role ||
+        "professional"
+    );
+    repaired = true;
+  } else if (!localStorage.getItem("activeAccountMode")) {
+    localStorage.setItem("activeAccountMode", isProfessional ? "business" : "personal");
+    repaired = true;
+  }
+
+  return { authenticated: true, repaired, isProfessional };
+}
+
 export function getDashboardPageForAccountMode(mode) {
   const activeMode =
     mode || localStorage.getItem("activeAccountMode") || "personal";

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
   isProfessionalSession,
+  restoreAuthenticatedSessionFromStorage,
   syncAccountModeForPage,
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
@@ -296,6 +297,7 @@ function App() {
     }
 
     const hasToken = safeGetStorageItem("token");
+    const restoredSession = restoreAuthenticatedSessionFromStorage(targetPage);
 
     if (isProfessionalOnlyPage(targetPage) && !hasToken) {
       return "login";
@@ -303,12 +305,9 @@ function App() {
 
     if (
       isProfessionalOnlyPage(targetPage) &&
-      (safeGetStorageItem("activeAccountMode", "personal") || "personal") === "personal"
+      !restoredSession.isProfessional &&
+      !isProfessionalSession()
     ) {
-      return "home";
-    }
-
-    if (isProfessionalOnlyPage(targetPage) && !isProfessionalSession()) {
       return "home";
     }
 
@@ -385,6 +384,8 @@ function App() {
       return "login";
     }
 
+    restoreAuthenticatedSessionFromStorage(routedHash);
+
     const onboardingComplete =
       safeGetStorageItem("onboardingComplete");
 
@@ -427,6 +428,12 @@ function App() {
         activeMode === "personal" &&
         isProfessionalOnlyPage(page)
       ) {
+        const restoredSession = restoreAuthenticatedSessionFromStorage(page);
+        if (restoredSession.isProfessional) {
+          syncAccountModeForPage(page);
+          return;
+        }
+
         window.location.hash = "home";
         setPageState("home");
       }
@@ -508,6 +515,8 @@ function App() {
         return;
       }
 
+      restoreAuthenticatedSessionFromStorage(hashPage);
+
 	      if (hashPage) {
 	        const guardedPage = getGuardedPage(hashPage);
 	        if (hashRoute === hashPage) {
@@ -548,6 +557,8 @@ function App() {
         setPageState("login");
         return;
       }
+
+      restoreAuthenticatedSessionFromStorage(currentHash);
 
 	      if (currentHash) {
 	        const guardedPage = getGuardedPage(currentHash);

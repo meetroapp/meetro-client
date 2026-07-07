@@ -5,6 +5,7 @@ import {
   getDashboardPageForAccountMode,
   hasBusinessProfileOwnership,
   isProfessionalSession,
+  restoreAuthenticatedSessionFromStorage,
   saveMeetroSession,
   setActiveAccountMode,
   syncAccountModeForPage,
@@ -93,6 +94,66 @@ test("business profile ownership stays separate from current personal mode", () 
   assert.equal(isProfessionalSession(), true);
   assert.equal(setActiveAccountMode("business"), true);
   assert.equal(localStorage.getItem("activeAccountMode"), "business");
+});
+
+test("authenticated professional session repairs business route mode after reload", () => {
+  installStorage();
+  localStorage.setItem("token", "token-123");
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      id: "user-1",
+      email: "william@example.com",
+      role: "homeowner",
+      account_type: "homeowner",
+    })
+  );
+  localStorage.setItem("activeAccountMode", "personal");
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem("userRole", "homeowner");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({
+      id: "business-1",
+      business_name: "Bgone Home Renovation",
+      category: "handyman",
+    })
+  );
+
+  const restored = restoreAuthenticatedSessionFromStorage("businessDashboard");
+
+  assert.equal(restored.authenticated, true);
+  assert.equal(restored.repaired, true);
+  assert.equal(restored.isProfessional, true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "business");
+  assert.equal(localStorage.getItem("accountType"), "professional");
+  assert.equal(localStorage.getItem("isProfessional"), "true");
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "true");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "true");
+  assert.equal(isProfessionalSession(), true);
+});
+
+test("session repair preserves personal mode on personal routes", () => {
+  installStorage();
+  localStorage.setItem("token", "token-123");
+  localStorage.setItem("activeAccountMode", "personal");
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({
+      id: "business-1",
+      business_name: "Bgone Home Renovation",
+      category: "handyman",
+    })
+  );
+
+  const restored = restoreAuthenticatedSessionFromStorage("home");
+
+  assert.equal(restored.authenticated, true);
+  assert.equal(restored.isProfessional, true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "personal");
+  assert.equal(localStorage.getItem("accountType"), "homeowner");
+  assert.equal(localStorage.getItem("isProfessional"), "true");
 });
 
 test("Discover preserves business account mode for professional users", () => {
