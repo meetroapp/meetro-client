@@ -109,8 +109,9 @@ export function getNotificationRoute(notification = {}, activeAccountMode = "per
 
   if (category === "hiring") {
     return {
-      page: activeAccountMode === "business" ? "hiringCenter" : "jobsHiring",
+      page: activeAccountMode === "business" ? "messagesInbox" : "jobsHiring",
       context: {
+        meetroMessageSection: activeAccountMode === "business" ? "hiring" : "",
         selectedHiringPositionId: notification.positionId || metadata.positionId || "",
         selectedHiringApplicantId: notification.applicantId || metadata.applicantId || "",
       },

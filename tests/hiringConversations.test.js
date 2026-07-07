@@ -107,6 +107,52 @@ test("saveHiringConversation writes registry, active conversation, meta, and sta
   assert.equal(messages[0].workflowType, "hiring_context");
 });
 
+test("saveHiringConversation reopens an existing applicant position thread without duplicating messages", () => {
+  const storage = createMemoryStorage();
+
+  const firstRecord = saveHiringConversation(
+    {
+      type: "hiring",
+      userId: "sarah@example.com",
+      applicantId: "sarah@example.com",
+      applicantName: "Sarah Applicant",
+      positionId: "field-handyman-helper",
+      positionTitle: "Field Handyman Helper",
+      businessName: "Bgone Home Renovation & Handyman Services",
+      source: "community_hiring",
+      lastMessage: "Sarah Applicant is interested in Field Handyman Helper.",
+    },
+    storage
+  );
+  const firstMessages = JSON.parse(
+    storage.getItem(`meetro_conversation_${firstRecord.id}`)
+  );
+
+  const reopenedRecord = saveHiringConversation(
+    {
+      type: "hiring",
+      userId: "sarah@example.com",
+      applicantId: "sarah@example.com",
+      applicantName: "Sarah Applicant",
+      positionId: "field-handyman-helper",
+      positionTitle: "Field Handyman Helper",
+      businessName: "Bgone Home Renovation & Handyman Services",
+      source: "community_hiring",
+      lastMessage: "Sarah Applicant is interested in Field Handyman Helper.",
+    },
+    storage
+  );
+  const registry = JSON.parse(storage.getItem("meetro_conversation_registry"));
+  const reopenedMessages = JSON.parse(
+    storage.getItem(`meetro_conversation_${reopenedRecord.id}`)
+  );
+
+  assert.equal(reopenedRecord.id, firstRecord.id);
+  assert.equal(registry.filter((item) => item.id === firstRecord.id).length, 1);
+  assert.equal(reopenedMessages.length, firstMessages.length);
+  assert.equal(storage.getItem("activeConversationId"), firstRecord.id);
+});
+
 test("hiring conversations reject work scheduling workflow cards", () => {
   const scheduleMessage = {
     id: "schedule-msg-1",

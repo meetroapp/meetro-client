@@ -37,7 +37,12 @@ test("notification routes open the existing destination for each workflow type",
   );
   assert.equal(
     getNotificationRoute({ type: "hiring_application" }, "business").page,
-    "hiringCenter"
+    "messagesInbox"
+  );
+  assert.equal(
+    getNotificationRoute({ type: "hiring_application" }, "business").context
+      .meetroMessageSection,
+    "hiring"
   );
   assert.equal(
     getNotificationRoute({ type: "review_reminder", requestId: "req-1" }).page,

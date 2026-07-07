@@ -8,6 +8,7 @@ import {
 import { saveHiringConversation } from "../utils/hiringConversations";
 import { getLocalizedHiringJobDisplay } from "../utils/hiringDisplayTranslations";
 import { getLanguage, t } from "../utils/language";
+import { createNotification } from "../utils/meetroNotifications";
 
 const distanceOptions = ["Any distance", "10 miles", "15 miles", "25 miles", "50 miles"];
 const employmentOptions = ["Any type", "Full Time", "Part Time", "Contract", "Seasonal"];
@@ -115,23 +116,54 @@ function JobsHiring({ setPage, language }) {
   };
 
   const messageBusiness = (job) => {
-    saveHiringConversation({
+    const applicantId =
+      localStorage.getItem("userId") ||
+      localStorage.getItem("userEmail") ||
+      localStorage.getItem("homeownerEmail") ||
+      localStorage.getItem("userName") ||
+      "guest";
+    const participantName =
+      localStorage.getItem("userName") ||
+      localStorage.getItem("homeownerName") ||
+      label("jobsHiringJobSeeker");
+    const selectedJobDisplay = getLocalizedHiringJobDisplay(job, activeLanguage);
+    const positionTitle = selectedJobDisplay.title || job.title;
+    const interestMessage = label("communityHiringInterestStarted")
+      .replace("{applicant}", participantName)
+      .replace("{title}", positionTitle);
+    const record = saveHiringConversation({
       type: "hiring",
+      userId: applicantId,
+      applicantId,
+      applicantName: participantName,
       jobId: job.id,
       positionId: job.sourcePositionId || job.id,
-      positionTitle: job.title,
+      positionTitle,
       businessId: job.businessId || job.businessName,
       businessName: job.businessName,
-      participantName:
-        localStorage.getItem("userName") ||
-        localStorage.getItem("homeownerName") ||
-        label("jobsHiringJobSeeker"),
+      participantName,
       participantRole: "applicant",
       source: "jobs_hiring",
       status: label("jobsHiringNewInquiry"),
       location: job.location || job.serviceArea || label("jobsHiringLabel"),
       returnPage: "jobsHiring",
-      lastMessage: label("jobsHiringInquiryStarted").replace("{title}", job.title),
+      lastMessage: interestMessage,
+    });
+
+    createNotification({
+      type: "hiring_application",
+      role: "professional",
+      title: label("communityHiringNotificationTitle"),
+      message: interestMessage,
+      conversationId: record.id,
+      dedupeKey: `jobs_hiring_interest_${record.id}`,
+      metadata: {
+        conversationType: record.conversation_type,
+        positionId: record.positionId,
+        positionTitle: record.positionTitle,
+        applicantId: record.applicantId,
+        businessId: record.businessId,
+      },
     });
     setPage("conversationThread");
   };
@@ -188,7 +220,7 @@ function JobsHiring({ setPage, language }) {
               type="button"
               className="meetro-visual-primary-button"
               style={primaryButton}
-              onClick={() => openApplicationSheet(selectedJob)}
+              onClick={() => messageBusiness(selectedJob)}
             >
               {label("jobsHiringApply")}
             </button>

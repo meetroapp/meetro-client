@@ -247,7 +247,11 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /copy: t\(copyKey, language\)/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
-  assert.match(discoverSource, /discoverMode === "communityHub" && renderCommunityHub\(\)/);
+  assert.match(discoverSource, /discoverMode === "communityHub"/);
+  assert.match(discoverSource, /selectedCommunityHiringJob/);
+  assert.match(discoverSource, /renderCommunityHiringOpportunityDetails\(\)/);
+  assert.match(discoverSource, /renderCommunityHub\(\)/);
+  assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
 });
 
 test("Businesses preview reuses existing business cards and full Businesses page remains unchanged", () => {
@@ -269,18 +273,61 @@ test("Businesses preview reuses existing business cards and full Businesses page
     discoverSource,
     /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/
   );
-  assert.match(discoverSource, /discoverMode === "communityHub" && renderCommunityHub\(\)/);
+  assert.match(discoverSource, /selectedCommunityHiringJob/);
+  assert.match(discoverSource, /renderCommunityHiringOpportunityDetails\(\)/);
+  assert.match(discoverSource, /renderCommunityHub\(\)/);
 });
 
-test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
+test("Hiring cards are actionable and open Community opportunity details", () => {
   assert.match(discoverSource, /const allHiringJobs = getHiringLocalJobOpenings\(\)/);
   assert.match(discoverSource, /communityHiringResults = orderByDiscoveryInterests/);
   assert.match(discoverSource, /hiringPreviewJobs = communityHiringResults\.slice/);
   assert.match(discoverSource, /COMMUNITY_PREVIEW_LIMIT/);
-  assert.match(discoverSource, /COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT/);
-  assert.match(discoverSource, /communitySpotlightStories\.map/);
   assert.match(discoverSource, /const renderHiringPreviewCard = \(job\) =>/);
   assert.match(discoverSource, /getLocalizedHiringJobDisplay\(job, language\)/);
+  assert.match(discoverSource, /role="button"/);
+  assert.match(discoverSource, /tabIndex=\{0\}/);
+  assert.match(discoverSource, /setSelectedCommunityHiringJob\(job\)/);
+  assert.match(discoverSource, /t\("communityHiringOpenOpportunityAria", language\)/);
+  assert.match(discoverSource, /t\("communityHiringViewOpportunity", language\)/);
+  assert.match(discoverSource, /const renderCommunityHiringOpportunityDetails = \(\) =>/);
+  assert.match(discoverSource, /t\("communityHiringOpportunityEyebrow", language\)/);
+  assert.match(discoverSource, /t\("jobsHiringEmploymentType", language\)/);
+  assert.match(discoverSource, /t\("jobsHiringPayRange", language\)/);
+  assert.match(discoverSource, /t\("jobsHiringLocation", language\)/);
+  assert.match(discoverSource, /t\("jobsHiringRequirements", language\)/);
+  assert.match(discoverSource, /t\("communityHiringInterested", language\)/);
+  assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
+  assert.equal(t("communityHiringViewOpportunity", "en"), "View Opportunity");
+  assert.equal(t("communityHiringInterested", "en"), "I'm Interested");
+  assert.equal(t("communityHiringOpportunityEyebrow", "en"), "Hiring Opportunity");
+});
+
+test("Community hiring interest creates a Hiring conversation and notification", () => {
+  assert.match(discoverSource, /import \{ saveHiringConversation \} from "\.\.\/utils\/hiringConversations"/);
+  assert.match(discoverSource, /import \{ createNotification \} from "\.\.\/utils\/meetroNotifications"/);
+  assert.match(discoverSource, /function expressHiringInterest\(job\)/);
+  assert.match(discoverSource, /type: "hiring"/);
+  assert.match(discoverSource, /source: "community_hiring"/);
+  assert.match(discoverSource, /userId: applicant\.userId/);
+  assert.match(discoverSource, /applicantId: applicant\.applicantId/);
+  assert.match(discoverSource, /positionId: job\.sourcePositionId \|\| job\.id/);
+  assert.match(discoverSource, /lastMessage: interestMessage/);
+  assert.match(discoverSource, /type: "hiring_application"/);
+  assert.match(discoverSource, /role: "professional"/);
+  assert.match(discoverSource, /conversationId: record\.id/);
+  assert.match(discoverSource, /dedupeKey: `community_hiring_interest_\$\{record\.id\}`/);
+  assert.match(discoverSource, /setPage\("conversationThread"\)/);
+  assert.equal(
+    t("communityHiringInterestStarted", "en"),
+    "{applicant} is interested in {title}."
+  );
+  assert.equal(t("communityHiringNotificationTitle", "en"), "New hiring interest");
+});
+
+test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
+  assert.match(discoverSource, /COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT/);
+  assert.match(discoverSource, /communitySpotlightStories\.map/);
   assert.match(discoverSource, /t\("communityHiringEmptyTitle", language\)/);
   assert.match(discoverSource, /t\("communityHiringEmptyText", language\)/);
   assert.equal(t("communityHiringEmptyTitle", "en"), "Hiring opportunities will appear here.");

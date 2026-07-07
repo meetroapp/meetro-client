@@ -28,6 +28,15 @@ const requiredJobsHiringKeys = [
   "jobsHiringCategoryPainting",
   "jobsHiringCategoryDrywall",
   "jobsHiringCategoryCleaning",
+  "communityHiringViewOpportunity",
+  "communityHiringInterested",
+  "communityHiringBackToCommunity",
+  "communityHiringOpportunityEyebrow",
+  "communityHiringOpportunityDetailsAria",
+  "communityHiringOpenOpportunityAria",
+  "communityHiringCapabilityArea",
+  "communityHiringInterestStarted",
+  "communityHiringNotificationTitle",
 ];
 
 test("Jobs & Hiring UI labels resolve for all supported app languages", () => {
@@ -41,7 +50,11 @@ test("Jobs & Hiring UI labels resolve for all supported app languages", () => {
 });
 
 test("Jobs & Hiring visible labels are localized outside English", () => {
+  assert.equal(t("jobsHiringApply", "en"), "I'm Interested");
   assert.equal(t("jobsHiringPayRange", "es"), "Rango de pago");
+  assert.equal(t("communityHiringInterested", "es"), "Me interesa");
   assert.equal(t("jobsHiringFeaturedTitle", "fr"), "Offres locales en vedette");
+  assert.equal(t("communityHiringNotificationTitle", "fr"), "Nouvel intérêt de recrutement");
   assert.equal(t("jobsHiringEmploymentPartTime", "pt-BR"), "Meio período");
+  assert.equal(t("communityHiringCapabilityArea", "pt-BR"), "Área de capacidade");
 });

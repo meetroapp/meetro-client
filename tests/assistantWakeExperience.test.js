@@ -446,6 +446,25 @@ test("companion state styles keep guidance compact and conversation scrollable",
   assert.match(assistantSource, /overflowY: "auto"/);
 });
 
+test("expanded companion cards stay inside viewport without page scrolling", () => {
+  assert.match(assistantSource, /ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN/);
+  assert.match(assistantSource, /ASSISTANT_EXPANDED_CARD_GAP/);
+  assert.match(assistantSource, /function getEstimatedCompanionExpandedHeight/);
+  assert.match(assistantSource, /function getCompanionAnchorMetrics/);
+  assert.match(assistantSource, /visibleTop/);
+  assert.match(assistantSource, /visibleBottom/);
+  assert.match(assistantSource, /launcherAdjustmentY/);
+  assert.match(assistantSource, /positionAdjustmentRequired/);
+  assert.match(assistantSource, /function ensureExpandedCompanionViewportSafety/);
+  assert.match(assistantSource, /ensureExpandedCompanionViewportSafety\(nextCompanionMode\)/);
+  assert.match(assistantSource, /ensureExpandedCompanionViewportSafety\(COMPANION_STATES\.conversation\)/);
+  assert.match(assistantSource, /function adjustAssistantPositionForMeasuredSheet/);
+  assert.match(assistantSource, /requestAnimationFrame\(\(\) => \{\s*adjustAssistantPositionForMeasuredSheet\(\);/);
+  assert.match(assistantSource, /writeStoredAiButtonPosition\(position/);
+  assert.match(assistantSource, /transition: "left 160ms ease, top 160ms ease, transform 160ms ease"/);
+  assert.doesNotMatch(assistantSource, /window\.scrollTo|document\.documentElement\.scrollTop|document\.body\.scrollTop/);
+});
+
 test("assistant response scrolls into view without aggressive reduced-motion behavior", () => {
   assert.match(assistantSource, /voiceAnswerRef = useRef\(null\)/);
   assert.match(assistantSource, /assistantSheetRef = useRef\(null\)/);
