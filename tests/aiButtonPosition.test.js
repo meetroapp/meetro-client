@@ -74,8 +74,8 @@ test("snapped AI button respects right safe-area inset", () => {
   );
 });
 
-test("Ask Meetro launcher margin is symmetrical at 18px on left and right", () => {
-  const options = { buttonSize: 126, edgeMargin: 18, bottomClearance: 94 };
+test("Ask Meetro launcher margin is symmetrical at 20px on left and right", () => {
+  const options = { buttonSize: 126, edgeMargin: 20, bottomClearance: 94 };
 
   assert.deepEqual(
     snapAiButtonPosition(
@@ -83,7 +83,7 @@ test("Ask Meetro launcher margin is symmetrical at 18px on left and right", () =
       { width: 390, height: 844 },
       options
     ),
-    { x: 18, y: 280 }
+    { x: 20, y: 280 }
   );
 
   assert.deepEqual(
@@ -92,7 +92,7 @@ test("Ask Meetro launcher margin is symmetrical at 18px on left and right", () =
       { width: 390, height: 844 },
       options
     ),
-    { x: 246, y: 280 }
+    { x: 244, y: 280 }
   );
 });
 
@@ -101,10 +101,22 @@ test("Ask Meetro right dock keeps visual margin outside safe-area inset", () => 
     snapAiButtonPosition(
       { x: 320, y: 280 },
       { width: 390, height: 844, safeAreaLeft: 0, safeAreaRight: 20 },
-      { buttonSize: 126, edgeMargin: 18, bottomClearance: 94 }
+      { buttonSize: 126, edgeMargin: 20, bottomClearance: 94 }
     ),
-    { x: 226, y: 280 }
+    { x: 224, y: 280 }
   );
+});
+
+test("Ask Meetro snapped launcher keeps at least 20px visual margin on mobile", () => {
+  const viewport = { width: 393, height: 852 };
+  const options = { buttonSize: 126, edgeMargin: 20, bottomClearance: 94 };
+  const leftDock = snapAiButtonPosition({ x: 0, y: 720 }, viewport, options);
+  const rightDock = snapAiButtonPosition({ x: 380, y: 720 }, viewport, options);
+
+  assert.equal(leftDock.x, 20);
+  assert.equal(viewport.width - rightDock.x - options.buttonSize, 20);
+  assert.ok(leftDock.y <= viewport.height - options.bottomClearance - options.buttonSize);
+  assert.ok(rightDock.y <= viewport.height - options.bottomClearance - options.buttonSize);
 });
 
 test("snaps AI button to the nearest horizontal edge while keeping vertical position", () => {

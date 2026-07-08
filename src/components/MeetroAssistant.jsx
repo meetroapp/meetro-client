@@ -46,6 +46,7 @@ import { readRequestCompanionContext } from "../utils/requestCompanionContext";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
+const ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN = 20;
 const ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN = 14;
 const ASSISTANT_EXPANDED_CARD_GAP = 12;
 
@@ -2453,11 +2454,15 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const launcherBottomClearance = isChat ? 104 : 94;
   const launcherFallbackBottom = `calc(${launcherBottomClearance}px + env(safe-area-inset-bottom))`;
   const launcherButtonSize = getAssistantLauncherButtonSize();
+  const launcherEdgeMargin =
+    typeof window !== "undefined" && window.innerWidth <= 768
+      ? ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN
+      : ASSISTANT_LAUNCHER_EDGE_MARGIN;
   const launcherPositionOptions = {
     ...AI_BUTTON_POSITION_DEFAULTS,
     buttonSize: launcherButtonSize,
     bottomClearance: launcherBottomClearance,
-    edgeMargin: ASSISTANT_LAUNCHER_EDGE_MARGIN,
+    edgeMargin: launcherEdgeMargin,
   };
   const isBusinessMode =
     getAccountModeForPage(
@@ -2612,7 +2617,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       {
         x:
           Number(viewport.width || 0) -
-          ASSISTANT_LAUNCHER_EDGE_MARGIN -
+          launcherEdgeMargin -
           Number(viewport.safeAreaRight || 0) -
           launcherButtonSize,
         y: Number(viewport.height || 0) - launcherBottomClearance - 50,
@@ -2647,6 +2652,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       viewport,
       fallbackBottom: launcherBottomClearance,
       companionMode: nextMode,
+      launcherEdgeMargin,
     });
 
     if (!metrics.positionAdjustmentRequired) return currentPosition;
@@ -3681,7 +3687,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         bottom: "auto",
       }
     : {
-        right: "max(18px, env(safe-area-inset-right, 0px))",
+        right: `max(${launcherEdgeMargin}px, env(safe-area-inset-right, 0px))`,
         bottom: launcherFallbackBottom,
       };
   const companionAnchorStyle = getCompanionAnchorStyle({
@@ -3690,6 +3696,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     viewport: getLauncherViewport(),
     fallbackBottom: launcherBottomClearance,
     companionMode,
+    launcherEdgeMargin,
   });
 
   return (
@@ -4292,6 +4299,7 @@ function getCompanionAnchorMetrics({
   viewport = {},
   fallbackBottom = 94,
   companionMode = COMPANION_STATES.guidance,
+  launcherEdgeMargin = ASSISTANT_LAUNCHER_EDGE_MARGIN,
 } = {}) {
   const safeWidth = Math.max(320, Number(viewport.width || 0));
   const safeHeight = Math.max(520, Number(viewport.height || 0));
@@ -4312,7 +4320,7 @@ function getCompanionAnchorMetrics({
     fallbackBottom,
   });
   const fallbackLauncherPosition = {
-    x: safeWidth - ASSISTANT_LAUNCHER_EDGE_MARGIN - launcherButtonSize,
+    x: safeWidth - launcherEdgeMargin - launcherButtonSize,
     y: safeHeight - fallbackBottom - launcherHeight,
   };
   const anchorPosition = launcherPosition || fallbackLauncherPosition;

@@ -314,7 +314,7 @@ function ServiceSelectorSheet({
             ))
           )}
         </div>
-        <p style={cantFindText}>
+        <p style={cantFindText} role="note">
           {cantFindLabel || t("professionalCapabilityCantFind", language)}
         </p>
 

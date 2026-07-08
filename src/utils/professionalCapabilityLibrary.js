@@ -257,7 +257,7 @@ export const PROFESSIONAL_CAPABILITY_LIBRARY = Object.freeze([
   {
     id: "healthcare",
     industry: "healthcare",
-    label: "Health & Wellness",
+    label: "Healthcare",
     aliases: ["healthcare", "health", "care"],
     specialties: Object.freeze([
       { id: "home_health", labelKey: "professionalOnboardingSpecialtyHomeHealth", label: "Home Health", aliases: ["home health"] },
@@ -270,7 +270,7 @@ export const PROFESSIONAL_CAPABILITY_LIBRARY = Object.freeze([
   {
     id: "transportation",
     industry: "transportation",
-    label: "Automotive Services",
+    label: "Transportation",
     aliases: ["transportation", "automotive", "mechanic"],
     specialties: Object.freeze([
       { id: "mechanic", labelKey: "professionalOnboardingSpecialtyMechanic", label: "Mechanic", aliases: ["mechanic"] },
@@ -319,7 +319,7 @@ export const PROFESSIONAL_CAPABILITY_LIBRARY = Object.freeze([
     ["flooring", "Flooring", ["Floor Installation", "Floor Repair", "Hardwood Flooring", "Vinyl Flooring"]],
     ["painting", "Painting", ["Interior Painting", "Exterior Painting", "Cabinet Painting", "Touch-Up Painting"]],
     ["drywall", "Drywall", ["Drywall Repair", "Drywall Installation", "Texture Matching", "Patch Repair"]],
-    ["windows_doors", "Windows & Doors", ["Window Repair", "Window Replacement", "Door Installation", "Door Repair"]],
+    ["windows_doors", "Doors & Windows", ["Window Repair", "Window Replacement", "Door Installation", "Door Repair"]],
     ["garage_doors", "Garage Doors", ["Garage Door Repair", "Garage Door Installation", "Garage Door Opener Installation"]],
     ["appliance_repair", "Appliance Repair", ["Refrigerator Repair", "Washer / Dryer Repair", "Oven Repair", "Dishwasher Repair"]],
     ["junk_removal", "Junk Removal", ["Furniture Removal", "Appliance Haul-Away", "Construction Debris", "Estate Cleanout"]],

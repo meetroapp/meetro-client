@@ -221,7 +221,7 @@ test("professional capability library exposes required searchable primary catego
     "Flooring",
     "Painting",
     "Drywall",
-    "Windows & Doors",
+    "Doors & Windows",
     "Garage Doors",
     "Appliance Repair",
     "Junk Removal",
@@ -237,6 +237,46 @@ test("professional capability library exposes required searchable primary catego
     searchProfessionalCapabilityCategories("office cleaning")
       .map((category) => category.label)
       .includes("Cleaning Services")
+  );
+});
+
+test("service selector category labels are distinct while preserving door capability IDs", () => {
+  const categories = getProfessionalCapabilityCategories();
+  const categoryLabels = categories.map((category) => category.label);
+  const labelCounts = categoryLabels.reduce((counts, label) => {
+    counts[label] = (counts[label] || 0) + 1;
+    return counts;
+  }, {});
+  const windowDoorSpecialties = searchProfessionalCapabilitySpecialties("windows_doors", "");
+  const garageDoorSpecialties = searchProfessionalCapabilitySpecialties("garage_doors", "");
+
+  assert.equal(labelCounts["Doors & Windows"], 1);
+  assert.equal(labelCounts["Garage Doors"], 1);
+  assert.equal(labelCounts["Windows & Doors"] || 0, 0);
+  assert.equal(new Set(categoryLabels).size, categoryLabels.length);
+  assert.deepEqual(
+    windowDoorSpecialties.map((specialty) => specialty.id),
+    ["window_repair", "window_replacement", "door_installation", "door_repair"]
+  );
+  assert.deepEqual(
+    windowDoorSpecialties.map((specialty) => specialty.label),
+    ["Window Repair", "Window Replacement", "Door Installation", "Door Repair"]
+  );
+  assert.deepEqual(
+    garageDoorSpecialties.map((specialty) => specialty.id),
+    [
+      "garage_door_repair",
+      "garage_door_installation",
+      "garage_door_opener_installation",
+    ]
+  );
+  assert.deepEqual(
+    garageDoorSpecialties.map((specialty) => specialty.label),
+    [
+      "Garage Door Repair",
+      "Garage Door Installation",
+      "Garage Door Opener Installation",
+    ]
   );
 });
 
@@ -365,7 +405,9 @@ test("professional capability labels resolve through language.js without changin
   );
   assert.equal(t("professionalCapabilitySearchCategories", "es"), "Buscar categorías");
   assert.equal(t("professionalCapabilitySelectedCount", "es"), "seleccionadas");
-  assert.equal(t("professionalCapabilityCantFind", "es"), "¿No encuentras lo que haces?");
+  assert.match(t("professionalCapabilityCantFind", "en"), /Choose the closest service for now/);
+  assert.match(t("professionalCapabilityCantFind", "en"), /Business Profile later/);
+  assert.match(t("professionalCapabilityCantFind", "es"), /Elige el servicio más cercano/);
 });
 
 test("professional capability library searches aliases and specialty sections", () => {
@@ -407,6 +449,7 @@ test("category-first selector is wired to onboarding and Business Profile only",
   assert.match(selectorSource, /professionalCapabilitySearchCategories/);
   assert.match(selectorSource, /professionalCapabilityChooseCategoryEmpty/);
   assert.match(selectorSource, /professionalCapabilityCantFind/);
+  assert.match(selectorSource, /role="note"/);
   assert.match(selectorSource, /filteredCategories/);
   assert.match(selectorSource, /activeCategoryId/);
   assert.match(onboardingSource, /getBusinessProfileCapabilityOptionsFromTaxonomy/);

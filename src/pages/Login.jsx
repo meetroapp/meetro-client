@@ -49,14 +49,14 @@ function Login({ setPage }) {
 
   const text = {
     en: {
-      login: "Welcome back",
+      login: "Sign in",
       signup: "Sign Up",
       getStarted: "Join Meetro Community",
       continueAction: "Continue",
-      welcomeTagline: "Continue the work that matters.",
-      welcomeBack: "Welcome back.",
+      welcomeTagline: "Continue the work that matters, with the people who matter.",
+      welcomeBack: "The work continues here.",
       createYourAccount: "Start your journey",
-      startHelper: "Sign in to continue where you left off.",
+      startHelper: "Continue where you left off.",
       arrivalSupport: "Built around trust, meaningful work, and lasting relationships.",
       supportHeading: "We're here to support you and the people you serve.",
       supportBody:
@@ -100,14 +100,14 @@ function Login({ setPage }) {
         "Please agree to the Terms of Use and Privacy Policy to create your account.",
     },
     es: {
-      login: "Bienvenido de nuevo",
+      login: "Inicia sesión",
       signup: "Crear cuenta",
       getStarted: "Únete a Meetro Community",
       continueAction: "Continuar",
-      welcomeTagline: "Continúa el trabajo que importa.",
-      welcomeBack: "Bienvenido de nuevo.",
+      welcomeTagline: "Continúa el trabajo que importa, con las personas que importan.",
+      welcomeBack: "El trabajo continúa aquí.",
       createYourAccount: "Comienza tu camino",
-      startHelper: "Inicia sesión para continuar donde te quedaste.",
+      startHelper: "Continúa donde te quedaste.",
       arrivalSupport: "Creado alrededor de confianza, trabajo significativo y relaciones duraderas.",
       supportHeading: "Estamos aquí para apoyarte a ti y a las personas a las que sirves.",
       supportBody:
@@ -154,14 +154,14 @@ function Login({ setPage }) {
         "Acepta los Términos de Uso y la Política de Privacidad para crear tu cuenta.",
     },
     fr: {
-      login: "Bon retour",
+      login: "Se connecter",
       signup: "Créer un compte",
       getStarted: "Rejoindre Meetro Community",
       continueAction: "Continuer",
-      welcomeTagline: "Continuez le travail qui compte.",
-      welcomeBack: "Bon retour.",
+      welcomeTagline: "Continuez le travail qui compte, avec les personnes qui comptent.",
+      welcomeBack: "Le travail continue ici.",
       createYourAccount: "Commencez votre parcours",
-      startHelper: "Connectez-vous pour reprendre là où vous vous étiez arrêté.",
+      startHelper: "Reprenez là où vous vous étiez arrêté.",
       arrivalSupport:
         "Conçu autour de la confiance, du travail utile et des relations durables.",
       supportHeading:
@@ -209,14 +209,14 @@ function Login({ setPage }) {
         "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour créer votre compte.",
     },
     "pt-BR": {
-      login: "Bem-vindo de volta",
+      login: "Entrar",
       signup: "Criar conta",
       getStarted: "Junte-se ao Meetro Community",
       continueAction: "Continuar",
-      welcomeTagline: "Continue o trabalho que importa.",
-      welcomeBack: "Bem-vindo de volta.",
+      welcomeTagline: "Continue o trabalho que importa, com as pessoas que importam.",
+      welcomeBack: "O trabalho continua aqui.",
       createYourAccount: "Comece sua jornada",
-      startHelper: "Entre para continuar de onde parou.",
+      startHelper: "Continue de onde parou.",
       arrivalSupport:
         "Criado em torno de confiança, trabalho significativo e relações duradouras.",
       supportHeading: "Estamos aqui para apoiar você e as pessoas que você atende.",
@@ -797,12 +797,13 @@ function Login({ setPage }) {
       </div>
 
       <div style={cardStyle} className="meetro-visual-surface">
-        {mode !== "reset" && (
+        {mode === "login" && (
           <div style={toggleRow}>
             <button
+              type="button"
               style={{
                 ...toggleButton,
-                ...(mode === "signup" ? activeToggleButton : inactiveToggleButton),
+                ...activeToggleButton,
               }}
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "signup");
@@ -812,11 +813,16 @@ function Login({ setPage }) {
               <MeetroIcon name="profile" size={18} decorative />
               {T.getStarted}
             </button>
+          </div>
+        )}
 
+        {mode === "signup" && (
+          <div style={toggleRow}>
             <button
+              type="button"
               style={{
                 ...toggleButton,
-                ...(mode === "login" ? activeToggleButton : inactiveToggleButton),
+                ...backToLoginButton,
               }}
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "login");
@@ -824,8 +830,7 @@ function Login({ setPage }) {
                 setLegalAccepted(false);
               }}
             >
-              <MeetroIcon name="lock" size={18} decorative />
-              {T.login}
+              ← {t("backToLogin", normalizedLanguage)}
             </button>
           </div>
         )}
@@ -835,7 +840,7 @@ function Login({ setPage }) {
             {mode === "reset"
               ? t("resetPasswordTitle", normalizedLanguage)
               : mode === "login"
-              ? T.welcomeBack
+              ? T.login
               : T.createYourAccount}
           </h2>
           <p style={authIntroText}>
@@ -876,7 +881,7 @@ function Login({ setPage }) {
             </button>
 
             <button type="button" style={guestButton} onClick={returnToLogin}>
-              {t("backToLogin", normalizedLanguage)}
+              {T.back}
             </button>
           </div>
         ) : (
@@ -1445,6 +1450,12 @@ const activeToggleButton = {
 const inactiveToggleButton = {
   background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
   color: "var(--meetro-color-forest-deep, #14351f)",
+};
+
+const backToLoginButton = {
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  boxShadow: "none",
 };
 
 const authIntro = {
