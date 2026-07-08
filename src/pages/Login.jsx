@@ -57,10 +57,10 @@ function Login({ setPage }) {
       welcomeBack: "The work continues here.",
       createYourAccount: "Start your journey",
       startHelper: "Continue where you left off.",
-      arrivalSupport: "Built around trust, meaningful work, and lasting relationships.",
-      supportHeading: "We're here to support you and the people you serve.",
+      arrivalSupport: "Built around relationships. Designed for communities.",
+      supportHeading: "Built around relationships. Designed for communities.",
       supportBody:
-        "Meetro Community is built around trust, relationships, and the work that matters most.",
+        "Meetro Community brings residents, professionals, businesses, and organizations together through trusted relationships.",
       chooseAccountType: "Choose Account Type",
       homeowner: "User Account",
       homeownerDescription:
@@ -108,10 +108,10 @@ function Login({ setPage }) {
       welcomeBack: "El trabajo continúa aquí.",
       createYourAccount: "Comienza tu camino",
       startHelper: "Continúa donde te quedaste.",
-      arrivalSupport: "Creado alrededor de confianza, trabajo significativo y relaciones duraderas.",
-      supportHeading: "Estamos aquí para apoyarte a ti y a las personas a las que sirves.",
+      arrivalSupport: "Creado alrededor de relaciones. Diseñado para comunidades.",
+      supportHeading: "Creado alrededor de relaciones. Diseñado para comunidades.",
       supportBody:
-        "Meetro Community está construido alrededor de la confianza, las relaciones y el trabajo que más importa.",
+        "Meetro Community reúne a residentes, profesionales, negocios y organizaciones a través de relaciones de confianza.",
       chooseAccountType: "Elige el tipo de cuenta",
       homeowner: "Cuenta de usuario",
       homeownerDescription:
@@ -163,11 +163,11 @@ function Login({ setPage }) {
       createYourAccount: "Commencez votre parcours",
       startHelper: "Reprenez là où vous vous étiez arrêté.",
       arrivalSupport:
-        "Conçu autour de la confiance, du travail utile et des relations durables.",
+        "Construit autour des relations. Conçu pour les communautés.",
       supportHeading:
-        "Nous sommes là pour vous soutenir, vous et les personnes que vous servez.",
+        "Construit autour des relations. Conçu pour les communautés.",
       supportBody:
-        "Meetro Community repose sur la confiance, les relations et le travail qui compte le plus.",
+        "Meetro Community réunit les résidents, les professionnels, les entreprises et les organisations grâce à des relations de confiance.",
       chooseAccountType: "Choisissez le type de compte",
       homeowner: "Compte utilisateur",
       homeownerDescription:
@@ -218,10 +218,10 @@ function Login({ setPage }) {
       createYourAccount: "Comece sua jornada",
       startHelper: "Continue de onde parou.",
       arrivalSupport:
-        "Criado em torno de confiança, trabalho significativo e relações duradouras.",
-      supportHeading: "Estamos aqui para apoiar você e as pessoas que você atende.",
+        "Criado em torno de relações. Projetado para comunidades.",
+      supportHeading: "Criado em torno de relações. Projetado para comunidades.",
       supportBody:
-        "Meetro Community foi criado em torno de confiança, relações e do trabalho que mais importa.",
+        "Meetro Community reúne moradores, profissionais, empresas e organizações por meio de relações de confiança.",
       chooseAccountType: "Escolha o tipo de conta",
       homeowner: "Conta de usuário",
       homeownerDescription:
@@ -803,7 +803,7 @@ function Login({ setPage }) {
               type="button"
               style={{
                 ...toggleButton,
-                ...activeToggleButton,
+                ...joinSecondaryButton,
               }}
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "signup");
@@ -1391,7 +1391,7 @@ const securityTitle = {
 const heroSubtitle = {
   textAlign: "center",
   fontSize: "18px",
-  lineHeight: "1.5",
+  lineHeight: "1.68",
   opacity: 0.98,
   margin: "0 auto",
   maxWidth: "340px",
@@ -1423,7 +1423,7 @@ const cardStyle = {
 
 const toggleRow = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: "8px",
   marginBottom: "24px",
 };
@@ -1441,15 +1441,11 @@ const toggleButton = {
   gap: "10px",
 };
 
-const activeToggleButton = {
-  background: "var(--meetro-gradient-selected-control, linear-gradient(135deg, #172317, #273326))",
-  color: "var(--meetro-color-paper, #fffdf8)",
-  boxShadow: "0 10px 24px rgba(49,35,20,0.14)",
-};
-
-const inactiveToggleButton = {
-  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
-  color: "var(--meetro-color-forest-deep, #14351f)",
+const joinSecondaryButton = {
+  background: "rgba(255,253,248,0.72)",
+  color: "var(--meetro-color-charcoal, #1f211f)",
+  border: "1px solid rgba(31,77,52,0.24)",
+  boxShadow: "0 8px 18px rgba(49,35,20,0.08)",
 };
 
 const backToLoginButton = {

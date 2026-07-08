@@ -21,9 +21,10 @@ test("Login keeps the Meetro Community arrival surface while using backend 2FA",
   assert.match(source, /Continue where you left off\./);
   assert.match(source, /Join Meetro Community/);
   assert.match(source, /continueAction: "Continue"/);
-  assert.match(source, /Built around trust, meaningful work, and lasting relationships\./);
-  assert.match(source, /We're here to support you and the people you serve\./);
-  assert.match(source, /Meetro Community is built around trust, relationships, and the work that matters most\./);
+  assert.match(source, /lineHeight: "1\.68"/);
+  assert.match(source, /\.\.\.joinSecondaryButton/);
+  assert.match(source, /Built around relationships\. Designed for communities\./);
+  assert.match(source, /Meetro Community brings residents, professionals, businesses, and organizations together through trusted relationships\./);
   assert.match(source, /T\.getStarted/);
   assert.match(source, /mode === "login" && \(/);
   assert.match(source, /localStorage\.setItem\("meetroLoginMode", "signup"\);\s*setMode\("signup"\);/);
@@ -114,7 +115,7 @@ test("professional signup category search renders results and clears only search
   assert.doesNotMatch(source, /<option value="" disabled>/);
 
   const handlerBody = source.match(
-    /function selectProfessionalCategory\(value\) \{([\s\S]*?)\n  \}/
+    /function selectProfessionalCategory\(value\) \{([\s\S]*?)\n\s{2}\}/
   )?.[1] || "";
 
   assert.doesNotMatch(handlerBody, /setName\(/);
