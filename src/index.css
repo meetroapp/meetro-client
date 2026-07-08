@@ -1469,3 +1469,168 @@ button {
 *::after {
   box-sizing: border-box;
 }
+
+
+/* HOTFIX: iPhone mobile web containment */
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    position: relative;
+    overscroll-behavior-x: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  .app-shell,
+  .page-shell,
+  .mobile-fit-page,
+  .home-page,
+  .messages-page,
+  .community-page,
+  .profile-page,
+  .business-dashboard-page,
+  main,
+  section,
+  article {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .card,
+  .surface-card,
+  .home-card,
+  .message-card,
+  .profile-card,
+  .community-card,
+  [class*="Card"],
+  [class*="card"] {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .card *,
+  .surface-card *,
+  .home-card *,
+  .message-card *,
+  .profile-card *,
+  .community-card *,
+  [class*="Card"] *,
+  [class*="card"] * {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  span,
+  button,
+  input,
+  textarea,
+  select {
+    max-width: 100%;
+  }
+
+  h1,
+  h2 {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  /* Fix rows that squeeze text into unusable columns on phone web */
+  .home-status-row,
+  .home-attention-row,
+  .home-communication-row,
+  .message-action-row,
+  .messages-header-row,
+  .messages-mobile-header {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .home-status-row > *,
+  .home-attention-row > *,
+  .home-communication-row > *,
+  .message-action-row > *,
+  .messages-header-row > *,
+  .messages-mobile-header > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Communication Center mobile header/action protection */
+  .messages-mobile-header,
+  .messages-header-row {
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .messages-mobile-header button,
+  .messages-header-row button,
+  .message-action-row button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  /* Prevent large CTA/button rows from forcing horizontal overflow */
+  .action-row,
+  .button-row,
+  .cta-row {
+    flex-wrap: wrap;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Intentional horizontal scrolling is allowed only for chip/navigation rails */
+  .discovery-interest-row,
+  .community-discovery-chips,
+  .chip-row,
+  .tab-row {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Avoid Safari 100vw overflow inside sticky/floating surfaces */
+  .sticky,
+  .sticky-discovery,
+  .floating,
+  .floating-surface {
+    max-width: 100%;
+    min-width: 0;
+  }
+}

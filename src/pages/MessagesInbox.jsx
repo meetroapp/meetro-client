@@ -5273,7 +5273,7 @@ const pageWrapper = {
   boxSizing: "border-box",
   color: "#111827",
   width: "100%",
-  maxWidth: "min(920px, 100vw)",
+  maxWidth: "min(920px, 100%)",
   minWidth: 0,
   margin: "0 auto",
   overflowX: "hidden",
@@ -5290,13 +5290,13 @@ const focusedConversationPageWrapper = {
 const relationshipIdentityPageWrapper = {
   ...pageWrapper,
   ...focusedConversationPageWrapper,
-  maxWidth: "min(760px, 100vw)",
+  maxWidth: "min(760px, 100%)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) calc(132px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))",
 };
 
 const splitPageWrapper = {
-  maxWidth: "min(1360px, 100vw)",
+  maxWidth: "min(1360px, 100%)",
 };
 
 const splitShell = {
@@ -5790,7 +5790,7 @@ const relationshipMenuBackdrop = {
   position: "fixed",
   inset: 0,
   width: "100%",
-  maxWidth: "100vw",
+  maxWidth: "100%",
   overflow: "hidden",
   zIndex: 50,
   border: "none",
