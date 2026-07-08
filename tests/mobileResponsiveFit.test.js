@@ -83,16 +83,29 @@ test("Home header preserves one-line branding on mobile", () => {
   assert.match(homeSource, /className="home-brand-wrap"/);
   assert.match(homeSource, /className="home-brand-main"/);
   assert.match(homeSource, /className="home-brand-badge"/);
-  assert.match(homeSource, /className="home-language-button"/);
+  assert.doesNotMatch(homeSource, /className="home-language-button"/);
+  assert.doesNotMatch(homeSource, /const languageButton = \{/);
+  assert.doesNotMatch(homeSource, /setLanguage\(nextLanguage\)/);
+  assert.match(homeSource, /max\(20px, env\(safe-area-inset-right, 0px\)\)/);
+  assert.match(homeSource, /calc\(104px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  assert.match(homeSource, /justifyContent: "flex-start"/);
   assert.match(
     homeSource,
-    /\.home-brand-main,[\s\S]*\.home-brand-badge,[\s\S]*\.home-language-button[\s\S]*white-space: nowrap;/
+    /\.home-brand-main,[\s\S]*\.home-brand-badge[\s\S]*white-space: nowrap;/
   );
   assert.match(
     homeSource,
     /@media \(max-width: 430px\)[\s\S]*\.home-brand-main[\s\S]*font-size: clamp\(17px, 5vw, 21px\) !important;/
   );
   assert.match(homeSource, /\.home-brand-main[\s\S]*word-break: keep-all !important;/);
+});
+
+test("Profile remains the account-owned language selection surface", () => {
+  assert.match(profileSource, /const \[languagePickerOpen, setLanguagePickerOpen\] = useState\(false\)/);
+  assert.match(profileSource, /setLanguage\(nextLanguage\)/);
+  assert.match(profileSource, /onClick=\{\(\) => setLanguagePickerOpen\(true\)\}/);
+  assert.match(profileSource, /aria-labelledby="language-picker-title"/);
+  assert.match(profileSource, /getLanguageLabel\(language\)/);
 });
 
 test("Home message attention card stacks action on phones without squeezing text", () => {

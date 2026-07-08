@@ -9,7 +9,7 @@ import {
   persistBusinessPortfolioProjects,
   readAllBusinessPortfolioItems,
 } from "../utils/businessPortfolioStorage";
-import { getLanguage, setLanguage, t } from "../utils/language";
+import { getLanguage, t } from "../utils/language";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
@@ -57,7 +57,6 @@ import {
 const homeLayoutMediaStyles = `
   .home-top-bar,
   .home-brand-wrap,
-  .home-language-button,
   .home-message-focus-card,
   .home-message-focus-copy,
   .home-message-open-text {
@@ -67,7 +66,6 @@ const homeLayoutMediaStyles = `
 
   .home-brand-main,
   .home-brand-badge,
-  .home-language-button,
   .home-message-open-text {
     white-space: nowrap;
   }
@@ -100,17 +98,6 @@ const homeLayoutMediaStyles = `
       font-size: 9px !important;
       letter-spacing: 0.04em !important;
       line-height: 1 !important;
-    }
-
-    .home-language-button {
-      flex: 0 1 auto !important;
-      max-width: 132px !important;
-      min-height: 40px !important;
-      padding: 9px 10px !important;
-      font-size: 12px !important;
-      gap: 5px !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
     }
 
     .home-message-focus-card {
@@ -243,12 +230,6 @@ function Home({ setPage }) {
       .unreadConversationCount
   );
 
-  function toggleLanguage() {
-    const nextLanguage = language === "en" ? "es" : "en";
-    setLanguage(nextLanguage);
-    updateLanguage(nextLanguage);
-  }
-
   function openWorkConversationForRequest(request = {}) {
     const requestId = request.requestId || request.id || "";
     const conversationId =
@@ -362,7 +343,7 @@ function Home({ setPage }) {
       <div className="app-page meetro-responsive-page" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
 
-<TopBar language={language} toggleLanguage={toggleLanguage} />
+        <TopBar />
 
         <div style={businessHero}>
           <p style={eyebrow}>{t("businessDashboard")}</p>
@@ -437,7 +418,7 @@ function Home({ setPage }) {
     return (
       <div className="app-page meetro-responsive-page" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar language={language} toggleLanguage={toggleLanguage} />
+        <TopBar />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
@@ -483,7 +464,7 @@ function Home({ setPage }) {
     return (
       <div className="app-page meetro-responsive-page" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar language={language} toggleLanguage={toggleLanguage} />
+        <TopBar />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
@@ -540,7 +521,7 @@ function Home({ setPage }) {
   return (
     <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
-      <TopBar language={language} toggleLanguage={toggleLanguage} />
+      <TopBar />
 
       {activeEmergencyInfo && (
         <div style={activeEmergencyCard}>
@@ -860,18 +841,13 @@ function Home({ setPage }) {
   );
 }
 
-function TopBar({ language, toggleLanguage }) {
+function TopBar() {
   return (
     <div className="home-top-bar" style={topBar}>
       <div className="home-brand-wrap" style={brandWrap}>
         <span className="home-brand-main" style={brandMain}>Meetro</span>
         <span className="home-brand-badge" style={brandBadge}>Community</span>
       </div>
-
-      <button className="home-language-button" style={languageButton} onClick={toggleLanguage}>
-        <MeetroIcon name="language" size={16} decorative /> {t("language")}{" "}
-        <strong>{language === "en" ? t("english") : t("spanish")}</strong>
-      </button>
     </div>
   );
 }
@@ -2375,7 +2351,7 @@ const pageWrapper = {
   background: "var(--meetro-gradient-community-page)",
   minHeight: "100dvh",
   padding:
-    "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
+    "calc(env(safe-area-inset-top) + 64px) max(20px, env(safe-area-inset-right, 0px)) calc(104px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   color: "var(--meetro-color-ink)",
   width: "100%",
@@ -2387,7 +2363,7 @@ const pageWrapper = {
 
 const topBar = {
   display: "flex",
-  justifyContent: "space-between",
+  justifyContent: "flex-start",
   alignItems: "center",
   marginBottom: "16px",
   gap: "12px",
@@ -2416,21 +2392,6 @@ const brandBadge = {
   fontWeight: "800",
   letterSpacing: "1px",
   textTransform: "uppercase",
-};
-
-const languageButton = {
-  border: "1px solid var(--meetro-color-line)",
-  background: "var(--meetro-surface-paper)",
-  color: "var(--meetro-color-ink)",
-  padding: "11px 14px",
-  borderRadius: "18px",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "5px",
-  fontWeight: "700",
-  boxShadow: "var(--meetro-shadow-soft)",
-  cursor: "pointer",
 };
 
 const heroCard = {
