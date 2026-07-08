@@ -6,6 +6,8 @@ const indexCssSource = readFileSync(new URL("../src/index.css", import.meta.url)
 const bottomNavSource = readFileSync(new URL("../src/components/BottomNav.jsx", import.meta.url), "utf8");
 const loginSource = readFileSync(new URL("../src/pages/Login.jsx", import.meta.url), "utf8");
 const discoverSource = readFileSync(new URL("../src/pages/Discover.jsx", import.meta.url), "utf8");
+const homeSource = readFileSync(new URL("../src/pages/Home.jsx", import.meta.url), "utf8");
+const messagesInboxSource = readFileSync(new URL("../src/pages/MessagesInbox.jsx", import.meta.url), "utf8");
 const profileSource = readFileSync(new URL("../src/pages/Profile.jsx", import.meta.url), "utf8");
 const contractorProfileSource = readFileSync(
   new URL("../src/pages/ContractorProfile.jsx", import.meta.url),
@@ -74,4 +76,53 @@ test("Ask Meetro launcher remains clamped inside mobile viewport", () => {
   assert.match(assistantSource, /writeStoredAiButtonPosition\(position/);
   assert.match(assistantSource, /window\.addEventListener\("resize", handleViewportChange\)/);
   assert.match(assistantSource, /window\.addEventListener\("orientationchange", handleViewportChange\)/);
+});
+
+test("Home header preserves one-line branding on mobile", () => {
+  assert.match(homeSource, /className="home-top-bar"/);
+  assert.match(homeSource, /className="home-brand-wrap"/);
+  assert.match(homeSource, /className="home-brand-main"/);
+  assert.match(homeSource, /className="home-brand-badge"/);
+  assert.match(homeSource, /className="home-language-button"/);
+  assert.match(
+    homeSource,
+    /\.home-brand-main,[\s\S]*\.home-brand-badge,[\s\S]*\.home-language-button[\s\S]*white-space: nowrap;/
+  );
+  assert.match(
+    homeSource,
+    /@media \(max-width: 430px\)[\s\S]*\.home-brand-main[\s\S]*font-size: clamp\(17px, 5vw, 21px\) !important;/
+  );
+  assert.match(homeSource, /\.home-brand-main[\s\S]*word-break: keep-all !important;/);
+});
+
+test("Home message attention card stacks action on phones without squeezing text", () => {
+  assert.match(homeSource, /className="home-message-focus-card"/);
+  assert.match(homeSource, /className="home-message-focus-copy" style=\{messageFocusCopy\}/);
+  assert.match(homeSource, /className="home-message-open-text"/);
+  assert.match(homeSource, /const messageFocusCopy = \{[\s\S]*flex: "1 1 auto"[\s\S]*minWidth: 0/);
+  assert.match(
+    homeSource,
+    /\.home-message-focus-card[\s\S]*grid-template-columns: 46px minmax\(0, 1fr\) !important;/
+  );
+  assert.match(homeSource, /\.home-message-open-text[\s\S]*grid-column: 1 \/ -1 !important;/);
+  assert.match(homeSource, /\.home-message-open-text[\s\S]*min-height: 44px !important;/);
+});
+
+test("Communication Center header stacks action above tabs on phones", () => {
+  assert.match(messagesInboxSource, /const messagesMobileLayoutStyles = `/);
+  assert.match(messagesInboxSource, /<style>\{messagesMobileLayoutStyles\}<\/style>/);
+  assert.match(messagesInboxSource, /className="messages-hub-header"/);
+  assert.match(messagesInboxSource, /className="messages-hub-title"/);
+  assert.match(messagesInboxSource, /className="messages-header-action-wrap"/);
+  assert.match(messagesInboxSource, /className="messages-header-action-button"/);
+  assert.match(messagesInboxSource, /className="messages-section-navigation"/);
+  assert.match(
+    messagesInboxSource,
+    /@media \(max-width: 430px\)[\s\S]*\.messages-hub-header[\s\S]*display: grid !important;/
+  );
+  assert.match(messagesInboxSource, /\.messages-header-action-button[\s\S]*width: 100% !important;/);
+  assert.match(
+    messagesInboxSource,
+    /\.messages-section-navigation[\s\S]*grid-template-columns: minmax\(0, 1fr\) !important;/
+  );
 });

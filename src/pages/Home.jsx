@@ -55,6 +55,90 @@ import {
 } from "../utils/localSpotlightVisibility";
 
 const homeLayoutMediaStyles = `
+  .home-top-bar,
+  .home-brand-wrap,
+  .home-language-button,
+  .home-message-focus-card,
+  .home-message-focus-copy,
+  .home-message-open-text {
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .home-brand-main,
+  .home-brand-badge,
+  .home-language-button,
+  .home-message-open-text {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 430px) {
+    .home-top-bar {
+      gap: 8px !important;
+    }
+
+    .home-brand-wrap {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      gap: 6px !important;
+    }
+
+    .home-brand-main {
+      flex: 0 1 auto !important;
+      min-width: 0 !important;
+      font-size: clamp(17px, 5vw, 21px) !important;
+      line-height: 1 !important;
+      overflow: hidden !important;
+      text-overflow: clip !important;
+      word-break: keep-all !important;
+      overflow-wrap: normal !important;
+    }
+
+    .home-brand-badge {
+      flex: 0 0 auto !important;
+      padding: 5px 7px !important;
+      font-size: 9px !important;
+      letter-spacing: 0.04em !important;
+      line-height: 1 !important;
+    }
+
+    .home-language-button {
+      flex: 0 1 auto !important;
+      max-width: 132px !important;
+      min-height: 40px !important;
+      padding: 9px 10px !important;
+      font-size: 12px !important;
+      gap: 5px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    .home-message-focus-card {
+      display: grid !important;
+      grid-template-columns: 46px minmax(0, 1fr) !important;
+      align-items: start !important;
+      gap: 12px !important;
+    }
+
+    .home-message-focus-copy {
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+
+    .home-message-open-text {
+      grid-column: 1 / -1 !important;
+      justify-self: stretch !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 44px !important;
+      border-radius: 999px !important;
+      background: var(--meetro-surface-sage) !important;
+      padding: 0 12px !important;
+      text-align: center !important;
+    }
+  }
+
   @media (orientation: landscape) and (max-height: 520px) {
     .home-my-projects-tabs,
     .home-my-projects-portrait {
@@ -719,11 +803,15 @@ function Home({ setPage }) {
       </section>
 
       <section style={messagesCompactSection}>
-        <button style={messageFocusCard} onClick={() => setPage("messagesInbox")}>
+        <button
+          className="home-message-focus-card"
+          style={messageFocusCard}
+          onClick={() => setPage("messagesInbox")}
+        >
           <div style={messageFocusIcon}>
             <MeetroIcon name="messages" size={24} decorative />
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="home-message-focus-copy" style={messageFocusCopy}>
             <strong style={messageFocusTitle}>
               {homeownerConversationMetrics.unreadConversationCount > 0
                 ? `${homeownerConversationMetrics.unreadConversationCount} ${t("homeMessagesCount", language)}`
@@ -735,7 +823,7 @@ function Home({ setPage }) {
                 : t("homeMessagesAllCaughtUpText")}
             </p>
           </div>
-          <span style={messageOpenText}>
+          <span className="home-message-open-text" style={messageOpenText}>
             {t("homeOpenMessages")}
           </span>
         </button>
@@ -774,13 +862,13 @@ function Home({ setPage }) {
 
 function TopBar({ language, toggleLanguage }) {
   return (
-    <div style={topBar}>
-      <div style={brandWrap}>
-        <span style={brandMain}>Meetro</span>
-        <span style={brandBadge}>Community</span>
+    <div className="home-top-bar" style={topBar}>
+      <div className="home-brand-wrap" style={brandWrap}>
+        <span className="home-brand-main" style={brandMain}>Meetro</span>
+        <span className="home-brand-badge" style={brandBadge}>Community</span>
       </div>
 
-      <button style={languageButton} onClick={toggleLanguage}>
+      <button className="home-language-button" style={languageButton} onClick={toggleLanguage}>
         <MeetroIcon name="language" size={16} decorative /> {t("language")}{" "}
         <strong>{language === "en" ? t("english") : t("spanish")}</strong>
       </button>
@@ -2336,6 +2424,10 @@ const languageButton = {
   color: "var(--meetro-color-ink)",
   padding: "11px 14px",
   borderRadius: "18px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "5px",
   fontWeight: "700",
   boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
@@ -3787,6 +3879,12 @@ const messageFocusCard = {
   textAlign: "left",
   boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
+};
+
+const messageFocusCopy = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  maxWidth: "100%",
 };
 
 const messageFocusIcon = {

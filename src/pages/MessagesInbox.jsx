@@ -85,6 +85,49 @@ const IconNewChat = () => (
   </svg>
 );
 
+const messagesMobileLayoutStyles = `
+  @media (max-width: 430px) {
+    .messages-hub-header {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      justify-content: stretch !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      overflow: visible !important;
+    }
+
+    .messages-hub-title {
+      min-width: 0 !important;
+      width: 100% !important;
+      font-size: clamp(25px, 8vw, 31px) !important;
+      line-height: 1.05 !important;
+    }
+
+    .messages-header-action-wrap {
+      width: 100% !important;
+      max-width: 100% !important;
+      justify-self: stretch !important;
+    }
+
+    .messages-header-action-button {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 44px !important;
+      justify-content: center !important;
+    }
+
+    .messages-section-navigation {
+      grid-template-columns: minmax(0, 1fr) !important;
+      gap: 8px !important;
+    }
+
+    .messages-section-navigation > * {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+  }
+`;
+
 
 function getDeletedConversationIds() {
   try {
@@ -4134,6 +4177,8 @@ function MessagesInbox({ setPage, currentPage }) {
         paddingTop: "0px",
       }}
     >
+      <style>{messagesMobileLayoutStyles}</style>
+
       <SafeBackBar
         setPage={setPage}
         fallback={getDashboardPageForAccountMode(activeAccountMode)}
@@ -4155,11 +4200,12 @@ function MessagesInbox({ setPage, currentPage }) {
 
       {!focusedConversationFlowOpen && (
         <>
-          <div style={messagesHubHeader}>
-            <h1 style={messagesHubTitle}>Communication Center</h1>
-            <div style={relationshipMenuWrap}>
+          <div className="messages-hub-header" style={messagesHubHeader}>
+            <h1 className="messages-hub-title" style={messagesHubTitle}>Communication Center</h1>
+            <div className="messages-header-action-wrap" style={relationshipMenuWrap}>
               <button
                 type="button"
+                className="messages-header-action-button"
                 style={
                   messageSection === "conversations"
                     ? relationshipNewChatButton
@@ -4200,7 +4246,11 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           </div>
 
-          <div style={messageSectionNavigation} aria-label="Communication Center navigation">
+          <div
+            className="messages-section-navigation"
+            style={messageSectionNavigation}
+            aria-label="Communication Center navigation"
+          >
             {(() => {
               const [key, label] = CONTACT_SECTION_OPTION;
               const count = getMessageSectionCount(key);
@@ -5566,6 +5616,10 @@ const messagesHubTitle = {
   lineHeight: 1.05,
   fontWeight: "950",
   letterSpacing: 0,
+  minWidth: 0,
+  maxWidth: "100%",
+  overflowWrap: "normal",
+  wordBreak: "normal",
 };
 
 const messageSectionNavigation = {
