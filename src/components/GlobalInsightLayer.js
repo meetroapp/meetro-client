@@ -37,6 +37,42 @@ function getInsightMessage(insight, language) {
   return insight.messageKey ? t(insight.messageKey, language) : insight.message || "";
 }
 
+function getReviewProjectUnavailableMessage(language = "en") {
+  const normalized = String(language || "en").toLowerCase();
+  if (normalized.startsWith("es")) {
+    return "La revisión del proyecto no está disponible ahora. La conversación permanece abierta.";
+  }
+  if (normalized.startsWith("fr")) {
+    return "La révision du projet n’est pas disponible pour le moment. La conversation reste ouverte.";
+  }
+  if (normalized.startsWith("pt")) {
+    return "A revisão do projeto não está disponível agora. A conversa permanece aberta.";
+  }
+  return "Review Project is not available right now. The conversation remains open.";
+}
+
+export function prepareReviewProjectNavigation(insight = {}, storage) {
+  if (!insight || insight.actionType !== "reviewProject") {
+    return { ok: false, reason: "unsupported-action" };
+  }
+
+  if (!insight.record || typeof insight.record !== "object") {
+    return { ok: false, reason: "missing-review-target" };
+  }
+
+  if (!storage || typeof storage.setItem !== "function") {
+    return { ok: false, reason: "storage-unavailable" };
+  }
+
+  try {
+    storage.setItem("lastCompletedProject", JSON.stringify(insight.record));
+  } catch {
+    return { ok: false, reason: "storage-write-failed" };
+  }
+
+  return { ok: true, page: "completedJobDetails" };
+}
+
 function getReducedMotion() {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -66,6 +102,7 @@ export function getGlobalInsightLayerStyles({
       top: `calc(env(safe-area-inset-top, 0px) + ${topOffset})`,
       bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
       overflowX: "hidden",
+      justifyContent: isConversation ? "flex-end" : "center",
     },
     card: {
       ...insightCard,
@@ -120,6 +157,7 @@ export default function GlobalInsightLayer({
   const [keyboardActive, setKeyboardActive] = useState(false);
   const [testInsight, setTestInsight] = useState(null);
   const [insightRefreshToken, setInsightRefreshToken] = useState(0);
+  const [actionFallback, setActionFallback] = useState(null);
   const activeInsightIdRef = useRef("");
   const testEventsEnabled = devTestMode || isInsightTesterEnabled();
 
@@ -284,11 +322,23 @@ export default function GlobalInsightLayer({
     }
 
     if (activeInsight.actionType === "reviewProject") {
-      if (activeInsight.record && safeStorage?.setItem) {
-        safeStorage.setItem("lastCompletedProject", JSON.stringify(activeInsight.record));
+      const navigation = prepareReviewProjectNavigation(activeInsight, safeStorage);
+      if (!navigation.ok) {
+        setActionFallback({
+          insightId: activeInsight.id,
+          message: getReviewProjectUnavailableMessage(language),
+        });
+        return;
       }
-      setPage("completedJobDetails");
-      dismissCurrent(false);
+      try {
+        setPage(navigation.page);
+        dismissCurrent(false);
+      } catch {
+        setActionFallback({
+          insightId: activeInsight.id,
+          message: getReviewProjectUnavailableMessage(language),
+        });
+      }
       return;
     }
 
@@ -309,6 +359,8 @@ export default function GlobalInsightLayer({
     keyboardActive,
     reducedMotion,
   });
+  const visibleActionFallback =
+    actionFallback?.insightId === activeInsight.id ? actionFallback.message : "";
 
   return React.createElement(
     "div",
@@ -358,6 +410,13 @@ export default function GlobalInsightLayer({
           { style: insightMessage },
           getInsightMessage(activeInsight, language)
         ),
+        visibleActionFallback
+          ? React.createElement(
+              "p",
+              { style: inlineFallback, role: "alert" },
+              visibleActionFallback
+            )
+          : null,
         React.createElement(
           "div",
           { style: insightActions },
@@ -379,8 +438,8 @@ export default function GlobalInsightLayer({
 
 const overlayWrap = {
   position: "fixed",
-  left: "max(14px, env(safe-area-inset-left, 0px))",
-  right: "max(14px, env(safe-area-inset-right, 0px))",
+  left: "max(20px, env(safe-area-inset-left, 0px))",
+  right: "max(20px, env(safe-area-inset-right, 0px))",
   top: "calc(env(safe-area-inset-top, 0px) + 76px)",
   zIndex: 80,
   display: "flex",
@@ -389,13 +448,13 @@ const overlayWrap = {
 };
 
 const insightCard = {
-  width: "min(460px, 100%)",
+  width: "min(360px, 100%)",
   boxSizing: "border-box",
   pointerEvents: "auto",
   display: "flex",
-  gap: "12px",
-  padding: "14px",
-  borderRadius: "22px",
+  gap: "10px",
+  padding: "10px 12px",
+  borderRadius: "18px",
   background: "rgba(255,255,255,0.78)",
   backdropFilter: "blur(18px)",
   WebkitBackdropFilter: "blur(18px)",
@@ -405,9 +464,9 @@ const insightCard = {
 };
 
 const insightIcon = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "14px",
+  width: "30px",
+  height: "30px",
+  borderRadius: "11px",
   background: "#f3f0ff",
   color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
@@ -449,13 +508,25 @@ const hideButton = {
 };
 
 const insightMessage = {
-  margin: "6px 0 12px",
+  margin: "4px 0 10px",
   color: "#334155",
-  fontSize: "14px",
-  lineHeight: 1.4,
+  fontSize: "13px",
+  lineHeight: 1.34,
   fontWeight: 750,
   overflowWrap: "normal",
   wordBreak: "normal",
+};
+
+const inlineFallback = {
+  margin: "-2px 0 10px",
+  color: "var(--meetro-color-forest-deep, #14351f)",
+  background: "rgba(236, 244, 234, 0.82)",
+  border: "1px solid rgba(31,77,52,0.16)",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 800,
 };
 
 const insightActions = {

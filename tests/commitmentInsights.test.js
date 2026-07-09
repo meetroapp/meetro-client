@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import GlobalInsightLayer from "../src/components/GlobalInsightLayer.js";
+import GlobalInsightLayer, {
+  getGlobalInsightLayerStyles,
+  prepareReviewProjectNavigation,
+} from "../src/components/GlobalInsightLayer.js";
 import { getCommitmentInsights } from "../src/utils/commitmentInsights.js";
 import {
   buildGlobalInsightContextFromStorage,
@@ -193,7 +196,74 @@ test("GlobalInsightLayer renders commitment insight through the same overlay", (
   assert.match(markup, /Commitment/);
   assert.match(markup, /Customer is waiting for visit confirmation/);
   assert.match(markup, /Continue Conversation/);
+  assert.match(markup, />Hide</);
   assert.match(markup, /role="status"/);
+});
+
+test("completed-work closure insight renders as a compact non-blocking banner", () => {
+  const styles = getGlobalInsightLayerStyles({
+    currentPage: "conversationThread",
+  });
+
+  assert.match(styles.overlay.bottom, /safe-area-inset-bottom/);
+  assert.equal(styles.overlay.justifyContent, "flex-end");
+  assert.equal(styles.card.width, "min(360px, 100%)");
+  assert.equal(styles.card.padding, "10px 12px");
+
+  const markup = renderToStaticMarkup(
+    React.createElement(GlobalInsightLayer, {
+      currentPage: "conversationThread",
+      storage: makeStorage({
+        userEmail: "sarah@example.com",
+        activeAccountMode: "business",
+      }),
+      insights: [
+        {
+          id: "commitment:next-step:closure:project-1",
+          type: "commitment",
+          priority: "high",
+          titleKey: "commitmentInsightTitle",
+          messageKey: "commitmentInsightWorkClosureNext",
+          message: "Work is completed. Closure is the next step.",
+          actionLabelKey: "reviewProject",
+          actionType: "reviewProject",
+          record: { id: "project-1", status: "completed" },
+        },
+      ],
+    })
+  );
+
+  assert.match(markup, /Work is completed\. Closure is the next step\./);
+  assert.match(markup, /Review Project/);
+  assert.match(markup, />Hide</);
+});
+
+test("Review Project insight navigation stores a safe target before routing", () => {
+  const storage = makeStorage();
+  const result = prepareReviewProjectNavigation(
+    {
+      actionType: "reviewProject",
+      record: { id: "project-1", status: "completed" },
+    },
+    storage
+  );
+
+  assert.deepEqual(result, { ok: true, page: "completedJobDetails" });
+  assert.match(storage.getItem("lastCompletedProject"), /"id":"project-1"/);
+});
+
+test("Review Project insight fails gracefully when the review target is missing", () => {
+  const storage = makeStorage();
+  const result = prepareReviewProjectNavigation(
+    {
+      actionType: "reviewProject",
+      relatedId: "project-1",
+    },
+    storage
+  );
+
+  assert.deepEqual(result, { ok: false, reason: "missing-review-target" });
+  assert.equal(storage.getItem("lastCompletedProject"), null);
 });
 
 test("commitment insights do not invent random facts", () => {
