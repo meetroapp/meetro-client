@@ -5358,6 +5358,7 @@ const splitShell = {
   minHeight: "540px",
   width: "100%",
   minWidth: 0,
+  minBlockSize: 0,
   overflow: "hidden",
 };
 
@@ -5365,11 +5366,15 @@ const wideWorkspaceShell = {
   gridTemplateColumns:
     "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
   gap: "20px",
-  height: "min(780px, calc(100dvh - 300px))",
+  height: "min(820px, calc(100dvh - 220px))",
+  minHeight: "min(620px, calc(100dvh - 180px))",
+  maxHeight: "calc(100dvh - 180px)",
 };
 
 const splitListPane = {
   minWidth: 0,
+  minHeight: 0,
+  height: "100%",
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: "4px",
@@ -5396,8 +5401,12 @@ const workspaceContextPane = {
   display: "grid",
   alignContent: "start",
   gap: "14px",
-  paddingRight: "4px",
+  padding: "0 4px calc(120px + env(safe-area-inset-bottom, 0px)) 0",
+  boxSizing: "border-box",
   WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
+  scrollPaddingBottom: "calc(132px + env(safe-area-inset-bottom, 0px))",
+  scrollbarGutter: "stable",
 };
 
 const workspaceContextCard = {

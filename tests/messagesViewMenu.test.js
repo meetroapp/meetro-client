@@ -521,6 +521,30 @@ test("Messages desktop context panel exposes Communication Center context withou
   assert.doesNotMatch(messagesSource, /create.*Project.*Context|save.*Project.*Context|new.*WorkspaceContext/i);
 });
 
+test("Messages desktop relationship context panel is scroll-safe without clipping sections", () => {
+  assert.match(messagesSource, /const workspaceContextPane = \{/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*minHeight: 0/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*height: "100%"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowY: "auto"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowX: "hidden"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollPaddingBottom: "calc\(132px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollbarGutter: "stable"/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship memory<\/p>/);
+});
+
+test("Messages desktop relationship panel containment preserves list thread and mobile flow", () => {
+  assert.match(messagesSource, /const splitShell = \{[\s\S]*minBlockSize: 0/);
+  assert.match(messagesSource, /const splitListPane = \{[\s\S]*height: "100%"/);
+  assert.match(messagesSource, /const splitThreadPane = \{[\s\S]*height: "100%"/);
+  assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /isWideWorkspace \? wideWorkspaceShell : \{\}/);
+  assert.match(messagesSource, /<ConversationThread[\s\S]*embedded/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
+});
+
 test("ConversationThread renders local or empty messages before backend hydration", () => {
   const localLoadIndex = conversationThreadSource.indexOf("const localMessages = loadLocalMessages()");
   const backendFetchIndex = conversationThreadSource.indexOf("authFetch(\n            `/messages/${selectedQuoteRequestId}`");
