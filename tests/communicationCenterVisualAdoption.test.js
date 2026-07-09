@@ -53,7 +53,7 @@ test("Communication Center rows and workspace context express relationship-first
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship memory<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Memory<\/p>/);
 });
 
 test("Communication Center preserves live conversation routing and does not introduce role switching", () => {

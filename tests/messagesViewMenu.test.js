@@ -513,7 +513,7 @@ test("Messages desktop context panel exposes Communication Center context withou
   assert.match(messagesSource, /label: "Next decision"/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship memory<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Memory<\/p>/);
   assert.match(messagesSource, /Relationship memory will grow as work, decisions, and history accumulate\./);
   assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
   assert.match(messagesSource, /setPage\("contractorDashboard"\)/);
@@ -527,13 +527,30 @@ test("Messages desktop relationship context panel is scroll-safe without clippin
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*height: "100%"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowY: "auto"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowX: "hidden"/);
-  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*padding: "0 4px calc\(72px \+ env\(safe-area-inset-bottom, 0px\)\) 0"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*padding: "16px 16px calc\(32px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollPaddingBottom: "calc\(96px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollbarGutter: "stable"/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Contact<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship memory<\/p>/);
+  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Memory<\/p>/);
+});
+
+test("Messages desktop relationship context panel uses flat rows instead of nested cards", () => {
+  const factRowSource = messagesSource.slice(
+    messagesSource.indexOf("const workspaceFactRow = {"),
+    messagesSource.indexOf("const workspaceFactLabel = {")
+  );
+
+  assert.match(messagesSource, /const workspaceContextSection = \{/);
+  assert.match(messagesSource, /const workspaceContextSection = \{[\s\S]*borderTop: "1px solid var\(--meetro-color-line/);
+  assert.match(factRowSource, /gridTemplateColumns: "minmax\(84px, 0\.42fr\) minmax\(0, 1fr\)"/);
+  assert.match(factRowSource, /padding: "7px 0"/);
+  assert.match(factRowSource, /borderTop: "1px solid rgba\(78,68,55,0\.08\)"/);
+  assert.doesNotMatch(factRowSource, /borderRadius/);
+  assert.doesNotMatch(factRowSource, /background/);
+  assert.doesNotMatch(messagesSource, /<section style=\{workspaceContextCard\} className="meetro-visual-surface">[\s\S]*<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
 });
 
 test("Messages desktop relationship panel containment preserves list thread and mobile flow", () => {

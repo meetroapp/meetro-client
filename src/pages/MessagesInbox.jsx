@@ -3013,7 +3013,7 @@ function MessagesInbox({ setPage, currentPage }) {
         aria-label="Relationship and project context"
         className="meetro-visual-surface"
       >
-        <section style={workspaceContextCard} className="meetro-visual-surface">
+        <section style={workspaceContextSection}>
           <p style={workspaceContextEyebrow}>Relationship</p>
           <div style={workspaceIdentityRow}>
             <div style={workspaceContextAvatar}>
@@ -3032,8 +3032,11 @@ function MessagesInbox({ setPage, currentPage }) {
               <p style={workspaceContextMeta}>{contextIdentity.typeLabel}</p>
             </div>
           </div>
+        </section>
 
-          {hasContactInfo && (
+        {hasContactInfo && (
+          <section style={workspaceContextSection}>
+            <p style={workspaceContextEyebrow}>Contact</p>
             <div style={workspaceFactList}>
               {contact.phone && (
                 <div style={workspaceFactRow}>
@@ -3054,10 +3057,10 @@ function MessagesInbox({ setPage, currentPage }) {
                 </div>
               )}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        <section style={workspaceContextCard} className="meetro-visual-surface">
+        <section style={workspaceContextSection}>
           <p style={workspaceContextEyebrow}>Communication</p>
           <div style={workspaceFactList}>
             {authorityFacts.map((fact) => (
@@ -3069,7 +3072,7 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
         </section>
 
-        <section style={workspaceContextCard} className="meetro-visual-surface">
+        <section style={workspaceContextSection}>
           <p style={workspaceContextEyebrow}>Related work</p>
           {hasContextFacts ? (
             <div style={workspaceFactList}>
@@ -3099,8 +3102,8 @@ function MessagesInbox({ setPage, currentPage }) {
           )}
         </section>
 
-        <section style={workspaceContextCard} className="meetro-visual-surface">
-          <p style={workspaceContextEyebrow}>Relationship memory</p>
+        <section style={workspaceContextSection}>
+          <p style={workspaceContextEyebrow}>Memory</p>
           {hasMemoryFacts ? (
             <div style={workspaceFactList}>
               {memoryFacts.map((fact) => (
@@ -5398,13 +5401,17 @@ const workspaceContextPane = {
   overflowX: "hidden",
   display: "grid",
   alignContent: "start",
-  gap: "14px",
-  padding: "0 4px calc(72px + env(safe-area-inset-bottom, 0px)) 0",
+  gap: 0,
+  padding: "16px 16px calc(32px + env(safe-area-inset-bottom, 0px))",
   boxSizing: "border-box",
   WebkitOverflowScrolling: "touch",
   overscrollBehavior: "contain",
   scrollPaddingBottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
   scrollbarGutter: "stable",
+  borderRadius: "28px",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  boxShadow: "var(--meetro-shadow-soft, 0 18px 44px rgba(15,23,42,0.08))",
 };
 
 const workspaceContextCard = {
@@ -5418,6 +5425,14 @@ const workspaceContextCard = {
   background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
   border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   boxShadow: "var(--meetro-shadow-soft, 0 18px 44px rgba(15,23,42,0.08))",
+};
+
+const workspaceContextSection = {
+  display: "grid",
+  gap: "10px",
+  minWidth: 0,
+  padding: "13px 0",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
 };
 
 const workspaceContextEmpty = {
@@ -5444,24 +5459,24 @@ const workspaceContextIcon = {
 const workspaceContextEyebrow = {
   margin: 0,
   color: "var(--meetro-color-wood, #b7791f)",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "950",
-  letterSpacing: "0.12em",
+  letterSpacing: "0.14em",
   textTransform: "uppercase",
 };
 
 const workspaceIdentityRow = {
   display: "grid",
-  gridTemplateColumns: "54px minmax(0, 1fr)",
+  gridTemplateColumns: "46px minmax(0, 1fr)",
   alignItems: "center",
-  gap: "12px",
+  gap: "10px",
   minWidth: 0,
 };
 
 const workspaceContextAvatar = {
-  width: "54px",
-  height: "54px",
-  borderRadius: "18px",
+  width: "46px",
+  height: "46px",
+  borderRadius: "16px",
   background: "var(--meetro-surface-sage, #eef4ea)",
   color: "var(--meetro-color-forest, #1f4d34)",
   display: "flex",
@@ -5480,14 +5495,14 @@ const workspaceIdentityCopy = {
 const workspaceContextTitle = {
   margin: 0,
   color: "#0f172a",
-  fontSize: "20px",
+  fontSize: "18px",
   lineHeight: 1.12,
   fontWeight: "950",
   overflowWrap: "break-word",
 };
 
 const workspaceContextMeta = {
-  margin: "5px 0 0",
+  margin: "3px 0 0",
   color: "var(--meetro-color-muted, #5f6b63)",
   fontSize: "13px",
   lineHeight: 1.35,
@@ -5504,23 +5519,23 @@ const workspaceContextText = {
 
 const workspaceFactList = {
   display: "grid",
-  gap: "10px",
+  gap: 0,
   minWidth: 0,
 };
 
 const workspaceFactRow = {
   display: "grid",
-  gap: "4px",
+  gridTemplateColumns: "minmax(84px, 0.42fr) minmax(0, 1fr)",
+  alignItems: "baseline",
+  gap: "10px",
   minWidth: 0,
-  padding: "10px 12px",
-  borderRadius: "18px",
-  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
-  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  padding: "7px 0",
+  borderTop: "1px solid rgba(78,68,55,0.08)",
 };
 
 const workspaceFactLabel = {
   color: "var(--meetro-color-wood, #b7791f)",
-  fontSize: "11px",
+  fontSize: "10px",
   fontWeight: "900",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
@@ -5532,6 +5547,7 @@ const workspaceFactValue = {
   lineHeight: 1.35,
   fontWeight: "900",
   overflowWrap: "anywhere",
+  textAlign: "right",
 };
 
 const workspaceContextAction = {
