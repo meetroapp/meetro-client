@@ -28,6 +28,9 @@ function getSafeStorage(storage) {
 }
 
 function getInsightMessage(insight, language) {
+  if (isClosureCommitmentInsight(insight)) {
+    return "Work is complete. Review the project to close it.";
+  }
   if (insight.messageKey === "relationshipInsightCustomerPreferenceMessage") {
     return insight.message || t("relationshipInsightCustomerPreferenceFallback", language);
   }
@@ -37,18 +40,66 @@ function getInsightMessage(insight, language) {
   return insight.messageKey ? t(insight.messageKey, language) : insight.message || "";
 }
 
-function getReviewProjectUnavailableMessage(language = "en") {
+export function getReviewProjectUnavailableMessage(language = "en") {
   const normalized = String(language || "en").toLowerCase();
   if (normalized.startsWith("es")) {
-    return "La revisión del proyecto no está disponible ahora. La conversación permanece abierta.";
+    return "La revisión del proyecto aún no está disponible. Abre la hoja de finalización o vuelve al Centro de Trabajo.";
   }
   if (normalized.startsWith("fr")) {
-    return "La révision du projet n’est pas disponible pour le moment. La conversation reste ouverte.";
+    return "La révision du projet n’est pas encore disponible. Ouvrez la feuille de fin de travaux ou revenez au centre de travail.";
   }
   if (normalized.startsWith("pt")) {
-    return "A revisão do projeto não está disponível agora. A conversa permanece aberta.";
+    return "A revisão do projeto ainda não está disponível. Abra a folha de conclusão ou volte ao Centro de Trabalho.";
   }
-  return "Review Project is not available right now. The conversation remains open.";
+  return "Project review is not available yet. Open the completion sheet or return to Work Center.";
+}
+
+function getProjectIdentity(record = {}) {
+  return (
+    record.id ||
+    record.projectId ||
+    record.requestId ||
+    record.jobId ||
+    record.historyId ||
+    record.conversationId ||
+    ""
+  );
+}
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+export function buildSafeReviewProjectRecord(record = {}) {
+  if (!record || typeof record !== "object") return null;
+  const identity = getProjectIdentity(record);
+  if (!identity) return null;
+
+  const completionPhotos = toArray(
+    record.photos ||
+      record.completionPhotos ||
+      record.finalPhotos ||
+      record.completionRecord?.photos
+  );
+
+  return {
+    ...record,
+    id: record.id || identity,
+    projectId: record.projectId || record.requestId || identity,
+    requestId: record.requestId || record.projectId || identity,
+    status: record.status || record.workflowStatus || "completed",
+    workflowStatus: record.workflowStatus || record.status || "completed",
+    title: record.title || record.projectTitle || record.service || "Completed work",
+    service: record.service || record.title || record.projectTitle || "Completed work",
+    photos: completionPhotos,
+    completionPhotos,
+    finalPhotos: toArray(record.finalPhotos),
+    projectTimeline: toArray(record.projectTimeline),
+    completionRecord:
+      record.completionRecord && typeof record.completionRecord === "object"
+        ? { ...record.completionRecord, photos: toArray(record.completionRecord.photos) }
+        : { photos: completionPhotos },
+  };
 }
 
 export function prepareReviewProjectNavigation(insight = {}, storage) {
@@ -56,7 +107,8 @@ export function prepareReviewProjectNavigation(insight = {}, storage) {
     return { ok: false, reason: "unsupported-action" };
   }
 
-  if (!insight.record || typeof insight.record !== "object") {
+  const reviewRecord = buildSafeReviewProjectRecord(insight.record);
+  if (!reviewRecord) {
     return { ok: false, reason: "missing-review-target" };
   }
 
@@ -65,7 +117,7 @@ export function prepareReviewProjectNavigation(insight = {}, storage) {
   }
 
   try {
-    storage.setItem("lastCompletedProject", JSON.stringify(insight.record));
+    storage.setItem("lastCompletedProject", JSON.stringify(reviewRecord));
   } catch {
     return { ok: false, reason: "storage-write-failed" };
   }
@@ -105,6 +157,7 @@ export function getGlobalInsightLayerStyles({
       bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
       overflowX: "hidden",
       justifyContent: isConversation || isClosureInsight ? "flex-end" : "center",
+      alignItems: isClosureInsight ? "flex-start" : overlayWrap.alignItems,
     },
     card: {
       ...(isClosureInsight ? closureInsightCard : insightCard),
@@ -414,7 +467,9 @@ export default function GlobalInsightLayer({
           React.createElement(
             "span",
             { style: insightEyebrow },
-            t(activeInsight.titleKey || "relationshipInsightTitle", language)
+            isClosureCommitmentInsight(activeInsight)
+              ? "Closure ready"
+              : t(activeInsight.titleKey || "relationshipInsightTitle", language)
           ),
           React.createElement(
             "button",
@@ -466,6 +521,7 @@ const overlayWrap = {
   zIndex: 80,
   display: "flex",
   justifyContent: "center",
+  alignItems: "flex-start",
   pointerEvents: "none",
 };
 
@@ -487,11 +543,12 @@ const insightCard = {
 
 const closureInsightCard = {
   ...insightCard,
-  width: "min(320px, 100%)",
-  gap: "8px",
-  padding: "8px 10px",
+  width: "min(280px, calc(100vw - 40px))",
+  gap: "7px",
+  padding: "7px 9px",
   borderRadius: "12px",
-  boxShadow: "0 8px 20px rgba(15,23,42,0.1)",
+  background: "rgba(255,255,255,0.88)",
+  boxShadow: "0 6px 16px rgba(15,23,42,0.08)",
 };
 
 const insightIcon = {

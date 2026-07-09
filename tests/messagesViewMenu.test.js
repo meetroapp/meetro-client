@@ -527,7 +527,8 @@ test("Messages desktop relationship context panel is scroll-safe without clippin
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*height: "100%"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowY: "auto"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*overflowX: "hidden"/);
-  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollPaddingBottom: "calc\(132px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*padding: "0 4px calc\(72px \+ env\(safe-area-inset-bottom, 0px\)\) 0"/);
+  assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollPaddingBottom: "calc\(96px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
   assert.match(messagesSource, /const workspaceContextPane = \{[\s\S]*scrollbarGutter: "stable"/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship<\/p>/);
   assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);

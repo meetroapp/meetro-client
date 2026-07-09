@@ -58,6 +58,14 @@ test("completion review actions stay tappable and do not treat reviews as closur
   );
 });
 
+test("completed job details guards malformed stored project data before rendering", () => {
+  assert.match(completedJobDetailsSource, /function safeJsonParse\(value, fallback = null\)/);
+  assert.match(completedJobDetailsSource, /function safeArray\(value\)/);
+  assert.doesNotMatch(completedJobDetailsSource, /JSON\.parse\(\s*localStorage\.getItem\("lastCompletedProject"\)/);
+  assert.match(completedJobDetailsSource, /safeArray\(completedProject\?\.completionPhotos\)/);
+  assert.match(completedJobDetailsSource, /safeArray\(safeJsonParse\(localStorage\.getItem\("completedJobPhotos"\), \[\]\)\)/);
+});
+
 test("emergency back and chat actions match their destination", () => {
   assert.match(emergencyStatusSource, /onClick=\{\(\) => setPage\("home"\)\}[\s\S]{0,80}\{t\.backHome\}/);
   assert.match(emergencyDispatchSource, /function openEmergencyChat\(\)/);

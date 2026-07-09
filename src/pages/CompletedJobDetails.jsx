@@ -25,13 +25,26 @@ import {
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 
+function safeJsonParse(value, fallback = null) {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function CompletedJobDetails({ setPage }) {
   const language = localStorage.getItem("language") || "en";
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const mediaDeferredCopy = getMediaDeferredCopy(language);
   const openedFromConversation = Boolean(getConversationOriginContext());
-  const completedProject = JSON.parse(
-    localStorage.getItem("lastCompletedProject") || "null"
+  const completedProject = safeJsonParse(
+    localStorage.getItem("lastCompletedProject"),
+    null
   );
   const [savedReview, setSavedReview] = useState(completedProject?.review || null);
   const [completionApproved, setCompletionApproved] = useState(
@@ -129,11 +142,15 @@ function CompletedJobDetails({ setPage }) {
   );
 
   const completionPhotos =
-    completedProject?.photos ||
-    completedProject?.completionPhotos ||
-    completedProject?.finalPhotos ||
-    completedProject?.completionRecord?.photos ||
-    JSON.parse(localStorage.getItem("completedJobPhotos") || "[]");
+    safeArray(completedProject?.photos).length > 0
+      ? safeArray(completedProject?.photos)
+      : safeArray(completedProject?.completionPhotos).length > 0
+      ? safeArray(completedProject?.completionPhotos)
+      : safeArray(completedProject?.finalPhotos).length > 0
+      ? safeArray(completedProject?.finalPhotos)
+      : safeArray(completedProject?.completionRecord?.photos).length > 0
+      ? safeArray(completedProject?.completionRecord?.photos)
+      : safeArray(safeJsonParse(localStorage.getItem("completedJobPhotos"), []));
 
   const rawCompletionNotes =
     completedProject?.acceptedQuote?.notes ||

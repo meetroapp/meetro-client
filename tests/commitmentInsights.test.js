@@ -3,6 +3,8 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import GlobalInsightLayer, {
+  buildSafeReviewProjectRecord,
+  getReviewProjectUnavailableMessage,
   getGlobalInsightLayerStyles,
   isClosureCommitmentInsight,
   prepareReviewProjectNavigation,
@@ -221,8 +223,8 @@ test("completed-work closure insight renders as a compact non-blocking banner", 
 
   assert.match(styles.overlay.bottom, /safe-area-inset-bottom/);
   assert.equal(styles.overlay.justifyContent, "flex-end");
-  assert.equal(styles.card.width, "min(320px, 100%)");
-  assert.equal(styles.card.padding, "8px 10px");
+  assert.equal(styles.card.width, "min(280px, calc(100vw - 40px))");
+  assert.equal(styles.card.padding, "7px 9px");
   assert.equal(styles.card.borderRadius, "12px");
   assert.equal(isClosureCommitmentInsight(closureInsight), true);
 
@@ -237,11 +239,12 @@ test("completed-work closure insight renders as a compact non-blocking banner", 
     })
   );
 
-  assert.match(markup, /Work is completed\. Closure is the next step\./);
+  assert.match(markup, /Closure ready/);
+  assert.match(markup, /Work is complete\. Review the project to close it\./);
   assert.match(markup, /Review Project/);
   assert.match(markup, />Hide</);
   assert.match(markup, /data-insight-presentation="compact-closure"/);
-  assert.match(markup, /width:min\(320px, 100%\)/);
+  assert.match(markup, /width:min\(280px, calc\(100vw - 40px\)\)/);
   assert.doesNotMatch(markup, /role="dialog"/);
 });
 
@@ -258,8 +261,8 @@ test("completed-work closure insight is not rendered as a large centered overlay
   });
 
   assert.equal(styles.overlay.justifyContent, "flex-end");
-  assert.equal(styles.card.width, "min(320px, 100%)");
-  assert.equal(styles.card.padding, "8px 10px");
+  assert.equal(styles.card.width, "min(280px, calc(100vw - 40px))");
+  assert.equal(styles.card.padding, "7px 9px");
   assert.notEqual(styles.card.width, "min(720px, 100%)");
 });
 
@@ -296,13 +299,33 @@ test("Review Project insight navigation stores a safe target before routing", ()
   const result = prepareReviewProjectNavigation(
     {
       actionType: "reviewProject",
-      record: { id: "project-1", status: "completed" },
+      record: {
+        id: "project-1",
+        status: "completed",
+        completionPhotos: { malformed: true },
+      },
     },
     storage
   );
 
   assert.deepEqual(result, { ok: true, page: "completedJobDetails" });
   assert.match(storage.getItem("lastCompletedProject"), /"id":"project-1"/);
+  assert.match(storage.getItem("lastCompletedProject"), /"completionPhotos":\[\]/);
+});
+
+test("Review Project navigation normalizes conversation records before completed details route", () => {
+  const safeRecord = buildSafeReviewProjectRecord({
+    projectId: "project-1",
+    workCompleted: true,
+    title: "Kitchen repair",
+    completionRecord: { photos: { bad: true } },
+  });
+
+  assert.equal(safeRecord.id, "project-1");
+  assert.equal(safeRecord.requestId, "project-1");
+  assert.equal(safeRecord.service, "Kitchen repair");
+  assert.deepEqual(safeRecord.photos, []);
+  assert.deepEqual(safeRecord.completionRecord.photos, []);
 });
 
 test("Review Project insight fails gracefully when the review target is missing", () => {
@@ -317,6 +340,10 @@ test("Review Project insight fails gracefully when the review target is missing"
 
   assert.deepEqual(result, { ok: false, reason: "missing-review-target" });
   assert.equal(storage.getItem("lastCompletedProject"), null);
+  assert.equal(
+    getReviewProjectUnavailableMessage("en"),
+    "Project review is not available yet. Open the completion sheet or return to Work Center."
+  );
 });
 
 test("commitment insights do not invent random facts", () => {

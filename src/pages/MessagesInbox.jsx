@@ -5366,9 +5366,7 @@ const wideWorkspaceShell = {
   gridTemplateColumns:
     "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
   gap: "20px",
-  height: "min(820px, calc(100dvh - 220px))",
-  minHeight: "min(620px, calc(100dvh - 180px))",
-  maxHeight: "calc(100dvh - 180px)",
+  height: "min(780px, calc(100dvh - 300px))",
 };
 
 const splitListPane = {
@@ -5401,11 +5399,11 @@ const workspaceContextPane = {
   display: "grid",
   alignContent: "start",
   gap: "14px",
-  padding: "0 4px calc(120px + env(safe-area-inset-bottom, 0px)) 0",
+  padding: "0 4px calc(72px + env(safe-area-inset-bottom, 0px)) 0",
   boxSizing: "border-box",
   WebkitOverflowScrolling: "touch",
   overscrollBehavior: "contain",
-  scrollPaddingBottom: "calc(132px + env(safe-area-inset-bottom, 0px))",
+  scrollPaddingBottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
   scrollbarGutter: "stable",
 };
 
