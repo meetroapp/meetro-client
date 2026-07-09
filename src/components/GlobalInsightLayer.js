@@ -93,8 +93,10 @@ export function getGlobalInsightLayerStyles({
   currentPage = "",
   keyboardActive = false,
   reducedMotion = false,
+  insight = null,
 } = {}) {
   const isConversation = /conversation|messages/i.test(String(currentPage || ""));
+  const isClosureInsight = isClosureCommitmentInsight(insight);
   const topOffset = keyboardActive && isConversation ? "48px" : "72px";
   return {
     overlay: {
@@ -102,16 +104,32 @@ export function getGlobalInsightLayerStyles({
       top: `calc(env(safe-area-inset-top, 0px) + ${topOffset})`,
       bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
       overflowX: "hidden",
-      justifyContent: isConversation ? "flex-end" : "center",
+      justifyContent: isConversation || isClosureInsight ? "flex-end" : "center",
     },
     card: {
-      ...insightCard,
+      ...(isClosureInsight ? closureInsightCard : insightCard),
       transition: reducedMotion
         ? "none"
         : "opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease",
       transform: reducedMotion ? "none" : "translateY(0)",
     },
   };
+}
+
+export function isClosureCommitmentInsight(insight = {}) {
+  return (
+    insight?.type === "commitment" &&
+    insight?.actionType === "reviewProject" &&
+    (String(insight?.id || "").startsWith("commitment:next-step:closure:") ||
+      insight?.messageKey === "commitmentInsightWorkClosureNext")
+  );
+}
+
+export function shouldRenderInsightOnPage(insight = {}, currentPage = "") {
+  if (!isClosureCommitmentInsight(insight)) return true;
+  return !/businessdashboard|business-home|businesshome|contractordashboard|workcenter/i.test(
+    String(currentPage || "")
+  );
 }
 
 function RelationshipInsightGlyph() {
@@ -259,9 +277,9 @@ export default function GlobalInsightLayer({
           })
         );
     return prioritizeInsights(
-      filterDismissedRelationshipInsights(sourceInsights, safeStorage).filter(
-        (insight) => !sessionDismissed.has(insight.id)
-      ),
+      filterDismissedRelationshipInsights(sourceInsights, safeStorage)
+        .filter((insight) => !sessionDismissed.has(insight.id))
+        .filter((insight) => shouldRenderInsightOnPage(insight, currentPage)),
       { currentPage, allowSettingsInsights: Boolean(testInsight) }
     );
   }, [
@@ -358,6 +376,7 @@ export default function GlobalInsightLayer({
     currentPage,
     keyboardActive,
     reducedMotion,
+    insight: activeInsight,
   });
   const visibleActionFallback =
     actionFallback?.insightId === activeInsight.id ? actionFallback.message : "";
@@ -368,6 +387,9 @@ export default function GlobalInsightLayer({
       style: layerStyles.overlay,
       "aria-live": "polite",
       "data-keyboard-active": keyboardActive ? "true" : "false",
+      "data-insight-presentation": isClosureCommitmentInsight(activeInsight)
+        ? "compact-closure"
+        : "compact",
     },
     React.createElement(
       "section",
@@ -461,6 +483,15 @@ const insightCard = {
   border: "1px solid rgba(255,255,255,0.48)",
   boxShadow: "0 12px 30px rgba(15,23,42,0.12)",
   color: "#111827",
+};
+
+const closureInsightCard = {
+  ...insightCard,
+  width: "min(320px, 100%)",
+  gap: "8px",
+  padding: "8px 10px",
+  borderRadius: "12px",
+  boxShadow: "0 8px 20px rgba(15,23,42,0.1)",
 };
 
 const insightIcon = {

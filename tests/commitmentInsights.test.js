@@ -4,7 +4,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import GlobalInsightLayer, {
   getGlobalInsightLayerStyles,
+  isClosureCommitmentInsight,
   prepareReviewProjectNavigation,
+  shouldRenderInsightOnPage,
 } from "../src/components/GlobalInsightLayer.js";
 import { getCommitmentInsights } from "../src/utils/commitmentInsights.js";
 import {
@@ -201,14 +203,28 @@ test("GlobalInsightLayer renders commitment insight through the same overlay", (
 });
 
 test("completed-work closure insight renders as a compact non-blocking banner", () => {
+  const closureInsight = {
+    id: "commitment:next-step:closure:project-1",
+    type: "commitment",
+    priority: "high",
+    titleKey: "commitmentInsightTitle",
+    messageKey: "commitmentInsightWorkClosureNext",
+    message: "Work is completed. Closure is the next step.",
+    actionLabelKey: "reviewProject",
+    actionType: "reviewProject",
+    record: { id: "project-1", status: "completed" },
+  };
   const styles = getGlobalInsightLayerStyles({
     currentPage: "conversationThread",
+    insight: closureInsight,
   });
 
   assert.match(styles.overlay.bottom, /safe-area-inset-bottom/);
   assert.equal(styles.overlay.justifyContent, "flex-end");
-  assert.equal(styles.card.width, "min(360px, 100%)");
-  assert.equal(styles.card.padding, "10px 12px");
+  assert.equal(styles.card.width, "min(320px, 100%)");
+  assert.equal(styles.card.padding, "8px 10px");
+  assert.equal(styles.card.borderRadius, "12px");
+  assert.equal(isClosureCommitmentInsight(closureInsight), true);
 
   const markup = renderToStaticMarkup(
     React.createElement(GlobalInsightLayer, {
@@ -217,25 +233,62 @@ test("completed-work closure insight renders as a compact non-blocking banner", 
         userEmail: "sarah@example.com",
         activeAccountMode: "business",
       }),
-      insights: [
-        {
-          id: "commitment:next-step:closure:project-1",
-          type: "commitment",
-          priority: "high",
-          titleKey: "commitmentInsightTitle",
-          messageKey: "commitmentInsightWorkClosureNext",
-          message: "Work is completed. Closure is the next step.",
-          actionLabelKey: "reviewProject",
-          actionType: "reviewProject",
-          record: { id: "project-1", status: "completed" },
-        },
-      ],
+      insights: [closureInsight],
     })
   );
 
   assert.match(markup, /Work is completed\. Closure is the next step\./);
   assert.match(markup, /Review Project/);
   assert.match(markup, />Hide</);
+  assert.match(markup, /data-insight-presentation="compact-closure"/);
+  assert.match(markup, /width:min\(320px, 100%\)/);
+  assert.doesNotMatch(markup, /role="dialog"/);
+});
+
+test("completed-work closure insight is not rendered as a large centered overlay", () => {
+  const closureInsight = {
+    id: "commitment:next-step:closure:project-1",
+    type: "commitment",
+    messageKey: "commitmentInsightWorkClosureNext",
+    actionType: "reviewProject",
+  };
+  const styles = getGlobalInsightLayerStyles({
+    currentPage: "home",
+    insight: closureInsight,
+  });
+
+  assert.equal(styles.overlay.justifyContent, "flex-end");
+  assert.equal(styles.card.width, "min(320px, 100%)");
+  assert.equal(styles.card.padding, "8px 10px");
+  assert.notEqual(styles.card.width, "min(720px, 100%)");
+});
+
+test("Business Dashboard suppresses completed-work closure insight", () => {
+  const closureInsight = {
+    id: "commitment:next-step:closure:project-1",
+    type: "commitment",
+    priority: "high",
+    titleKey: "commitmentInsightTitle",
+    messageKey: "commitmentInsightWorkClosureNext",
+    message: "Work is completed. Closure is the next step.",
+    actionLabelKey: "reviewProject",
+    actionType: "reviewProject",
+    record: { id: "project-1", status: "completed" },
+  };
+  const storage = makeStorage({
+    userEmail: "sarah@example.com",
+    activeAccountMode: "business",
+  });
+  const markup = renderToStaticMarkup(
+    React.createElement(GlobalInsightLayer, {
+      currentPage: "businessDashboard",
+      storage,
+      insights: [closureInsight],
+    })
+  );
+
+  assert.equal(shouldRenderInsightOnPage(closureInsight, "businessDashboard"), false);
+  assert.equal(markup, "");
 });
 
 test("Review Project insight navigation stores a safe target before routing", () => {
