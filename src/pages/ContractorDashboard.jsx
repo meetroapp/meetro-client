@@ -94,6 +94,17 @@ import {
 import { getWorkCenterPrimaryCtaLabel } from "../utils/workCenterCtaLabels";
 import { getProfessionalWorkMetrics } from "../utils/dashboardMetrics";
 import { readBusinessAvailability } from "../utils/businessAvailability";
+import {
+  appendWorkflowOverrideHistory,
+  getPendingWorkflowDependencies,
+  shouldWarnBeforeAction,
+} from "../utils/workflowDependencyAlerts";
+import {
+  appendWorkflowDependencyHistoryEvent,
+  buildWorkflowDependencyReportSection,
+  createWorkflowDependencyIdentifiedEvent,
+  getWorkflowDependencyHistory,
+} from "../utils/workflowDependencyHistory";
 
 function createBlankScheduleForm(overrides = {}) {
   return {
@@ -332,6 +343,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
     method: "meetro_chat",
     note: "",
   });
+  const [workflowDependencyPrompt, setWorkflowDependencyPrompt] = useState(null);
+  const workflowDependencyDialogRef = useRef(null);
+  const workflowDependencyReturnFocusRef = useRef(null);
 
   const [materialsDraft, setMaterialsDraft] = useState("");
   const [materialsAiSuggestion, setMaterialsAiSuggestion] = useState("");
@@ -370,6 +384,161 @@ function ContractorDashboard({ setPage, language = "en" }) {
     "selectedWorkCenterRequest",
     null
   );
+
+  function getWorkflowDependencyJobRecord(source = {}) {
+    return {
+      ...source,
+      id:
+        source.id ||
+        source.jobId ||
+        source.projectId ||
+        source.requestId ||
+        source.scheduleId ||
+        localStorage.getItem("activeWorkScheduleId") ||
+        localStorage.getItem("selectedQuoteRequestId") ||
+        "active-work",
+      customerName:
+        source.customerName ||
+        source.customer ||
+        source.homeownerName ||
+        localStorage.getItem("activeConversationName") ||
+        localStorage.getItem("completionCustomer") ||
+        "Customer",
+      conversationId:
+        source.conversationId ||
+        source.projectConversationId ||
+        source.activeConversationId ||
+        localStorage.getItem("activeWorkConversationId") ||
+        localStorage.getItem("activeConversationId") ||
+        "",
+      workflowStage:
+        source.workflowStage ||
+        source.stage ||
+        source.workflowStatus ||
+        source.status ||
+        localStorage.getItem("activeWorkStage") ||
+        "",
+      projectTimeline: Array.isArray(source.projectTimeline) ? source.projectTimeline : [],
+    };
+  }
+
+  function getPrimaryWorkflowDependency(source = {}) {
+    return getPendingWorkflowDependencies(getWorkflowDependencyJobRecord(source))[0] || null;
+  }
+
+  function getWorkflowDependencyActionLabel(action = "") {
+    const labels = {
+      schedule_visit: "Schedule Visit",
+      record_evaluation: "Record Evaluation",
+      create_proposal: "Create Proposal",
+      mark_approved: "Mark Approved",
+      record_payment: "Record Payment",
+      schedule_work: "Schedule Work",
+      on_the_way: "On The Way",
+      arrived: "Arrived",
+      start_work: "Start Work",
+      perform_additional_work: "Perform Additional Work",
+      complete_work: "Complete Work",
+      finalize_invoice: "Finalize Invoice",
+      send_final_invoice: "Send Final Invoice",
+      create_receipt: "Create Receipt",
+      close_job: "Close Job",
+      move_to_history: "Move to History",
+    };
+    return (
+      labels[action] ||
+      String(action || "Continue")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    );
+  }
+
+  function recordWorkflowDependencyOverride(jobRecord = {}, dependency, action) {
+    const nextRecord = appendWorkflowOverrideHistory(jobRecord, dependency, action);
+    try {
+      localStorage.setItem("lastWorkflowDependencyOverride", JSON.stringify(nextRecord.projectTimeline?.[0] || null));
+      if (nextRecord.conversationId) {
+        saveJobRecord(nextRecord.conversationId, nextRecord.projectTimeline || []);
+      }
+    } catch (error) {
+      console.warn("Workflow dependency override history could not be recorded.", {
+        errorName: error?.name || "Error",
+      });
+    }
+  }
+
+  function recordWorkflowDependencyHistoryEvent(jobRecord = {}, event = {}) {
+    const eventKey = event?.id ? `workflowDependencyHistory:${event.id}` : "";
+    if (eventKey && localStorage.getItem(eventKey) === "recorded") return;
+    const nextRecord = appendWorkflowDependencyHistoryEvent(jobRecord, event);
+    try {
+      if (eventKey) localStorage.setItem(eventKey, "recorded");
+      if (nextRecord.conversationId) {
+        saveJobRecord(nextRecord.conversationId, nextRecord.projectTimeline || []);
+      }
+    } catch (error) {
+      console.warn("Workflow dependency history could not be recorded.", {
+        errorName: error?.name || "Error",
+      });
+    }
+  }
+
+  function requestWorkflowDependencyAdvance(source, action, continueAction) {
+    const jobRecord = getWorkflowDependencyJobRecord(source);
+    const warning = shouldWarnBeforeAction(jobRecord, action);
+    if (!warning.shouldWarn) {
+      continueAction?.();
+      return;
+    }
+
+    workflowDependencyReturnFocusRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    recordWorkflowDependencyHistoryEvent(
+      jobRecord,
+      createWorkflowDependencyIdentifiedEvent(warning.dependency, action)
+    );
+
+    setWorkflowDependencyPrompt({
+      jobRecord,
+      action,
+      dependency: warning.dependency,
+      continueAction,
+    });
+  }
+
+  function continueWorkflowDependencyPrompt() {
+    if (!workflowDependencyPrompt) return;
+    recordWorkflowDependencyOverride(
+      workflowDependencyPrompt.jobRecord,
+      workflowDependencyPrompt.dependency,
+      workflowDependencyPrompt.action
+    );
+    const continueAction = workflowDependencyPrompt.continueAction;
+    setWorkflowDependencyPrompt(null);
+    continueAction?.();
+  }
+
+  function dismissWorkflowDependencyPrompt() {
+    setWorkflowDependencyPrompt(null);
+    setTimeout(() => {
+      workflowDependencyReturnFocusRef.current?.focus?.();
+    }, 0);
+  }
+
+  function sendWorkflowDependencyReminder() {
+    const dependency = workflowDependencyPrompt?.dependency;
+    if (!dependency?.conversationId) return;
+    localStorage.setItem("activeConversationId", dependency.conversationId);
+    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("conversationReturnPage", "contractorDashboard");
+    setWorkflowDependencyPrompt(null);
+    setPage("conversationThread");
+  }
+
+  useEffect(() => {
+    if (!workflowDependencyPrompt?.dependency) return;
+    workflowDependencyDialogRef.current?.focus?.();
+  }, [workflowDependencyPrompt]);
 
   const leadWorkflowStage =
     localStorage.getItem("leadWorkflowStage") || "";
@@ -7677,6 +7846,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       .map((event) => event.label || event.stage)
       .filter(Boolean)
       .join(" -> ");
+    const dependencyHistory = getWorkflowDependencyHistory(job);
+    const dependencyReportSection = buildWorkflowDependencyReportSection(dependencyHistory);
 
     return [
       "Meetro Job History Report",
@@ -7712,6 +7883,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       `Completion Notes: ${getHistoryCompletionNotes(job) || "—"}`,
       `Closure Notes: ${getHistoryClosureNotes(job) || "—"}`,
       `Timeline: ${timeline || "—"}`,
+      ...(dependencyReportSection ? ["", dependencyReportSection] : []),
     ].join("\n");
   };
 
@@ -9662,10 +9834,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setShowCloseJobForm(true);
   };
 
-  const confirmCloseWorkCenterJob = (job = {}) => {
+  const confirmCloseWorkCenterJob = (job = {}, options = {}) => {
     const closureReadiness = evaluateWorkCenterClosureReadiness(job);
 
-    if (!closureReadiness.closureReady) {
+    if (!closureReadiness.closureReady && !options.allowDependencyOverride) {
       setJobActionToast({
         type: "error",
         message:
@@ -10298,6 +10470,105 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const isCompactWorkCenterChildPageOpen =
     isWorkCenterSectionOpen && compactWorkCenterChildTabs.includes(activeTab);
 
+  function renderWorkflowDependencyBanner(source = {}) {
+    const dependency = getPrimaryWorkflowDependency(source);
+    if (!dependency) return null;
+    const severityLabel =
+      dependency.severity === "critical_warning" ? "Critical warning" : "Advisory warning";
+
+    return (
+      <div style={workflowDependencyBanner} aria-label="Waiting on Customer">
+        <span style={workflowDependencySeverity}>{severityLabel}</span>
+        <strong style={workflowDependencyTitle}>{dependency.title}</strong>
+        <span style={workflowDependencyText}>
+          Waiting on: {dependency.waitingOn}. Recommended: wait or send a reminder.
+        </span>
+        {dependency.requestedAt && (
+          <span style={workflowDependencyMeta}>Requested {formatDateTimeDisplay(dependency.requestedAt)}</span>
+        )}
+        {dependency.lastReminderAt && (
+          <span style={workflowDependencyMeta}>Last reminder {formatDateTimeDisplay(dependency.lastReminderAt)}</span>
+        )}
+      </div>
+    );
+  }
+
+  function renderWorkflowDependencyPrompt() {
+    if (!workflowDependencyPrompt?.dependency) return null;
+    const dependency = workflowDependencyPrompt.dependency;
+    const severityLabel =
+      dependency.severity === "critical_warning" ? "Critical warning" : "Advisory warning";
+    const attemptedActionLabel = getWorkflowDependencyActionLabel(
+      workflowDependencyPrompt.action || dependency.attemptedNextAction
+    );
+    return (
+      <div style={workflowDependencyDialogBackdrop} role="presentation">
+        <section
+          ref={workflowDependencyDialogRef}
+          style={workflowDependencyDialog}
+          role="alertdialog"
+          aria-modal="true"
+          aria-label={`${severityLabel}: ${dependency.title}`}
+          aria-describedby="workflow-dependency-dialog-summary workflow-dependency-dialog-warning"
+          tabIndex={-1}
+        >
+          <p style={workflowDependencyDialogEyebrow}>{severityLabel}</p>
+          <h2 style={workflowDependencyDialogTitle}>{dependency.title}</h2>
+          <p id="workflow-dependency-dialog-summary" style={workflowDependencyDialogText}>
+            {dependency.message}
+          </p>
+          <div style={workflowDependencyDialogFacts}>
+            <span>Attempting: {attemptedActionLabel}</span>
+            <span>Waiting on: {dependency.waitingOn}</span>
+            <span>Recommended: wait or send a reminder.</span>
+          </div>
+          <p id="workflow-dependency-dialog-warning" style={workflowDependencyDialogWarning}>
+            {dependency.continueWarning}
+          </p>
+          {Array.isArray(dependency.relatedDependencies) &&
+            dependency.relatedDependencies.length > 1 && (
+              <div style={workflowDependencySummary}>
+                <p style={workflowDependencySummaryTitle}>Still unresolved</p>
+                <ul style={workflowDependencySummaryList}>
+                  {dependency.relatedDependencies.map((item) => (
+                    <li key={item.id || item.type} style={workflowDependencySummaryItem}>
+                      {item.expectedAction}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          <div style={workflowDependencyDialogActions}>
+            <button
+              type="button"
+              style={workflowDependencyRecommendedButton}
+              onClick={dismissWorkflowDependencyPrompt}
+            >
+              Wait
+            </button>
+            {dependency.conversationId && (
+              <button
+                type="button"
+                style={workflowDependencySecondaryButton}
+                onClick={sendWorkflowDependencyReminder}
+              >
+                Send Reminder
+              </button>
+            )}
+            <button
+              type="button"
+              style={workflowDependencyRiskButton}
+              data-risk-action="workflow-dependency-continue-anyway"
+              onClick={continueWorkflowDependencyPrompt}
+            >
+              Continue Anyway
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="app-page contractor-dashboard meetro-wide-page meetro-visual-page" style={page}>
       <style>
@@ -10310,6 +10581,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           }
         `}
       </style>
+      {renderWorkflowDependencyPrompt()}
       {!isCompactWorkCenterChildPageOpen && (
         <div style={topBar}>
           {!isWorkCenterSectionOpen && (
@@ -11250,7 +11522,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <button
                               type="button"
                               style={startScheduleBtn}
-                              onClick={() => confirmCloseWorkCenterJob(scopedJob)}
+                              onClick={() => {
+                                const closureReadiness =
+                                  evaluateWorkCenterClosureReadiness(scopedJob);
+                                requestWorkflowDependencyAdvance(
+                                  {
+                                    ...scopedJob,
+                                    closureObligationsPending:
+                                      !closureReadiness.closureReady,
+                                    workflowStage: "closure",
+                                  },
+                                  "close_job",
+                                  () =>
+                                    confirmCloseWorkCenterJob(scopedJob, {
+                                      allowDependencyOverride: true,
+                                    })
+                                );
+                              }}
                             >
                               {activeLanguage === "es" ? "Guardar en historial" : "Save to History"}
                             </button>
@@ -11606,6 +11894,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                            : "—"}
 	                        </span>
 	                      </div>
+	                      {getWorkflowDependencyHistory(scopedJob).length > 0 && (
+	                        <div style={jobHistoryReadOnlySection}>
+	                          <strong>Workflow Dependencies</strong>
+	                          <span style={workflowDependencyHistoryList}>
+	                            {getWorkflowDependencyHistory(scopedJob).map((event) => (
+	                              <span key={event.id} style={workflowDependencyHistoryItem}>
+	                                {event.summary}
+	                                {event.affectedWorkflowAction
+	                                  ? ` · Action: ${event.affectedWorkflowAction}`
+	                                  : ""}
+	                              </span>
+	                            ))}
+	                          </span>
+	                        </div>
+	                      )}
 	                    </div>
 	                  </div>
 	                )}
@@ -11663,6 +11966,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         </div>
                       </details>
 	                    )}
+                    {!isJobHistoryMode && getWorkflowDependencyHistory(scopedJob).length > 0 && (
+                      <details style={jobSupportingMoreDisclosure}>
+                        <summary style={jobSupportingMoreSummary}>
+                          Workflow Dependencies
+                        </summary>
+                        <div style={jobSavedTimelineList}>
+                          {getWorkflowDependencyHistory(scopedJob).slice(-5).map((event) => (
+                            <div key={event.id} style={jobSavedTimelineItem}>
+                              <span>{event.summary}</span>
+                              <small>
+                                {formatJobTimelineEventTime(event.timestamp)} · Read-only
+                              </small>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
 	                  </div>
 	                </details>
 	                )}
@@ -14954,6 +15274,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 ) &&
                 (universalActiveWork.service || universalActiveWork.location) && (
                 <div style={activeJobPanel}>
+                  {renderWorkflowDependencyBanner(universalActiveWork)}
                   <div style={activeJobTop}>
                     <div>
                       <span
@@ -15024,16 +15345,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           : {}),
                       }}
                       onClick={() => {
-                        saveActiveWorkSnapshot({
-                          stage: "on_the_way",
-                          status: "on_the_way",
-                        });
+                        requestWorkflowDependencyAdvance(universalActiveWork, "on_the_way", () => {
+                          saveActiveWorkSnapshot({
+                            stage: "on_the_way",
+                            status: "on_the_way",
+                          });
 
-                        localStorage.setItem("activeWorkStage", "on_the_way");
-                        localStorage.setItem("activeWorkStatus", "on_the_way");
-                        localStorage.setItem("activeJobStatus", "on_the_way");
-                        localStorage.removeItem("activeWorkPauseReason");
-                        setRefreshKey((prev) => prev + 1);
+                          localStorage.setItem("activeWorkStage", "on_the_way");
+                          localStorage.setItem("activeWorkStatus", "on_the_way");
+                          localStorage.setItem("activeJobStatus", "on_the_way");
+                          localStorage.removeItem("activeWorkPauseReason");
+                          setRefreshKey((prev) => prev + 1);
+                        });
                       }}
                     >
                        {getWorkflowStageLabel("on_the_way")}
@@ -15071,15 +15394,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           : {}),
                       }}
                       onClick={() => {
-                        saveActiveWorkSnapshot({
-                          stage: "arrived",
-                        });
+                        requestWorkflowDependencyAdvance(universalActiveWork, "arrived", () => {
+                          saveActiveWorkSnapshot({
+                            stage: "arrived",
+                          });
 
-                        localStorage.setItem("activeWorkStage", "arrived");
-                        localStorage.setItem("activeWorkStatus", "arrived");
-                        localStorage.setItem("activeJobStatus", "arrived");
-                        localStorage.removeItem("activeWorkPauseReason");
-                        setRefreshKey((prev) => prev + 1);
+                          localStorage.setItem("activeWorkStage", "arrived");
+                          localStorage.setItem("activeWorkStatus", "arrived");
+                          localStorage.setItem("activeJobStatus", "arrived");
+                          localStorage.removeItem("activeWorkPauseReason");
+                          setRefreshKey((prev) => prev + 1);
+                        });
                       }}
                     >
                        {getWorkflowStageLabel("arrived")}
@@ -15093,15 +15418,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           : {}),
                       }}
                       onClick={() => {
-                        saveActiveWorkSnapshot({
-                          stage: "working",
-                        });
+                        requestWorkflowDependencyAdvance(universalActiveWork, "start_work", () => {
+                          saveActiveWorkSnapshot({
+                            stage: "working",
+                          });
 
-                        localStorage.setItem("activeWorkStage", "working");
-                          localStorage.setItem("activeWorkStatus", "working");
-                          localStorage.setItem("activeJobStatus", "working");
-                        localStorage.removeItem("activeWorkPauseReason");
-                        setRefreshKey((prev) => prev + 1);
+                          localStorage.setItem("activeWorkStage", "working");
+                            localStorage.setItem("activeWorkStatus", "working");
+                            localStorage.setItem("activeJobStatus", "working");
+                          localStorage.removeItem("activeWorkPauseReason");
+                          setRefreshKey((prev) => prev + 1);
+                        });
                       }}
                     >
                        {getWorkflowStageLabel("working")}
@@ -15163,24 +15490,26 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <button
                       style={completeButton}
                       onClick={() => {
-                        localStorage.setItem(
-                          "completionService",
-                          universalActiveWork.service || translate("scheduledWork")
-                        );
-                        localStorage.setItem(
-                          "completionLocation",
-                          universalActiveWork.location || ""
-                        );
-                        localStorage.setItem(
-                          "completionSource",
-                          universalActiveWork.type || "scheduled"
-                        );
-                        localStorage.setItem(
-                          "completionScheduleId",
-                          localStorage.getItem("activeWorkScheduleId") || ""
-                        );
+                        requestWorkflowDependencyAdvance(universalActiveWork, "complete_work", () => {
+                          localStorage.setItem(
+                            "completionService",
+                            universalActiveWork.service || translate("scheduledWork")
+                          );
+                          localStorage.setItem(
+                            "completionLocation",
+                            universalActiveWork.location || ""
+                          );
+                          localStorage.setItem(
+                            "completionSource",
+                            universalActiveWork.type || "scheduled"
+                          );
+                          localStorage.setItem(
+                            "completionScheduleId",
+                            localStorage.getItem("activeWorkScheduleId") || ""
+                          );
 
-                        setPage("completionSheet");
+                          setPage("completionSheet");
+                        });
                       }}
                     >
                        {translate("createCompletion")}
@@ -15231,9 +15560,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   ...job,
                   status: normalizedSyncedStatus,
                 });
+                const activeWorkAttemptedAction = activeWorkIsOnSite
+                  ? "complete_work"
+                  : "start_work";
 
                 return (
                 <div style={activeJobPanel} key={job.id}>
+                  {renderWorkflowDependencyBanner(job)}
                   <div style={activeWorkCardTop}>
                     <div style={activeWorkCardIdentity}>
                       <h3 style={activeJobTitle}>{activeWorkTitle}</h3>
@@ -15270,7 +15603,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <button
                       type="button"
                       style={workflowPrimaryActionButton}
-                      onClick={activeWorkWorkflow.onAction}
+                      onClick={() =>
+                        requestWorkflowDependencyAdvance(
+                          job,
+                          activeWorkAttemptedAction,
+                          activeWorkWorkflow.onAction
+                        )
+                      }
                     >
                       {activeWorkWorkflow.actionLabel}
                     </button>
@@ -24378,6 +24717,216 @@ const messageCustomerButton = {
   borderRadius: "16px",
   padding: "14px",
   fontWeight: "900",
+};
+
+const workflowDependencyBanner = {
+  display: "grid",
+  gap: "5px",
+  padding: "11px 12px",
+  marginBottom: "12px",
+  borderRadius: "14px",
+  background: "linear-gradient(135deg, #fffbeb, #fff7ed)",
+  border: "1px solid rgba(217,119,6,0.22)",
+  color: "#78350f",
+  boxSizing: "border-box",
+};
+
+const workflowDependencyTitle = {
+  fontSize: "13px",
+  lineHeight: 1.25,
+  fontWeight: "950",
+};
+
+const workflowDependencySeverity = {
+  justifySelf: "start",
+  padding: "3px 7px",
+  borderRadius: "999px",
+  background: "rgba(180,83,9,0.12)",
+  color: "#92400e",
+  fontSize: "10px",
+  lineHeight: 1.1,
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const workflowDependencyText = {
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: "800",
+};
+
+const workflowDependencyMeta = {
+  fontSize: "11px",
+  lineHeight: 1.3,
+  color: "#92400e",
+  fontWeight: "800",
+};
+
+const workflowDependencyDialogBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10020,
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "center",
+  padding:
+    "calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 104px)",
+  background: "rgba(15,23,42,0.28)",
+  boxSizing: "border-box",
+};
+
+const workflowDependencyDialog = {
+  width: "min(460px, 100%)",
+  maxHeight: "min(620px, calc(100dvh - 148px))",
+  overflowY: "auto",
+  borderRadius: "22px",
+  padding: "18px",
+  background: "rgba(255,253,248,0.98)",
+  border: "1px solid rgba(217,119,6,0.2)",
+  boxShadow: "0 24px 70px rgba(15,23,42,0.22)",
+  boxSizing: "border-box",
+};
+
+const workflowDependencyDialogEyebrow = {
+  margin: "0 0 6px",
+  color: "#b45309",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+};
+
+const workflowDependencyDialogTitle = {
+  margin: "0 0 8px",
+  color: "#111827",
+  fontSize: "20px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+};
+
+const workflowDependencyDialogText = {
+  margin: "0 0 10px",
+  color: "#334155",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: "750",
+};
+
+const workflowDependencyDialogFacts = {
+  display: "grid",
+  gap: "6px",
+  margin: "0 0 12px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  border: "1px solid rgba(148,163,184,0.25)",
+  color: "#1f2937",
+  fontSize: "13px",
+  lineHeight: 1.3,
+  fontWeight: "850",
+};
+
+const workflowDependencyDialogWarning = {
+  margin: "0 0 14px",
+  color: "#78350f",
+  background: "#fffbeb",
+  border: "1px solid rgba(217,119,6,0.18)",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "850",
+};
+
+const workflowDependencySummary = {
+  margin: "0 0 14px",
+  padding: "10px 12px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1px solid rgba(148,163,184,0.28)",
+};
+
+const workflowDependencySummaryTitle = {
+  margin: "0 0 6px",
+  color: "#475569",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+};
+
+const workflowDependencySummaryList = {
+  margin: 0,
+  paddingLeft: "18px",
+  display: "grid",
+  gap: "4px",
+};
+
+const workflowDependencySummaryItem = {
+  color: "#1f2937",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "850",
+};
+
+const workflowDependencyHistoryList = {
+  display: "grid",
+  gap: "6px",
+  minWidth: 0,
+};
+
+const workflowDependencyHistoryItem = {
+  display: "block",
+  overflowWrap: "anywhere",
+  lineHeight: 1.35,
+};
+
+const workflowDependencyDialogActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 132px), 1fr))",
+  gap: "9px",
+};
+
+const workflowDependencySecondaryButton = {
+  minHeight: "44px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "14px",
+  background: "#ffffff",
+  color: "#334155",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const workflowDependencyRecommendedButton = {
+  minHeight: "44px",
+  border: "none",
+  borderRadius: "14px",
+  background: "#0f172a",
+  color: "#ffffff",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const workflowDependencyRiskButton = {
+  minHeight: "44px",
+  border: "1px solid rgba(180,83,9,0.45)",
+  borderRadius: "14px",
+  background: "#fff7ed",
+  color: "#92400e",
+  fontWeight: "950",
+  cursor: "pointer",
+};
+
+const workflowDependencyPrimaryButton = {
+  minHeight: "44px",
+  border: "none",
+  borderRadius: "14px",
+  background: "linear-gradient(135deg, #b45309, #92400e)",
+  color: "#ffffff",
+  fontWeight: "950",
+  cursor: "pointer",
 };
 
 export default ContractorDashboard;
