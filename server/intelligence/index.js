@@ -2,6 +2,7 @@ export {
   buildCompanionCapabilities,
   COMPANION_CAPABILITY_LIBRARY,
 } from "./capability/companionCapabilityEngine.js";
+export * from "./business/index.js";
 export { handleCompanionAsk } from "./companionController.js";
 export { COMPANION_ASK_ROUTE, registerCompanionRoutes } from "./companionRoutes.js";
 export {

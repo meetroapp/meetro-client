@@ -1210,3 +1210,97 @@ The backend adapter must provide scoped persistence equivalent to:
 - exact authorized relationship, workflow, and conversation IDs
 
 The adapter must enforce durable storage, transactional correction, immediate deletion exclusion, index cleanup, retention, access control, and privacy-driven purge. Until that adapter exists, persistent retrieval is safely empty and no production durable write is claimed.
+
+---
+
+# MC-AI-012 — Business Intelligence Foundation
+
+## Responsibility And Flow
+
+Business Intelligence is a read-only interpretation layer for authorized operational evidence. It aggregates workload, pipeline, responsibility, scheduling, lifecycle backlogs, financial workflow signals, bottlenecks, priorities, trends, confidence, and business-health classification. It does not operate the business or replace accounting, scheduling, workflow, relationship, or memory authority.
+
+```text
+Business-Scoped Request
+  -> Gateway
+  -> Orchestrator
+  -> Workflow Intelligence
+  -> Relationship Intelligence
+  -> Persistent Memory
+  -> Business Scope Resolver
+  -> Normalize and Deduplicate Operational Records
+  -> Build Workload, Pipeline, Schedule, and Financial Signals
+  -> Detect Bottlenecks
+  -> Determine Priorities
+  -> Classify Business Health
+  -> Return Structured Business Context
+  -> Unified Context Builder
+  -> Provider
+```
+
+One Gateway request continues to produce no more than one provider execution and one usage-accounting event.
+
+## Business Scope Resolution
+
+Business scope comes from authenticated backend identity, authorized business IDs, or a trusted backend business profile. Client-supplied business IDs and business names are never authority. Where more than one authorized business exists and no trusted active business is supplied, the engine returns empty context rather than combining businesses.
+
+Every source record must carry the exact resolved business ID. Out-of-scope and unscoped records are excluded. The engine never combines metrics across businesses or personal and professional accounts.
+
+## Supported Sources
+
+The trusted adapter may provide scoped service requests, workflows, visits, evaluations, proposals or quotes, approvals, deposits, payments, schedules, active work, emergency records, completion records, Closure records, Job History, invoices, receipts, and operational relationship metadata. Repository methods receive authenticated user and resolved business ID.
+
+Frontend localStorage selectors are not backend intelligence sources. Production integrations must provide trusted records through `backendContext` or scoped repository methods such as `getBusinessRecords`, `getWorkflowRecords`, `getScheduleRecords`, `getProposalRecords`, `getFinancialWorkflowRecords`, and `getRelationshipRecords`.
+
+## Normalization And Deduplication
+
+The normalizer projects stable IDs, lifecycle statuses, responsibility, blockers, explicit schedule timestamps, Completion, Closure, history, proposal, invoice, receipt, and aggregate-value evidence. It excludes names, addresses, messages, private notes, attachments, and payment credentials.
+
+Lifecycle records deduplicate by stable job, project, emergency request, or request ID. Proposals, invoices, receipts, evaluations, and schedules use their own typed IDs. Completion and Job History representations do not create additional jobs. Conflicting cross-business identities are excluded rather than merged.
+
+## Workload And Pipeline
+
+Workload distinguishes open workflows, active work, emergency work, scheduled-today and upcoming work, explicit overdue items, completed-but-not-closed work, and closed work. Business dates use the authenticated business timezone; UTC is only the documented fallback when no timezone is supplied.
+
+Overdue classification requires an explicit overdue state, due timestamp, schedule timestamp with qualifying workflow evidence, or product SLA. Record age alone is never overdue evidence.
+
+Pipeline metrics distinguish new requests, unfinished evaluations, proposal drafts, sent proposals, customer approval waiting, and approved work without a linked schedule.
+
+## Responsibility, Bottlenecks, And Priorities
+
+Waiting-on counts aggregate Workflow Intelligence responsibility values for customer, professional, system, and third party. Normal customer waiting is not automatically overdue or a bottleneck.
+
+Bottlenecks require deterministic evidence and minimum backlog conditions. Supported classes include emergency or active-work pressure, explicit overdue work, evaluation and proposal backlogs, professional response backlog, completion and Closure backlog, invoice or receipt workflow backlog, history reconciliation, and explicit schedule conflicts.
+
+Priorities are read-only, evidence-derived, deduplicated, capped, and deterministically ordered. Emergency and safety-related issues precede normal operational review; professional-owned due work precedes ordinary customer waiting. The engine never sends, schedules, approves, closes, changes, or resolves anything.
+
+## Scheduling Capacity
+
+Capacity is normalized as available, medium, busy, full, or unknown. It uses explicit scheduled work, overlaps with complete start and end timestamps, emergency pressure, approved-unscheduled work, and approved business-scoped Persistent Memory defaults. Missing duration or capacity evidence produces conservative or unknown results. No employee capacity is invented.
+
+## Financial Workflow Signals
+
+Financial signals keep proposed value, approved value, invoiced value, and recorded or collected revenue separate. Proposal value is never earned revenue. Unpaid invoice value is never collected revenue. Recorded revenue is included only when trusted source records provide it and payment or receipt evidence supports it.
+
+The engine does not calculate taxes, profit, cash balance, cash flow, bank reconciliation, or financial statements. Mixed currencies generate a warning and suppress a single aggregate currency claim.
+
+## Business Health, Trends, And Confidence
+
+Health classifications are healthy, busy, overloaded, underutilized, blocked, and unknown. Classification combines multiple operational signals and centralized conservative defaults; it does not use an AI call or a single universal count in isolation. Detailed thresholds remain internal implementation policy.
+
+Trends require comparable timestamped windows and sufficient evidence. Insufficient evidence returns `insufficient_data` or `unknown`; no seasonality or revenue forecast is inferred.
+
+Confidence is deterministic. Stable scoped records and complete timestamps support higher confidence. Missing timestamps, mixed currency, contradictory identities, unresolved duplicates, or disputed states reduce confidence and produce safe warnings.
+
+## Authority Boundaries
+
+Workflow Intelligence remains authoritative for lifecycle stage, next action, waiting actor, blockers, obligations, Completion versus Closure, and Job History eligibility. Relationship Intelligence remains authoritative for customer continuity and communication response state. Persistent Memory may contribute only active, consent-valid, exact-business preferences; it never overrides current operational records.
+
+## Privacy And Logging
+
+Provider context contains aggregates, classifications, safe evidence counts, warnings, and stable business ID only. It excludes customer names, private notes, message bodies, addresses, phone numbers, email addresses, attachments, photos, invoice or receipt contents, payment or banking details, tax data, prompts, and unrelated memory values.
+
+Logs may contain request and business IDs, workflow, bottleneck, and priority counts, classification, confidence, truncation, and elapsed time. Logs never include raw records, names, notes, messages, addresses, financial details, memory values, prompts, or unified provider context.
+
+## Production Adapter Requirements
+
+Production repositories must enforce authenticated business scope before returning records, preserve stable typed IDs, provide business timezone where available, prevent unrestricted whole-database reads, and return immutable or safely copied records. The engine is read-only and safely returns empty context when an authorized business or trusted evidence cannot be established.

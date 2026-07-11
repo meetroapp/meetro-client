@@ -531,3 +531,56 @@ Complete inventorship, assignment, prior-art, and public-disclosure review.
 ### Notes
 
 No raw conversation, private customer content, credential, private prompt, or operative trade-secret logic is reproduced here.
+
+## MC-IP-0011 — Business Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-012
+**Repository Commit:** Pending repository verification
+**Related Files:** `server/intelligence/business/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/businessIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`
+
+### Problem Solved
+
+Professionals need a trustworthy operational view across fragmented workflow evidence without converting the Companion into accounting or autonomous business software.
+
+### Technical or Creative Solution
+
+A business-scoped, read-only intelligence layer normalizes and deduplicates trusted operational records, interprets workload and schedule capacity, separates financial workflow signals, detects evidence-backed bottlenecks, and returns deterministic priorities and business-health classifications.
+
+### Distinguishing Characteristics
+
+Exact business authorization, stable lifecycle deduplication, workflow-derived responsibility, privacy-minimized aggregation, deterministic health and priority reasoning, and strict separation between proposed, approved, invoiced, and recorded value.
+
+### Operational Value
+
+Helps professionals identify operational pressure and unresolved responsibilities without modifying business, schedule, customer, workflow, or financial records.
+
+### Evidence of Implementation
+
+Repository modules, orchestrator integration, focused tests, and architecture documentation exist in the working tree. A qualifying implementation commit remains pending repository verification.
+
+### Publicly Disclosed?
+
+Pending repository verification.
+
+### Confidential Elements
+
+Detailed classification thresholds, prioritization policy, future trend methods, and internal operational weighting.
+
+### Recommended Protection
+
+Evaluate as a patent candidate with counsel, preserve non-public operational methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Commit the verified implementation, update this entry with the commit hash, and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No detailed threshold, ranking formula, private customer information, financial credential, or operative trade-secret logic is reproduced here.

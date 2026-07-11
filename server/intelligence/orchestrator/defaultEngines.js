@@ -1,5 +1,6 @@
 import { buildCompanionCapabilities } from "../capability/companionCapabilityEngine.js";
 import { buildCompanionCommunityIntelligence } from "../community/companionCommunityEngine.js";
+import { businessEngineSupports, collectBusinessIntelligence } from "../business/businessEngine.js";
 import { buildCompanionContextEngine } from "../context/companionContextEngine.js";
 import { buildCompanionKnowledge } from "../knowledge/companionKnowledgeEngine.js";
 import {
@@ -110,7 +111,11 @@ export function createDefaultOrchestrationEngines() {
       });
       return createEngineContextResult({ section: "community", priority: 70, data: result.data, metadata: result.diagnostics });
     }),
-    engine("business", 80, async () => createEngineContextResult({ section: "business", priority: 80, data: {} })),
+    engine("business", 80, async (request, collected) => createEngineContextResult({
+      section: "business",
+      priority: 80,
+      data: await collectBusinessIntelligence({ request, collected }),
+    }), { supports: businessEngineSupports }),
     engine("contracts", 90, async () => createEngineContextResult({ section: "contracts", priority: 90, data: {} })),
   ];
 }
