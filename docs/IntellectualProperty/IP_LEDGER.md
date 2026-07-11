@@ -489,8 +489,8 @@ No availability, registration, or enforceability claim is made.
 **Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
 **Product:** Meetro Community
 **Related Milestone:** MC-AI-011
-**Repository Commit:** Pending repository verification
-**Related Files:** `server/intelligence/memory/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/persistentMemory.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`
+**Repository Commit:** `b688449`
+**Related Files:** `server/intelligence/memory/persistentMemoryEngine.js`, `server/intelligence/memory/memoryContracts.js`, `server/intelligence/memory/memoryRepositoryContracts.js`, `server/intelligence/memory/memoryService.js`, `server/intelligence/memory/memoryRetrieval.js`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/persistentMemory.test.js`, `server/tests/intelligenceGateway.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`
 
 ### Problem Solved
 
@@ -510,7 +510,7 @@ Preserves approved continuity across sessions while keeping Meetro Community rec
 
 ### Evidence of Implementation
 
-Repository modules, orchestration integration, focused tests, and architecture documentation exist in the working tree. A qualifying implementation commit remains pending repository verification.
+Verified commit `b688449` adds the persistent-memory domain, repository boundary, orchestration integration, focused tests, and architecture documentation.
 
 ### Publicly Disclosed?
 
@@ -526,7 +526,7 @@ Evaluate as a patent candidate with counsel, preserve non-public operational det
 
 ### Follow-Up Actions
 
-Commit the verified implementation, update this entry with the commit hash, and complete inventorship, assignment, prior-art, and public-disclosure review.
+Complete inventorship, assignment, prior-art, and public-disclosure review.
 
 ### Notes
 
