@@ -17,6 +17,7 @@ const ENGINE_STAGES = [
   ["community", "contracts"],
   ["knowledge"],
   ["capability"],
+  ["validation"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {
@@ -38,6 +39,7 @@ function buildProviderMessages(request, unifiedContext) {
         capabilities: unifiedContext.capabilities || {},
         workflow: unifiedContext.workflow || {},
         relationship: unifiedContext.relationship || {},
+        validation: unifiedContext.validation || {},
         ...unifiedContext,
       }),
     },

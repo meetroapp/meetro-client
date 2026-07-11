@@ -751,3 +751,56 @@ Record the qualifying implementation commit, complete inventorship, assignment, 
 ### Notes
 
 No phrase map, selection weight, prioritization formula, internal threshold, sensitive permission map, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.
+
+## MC-IP-0015 — Intelligence Validation and Confidence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-016
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/validation/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/tests/validationIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Individual engine confidence could not establish whether cross-engine evidence agreed, conflicted, remained current, or safely supported provider language.
+
+### Technical or Creative Solution
+
+A required read-only validation stage reconciles bounded engine evidence under deterministic authority boundaries, preserves traceability, surfaces contradictions, normalizes platform confidence, and generates response constraints before provider execution.
+
+### Distinguishing Characteristics
+
+Separation of domain confidence from platform confidence, cross-engine evidence reconciliation, conflict-preserving response constraints, and fail-safe withholding of unsupported certainty.
+
+### Operational Value
+
+Reduces the risk that incomplete, stale, unauthorized, or contradictory intelligence is presented as established fact while preserving each engine's authority and the single-provider architecture.
+
+### Evidence of Implementation
+
+The working tree contains the validation contracts, authority and evidence adapters, contradiction and response-policy modules, required Orchestrator integration, focused tests, architecture documentation, and roadmap update. A qualifying commit remains pending.
+
+### Production Limitation
+
+Validation is limited to structured evidence supplied by selected engines. Missing stable identifiers, freshness metadata, or production adapters causes confidence to be qualified or withheld.
+
+### Confidential Elements
+
+Detailed reconciliation policy, internal priority methods, conflict handling rules, and security-sensitive authorization validation.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public validation methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Record the qualifying implementation commit and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No internal weighting, scoring threshold, detailed conflict rule, abuse defense, private mapping, or security-sensitive authorization logic is reproduced here. No patent, registration, or legal-protection status is asserted.

@@ -13,6 +13,7 @@ import {
 } from "../memory/persistentMemoryEngine.js";
 import { collectRelationshipIntelligence, relationshipEngineSupports } from "../relationship/relationshipEngine.js";
 import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow/workflowEngine.js";
+import { collectIntelligenceValidation } from "../validation/validationEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
 
 function engine(id, priority, collectContext, options = {}) {
@@ -98,5 +99,6 @@ export function createDefaultOrchestrationEngines() {
       data: await collectCommunityIntelligence({ request, collected }),
     }), { supports: communityEngineSupports }),
     engine("contracts", 90, async () => createEngineContextResult({ section: "contracts", priority: 90, data: {} })),
+    engine("validation", 110, async (request, collected) => createEngineContextResult({ section: "validation", priority: 110, data: await collectIntelligenceValidation({ request, collected }) }), { required: true }),
   ];
 }

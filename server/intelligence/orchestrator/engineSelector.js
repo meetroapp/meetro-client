@@ -64,12 +64,13 @@ export function selectEngineIds(request = {}, registry) {
   const source = normalize(request.source?.page || request.source?.surface);
   const mapped = FEATURE_ENGINES[feature] || FEATURE_ENGINES[capability] || FEATURE_ENGINES[source];
   const ids = [...new Set([...(CAPABILITY_FEATURES.has(feature) ? ["capability"] : []), ...(mapped || DEFAULT_ENGINES)])];
-
-  return ids
+  const selected = ids
     .map((id) => registry.get(id))
     .filter((engine) => engine && engine.enabled !== false && engine.supports(request) !== false)
     .sort((left, right) => left.priority - right.priority)
     .map((engine) => engine.id);
+  if (selected.some((id) => !["context", "memory"].includes(id)) && registry.get("validation")) selected.push("validation");
+  return [...new Set(selected)];
 }
 
 export { DEFAULT_ENGINES, FEATURE_ENGINES };

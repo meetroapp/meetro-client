@@ -304,9 +304,21 @@ Evidence: [Capability Intelligence](../../server/intelligence/capability/). See 
 
 ### Phase 3 — Intelligence Quality And Decision Support
 
+**Status:** In progress; MC-AI-016 implemented
+
+#### MC-AI-016 — Intelligence Validation and Confidence Foundation
+
+**Status:** Implemented 2026-07-11
+
+Adds a required post-engine validation stage with deterministic authority resolution, bounded evidence traceability, agreement and contradiction detection, freshness and scope checks, platform-confidence normalization, and provider response constraints. It preserves domain authority and performs no execution or mutation.
+
+**Production limitation:** Validation quality is bounded by the structured evidence supplied by selected engines. Missing timestamps, identifiers, or adapters result in qualified or withheld confidence rather than inferred certainty.
+
+#### MC-AI-017 — Decision Intelligence Foundation
+
 **Status:** Planned
 
-Recommended next milestone: **MC-AI-016 — Intelligence Validation and Confidence Foundation**. It should reconcile permitted cross-engine evidence, normalize confidence, preserve traceability, and surface contradictions without executing product actions.
+This future milestone should compare permitted options and constraints, preserve validated evidence and uncertainty, and recommend no action when evidence is insufficient. It must remain advisory.
 
 - **Intelligence Validation and Confidence:** reconcile permitted engine outputs, normalize confidence, preserve evidence, and prevent weak conclusions from appearing as facts.
 - **Decision Intelligence:** compare permitted options, identify constraints, and surface tradeoffs while remaining advisory.
@@ -357,6 +369,7 @@ No capability in this phase is claimed as currently implemented.
 | Refinement | Business-before-Community sequencing | Implemented | Preserve intended engine dependency order | MC-AI-012, MC-AI-013 | `9908f9fc83e51e057b76abf405c4f55886f8c980` | 2026-07-11 | Review with related entries |
 | MC-AI-014 | Knowledge Intelligence | Implemented | Source-aware governed knowledge retrieval | Core intelligence foundation | `4e37db9bf8ac01b91c3d91f523a915ae524830ce` | 2026-07-11 | [MC-IP-0013](../IntellectualProperty/IP_LEDGER.md#mc-ip-0013--knowledge-intelligence-foundation) |
 | MC-AI-015 | Capability Intelligence | Implemented | Governed task and capability routing without execution | MC-AI-014 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0014](../IntellectualProperty/IP_LEDGER.md#mc-ip-0014--capability-intelligence-foundation) |
+| MC-AI-016 | Intelligence Validation and Confidence | Implemented | Cross-engine validation and response constraints | MC-AI-015 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0015](../IntellectualProperty/IP_LEDGER.md#mc-ip-0015--intelligence-validation-and-confidence-foundation) |
 
 ## Engine Responsibility Matrix
 
@@ -468,4 +481,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next implementation milestone is **MC-AI-016 — Intelligence Validation and Confidence Foundation**. It remains planned and is not implemented by MC-AI-015.
+The next implementation milestone is **MC-AI-017 — Decision Intelligence Foundation**. It remains planned and is not implemented by MC-AI-016.

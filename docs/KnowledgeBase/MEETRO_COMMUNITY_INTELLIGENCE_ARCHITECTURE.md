@@ -1533,3 +1533,36 @@ The executable stage runs after Knowledge and contributes one `capabilities` sec
 Logs contain request, intent and capability IDs, status, category, risk, bounded counts, confidence, and timing only. They exclude message bodies, drafts, customer names, private inputs, document content, memory values, prompts, credentials, and provider context.
 
 This milestone has no execution layer. It cannot send messages, create or save documents, change schedules, approve proposals, record payments, close jobs, publish Community content, modify memory, or mutate product state.
+
+## Intelligence Validation And Confidence Foundation
+
+Status: Complete (MC-AI-016)
+
+Validation is the required final intelligence stage after Capability and before Unified Context provider execution. It consumes immutable copies of selected engine outputs, preserves every domain engine's authority, derives bounded claims and evidence references, surfaces agreements and contradictions, normalizes platform confidence, and creates deterministic response constraints. It does not generate answers or execute actions.
+
+```text
+Collected Engine Context
+  -> Claim Adaptation
+  -> Authority Resolution
+  -> Evidence and Freshness Validation
+  -> Identity and Scope Validation
+  -> Agreement Detection
+  -> Contradiction Detection
+  -> Confidence Normalization
+  -> Response Constraint Policy
+  -> Validated Intelligence Context
+  -> Unified Context Builder
+  -> Provider
+```
+
+The authority matrix preserves Workflow for lifecycle and next action, Relationship for continuity and engagement, Persistent Memory for approved preferences, Business for operational aggregates, Community for authorized activity, Knowledge for verified guidance, Capability for approved capability definitions, and Contracts for contract context. Supporting engines cannot overwrite the authoritative domain.
+
+Adapters derive minimal validation evidence from existing engine contracts without broad engine rewrites. Evidence uses stable engine and source or record IDs when available, never raw messages, source excerpts, private records, names, addresses, payment details, or provider output. Agreement and contradiction ordering is deterministic and deduplicated. Contradictions retain severity, authoritative engine, safe resolution boundary, and response impact; they are never silently discarded.
+
+Freshness, scope, identity, authorization, Knowledge support, Capability readiness, Memory precedence, Business aggregate consistency, and Community privacy are validated only from available structured evidence. Display-name identity is not accepted. Memory cannot grant permission, Knowledge cannot invent live state, Capability cannot override Workflow prerequisites, and Community cannot expose private business or social-scoring fields.
+
+Validation status is supported, partially supported, conflicted, insufficient evidence, unauthorized, stale only, blocked, or unknown. Overall confidence is high, medium, low, or withheld; numerical engine confidence is not averaged. Response modes are definitive, qualified, clarification required, insufficient evidence, conflict warning, escalation required, or blocked. Definitive language requires consistent current evidence and no material conflict. Safety, emergency, legal, permit, privacy, authorization, and unexpected execution conflicts constrain or block the provider and preserve applicable disclaimers.
+
+Validation is a required executable engine so failure cannot silently bypass quality control. The provider receives original minimized domain context plus a separate `validation` section and must preserve uncertainty, contradictions, blocked topics, disclaimers, escalation, and the no-execution boundary. One provider call and existing usage accounting remain unchanged.
+
+Safe logs contain request ID, statuses, response mode, counts, flags, and timing only. Validation never mutates Workflow, Relationship, Memory, Business, Community, Knowledge, Capability, or product state.
