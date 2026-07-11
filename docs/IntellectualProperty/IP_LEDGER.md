@@ -968,8 +968,8 @@ This entry records authorship and repository evidence for internal governance pu
 **Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
 **Product:** Meetro Community
 **Related Milestone:** MC-AI-019
-**Repository Commit:** Pending qualifying commit
-**Related Files:** `server/intelligence/planning/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/intelligence/prompts/companionSystemPrompt.js`, `server/tests/planningIntelligence.test.js`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+**Repository Commit:** `b0a21fa7fb55507b612eb02114fd79080bc60b79`
+**Related Files:** `server/intelligence/planning/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/intelligence/index.js`, `server/intelligence/prompts/companionSystemPrompt.js`, `server/tests/planningIntelligence.test.js`, `server/tests/intelligenceEngineRegistry.test.js`, `server/tests/intelligenceGateway.test.js`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
 
 ### Problem Solved
 
@@ -989,11 +989,11 @@ Allows the Companion to explain a safe path from recommendation toward possible 
 
 ### Evidence of Implementation
 
-The working tree contains Planning contracts, mode and readiness rules, deterministic plan and step assembly, required Orchestrator and provider-boundary integration, focused tests, architecture documentation, and roadmap updates. A qualifying commit remains pending.
+Primary implementation commit `b0a21fa7fb55507b612eb02114fd79080bc60b79` contains Planning contracts, mode and readiness rules, deterministic plan and step assembly, required Orchestrator and provider-boundary integration, focused tests, architecture documentation, and roadmap updates.
 
 ### Production Limitation
 
-Planning Intelligence operates only on validated Recommendation, Decision, Capability, and Workflow evidence. It does not authorize actions, invoke write paths, mutate product state, estimate unsupported costs or dates, or execute plans.
+Planning Intelligence transforms only validated Recommendation output supported by Decision, Capability, and Workflow evidence. It does not discover external plans, authorize actions, invoke write paths, execute plans, or mutate product state. Exact cost, effort, and schedule estimates remain unavailable unless verified product data exists.
 
 ### Confidential Elements
 
@@ -1005,7 +1005,7 @@ Evaluate patent candidacy with counsel, preserve non-public planning methods as 
 
 ### Follow-Up Actions
 
-Record the qualifying implementation commit and define MC-AI-020 Execution Governance before considering any future execution capability.
+Define MC-AI-020 Execution Governance before considering any future execution capability.
 
 ### Notes
 
