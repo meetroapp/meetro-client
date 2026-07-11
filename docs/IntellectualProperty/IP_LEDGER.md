@@ -815,8 +815,9 @@ No internal weighting, scoring threshold, detailed conflict rule, abuse defense,
 **Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
 **Product:** Meetro Community
 **Related Milestone:** MC-AI-017
-**Repository Commit:** Pending qualifying commit
-**Related Files:** `server/intelligence/decision/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/tests/decisionIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+**Repository Commit:** `886169f195cfd33c62506ebc8639762bfae68d08`
+**Supporting Verification Commit:** `512bbce554e643031d54fc11efbb31bae8e2fb68`
+**Related Files:** `server/intelligence/decision/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/intelligence/prompts/companionSystemPrompt.js`, `server/tests/decisionIntelligence.test.js`, `server/tests/intelligenceEngineRegistry.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
 
 ### Problem Solved
 
@@ -836,7 +837,7 @@ Helps the Companion explain supported choices consistently without inventing opt
 
 ### Evidence of Implementation
 
-The working tree contains decision contracts, option and constraint adapters, tradeoff and recommendation modules, required Orchestrator integration, focused tests, architecture documentation, and roadmap update. A qualifying commit remains pending.
+Verified primary commit `886169f195cfd33c62506ebc8639762bfae68d08` contains the decision contracts, option and constraint adapters, tradeoff and recommendation modules, required Orchestrator and provider-boundary integration, focused tests, architecture documentation, and roadmap update. Supporting commit `512bbce554e643031d54fc11efbb31bae8e2fb68` verifies executable engine registry order.
 
 ### Production Limitation
 
@@ -852,7 +853,7 @@ Evaluate patent candidacy with counsel, preserve non-public comparison methods a
 
 ### Follow-Up Actions
 
-Record the qualifying implementation commit and complete inventorship, assignment, prior-art, and public-disclosure review.
+Complete inventorship, assignment, prior-art, and public-disclosure review while preserving the separation between advisory comparison and execution.
 
 ### Notes
 
