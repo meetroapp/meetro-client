@@ -20,6 +20,7 @@ const ENGINE_STAGES = [
   ["validation"],
   ["decision"],
   ["recommendation"],
+  ["planning"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {
@@ -44,6 +45,7 @@ function buildProviderMessages(request, unifiedContext) {
         validation: unifiedContext.validation || {},
         decision: unifiedContext.decision || {},
         recommendation: unifiedContext.recommendation || {},
+        planning: unifiedContext.planning || {},
         ...unifiedContext,
       }),
     },

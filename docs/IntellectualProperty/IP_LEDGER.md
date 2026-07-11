@@ -952,8 +952,61 @@ This entry documents adopted governance only. It does not implement Planning Int
 
 ### Follow-Up Actions
 
-Apply the adopted Constitution to the design review for planned MC-AI-019 before any implementation begins and preserve its governance boundaries in future architecture reviews.
+Continue applying the adopted Constitution to MC-AI-019 verification and all future architecture reviews.
 
 ### Notes
 
 This entry records authorship and repository evidence for internal governance purposes. It makes no patent, registration, or legal-protection claim.
+
+## MC-IP-0018 — Planning Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-019
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/planning/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/intelligence/prompts/companionSystemPrompt.js`, `server/tests/planningIntelligence.test.js`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Validated recommendations required a consistent way to describe how they could be accomplished without converting advisory reasoning into product action.
+
+### Technical or Creative Solution
+
+A required advisory engine transforms eligible Recommendation output into bounded plans with stable ordered steps, structured prerequisites and dependencies, missing-information states, explicit approval checkpoints, readiness, risk and rollback awareness, and future verification criteria.
+
+### Distinguishing Characteristics
+
+Recommendation-to-plan traceability, deterministic plan and step identity, preservation of Validation and Decision authority, fail-closed readiness, structured approval boundaries, and constitutional separation from execution.
+
+### Operational Value
+
+Allows the Companion to explain a safe path from recommendation toward possible future action while preserving user authority, current product truth, and non-mutation guarantees.
+
+### Evidence of Implementation
+
+The working tree contains Planning contracts, mode and readiness rules, deterministic plan and step assembly, required Orchestrator and provider-boundary integration, focused tests, architecture documentation, and roadmap updates. A qualifying commit remains pending.
+
+### Production Limitation
+
+Planning Intelligence operates only on validated Recommendation, Decision, Capability, and Workflow evidence. It does not authorize actions, invoke write paths, mutate product state, estimate unsupported costs or dates, or execute plans.
+
+### Confidential Elements
+
+Detailed planning policies, future step-selection methods, and future execution-governance controls.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public planning methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Record the qualifying implementation commit and define MC-AI-020 Execution Governance before considering any future execution capability.
+
+### Notes
+
+No proprietary planning formula, selection heuristic, ordering weight, internal score, confidential prompt detail, or future execution control is reproduced here. No patent, registration, certification, compliance, or legal-protection status is asserted.

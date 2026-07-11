@@ -340,9 +340,11 @@ See [Meetro Community Intelligence Constitution](MEETRO_INTELLIGENCE_CONSTITUTIO
 
 #### MC-AI-019 — Planning Intelligence Foundation
 
-**Status:** Planned
+**Status:** Implemented 2026-07-11
 
-This future milestone may assemble approved multi-step plans from validated recommendations while remaining advisory and requiring explicit approval before any future execution.
+Adds deterministic advisory plan assembly from validated Recommendation output, including stable steps, prerequisites, dependencies, missing information, approval checkpoints, readiness, risk and rollback awareness, and future completion criteria. Planning remains non-mutating and cannot authorize or execute any action.
+
+**Production limitation:** Plans are limited to current validated Recommendation, Decision, Capability, and Workflow evidence. Effort remains unknown without validated product data. No execution capability or frontend planning surface is implemented.
 
 - **Intelligence Validation and Confidence:** reconcile permitted engine outputs, normalize confidence, preserve evidence, and prevent weak conclusions from appearing as facts.
 - **Decision Intelligence:** compare permitted options, identify constraints, and surface tradeoffs while remaining advisory.
@@ -353,9 +355,9 @@ No MC-AI numbers are assigned to these concepts.
 
 ### Phase 4 — Guided Planning
 
-**Status:** Future
+**Status:** Foundation implemented
 
-Potential capabilities include Assistant planning, draft preparation, multi-step task proposals, and user-approved execution plans.
+The implemented foundation provides advisory multi-step plans, prerequisite and dependency visibility, missing-information handling, approval checkpoints, and completion criteria. Draft preparation and every form of execution remain future capabilities.
 
 **Safety law:** Planning does not equal execution. Every material action remains reviewable.
 
@@ -397,7 +399,7 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-017 | Decision Intelligence | Implemented | Validated option comparison without execution | MC-AI-016 and Capability | Pending qualifying commit | 2026-07-11 | [MC-IP-0016](../IntellectualProperty/IP_LEDGER.md#mc-ip-0016--decision-intelligence-foundation) |
 | MC-AI-018 | Recommendation Intelligence | Implemented | Evidence-backed priority without execution | MC-AI-017, MC-AI-016 | Pending qualifying commit | 2026-07-11 | [MC-IP-0017](../IntellectualProperty/IP_LEDGER.md#mc-ip-0017--recommendation-intelligence-foundation) |
 | MC-ARCH-002 | Intelligence Constitution | Adopted | Permanent intelligence governance and reasoning/execution separation | Implemented reasoning stack | Not applicable; documentation adoption | 2026-07-11 | [MC-ARCH-002](../IntellectualProperty/IP_LEDGER.md#mc-arch-002--intelligence-constitution) |
-| MC-AI-019 | Planning Intelligence | Planned | Advisory execution planning without mutation | MC-ARCH-002, MC-AI-018 | Not implemented | — | — |
+| MC-AI-019 | Planning Intelligence | Implemented | Structured advisory planning without mutation or execution | MC-ARCH-002, MC-AI-018 | Pending qualifying commit | 2026-07-11 | [MC-IP-0018](../IntellectualProperty/IP_LEDGER.md#mc-ip-0018--planning-intelligence-foundation) |
 
 ## Engine Responsibility Matrix
 
@@ -413,6 +415,7 @@ No capability in this phase is claimed as currently implemented.
 | Persistent Memory | Implemented | Approved durable continuity | Raw conversation archives or automatic promotion |
 | Business | Implemented | Read-only operational business reasoning | Accounting mutation or financial execution |
 | Community | Implemented | Authorized aggregate community context | Popularity, influence, endorsement, or social scoring |
+| Planning Intelligence | Implemented | Deterministic advisory plans derived from validated recommendations | Authorization, product mutation, provider-generated steps, or execution |
 | Contracts | Placeholder extension | Future contract-scoped context | Unreviewed legal conclusions or execution |
 | Document | Disabled future metadata | Future governed document intelligence | Unauthorized document access |
 | Portfolio | Disabled future metadata | Future capability evidence from portfolio records | False certification or ranking |
@@ -509,4 +512,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next implementation milestone is **MC-AI-019 — Planning Intelligence Foundation**. It remains planned and is not implemented by MC-AI-018.
+The next architecture milestone is **MC-AI-020 — Execution Governance Foundation**. It must define authorization, approval, idempotency, audit, failure, and rollback rules before any future execution capability may be implemented. No execution capability is currently implemented.

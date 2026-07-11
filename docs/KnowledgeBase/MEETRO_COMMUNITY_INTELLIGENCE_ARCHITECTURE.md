@@ -1595,4 +1595,18 @@ Recommendation context enters Unified Context as a separate `recommendation` sec
 
 [MC-ARCH-002 — Meetro Community Intelligence Constitution](../Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md) is the adopted governance authority for this architecture. It fixes the authority order, evidence and privacy boundaries, engine responsibilities, provider subordination, explicit-approval requirements, and separation of reasoning from any future execution.
 
-The Constitution introduces no runtime behavior. MC-AI-019 Planning Intelligence remains planned, must remain advisory and non-mutating, and requires an explicit future implementation task.
+The Constitution introduces no runtime behavior. MC-AI-019 implements its Planning boundary as a separate required advisory engine while preserving the Constitution's prohibition on execution and mutation.
+
+## Planning Intelligence Foundation
+
+Status: Complete (MC-AI-019)
+
+Planning Intelligence runs after Recommendation Intelligence and converts only validated, Decision-backed Recommendation output into deterministic advisory plans. It preserves recommendation order, category, priority, confidence, source engines, supporting evidence, prerequisites, constraints, and explicit-approval requirements. It cannot create unsupported options, override Validation, Decision, Capability, Workflow, or Recommendation authority, or treat provider output as evidence.
+
+Each plan has a stable plan ID and includes its goal, source recommendation, Decision and Capability IDs, prerequisites, dependencies, missing information, ordered steps, approval checkpoints, constraints, structured risks, rollback awareness, completion criteria, readiness, planning mode, confidence, and unknown effort when validated effort data is unavailable. Each step has a stable ID, deterministic order, dependencies, prerequisites, approval requirement, future completion condition, reversibility indicator, and false execution fields.
+
+Planning modes are planned, deferred, blocked, clarification required, no safe plan, and no action. Readiness is ready, partially ready, blocked, awaiting information, awaiting approval, or not applicable. Missing or conflicted evidence, unsupported options, absent Decision or Capability linkage, blocked recommendations, and stale-only state fail closed. Deferred recommendations remain deferred and Recommendation ordering remains authoritative.
+
+Planning contributes one `planning` section to Unified Context before the existing single provider call. The provider may explain the supplied plan, prerequisites, blockers, missing information, risks, and approvals. It may not add or reorder steps, change readiness or confidence, remove constraints or approvals, invent facts, mark completion, or claim execution.
+
+Planning clones its inputs, performs no writes, and logs bounded metadata only. Every plan and step records that execution is not allowed and was not performed. MC-AI-019 does not add product actions, execution helpers, write APIs, or frontend planning surfaces.

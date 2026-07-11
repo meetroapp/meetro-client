@@ -72,6 +72,7 @@ export function selectEngineIds(request = {}, registry) {
   if (selected.some((id) => !["context", "memory"].includes(id)) && registry.get("validation")) selected.push("validation");
   if (selected.includes("validation") && registry.get("decision")) selected.push("decision");
   if (selected.includes("decision") && registry.get("recommendation")) selected.push("recommendation");
+  if (selected.includes("recommendation") && registry.get("planning")) selected.push("planning");
   return [...new Set(selected)];
 }
 

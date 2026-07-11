@@ -16,6 +16,7 @@ import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow
 import { collectIntelligenceValidation } from "../validation/validationEngine.js";
 import { collectDecisionIntelligence } from "../decision/decisionEngine.js";
 import { collectRecommendationIntelligence } from "../recommendation/recommendationEngine.js";
+import { collectPlanningIntelligence } from "../planning/planningEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
 
 function engine(id, priority, collectContext, options = {}) {
@@ -104,5 +105,6 @@ export function createDefaultOrchestrationEngines() {
     engine("validation", 110, async (request, collected) => createEngineContextResult({ section: "validation", priority: 110, data: await collectIntelligenceValidation({ request, collected }) }), { required: true }),
     engine("decision", 120, async (request, collected) => createEngineContextResult({ section: "decision", priority: 120, data: await collectDecisionIntelligence({ request, collected }) }), { required: true }),
     engine("recommendation", 130, async (request, collected) => createEngineContextResult({ section: "recommendation", priority: 130, data: await collectRecommendationIntelligence({ request, collected }) }), { required: true }),
+    engine("planning", 140, async (request, collected) => createEngineContextResult({ section: "planning", priority: 140, data: await collectPlanningIntelligence({ request, collected }) }), { required: true }),
   ];
 }
