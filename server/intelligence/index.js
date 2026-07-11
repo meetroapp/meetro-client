@@ -56,6 +56,7 @@ export * from "./validation/index.js";
 export * from "./decision/index.js";
 export * from "./recommendation/index.js";
 export * from "./planning/index.js";
+export * from "./executionGovernance/index.js";
 export { getCompanionSystemPrompt } from "./prompts/companionSystemPrompt.js";
 export {
   buildCompanionRelationship,

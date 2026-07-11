@@ -21,6 +21,7 @@ const ENGINE_STAGES = [
   ["decision"],
   ["recommendation"],
   ["planning"],
+  ["execution_governance"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {
@@ -46,6 +47,7 @@ function buildProviderMessages(request, unifiedContext) {
         decision: unifiedContext.decision || {},
         recommendation: unifiedContext.recommendation || {},
         planning: unifiedContext.planning || {},
+        executionGovernance: unifiedContext.executionGovernance || {},
         ...unifiedContext,
       }),
     },
@@ -121,6 +123,7 @@ export async function orchestrateCompanionAsk({
   memoryRepository = defaultCompanionSessionMemory,
   persistentMemoryRepository,
   engineRegistry,
+  gatewayGovernance = {},
   onDiagnostics,
 } = {}) {
   const startedAt = Date.now();
@@ -134,6 +137,7 @@ export async function orchestrateCompanionAsk({
       repositories,
       memoryRepository,
       persistentMemoryRepository,
+      gatewayGovernance,
     }),
     intent,
   };

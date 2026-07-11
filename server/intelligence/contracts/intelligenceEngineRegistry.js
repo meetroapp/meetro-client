@@ -17,6 +17,7 @@ export const INTELLIGENCE_ENGINE_NAMES = Object.freeze({
   decision: "decision",
   recommendation: "recommendation",
   planning: "planning",
+  executionGovernance: "execution_governance",
 });
 
 const CURRENT_ENGINE_REGISTRY = [
@@ -84,19 +85,20 @@ const CURRENT_ENGINE_REGISTRY = [
   { name: INTELLIGENCE_ENGINE_NAMES.decision, version: "1.0", executionOrder: 120, enabled: true },
   { name: INTELLIGENCE_ENGINE_NAMES.recommendation, version: "1.0", executionOrder: 130, enabled: true },
   { name: INTELLIGENCE_ENGINE_NAMES.planning, version: "1.0", executionOrder: 140, enabled: true },
+  { name: INTELLIGENCE_ENGINE_NAMES.executionGovernance, version: "1.0", executionOrder: 150, enabled: true },
 ];
 
 const FUTURE_ENGINE_REGISTRY = [
   {
     name: INTELLIGENCE_ENGINE_NAMES.document,
     version: "future",
-    executionOrder: 150,
+    executionOrder: 160,
     enabled: false,
   },
   {
     name: INTELLIGENCE_ENGINE_NAMES.portfolio,
     version: "future",
-    executionOrder: 160,
+    executionOrder: 170,
     enabled: false,
   },
 ];

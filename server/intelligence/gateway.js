@@ -82,9 +82,10 @@ export async function askCompanionGateway(options = {}) {
     memoryWritten: false,
   };
 
+  const permissions = validatePermissions({ user, body });
   const checks = [
     !question ? { ok: false, code: "invalid_request" } : { ok: true },
-    validatePermissions({ user, body }),
+    permissions,
   ];
 
   for (const check of checks) {
@@ -128,6 +129,14 @@ export async function askCompanionGateway(options = {}) {
     const result = await orchestrateCompanionAsk({
       ...options,
       intent,
+      gatewayGovernance: Object.freeze({
+        authenticated: permissions.ok,
+        sessionActive: permissions.ok,
+        permissionsValid: permissions.ok,
+        membershipValid: membership.ok,
+        creditsValid: credits.ok,
+        rateLimitValid: usage.ok,
+      }),
       onDiagnostics(orchestrationDiagnostics) {
         Object.assign(diagnostics, orchestrationDiagnostics);
       },

@@ -361,6 +361,14 @@ The implemented foundation provides advisory multi-step plans, prerequisite and 
 
 **Safety law:** Planning does not equal execution. Every material action remains reviewable.
 
+#### MC-AI-020 — Execution Governance Foundation
+
+**Status:** Implemented 2026-07-11
+
+Adds the required non-executing governance stage after Planning. It defines backend-owned authorization attestations, explicit and expiring approval checks, prerequisite status, idempotency and duplicate policy, metadata-only audit and receipt contracts, rollback classifications, retry governance, failure classes, and fail-closed denial reasons.
+
+**Production limitation:** Execution Governance evaluates policy only. Execution eligibility and performed state remain false, receipts remain `not_executed`, and no product action, rollback behavior, or execution API exists.
+
 ### Phase 5 — User-Approved Companion Execution
 
 **Status:** Future / Restricted
@@ -400,6 +408,7 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-018 | Recommendation Intelligence | Implemented | Evidence-backed priority without execution | MC-AI-017, MC-AI-016 | Pending qualifying commit | 2026-07-11 | [MC-IP-0017](../IntellectualProperty/IP_LEDGER.md#mc-ip-0017--recommendation-intelligence-foundation) |
 | MC-ARCH-002 | Intelligence Constitution | Adopted | Permanent intelligence governance and reasoning/execution separation | Implemented reasoning stack | Not applicable; documentation adoption | 2026-07-11 | [MC-ARCH-002](../IntellectualProperty/IP_LEDGER.md#mc-arch-002--intelligence-constitution) |
 | MC-AI-019 | Planning Intelligence | Implemented | Structured advisory planning without mutation or execution | MC-ARCH-002, MC-AI-018 | Pending qualifying commit | 2026-07-11 | [MC-IP-0018](../IntellectualProperty/IP_LEDGER.md#mc-ip-0018--planning-intelligence-foundation) |
+| MC-AI-020 | Execution Governance | Implemented | Authorization, approval, idempotency, audit, rollback, and failure policy without execution | MC-ARCH-002, MC-AI-019 | Pending qualifying commit | 2026-07-11 | [MC-IP-0019](../IntellectualProperty/IP_LEDGER.md#mc-ip-0019--execution-governance-foundation) |
 
 ## Engine Responsibility Matrix
 
@@ -416,6 +425,7 @@ No capability in this phase is claimed as currently implemented.
 | Business | Implemented | Read-only operational business reasoning | Accounting mutation or financial execution |
 | Community | Implemented | Authorized aggregate community context | Popularity, influence, endorsement, or social scoring |
 | Planning Intelligence | Implemented | Deterministic advisory plans derived from validated recommendations | Authorization, product mutation, provider-generated steps, or execution |
+| Execution Governance | Implemented | Policy eligibility, denials, approval, idempotency, audit, receipt, rollback, and failure contracts | Product actions, approval inference, provider authorization, or execution |
 | Contracts | Placeholder extension | Future contract-scoped context | Unreviewed legal conclusions or execution |
 | Document | Disabled future metadata | Future governed document intelligence | Unauthorized document access |
 | Portfolio | Disabled future metadata | Future capability evidence from portfolio records | False certification or ranking |
@@ -512,4 +522,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next architecture milestone is **MC-AI-020 — Execution Governance Foundation**. It must define authorization, approval, idempotency, audit, failure, and rollback rules before any future execution capability may be implemented. No execution capability is currently implemented.
+The next architecture milestone is **MC-AI-021 — User-Approved Execution Contract Foundation**. It may define contracts for future explicitly approved actions, but must not implement execution. No execution capability is currently implemented.

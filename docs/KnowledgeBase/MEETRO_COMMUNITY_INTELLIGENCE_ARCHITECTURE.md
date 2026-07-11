@@ -1610,3 +1610,15 @@ Planning modes are planned, deferred, blocked, clarification required, no safe p
 Planning contributes one `planning` section to Unified Context before the existing single provider call. The provider may explain the supplied plan, prerequisites, blockers, missing information, risks, and approvals. It may not add or reorder steps, change readiness or confidence, remove constraints or approvals, invent facts, mark completion, or claim execution.
 
 Planning clones its inputs, performs no writes, and logs bounded metadata only. Every plan and step records that execution is not allowed and was not performed. MC-AI-019 does not add product actions, execution helpers, write APIs, or frontend planning surfaces.
+
+## Execution Governance Foundation
+
+Status: Complete (MC-AI-020)
+
+Execution Governance is a required policy stage after Planning. It evaluates backend-owned Gateway attestations, current Capability and Validation state, Planning prerequisites, action-specific approvals, idempotency status, audit and receipt requirements, rollback classification, retry policy, and structured denial reasons. It does not execute actions and does not make advisory Planning output authoritative for authorization.
+
+Authorization remains explicit and current. Authentication, session, permissions, membership, credits, rate limits, workflow ownership, resource ownership, and Capability availability are evaluated from backend-owned context. Recommendation, Planning, provider text, Memory, silence, and prior approval cannot establish authorization. Approval is action-specific, state-bound, expiring, and invalidated by material state change.
+
+Idempotency governance classifies missing, verified, and duplicate requests without processing them. Audit and receipt contracts require a request reference, approval and authorization verification, timestamp, result placeholder, rollback reference where applicable, and failure classification. Receipts always state `not_executed` in this milestone. Rollback classifications are awareness only: not supported, compensating action, manual review, reversible, or irreversible.
+
+Execution Governance contributes one `executionGovernance` section before the existing single provider call. The provider may explain denials and requirements but cannot authorize execution, remove approval requirements, bypass policy, fabricate receipts, or claim execution. Every result keeps `executionEligible` and `executionPerformed` false. No write API, execution adapter, rollback action, or frontend execution surface exists.

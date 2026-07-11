@@ -605,6 +605,7 @@ test("Gateway receives request and returns normalized provider response", async 
   assert.equal("workflow" in result, false);
   assert.equal("relationship" in result, false);
   assert.equal("planning" in result, false);
+  assert.equal("executionGovernance" in result, false);
   assert.equal("raw" in result, false);
   assert.equal(calls.length, 1);
   assert.match(calls[0].messages[0].content, /Ask Meetro/);
@@ -694,9 +695,10 @@ test("Gateway and Companion Orchestrator preserve successful flow and safe diagn
     "decision",
     "recommendation",
     "planning",
+    "execution_governance",
   ]);
   assert.deepEqual(diagnostics[0].failedEngines, []);
-  assert.equal(diagnostics[0].successfulEngines.length, 11);
+  assert.equal(diagnostics[0].successfulEngines.length, 12);
   assert.equal(diagnostics[0].usageRecorded, true);
   assert.equal(diagnostics[0].providerCalled, true);
 });

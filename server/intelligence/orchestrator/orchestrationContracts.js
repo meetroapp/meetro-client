@@ -39,6 +39,7 @@ export function normalizeOrchestrationRequest(options = {}) {
     repositories: cleanRecord(options.repositories),
     memoryRepository: options.memoryRepository,
     persistentMemoryRepository: options.persistentMemoryRepository,
+    gatewayGovernance: Object.freeze(cleanRecord(options.gatewayGovernance)),
   });
 }
 
