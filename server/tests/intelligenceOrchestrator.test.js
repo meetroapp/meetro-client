@@ -53,7 +53,7 @@ test("engine selection is centralized, deterministic, deduplicated, and safely f
   assert.deepEqual(selectEngineIds({ feature: "unknown", source: {} }, registry), ["context", "knowledge", "capability"]);
   assert.deepEqual(
     selectEngineIds({ feature: "emergency", source: {} }, registry),
-    ["context", "knowledge", "workflow"]
+    ["context", "knowledge", "capability", "workflow"]
   );
 });
 
