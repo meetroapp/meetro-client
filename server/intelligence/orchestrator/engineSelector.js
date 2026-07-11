@@ -4,8 +4,15 @@ const FEATURE_ENGINES = Object.freeze({
   emergency: ["workflow", "relationship", "persistent_memory", "knowledge", "context"],
   quote_builder: ["workflow", "relationship", "persistent_memory", "business", "contracts", "context"],
   conversation: ["relationship", "memory", "persistent_memory", "workflow", "context"],
-  community: ["community", "context"],
-  ask_meetro: ["capability", "context", "knowledge", "workflow", "relationship", "memory", "persistent_memory", "business"],
+  community: ["community", "relationship", "persistent_memory", "business", "context"],
+  discover: ["community", "relationship", "persistent_memory", "business", "context"],
+  meetro_moments: ["community", "relationship", "persistent_memory", "context"],
+  spotlight: ["community", "relationship", "context"],
+  wonder_pass: ["community", "context"],
+  local_services: ["community", "business", "context"],
+  community_profile: ["community", "relationship", "context"],
+  community_service_discovery: ["community", "relationship", "business", "context"],
+  ask_meetro: ["capability", "context", "knowledge", "workflow", "relationship", "memory", "persistent_memory", "business", "community"],
   business_intelligence: ["business", "workflow", "relationship", "persistent_memory", "context"],
   business_dashboard: ["business", "workflow", "relationship", "persistent_memory", "context"],
   revenue: ["business", "workflow", "persistent_memory", "context"],
@@ -21,7 +28,7 @@ const FEATURE_ENGINES = Object.freeze({
   customer_relationships: ["relationship", "workflow", "persistent_memory", "business", "context"],
   business_profile: ["business", "persistent_memory", "context"],
   hiring: ["relationship", "memory", "context"],
-  community_relationship: ["community", "relationship", "context"],
+  community_relationship: ["community", "relationship", "persistent_memory", "context"],
 });
 
 function normalize(value) {

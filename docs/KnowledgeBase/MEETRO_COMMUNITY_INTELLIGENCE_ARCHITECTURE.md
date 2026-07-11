@@ -1304,3 +1304,98 @@ Logs may contain request and business IDs, workflow, bottleneck, and priority co
 ## Production Adapter Requirements
 
 Production repositories must enforce authenticated business scope before returning records, preserve stable typed IDs, provide business timezone where available, prevent unrestricted whole-database reads, and return immutable or safely copied records. The engine is read-only and safely returns empty context when an authorized business or trusted evidence cannot be established.
+
+---
+
+# MC-AI-013 — Community Intelligence Foundation
+
+## Responsibility And Flow
+
+Community Intelligence is a read-only interpretation layer for authorized, visible, privacy-safe community evidence. It aggregates Moments, Spotlight, Wonder Pass, public posts and profiles, local service representation, permitted engagement metadata, and community-linked relationships. It does not rank people, alter recommendations, create content, issue benefits, contact members, or perform community actions.
+
+```text
+Community-Scoped Request
+  -> Gateway
+  -> Orchestrator
+  -> Workflow Intelligence when relevant
+  -> Relationship Intelligence
+  -> Persistent Memory
+  -> Business Intelligence when authorized
+  -> Community Scope Resolver
+  -> Authorization and Visibility Filtering
+  -> Location Minimization
+  -> Normalize and Deduplicate Community Records
+  -> Build Moments, Spotlight, Wonder Pass, Service, and Engagement Signals
+  -> Determine Community Opportunities
+  -> Return Structured Community Context
+  -> Unified Context Builder
+  -> Provider
+```
+
+One Gateway request continues to produce no more than one provider call and one usage-accounting event.
+
+## Scope And Authorization
+
+Community scope comes from authenticated membership, authorized community IDs, a trusted backend community context, or an explicitly public backend community scope. Client-supplied community IDs and display names are never authority. Ambiguous multi-community scope returns empty context unless the backend provides one trusted active scope.
+
+Every included record must carry the exact resolved community or service-area ID. Separate communities are never combined unless a future explicitly authorized regional aggregate contract is introduced.
+
+## Visibility
+
+Visibility filtering occurs before normalization or aggregation. Public content still requires a valid product scope. Community visibility requires membership. Connections or relationship visibility requires an exact Relationship Intelligence linkage. Private, hidden, blocked, deleted, and archived records are excluded. Blocking overrides other visibility.
+
+Contradictory visibility, such as public and private evidence on the same record, is excluded and lowers confidence. The engine does not change source visibility.
+
+## Location Privacy
+
+Community context may include stable community ID, service-area ID, city, broad region, and an explicitly public neighborhood ID. It excludes street addresses, exact coordinates, private service addresses, customer locations, movement, and inferred routines. Multiple sources are never combined to reconstruct precise location.
+
+## Supported Sources And Deduplication
+
+Trusted repositories may provide Moments, Spotlight, Wonder Pass, community posts, visible profiles, aggregate engagement, service interests, and community-linked relationship records. Source records are projected into stable IDs, visibility-safe categories, timestamps, aggregate counts, and coarse location.
+
+Moments, Spotlights, Wonder Pass offers, posts, profiles, engagement events, relationships, and conversations deduplicate by typed stable IDs. A professional shown in multiple categories counts once globally while remaining represented in each explicit category. Conflicting cross-community identities are excluded.
+
+## Moments, Spotlight, And Wonder Pass
+
+Moments use visible status, expiration, categories, and aggregate interaction counts. Private content, viewer identities, reaction identities, and sentiment are excluded.
+
+Spotlight presence is factual product placement, not endorsement, superiority, quality, trust, or social worth. The engine never changes Spotlight selection or ranking.
+
+Wonder Pass interpretation is limited to visible active offers, categories, availability, expiration, and authorized aggregate redemption counts. It never exposes individual redemption history, infers spending power, issues passes, redeems benefits, or changes eligibility.
+
+## Service Discovery And Engagement
+
+Service discovery counts visible professionals by explicit category and uses only authorized aggregate interest records. One request or interaction never becomes a demand trend. Low visible supply requires explicit aggregate interest evidence and remains an advisory signal; it never creates leads or changes Discover ordering.
+
+Engagement includes permitted aggregate reaction, comment, share, save, redemption, and conversation counts. It excludes private viewers, private saves, identity-level browsing, comment bodies, message bodies, and hidden reactions.
+
+## Relationship, Business, And Memory Boundaries
+
+Relationship Intelligence remains authoritative for current relationship state. Community Intelligence may count an exact community-linked relationship or conversation but does not infer friendship, influence, loyalty, trust, or social value.
+
+Business Intelligence remains authoritative for private operations. Community context never includes workload, revenue, invoices, customers, business health, or internal priorities. Public service-category participation may be supplied only through an explicitly public community record.
+
+Persistent Memory may contribute active, consent-valid, exact-community preferences from approved categories. It never supplies current community facts, and business, workflow, relationship, or unrelated user memories are excluded.
+
+## Signals, Opportunities, And Trends
+
+Community signals are deterministic factual observations about visible categories, recent visible activity, aggregate engagement, and existing authorized connections. Strength and opportunity ordering use centralized implementation policy that is not a popularity or recommendation score.
+
+Opportunities are evidence-derived, deduplicated, capped, and read-only. They may identify visible service interest, limited visible supply, active public content, Wonder Pass participation, or an authorized connection. They do not create leads, contact users, promise demand, or modify recommendation outcomes.
+
+Trends require sufficient timestamped samples and comparable windows. Unsupported trends return `insufficient_data` or `unknown`; the engine never forecasts behavior, seasonality, or future demand.
+
+## Confidence, Privacy, And Logging
+
+Confidence is deterministic. Stable scope, visibility, IDs, and timestamps support higher confidence. Visibility conflicts, active-after-expiration evidence, ambiguous duplicates, unsafe location, and incomplete authorization lower confidence and produce safe warnings.
+
+Provider context excludes names, customer identity, private requests, addresses, coordinates, browsing history, viewer lists, private engagement identities, raw messages or comments, media, payment details, sensitive traits, personality, sentiment, income, popularity, influence, trust, loyalty, and social-value scores.
+
+Logs may contain request and community IDs, source and visible counts, signal and opportunity counts, confidence, truncation, and timing. Logs never contain raw content, names, comments, messages, private reactions, location details, memory values, prompts, or unified provider context.
+
+## Production Repository Requirements
+
+Production adapters must enforce community authorization and visibility before returning records, preserve stable typed IDs, expose only policy-approved aggregate engagement, provide coarse location fields, prevent unrestricted whole-database reads, and return immutable or safely copied records. Supported boundaries include `getCommunityRecords`, `getMomentRecords`, `getSpotlightRecords`, `getWonderPassRecords`, `getVisibleProfileRecords`, `getCommunityEngagementRecords`, and `getCommunityRelationshipRecords`.
+
+Frontend localStorage and UI discovery projections are not backend intelligence authority. Without a trusted community scope and visible records, the engine returns empty context.

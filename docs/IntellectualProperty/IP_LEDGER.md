@@ -584,3 +584,56 @@ Complete inventorship, assignment, prior-art, and public-disclosure review.
 ### Notes
 
 No detailed threshold, ranking formula, private customer information, financial credential, or operative trade-secret logic is reproduced here.
+
+## MC-IP-0012 — Community Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-013
+**Repository Commit:** Pending repository verification
+**Related Files:** `server/intelligence/community/`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/communityIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`
+
+### Problem Solved
+
+Community activity spans multiple public and relationship-aware surfaces, but useful interpretation must not expose private participation or turn visibility into social ranking.
+
+### Technical or Creative Solution
+
+An authorized community-scope layer filters visibility, minimizes location, normalizes and deduplicates visible records, interprets Moments, Spotlight, Wonder Pass, service representation, and aggregate engagement, and produces deterministic signals and advisory opportunities.
+
+### Distinguishing Characteristics
+
+Visibility-first aggregation, privacy-safe location minimization, typed cross-surface deduplication, manipulation-resistant factual signals, and strict separation from popularity, endorsement, recommendation, and social-value scoring.
+
+### Operational Value
+
+Provides useful local context while preserving member privacy, relationship authority, community continuity, and existing product recommendation outcomes.
+
+### Evidence of Implementation
+
+Repository modules, orchestrator integration, focused tests, and architecture documentation exist in the working tree. A qualifying implementation commit remains pending repository verification.
+
+### Publicly Disclosed?
+
+Pending repository verification.
+
+### Confidential Elements
+
+Internal thresholds, signal and opportunity policy, future manipulation defenses, and future trend methods.
+
+### Recommended Protection
+
+Evaluate as a patent candidate with counsel, preserve non-public operational methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Commit the verified implementation, update this entry with the commit hash, and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No ranking formula, recommendation weight, abuse-detection rule, private community data, or operative trade-secret logic is reproduced here.
