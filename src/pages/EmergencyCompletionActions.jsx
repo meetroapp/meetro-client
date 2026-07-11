@@ -7,6 +7,10 @@ import {
   normalizeLaborPricingType,
   normalizePricingModel,
 } from "../utils/pricingCalculations";
+import {
+  normalizeEmergencyClosedJob,
+  upsertUnifiedClosedJob,
+} from "../utils/unifiedJobHistory";
 
 function EmergencyCompletionActions({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -98,6 +102,7 @@ function EmergencyCompletionActions({ setPage }) {
   };
 
   function saveToHistory() {
+    const closedAt = new Date().toISOString();
     const emergencyConversationId =
       activeEmergencyRecord.conversationId ||
       activeEmergencyRecord.emergencyConversationId ||
@@ -108,7 +113,7 @@ function EmergencyCompletionActions({ setPage }) {
       "emergency-active";
 
     localStorage.setItem("emergencySavedToHistory", "true");
-    localStorage.setItem("emergencyArchivedAt", new Date().toISOString());
+    localStorage.setItem("emergencyArchivedAt", closedAt);
     saveActiveJobSnapshot({
       status: "completed",
       service,
@@ -122,10 +127,10 @@ function EmergencyCompletionActions({ setPage }) {
     localStorage.setItem("emergencyDispatchStatus", "completed");
     localStorage.setItem("businessAcceptedEmergency", "false");
 
-    saveEmergencyRecordPatch({
+    const archivedEmergencyRecord = saveEmergencyRecordPatch({
       status: "completed",
       savedToHistory: true,
-      archivedAt: new Date().toISOString(),
+      archivedAt: closedAt,
       service,
       businessName,
       paymentStatus,
@@ -133,8 +138,51 @@ function EmergencyCompletionActions({ setPage }) {
       ...pricingPatch,
     });
 
+    const completedProjects = (() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("completedProjects") || "[]");
+        return Array.isArray(saved) ? saved : [];
+      } catch {
+        return [];
+      }
+    })();
+    const lastCompletedProject = (() => {
+      try {
+        return JSON.parse(localStorage.getItem("lastCompletedProject") || "{}");
+      } catch {
+        return {};
+      }
+    })();
+    const emergencyRequestId = String(archivedEmergencyRecord.id || "");
+    const normalizedConversationId = String(emergencyConversationId || "");
+    const matchesEmergencyCompletion = (record = {}) =>
+      Boolean(
+        (emergencyRequestId &&
+          String(record.emergencyRequestId || "") === emergencyRequestId) ||
+          (normalizedConversationId &&
+            String(record.conversationId || "") === normalizedConversationId)
+      );
+    const matchingCompletion =
+      completedProjects.find(matchesEmergencyCompletion) ||
+      (matchesEmergencyCompletion(lastCompletedProject)
+        ? lastCompletedProject
+        : {});
+    const closedHistoryRecord = normalizeEmergencyClosedJob({
+      emergencyRecord: archivedEmergencyRecord,
+      completionRecord: matchingCompletion,
+      conversationId: emergencyConversationId,
+      closedAt,
+    });
+
+    localStorage.setItem(
+      "completedProjects",
+      JSON.stringify(upsertUnifiedClosedJob(completedProjects, closedHistoryRecord))
+    );
+    localStorage.setItem("lastCompletedProject", JSON.stringify(closedHistoryRecord));
+
     window.dispatchEvent(new Event("meetroEmergencyConversationUpdated"));
     window.dispatchEvent(new Event("meetro-messages-updated"));
+    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
 
     localStorage.setItem("meetroConversationType", "emergency");
     localStorage.setItem("activeConversationId", String(emergencyConversationId));

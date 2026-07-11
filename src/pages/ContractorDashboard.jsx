@@ -105,6 +105,7 @@ import {
   createWorkflowDependencyIdentifiedEvent,
   getWorkflowDependencyHistory,
 } from "../utils/workflowDependencyHistory";
+import { upsertUnifiedClosedJob } from "../utils/unifiedJobHistory";
 
 function createBlankScheduleForm(overrides = {}) {
   return {
@@ -7594,12 +7595,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const getWorkCenterPaymentSummary = (job = {}) => {
     const total = getWorkCenterJobFinalTotal(job);
+    const historyPayments = Array.isArray(job.history?.payments)
+      ? job.history.payments
+      : [job.history?.payment, job.history?.payments].filter(Boolean);
     const paymentReceived = Boolean(
       job.quote?.paymentReceivedAt ||
         job.quote?.depositPaidAt ||
         job.quote?.paidAt ||
         job.schedule?.paymentReceivedAt ||
-        job.history?.payments?.paymentReceivedAt
+        historyPayments.some(
+          (payment) =>
+            payment?.paymentReceivedAt ||
+            payment?.paidAt ||
+            ["paid", "received", "payment_received"].includes(
+              String(payment?.status || "").toLowerCase()
+            )
+        )
     );
     const paymentLabel = paymentReceived
       ? activeLanguage === "es"
@@ -7743,7 +7754,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const workItemPhotos = getWorkCenterJobWorkItems(job).flatMap((workItem) =>
       Array.isArray(workItem.photos) ? workItem.photos : []
     );
-    return [...schedulePhotos, ...workItemPhotos];
+    const historyPhotos = [
+      ...(Array.isArray(job.history?.photos) ? job.history.photos : []),
+      ...(Array.isArray(job.history?.completionPhotos)
+        ? job.history.completionPhotos
+        : []),
+      ...(Array.isArray(job.history?.completion?.photos)
+        ? job.history.completion.photos
+        : []),
+    ];
+    return [...schedulePhotos, ...workItemPhotos, ...historyPhotos].filter(
+      (photo, index, photos) =>
+        photos.findIndex(
+          (candidate) =>
+            (candidate?.id && candidate.id === photo?.id) || candidate === photo
+        ) === index
+    );
   };
 
   const getWorkCenterJobMaterials = (job = {}) =>
@@ -8259,12 +8285,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const saveClosedJobToHistory = (job = {}) => {
     const closedRecord = buildClosedJobHistoryRecord(job);
     const savedHistory = readMeetroArray("completedProjects");
-    const withoutDuplicate = savedHistory.filter(
-      (record) => !jobMatchesScopedRecord(job, record)
-    );
     localStorage.setItem(
       "completedProjects",
-      JSON.stringify([closedRecord, ...withoutDuplicate])
+      JSON.stringify(upsertUnifiedClosedJob(savedHistory, closedRecord))
     );
 
     moveJobToHistory(closedRecord, {
@@ -10683,11 +10706,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <button
                   key={card.key}
                   type="button"
-                  className={`meetro-visual-surface${activeTab === card.key ? " meetro-selected-card" : ""}`}
+                  className={`meetro-visual-surface work-center-navigation-card${
+                    isWorkCenterSectionOpen && activeTab === card.key
+                      ? " meetro-selected-card"
+                      : ""
+                  }`}
                   style={{
                     ...workCenterPrimaryNavCard,
                     ...(card.alert ? workCenterPrimaryNavCardAlert : {}),
-                    borderColor: card.alert ? "#fb923c" : `${card.accent}24`,
+                    ...(card.alert ? { borderColor: "#fb923c" } : {}),
                   }}
                   onClick={card.onClick}
                 >
@@ -12850,8 +12877,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       >
                         <span style={jobListCardMain}>
                           <strong style={jobListCustomer}>{job.customer}</strong>
-                          <span style={jobListMeta}>{job.title}</span>
-                          <span style={jobListMeta}>{job.address}</span>
+	                          <span style={jobListMeta}>{job.title}</span>
+	                          <span style={jobListMeta}>{job.address}</span>
+	                          {job.history?.sourceType === "emergency" && (
+	                            <span style={jobHistorySourceLabel}>Emergency</span>
+	                          )}
 	                          <span style={jobListStatus}>
 	                            {activeLanguage === "es" ? "Estado final" : "Final status"}:{" "}
 	                            {activeLanguage === "es" ? "Cerrado" : "Closed"}
@@ -21385,6 +21415,18 @@ const jobListMeta = {
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: "750",
+};
+
+const jobHistorySourceLabel = {
+  width: "fit-content",
+  color: "#9a3412",
+  background: "#fff7ed",
+  border: "1px solid #fed7aa",
+  borderRadius: "999px",
+  padding: "4px 8px",
+  fontSize: "11px",
+  fontWeight: "900",
+  lineHeight: 1.2,
 };
 
 const jobListStatus = {
