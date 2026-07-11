@@ -648,7 +648,7 @@ No ranking formula, recommendation weight, abuse-detection rule, private communi
 **Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
 **Product:** Meetro Community
 **Related Milestone:** MC-AI-014
-**Repository Commit:** Pending qualifying commit
+**Repository Commit:** `4e37db9bf8ac01b91c3d91f523a915ae524830ce`
 **Related Files:** `server/intelligence/knowledge/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/knowledgeIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
 
 ### Problem Solved
@@ -669,7 +669,11 @@ Supports consistent product, workflow, service, policy, safety, and operational 
 
 ### Evidence of Implementation
 
-The working tree contains typed source and repository contracts, centralized domain and policy modules, deterministic retrieval and evidence normalization, executable Orchestrator integration, focused tests, and architecture documentation. A qualifying commit reference remains pending.
+Verified commit `4e37db9bf8ac01b91c3d91f523a915ae524830ce` contains the Knowledge Intelligence modules, executable Orchestrator integration, focused tests, architecture documentation, and roadmap update.
+
+### Production Limitation
+
+A reviewed database-backed read-only Knowledge Repository adapter is still required for production knowledge retrieval. Without a trusted adapter, the engine returns insufficient evidence rather than inferring unsupported knowledge.
 
 ### Publicly Disclosed?
 
@@ -685,7 +689,7 @@ Evaluate patent candidacy with counsel, preserve non-public retrieval and govern
 
 ### Follow-Up Actions
 
-Create and certify a production read-only knowledge repository adapter, record the qualifying implementation commit, and complete inventorship, assignment, prior-art, and public-disclosure review.
+Create and certify the production read-only Knowledge Repository adapter, and complete inventorship, assignment, prior-art, and public-disclosure review.
 
 ### Notes
 
