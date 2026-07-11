@@ -30,3 +30,6 @@ dist-ssr
 
 # Xcode workspace files
 ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/
+
+# Generated presentation artifacts
+output/
