@@ -51,7 +51,7 @@ test("Intelligence Engine Registry includes disabled future extension points", (
   assert.equal(future.every((engine) => engine.version === "future"), true);
 });
 
-test("Intelligence Engine Registry enables Community metadata after Relationship without execution wiring", () => {
+test("Intelligence Engine Registry enables Community metadata after Relationship", () => {
   const community = getIntelligenceEngineMetadata(INTELLIGENCE_ENGINE_NAMES.community);
   assert.deepEqual(community, {
     name: INTELLIGENCE_ENGINE_NAMES.community,
@@ -63,11 +63,8 @@ test("Intelligence Engine Registry enables Community metadata after Relationship
   const relationship = getIntelligenceEngineMetadata(INTELLIGENCE_ENGINE_NAMES.relationship);
   assert.equal(relationship.executionOrder < community.executionOrder, true);
 
-  const orchestratorSource = fs.readFileSync(
-    new URL("../intelligence/orchestrator/companionOrchestrator.js", import.meta.url),
-    "utf8"
-  );
-  assert.doesNotMatch(orchestratorSource, /buildCompanionCommunityIntelligence|companionCommunityEngine/);
+  const gatewaySource = fs.readFileSync(new URL("../intelligence/gateway.js", import.meta.url), "utf8");
+  assert.doesNotMatch(gatewaySource, /buildCompanionCommunityIntelligence|companionCommunityEngine/);
 });
 
 test("Intelligence Engine Registry exposes metadata without becoming an execution path", () => {

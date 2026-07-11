@@ -92,6 +92,66 @@ Meetro Community remains the source of truth.
 
 ---
 
+# PRODUCTION ORCHESTRATION FOUNDATION (MC-AI-008)
+
+The production request boundary is:
+
+```txt
+Feature Request
+        ↓
+Gateway Validation
+        ↓
+Companion Orchestrator
+        ↓
+Central Engine Selection
+        ↓
+Isolated Context Collection
+        ↓
+Unified Structured Context
+        ↓
+Provider Adapter
+        ↓
+Gateway Usage Recording
+        ↓
+Safe Response
+```
+
+## Responsibility Boundaries
+
+The Gateway owns request validation, authenticated identity, membership and permission checks, usage and credit checks, rate-limit integration, usage recording, and the public response contract. It must not select engines, collect domain context, compose provider messages, or call a provider directly.
+
+The Orchestrator owns internal request normalization, centralized engine selection, safe engine execution, unified context construction, provider-adapter coordination, memory continuity, internal diagnostics, and orchestration error propagation. It must not repeat authentication, membership, credit, rate-limit, or feature-permission checks.
+
+The Provider Adapter owns provider lookup, timeout behavior, provider invocation, and provider result normalization. Provider credentials and provider-specific response details remain behind this boundary.
+
+## Executable Engine Interface
+
+An executable engine has a stable `id`, deterministic `priority`, `supports(request)`, and `collectContext(request, collectedContext)`. Context results contain a unique `section`, numeric `priority`, structured `data`, and optional safe `metadata`. Required engines are explicitly marked; all others are optional.
+
+The existing metadata registry remains the architectural inventory. The executable orchestration registry validates callable engines, rejects duplicate IDs, and provides deterministic ordering. Adding an engine requires an adapter, registry registration, and a centralized selection rule. Gateway changes are not required.
+
+## Engine Selection
+
+Selection is feature-, capability-, and source-aware. Ask Meetro selects capability, context, knowledge, workflow, relationship, and memory. Emergency, quote, conversation, community, and business surfaces select only their relevant domains. Unknown features fall back to capability, context, and knowledge. Selection deduplicates IDs, applies engine `supports()` checks, and preserves registry priority.
+
+## Unified Context
+
+Engine results remain structured until the provider boundary. Empty sections are excluded, ordering is deterministic, duplicate sections cannot overwrite earlier higher-priority context, and engine-provided `system` context is rejected. A bounded byte budget prevents uncontrolled context growth; dropped or truncated sections are recorded only as safe internal metadata.
+
+The provider payload retains legacy Companion fields for backward compatibility and also receives the unified context packet. The UI receives neither form.
+
+## Failure And Logging Rules
+
+Independent engines execute with settled-promise isolation where dependency order permits. An optional engine failure is logged with engine ID, status, and timing, then orchestration continues. A required engine failure stops before provider invocation and returns through Gateway error normalization. Provider failures retain existing timeout and failure normalization, failed usage recording, and safe session-memory status.
+
+Orchestration logs may include request ID, feature, capability, selected/successful/failed engine IDs, provider ID, status, error code, counts, and elapsed time. Logs must never contain user message bodies, prompts, API keys, private context, relationship history, memory content, or provider credentials.
+
+## Future Engines
+
+Analytics, compliance, portfolio, learning, permits, safety, document intelligence, business intelligence, and persistent memory may be added through adapters and centralized selection rules. Domain intelligence belongs inside engines, never inside the Gateway or Orchestrator.
+
+---
+
 # COMPLETED FOUNDATION
 
 ## 1. Intelligence Gateway

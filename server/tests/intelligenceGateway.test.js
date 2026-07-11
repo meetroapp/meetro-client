@@ -15,7 +15,6 @@ import {
   MEETRO_KNOWLEDGE_BASE,
 } from "../intelligence/knowledge/companionKnowledgeEngine.js";
 import { createInMemoryCompanionSessionMemory } from "../intelligence/memory/companionSessionMemory.js";
-import { orchestrateCompanionAsk } from "../intelligence/orchestrator/companionOrchestrator.js";
 import { invokeProvider } from "../intelligence/providerAdapter.js";
 import { createOpenAIProvider } from "../intelligence/providers/openaiProvider.js";
 import {
@@ -639,13 +638,13 @@ test("Gateway receives request and returns normalized provider response", async 
   assert.equal(memoryState.records[0].linkedRequestId, "req-verified");
 });
 
-test("Companion Orchestrator owns the successful intelligence sequence and safe diagnostics", async () => {
+test("Gateway and Companion Orchestrator preserve successful flow and safe diagnostics", async () => {
   const { provider, calls } = mockProvider("Orchestrated answer");
   const diagnostics = [];
   const memoryRepository = createInMemoryCompanionSessionMemory();
   const usageEvents = [];
 
-  const result = await orchestrateCompanionAsk({
+  const result = await askCompanionGateway({
     user: { id: "user-orchestrator", accountType: "standard" },
     body: { question: "What happens next?", pageContext: "request_detail" },
     backendContext: {
@@ -685,24 +684,16 @@ test("Companion Orchestrator owns the successful intelligence sequence and safe 
   assert.equal(diagnostics[0].contextBuilt, true);
   assert.equal(diagnostics[0].memoryRead, true);
   assert.equal(diagnostics[0].memoryWritten, true);
-  assert.equal(diagnostics[0].knowledgeBuilt, true);
-  assert.equal(diagnostics[0].knowledgeItemCount, 5);
-  assert.ok(diagnostics[0].knowledgeCategories.includes("workflowRules"));
-  assert.ok(diagnostics[0].knowledgeCategories.includes("responseGuidance"));
-  assert.equal(diagnostics[0].capabilityBuilt, true);
-  assert.equal(typeof diagnostics[0].primaryCapabilityCount, "number");
-  assert.equal(typeof diagnostics[0].supportingCapabilityCount, "number");
-  assert.equal(typeof diagnostics[0].capabilityConfidence, "number");
-  assert.equal(diagnostics[0].workflowBuilt, true);
-  assert.equal(typeof diagnostics[0].currentStage, "string");
-  assert.equal(typeof diagnostics[0].guidanceCategory, "string");
-  assert.equal(typeof diagnostics[0].missingPrerequisiteCount, "number");
-  assert.equal(typeof diagnostics[0].workflowConfidence, "number");
-  assert.equal(diagnostics[0].relationshipBuilt, true);
-  assert.equal(typeof diagnostics[0].relationshipType, "string");
-  assert.equal(typeof diagnostics[0].communicationPosture, "string");
-  assert.equal(typeof diagnostics[0].trustBoundary, "string");
-  assert.equal(typeof diagnostics[0].relationshipConfidence, "number");
+  assert.deepEqual(diagnostics[0].selectedEngines, [
+    "context",
+    "memory",
+    "knowledge",
+    "capability",
+    "workflow",
+    "relationship",
+  ]);
+  assert.deepEqual(diagnostics[0].failedEngines, []);
+  assert.equal(diagnostics[0].successfulEngines.length, 6);
   assert.equal(diagnostics[0].usageRecorded, true);
   assert.equal(diagnostics[0].providerCalled, true);
 });
@@ -913,7 +904,7 @@ test("Gateway handles provider timeout with normalized fallback error", async ()
   assert.match(result.answer, /longer than expected/i);
 });
 
-test("Gateway logs only safe operational metadata", async () => {
+test("Gateway orchestration logs only safe operational metadata", async () => {
   const { provider } = mockProvider("Logged answer");
   const events = [];
   const logger = {
@@ -941,17 +932,11 @@ test("Gateway logs only safe operational metadata", async () => {
   });
 
   assert.equal(result.success, true);
-  assert.equal(events.length, 1);
-  assert.equal(events[0].message, "meetro_intelligence_gateway");
-  assert.deepEqual(Object.keys(events[0].event).sort(), [
-    "intent",
-    "provider",
-    "requestId",
-    "responseTimeMs",
-    "success",
-  ]);
-  assert.equal(events[0].event.requestId, "req-logs");
+  assert.ok(events.length > 1);
+  assert.ok(events.some((entry) => entry.message === "intelligence.orchestration.completed"));
+  assert.ok(events.every((entry) => entry.event.event === entry.message));
   assert.equal(JSON.stringify(events[0]), JSON.stringify(events[0]).replace("do not log", ""));
+  assert.doesNotMatch(JSON.stringify(events), /What happens next|do not log|fake-logs/);
 });
 
 test("Gateway rejects missing authentication before provider invocation", async () => {
@@ -1011,10 +996,10 @@ test("usage limit blocks before provider invocation and still records usage", as
   assert.equal(memoryRepository.inspect().records.length, 0);
 });
 
-test("orchestrator diagnostics confirm usage limit blocks before provider and memory", async () => {
+test("Gateway diagnostics confirm usage limit blocks before Orchestrator provider and memory work", async () => {
   let invoked = false;
   const diagnostics = [];
-  const result = await orchestrateCompanionAsk({
+  const result = await askCompanionGateway({
     user: { id: "user-blocked", accountType: "standard" },
     body: { question: "What happens next?" },
     validateUsageLimit() {
@@ -1043,23 +1028,7 @@ test("orchestrator diagnostics confirm usage limit blocks before provider and me
   assert.equal(diagnostics[0].contextBuilt, false);
   assert.equal(diagnostics[0].memoryRead, false);
   assert.equal(diagnostics[0].memoryWritten, false);
-  assert.equal(diagnostics[0].knowledgeBuilt, false);
-  assert.equal(diagnostics[0].knowledgeItemCount, 0);
-  assert.deepEqual(diagnostics[0].knowledgeCategories, []);
-  assert.equal(diagnostics[0].capabilityBuilt, false);
-  assert.equal(diagnostics[0].primaryCapabilityCount, 0);
-  assert.equal(diagnostics[0].supportingCapabilityCount, 0);
-  assert.equal(diagnostics[0].capabilityConfidence, 0);
-  assert.equal(diagnostics[0].workflowBuilt, false);
-  assert.equal(diagnostics[0].currentStage, "");
-  assert.equal(diagnostics[0].guidanceCategory, "");
-  assert.equal(diagnostics[0].missingPrerequisiteCount, 0);
-  assert.equal(diagnostics[0].workflowConfidence, 0);
-  assert.equal(diagnostics[0].relationshipBuilt, false);
-  assert.equal(diagnostics[0].relationshipType, "");
-  assert.equal(diagnostics[0].communicationPosture, "");
-  assert.equal(diagnostics[0].trustBoundary, "");
-  assert.equal(diagnostics[0].relationshipConfidence, 0);
+  assert.equal("selectedEngines" in diagnostics[0], false);
   assert.equal(diagnostics[0].usageRecorded, true);
 });
 
@@ -1216,6 +1185,10 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
     new URL("../intelligence/orchestrator/companionOrchestrator.js", import.meta.url),
     "utf8"
   );
+  const defaultEnginesSource = fs.readFileSync(
+    new URL("../intelligence/orchestrator/defaultEngines.js", import.meta.url),
+    "utf8"
+  );
   const adapterSource = fs.readFileSync(
     new URL("../intelligence/providerAdapter.js", import.meta.url),
     "utf8"
@@ -1228,14 +1201,13 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
   assert.doesNotMatch(gatewaySource, /from "openai"|responses\.create|OPENAI_API_KEY/);
   assert.match(gatewaySource, /orchestrateCompanionAsk/);
   assert.doesNotMatch(gatewaySource, /buildCompanionContextEngine|buildCompanionCapabilities|buildCompanionWorkflow|buildCompanionRelationship|resolveCompanionSessionMemory|invokeProvider|getCompanionSystemPrompt/);
-  assert.match(orchestratorSource, /buildCompanionContextEngine/);
-  assert.match(orchestratorSource, /buildCompanionKnowledge/);
-  assert.match(orchestratorSource, /buildCompanionCapabilities/);
-  assert.match(orchestratorSource, /buildCompanionWorkflow/);
-  assert.match(orchestratorSource, /buildCompanionRelationship/);
-  assert.match(orchestratorSource, /resolveCompanionSessionMemory/);
+  assert.match(defaultEnginesSource, /buildCompanionContextEngine/);
+  assert.match(defaultEnginesSource, /buildCompanionKnowledge/);
+  assert.match(defaultEnginesSource, /buildCompanionCapabilities/);
+  assert.match(defaultEnginesSource, /buildCompanionWorkflow/);
+  assert.match(defaultEnginesSource, /buildCompanionRelationship/);
+  assert.match(defaultEnginesSource, /resolveCompanionSessionMemory/);
   assert.match(orchestratorSource, /invokeProvider/);
-  assert.match(orchestratorSource, /Knowledge Engine, Capability Engine, Workflow Engine, Relationship Engine/);
   assert.doesNotMatch(orchestratorSource, /from "openai"|responses\.create|OPENAI_API_KEY/);
   assert.match(adapterSource, /createProviderRegistry/);
   assert.match(providerSource, /from "openai"/);

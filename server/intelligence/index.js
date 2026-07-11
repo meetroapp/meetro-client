@@ -28,6 +28,13 @@ export {
   validatePermissions,
   validateUsageLimit,
 } from "./gateway.js";
+export {
+  buildUnifiedContext,
+  createEngineRegistry,
+  normalizeOrchestrationRequest,
+  orchestrateCompanionAsk,
+  selectEngineIds,
+} from "./orchestrator/index.js";
 export { classifyCompanionIntent } from "./intentEngine.js";
 export {
   buildCompanionKnowledge,
@@ -39,7 +46,6 @@ export {
   getSafeRecentCompanionMemory,
   resolveCompanionSessionMemory,
 } from "./memory/companionSessionMemory.js";
-export { orchestrateCompanionAsk } from "./orchestrator/companionOrchestrator.js";
 export { invokeProvider } from "./providerAdapter.js";
 export { getCompanionSystemPrompt } from "./prompts/companionSystemPrompt.js";
 export {
