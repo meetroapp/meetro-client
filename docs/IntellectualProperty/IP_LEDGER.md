@@ -911,3 +911,44 @@ Record the qualifying implementation commit and complete inventorship, assignmen
 ### Notes
 
 No proprietary ranking formula, weighting, priority threshold, private mapping, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.
+
+## MC-ARCH-002 — Intelligence Constitution
+
+**Status:** Adopted
+**Category:** Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Adopted:** 2026-07-11
+**Primary Author:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-ARCH-002
+**Repository Commit:** Not recorded; this entry must not claim a commit before one exists
+**Related Files:** `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`, `docs/IntellectualProperty/IP_LEDGER.md`
+
+### Governance Purpose
+
+Establishes a durable authority hierarchy and governance boundary for intelligence evidence, validation, engine responsibilities, privacy, provider use, user approval, future planning, and any future execution.
+
+### Distinguishing Characteristics
+
+Separates product truth from provider explanation, preserves domain authority, makes high-impact approval explicit, requires privacy minimization before provider context, and constitutionally separates reasoning and planning from execution.
+
+### Operational Value
+
+Provides contributors with a stable standard for extending intelligence without weakening trust, evidence integrity, privacy, user control, or architecture discipline.
+
+### Confidentiality Boundary
+
+The constitutional document states governance principles only. It does not disclose confidential formulas, thresholds, rankings, weights, selection methods, authorization internals, provider configuration, or security controls.
+
+### Production Limitation
+
+This entry documents adopted governance only. It does not implement Planning Intelligence, execution, provider changes, engine-order changes, or runtime enforcement beyond existing controls.
+
+### Follow-Up Actions
+
+Apply the Constitution to the design review for planned MC-AI-019 before any implementation begins. Record repository evidence only after a qualifying commit exists.
+
+### Notes
+
+This entry records authorship and repository evidence for internal governance purposes. It makes no patent, registration, or legal-protection claim.

@@ -1590,3 +1590,9 @@ Each recommendation carries a stable recommendation, decision, and capability ID
 Ordering is deterministic and bounded. Blocked, unauthorized, conflicted, stale-only, unsafe, or unsupported options never become active recommendations. Lower-priority alternatives remain visible as deferred recommendations. Completed appropriate state may produce no action, while insufficient evidence produces no safe recommendation. High-impact recommendations preserve explicit approval and never authorize execution.
 
 Recommendation context enters Unified Context as a separate `recommendation` section before the existing single provider call. The provider may explain priorities but cannot invent higher priority, hide blocked recommendations, bypass Decision or Validation, or claim execution. Logs contain only request ID, recommendation count, highest-priority ID, blocked count, confidence, and timing.
+
+## Constitutional Governance Anchor
+
+[MC-ARCH-002 — Meetro Community Intelligence Constitution](../Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md) is the adopted governance authority for this architecture. It fixes the authority order, evidence and privacy boundaries, engine responsibilities, provider subordination, explicit-approval requirements, and separation of reasoning from any future execution.
+
+The Constitution introduces no runtime behavior. MC-AI-019 Planning Intelligence remains planned, must remain advisory and non-mutating, and requires an explicit future implementation task.

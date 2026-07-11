@@ -330,6 +330,14 @@ Adds evidence-backed recommendation construction, deterministic priority and ord
 
 **Production limitation:** Recommendations are limited to validated Decision options in current context. The engine does not discover external opportunities, rank professionals, or execute recommendations.
 
+#### MC-ARCH-002 — Intelligence Constitution
+
+**Status:** Adopted 2026-07-11
+
+Establishes the authority hierarchy, evidence and privacy rules, engine boundaries, provider subordination, explicit-approval requirements, and permanent separation between reasoning, future planning, and any future execution. This is governance documentation and introduces no runtime behavior.
+
+See [Meetro Community Intelligence Constitution](MEETRO_INTELLIGENCE_CONSTITUTION.md).
+
 #### MC-AI-019 — Planning Intelligence Foundation
 
 **Status:** Planned
@@ -388,6 +396,8 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-016 | Intelligence Validation and Confidence | Implemented | Cross-engine validation and response constraints | MC-AI-015 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0015](../IntellectualProperty/IP_LEDGER.md#mc-ip-0015--intelligence-validation-and-confidence-foundation) |
 | MC-AI-017 | Decision Intelligence | Implemented | Validated option comparison without execution | MC-AI-016 and Capability | Pending qualifying commit | 2026-07-11 | [MC-IP-0016](../IntellectualProperty/IP_LEDGER.md#mc-ip-0016--decision-intelligence-foundation) |
 | MC-AI-018 | Recommendation Intelligence | Implemented | Evidence-backed priority without execution | MC-AI-017, MC-AI-016 | Pending qualifying commit | 2026-07-11 | [MC-IP-0017](../IntellectualProperty/IP_LEDGER.md#mc-ip-0017--recommendation-intelligence-foundation) |
+| MC-ARCH-002 | Intelligence Constitution | Adopted | Permanent intelligence governance and reasoning/execution separation | Implemented reasoning stack | Not applicable; documentation adoption | 2026-07-11 | [MC-ARCH-002](../IntellectualProperty/IP_LEDGER.md#mc-arch-002--intelligence-constitution) |
+| MC-AI-019 | Planning Intelligence | Planned | Advisory execution planning without mutation | MC-ARCH-002, MC-AI-018 | Not implemented | — | — |
 
 ## Engine Responsibility Matrix
 
