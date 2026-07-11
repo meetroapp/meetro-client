@@ -1063,3 +1063,44 @@ Design MC-AI-021 as a contract-only milestone before considering any execution i
 ### Notes
 
 No proprietary policy formula, private decision threshold, internal weighting, confidential provider instruction, or security-sensitive control is reproduced here. No legal status is asserted.
+
+## MC-ARCH-003 — Intelligence Platform Specification v1.0
+
+**Status:** Baseline Adopted
+**Category:** Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Adopted:** 2026-07-11
+**Primary Author:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-ARCH-003
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `docs/Architecture/MEETRO_INTELLIGENCE_PLATFORM_SPECIFICATION_V1.md`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/Architecture/AI_ROADMAP.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/IntellectualProperty/IP_LEDGER.md`
+
+### Architecture Scope
+
+Records the layered intelligence platform architecture from Gateway controls through non-executing Execution Governance, including the authority hierarchy, engine responsibility boundaries, advisory reasoning model, provider boundary, privacy and security model, Planning and Governance boundaries, no-execution baseline, and extension framework.
+
+### Operational Value
+
+Provides a stable technical baseline for contributors, reviewers, advisors, architecture diligence, internal onboarding, and future implementation-evidence preparation without changing runtime behavior.
+
+### Evidence of Adoption
+
+The working tree contains the v1.0 specification and concise references in the standing architecture record and roadmap. A qualifying documentation commit remains pending.
+
+### Confidentiality Boundary
+
+The specification documents responsibilities and boundaries without disclosing proprietary formulas, heuristics, weights, thresholds, prompt internals, provider configuration, or security-sensitive controls.
+
+### Production Limitation
+
+This is a documentation baseline. It does not implement execution contracts, execution adapters, product writes, provider changes, engine-order changes, or UI. Version 1.0 remains advisory and non-executing.
+
+### Follow-Up Actions
+
+Record the qualifying documentation commit before adding repository evidence. Review MC-AI-021 as a contract-only milestone under the Constitution and this baseline.
+
+### Notes
+
+This entry records architectural authorship and repository evidence. It makes no legal-status claim and does not classify the specification itself as a patent candidate.

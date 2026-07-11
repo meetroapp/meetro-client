@@ -1622,3 +1622,7 @@ Authorization remains explicit and current. Authentication, session, permissions
 Idempotency governance classifies missing, verified, and duplicate requests without processing them. Audit and receipt contracts require a request reference, approval and authorization verification, timestamp, result placeholder, rollback reference where applicable, and failure classification. Receipts always state `not_executed` in this milestone. Rollback classifications are awareness only: not supported, compensating action, manual review, reversible, or irreversible.
 
 Execution Governance contributes one `executionGovernance` section before the existing single provider call. The provider may explain denials and requirements but cannot authorize execution, remove approval requirements, bypass policy, fabricate receipts, or claim execution. Every result keeps `executionEligible` and `executionPerformed` false. No write API, execution adapter, rollback action, or frontend execution surface exists.
+
+## Platform Specification v1.0
+
+[MC-ARCH-003 — Meetro Community Intelligence Platform Specification v1.0](../Architecture/MEETRO_INTELLIGENCE_PLATFORM_SPECIFICATION_V1.md) is the adopted technical baseline for the implemented platform from the Gateway through Execution Governance. It consolidates responsibilities, authority, provider, privacy, approval, testing, limitation, and extension boundaries without replacing this detailed architecture record or the Intelligence Constitution.

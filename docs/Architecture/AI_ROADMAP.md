@@ -369,6 +369,14 @@ Adds the required non-executing governance stage after Planning. It defines back
 
 **Production limitation:** Execution Governance evaluates policy only. Execution eligibility and performed state remain false, receipts remain `not_executed`, and no product action, rollback behavior, or execution API exists.
 
+#### MC-ARCH-003 — Intelligence Platform Specification v1.0
+
+**Status:** Baseline Adopted 2026-07-11
+
+Establishes the verified v1.0 technical baseline from the Intelligence Gateway through Execution Governance, including authority, engine responsibilities, evidence, provider, privacy, approval, testing, current limitations, and safe extension boundaries. This documentation milestone adds no runtime or execution behavior.
+
+See [Meetro Community Intelligence Platform Specification v1.0](MEETRO_INTELLIGENCE_PLATFORM_SPECIFICATION_V1.md).
+
 ### Phase 5 — User-Approved Companion Execution
 
 **Status:** Future / Restricted
@@ -409,6 +417,7 @@ No capability in this phase is claimed as currently implemented.
 | MC-ARCH-002 | Intelligence Constitution | Adopted | Permanent intelligence governance and reasoning/execution separation | Implemented reasoning stack | Not applicable; documentation adoption | 2026-07-11 | [MC-ARCH-002](../IntellectualProperty/IP_LEDGER.md#mc-arch-002--intelligence-constitution) |
 | MC-AI-019 | Planning Intelligence | Implemented | Structured advisory planning without mutation or execution | MC-ARCH-002, MC-AI-018 | Pending qualifying commit | 2026-07-11 | [MC-IP-0018](../IntellectualProperty/IP_LEDGER.md#mc-ip-0018--planning-intelligence-foundation) |
 | MC-AI-020 | Execution Governance | Implemented | Authorization, approval, idempotency, audit, rollback, and failure policy without execution | MC-ARCH-002, MC-AI-019 | Pending qualifying commit | 2026-07-11 | [MC-IP-0019](../IntellectualProperty/IP_LEDGER.md#mc-ip-0019--execution-governance-foundation) |
+| MC-ARCH-003 | Intelligence Platform Specification v1.0 | Baseline Adopted | Stable technical baseline through non-executing Governance | MC-ARCH-002, MC-AI-020 | Pending qualifying commit | 2026-07-11 | [MC-ARCH-003](../IntellectualProperty/IP_LEDGER.md#mc-arch-003--intelligence-platform-specification-v10) |
 
 ## Engine Responsibility Matrix
 
