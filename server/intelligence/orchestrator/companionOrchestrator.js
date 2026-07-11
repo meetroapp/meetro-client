@@ -10,13 +10,13 @@ import { buildUnifiedContext } from "./unifiedContextBuilder.js";
 
 const ENGINE_STAGES = [
   ["context", "memory"],
-  ["capability"],
   ["workflow"],
   ["relationship"],
   ["persistent_memory"],
   ["business"],
   ["community", "contracts"],
   ["knowledge"],
+  ["capability"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {

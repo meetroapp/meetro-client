@@ -51,7 +51,7 @@ Intelligence Orchestrator
         |-- Business Intelligence            [Implemented]
         |-- Community Intelligence           [Implemented]
         |-- Knowledge Intelligence           [MC-AI-014 Implemented]
-        |-- Capability Intelligence          [MC-AI-015 Planned expansion]
+        |-- Capability Intelligence          [MC-AI-015 Implemented]
         `-- Future Intelligence Engines
         |
         v
@@ -268,7 +268,7 @@ Includes MC-AI-008 through MC-AI-013. This phase taught Meetro Community to inte
 
 ### Phase 2 — Trusted Knowledge And Capability
 
-**Status:** MC-AI-014 implemented; MC-AI-015 planned
+**Status:** Complete
 
 #### MC-AI-014 — Knowledge Intelligence Foundation
 
@@ -288,19 +288,25 @@ Evidence: [Knowledge Intelligence](../../server/intelligence/knowledge/). See [M
 
 #### MC-AI-015 — Capability Intelligence Foundation
 
-**Status:** Planned, not implemented
+**Status:** Implemented 2026-07-11
 
-Purpose: determine the approved Meetro Community capability relevant to a user goal, such as explaining workflow, preparing documents, reviewing schedules, interpreting business or community state, retrieving verified knowledge, or identifying required next steps.
+Determines the approved Meetro Community capability relevant to a user goal, such as explaining workflow, preparing documents, reviewing schedules, interpreting business or community state, retrieving verified knowledge, or identifying required next steps.
 
-Capability Intelligence proposes or routes capabilities. It does not automatically execute them.
+Capability Intelligence uses a server-owned typed registry, deterministic intent resolution, role, scope, permission, input and prerequisite evaluation, risk classification, and one safe next-step proposal. It consumes existing engine evidence and does not automatically execute capabilities.
 
 Dependencies: Knowledge, Workflow, Relationship, Persistent Memory, Business, and Community Intelligence.
 
-The repository already contains problem-to-capability reasoning in `companionCapabilityEngine.js`. MC-AI-015 represents broader governed capability routing; the existing helper does not make MC-AI-015 implemented.
+The earlier `companionCapabilityEngine.js` remains a compatibility helper for service-skill signals. Governed product-capability selection is owned by the MC-AI-015 engine.
+
+**Production limitation:** MC-AI-015 proposes capabilities only. Meetro Community has no capability execution layer in this milestone; saving, sending, scheduling, approving, recording, closing, publishing, or other mutation requires a separate future user-approved and authorized architecture.
+
+Evidence: [Capability Intelligence](../../server/intelligence/capability/). See [MC-IP-0014](../IntellectualProperty/IP_LEDGER.md#mc-ip-0014--capability-intelligence-foundation).
 
 ### Phase 3 — Intelligence Quality And Decision Support
 
-**Status:** Planned concepts
+**Status:** Planned
+
+Recommended next milestone: **MC-AI-016 — Intelligence Validation and Confidence Foundation**. It should reconcile permitted cross-engine evidence, normalize confidence, preserve traceability, and surface contradictions without executing product actions.
 
 - **Intelligence Validation and Confidence:** reconcile permitted engine outputs, normalize confidence, preserve evidence, and prevent weak conclusions from appearing as facts.
 - **Decision Intelligence:** compare permitted options, identify constraints, and surface tradeoffs while remaining advisory.
@@ -349,8 +355,8 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-012 | Business Intelligence | Implemented | Read-only business operations interpretation | Workflow, Relationship, Memory | `539d00c4b96a165eafffcfb18114763a8e6622a6` | 2026-07-11 | [MC-IP-0011](../IntellectualProperty/IP_LEDGER.md#mc-ip-0011--business-intelligence-foundation) |
 | MC-AI-013 | Community Intelligence | Implemented | Authorized aggregate community interpretation | Relationship, Memory, Business | `d92acd73367ff320830292a0d7c3385f52fcba53` | 2026-07-11 | [MC-IP-0012](../IntellectualProperty/IP_LEDGER.md#mc-ip-0012--community-intelligence-foundation) |
 | Refinement | Business-before-Community sequencing | Implemented | Preserve intended engine dependency order | MC-AI-012, MC-AI-013 | `9908f9fc83e51e057b76abf405c4f55886f8c980` | 2026-07-11 | Review with related entries |
-| MC-AI-014 | Knowledge Intelligence | Implemented | Source-aware governed knowledge retrieval | Core intelligence foundation | Pending qualifying commit | 2026-07-11 | [MC-IP-0013](../IntellectualProperty/IP_LEDGER.md#mc-ip-0013--knowledge-intelligence-foundation) |
-| MC-AI-015 | Capability Intelligence | Planned | Governed task and capability routing | MC-AI-014 and core engines | Pending repository verification | Pending repository verification | Add after implementation review |
+| MC-AI-014 | Knowledge Intelligence | Implemented | Source-aware governed knowledge retrieval | Core intelligence foundation | `4e37db9bf8ac01b91c3d91f523a915ae524830ce` | 2026-07-11 | [MC-IP-0013](../IntellectualProperty/IP_LEDGER.md#mc-ip-0013--knowledge-intelligence-foundation) |
+| MC-AI-015 | Capability Intelligence | Implemented | Governed task and capability routing without execution | MC-AI-014 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0014](../IntellectualProperty/IP_LEDGER.md#mc-ip-0014--capability-intelligence-foundation) |
 
 ## Engine Responsibility Matrix
 
@@ -360,7 +366,7 @@ No capability in this phase is claimed as currently implemented.
 | Context | Implemented | Verified backend request context | Frontend-injected identity or unrestricted records |
 | Session Memory | Implemented | Short-lived conversation continuity | Durable approved memory or cross-user history |
 | Knowledge Intelligence | Implemented | Authorized source-aware knowledge evidence and traceability | Final answers, live state, source mutation, or unsupported facts |
-| Capability helper | Implemented foundation | Problem-to-capability reasoning | Full MC-AI-015 routing or autonomous execution |
+| Capability Intelligence | Implemented | Governed intent-to-capability proposals and safe next steps | Product execution, permission grants, or autonomous actions |
 | Workflow | Implemented | Live lifecycle state and next workflow action | Relationship profiling or business accounting |
 | Relationship | Implemented | Current relationship continuity | Personality, sentiment, trust, loyalty, or customer-value scoring |
 | Persistent Memory | Implemented | Approved durable continuity | Raw conversation archives or automatic promotion |
@@ -462,4 +468,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next implementation milestone is **MC-AI-015 — Capability Intelligence Foundation**. MC-AI-014 is implemented in the working tree and awaits a qualifying commit reference.
+The next implementation milestone is **MC-AI-016 — Intelligence Validation and Confidence Foundation**. It remains planned and is not implemented by MC-AI-015.

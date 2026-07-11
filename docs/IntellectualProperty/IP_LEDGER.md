@@ -694,3 +694,60 @@ Create and certify the production read-only Knowledge Repository adapter, and co
 ### Notes
 
 No retrieval weights, ranking formula, confidential source mapping, private content, credential, or operative security detail is reproduced here. No patent, registration, or legal-protection status is asserted.
+
+## MC-IP-0014 — Capability Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-015
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/capability/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/tests/capabilityIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Understanding a member's goal did not by itself establish which Meetro Community capability applied, whether it was permitted and ready, or what safe next step should occur before any product action.
+
+### Technical or Creative Solution
+
+A server-owned capability registry and read-only proposal engine resolve approved capabilities, evaluate trusted authorization and readiness evidence across existing intelligence domains, classify risk and availability, and return a bounded next-step proposal without execution.
+
+### Distinguishing Characteristics
+
+Stable governed capability identities, deterministic intent-to-capability resolution, cross-engine readiness composition, explicit missing requirements, and strict separation between reasoning, approval, and execution.
+
+### Operational Value
+
+Provides a consistent foundation for explaining what Meetro can support while preventing interpreted intent from becoming silent authority to mutate product or community state.
+
+### Evidence of Implementation
+
+The working tree contains the typed registry, deterministic resolver, authorization and requirement evaluators, risk-aware proposal engine, executable Orchestrator integration, focused tests, architecture documentation, and roadmap update. A qualifying commit reference remains pending.
+
+### Production Limitation
+
+MC-AI-015 proposes capabilities only. A separate reviewed execution architecture with explicit user approval and final authorization would be required before any product action could occur.
+
+### Publicly Disclosed?
+
+Pending review.
+
+### Confidential Elements
+
+Detailed intent mappings, selection and prioritization methods, internal risk policy, sensitive permission mappings, and future execution security controls.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public routing and governance methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Record the qualifying implementation commit, complete inventorship, assignment, prior-art, and public-disclosure review, and keep execution architecture separate from capability reasoning.
+
+### Notes
+
+No phrase map, selection weight, prioritization formula, internal threshold, sensitive permission map, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.

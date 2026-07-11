@@ -21,13 +21,13 @@ test("Intelligence Engine Registry reflects the current orchestration order", ()
       INTELLIGENCE_ENGINE_NAMES.intent,
       INTELLIGENCE_ENGINE_NAMES.context,
       INTELLIGENCE_ENGINE_NAMES.sessionMemory,
-      INTELLIGENCE_ENGINE_NAMES.knowledge,
-      INTELLIGENCE_ENGINE_NAMES.capability,
       INTELLIGENCE_ENGINE_NAMES.workflow,
       INTELLIGENCE_ENGINE_NAMES.relationship,
       INTELLIGENCE_ENGINE_NAMES.persistentMemory,
       INTELLIGENCE_ENGINE_NAMES.business,
       INTELLIGENCE_ENGINE_NAMES.community,
+      INTELLIGENCE_ENGINE_NAMES.knowledge,
+      INTELLIGENCE_ENGINE_NAMES.capability,
     ]
   );
   assert.deepEqual(
@@ -56,7 +56,7 @@ test("Intelligence Engine Registry enables Community metadata after Relationship
   assert.deepEqual(community, {
     name: INTELLIGENCE_ENGINE_NAMES.community,
     version: "1.0",
-    executionOrder: 100,
+    executionOrder: 80,
     enabled: true,
   });
 
@@ -66,14 +66,14 @@ test("Intelligence Engine Registry enables Community metadata after Relationship
   assert.deepEqual(persistentMemory, {
     name: INTELLIGENCE_ENGINE_NAMES.persistentMemory,
     version: "1.0",
-    executionOrder: 80,
+    executionOrder: 60,
     enabled: true,
   });
   assert.equal(relationship.executionOrder < persistentMemory.executionOrder, true);
   assert.deepEqual(business, {
     name: INTELLIGENCE_ENGINE_NAMES.business,
     version: "1.0",
-    executionOrder: 90,
+    executionOrder: 70,
     enabled: true,
   });
   assert.equal(persistentMemory.executionOrder < business.executionOrder, true);
@@ -88,7 +88,7 @@ test("Intelligence Engine Registry exposes metadata without becoming an executio
   assert.deepEqual(workflow, {
     name: INTELLIGENCE_ENGINE_NAMES.workflow,
     version: "1.0",
-    executionOrder: 60,
+    executionOrder: 40,
     enabled: true,
   });
 

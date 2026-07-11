@@ -684,11 +684,11 @@ test("Gateway and Companion Orchestrator preserve successful flow and safe diagn
   assert.deepEqual(diagnostics[0].selectedEngines, [
     "context",
     "memory",
-    "capability",
     "workflow",
     "relationship",
     "persistent_memory",
     "knowledge",
+    "capability",
   ]);
   assert.deepEqual(diagnostics[0].failedEngines, []);
   assert.equal(diagnostics[0].successfulEngines.length, 7);
@@ -1200,7 +1200,7 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
   assert.doesNotMatch(gatewaySource, /buildCompanionContextEngine|buildCompanionCapabilities|buildCompanionWorkflow|buildCompanionRelationship|resolveCompanionSessionMemory|invokeProvider|getCompanionSystemPrompt/);
   assert.match(defaultEnginesSource, /buildCompanionContextEngine/);
   assert.match(defaultEnginesSource, /collectKnowledgeIntelligence/);
-  assert.match(defaultEnginesSource, /buildCompanionCapabilities/);
+  assert.match(defaultEnginesSource, /collectCapabilityIntelligence/);
   assert.match(defaultEnginesSource, /collectWorkflowIntelligence/);
   assert.match(defaultEnginesSource, /collectRelationshipIntelligence/);
   assert.match(defaultEnginesSource, /resolveCompanionSessionMemory/);

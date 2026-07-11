@@ -1,5 +1,13 @@
 const DEFAULT_ENGINES = ["capability", "context", "knowledge"];
 
+const CAPABILITY_FEATURES = new Set([
+  "ask_meetro", "product_help", "help", "product_navigation", "workflow_explanation", "emergency",
+  "quote_builder", "conversation", "community", "discover", "meetro_moments", "spotlight", "wonder_pass",
+  "business_intelligence", "business_dashboard", "business_tools", "evaluation", "work_center", "current_jobs",
+  "schedule", "active_work", "completion", "closure", "job_history", "messages", "customer_relationships",
+  "business_profile", "hiring", "invoices", "invoice_builder", "documentation", "document_guidance", "onboarding",
+]);
+
 const FEATURE_ENGINES = Object.freeze({
   emergency: ["workflow", "relationship", "persistent_memory", "knowledge", "context"],
   product_help: ["knowledge", "context"],
@@ -55,7 +63,7 @@ export function selectEngineIds(request = {}, registry) {
   const capability = normalize(request.capability);
   const source = normalize(request.source?.page || request.source?.surface);
   const mapped = FEATURE_ENGINES[feature] || FEATURE_ENGINES[capability] || FEATURE_ENGINES[source];
-  const ids = [...new Set(mapped || DEFAULT_ENGINES)];
+  const ids = [...new Set([...(CAPABILITY_FEATURES.has(feature) ? ["capability"] : []), ...(mapped || DEFAULT_ENGINES)])];
 
   return ids
     .map((id) => registry.get(id))

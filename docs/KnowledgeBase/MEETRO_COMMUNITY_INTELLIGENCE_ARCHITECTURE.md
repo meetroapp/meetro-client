@@ -1469,3 +1469,67 @@ Production requires a database-backed or equivalent immutable read-only adapter 
 Future ingestion must separately validate source type, file safety, confidentiality, domain, authority, version, review approval, indexing, and publication. This foundation adds no upload UI, automatic crawling, arbitrary URL ingestion, or mutable source-controlled runtime store.
 
 Safe logs contain request and domain identifiers, source counts, status, confidence, conflicts, truncation, and timing only. They exclude messages, prompts, source text, excerpts, facts, guidance, private titles, confidential paths, credentials, customer information, and provider context.
+
+## Capability Intelligence Foundation
+
+Status: Complete (MC-AI-015)
+
+Capability Intelligence is the read-only reasoning and routing layer that identifies what a member is trying to accomplish, resolves an approved Meetro Community capability, evaluates whether its role, scope, permission, input, and prerequisite requirements are satisfied, classifies risk and availability, and proposes one safe next step. It does not execute the capability.
+
+```text
+Capability-Scoped Request
+  -> Gateway
+  -> Orchestrator
+  -> Existing Intelligence Context
+  -> Capability Intent Resolver
+  -> Capability Registry
+  -> Role, Scope, Permission, Input, and Prerequisite Evaluation
+  -> Capability Selection
+  -> Risk and Availability Classification
+  -> Safe Next-Step Proposal
+  -> Structured Capability Context
+  -> Unified Context Builder
+  -> Provider
+```
+
+### Registry And Contracts
+
+The server-owned registry defines stable capability IDs, names, domains, categories, supported roles, required scopes and permissions, required and optional inputs, prerequisites, execution mode, risk, supported features, supporting engines, version, lifecycle status, and replacement metadata. Definitions are schema-validated, duplicate IDs are rejected, and lookup order is deterministic. Clients cannot register capabilities.
+
+Registered domains cover evidenced product guidance, workflow, emergency, relationship and communication, business operations, Community, verified knowledge, documents, hiring, onboarding, and settings. Categories distinguish informational, diagnostic, navigational, preparatory, review, communication, workflow, business, Community, document, administrative, restricted, and unsupported work.
+
+### Intent And Selection
+
+Intent resolution is deterministic. It evaluates a validated capability ID, supported product feature or surface, existing workflow evidence, approved structured metadata, and bounded product-language mappings. Unsupported IDs are rejected. Vague language does not become mutation authority, and requests to send, publish, approve, record, close, or silently change product state return an execution-unavailable result. Safer review or preparation is distinct from execution.
+
+The output identifies the intent, requested outcome, selected capability, alternatives, authorization, prerequisites, inputs, supporting engines, next step, execution boundary, status, confidence, evidence, and warnings. Missing or unsupported intent returns structured unsupported context rather than invented capability availability.
+
+### Authorization, Scope, And Permissions
+
+Role and account type come from the authenticated server user. Client role and permission fields are ignored. Supported normalized roles are standard and professional, with business-owner and business-member representations treated as professional only when provided by authenticated server context.
+
+Scope evaluation uses stable backend evidence for user, business, relationship, workflow, conversation, community, document, and system scope. Display names never establish scope. Permission evidence comes only from trusted backend or authenticated user context. Capability Intelligence interprets apparent availability; Gateway and any future execution layer remain final enforcement authorities. Memory, Business, Community, and Knowledge output cannot grant permission.
+
+### Inputs, Prerequisites, Modes, And Status
+
+Required and optional inputs are declared centrally. Present, missing, invalid, and unauthorized references are reported without inventing values or copying private records. Lifecycle prerequisites use Workflow Intelligence outputs rather than a second state machine. Relationship, Community, Business, Knowledge, Memory, and Contracts evidence retain their established authority boundaries.
+
+Modes are read-only, draft-only, preparatory, user-approved, restricted, or unavailable. Status is available, available with missing inputs, blocked, restricted, unsupported, ambiguous, or unavailable. Planned and disabled definitions are unavailable; deprecated definitions provide replacement guidance when configured.
+
+Risk is informational, standard, sensitive, high impact, or prohibited. High-impact and user-approved capabilities always state that separate explicit approval is required, while `execution.performed` and `execution.executableNow` remain false. MC-AI-015 contains no execution function.
+
+### Safe Next Steps And Ambiguity
+
+The engine returns one deterministic next step: explain, collect input, resolve scope, resolve permission, complete a prerequisite, review a draft, request confirmation, identify a surface, take no action, or reject an unsupported request. Alternatives are bounded and deduplicated. Ambiguity never selects the higher-impact interpretation automatically.
+
+### Cross-Engine And Provider Boundaries
+
+Workflow owns live lifecycle state and blockers. Relationship owns relationship and communication context. Persistent Memory owns approved preferences but cannot satisfy authorization. Business owns current operational metrics. Community owns authorized community evidence. Knowledge owns verified rules and may block knowledge-dependent capability claims when evidence is insufficient. Contracts may support explanations but Capability Intelligence cannot alter contractual obligations.
+
+The executable stage runs after Knowledge and contributes one `capabilities` section through Unified Context before the existing single provider call. Provider context marks capability output as advisory, records that execution did not occur, preserves missing and restricted states, and requires a separate approval boundary for future high-impact work. Gateway response and usage accounting remain unchanged.
+
+### Logging And Production Limitation
+
+Logs contain request, intent and capability IDs, status, category, risk, bounded counts, confidence, and timing only. They exclude message bodies, drafts, customer names, private inputs, document content, memory values, prompts, credentials, and provider context.
+
+This milestone has no execution layer. It cannot send messages, create or save documents, change schedules, approve proposals, record payments, close jobs, publish Community content, modify memory, or mutate product state.

@@ -2,6 +2,7 @@ export {
   buildCompanionCapabilities,
   COMPANION_CAPABILITY_LIBRARY,
 } from "./capability/companionCapabilityEngine.js";
+export * from "./capability/index.js";
 export * from "./business/index.js";
 export * from "./community/index.js";
 export { handleCompanionAsk } from "./companionController.js";

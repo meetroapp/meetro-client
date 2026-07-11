@@ -310,7 +310,7 @@ test("workflow selection covers operational surfaces and excludes unsupported kn
     assert.ok(selectEngineIds({ feature, source: {} }, registry).includes("workflow"), feature);
   }
   assert.equal(selectEngineIds({ feature: "community", source: {} }, registry).includes("workflow"), false);
-  assert.deepEqual(selectEngineIds({ feature: "unknown", source: {} }, registry), ["context", "capability"]);
+  assert.deepEqual(selectEngineIds({ feature: "unknown", source: {} }, registry), ["context"]);
 });
 
 test("Unified Context Builder preserves structured workflow output", () => {

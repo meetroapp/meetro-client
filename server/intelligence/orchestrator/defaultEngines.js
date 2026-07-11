@@ -1,4 +1,4 @@
-import { buildCompanionCapabilities } from "../capability/companionCapabilityEngine.js";
+import { capabilityEngineSupports, collectCapabilityIntelligence } from "../capability/capabilityEngine.js";
 import { collectCommunityIntelligence, communityEngineSupports } from "../community/communityEngine.js";
 import { businessEngineSupports, collectBusinessIntelligence } from "../business/businessEngine.js";
 import { buildCompanionContextEngine } from "../context/companionContextEngine.js";
@@ -60,16 +60,11 @@ export function createDefaultOrchestrationEngines() {
       priority: 95,
       data: await collectKnowledgeIntelligence({ request }),
     }), { supports: knowledgeEngineSupports }),
-    engine("capability", 40, async (request, collected) => createEngineContextResult({
+    engine("capability", 100, async (request, collected) => createEngineContextResult({
       section: "capabilities",
-      priority: 40,
-      data: buildCompanionCapabilities({
-        userMessage: request.message,
-        intent: request.intent,
-        context: collected.context || {},
-        knowledge: collected.knowledge || {},
-      }),
-    })),
+      priority: 100,
+      data: await collectCapabilityIntelligence({ request, collected }),
+    }), { supports: capabilityEngineSupports }),
     engine("workflow", 50, async (request, collected) => createEngineContextResult({
       section: "workflow",
       priority: 50,
