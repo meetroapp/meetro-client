@@ -1,0 +1,11 @@
+export { collectRelationshipIntelligence, relationshipEngineSupports } from "./relationshipEngine.js";
+export { resolveRelationshipSource } from "./relationshipSourceResolver.js";
+export { normalizeRelationshipResolution } from "./relationshipNormalizer.js";
+export { getRelationshipParties, hasStableParty, partiesAgree } from "./relationshipIdentity.js";
+export { buildRelationshipActivity, selectCurrentEngagement } from "./relationshipActivity.js";
+export { buildRelationshipCommunication } from "./relationshipCommunication.js";
+export { classifyRelationshipContinuity } from "./relationshipContinuity.js";
+export { detectRelationshipFollowUps } from "./relationshipFollowUps.js";
+export { inferRelationshipNextAction } from "./relationshipNextAction.js";
+export { evaluateRelationshipConfidence } from "./relationshipConfidence.js";
+export { RELATIONSHIP_TYPES, CONTINUITY_CLASSIFICATIONS } from "./relationshipContracts.js";

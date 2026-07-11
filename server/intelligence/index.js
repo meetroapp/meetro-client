@@ -53,6 +53,22 @@ export {
   RELATIONSHIP_RULES,
 } from "./relationship/companionRelationshipEngine.js";
 export {
+  buildRelationshipActivity,
+  buildRelationshipCommunication,
+  classifyRelationshipContinuity,
+  collectRelationshipIntelligence,
+  detectRelationshipFollowUps,
+  evaluateRelationshipConfidence,
+  getRelationshipParties,
+  inferRelationshipNextAction,
+  normalizeRelationshipResolution,
+  relationshipEngineSupports,
+  resolveRelationshipSource,
+  selectCurrentEngagement,
+  CONTINUITY_CLASSIFICATIONS,
+  RELATIONSHIP_TYPES,
+} from "./relationship/index.js";
+export {
   buildCompanionWorkflow,
   MEETRO_WORKFLOW_STAGES,
   WORKFLOW_LIFECYCLE_RULES,

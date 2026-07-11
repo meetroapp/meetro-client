@@ -234,6 +234,78 @@ Workflow Intelligence excludes full conversations, private notes, addresses, pay
 
 ---
 
+# RELATIONSHIP INTELLIGENCE FOUNDATION (MC-AI-010)
+
+Relationship Intelligence describes factual operational continuity between scoped parties. It is not a personality profile, trust score, loyalty score, sentiment model, customer-value score, or private conversation summary. It never creates contacts, merges identities, sends messages, follows up, marks messages read, or changes workflow state.
+
+```txt
+Ask Meetro Request
+        ↓
+Gateway
+        ↓
+Orchestrator
+        ↓
+Workflow Intelligence
+        ↓
+Relationship Intelligence
+        ↓
+Resolve Scoped Parties and Records
+        ↓
+Classify Continuity
+        ↓
+Summarize Operational Activity
+        ↓
+Determine Communication State
+        ↓
+Determine Relationship-Level Next Action
+        ↓
+Return Privacy-Minimized Structured Context
+        ↓
+Unified Context Builder
+        ↓
+Provider
+```
+
+## Relationship Types And Identity
+
+Supported evidence may identify professional/customer, homeowner/professional, business/customer, emergency service, standard service, hiring, community connection, referral, and conversation-only relationships. Resolution uses relationship ID, conversation ID, project or job ID, request or emergency ID, then customer plus business scope. Name-only and broad email-only matching are prohibited.
+
+Normalized parties contain only the professional, customer, and business IDs needed for orchestration. Authenticated professional and business scope or authenticated homeowner identity is applied before resolution. Relationships cannot cross businesses, professionals, customers, or active account scopes. Hiring and Community records remain separate unless a stable explicit relationship link exists.
+
+## Continuity And State
+
+Continuity classifications are deterministic: first-time customer, new relationship, returning customer, active customer, past customer, inactive relationship, conversation-only, or unknown. Returning requires prior completed or closed work plus current activity. Repeated work is operational continuity, not evidence of loyalty, satisfaction, character, or trustworthiness.
+
+Relationship state may be new, active, waiting, follow-up due, completed, inactive, closed, or unknown. Active Workflow Intelligence remains the lifecycle authority. Relationship Intelligence uses its structured output for current engagement and next-action ownership rather than maintaining a second workflow status map.
+
+## Activity And Engagement
+
+Safe activity counts include requests, active requests, completed and closed jobs, emergency work, proposals, unpaid invoices, conversations, explicit follow-ups, hiring conversations, and Community interactions. Typed stable IDs deduplicate completion records against Job History and emergency requests against their corresponding emergency jobs. Revenue and subjective customer value are never calculated.
+
+Current engagement prioritizes active emergencies, active work, scheduled work or visits, proposals awaiting decisions, evaluations, new requests, unresolved financial documents, closed history, then conversation-only relationships. Workflow Intelligence output takes precedence unless a higher-priority active emergency exists.
+
+## Communication And Follow-Up
+
+Communication continuity uses channel, conversation ID, timestamps, sender direction, persisted response state, unread count, and closed/archive state. Full messages, attachments, photos, voice transcripts, and message-by-message summaries are forbidden. Direction alone does not create a pending-response state without unread or explicit pending evidence.
+
+Follow-ups require explicit evidence such as an unread incoming message, persisted follow-up flag, proposal revision request, completion follow-up, or financial-document delivery state. No due date or overdue state is invented. Relationship next actions complement Workflow Intelligence and are never executed automatically.
+
+## Contradictions And Confidence
+
+Conflicting customer, professional, business, relationship, or conversation identifiers produce warnings, exclude disputed records, and lower confidence. Stable agreeing IDs produce high confidence; scoped consistent inference without an explicit relationship ID produces medium confidence; conflicts or incomplete party identity produce low confidence. Contradictions never trigger automatic merges.
+
+## Privacy Boundary
+
+Relationship context excludes message bodies, private notes, addresses, phone numbers, email addresses, payment credentials, financial accounts, media, medical or sensitive traits, inferred income, personality, sentiment, politics, religion, race, disability, family status, and unrestricted metadata. The UI never receives the internal relationship packet.
+
+## Production Data Contract
+
+Trusted data may be supplied through scoped `backendContext.relationships`, `backendContext.conversations`, scoped workflow/history collections, `repositories.getRelationshipRecords()`, `repositories.getConversationRecords()`, and `repositories.getWorkflowRecords()`. Repository calls receive authenticated user and stable selector IDs. Unrestricted frontend arrays and browser storage are not data sources.
+
+Future relationship adapters register trusted collections and stable identity fields at the resolver boundary. They must preserve authenticated scope, privacy minimization, Workflow Intelligence ownership, and the single-provider-call contract.
+
+---
+
 # COMPLETED FOUNDATION
 
 ## 1. Intelligence Gateway

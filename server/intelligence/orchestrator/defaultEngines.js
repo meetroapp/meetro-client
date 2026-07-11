@@ -6,7 +6,7 @@ import {
   getSafeRecentCompanionMemory,
   resolveCompanionSessionMemory,
 } from "../memory/companionSessionMemory.js";
-import { buildCompanionRelationship } from "../relationship/companionRelationshipEngine.js";
+import { collectRelationshipIntelligence, relationshipEngineSupports } from "../relationship/relationshipEngine.js";
 import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow/workflowEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
 
@@ -84,15 +84,12 @@ export function createDefaultOrchestrationEngines() {
     engine("relationship", 60, async (request, collected) => createEngineContextResult({
       section: "relationship",
       priority: 60,
-      data: buildCompanionRelationship({
-        user: request.user,
-        intent: request.intent,
+      data: await collectRelationshipIntelligence({
+        request,
         context: collected.context || {},
         workflow: collected.workflow || {},
-        knowledge: collected.knowledge || {},
-        memory: collected.memory || [],
       }),
-    })),
+    }), { supports: relationshipEngineSupports }),
     engine("community", 70, async (request, collected) => {
       const result = buildCompanionCommunityIntelligence({
         intent: request.intent,

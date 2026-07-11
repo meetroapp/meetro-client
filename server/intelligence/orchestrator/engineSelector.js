@@ -1,20 +1,24 @@
 const DEFAULT_ENGINES = ["capability", "context", "knowledge"];
 
 const FEATURE_ENGINES = Object.freeze({
-  emergency: ["workflow", "knowledge", "context"],
-  quote_builder: ["workflow", "business", "contracts", "context"],
+  emergency: ["workflow", "relationship", "knowledge", "context"],
+  quote_builder: ["workflow", "relationship", "business", "contracts", "context"],
   conversation: ["relationship", "memory", "workflow", "context"],
-  community: ["community", "relationship", "context"],
+  community: ["community", "context"],
   ask_meetro: ["capability", "context", "knowledge", "workflow", "relationship", "memory"],
-  business_intelligence: ["business", "workflow", "context"],
+  business_intelligence: ["business", "workflow", "relationship", "context"],
   evaluation: ["workflow", "knowledge", "context"],
-  work_center: ["workflow", "context", "knowledge"],
-  current_jobs: ["workflow", "context", "knowledge"],
+  work_center: ["workflow", "relationship", "context", "knowledge"],
+  current_jobs: ["workflow", "relationship", "context", "knowledge"],
   schedule: ["workflow", "context", "knowledge"],
   active_work: ["workflow", "context", "knowledge"],
-  completion: ["workflow", "context", "knowledge"],
-  closure: ["workflow", "context", "knowledge"],
-  job_history: ["workflow", "context", "knowledge"],
+  completion: ["workflow", "relationship", "context", "knowledge"],
+  closure: ["workflow", "relationship", "context", "knowledge"],
+  job_history: ["workflow", "relationship", "context", "knowledge"],
+  messages: ["relationship", "memory", "context"],
+  customer_relationships: ["relationship", "workflow", "context"],
+  hiring: ["relationship", "memory", "context"],
+  community_relationship: ["community", "relationship", "context"],
 });
 
 function normalize(value) {

@@ -357,7 +357,7 @@ test("Workflow Engine is backend-owned and ignores injected frontend workflow st
   assert.ok(providerPayload.workflow.missingPrerequisites.includes("evaluation findings"));
   assert.doesNotMatch(JSON.stringify(providerPayload.workflow), /fake injected status|private relationship/);
   assert.equal(providerPayload.workflow.evidence.some((item) => item.value === "closed"), false);
-  assert.equal(providerPayload.relationship.relationshipType, "homeowner_professional");
+  assert.deepEqual(providerPayload.relationship, {});
   assert.doesNotMatch(JSON.stringify(providerPayload.relationship), /property manager vendor|trustScore|hidden private relationship/);
 });
 
@@ -623,10 +623,7 @@ test("Gateway receives request and returns normalized provider response", async 
   assert.equal(typeof providerPayload.workflow.nextSafeAction, "string");
   assert.equal(Array.isArray(providerPayload.workflow.missingPrerequisites), true);
   assert.equal(typeof providerPayload.workflow.workflowSummary, "string");
-  assert.equal(typeof providerPayload.relationship.relationshipType, "string");
-  assert.equal(typeof providerPayload.relationship.communicationPosture, "string");
-  assert.equal(typeof providerPayload.relationship.trustBoundary, "string");
-  assert.equal(typeof providerPayload.relationship.relationshipSafeGuidance, "string");
+  assert.deepEqual(providerPayload.relationship, {});
   assert.doesNotMatch(JSON.stringify(providerPayload.context), /fake injected status|req-1/);
   assert.doesNotMatch(JSON.stringify(providerPayload.knowledge), /fake injected status|req-1/);
   assert.doesNotMatch(JSON.stringify(providerPayload.capabilities), /fake injected status|req-1|ranking|marketplace/i);
@@ -724,7 +721,7 @@ test("Provider receives selected capability context while UI response stays capa
   assert.ok(providerPayload.capabilities.supportingCapabilities.includes("cabinet repair"));
   assert.ok(providerPayload.capabilities.capabilityFamilies.includes("restoration"));
   assert.deepEqual(providerPayload.workflow, {});
-  assert.equal(providerPayload.relationship.relationshipType, "homeowner_professional");
+  assert.deepEqual(providerPayload.relationship, {});
   assert.doesNotMatch(JSON.stringify(providerPayload.capabilities), /Best Pros|injected business|marketplace|ranking/i);
   assert.doesNotMatch(JSON.stringify(providerPayload.workflow), /Best Pros|injected business|marketplace|ranking/i);
   assert.doesNotMatch(JSON.stringify(providerPayload.relationship), /Best Pros|injected business|marketplace|ranking|trust score/i);
@@ -1205,7 +1202,7 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
   assert.match(defaultEnginesSource, /buildCompanionKnowledge/);
   assert.match(defaultEnginesSource, /buildCompanionCapabilities/);
   assert.match(defaultEnginesSource, /collectWorkflowIntelligence/);
-  assert.match(defaultEnginesSource, /buildCompanionRelationship/);
+  assert.match(defaultEnginesSource, /collectRelationshipIntelligence/);
   assert.match(defaultEnginesSource, /resolveCompanionSessionMemory/);
   assert.match(orchestratorSource, /invokeProvider/);
   assert.doesNotMatch(orchestratorSource, /from "openai"|responses\.create|OPENAI_API_KEY/);
