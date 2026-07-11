@@ -70,6 +70,7 @@ export function selectEngineIds(request = {}, registry) {
     .sort((left, right) => left.priority - right.priority)
     .map((engine) => engine.id);
   if (selected.some((id) => !["context", "memory"].includes(id)) && registry.get("validation")) selected.push("validation");
+  if (selected.includes("validation") && registry.get("decision")) selected.push("decision");
   return [...new Set(selected)];
 }
 

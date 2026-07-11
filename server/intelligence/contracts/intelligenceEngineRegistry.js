@@ -14,6 +14,7 @@ export const INTELLIGENCE_ENGINE_NAMES = Object.freeze({
   portfolio: "portfolio",
   persistentMemory: "persistent_memory",
   validation: "validation",
+  decision: "decision",
 });
 
 const CURRENT_ENGINE_REGISTRY = [
@@ -78,19 +79,20 @@ const CURRENT_ENGINE_REGISTRY = [
     enabled: true,
   },
   { name: INTELLIGENCE_ENGINE_NAMES.validation, version: "1.0", executionOrder: 110, enabled: true },
+  { name: INTELLIGENCE_ENGINE_NAMES.decision, version: "1.0", executionOrder: 120, enabled: true },
 ];
 
 const FUTURE_ENGINE_REGISTRY = [
   {
     name: INTELLIGENCE_ENGINE_NAMES.document,
     version: "future",
-    executionOrder: 120,
+    executionOrder: 130,
     enabled: false,
   },
   {
     name: INTELLIGENCE_ENGINE_NAMES.portfolio,
     version: "future",
-    executionOrder: 130,
+    executionOrder: 140,
     enabled: false,
   },
 ];

@@ -804,3 +804,56 @@ Record the qualifying implementation commit and complete inventorship, assignmen
 ### Notes
 
 No internal weighting, scoring threshold, detailed conflict rule, abuse defense, private mapping, or security-sensitive authorization logic is reproduced here. No patent, registration, or legal-protection status is asserted.
+
+## MC-IP-0016 — Decision Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-017
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/decision/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/tests/decisionIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Validated intelligence still required a consistent way to compare approved options, constraints, tradeoffs, evidence, and approval boundaries without turning analysis into execution.
+
+### Technical or Creative Solution
+
+A required advisory engine constructs bounded options from validated capabilities, compares deterministic constraints and tradeoffs, preserves evidence and confidence, and returns a supported path or explicit safe non-recommendation mode.
+
+### Distinguishing Characteristics
+
+Validation-dependent option comparison, evidence-backed recommendation modes, explicit no-safe-option behavior, approval propagation, and strict separation between comparison and execution.
+
+### Operational Value
+
+Helps the Companion explain supported choices consistently without inventing options, overriding authority, or performing product actions.
+
+### Evidence of Implementation
+
+The working tree contains decision contracts, option and constraint adapters, tradeoff and recommendation modules, required Orchestrator integration, focused tests, architecture documentation, and roadmap update. A qualifying commit remains pending.
+
+### Production Limitation
+
+Decision Intelligence compares only validated Capability options available in current context. It does not discover external alternatives, rank professionals, or execute recommendations.
+
+### Confidential Elements
+
+Detailed comparison policy, internal prioritization methods, and future recommendation safeguards.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public comparison methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Record the qualifying implementation commit and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No proprietary ranking formula, weighting, internal threshold, private mapping, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.

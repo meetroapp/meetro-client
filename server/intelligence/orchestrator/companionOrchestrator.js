@@ -18,6 +18,7 @@ const ENGINE_STAGES = [
   ["knowledge"],
   ["capability"],
   ["validation"],
+  ["decision"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {
@@ -40,6 +41,7 @@ function buildProviderMessages(request, unifiedContext) {
         workflow: unifiedContext.workflow || {},
         relationship: unifiedContext.relationship || {},
         validation: unifiedContext.validation || {},
+        decision: unifiedContext.decision || {},
         ...unifiedContext,
       }),
     },

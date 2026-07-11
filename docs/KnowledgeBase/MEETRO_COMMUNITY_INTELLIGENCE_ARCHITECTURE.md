@@ -1566,3 +1566,15 @@ Validation status is supported, partially supported, conflicted, insufficient ev
 Validation is a required executable engine so failure cannot silently bypass quality control. The provider receives original minimized domain context plus a separate `validation` section and must preserve uncertainty, contradictions, blocked topics, disclaimers, escalation, and the no-execution boundary. One provider call and existing usage accounting remain unchanged.
 
 Safe logs contain request ID, statuses, response mode, counts, flags, and timing only. Validation never mutates Workflow, Relationship, Memory, Business, Community, Knowledge, Capability, or product state.
+
+## Decision Intelligence Foundation
+
+Status: Complete (MC-AI-017)
+
+Decision Intelligence is the required advisory stage after Validation. It consumes validated Capability options, constraints, evidence, confidence, and response restrictions; constructs bounded option models; compares supported alternatives; records deterministic tradeoffs; and identifies either one supported path or a safe non-recommendation mode. It never creates options outside the approved Capability output and never executes a recommendation.
+
+Each option preserves a stable option and capability ID, supporting engines and evidence references, advantages, disadvantages, constraints, prerequisites, permission state, validation status, confidence, and explicit-approval requirement. Validation remains authoritative: blocked, unauthorized, conflicted, stale-only, or insufficient evidence cannot become a recommendation. Ambiguity becomes clarification required, and unresolved evidence becomes no safe option.
+
+Recommendation modes are recommended, alternative, clarification required, unsupported, blocked, and no safe option. Tradeoffs are structured, bounded, deduplicated, and deterministically ordered. High-impact options preserve explicit approval requirements, while `execution.performed` and `execution.executableNow` remain false.
+
+Decision context enters Unified Context as a separate `decision` section before the existing single provider call. The provider may explain the comparison but cannot execute it, claim an action occurred, override Validation or Capability, invent evidence, hide uncertainty, or raise confidence. Logs contain only request ID, option count, selected option ID, mode, confidence, and timing.

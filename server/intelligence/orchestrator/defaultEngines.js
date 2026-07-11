@@ -14,6 +14,7 @@ import {
 import { collectRelationshipIntelligence, relationshipEngineSupports } from "../relationship/relationshipEngine.js";
 import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow/workflowEngine.js";
 import { collectIntelligenceValidation } from "../validation/validationEngine.js";
+import { collectDecisionIntelligence } from "../decision/decisionEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
 
 function engine(id, priority, collectContext, options = {}) {
@@ -100,5 +101,6 @@ export function createDefaultOrchestrationEngines() {
     }), { supports: communityEngineSupports }),
     engine("contracts", 90, async () => createEngineContextResult({ section: "contracts", priority: 90, data: {} })),
     engine("validation", 110, async (request, collected) => createEngineContextResult({ section: "validation", priority: 110, data: await collectIntelligenceValidation({ request, collected }) }), { required: true }),
+    engine("decision", 120, async (request, collected) => createEngineContextResult({ section: "decision", priority: 120, data: await collectDecisionIntelligence({ request, collected }) }), { required: true }),
   ];
 }
