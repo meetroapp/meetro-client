@@ -1,0 +1,14 @@
+# Meetro Community Trademark Candidate Register
+
+These are preliminary candidates only. No availability, priority, ownership, registration, or enforceability claim is made. Use **Pending legal clearance** where no verified search or filing exists.
+
+| Mark | Type | Associated Goods Or Services | First Internal Use | First Public Use | Current Usage | Owner | Domain Names | Logo Or Word Mark | Registration Status | Conflict-Search Status | Priority | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Meetro Community | Word mark / possible logo mark | Community, professional-services coordination, communication, and workflow software | Pending repository verification | Pending repository verification | Primary product and community identity | WM FLEX LABS, LLC, pending final confirmation or assignment | Pending verification | Both appear in repository; provenance review pending | Pending legal clearance | Pending legal clearance | High | Collect dated specimens and verify chain of title. |
+| Ask Meetro | Word mark | Contextual Companion and intelligence guidance services | Pending repository verification | Pending repository verification | Companion identity | Same as above | Pending verification | Word mark; logo status pending | Pending legal clearance | Pending legal clearance | High | Avoid describing registration before evidence exists. |
+| Wonder Pass | Word mark | Product-quality and visual refinement methodology | Pending repository verification | Pending repository verification | Internal and product documentation usage | Same as above | Pending verification | Word mark | Pending legal clearance | Pending legal clearance | Medium | Clarify external commercial use. |
+| Meetro Moments | Word mark | Community story and media-preservation features | Pending repository verification | Pending repository verification | Application feature identity | Same as above | Pending verification | Word mark; graphics pending review | Pending legal clearance | Pending legal clearance | Medium | Collect current UI specimens. |
+| Spotlight | Word mark | Community discovery and featured-story services | Pending repository verification | Pending repository verification | Community feature identity | Same as above | Pending verification | Word mark | Pending legal clearance | Pending legal clearance | Medium | Common term; legal clearance is especially important. |
+| Work Center | Word mark | Professional work-management and operational workspace software | Pending repository verification | Pending repository verification | Application workspace identity | Same as above | Pending verification | Word mark | Pending legal clearance | Pending legal clearance | Medium | Descriptiveness and conflicts require counsel review. |
+
+Record domain ownership only after documentary verification. Maintain separate evidence for stylized logos, first use in commerce, geographic scope, and associated goods or services.
