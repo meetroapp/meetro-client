@@ -59,9 +59,15 @@ const CURRENT_ENGINE_REGISTRY = [
     enabled: true,
   },
   {
-    name: INTELLIGENCE_ENGINE_NAMES.community,
+    name: INTELLIGENCE_ENGINE_NAMES.persistentMemory,
     version: "1.0",
     executionOrder: 80,
+    enabled: true,
+  },
+  {
+    name: INTELLIGENCE_ENGINE_NAMES.community,
+    version: "1.0",
+    executionOrder: 90,
     enabled: true,
   },
 ];
@@ -70,23 +76,17 @@ const FUTURE_ENGINE_REGISTRY = [
   {
     name: INTELLIGENCE_ENGINE_NAMES.business,
     version: "future",
-    executionOrder: 90,
+    executionOrder: 100,
     enabled: false,
   },
   {
     name: INTELLIGENCE_ENGINE_NAMES.document,
     version: "future",
-    executionOrder: 100,
-    enabled: false,
-  },
-  {
-    name: INTELLIGENCE_ENGINE_NAMES.portfolio,
-    version: "future",
     executionOrder: 110,
     enabled: false,
   },
   {
-    name: INTELLIGENCE_ENGINE_NAMES.persistentMemory,
+    name: INTELLIGENCE_ENGINE_NAMES.portfolio,
     version: "future",
     executionOrder: 120,
     enabled: false,

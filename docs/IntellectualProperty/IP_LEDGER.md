@@ -478,3 +478,56 @@ Complete the Trademark Candidate Register and collect dated specimens of actual 
 ### Notes
 
 No availability, registration, or enforceability claim is made.
+
+## MC-IP-0010 — Persistent Companion Memory Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-011
+**Repository Commit:** Pending repository verification
+**Related Files:** `server/intelligence/memory/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/persistentMemory.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`
+
+### Problem Solved
+
+Ask Meetro needs durable continuity without treating raw conversations or sensitive profiles as permanent memory.
+
+### Technical or Creative Solution
+
+A consent-controlled, scope-safe memory foundation stores minimal approved operational facts through a replaceable repository contract. It supports proposals, correction, deletion, expiration, deterministic relevance, and minimized provider context while remaining separate from session memory.
+
+### Distinguishing Characteristics
+
+Stable ownership and scope, source traceability, explicit consent, retention-aware lifecycle, versioned correction, immediate retrieval exclusion after deletion, and deterministic scope-first retrieval.
+
+### Operational Value
+
+Preserves approved continuity across sessions while keeping Meetro Community records authoritative and giving users correction and forgetting controls.
+
+### Evidence of Implementation
+
+Repository modules, orchestration integration, focused tests, and architecture documentation exist in the working tree. A qualifying implementation commit remains pending repository verification.
+
+### Publicly Disclosed?
+
+Pending repository verification.
+
+### Confidential Elements
+
+Future relevance refinements, retention policies, repository operations, and context-prioritization details.
+
+### Recommended Protection
+
+Evaluate as a patent candidate with counsel, preserve non-public operational details as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Commit the verified implementation, update this entry with the commit hash, and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No raw conversation, private customer content, credential, private prompt, or operative trade-secret logic is reproduced here.

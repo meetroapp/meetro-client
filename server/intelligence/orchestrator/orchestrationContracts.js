@@ -38,6 +38,7 @@ export function normalizeOrchestrationRequest(options = {}) {
     backendContext: cleanRecord(options.backendContext),
     repositories: cleanRecord(options.repositories),
     memoryRepository: options.memoryRepository,
+    persistentMemoryRepository: options.persistentMemoryRepository,
   });
 }
 

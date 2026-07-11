@@ -1096,3 +1096,117 @@ Meetro Community understands.
 The Companion protects the relationship.
 
 The lantern stays lit.
+
+---
+
+# MC-AI-011 — Persistent Companion Memory Foundation
+
+## Responsibility
+
+Persistent Companion Memory preserves compact, approved operational facts across sessions. It is not a conversation archive and does not replace workflow, relationship, business, or product records. The engine consumes only a trusted backend repository and contributes minimized context through the existing Unified Context Builder.
+
+The production sequence is:
+
+```text
+Workflow Intelligence
+  -> Relationship Intelligence
+  -> Persistent Companion Memory
+  -> Unified Context Builder
+  -> Provider Adapter
+```
+
+One Gateway request still produces one provider call and one usage-accounting flow.
+
+## Session Memory Separation
+
+Session memory remains a short-lived conversation-continuity buffer. Persistent memory is a separate domain with explicit ownership, scope, source, consent, lifecycle, sensitivity, correction, deletion, retention, and versioning. Session exchanges are never automatically promoted.
+
+The only approved future promotion path is:
+
+```text
+Session fact
+  -> Memory proposal
+  -> User confirmation
+  -> Persistent repository
+```
+
+## Record And Scope Contract
+
+Every durable record has a stable typed memory ID, owner type and ID, one explicit scope, centralized category, minimal structured value, human-readable summary, traceable source, consent record, lifecycle, sensitivity, confidence, tags, and version.
+
+Supported scopes are user, business, relationship, workflow, conversation, community, and approved system context. User and business identities come from authenticated backend context. Relationship, workflow, and conversation retrieval require exact stable IDs. Display-name matching is forbidden.
+
+Supported categories are centralized in `server/intelligence/memory/memoryContracts.js`. Clients cannot create arbitrary categories.
+
+## Consent And Write Policy
+
+User and business preferences require explicit or user-confirmed consent. Minimal workflow-continuity references may use `system_required` when the product relationship already authorizes that continuity. Unknown or withdrawn consent cannot be persisted or retrieved.
+
+The write policy rejects speculative, transient, unscoped, unsupported, sensitive, credential-bearing, raw-message, private-note, and unrestricted customer content. User statements are not automatically remembered.
+
+```text
+User or System Fact
+  -> Memory Write Policy
+  -> Consent and Scope Validation
+  -> Memory Proposal
+  -> Confirmation
+  -> Persistent Repository
+  -> Scoped Retrieval
+  -> Persistent Memory Engine
+  -> Unified Context Builder
+  -> Provider
+```
+
+Proposals remain pending until explicitly confirmed. Rejection creates no active memory.
+
+## Repository Contract
+
+Persistent memory is database-agnostic. The repository boundary supports create, read, scoped list, update, correction, deletion, scope deletion, expiration, usage recording, proposal confirmation or rejection, and privacy-driven purge. The deterministic in-memory adapter is test-only and must not be used as production persistence.
+
+Production must inject a trusted adapter through `persistentMemoryRepository`, `backendContext.memoryRepository`, or `repositories.memory`. No suitable database-backed repository exists in the current codebase, so deployment must provide this adapter before durable writes are enabled. The engine fails empty when no repository is present; it never falls back to frontend storage, static files, or global process memory.
+
+## Lifecycle, Correction, And Deletion
+
+Lifecycle states are proposed, active, superseded, expired, deleted, and rejected. Correction creates a new stable record and version linked through `previousMemoryId`; the prior version becomes superseded. Deleted, expired, superseded, rejected, and withdrawn-consent records are immediately excluded from retrieval.
+
+Deletion affects Companion memory only. It never deletes jobs, workflows, relationships, conversations, customers, messages, invoices, or history. The repository boundary supports minimal audit retention and an authorized purge operation where privacy requirements require permanent erasure.
+
+Retention dates are never inferred. Preferences remain until changed or deleted; scoped operational references require explicit expiration or an approved product policy.
+
+## Sensitivity And Retrieval
+
+Sensitivity levels are standard, restricted, and prohibited. Prohibited records are rejected without a bypass. The prohibited boundary includes credentials, payment information, medical and sensitive personal attributes, precise personal location, private messages and notes, photos, and prompt contents.
+
+Retrieval is deterministic and scope-first:
+
+```text
+exact workflow
+  -> exact relationship
+  -> exact business
+  -> exact user preference
+  -> approved system rule
+```
+
+Exact category, key, feature, capability, and unfinished-work signals refine ordering. No provider call, semantic vector search, psychological inference, sentiment, or personality analysis ranks memory. Context limits and deterministic tie-breaking prevent uncontrolled provider payloads.
+
+## Authority Boundaries
+
+Workflow Intelligence remains the authority for current lifecycle state. Memory may reference unfinished work but cannot duplicate or override live workflow evidence. Relationship Intelligence remains the authority for current relationship state. Memory may preserve an approved continuity preference but cannot store narratives, sentiment, personality, loyalty, or trust conclusions.
+
+## Authorization And Logging
+
+All write, correction, deletion, and retrieval operations use authenticated server identity and trusted authorization context. Cross-user and cross-business records are excluded. Exact relationship, workflow, and conversation authorization is required.
+
+Memory logs may include request IDs, owner IDs, business IDs, memory IDs, category, scope type, counts, statuses, truncation, and timing. They must never include values, summaries, source content, customer names, private notes, addresses, credentials, prompts, or provider context.
+
+## Production Data Contract
+
+The backend adapter must provide scoped persistence equivalent to:
+
+- `repositories.memory`
+- `backendContext.memoryRepository`
+- authenticated user identity
+- authorized business IDs
+- exact authorized relationship, workflow, and conversation IDs
+
+The adapter must enforce durable storage, transactional correction, immediate deletion exclusion, index cleanup, retention, access control, and privacy-driven purge. Until that adapter exists, persistent retrieval is safely empty and no production durable write is claimed.

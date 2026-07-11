@@ -14,6 +14,7 @@ const ENGINE_STAGES = [
   ["capability"],
   ["workflow"],
   ["relationship"],
+  ["persistent_memory"],
   ["community", "business", "contracts"],
 ];
 
@@ -109,12 +110,24 @@ export async function orchestrateCompanionAsk({
   backendContext = {},
   repositories = {},
   memoryRepository = defaultCompanionSessionMemory,
+  persistentMemoryRepository,
   engineRegistry,
   onDiagnostics,
 } = {}) {
   const startedAt = Date.now();
   const log = createOrchestrationLogger(logger);
-  const request = { ...normalizeOrchestrationRequest({ body, user, requestId, backendContext, repositories, memoryRepository }), intent };
+  const request = {
+    ...normalizeOrchestrationRequest({
+      body,
+      user,
+      requestId,
+      backendContext,
+      repositories,
+      memoryRepository,
+      persistentMemoryRepository,
+    }),
+    intent,
+  };
   const registry = engineRegistry || createEngineRegistry(createDefaultOrchestrationEngines());
   const selectedEngines = selectEngineIds(request, registry);
   const diagnostics = {

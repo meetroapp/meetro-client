@@ -46,6 +46,7 @@ export {
   getSafeRecentCompanionMemory,
   resolveCompanionSessionMemory,
 } from "./memory/companionSessionMemory.js";
+export * from "./memory/index.js";
 export { invokeProvider } from "./providerAdapter.js";
 export { getCompanionSystemPrompt } from "./prompts/companionSystemPrompt.js";
 export {

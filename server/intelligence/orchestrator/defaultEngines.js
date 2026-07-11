@@ -6,6 +6,10 @@ import {
   getSafeRecentCompanionMemory,
   resolveCompanionSessionMemory,
 } from "../memory/companionSessionMemory.js";
+import {
+  collectPersistentMemoryContext,
+  persistentMemoryEngineSupports,
+} from "../memory/persistentMemoryEngine.js";
 import { collectRelationshipIntelligence, relationshipEngineSupports } from "../relationship/relationshipEngine.js";
 import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow/workflowEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
@@ -90,6 +94,11 @@ export function createDefaultOrchestrationEngines() {
         workflow: collected.workflow || {},
       }),
     }), { supports: relationshipEngineSupports }),
+    engine("persistent_memory", 65, async (request, collected) => createEngineContextResult({
+      section: "persistentMemory",
+      priority: 65,
+      data: await collectPersistentMemoryContext({ request, collected }),
+    }), { supports: persistentMemoryEngineSupports }),
     engine("community", 70, async (request, collected) => {
       const result = buildCompanionCommunityIntelligence({
         intent: request.intent,
