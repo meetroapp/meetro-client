@@ -691,9 +691,10 @@ test("Gateway and Companion Orchestrator preserve successful flow and safe diagn
     "capability",
     "validation",
     "decision",
+    "recommendation",
   ]);
   assert.deepEqual(diagnostics[0].failedEngines, []);
-  assert.equal(diagnostics[0].successfulEngines.length, 9);
+  assert.equal(diagnostics[0].successfulEngines.length, 10);
   assert.equal(diagnostics[0].usageRecorded, true);
   assert.equal(diagnostics[0].providerCalled, true);
 });

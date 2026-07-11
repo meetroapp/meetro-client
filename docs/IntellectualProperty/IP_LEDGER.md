@@ -858,3 +858,56 @@ Complete inventorship, assignment, prior-art, and public-disclosure review while
 ### Notes
 
 No proprietary ranking formula, weighting, internal threshold, private mapping, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.
+
+## MC-IP-0017 — Recommendation Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-018
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/recommendation/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/intelligence/contracts/intelligenceEngineRegistry.js`, `server/intelligence/prompts/companionSystemPrompt.js`, `server/tests/recommendationIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Validated decisions required a consistent way to identify what deserves attention first without converting comparison into automatic action.
+
+### Technical or Creative Solution
+
+A required advisory engine constructs bounded recommendations from validated Decision options, preserves evidence and constraints, assigns deterministic priority, separates active, deferred, and blocked recommendations, and returns safe no-recommendation outcomes.
+
+### Distinguishing Characteristics
+
+Evidence-backed prioritization, deterministic recommendation ordering, explicit deferred and blocked states, no-action handling, approval propagation, and strict separation from execution.
+
+### Operational Value
+
+Helps the Companion explain attention priorities consistently without inventing opportunities, overriding validated decisions, or performing product actions.
+
+### Evidence of Implementation
+
+The working tree contains recommendation contracts, category and priority policies, ordering and constraint modules, required Orchestrator integration, focused tests, architecture documentation, and roadmap update. A qualifying commit remains pending.
+
+### Production Limitation
+
+Recommendation Intelligence prioritizes only validated Decision options in current context. It does not discover external opportunities, rank professionals, or execute recommendations.
+
+### Confidential Elements
+
+Detailed prioritization policy, internal ordering methods, and future recommendation safeguards.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public prioritization methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Record the qualifying implementation commit and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No proprietary ranking formula, weighting, priority threshold, private mapping, or future execution control is reproduced here. No patent, registration, or legal-protection status is asserted.

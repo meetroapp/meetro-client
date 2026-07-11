@@ -1578,3 +1578,15 @@ Each option preserves a stable option and capability ID, supporting engines and 
 Recommendation modes are recommended, alternative, clarification required, unsupported, blocked, and no safe option. Tradeoffs are structured, bounded, deduplicated, and deterministically ordered. High-impact options preserve explicit approval requirements, while `execution.performed` and `execution.executableNow` remain false.
 
 Decision context enters Unified Context as a separate `decision` section before the existing single provider call. The provider may explain the comparison but cannot execute it, claim an action occurred, override Validation or Capability, invent evidence, hide uncertainty, or raise confidence. Logs contain only request ID, option count, selected option ID, mode, confidence, and timing.
+
+## Recommendation Intelligence Foundation
+
+Status: Complete (MC-AI-018)
+
+Recommendation Intelligence is the required advisory stage after Decision. It transforms validated Decision options into bounded, evidence-backed recommendations that identify what deserves attention first while preserving blocked, deferred, clarification, no-safe-recommendation, and no-action outcomes. It cannot create options absent from Decision Intelligence and cannot override Validation.
+
+Each recommendation carries a stable recommendation, decision, and capability ID; category and deterministic priority; supporting engines and evidence; structured rationale; prerequisites and constraints; confidence; and explicit-approval requirements. Supported categories cover workflow, relationship, business, Community, knowledge, communication, document, scheduling, follow-up, emergency, review, maintenance, informational, and no action. Priorities are critical, high, medium, low, or deferred and derive only from validated structured context.
+
+Ordering is deterministic and bounded. Blocked, unauthorized, conflicted, stale-only, unsafe, or unsupported options never become active recommendations. Lower-priority alternatives remain visible as deferred recommendations. Completed appropriate state may produce no action, while insufficient evidence produces no safe recommendation. High-impact recommendations preserve explicit approval and never authorize execution.
+
+Recommendation context enters Unified Context as a separate `recommendation` section before the existing single provider call. The provider may explain priorities but cannot invent higher priority, hide blocked recommendations, bypass Decision or Validation, or claim execution. Logs contain only request ID, recommendation count, highest-priority ID, blocked count, confidence, and timing.

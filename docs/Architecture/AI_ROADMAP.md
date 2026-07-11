@@ -304,7 +304,7 @@ Evidence: [Capability Intelligence](../../server/intelligence/capability/). See 
 
 ### Phase 3 — Intelligence Quality And Decision Support
 
-**Status:** In progress; MC-AI-016 and MC-AI-017 implemented
+**Status:** In progress; MC-AI-016 through MC-AI-018 implemented
 
 #### MC-AI-016 — Intelligence Validation and Confidence Foundation
 
@@ -324,9 +324,17 @@ Adds deterministic validated-option construction, constraint evaluation, bounded
 
 #### MC-AI-018 — Recommendation Intelligence Foundation
 
+**Status:** Implemented 2026-07-11
+
+Adds evidence-backed recommendation construction, deterministic priority and ordering, deferred and blocked recommendation handling, no-safe-recommendation and no-action outcomes, and explicit approval propagation. It remains advisory and preserves Decision and Validation authority.
+
+**Production limitation:** Recommendations are limited to validated Decision options in current context. The engine does not discover external opportunities, rank professionals, or execute recommendations.
+
+#### MC-AI-019 — Planning Intelligence Foundation
+
 **Status:** Planned
 
-This future milestone may prioritize validated opportunities across intelligence domains while remaining advisory and preserving user control.
+This future milestone may assemble approved multi-step plans from validated recommendations while remaining advisory and requiring explicit approval before any future execution.
 
 - **Intelligence Validation and Confidence:** reconcile permitted engine outputs, normalize confidence, preserve evidence, and prevent weak conclusions from appearing as facts.
 - **Decision Intelligence:** compare permitted options, identify constraints, and surface tradeoffs while remaining advisory.
@@ -379,6 +387,7 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-015 | Capability Intelligence | Implemented | Governed task and capability routing without execution | MC-AI-014 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0014](../IntellectualProperty/IP_LEDGER.md#mc-ip-0014--capability-intelligence-foundation) |
 | MC-AI-016 | Intelligence Validation and Confidence | Implemented | Cross-engine validation and response constraints | MC-AI-015 and core engines | Pending qualifying commit | 2026-07-11 | [MC-IP-0015](../IntellectualProperty/IP_LEDGER.md#mc-ip-0015--intelligence-validation-and-confidence-foundation) |
 | MC-AI-017 | Decision Intelligence | Implemented | Validated option comparison without execution | MC-AI-016 and Capability | Pending qualifying commit | 2026-07-11 | [MC-IP-0016](../IntellectualProperty/IP_LEDGER.md#mc-ip-0016--decision-intelligence-foundation) |
+| MC-AI-018 | Recommendation Intelligence | Implemented | Evidence-backed priority without execution | MC-AI-017, MC-AI-016 | Pending qualifying commit | 2026-07-11 | [MC-IP-0017](../IntellectualProperty/IP_LEDGER.md#mc-ip-0017--recommendation-intelligence-foundation) |
 
 ## Engine Responsibility Matrix
 
@@ -490,4 +499,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next implementation milestone is **MC-AI-018 — Recommendation Intelligence Foundation**. It remains planned and is not implemented by MC-AI-017.
+The next implementation milestone is **MC-AI-019 — Planning Intelligence Foundation**. It remains planned and is not implemented by MC-AI-018.

@@ -30,11 +30,12 @@ test("Intelligence Engine Registry reflects the current orchestration order", ()
       INTELLIGENCE_ENGINE_NAMES.capability,
       INTELLIGENCE_ENGINE_NAMES.validation,
       INTELLIGENCE_ENGINE_NAMES.decision,
+      INTELLIGENCE_ENGINE_NAMES.recommendation,
     ]
   );
   assert.deepEqual(
     enabled.map((engine) => engine.executionOrder),
-    [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+    [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130]
   );
   assert.equal(enabled.every((engine) => engine.version === "1.0" && engine.enabled === true), true);
 });
