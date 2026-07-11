@@ -611,9 +611,8 @@ test("Gateway receives request and returns normalized provider response", async 
   assert.equal(providerPayload.context.workflow.activeRequestId, "req-verified");
   assert.equal(providerPayload.context.workflow.status, "scheduled");
   assert.deepEqual(providerPayload.memory, []);
-  assert.ok(providerPayload.knowledge.workflowRules.some((item) => /Relationship -> Communication -> Schedule/.test(item)));
-  assert.ok(providerPayload.knowledge.responseGuidance.some((item) => /next safe action/i.test(item)));
-  assert.equal(JSON.stringify(providerPayload.knowledge).length < JSON.stringify(MEETRO_KNOWLEDGE_BASE).length, true);
+  assert.equal(providerPayload.knowledge.knowledgeStatus, "insufficient_evidence");
+  assert.deepEqual(providerPayload.knowledge.sources, []);
   assert.equal(Array.isArray(providerPayload.capabilities.primaryCapabilities), true);
   assert.equal(Array.isArray(providerPayload.capabilities.supportingCapabilities), true);
   assert.equal(Array.isArray(providerPayload.capabilities.capabilityFamilies), true);
@@ -685,11 +684,11 @@ test("Gateway and Companion Orchestrator preserve successful flow and safe diagn
   assert.deepEqual(diagnostics[0].selectedEngines, [
     "context",
     "memory",
-    "knowledge",
     "capability",
     "workflow",
     "relationship",
     "persistent_memory",
+    "knowledge",
   ]);
   assert.deepEqual(diagnostics[0].failedEngines, []);
   assert.equal(diagnostics[0].successfulEngines.length, 7);
@@ -1200,7 +1199,7 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
   assert.match(gatewaySource, /orchestrateCompanionAsk/);
   assert.doesNotMatch(gatewaySource, /buildCompanionContextEngine|buildCompanionCapabilities|buildCompanionWorkflow|buildCompanionRelationship|resolveCompanionSessionMemory|invokeProvider|getCompanionSystemPrompt/);
   assert.match(defaultEnginesSource, /buildCompanionContextEngine/);
-  assert.match(defaultEnginesSource, /buildCompanionKnowledge/);
+  assert.match(defaultEnginesSource, /collectKnowledgeIntelligence/);
   assert.match(defaultEnginesSource, /buildCompanionCapabilities/);
   assert.match(defaultEnginesSource, /collectWorkflowIntelligence/);
   assert.match(defaultEnginesSource, /collectRelationshipIntelligence/);

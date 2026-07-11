@@ -304,13 +304,13 @@ test("workflow context reaches unified provider context with one provider call a
   assert.equal("workflow" in result, false);
 });
 
-test("workflow selection covers operational surfaces without changing fallback or community routing", () => {
+test("workflow selection covers operational surfaces and excludes unsupported knowledge fallback", () => {
   const registry = createEngineRegistry(createDefaultOrchestrationEngines());
   for (const feature of ["emergency", "quote_builder", "evaluation", "work_center", "current_jobs", "schedule", "active_work", "completion", "closure", "job_history", "business_intelligence"]) {
     assert.ok(selectEngineIds({ feature, source: {} }, registry).includes("workflow"), feature);
   }
   assert.equal(selectEngineIds({ feature: "community", source: {} }, registry).includes("workflow"), false);
-  assert.deepEqual(selectEngineIds({ feature: "unknown", source: {} }, registry), ["context", "knowledge", "capability"]);
+  assert.deepEqual(selectEngineIds({ feature: "unknown", source: {} }, registry), ["context", "capability"]);
 });
 
 test("Unified Context Builder preserves structured workflow output", () => {

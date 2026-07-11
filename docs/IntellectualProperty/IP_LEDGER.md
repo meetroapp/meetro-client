@@ -637,3 +637,56 @@ Commit the verified implementation, update this entry with the commit hash, and 
 ### Notes
 
 No ranking formula, recommendation weight, abuse-detection rule, private community data, or operative trade-secret logic is reproduced here.
+
+## MC-IP-0013 — Knowledge Intelligence Foundation
+
+**Status:** Implemented
+**Category:** Patent Candidate / Trade Secret / Copyright
+**First Documented:** 2026-07-11
+**Implemented:** 2026-07-11
+**Primary Author / Inventor:** William E. Molina
+**Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
+**Product:** Meetro Community
+**Related Milestone:** MC-AI-014
+**Repository Commit:** Pending qualifying commit
+**Related Files:** `server/intelligence/knowledge/`, `server/intelligence/orchestrator/defaultEngines.js`, `server/intelligence/orchestrator/companionOrchestrator.js`, `server/intelligence/orchestrator/engineSelector.js`, `server/tests/knowledgeIntelligence.test.js`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/Architecture/AI_ROADMAP.md`
+
+### Problem Solved
+
+Provider-generated language needed to remain distinct from trusted Meetro Community knowledge while product guidance required bounded, current, authorized, and traceable evidence.
+
+### Technical or Creative Solution
+
+A read-only source-aware engine resolves trusted scope, enforces authority and confidentiality, retrieves reviewed records deterministically, minimizes evidence, evaluates freshness and version state, surfaces conflicts, and produces source-traced structured context before provider explanation.
+
+### Distinguishing Characteristics
+
+Verified-source separation, exact scope controls, privacy-minimized excerpts, conflict-aware evidence handling, stable source traceability, and safe failure to insufficient evidence distinguish knowledge retrieval from model inference.
+
+### Operational Value
+
+Supports consistent product, workflow, service, policy, safety, and operational explanations without allowing provider language, client data, or stale records to become authority.
+
+### Evidence of Implementation
+
+The working tree contains typed source and repository contracts, centralized domain and policy modules, deterministic retrieval and evidence normalization, executable Orchestrator integration, focused tests, and architecture documentation. A qualifying commit reference remains pending.
+
+### Publicly Disclosed?
+
+Pending review.
+
+### Confidential Elements
+
+Detailed source-selection heuristics, retrieval weighting, confidential mappings, conflict policy internals, and operative authorization controls.
+
+### Recommended Protection
+
+Evaluate patent candidacy with counsel, preserve non-public retrieval and governance methods as trade-secret candidates, and retain source and documentation copyright evidence.
+
+### Follow-Up Actions
+
+Create and certify a production read-only knowledge repository adapter, record the qualifying implementation commit, and complete inventorship, assignment, prior-art, and public-disclosure review.
+
+### Notes
+
+No retrieval weights, ranking formula, confidential source mapping, private content, credential, or operative security detail is reproduced here. No patent, registration, or legal-protection status is asserted.

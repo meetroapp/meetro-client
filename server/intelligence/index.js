@@ -42,6 +42,7 @@ export {
   buildCompanionKnowledge,
   MEETRO_KNOWLEDGE_BASE,
 } from "./knowledge/companionKnowledgeEngine.js";
+export * from "./knowledge/index.js";
 export {
   appendCompanionSessionMemory,
   createInMemoryCompanionSessionMemory,

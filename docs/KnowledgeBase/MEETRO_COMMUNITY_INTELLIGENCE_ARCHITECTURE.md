@@ -1399,3 +1399,73 @@ Logs may contain request and community IDs, source and visible counts, signal an
 Production adapters must enforce community authorization and visibility before returning records, preserve stable typed IDs, expose only policy-approved aggregate engagement, provide coarse location fields, prevent unrestricted whole-database reads, and return immutable or safely copied records. Supported boundaries include `getCommunityRecords`, `getMomentRecords`, `getSpotlightRecords`, `getWonderPassRecords`, `getVisibleProfileRecords`, `getCommunityEngagementRecords`, and `getCommunityRelationshipRecords`.
 
 Frontend localStorage and UI discovery projections are not backend intelligence authority. Without a trusted community scope and visible records, the engine returns empty context.
+
+## Knowledge Intelligence Foundation
+
+Status: Complete (MC-AI-014)
+
+Knowledge Intelligence is the read-only source-aware evidence layer. It identifies a supported domain, resolves backend-owned authorization scope, discovers records through an injected trusted repository, filters status and confidentiality before retrieval, orders relevant evidence deterministically, and contributes one bounded `knowledge` section to Unified Context. It never writes the final answer, changes product state, calls a provider, or treats provider language, session messages, memory, or client-supplied documents as verified knowledge.
+
+```text
+Knowledge-Scoped Request
+  -> Gateway
+  -> Orchestrator
+  -> Knowledge Scope Resolver
+  -> Authorization and Confidentiality Filtering
+  -> Domain and Intent Resolution
+  -> Source Discovery
+  -> Freshness, Version, and Status Filtering
+  -> Deterministic Retrieval
+  -> Conflict Detection
+  -> Fact and Guidance Normalization
+  -> Citation Construction
+  -> Structured Knowledge Context
+  -> Unified Context Builder
+  -> Provider
+```
+
+### Source And Domain Contracts
+
+The centralized domain registry accepts only reviewed product, workflow, relationship, business operations, community, service, evaluation, emergency, lifecycle, documentation, transaction, scheduling, permit, inspection, compliance, policy, safety, onboarding, hiring, Community-program, Companion, and architecture domains. Client-provided arbitrary domain names are not trusted.
+
+A source has a stable typed ID, approved source type, explicit domain and optional subdomains, authority, confidentiality, active status, language, version, effective and update metadata, optional supersession and product-version metadata, a repository-relative reference, and bounded structured facts or guidance. Supported source types include internal and product standards, architecture standards, policies, legal documents, workflow standards, evaluation templates, service, emergency and permit guides, business and system rules, and repository-approved external references. Arbitrary URLs are not sources.
+
+### Authority, Confidentiality, And Scope
+
+Authority is metadata-owned and ordered from authoritative through approved, reference, advisory, and unverified. Only authoritative or approved structured records may produce verified facts. Advisory prose remains attributed guidance. Equal-authority material conflicts are surfaced and block definitive facts and guidance; a weaker disagreement does not silently displace stronger evidence.
+
+Confidentiality supports public, user-visible, internal, restricted, and prohibited records. Internal use requires trusted backend authorization, restricted records require exact source authorization, and prohibited records never enter provider context. Business, relationship, and community scope IDs must match backend-authorized IDs. Restricted titles and paths are minimized. Frontend identity, scope, authority, confidentiality, source IDs, and documents do not grant access.
+
+### Discovery, Indexing, And Retrieval
+
+Production discovery occurs only through an injected read-only repository. The engine does not traverse the filesystem, crawl websites, ingest URLs, or create embeddings. The initial index and relevance boundary is deterministic metadata and lexical matching using source identity, domain, subdomain, feature context, language, product version, authority, status, freshness, tags, headings, and bounded query terms. Exact scoped and higher-authority evidence is preferred. Detailed weighting remains confidential.
+
+Retrieval limits considered and returned sources, facts, guidance, excerpt length, citations, and serialized context. Ordering and tie-breaking are deterministic. Full documents, unrestricted metadata, secrets, credentials, private messages, attachments, and customer records are excluded. The repository contract supports listing/searching sources, exact source reads, structured facts, bounded excerpts, and retrieval-usage recording without mutation.
+
+### Facts, Excerpts, Citations, And Status
+
+Verified facts must be curated structured records and carry supporting source IDs. Arbitrary prose is never promoted into a formal fact; when relevant, a small normalized excerpt becomes attributed guidance. Stable `knowledge:*` source markers preserve traceability for provider context and future citation presentation. Local absolute paths are never included.
+
+Knowledge status is normalized as supported, partially supported, conflicted, insufficient evidence, unauthorized, stale only, or unknown. No authorized repository or no verified match returns `insufficient_evidence`, not generated truth. Confidence is deterministic and decreases for advisory authority, unknown or stale metadata, partial scope, and unresolved conflicts.
+
+### Freshness, Versioning, And Supersession
+
+Freshness uses only recorded effective, updated, expiration, supersession, and version metadata. Current sources outrank aging or stale records. Expired sources are excluded. Superseded sources are excluded unless trusted historical access is explicitly requested. Stale-only evidence is labeled and warned; missing dates lower confidence. Product-version mismatch produces a warning rather than presenting older behavior as current. Review dates are never invented.
+
+### Disclaimers And Safety-Critical Knowledge
+
+Disclaimer codes are domain- and evidence-based, including legal-information boundaries, local permit verification, emergency-condition verification, professional inspection, source conflict, stale evidence, and insufficient verified knowledge. Emergency, safety, electrical, gas, structural, fire, mold, medical, legal, financial, permit, inspection, and compliance guidance requires conservative verified support. Conflicted or unsupported evidence cannot become definitive instructions.
+
+### Engine Boundaries And Provider Packaging
+
+Workflow Intelligence remains authority for live lifecycle state; Knowledge can explain a standard but cannot change that state. Relationship Intelligence owns live relationship context. Persistent Memory owns approved preferences, which cannot override product, policy, workflow, legal, or safety evidence. Business Intelligence owns current operational metrics, and Community Intelligence owns current authorized community activity. Session Memory is conversational continuity only and is never a knowledge source.
+
+Knowledge runs after Community and Contracts in the executable orchestration sequence and contributes one structured section before the existing single provider execution. Provider packaging separates query, sources, facts, guidance, conflicts, freshness, confidence, disclaimers, and warnings. The provider may explain evidence but may not invent citations or convert unsupported content into verified knowledge. Gateway response, usage metering, model selection, credits, and provider count are unchanged.
+
+### Repository, Ingestion, And Logging Boundaries
+
+Production requires a database-backed or equivalent immutable read-only adapter that performs authorization before returning records and preserves reviewed metadata. Until that adapter exists, production behavior is safely empty. The in-memory adapter exists for deterministic tests only.
+
+Future ingestion must separately validate source type, file safety, confidentiality, domain, authority, version, review approval, indexing, and publication. This foundation adds no upload UI, automatic crawling, arbitrary URL ingestion, or mutable source-controlled runtime store.
+
+Safe logs contain request and domain identifiers, source counts, status, confidence, conflicts, truncation, and timing only. They exclude messages, prompts, source text, excerpts, facts, guidance, private titles, confidential paths, credentials, customer information, and provider context.

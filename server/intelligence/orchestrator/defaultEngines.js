@@ -2,7 +2,7 @@ import { buildCompanionCapabilities } from "../capability/companionCapabilityEng
 import { collectCommunityIntelligence, communityEngineSupports } from "../community/communityEngine.js";
 import { businessEngineSupports, collectBusinessIntelligence } from "../business/businessEngine.js";
 import { buildCompanionContextEngine } from "../context/companionContextEngine.js";
-import { buildCompanionKnowledge } from "../knowledge/companionKnowledgeEngine.js";
+import { collectKnowledgeIntelligence, knowledgeEngineSupports } from "../knowledge/knowledgeEngine.js";
 import {
   getSafeRecentCompanionMemory,
   resolveCompanionSessionMemory,
@@ -55,19 +55,11 @@ export function createDefaultOrchestrationEngines() {
         metadata: { companionSessionId: session.sessionId },
       });
     }),
-    engine("knowledge", 30, async (request, collected) => {
-      const result = buildCompanionKnowledge({
-        userMessage: request.message,
-        intent: request.intent,
-        context: collected.context || {},
-      });
-      return createEngineContextResult({
-        section: "knowledge",
-        priority: 30,
-        data: result.packet,
-        metadata: result.diagnostics,
-      });
-    }),
+    engine("knowledge", 95, async (request) => createEngineContextResult({
+      section: "knowledge",
+      priority: 95,
+      data: await collectKnowledgeIntelligence({ request }),
+    }), { supports: knowledgeEngineSupports }),
     engine("capability", 40, async (request, collected) => createEngineContextResult({
       section: "capabilities",
       priority: 40,

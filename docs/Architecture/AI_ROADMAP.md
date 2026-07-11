@@ -50,7 +50,7 @@ Intelligence Orchestrator
         |-- Persistent Companion Memory      [Implemented]
         |-- Business Intelligence            [Implemented]
         |-- Community Intelligence           [Implemented]
-        |-- Knowledge Intelligence           [MC-AI-014 Planned expansion]
+        |-- Knowledge Intelligence           [MC-AI-014 Implemented]
         |-- Capability Intelligence          [MC-AI-015 Planned expansion]
         `-- Future Intelligence Engines
         |
@@ -268,19 +268,23 @@ Includes MC-AI-008 through MC-AI-013. This phase taught Meetro Community to inte
 
 ### Phase 2 — Trusted Knowledge And Capability
 
-**Status:** Planned
+**Status:** MC-AI-014 implemented; MC-AI-015 planned
 
 #### MC-AI-014 — Knowledge Intelligence Foundation
 
-**Status:** Planned, not implemented
+**Status:** Implemented 2026-07-11
 
-Purpose: provide trusted, source-aware, domain-scoped knowledge retrieval for product guidance, service knowledge, emergency procedures, evaluations, documentation, permits, inspections, policies, disclaimers, business operations, legal-information boundaries, and governed knowledge-base records.
+Provides trusted, source-aware, domain-scoped knowledge retrieval for product guidance, service knowledge, emergency procedures, evaluations, documentation, permits, inspections, policies, disclaimers, business operations, legal-information boundaries, and governed knowledge-base records.
 
 Required principles include verified sources, source traceability, freshness, scope controls, conflict handling, unsupported-claim prevention, controlled retrieval, and proprietary-source minimization.
 
 Dependencies: Orchestrator, Unified Context Builder, engine registration, privacy controls, and safe logging.
 
-The repository already contains a curated `companionKnowledgeEngine.js`. MC-AI-014 represents a broader production knowledge architecture; this existing helper does not make MC-AI-014 implemented.
+The production engine adds typed source contracts, centralized domains, backend-owned scope authorization, confidentiality and authority controls, deterministic metadata retrieval, bounded facts and excerpts, freshness and supersession handling, conflict detection, stable source references, domain-based disclaimers, safe logging, and structured Unified Context integration. The earlier curated `companionKnowledgeEngine.js` remains a compatibility helper and is not production retrieval authority.
+
+**Production limitation:** No database-backed production knowledge repository is configured by default. Without an injected trusted read-only adapter, the engine returns `insufficient_evidence`; it does not scan the repository or browse the public web at request time.
+
+Evidence: [Knowledge Intelligence](../../server/intelligence/knowledge/). See [MC-IP-0013](../IntellectualProperty/IP_LEDGER.md#mc-ip-0013--knowledge-intelligence-foundation).
 
 #### MC-AI-015 — Capability Intelligence Foundation
 
@@ -345,7 +349,7 @@ No capability in this phase is claimed as currently implemented.
 | MC-AI-012 | Business Intelligence | Implemented | Read-only business operations interpretation | Workflow, Relationship, Memory | `539d00c4b96a165eafffcfb18114763a8e6622a6` | 2026-07-11 | [MC-IP-0011](../IntellectualProperty/IP_LEDGER.md#mc-ip-0011--business-intelligence-foundation) |
 | MC-AI-013 | Community Intelligence | Implemented | Authorized aggregate community interpretation | Relationship, Memory, Business | `d92acd73367ff320830292a0d7c3385f52fcba53` | 2026-07-11 | [MC-IP-0012](../IntellectualProperty/IP_LEDGER.md#mc-ip-0012--community-intelligence-foundation) |
 | Refinement | Business-before-Community sequencing | Implemented | Preserve intended engine dependency order | MC-AI-012, MC-AI-013 | `9908f9fc83e51e057b76abf405c4f55886f8c980` | 2026-07-11 | Review with related entries |
-| MC-AI-014 | Knowledge Intelligence | Planned | Source-aware governed knowledge retrieval | Core intelligence foundation | Pending repository verification | Pending repository verification | Add after implementation review |
+| MC-AI-014 | Knowledge Intelligence | Implemented | Source-aware governed knowledge retrieval | Core intelligence foundation | Pending qualifying commit | 2026-07-11 | [MC-IP-0013](../IntellectualProperty/IP_LEDGER.md#mc-ip-0013--knowledge-intelligence-foundation) |
 | MC-AI-015 | Capability Intelligence | Planned | Governed task and capability routing | MC-AI-014 and core engines | Pending repository verification | Pending repository verification | Add after implementation review |
 
 ## Engine Responsibility Matrix
@@ -355,7 +359,7 @@ No capability in this phase is claimed as currently implemented.
 | Intent | Implemented helper | Coarse request-intent classification | Domain truth or execution |
 | Context | Implemented | Verified backend request context | Frontend-injected identity or unrestricted records |
 | Session Memory | Implemented | Short-lived conversation continuity | Durable approved memory or cross-user history |
-| Knowledge helper | Implemented foundation | Curated Meetro knowledge selection | Full MC-AI-014 source governance or unsupported facts |
+| Knowledge Intelligence | Implemented | Authorized source-aware knowledge evidence and traceability | Final answers, live state, source mutation, or unsupported facts |
 | Capability helper | Implemented foundation | Problem-to-capability reasoning | Full MC-AI-015 routing or autonomous execution |
 | Workflow | Implemented | Live lifecycle state and next workflow action | Relationship profiling or business accounting |
 | Relationship | Implemented | Current relationship continuity | Personality, sentiment, trust, loyalty, or customer-value scoring |
@@ -417,7 +421,7 @@ This is a roadmap dependency model, not a requirement that every engine execute 
 | Business Intelligence | Empty context without one authorized business and trusted scoped records | Immutable business-scoped workflow, schedule, proposal, and financial-workflow repositories | Business guidance remains unavailable or incomplete | Business Repository Adapter and evidence certification |
 | Community Intelligence | Empty context without trusted scope and visible records | Immutable visibility-filtered repositories with stable IDs and coarse location | Community guidance remains unavailable; unsafe adapters could create privacy risk | Community Repository Adapter and visibility certification |
 | Usage and credits | Central checks and recording extension points fail safely under current contracts | Verified production metering, entitlement, rate, and credit adapters where required | Cost and entitlement governance may remain incomplete | Dedicated production usage and credit readiness review |
-| Knowledge | Curated helper selects bounded internal knowledge | MC-AI-014 source registry, traceability, freshness, conflict, and scope controls | Stale or unsupported knowledge may be unavailable rather than safely retrieved | MC-AI-014 |
+| Knowledge | Governed engine returns bounded structured evidence or `insufficient_evidence` | Database-backed read-only repository with reviewed source metadata and authorization | Knowledge remains unavailable rather than inferred when no trusted adapter exists | Production Knowledge Repository Adapter |
 
 ## Governance
 
@@ -458,4 +462,4 @@ Detailed confidential evidence belongs only in approved restricted systems gover
 
 ## Next Verified Planning Step
 
-The next implementation milestone is **MC-AI-014 — Knowledge Intelligence Foundation**. It remains planned until code, tests, documentation, and a qualifying commit establish implementation evidence.
+The next implementation milestone is **MC-AI-015 — Capability Intelligence Foundation**. MC-AI-014 is implemented in the working tree and awaits a qualifying commit reference.
