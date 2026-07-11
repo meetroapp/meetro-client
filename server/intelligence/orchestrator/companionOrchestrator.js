@@ -15,7 +15,8 @@ const ENGINE_STAGES = [
   ["workflow"],
   ["relationship"],
   ["persistent_memory"],
-  ["community", "business", "contracts"],
+  ["business"],
+  ["community", "contracts"],
 ];
 
 function getRequestId(context = {}, fallback = "companion-request") {
