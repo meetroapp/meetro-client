@@ -109,7 +109,6 @@ function stagePacket(currentStage, options = {}) {
 }
 
 export function buildCompanionWorkflow({
-  user = {},
   intent = "reasoning",
   context = {},
   knowledge = {},

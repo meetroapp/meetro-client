@@ -7,7 +7,7 @@ import {
   resolveCompanionSessionMemory,
 } from "../memory/companionSessionMemory.js";
 import { buildCompanionRelationship } from "../relationship/companionRelationshipEngine.js";
-import { buildCompanionWorkflow } from "../workflow/companionWorkflowEngine.js";
+import { collectWorkflowIntelligence, workflowEngineSupports } from "../workflow/workflowEngine.js";
 import { createEngineContextResult } from "./orchestrationContracts.js";
 
 function engine(id, priority, collectContext, options = {}) {
@@ -76,14 +76,11 @@ export function createDefaultOrchestrationEngines() {
     engine("workflow", 50, async (request, collected) => createEngineContextResult({
       section: "workflow",
       priority: 50,
-      data: buildCompanionWorkflow({
-        user: request.user,
-        intent: request.intent,
+      data: await collectWorkflowIntelligence({
+        request,
         context: collected.context || {},
-        knowledge: collected.knowledge || {},
-        capabilities: collected.capabilities || {},
       }),
-    })),
+    }), { supports: workflowEngineSupports }),
     engine("relationship", 60, async (request, collected) => createEngineContextResult({
       section: "relationship",
       priority: 60,

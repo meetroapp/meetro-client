@@ -152,6 +152,88 @@ Analytics, compliance, portfolio, learning, permits, safety, document intelligen
 
 ---
 
+# WORKFLOW INTELLIGENCE FOUNDATION (MC-AI-009)
+
+Workflow Intelligence interprets existing Meetro Community records. It does not create, approve, schedule, pay, complete, close, archive, or mutate work.
+
+```txt
+Ask Meetro Request
+        ↓
+Gateway
+        ↓
+Orchestrator
+        ↓
+Workflow Engine
+        ↓
+Resolve Workflow Record
+        ↓
+Normalize Lifecycle
+        ↓
+Determine Current Stage
+        ↓
+Determine Next Action
+        ↓
+Evaluate Obligations and Blockers
+        ↓
+Return Structured Workflow Context
+        ↓
+Unified Context Builder
+        ↓
+Provider
+```
+
+## Supported Workflow Types
+
+The foundation recognizes standard jobs, emergency jobs, service requests, scheduled visits, evaluations, quotes and proposals, active work, completion, closure, Job History, and conversations linked to work. Future workflow types register source adapters and status mappings; they do not add branching logic to the Gateway or Orchestrator.
+
+## Canonical Lifecycle
+
+```txt
+Relationship
+→ Communication
+→ Evaluation Visit
+→ Evaluation
+→ Quote / Proposal
+→ Customer Approval
+→ Payment / Deposit
+→ Schedule Work
+→ Perform Work
+→ Completion
+→ Invoice / Receipt
+→ Closure
+→ Job History
+```
+
+Emergency work follows Emergency Request or Alert, Status and Communication, Professional Response or Dispatch, Work, Completion, Invoice / Payment / Receipt, Closure, and Job History. Emergency completion remains open until Closure is recorded and history requirements are satisfied.
+
+## Resolution And Normalization
+
+Workflow resolution uses stable typed identifiers in this order: project, job, emergency request, standard request, completion, then conversation. Customer-name-only matching is forbidden. Related records are combined only through matching typed identifiers, preserving customer and job isolation.
+
+Persisted status aliases are centralized into canonical stages. Explicit persisted status and supporting records take precedence. Derived inference is used only when explicit state is incomplete. Workflow evidence returned to the provider is minimized to safe status, proposal, completion, closure, and history indicators.
+
+## Actions, Waiting, And Blockers
+
+The engine returns a structured next action and identifies whether responsibility belongs to the professional, customer, system, third party, none, or remains unknown. Normal waiting states remain distinct from blockers. Blockers represent unmet prerequisites such as approval, required deposits or payments, permits, inspections, documents, invoices, receipts, confirmations, identifier conflicts, or missing history normalization.
+
+## Obligations
+
+Payment, deposit, invoice, receipt, permits, inspection, documents, customer approval, customer confirmation, completion record, closure record, and history normalization use normalized states: `not_required`, `not_due`, `pending`, `satisfied`, `missing`, `blocked`, or `unknown`. Missing evidence never becomes satisfied implicitly.
+
+## Completion And Closure
+
+Completion records that work was performed. Completion is not Closure. Closure requires supported financial, operational, document, permit, inspection, and customer obligations to be resolved. A closed source record is not normalized Job History until a closed read-only history record exists. The engine may recommend reconciliation but never writes history itself.
+
+## Contradictions And Confidence
+
+Confidence is deterministic. Strong identifiers with agreeing explicit records produce high confidence. Consistent inferred state produces medium confidence. Conflicting identifiers or statuses, missing completion behind Closure, active work alongside Job History, missing proposals behind approval, or unresolved permits behind Closure produce warnings and low confidence. Contradictions never crash orchestration.
+
+## Privacy Boundary
+
+Workflow Intelligence excludes full conversations, private notes, addresses, payment credentials, media, invoices, receipts, secrets, and unrestricted metadata. The UI never receives the internal workflow packet. The provider receives it only through the Unified Context Builder in the existing single-call orchestration path.
+
+---
+
 # COMPLETED FOUNDATION
 
 ## 1. Intelligence Gateway

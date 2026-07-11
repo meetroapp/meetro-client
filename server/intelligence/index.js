@@ -57,3 +57,15 @@ export {
   MEETRO_WORKFLOW_STAGES,
   WORKFLOW_LIFECYCLE_RULES,
 } from "./workflow/companionWorkflowEngine.js";
+export {
+  collectWorkflowIntelligence,
+  detectWorkflowBlockers,
+  evaluateWorkflowConfidence,
+  evaluateWorkflowObligations,
+  inferWorkflowNextAction,
+  normalizeWorkflowResolution,
+  resolveWorkflowSource,
+  workflowEngineSupports,
+  WORKFLOW_STAGES,
+  WORKFLOW_TYPES,
+} from "./workflow/index.js";

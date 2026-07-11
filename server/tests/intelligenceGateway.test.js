@@ -355,7 +355,8 @@ test("Workflow Engine is backend-owned and ignores injected frontend workflow st
   assert.equal(providerPayload.workflow.currentStage, "evaluation");
   assert.equal(providerPayload.workflow.guidanceCategory, "evaluation_before_quote");
   assert.ok(providerPayload.workflow.missingPrerequisites.includes("evaluation findings"));
-  assert.doesNotMatch(JSON.stringify(providerPayload.workflow), /closed|approved|completed/);
+  assert.doesNotMatch(JSON.stringify(providerPayload.workflow), /fake injected status|private relationship/);
+  assert.equal(providerPayload.workflow.evidence.some((item) => item.value === "closed"), false);
   assert.equal(providerPayload.relationship.relationshipType, "homeowner_professional");
   assert.doesNotMatch(JSON.stringify(providerPayload.relationship), /property manager vendor|trustScore|hidden private relationship/);
 });
@@ -722,8 +723,7 @@ test("Provider receives selected capability context while UI response stays capa
   assert.ok(providerPayload.capabilities.primaryCapabilities.includes("drywall replacement"));
   assert.ok(providerPayload.capabilities.supportingCapabilities.includes("cabinet repair"));
   assert.ok(providerPayload.capabilities.capabilityFamilies.includes("restoration"));
-  assert.equal(providerPayload.workflow.currentStage, "schedule");
-  assert.equal(providerPayload.workflow.guidanceCategory, "schedule_before_evaluation");
+  assert.deepEqual(providerPayload.workflow, {});
   assert.equal(providerPayload.relationship.relationshipType, "homeowner_professional");
   assert.doesNotMatch(JSON.stringify(providerPayload.capabilities), /Best Pros|injected business|marketplace|ranking/i);
   assert.doesNotMatch(JSON.stringify(providerPayload.workflow), /Best Pros|injected business|marketplace|ranking/i);
@@ -1204,7 +1204,7 @@ test("Gateway remains provider independent while OpenAI stays behind provider bo
   assert.match(defaultEnginesSource, /buildCompanionContextEngine/);
   assert.match(defaultEnginesSource, /buildCompanionKnowledge/);
   assert.match(defaultEnginesSource, /buildCompanionCapabilities/);
-  assert.match(defaultEnginesSource, /buildCompanionWorkflow/);
+  assert.match(defaultEnginesSource, /collectWorkflowIntelligence/);
   assert.match(defaultEnginesSource, /buildCompanionRelationship/);
   assert.match(defaultEnginesSource, /resolveCompanionSessionMemory/);
   assert.match(orchestratorSource, /invokeProvider/);

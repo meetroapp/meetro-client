@@ -3,10 +3,18 @@ const DEFAULT_ENGINES = ["capability", "context", "knowledge"];
 const FEATURE_ENGINES = Object.freeze({
   emergency: ["workflow", "knowledge", "context"],
   quote_builder: ["workflow", "business", "contracts", "context"],
-  conversation: ["relationship", "memory", "context"],
+  conversation: ["relationship", "memory", "workflow", "context"],
   community: ["community", "relationship", "context"],
   ask_meetro: ["capability", "context", "knowledge", "workflow", "relationship", "memory"],
   business_intelligence: ["business", "workflow", "context"],
+  evaluation: ["workflow", "knowledge", "context"],
+  work_center: ["workflow", "context", "knowledge"],
+  current_jobs: ["workflow", "context", "knowledge"],
+  schedule: ["workflow", "context", "knowledge"],
+  active_work: ["workflow", "context", "knowledge"],
+  completion: ["workflow", "context", "knowledge"],
+  closure: ["workflow", "context", "knowledge"],
+  job_history: ["workflow", "context", "knowledge"],
 });
 
 function normalize(value) {
