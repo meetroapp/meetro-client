@@ -14,7 +14,10 @@ import {
 import {
   AI_BUTTON_POSITION_DEFAULTS,
   clampAiButtonPosition,
+  getAiButtonAccountBehavior,
+  getProfessionalAiButtonPosition,
   readStoredAiButtonPosition,
+  resolveAiButtonPositionForAccount,
   writeStoredAiButtonPosition,
 } from "../utils/aiButtonPosition";
 import {
@@ -2401,6 +2404,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
+  const [activeAccountMode, setActiveAccountMode] = useState(
+    () => localStorage.getItem("activeAccountMode") || "personal"
+  );
   const [assistantClosing, setAssistantClosing] = useState(false);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
   const [feedbackFormOpen, setFeedbackFormOpen] = useState(false);
@@ -2450,8 +2456,12 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     [assistantContextPage, language]
   );
   const roleLabel = getRoleLabel(currentPage, language);
+  const isBusinessMode =
+    getAccountModeForPage(currentPage, activeAccountMode) === "business";
+  const roleMode = isBusinessMode ? "business" : "personal";
+  const launcherAccountBehavior = getAiButtonAccountBehavior(roleMode);
   const isChat = currentPage === "conversationThread" || currentPage === "emergencyChat";
-  const launcherBottomClearance = isChat ? 104 : 94;
+  const launcherBottomClearance = isBusinessMode || isChat ? 104 : 94;
   const launcherFallbackBottom = `calc(${launcherBottomClearance}px + env(safe-area-inset-bottom))`;
   const launcherButtonSize = getAssistantLauncherButtonSize();
   const launcherEdgeMargin =
@@ -2464,12 +2474,6 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     bottomClearance: launcherBottomClearance,
     edgeMargin: launcherEdgeMargin,
   };
-  const isBusinessMode =
-    getAccountModeForPage(
-      currentPage,
-      localStorage.getItem("activeAccountMode") || "personal"
-    ) === "business";
-  const roleMode = isBusinessMode ? "business" : "personal";
   const companionObservationScope = getCompanionObservationScope({
     storage: localStorage,
     currentPage: assistantContextPage,
@@ -2629,6 +2633,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   function preserveLauncherPosition(position) {
     const viewport = getLauncherViewport();
+    if (!launcherAccountBehavior.persistPosition) {
+      const fixedPosition = getProfessionalAiButtonPosition(
+        viewport,
+        launcherPositionOptions
+      );
+      setLauncherPosition(fixedPosition);
+      return fixedPosition;
+    }
     const nextPosition = writeStoredAiButtonPosition(position, {
       viewport,
       options: launcherPositionOptions,
@@ -2639,6 +2651,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   function ensureExpandedCompanionViewportSafety(nextMode) {
     const viewport = getLauncherViewport();
+    if (!launcherAccountBehavior.draggable) {
+      return getProfessionalAiButtonPosition(viewport, launcherPositionOptions);
+    }
     const currentPosition =
       launcherPosition ||
       readStoredAiButtonPosition({
@@ -2664,6 +2679,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function adjustAssistantPositionForMeasuredSheet() {
+    if (!launcherAccountBehavior.draggable) return;
     const sheetNode = assistantSheetRef.current;
     if (!sheetNode) return;
 
@@ -2712,20 +2728,47 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }, []);
 
   useEffect(() => {
-    const storedPosition = readStoredAiButtonPosition({
-      viewport: getLauncherViewport(),
-      options: launcherPositionOptions,
-    });
-    setLauncherPosition(storedPosition);
-  }, [launcherBottomClearance]);
+    const viewport = getLauncherViewport();
+    if (!launcherAccountBehavior.draggable) launcherDragRef.current = null;
+    setLauncherPosition(
+      resolveAiButtonPositionForAccount({
+        accountMode: roleMode,
+        storage: localStorage,
+        viewport,
+        options: launcherPositionOptions,
+      })
+    );
+  }, [launcherBottomClearance, launcherAccountBehavior.draggable, roleMode]);
+
+  useEffect(() => {
+    function handleAccountModeChange() {
+      setActiveAccountMode(
+        localStorage.getItem("activeAccountMode") || "personal"
+      );
+    }
+
+    window.addEventListener("accountModeChanged", handleAccountModeChange);
+    window.addEventListener("storage", handleAccountModeChange);
+    return () => {
+      window.removeEventListener("accountModeChanged", handleAccountModeChange);
+      window.removeEventListener("storage", handleAccountModeChange);
+    };
+  }, []);
 
   useEffect(() => {
     function handleViewportChange() {
+      const viewport = getLauncherViewport();
       setLauncherPosition((currentPosition) => {
+        if (!launcherAccountBehavior.draggable) {
+          return getProfessionalAiButtonPosition(
+            viewport,
+            launcherPositionOptions
+          );
+        }
         if (!currentPosition) return currentPosition;
         return clampAiButtonPosition(
           currentPosition,
-          getLauncherViewport(),
+          viewport,
           launcherPositionOptions
         );
       });
@@ -2738,7 +2781,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       window.removeEventListener("resize", handleViewportChange);
       window.removeEventListener("orientationchange", handleViewportChange);
     };
-  }, [launcherBottomClearance]);
+  }, [launcherBottomClearance, launcherAccountBehavior.draggable]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -3531,7 +3574,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function handleLauncherPointerDown(event) {
-    if (open) return;
+    if (open || !launcherAccountBehavior.draggable) return;
     const rect = event.currentTarget.getBoundingClientRect();
     launcherDragRef.current = {
       pointerId: event.pointerId,
@@ -3546,6 +3589,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function handleLauncherPointerMove(event) {
+    if (!launcherAccountBehavior.draggable) return;
     const dragState = launcherDragRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) return;
 
@@ -3571,6 +3615,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }
 
   function handleLauncherPointerUp(event) {
+    if (!launcherAccountBehavior.draggable) return;
     const dragState = launcherDragRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) return;
 
@@ -3703,6 +3748,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     <>
       <button
         className="meetro-assistant-launcher"
+        data-position-mode={launcherAccountBehavior.draggable ? "draggable" : "fixed"}
         type="button"
         aria-label={copy.assistantName || copy.buttonLabel}
         onPointerDown={handleLauncherPointerDown}

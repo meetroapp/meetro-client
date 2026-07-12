@@ -6,6 +6,11 @@ export const AI_BUTTON_POSITION_DEFAULTS = Object.freeze({
   bottomClearance: 94,
 });
 
+export const AI_BUTTON_ACCOUNT_BEHAVIORS = Object.freeze({
+  personal: Object.freeze({ draggable: true, persistPosition: true }),
+  business: Object.freeze({ draggable: false, persistPosition: false }),
+});
+
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -76,6 +81,29 @@ export function snapAiButtonPosition(position = {}, viewport = {}, options = {})
     x: clamped.x <= midpoint ? bounds.minX : bounds.maxX,
     y: clamped.y,
   };
+}
+
+export function getAiButtonAccountBehavior(accountMode = "personal") {
+  return accountMode === "business"
+    ? AI_BUTTON_ACCOUNT_BEHAVIORS.business
+    : AI_BUTTON_ACCOUNT_BEHAVIORS.personal;
+}
+
+export function getProfessionalAiButtonPosition(viewport = {}, options = {}) {
+  const bounds = getAiButtonBounds(viewport, options);
+  return { x: bounds.maxX, y: bounds.maxY };
+}
+
+export function resolveAiButtonPositionForAccount({
+  accountMode = "personal",
+  storage = globalThis.localStorage,
+  viewport = {},
+  options = {},
+} = {}) {
+  if (accountMode === "business") {
+    return getProfessionalAiButtonPosition(viewport, options);
+  }
+  return readStoredAiButtonPosition({ storage, viewport, options });
 }
 
 export function isAiButtonPositionUsable(position = {}, viewport = {}, options = {}) {
