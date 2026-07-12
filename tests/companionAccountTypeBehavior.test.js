@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 
 import {
   AI_BUTTON_POSITION_STORAGE_KEY,
+  PROFESSIONAL_AI_BUTTON_POSITION_STORAGE_KEY,
   getAiButtonAccountBehavior,
-  getProfessionalAiButtonPosition,
+  getAiButtonPositionStorageKey,
   resolveAiButtonPositionForAccount,
   writeStoredAiButtonPosition,
 } from "../src/utils/aiButtonPosition.js";
@@ -62,17 +63,33 @@ test("personal Companion remains draggable and position persistence remains enab
   );
 });
 
-test("business Companion is fixed and ignores the homeowner stored position", () => {
+test("business Companion remains draggable and persists to its own storage key", () => {
   assert.deepEqual(getAiButtonAccountBehavior("business"), {
-    draggable: false,
-    persistPosition: false,
+    draggable: true,
+    persistPosition: true,
   });
 
   const storage = createMemoryStorage({
     [AI_BUTTON_POSITION_STORAGE_KEY]: JSON.stringify({ x: 20, y: 320 }),
   });
-  const fixed = getProfessionalAiButtonPosition(viewport, options);
-  assert.deepEqual(fixed, { x: 228, y: 614 });
+  const saved = writeStoredAiButtonPosition(
+    { x: 300, y: 410 },
+    {
+      storage,
+      storageKey: getAiButtonPositionStorageKey("business"),
+      viewport,
+      options,
+    }
+  );
+  assert.deepEqual(saved, { x: 228, y: 410 });
+  assert.deepEqual(
+    JSON.parse(storage.getItem(PROFESSIONAL_AI_BUTTON_POSITION_STORAGE_KEY)),
+    saved
+  );
+  assert.deepEqual(
+    JSON.parse(storage.getItem(AI_BUTTON_POSITION_STORAGE_KEY)),
+    { x: 20, y: 320 }
+  );
   assert.deepEqual(
     resolveAiButtonPositionForAccount({
       accountMode: "business",
@@ -80,13 +97,17 @@ test("business Companion is fixed and ignores the homeowner stored position", ()
       viewport,
       options,
     }),
-    fixed
+    saved
   );
 });
 
-test("account switching uses fixed business placement then restores personal placement", () => {
+test("account switching restores separate personal and professional positions", () => {
   const storage = createMemoryStorage({
     [AI_BUTTON_POSITION_STORAGE_KEY]: JSON.stringify({ x: 20, y: 320 }),
+    [PROFESSIONAL_AI_BUTTON_POSITION_STORAGE_KEY]: JSON.stringify({
+      x: 228,
+      y: 410,
+    }),
   });
   const businessPosition = resolveAiButtonPositionForAccount({
     accountMode: "business",
@@ -101,28 +122,41 @@ test("account switching uses fixed business placement then restores personal pla
     options,
   });
 
-  assert.deepEqual(businessPosition, { x: 228, y: 614 });
+  assert.deepEqual(businessPosition, { x: 228, y: 410 });
   assert.deepEqual(personalPosition, { x: 20, y: 320 });
 });
 
-test("professional fixed placement respects safe areas and BottomNav clearance", () => {
-  const fixed = getProfessionalAiButtonPosition(viewport, options);
-  assert.equal(viewport.width - fixed.x - options.buttonSize, 36);
-  assert.ok(fixed.y <= viewport.height - options.bottomClearance - options.buttonSize);
-  assert.ok(fixed.x >= options.edgeMargin + viewport.safeAreaLeft);
+test("both account positions remain safe-area constrained", () => {
+  for (const accountMode of ["personal", "business"]) {
+    const storage = createMemoryStorage();
+    const saved = writeStoredAiButtonPosition(
+      { x: 999, y: 999 },
+      {
+        storage,
+        storageKey: getAiButtonPositionStorageKey(accountMode),
+        viewport,
+        options,
+      }
+    );
+    assert.deepEqual(saved, { x: 228, y: 614 });
+    assert.equal(viewport.width - saved.x - options.buttonSize, 36);
+    assert.ok(saved.y <= viewport.height - options.bottomClearance - options.buttonSize);
+  }
 });
 
-test("MeetroAssistant disables professional pointer dragging without changing expansion flow", () => {
+test("MeetroAssistant keeps pointer dragging enabled in both modes without changing expansion flow", () => {
   const source = readFileSync(
     new URL("../src/components/MeetroAssistant.jsx", import.meta.url),
     "utf8"
   );
 
-  assert.match(source, /data-position-mode=\{launcherAccountBehavior\.draggable \? "draggable" : "fixed"\}/);
-  assert.match(source, /if \(open \|\| !launcherAccountBehavior\.draggable\) return;/);
-  assert.match(source, /if \(!launcherAccountBehavior\.draggable\) return;[\s\S]*function handleLauncherPointerUp/);
+  assert.match(source, /data-position-mode="draggable"/);
+  assert.match(source, /function handleLauncherPointerDown\(event\) \{\n\s+if \(open\) return;/);
+  assert.doesNotMatch(source, /!launcherAccountBehavior\.draggable/);
+  assert.doesNotMatch(source, /getProfessionalAiButtonPosition/);
   assert.match(source, /window\.addEventListener\("accountModeChanged", handleAccountModeChange\)/);
   assert.match(source, /resolveAiButtonPositionForAccount\(\{[\s\S]*accountMode: roleMode/);
+  assert.match(source, /storageKey: getAiButtonPositionStorageKey\(roleMode\)/);
   assert.match(source, /ensureExpandedCompanionViewportSafety\(nextCompanionMode\)/);
   assert.match(source, /setCompanionMode\(nextCompanionMode\);[\s\S]*setOpen\(true\);/);
 });

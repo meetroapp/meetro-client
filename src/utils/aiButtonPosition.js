@@ -1,4 +1,11 @@
 export const AI_BUTTON_POSITION_STORAGE_KEY = "meetroAiButtonPosition";
+export const PROFESSIONAL_AI_BUTTON_POSITION_STORAGE_KEY =
+  "meetroProfessionalAiButtonPosition";
+
+export const AI_BUTTON_POSITION_STORAGE_KEYS = Object.freeze({
+  personal: AI_BUTTON_POSITION_STORAGE_KEY,
+  business: PROFESSIONAL_AI_BUTTON_POSITION_STORAGE_KEY,
+});
 
 export const AI_BUTTON_POSITION_DEFAULTS = Object.freeze({
   buttonSize: 52,
@@ -8,7 +15,7 @@ export const AI_BUTTON_POSITION_DEFAULTS = Object.freeze({
 
 export const AI_BUTTON_ACCOUNT_BEHAVIORS = Object.freeze({
   personal: Object.freeze({ draggable: true, persistPosition: true }),
-  business: Object.freeze({ draggable: false, persistPosition: false }),
+  business: Object.freeze({ draggable: true, persistPosition: true }),
 });
 
 function toFiniteNumber(value, fallback = 0) {
@@ -89,9 +96,10 @@ export function getAiButtonAccountBehavior(accountMode = "personal") {
     : AI_BUTTON_ACCOUNT_BEHAVIORS.personal;
 }
 
-export function getProfessionalAiButtonPosition(viewport = {}, options = {}) {
-  const bounds = getAiButtonBounds(viewport, options);
-  return { x: bounds.maxX, y: bounds.maxY };
+export function getAiButtonPositionStorageKey(accountMode = "personal") {
+  return accountMode === "business"
+    ? AI_BUTTON_POSITION_STORAGE_KEYS.business
+    : AI_BUTTON_POSITION_STORAGE_KEYS.personal;
 }
 
 export function resolveAiButtonPositionForAccount({
@@ -100,10 +108,12 @@ export function resolveAiButtonPositionForAccount({
   viewport = {},
   options = {},
 } = {}) {
-  if (accountMode === "business") {
-    return getProfessionalAiButtonPosition(viewport, options);
-  }
-  return readStoredAiButtonPosition({ storage, viewport, options });
+  return readStoredAiButtonPosition({
+    storage,
+    storageKey: getAiButtonPositionStorageKey(accountMode),
+    viewport,
+    options,
+  });
 }
 
 export function isAiButtonPositionUsable(position = {}, viewport = {}, options = {}) {
@@ -118,6 +128,7 @@ export function isAiButtonPositionUsable(position = {}, viewport = {}, options =
 
 export function readStoredAiButtonPosition({
   storage = globalThis.localStorage,
+  storageKey = AI_BUTTON_POSITION_STORAGE_KEY,
   viewport = {},
   options = {},
 } = {}) {
@@ -125,7 +136,7 @@ export function readStoredAiButtonPosition({
 
   try {
     const parsed = JSON.parse(
-      storage.getItem(AI_BUTTON_POSITION_STORAGE_KEY) || "null"
+      storage.getItem(storageKey) || "null"
     );
 
     if (!isAiButtonPositionUsable(parsed, viewport, options)) return null;
@@ -137,12 +148,13 @@ export function readStoredAiButtonPosition({
 
 export function writeStoredAiButtonPosition(position = {}, {
   storage = globalThis.localStorage,
+  storageKey = AI_BUTTON_POSITION_STORAGE_KEY,
   viewport = {},
   options = {},
 } = {}) {
   if (!storage) return null;
 
   const snapped = snapAiButtonPosition(position, viewport, options);
-  storage.setItem(AI_BUTTON_POSITION_STORAGE_KEY, JSON.stringify(snapped));
+  storage.setItem(storageKey, JSON.stringify(snapped));
   return snapped;
 }
