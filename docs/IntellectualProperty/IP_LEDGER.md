@@ -1070,12 +1070,13 @@ No proprietary policy formula, private decision threshold, internal weighting, c
 **Category:** Trade Secret / Copyright
 **First Documented:** 2026-07-11
 **Adopted:** 2026-07-11
+**Implemented:** 2026-07-11
 **Primary Author:** William E. Molina
 **Owning Entity:** WM FLEX LABS, LLC, pending final confirmation or assignment
 **Product:** Meetro Community
 **Related Milestone:** MC-ARCH-003
-**Repository Commit:** Pending qualifying commit
-**Related Files:** `docs/Architecture/MEETRO_INTELLIGENCE_PLATFORM_SPECIFICATION_V1.md`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/Architecture/AI_ROADMAP.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/IntellectualProperty/IP_LEDGER.md`
+**Repository Commit:** `1368bf65d9259b8b4cc6efc5f91bfdba88601447`
+**Related Files:** `docs/Architecture/MEETRO_INTELLIGENCE_PLATFORM_SPECIFICATION_V1.md`, `docs/Architecture/MEETRO_INTELLIGENCE_CONSTITUTION.md`, `docs/Architecture/AI_ROADMAP.md`, `docs/KnowledgeBase/MEETRO_COMMUNITY_INTELLIGENCE_ARCHITECTURE.md`, `docs/IntellectualProperty/IP_LEDGER.md`, `server/intelligence/gateway.js`, `server/intelligence/orchestrator/`, `server/intelligence/contracts/`, `server/intelligence/workflow/`, `server/intelligence/relationship/`, `server/intelligence/memory/`, `server/intelligence/business/`, `server/intelligence/community/`, `server/intelligence/knowledge/`, `server/intelligence/capability/`, `server/intelligence/validation/`, `server/intelligence/decision/`, `server/intelligence/recommendation/`, `server/intelligence/planning/`, `server/intelligence/executionGovernance/`, `server/tests/intelligenceGateway.test.js`, `server/tests/intelligenceEngineRegistry.test.js`, `server/tests/planningIntelligence.test.js`, `server/tests/executionGovernance.test.js`
 
 ### Architecture Scope
 
@@ -1087,7 +1088,11 @@ Provides a stable technical baseline for contributors, reviewers, advisors, arch
 
 ### Evidence of Adoption
 
-The working tree contains the v1.0 specification and concise references in the standing architecture record and roadmap. A qualifying documentation commit remains pending.
+Primary implementation commit `1368bf65d9259b8b4cc6efc5f91bfdba88601447` contains the v1.0 specification and concise references in the standing architecture record, roadmap, and IP Ledger.
+
+### v1.0 Definition
+
+A complete, tested, constitutionally governed advisory intelligence and execution-governance platform with no execution capability.
 
 ### Confidentiality Boundary
 
@@ -1095,11 +1100,11 @@ The specification documents responsibilities and boundaries without disclosing p
 
 ### Production Limitation
 
-This is a documentation baseline. It does not implement execution contracts, execution adapters, product writes, provider changes, engine-order changes, or UI. Version 1.0 remains advisory and non-executing.
+This is a documentation baseline. Version 1.0 has no execution contracts, execution adapters, product write actions, frontend execution surface, automatic execution, or external alternative discovery. Exact estimates require verified product data. Future persistence remains required for approvals, receipts, idempotency, and audit records. The provider remains explanatory only.
 
 ### Follow-Up Actions
 
-Record the qualifying documentation commit before adding repository evidence. Review MC-AI-021 as a contract-only milestone under the Constitution and this baseline.
+Review MC-AI-021 as a contract-only milestone under the Constitution and this baseline.
 
 ### Notes
 
