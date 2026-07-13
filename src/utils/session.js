@@ -255,6 +255,14 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
   };
 }
 
+export function replaceMeetroSessionToken(token, storage = localStorage) {
+  if (!storage || typeof storage.setItem !== "function") return false;
+  if (typeof token !== "string" || !token.trim() || token !== token.trim()) return false;
+
+  storage.setItem("token", token);
+  return storage.getItem("token") === token;
+}
+
 export function getPostLoginPage(user = {}) {
   if (isProfessionalUser(user)) {
     return "businessDashboard";

@@ -11,6 +11,284 @@ body,
   overscroll-behavior-x: none;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-security-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px)
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 16px)
+    max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(25, 31, 26, 0.44);
+  overscroll-behavior: contain;
+}
+
+.account-security-workspace {
+  width: min(100%, 640px);
+  max-width: 100%;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--meetro-border-warm, #ded8ca);
+  border-radius: 8px;
+  background: var(--meetro-paper, #fffdf7);
+  box-shadow: 0 20px 60px rgba(24, 37, 29, 0.22);
+  color: var(--meetro-deep-forest, #173c2b);
+}
+
+.account-security-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--meetro-border-warm, #ded8ca);
+}
+
+.account-security-header p {
+  margin: 0 0 4px;
+  color: #6b755f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.account-security-header h2,
+.account-security-section h3,
+.account-security-section p {
+  margin-top: 0;
+}
+
+.account-security-header h2 {
+  margin-bottom: 0;
+  font-size: 25px;
+}
+
+.account-security-header > button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--meetro-border-warm, #ded8ca);
+  border-radius: 50%;
+  background: #fffdf8;
+  color: #173c2b;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.account-security-content {
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: 110px;
+}
+
+.account-security-section {
+  min-width: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--meetro-border-warm, #ded8ca);
+}
+
+.account-security-section:first-child {
+  padding-top: 0;
+}
+
+.account-security-section:last-child {
+  border-bottom: 0;
+}
+
+.account-security-section-heading p,
+.account-security-readonly p {
+  margin-bottom: 0;
+  color: #687160;
+  line-height: 1.55;
+}
+
+.account-security-section form {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.account-security-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: #27362c;
+  font-weight: 750;
+}
+
+.account-security-password-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  border: 1px solid #d7d3c6;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fffefa;
+}
+
+.account-security-password-control:focus-within {
+  border-color: #326749;
+  box-shadow: 0 0 0 3px rgba(50, 103, 73, 0.14);
+}
+
+.account-security-password-control input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  padding: 12px 14px;
+  background: transparent;
+  font: inherit;
+}
+
+.account-security-password-control button {
+  min-width: 64px;
+  min-height: 44px;
+  border: 0;
+  border-left: 1px solid #e0dccf;
+  padding: 0 12px;
+  background: #f5f4ec;
+  color: #24543b;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.account-security-requirements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: #f2f5ec;
+  list-style: none;
+}
+
+.account-security-requirements li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #596558;
+  font-size: 14px;
+}
+
+.account-security-requirements li[data-met="true"] {
+  color: #1e5a3b;
+  font-weight: 750;
+}
+
+.account-security-status {
+  display: grid;
+  gap: 3px;
+  min-height: 0;
+  color: #5f665c;
+}
+
+.account-security-status.is-error {
+  padding: 12px;
+  border-left: 4px solid #a43b35;
+  background: #fff2ef;
+  color: #7b2925;
+}
+
+.account-security-status.is-success {
+  padding: 12px;
+  border-left: 4px solid #2e6848;
+  background: #edf5ed;
+  color: #214e37;
+}
+
+.account-security-actions {
+  position: sticky;
+  bottom: -1px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 10px;
+  background: var(--meetro-paper, #fffdf7);
+}
+
+.account-security-actions button,
+.account-security-sign-out {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.account-security-actions button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
+.account-security-secondary {
+  border: 1px solid #bac6b8;
+  background: #fffefa;
+  color: #214f38;
+}
+
+.account-security-sign-out {
+  border: 1px solid #bc5a52;
+  background: transparent;
+  color: #8a2f2a;
+}
+
+@media (max-width: 600px) {
+  .account-security-overlay {
+    align-items: flex-end;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px)
+      max(12px, env(safe-area-inset-right, 0px))
+      calc(env(safe-area-inset-bottom, 0px) + 12px)
+      max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .account-security-workspace {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+  }
+
+  .account-security-header,
+  .account-security-content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .account-security-requirements {
+    grid-template-columns: 1fr;
+  }
+
+  .account-security-actions {
+    flex-direction: column-reverse;
+  }
+
+  .account-security-actions button,
+  .account-security-sign-out {
+    width: 100%;
+  }
+}
+
 body {
   position: relative;
   color: var(--meetro-color-ink, #111827);

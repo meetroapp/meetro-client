@@ -1,5 +1,5 @@
-import API_URL from "../api";
-import { getAccountConnectionStateFromAuthResult } from "./accountConnection";
+import API_URL from "../api.js";
+import { getAccountConnectionStateFromAuthResult } from "./accountConnection.js";
 
 export function clearMeetroSession() {
   const keysToRemove = [
@@ -55,6 +55,10 @@ export function handleAuthExpired(setPage) {
 }
 
 export async function authFetch(endpoint, options = {}, setPage) {
+  const {
+    skipAuthExpirationHandling = false,
+    ...requestOptions
+  } = options;
   const token = localStorage.getItem("token");
 
   if (!token) {
@@ -72,15 +76,15 @@ export async function authFetch(endpoint, options = {}, setPage) {
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
+    ...requestOptions,
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(requestOptions.headers || {}),
       Authorization: `Bearer ${token}`,
     },
   });
 
-  let data = {};
+  let data;
 
   try {
     data = await response.json();
@@ -96,7 +100,9 @@ export async function authFetch(endpoint, options = {}, setPage) {
     data.message === "No token provided";
 
   if (authError) {
-    handleAuthExpired(setPage);
+    if (!skipAuthExpirationHandling) {
+      handleAuthExpired(setPage);
+    }
   } else {
     const accountConnectionState =
       getAccountConnectionStateFromAuthResult({ response, data });

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import PersonalAddressManager from "../components/PersonalAddressManager";
+import AccountSecurityWorkspace from "../components/AccountSecurityWorkspace";
 import {
   SUPPORTED_LANGUAGES,
   getLanguage,
@@ -10,7 +11,7 @@ import {
   setLanguage,
   t,
 } from "../utils/language";
-import { authFetch, clearMeetroSession } from "../utils/authFetch";
+import { authFetch, clearMeetroSession, handleAuthExpired } from "../utils/authFetch";
 import {
   hasBusinessProfileOwnership,
   isProfessionalSession,
@@ -48,6 +49,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [language, updateLanguage] = useState(getLanguage());
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
   const [addressManagerOpen, setAddressManagerOpen] = useState(false);
+  const [accountSecurityOpen, setAccountSecurityOpen] = useState(false);
   const [personalAddresses, setPersonalAddresses] = useState(() => readPersonalAddresses());
   const [personalInfoOpen, setPersonalInfoOpen] = useState(false);
   const [myProfessionalsOpen, setMyProfessionalsOpen] = useState(false);
@@ -342,6 +344,19 @@ function Profile({ setPage, currentPage, embedded = false }) {
     window.location.hash = "login";
 
     window.location.reload();
+  }
+
+  function renderAccountSecurityWorkspace() {
+    if (!accountSecurityOpen) return null;
+
+    return (
+      <AccountSecurityWorkspace
+        accountMode={activeMode}
+        onClose={() => setAccountSecurityOpen(false)}
+        onSignOut={handleLogout}
+        onSessionExpired={() => handleAuthExpired(setPage)}
+      />
+    );
   }
 
   function handleLanguageSelect(languageCode) {
@@ -1149,8 +1164,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
           <SettingRow
             icon="privacy"
             label={t("passwordSecurity")}
-            value={t("comingSoon")}
-            disabled
+            value={t("manage")}
+            onClick={() => setAccountSecurityOpen(true)}
           />
         </SettingsSection>
 
@@ -1215,6 +1230,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
         <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
           {t("logout")}
         </button>
+
+        {renderAccountSecurityWorkspace()}
 
         {personalInfoOpen && (
           <div
@@ -1563,8 +1580,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
         <SettingRow
           icon="privacy"
           label={t("passwordSecurity")}
-          value={t("comingSoon")}
-          disabled
+          value={t("manage")}
+          onClick={() => setAccountSecurityOpen(true)}
         />
       </SettingsSection>
 
@@ -1707,6 +1724,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
       <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
         {t("logout")}
       </button>
+
+      {renderAccountSecurityWorkspace()}
 
       {personalInfoOpen && (
         <div
