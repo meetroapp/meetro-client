@@ -289,6 +289,172 @@ body,
   }
 }
 
+.password-reset-page {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
+  background: #173c2b;
+}
+
+.password-reset-workspace {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  color: #173c2b;
+}
+
+.password-reset-workspace.is-standalone {
+  width: min(100%, 520px);
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid var(--meetro-border-warm, #ded8ca);
+  border-radius: 8px;
+  background: var(--meetro-paper, #fffdf7);
+  box-shadow: 0 20px 60px rgba(12, 28, 19, 0.28);
+}
+
+.password-reset-workspace form,
+.password-reset-result {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.password-reset-workspace h2,
+.password-reset-workspace p {
+  margin: 0;
+}
+
+.password-reset-workspace h2 {
+  font-size: clamp(24px, 5vw, 32px);
+  line-height: 1.15;
+}
+
+.password-reset-workspace p {
+  color: #687160;
+  line-height: 1.55;
+}
+
+.password-reset-workspace label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: #27362c;
+  font-weight: 750;
+}
+
+.password-reset-workspace input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  box-sizing: border-box;
+  border: 1px solid #d7d3c6;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fffefa;
+  color: #18251d;
+  font: inherit;
+}
+
+.password-reset-workspace input:focus {
+  border-color: #326749;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(50, 103, 73, 0.14);
+}
+
+.password-reset-workspace button {
+  min-height: 44px;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.password-reset-workspace button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
+.password-reset-secondary {
+  border: 1px solid #bac6b8;
+  padding: 11px 18px;
+  background: transparent;
+  color: #214f38;
+}
+
+.password-reset-password-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.password-reset-password-control input {
+  border-radius: 8px 0 0 8px;
+}
+
+.password-reset-password-control button {
+  min-width: 72px;
+  border: 1px solid #d7d3c6;
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  padding: 0 12px;
+  background: #f5f4ec;
+  color: #24543b;
+}
+
+.password-reset-requirements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: #f2f5ec;
+  list-style: none;
+}
+
+.password-reset-requirements li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #596558;
+  font-size: 14px;
+}
+
+.password-reset-requirements li[data-met="true"] {
+  color: #1e5a3b;
+  font-weight: 750;
+}
+
+.password-reset-status {
+  min-height: 0;
+}
+
+.password-reset-status.is-error {
+  padding: 12px;
+  border-left: 4px solid #a43b35;
+  background: #fff2ef;
+  color: #7b2925;
+}
+
+.account-security-recovery .password-reset-workspace {
+  margin-top: 16px;
+}
+
+@media (max-width: 480px) {
+  .password-reset-requirements {
+    grid-template-columns: 1fr;
+  }
+
+  .password-reset-password-control {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+}
+
 .team-members-page {
   width: 100%;
   max-width: 1180px;

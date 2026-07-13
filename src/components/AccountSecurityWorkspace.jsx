@@ -6,6 +6,7 @@ import {
   getAccountSecurityCapabilities,
 } from "../utils/accountSecurity";
 import { t } from "../utils/language";
+import PasswordResetWorkspace from "./PasswordResetWorkspace.jsx";
 
 const EMPTY_FORM = Object.freeze({
   currentPassword: "",
@@ -247,9 +248,10 @@ export default function AccountSecurityWorkspace({
             </form>
           </section>
 
-          <section className="account-security-section account-security-readonly">
+          <section className="account-security-section account-security-recovery">
             <h3>{t("accountSecurityRecovery")}</h3>
-            <p>{t("accountSecurityRecoveryUnavailable")}</p>
+            <p>{t("accountSecurityRecoveryHelp")}</p>
+            {capabilities.emailRecovery && <PasswordResetWorkspace requestOnly />}
           </section>
 
           <section className="account-security-section account-security-readonly">

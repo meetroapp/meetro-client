@@ -14,7 +14,6 @@ import {
   getPostLoginPage,
   isProfessionalUser,
 } from "../utils/session";
-import { buildPasswordResetRequest } from "../utils/passwordReset";
 import {
   TWO_FACTOR_FAILURE,
   buildTwoFactorPayload,
@@ -27,6 +26,7 @@ import {
   normalizeLoginFailure,
 } from "../utils/loginErrorPresentation";
 import MeetroIcon from "../components/MeetroIcon";
+import PasswordResetWorkspace from "../components/PasswordResetWorkspace";
 
 function Login({ setPage }) {
   const [mode, setMode] = useState(
@@ -40,9 +40,6 @@ function Login({ setPage }) {
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetError, setResetError] = useState("");
-  const [resetConfirmation, setResetConfirmation] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [twoFactorStep, setTwoFactorStep] = useState(false);
   const [verificationError, setVerificationError] = useState("");
@@ -391,37 +388,13 @@ function Login({ setPage }) {
   }
 
   function openPasswordReset() {
-    setResetEmail(email.trim());
-    setResetError("");
-    setResetConfirmation("");
     localStorage.setItem("meetroLoginMode", "reset");
     setMode("reset");
   }
 
   function returnToLogin() {
-    setResetError("");
-    setResetConfirmation("");
     localStorage.setItem("meetroLoginMode", "login");
     setMode("login");
-  }
-
-  function handlePasswordReset() {
-    const result = buildPasswordResetRequest(resetEmail);
-
-    setResetConfirmation("");
-
-    if (!result.ok) {
-      setResetError(
-        result.errorCode === "email_required"
-          ? t("resetEmailRequired", normalizedLanguage)
-          : t("resetEmailInvalid", normalizedLanguage)
-      );
-      return;
-    }
-
-    setResetError("");
-    setEmail(result.email);
-    setResetConfirmation(t("resetPasswordConfirmation", normalizedLanguage));
   }
 
   function checkIsProfessional(user = {}) {
@@ -903,55 +876,17 @@ function Login({ setPage }) {
           </div>
         )}
 
-        <div style={authIntro}>
-          <h2 style={authIntroTitle}>
-            {mode === "reset"
-              ? t("resetPasswordTitle", normalizedLanguage)
-              : mode === "login"
-              ? T.login
-              : T.createYourAccount}
-          </h2>
-          <p style={authIntroText}>
-            {mode === "reset"
-              ? t("resetPasswordDescription", normalizedLanguage)
-              : T.startHelper}
-          </p>
-        </div>
+        {mode !== "reset" && (
+          <div style={authIntro}>
+            <h2 style={authIntroTitle}>
+              {mode === "login" ? T.login : T.createYourAccount}
+            </h2>
+            <p style={authIntroText}>{T.startHelper}</p>
+          </div>
+        )}
 
         {mode === "reset" ? (
-          <div style={resetForm}>
-            <input
-              style={input}
-              type="email"
-              placeholder={t("resetEmailPlaceholder", normalizedLanguage)}
-              value={resetEmail}
-              onChange={(event) => {
-                setResetEmail(event.target.value);
-                setResetError("");
-              }}
-            />
-
-            {resetError && <div style={resetErrorBox}>{resetError}</div>}
-
-            {resetConfirmation && (
-              <div style={resetConfirmationBox}>
-                <strong>{resetConfirmation}</strong>
-                <span>{t("resetPasswordSimulatedNote", normalizedLanguage)}</span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              style={submitButton}
-              onClick={handlePasswordReset}
-            >
-              {t("sendResetLink", normalizedLanguage)}
-            </button>
-
-            <button type="button" style={guestButton} onClick={returnToLogin}>
-              {T.back}
-            </button>
-          </div>
+          <PasswordResetWorkspace initialEmail={email} onBackToSignIn={returnToLogin} />
         ) : (
           <>
             {mode === "signup" && (
@@ -1748,36 +1683,6 @@ const forgotPasswordButton = {
   textAlign: "right",
   padding: "0 2px 14px",
   cursor: "pointer",
-};
-
-const resetForm = {
-  display: "grid",
-  gap: "10px",
-};
-
-const resetErrorBox = {
-  marginTop: "-8px",
-  padding: "12px 14px",
-  borderRadius: "16px",
-  border: "1px solid rgba(239, 68, 68, 0.22)",
-  background: "#fef2f2",
-  color: "#991b1b",
-  fontSize: "13px",
-  fontWeight: "850",
-  lineHeight: 1.4,
-};
-
-const resetConfirmationBox = {
-  display: "grid",
-  gap: "6px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid rgba(16, 185, 129, 0.22)",
-  background: "#ecfdf5",
-  color: "#065f46",
-  fontSize: "13px",
-  fontWeight: "800",
-  lineHeight: 1.45,
 };
 
 const disabledSubmitButton = {

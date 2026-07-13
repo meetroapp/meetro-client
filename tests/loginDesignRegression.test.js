@@ -44,7 +44,7 @@ test("Login keeps the Meetro Community arrival surface while using backend 2FA",
   assert.match(source, /verifyTwoFactorCode\(\{/);
   assert.match(source, /fetch\(`\$\{API_URL\}\$\{endpoint\}`/);
   assert.match(source, /endpoint = mode === "login" \? "\/auth\/login" : "\/auth\/signup"/);
-  assert.match(source, /buildPasswordResetRequest\(resetEmail\)/);
+  assert.match(source, /<PasswordResetWorkspace initialEmail=\{email\} onBackToSignIn=\{returnToLogin\} \/>/);
   assert.match(source, /setLanguage\(nextLanguage\)/);
   assert.match(source, /var\(--meetro-gradient-community-action/);
   assert.match(source, /var\(--meetro-color-forest/);

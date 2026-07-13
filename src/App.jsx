@@ -91,6 +91,7 @@ import JobUpdate from "./pages/JobUpdate";
 import Legal from "./pages/Legal";
 import MeetroJourney from "./pages/MeetroJourney";
 import MeetroStory from "./pages/MeetroStory";
+import PasswordResetWorkspace from "./components/PasswordResetWorkspace";
 
 const PageLoader = () => (
   <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
@@ -227,7 +228,7 @@ const publicLegalDocumentRoutes = {
   aiDisclaimer: "ai",
 };
 
-const publicMarketingRoutes = new Set(["meetroStory"]);
+const publicUnauthenticatedRoutes = new Set(["meetroStory", "resetPassword"]);
 const SESSION_HYDRATION = Object.freeze({
   restoring: "restoring",
   authenticated: "authenticated",
@@ -313,8 +314,8 @@ function App() {
   const isPublicLegalPage = (targetPage = "") =>
     Boolean(publicLegalDocumentRoutes[targetPage]);
 
-  const isPublicMarketingPage = (targetPage = "") =>
-    publicMarketingRoutes.has(targetPage);
+  const isPublicUnauthenticatedPage = (targetPage = "") =>
+    publicUnauthenticatedRoutes.has(targetPage);
 
   const persistRouteContext = (route = "") => {
     const momentId = getMeetroMomentRouteId(route);
@@ -340,6 +341,7 @@ function App() {
     if (hashRoute) return hashRoute;
 
     const pathRoute = window.location.pathname || "";
+    if (pathRoute === "/reset-password") return "resetPassword";
     return getMeetroMomentRouteId(pathRoute) ? pathRoute : "";
   };
 
@@ -371,7 +373,7 @@ function App() {
       return getLegalPageForRoute(targetPage);
     }
 
-    if (isPublicMarketingPage(targetPage)) {
+    if (isPublicUnauthenticatedPage(targetPage)) {
       return targetPage;
     }
 
@@ -449,7 +451,7 @@ function App() {
       return getLegalPageForRoute(currentHash);
     }
 
-    if (currentHash && isPublicMarketingPage(currentHash)) {
+    if (currentHash && isPublicUnauthenticatedPage(currentHash)) {
       return currentHash;
     }
 
@@ -497,7 +499,7 @@ function App() {
     const currentHash = getRoutePage(currentRoute);
 
     if (
-      (currentHash && (isPublicLegalPage(currentHash) || isPublicMarketingPage(currentHash))) ||
+      (currentHash && (isPublicLegalPage(currentHash) || isPublicUnauthenticatedPage(currentHash))) ||
       (currentRoute && isPublicProfileRoute(currentRoute))
     ) {
       return { status: SESSION_HYDRATION.public };
@@ -668,7 +670,7 @@ function App() {
         return;
       }
 
-      if (hashPage && isPublicMarketingPage(hashPage)) {
+      if (hashPage && isPublicUnauthenticatedPage(hashPage)) {
         setPageState(hashPage);
         return;
       }
@@ -712,7 +714,7 @@ function App() {
         return;
       }
 
-      if (currentHash && isPublicMarketingPage(currentHash)) {
+      if (currentHash && isPublicUnauthenticatedPage(currentHash)) {
         setPageState(currentHash);
         return;
       }
@@ -863,7 +865,7 @@ function App() {
       return;
     }
 
-    if (isPublicMarketingPage(newPage)) {
+    if (isPublicUnauthenticatedPage(newPage)) {
       window.location.hash = newPage;
       setPageState(newPage);
       return;
@@ -916,6 +918,18 @@ if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "session
 
 if (page === "login") {
   return withStartupChrome(withRouteBoundary(<Login setPage={setPage} />, page, setPage), updateNotice);
+}
+
+if (page === "resetPassword") {
+  return withStartupChrome(withRouteBoundary(
+    <PasswordResetWorkspace
+      allowCompletion
+      standalone
+      onBackToSignIn={() => setPage("login")}
+    />,
+    page,
+    setPage
+  ), updateNotice);
 }
 
 if (page === "legal") {

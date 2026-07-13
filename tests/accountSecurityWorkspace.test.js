@@ -241,11 +241,11 @@ test("request timeout aborts safely", async () => {
   assert.equal(result.failure, ACCOUNT_SECURITY_FAILURE.SERVICE_UNAVAILABLE);
 });
 
-test("capabilities truthfully expose only password change and sign out", () => {
+test("capabilities expose password change, sign out, and production email recovery", () => {
   assert.deepEqual(getAccountSecurityCapabilities(), {
     passwordChange: true,
     signOut: true,
-    emailRecovery: false,
+    emailRecovery: true,
     twoFactorManagement: false,
     recoveryCodes: false,
     activeSessions: false,
@@ -277,10 +277,10 @@ test("workspace fields, independent visibility, autocomplete, pending guard, and
   assert.match(componentSource, /previousModeRef\.current !== accountMode/);
 });
 
-test("workspace is truthful about recovery and two-factor management", () => {
-  assert.doesNotMatch(componentSource, /passwordReset|buildPasswordResetRequest|reset email/i);
+test("workspace reuses production recovery while remaining truthful about two-factor management", () => {
+  assert.match(componentSource, /PasswordResetWorkspace requestOnly/);
   assert.doesNotMatch(componentSource, /enable-2fa|disable-2fa|recovery code|qr code|totp|trusted device|other sessions/i);
-  assert.match(componentSource, /accountSecurityRecoveryUnavailable/);
+  assert.match(componentSource, /accountSecurityRecoveryHelp/);
   assert.match(componentSource, /accountSecurityTwoFactorReadOnly/);
   assert.match(loginSource, /verifyTwoFactorCode\(\{/);
 });

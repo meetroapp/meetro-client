@@ -96,7 +96,7 @@ export function getAccountSecurityCapabilities() {
   return Object.freeze({
     passwordChange: true,
     signOut: true,
-    emailRecovery: false,
+    emailRecovery: true,
     twoFactorManagement: false,
     recoveryCodes: false,
     activeSessions: false,
