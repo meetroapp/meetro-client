@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
-import MeetroIcon from "../components/MeetroIcon";
 import HiringInterviewEditor from "../components/HiringInterviewEditor";
+import HiringPositionEditor from "../components/HiringPositionEditor";
 import HiringSettingsWorkspace from "../components/HiringSettingsWorkspace";
 import { getLanguage, t } from "../utils/language";
 import {
@@ -11,10 +11,14 @@ import {
   getHiringApplicantsForPosition,
   getHiringOpenPositions,
   getHiringPositionById,
-  HIRING_EMPLOYMENT_TYPES,
+  closeHiringPosition,
+  pauseHiringPosition,
+  publishHiringPosition,
+  reopenHiringPosition,
   saveHiringPosition,
   validateHiringPositionDraft,
 } from "../utils/hiringCenterRegistry";
+import { getRuntimeHiringQaOptions } from "../utils/hiringFixtureGate";
 import {
   resolveHiringConversation,
   saveHiringConversation,
@@ -26,6 +30,7 @@ import {
   createHiringInterview,
   filterHiringInterviews,
   formatHiringInterviewSummary,
+  getUpcomingHiringInterviews,
   projectHiringInterviewNotification,
   readHiringInterviews,
   updateHiringInterview,
@@ -47,16 +52,20 @@ import {
 function HiringCenter({ setPage }) {
   const language = getLanguage();
   const isSpanish = language === "es";
-  const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "local-business";
-  const accountMode = localStorage.getItem("activeAccountMode") || "business";
+  const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "";
+  const accountMode = localStorage.getItem("activeAccountMode") || "";
+  const qaOptions = getRuntimeHiringQaOptions(localStorage);
+  const hiringOptions = { businessId, activeBusinessId: businessId, accountMode, ...qaOptions };
   const initialHiringSettings = readHiringSettings({ businessId, accountMode });
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [selectedApplicant, setSelectedApplicant] = useState(() =>
-    getHiringApplicantById(localStorage.getItem("selectedHiringApplicantId"))
+    getHiringApplicantById(localStorage.getItem("selectedHiringApplicantId"), hiringOptions)
   );
   const [notice, setNotice] = useState(null);
-  const [isCreatePositionOpen, setIsCreatePositionOpen] = useState(false);
-  const [createPositionError, setCreatePositionError] = useState("");
+  const [positionEditorMode, setPositionEditorMode] = useState(null);
+  const [positionErrors, setPositionErrors] = useState({});
+  const [positionApplicantView, setPositionApplicantView] = useState(false);
+  const [positionConfirmation, setPositionConfirmation] = useState(null);
   const [, setRefreshKey] = useState(0);
   const [hiringSettings, setHiringSettings] = useState(
     () => initialHiringSettings.settings
@@ -65,12 +74,12 @@ function HiringCenter({ setPage }) {
   const [positionDraft, setPositionDraft] = useState(() =>
     applyHiringSettingsToPositionDraft(createBlankPositionDraft(), initialHiringSettings.settings)
   );
-  const [interviews, setInterviews] = useState(() => readHiringInterviews({ businessId }));
+  const [interviews, setInterviews] = useState(() => readHiringInterviews(hiringOptions));
   const [interviewEditor, setInterviewEditor] = useState(null);
   const [interviewErrors, setInterviewErrors] = useState({});
-  const positions = getHiringOpenPositions();
-  const applicants = getHiringApplicants();
-  const teamMembers = listTeamMembers({ businessId });
+  const positions = getHiringOpenPositions(hiringOptions);
+  const applicants = getHiringApplicants(hiringOptions);
+  const teamMembers = listTeamMembers({ ...hiringOptions });
 
   useEffect(() => {
     localStorage.removeItem("selectedHiringApplicantId");
@@ -92,11 +101,23 @@ function HiringCenter({ setPage }) {
   };
 
   const openCreatePosition = () => {
-    setCreatePositionError("");
+    setPositionErrors({});
     setPositionDraft(
       applyHiringSettingsToPositionDraft(createBlankPositionDraft(), hiringSettings)
     );
-    setIsCreatePositionOpen(true);
+    setPositionEditorMode("create");
+  };
+
+  const openEditPosition = (position) => {
+    setPositionErrors({});
+    setPositionDraft({
+      ...position,
+      experience: position.experience || position.experienceRequired || "",
+      skillsNeeded: (position.skillsNeeded || []).join(", "),
+      requirements: (position.requirements || []).join("\n"),
+      schedule: position.schedule || position.scheduleAvailability || "",
+    });
+    setPositionEditorMode("edit");
   };
 
   const persistHiringSettings = (draft) => {
@@ -109,37 +130,34 @@ function HiringCenter({ setPage }) {
     setPositionDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const closeCreatePosition = () => {
-    setIsCreatePositionOpen(false);
-    setCreatePositionError("");
+  const closePositionEditor = () => {
+    setPositionEditorMode(null);
+    setPositionErrors({});
   };
 
   const savePosition = (status) => {
     const nextDraft = { ...positionDraft, status };
-    const validation = validateHiringPositionDraft(nextDraft);
+    const validation = validateHiringPositionDraft(nextDraft, hiringOptions);
     if (!validation.valid) {
-      const labels = {
-        title: "Position title",
-        description: "Short description",
-        serviceArea: "Service area",
-      };
-      setCreatePositionError(
-        `Add ${validation.missingFields.map((field) => labels[field] || field).join(", ")} before saving.`
-      );
+      setPositionErrors(validation.errors || {});
       return;
     }
 
-    const result = saveHiringPosition(nextDraft, { hiringSettings });
+    const result = saveHiringPosition(nextDraft, {
+      ...hiringOptions,
+      businessName: localStorage.getItem("businessName") || "Local Business",
+      hiringSettings,
+    });
     if (!result.ok || !result.position) {
-      setCreatePositionError("Position could not be saved. Check the required fields and try again.");
+      setPositionErrors(result.validation?.errors || { form: "unavailable" });
       return;
     }
 
     setRefreshKey((key) => key + 1);
     setSelectedPosition(result.position);
     setSelectedApplicant(null);
-    setIsCreatePositionOpen(false);
-    setCreatePositionError("");
+    setPositionEditorMode(null);
+    setPositionErrors({});
     setNotice({
       title: status === "Open" ? "Position published" : "Draft saved",
       body:
@@ -153,6 +171,7 @@ function HiringCenter({ setPage }) {
   const openPosition = (position) => {
     setSelectedPosition(position);
     setSelectedApplicant(null);
+    setPositionApplicantView(false);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
@@ -160,6 +179,38 @@ function HiringCenter({ setPage }) {
     setSelectedApplicant(applicant);
     setSelectedPosition(null);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+
+  const runPositionTransition = (action, position) => {
+    const operations = {
+      publish: publishHiringPosition,
+      pause: pauseHiringPosition,
+      reopen: reopenHiringPosition,
+      close: closeHiringPosition,
+    };
+    const result = operations[action]?.(position.id, hiringOptions);
+    if (!result?.ok) {
+      setNotice({ title: t("required", language), body: t("hiringPositionActionFailed", language) });
+      return;
+    }
+    setSelectedPosition(result.position);
+    setRefreshKey((value) => value + 1);
+    setPositionConfirmation(null);
+    setNotice({
+      title: t(`hiringPosition${action[0].toUpperCase()}${action.slice(1)}Notice`, language),
+      body: t("hiringPositionStatusUpdated", language),
+    });
+  };
+
+  const requestPositionTransition = (action, position) => {
+    if (action === "publish" || action === "reopen") {
+      runPositionTransition(action, position);
+      return;
+    }
+    const activeInterviews = getUpcomingHiringInterviews(
+      filterHiringInterviews(interviews, { positionId: position.id })
+    );
+    setPositionConfirmation({ action, position, hasActiveInterviews: activeInterviews.length > 0 });
   };
 
   const ensureHiringConversation = (applicant, position) => {
@@ -188,7 +239,7 @@ function HiringCenter({ setPage }) {
       setNotice({ title: t("businessAccountRequired", language), body: t("hiringInterviewIdentityError", language) });
       return;
     }
-    const position = getHiringPositionById(applicant.positionId);
+    const position = getHiringPositionById(applicant.positionId, hiringOptions);
     if (!position || position.businessId !== businessId || applicant.businessId !== businessId) {
       setNotice({ title: t("required", language), body: t("hiringInterviewIdentityError", language) });
       return;
@@ -197,7 +248,7 @@ function HiringCenter({ setPage }) {
     setInterviewEditor({ applicant, position, interview });
   };
 
-  const refreshInterviews = () => setInterviews(readHiringInterviews({ businessId }));
+  const refreshInterviews = () => setInterviews(readHiringInterviews(hiringOptions));
 
   const syncInterviewArtifacts = (interview, notify = true) => {
     upsertHiringInterviewMessage(interview);
@@ -282,7 +333,7 @@ function HiringCenter({ setPage }) {
   };
 
   const createMemberFromApplicant = (applicant, interview) => {
-    const position = getHiringPositionById(applicant.positionId);
+    const position = getHiringPositionById(applicant.positionId, hiringOptions);
     const result = createTeamMember(
       {
         displayName: applicant.name,
@@ -323,8 +374,55 @@ function HiringCenter({ setPage }) {
     setPage("teamMembers");
   };
 
+  if (selectedPosition && positionApplicantView) {
+    const positionApplicants = getHiringApplicantsForPosition(selectedPosition.id, hiringOptions);
+    return (
+      <HiringPageShell
+        setPage={setPage}
+        backLabel={t("hiringPositionDetails", language)}
+        onBack={() => setPositionApplicantView(false)}
+        eyebrow={t("hiringCenter", language)}
+        title={t("hiringPositionApplicantsForPosition", language)}
+        subtitle={selectedPosition.title}
+      >
+        <section style={section} aria-live="polite">
+          {positionApplicants.length === 0 ? (
+            <div style={emptyState}><strong>{t("hiringPositionNoApplicants", language)}</strong></div>
+          ) : (
+            <div style={cardGrid}>
+              {positionApplicants.map((applicant) => {
+                const applicantInterview = filterHiringInterviews(interviews, {
+                  applicantId: applicant.id,
+                  positionId: selectedPosition.id,
+                })[0];
+                return (
+                  <article key={applicant.id} className="meetro-visual-surface" style={recordCard}>
+                    <div style={cardTop}>
+                      <h2 style={cardTitle}>{applicant.name}</h2>
+                      <span style={applicantBadge}>{applicant.status}</span>
+                    </div>
+                    <p style={bodyText}>{applicant.experienceSummary}</p>
+                    <dl style={detailsGrid}>
+                      <Detail label={t("applicationDate", language)} value={applicant.applicationDate || t("notProvided", language)} />
+                      <Detail label={t("interviewDetails", language)} value={applicantInterview ? formatHiringInterviewSummary(applicantInterview) : t("noInterviewsScheduled", language)} />
+                    </dl>
+                    <div style={actionRow}>
+                      <button type="button" style={previewAction} onClick={() => openApplicant(applicant)}>{t("viewApplicant", language)}</button>
+                      <button type="button" style={previewAction} onClick={() => messageApplicant(applicant)}>{t("message", language)}</button>
+                      <button type="button" style={previewAction} onClick={() => openInterview(applicant, applicantInterview)}>{t("scheduleInterview", language)}</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </HiringPageShell>
+    );
+  }
+
   if (selectedPosition) {
-    const positionApplicants = getHiringApplicantsForPosition(selectedPosition.id);
+    const positionApplicants = getHiringApplicantsForPosition(selectedPosition.id, hiringOptions);
 
     return (
       <HiringPageShell
@@ -382,24 +480,56 @@ function HiringCenter({ setPage }) {
           </div>
 
           <div style={actionRow}>
-            {["Edit Position", "Pause Position", "Close Position", "View Applicants"].map((action) => (
-              <button
-                key={action}
-                type="button"
-                style={previewAction}
-                onClick={() =>
-                  openPreview(
-                    `${action} is coming soon`,
-                    "Position management actions are preview-only in this TestFlight foundation."
-                  )
-                }
-              >
-                {action} · {copy.preview}
+            {selectedPosition.status !== "Closed" && (
+              <button type="button" style={previewAction} onClick={() => openEditPosition(selectedPosition)}>
+                {t("hiringPositionEdit", language)}
               </button>
-            ))}
+            )}
+            {selectedPosition.status === "Draft" && (
+              <button type="button" className="meetro-visual-primary-button" style={interviewPrimaryAction} onClick={() => requestPositionTransition("publish", selectedPosition)}>
+                {t("hiringPositionPublish", language)}
+              </button>
+            )}
+            {selectedPosition.status === "Open" && (
+              <button type="button" style={previewAction} onClick={() => requestPositionTransition("pause", selectedPosition)}>
+                {t("hiringPositionPause", language)}
+              </button>
+            )}
+            {selectedPosition.status === "Paused" && (
+              <button type="button" className="meetro-visual-primary-button" style={interviewPrimaryAction} onClick={() => requestPositionTransition("reopen", selectedPosition)}>
+                {t("hiringPositionReopen", language)}
+              </button>
+            )}
+            {["Open", "Paused"].includes(selectedPosition.status) && (
+              <button type="button" style={{ ...previewAction, color: "#9f2d24", borderColor: "#d7aaa4" }} onClick={() => requestPositionTransition("close", selectedPosition)}>
+                {t("hiringPositionClose", language)}
+              </button>
+            )}
+            <button type="button" style={previewAction} onClick={() => setPositionApplicantView(true)}>
+              {t("hiringPositionViewApplicants", language)}
+            </button>
           </div>
         </article>
 
+        {positionEditorMode && (
+          <HiringPositionEditor
+            mode={positionEditorMode}
+            draft={positionDraft}
+            errors={positionErrors}
+            language={language}
+            onChange={updatePositionDraft}
+            onSaveDraft={() => savePosition("Draft")}
+            onPublish={() => savePosition("Open")}
+            onSaveChanges={() => savePosition(selectedPosition.status)}
+            onClose={closePositionEditor}
+          />
+        )}
+        <PositionConfirmation
+          confirmation={positionConfirmation}
+          language={language}
+          onCancel={() => setPositionConfirmation(null)}
+          onConfirm={() => runPositionTransition(positionConfirmation.action, positionConfirmation.position)}
+        />
         <PreviewSheet notice={notice} onClose={() => setNotice(null)} />
       </HiringPageShell>
     );
@@ -411,7 +541,7 @@ function HiringCenter({ setPage }) {
     const latestInterview = activeInterview || applicantInterviews[0] || null;
     const applicationGuidance = projectSettingsIntoApplicationReview(
       hiringSettings,
-      getHiringPositionById(selectedApplicant.positionId) || {},
+      getHiringPositionById(selectedApplicant.positionId, hiringOptions) || {},
       selectedApplicant
     );
     const applicationSummary = getHiringSettingsSummary({
@@ -561,27 +691,13 @@ function HiringCenter({ setPage }) {
         onBack={() => setPage("businessCommandCenter")}
       />
 
-      <div className="meetro-visual-surface" style={previewCard}>
-        <span style={previewIcon}>
-          <MeetroIcon name="hiringCenter" size={20} decorative />
-        </span>
-        <div>
-          <strong>{copy.preview}</strong>
-          <span>
-            {isSpanish
-              ? "Esta fundación organiza posiciones, solicitantes y entrevistas sin cambiar flujos activos."
-              : "This foundation organizes positions, applicants, and interviews without changing active job workflows."}
-          </span>
-        </div>
-      </div>
-
       <section style={section}>
         <SectionHeading
           title={isSpanish ? "Posiciones abiertas" : "Open Positions"}
           description={
             isSpanish
-              ? "Roles locales que el negocio podria publicar o administrar."
-              : "Local roles the business could publish or manage."
+              ? "Crea y administra puestos para tu negocio."
+              : "Create and manage positions for your business."
           }
         />
         <button
@@ -589,10 +705,12 @@ function HiringCenter({ setPage }) {
           style={secondaryWideButton}
           onClick={openCreatePosition}
         >
-          Create Position · {copy.preview}
+          {t("hiringPositionCreate", language)}
         </button>
 
-        <div style={cardGrid}>
+        {positions.length === 0 ? (
+          <div style={emptyState}><strong>{t("hiringPositionNoPositions", language)}</strong></div>
+        ) : <div style={cardGrid}>
           {positions.map((position) => (
             <article
               key={position.id}
@@ -633,7 +751,7 @@ function HiringCenter({ setPage }) {
               </button>
             </article>
           ))}
-        </div>
+        </div>}
       </section>
 
       <section style={section}>
@@ -641,12 +759,14 @@ function HiringCenter({ setPage }) {
           title={isSpanish ? "Solicitantes" : "Applicants"}
           description={
             isSpanish
-              ? "Vista previa de personas que aplicaron a roles abiertos."
-              : "Preview of people who applied to open roles."
+              ? "Personas que solicitaron puestos de tu negocio."
+              : "People who applied to your business positions."
           }
         />
 
-        <div style={cardGrid}>
+        {applicants.length === 0 ? (
+          <div style={emptyState}><strong>{t("hiringPositionNoApplicants", language)}</strong></div>
+        ) : <div style={cardGrid}>
           {applicants.map((applicant) => (
             <article
               key={applicant.id}
@@ -701,11 +821,11 @@ function HiringCenter({ setPage }) {
               </div>
             </article>
           ))}
-        </div>
+        </div>}
       </section>
 
       <section style={section}>
-        <SectionHeading title={t("upcomingInterviews", language)} description={t("interviewDetails", language)} />
+        <SectionHeading title={t("interviews", language)} description={t("interviewDetails", language)} />
         {interviews.length === 0 && <div style={emptyState}><strong>{t("noInterviewsScheduled", language)}</strong></div>}
         <div style={cardGrid}>
           {interviews.map((interview) => (
@@ -713,7 +833,7 @@ function HiringCenter({ setPage }) {
               key={interview.id}
               style={{ ...recordCard, ...interactiveCard }}
               onClick={() => {
-                const applicant = getHiringApplicantById(interview.applicantId);
+                const applicant = getHiringApplicantById(interview.applicantId, hiringOptions);
                 if (applicant) openInterview(applicant, interview);
               }}
             >
@@ -763,17 +883,19 @@ function HiringCenter({ setPage }) {
         </button>
       </section>
 
-      <CreatePositionSheet
-        isOpen={isCreatePositionOpen}
+      {positionEditorMode && (
+      <HiringPositionEditor
+        mode={positionEditorMode}
         draft={positionDraft}
-        error={createPositionError}
+        errors={positionErrors}
         onChange={updatePositionDraft}
-        onCancel={closeCreatePosition}
+        onClose={closePositionEditor}
         onSaveDraft={() => savePosition("Draft")}
         onPublish={() => savePosition("Open")}
-        applicationRequirements={positionDraft.applicationRequirements}
+        onSaveChanges={() => savePosition(positionDraft.status)}
         language={language}
       />
+      )}
       {isHiringSettingsOpen && (
         <HiringSettingsWorkspace
           settings={hiringSettings}
@@ -803,175 +925,20 @@ function createBlankPositionDraft() {
   return {
     title: "",
     description: "",
-    payRange: "",
+    payMin: "",
+    payMax: "",
+    payUnit: "hour",
     employmentType: "Contract",
-    experienceRequired: "",
+    experience: "",
     serviceArea: "",
     skillsNeeded: "",
-    scheduleAvailability: "",
+    requirements: "",
+    schedule: "",
     contactPreference: "",
+    vehicleRequired: false,
+    backgroundCheckRequired: false,
     status: "Draft",
   };
-}
-
-function CreatePositionSheet({
-  isOpen,
-  draft,
-  error,
-  onChange,
-  onCancel,
-  onSaveDraft,
-  onPublish,
-  applicationRequirements,
-  language,
-}) {
-  if (!isOpen) return null;
-
-  return (
-    <div style={sheetOverlay} onClick={onCancel}>
-      <form
-        style={formSheet}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={(event) => {
-          event.preventDefault();
-          onPublish();
-        }}
-      >
-        <div style={sheetHandle}></div>
-        <div>
-          <p style={fieldLabel}>Hiring Center</p>
-          <h2 style={sheetTitle}>Create Position</h2>
-          <p style={sheetBody}>
-            Create a local hiring role for your business. Required fields are title,
-            description, and service area.
-          </p>
-        </div>
-
-        {error && <div style={validationNotice}>{error}</div>}
-
-        <label style={formField}>
-          <span>Position title</span>
-          <input
-            style={input}
-            value={draft.title}
-            onChange={(event) => onChange("title", event.target.value)}
-            placeholder="Field Handyman Helper"
-          />
-        </label>
-
-        <div style={notesBox}>
-          <p style={fieldLabel}>{t("hiringSettingsApplicationRequirements", language)}</p>
-          <p style={sheetBody}>{t("hiringSettingsPositionDefaultsHelp", language)}</p>
-          <strong>
-            {Object.entries(applicationRequirements || {}).filter(
-              ([key, value]) => key !== "customQuestions" && value === true
-            ).length} {t("hiringSettingsRequired", language).toLowerCase()}
-          </strong>
-        </div>
-
-        <label style={formField}>
-          <span>Short description</span>
-          <textarea
-            style={textarea}
-            value={draft.description}
-            onChange={(event) => onChange("description", event.target.value)}
-            placeholder="Describe the role and what this person will help with."
-          />
-        </label>
-
-        <div style={formGrid}>
-          <label style={formField}>
-            <span>Pay range</span>
-            <input
-              style={input}
-              value={draft.payRange}
-              onChange={(event) => onChange("payRange", event.target.value)}
-              placeholder="$20-$28/hr"
-            />
-          </label>
-
-          <label style={formField}>
-            <span>Employment type</span>
-            <select
-              style={input}
-              value={draft.employmentType}
-              onChange={(event) => onChange("employmentType", event.target.value)}
-            >
-              {HIRING_EMPLOYMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <label style={formField}>
-          <span>Experience requirement</span>
-          <input
-            style={input}
-            value={draft.experienceRequired}
-            onChange={(event) => onChange("experienceRequired", event.target.value)}
-            placeholder="1+ year home repair or maintenance experience"
-          />
-        </label>
-
-        <label style={formField}>
-          <span>Service area</span>
-          <input
-            style={input}
-            value={draft.serviceArea}
-            onChange={(event) => onChange("serviceArea", event.target.value)}
-            placeholder="Lee County, FL"
-          />
-        </label>
-
-        <label style={formField}>
-          <span>Skills needed</span>
-          <textarea
-            style={textareaSmall}
-            value={draft.skillsNeeded}
-            onChange={(event) => onChange("skillsNeeded", event.target.value)}
-            placeholder="Basic tools, reliable transportation, customer-friendly communication"
-          />
-        </label>
-
-        <div style={formGrid}>
-          <label style={formField}>
-            <span>Schedule / availability</span>
-            <input
-              style={input}
-              value={draft.scheduleAvailability}
-              onChange={(event) => onChange("scheduleAvailability", event.target.value)}
-              placeholder="Weekdays, occasional weekends"
-            />
-          </label>
-
-          <label style={formField}>
-            <span>Contact preference</span>
-            <input
-              style={input}
-              value={draft.contactPreference}
-              onChange={(event) => onChange("contactPreference", event.target.value)}
-              placeholder="Text, phone, or email"
-            />
-          </label>
-        </div>
-
-        <div style={sheetActionGrid}>
-          <button type="button" style={secondarySheetButton} onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" style={secondarySheetButton} onClick={onSaveDraft}>
-            Save Draft
-          </button>
-          <button type="submit" style={primarySheetButton}>
-            Publish Position
-          </button>
-        </div>
-      </form>
-    </div>
-  );
 }
 
 function HiringPageShell({
@@ -994,6 +961,44 @@ function HiringPageShell({
       />
       {children}
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
+    </div>
+  );
+}
+
+function PositionConfirmation({ confirmation, language, onCancel, onConfirm }) {
+  const titleRef = useRef(null);
+  useEffect(() => {
+    if (!confirmation) return undefined;
+    titleRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmation, onCancel]);
+  if (!confirmation) return null;
+  const isClose = confirmation.action === "close";
+  return (
+    <div style={sheetOverlay} role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <section style={sheet} role="alertdialog" aria-modal="true" aria-labelledby="position-confirmation-title">
+        <h2 id="position-confirmation-title" style={sheetTitle} tabIndex="-1" ref={titleRef}>
+          {t(isClose ? "hiringPositionClose" : "hiringPositionPause", language)}
+        </h2>
+        <p style={sheetBody}>
+          {t(isClose ? "hiringPositionCloseWarning" : "hiringPositionPauseWarning", language)}
+        </p>
+        {confirmation.hasActiveInterviews && (
+          <p style={validationNotice}>{t("hiringPositionInterviewWarning", language)}</p>
+        )}
+        <div style={sheetActionGrid}>
+          <button type="button" style={secondarySheetButton} onClick={onCancel}>{t("cancel", language)}</button>
+          <button type="button" style={{ ...primarySheetButton, ...(isClose ? { background: "#8f2f28" } : {}) }} onClick={onConfirm}>
+            {t("confirm", language)}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1100,30 +1105,6 @@ const subtitle = {
   fontSize: "15px",
   lineHeight: 1.45,
   fontWeight: "700",
-};
-
-const previewCard = {
-  display: "grid",
-  gridTemplateColumns: "38px 1fr",
-  gap: "10px",
-  padding: "13px",
-  borderRadius: "16px",
-  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
-  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
-  color: "#334155",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  marginBottom: "18px",
-};
-
-const previewIcon = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "14px",
-  display: "grid",
-  placeItems: "center",
-  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
-  color: "var(--meetro-color-forest, #1f4d34)",
 };
 
 const section = {
@@ -1399,13 +1380,6 @@ const sheet = {
   boxShadow: "0 18px 50px rgba(15,23,42,0.25)",
 };
 
-const formSheet = {
-  ...sheet,
-  maxHeight: "calc(100dvh - 120px)",
-  overflowY: "auto",
-  paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
-};
-
 const sheetHandle = {
   width: "48px",
   height: "5px",
@@ -1450,47 +1424,6 @@ const validationNotice = {
   fontSize: "13px",
   fontWeight: "850",
   lineHeight: 1.4,
-};
-
-const formField = {
-  display: "grid",
-  gap: "6px",
-  color: "#334155",
-  fontSize: "13px",
-  fontWeight: "900",
-};
-
-const input = {
-  width: "100%",
-  maxWidth: "100%",
-  minHeight: "46px",
-  padding: "0 12px",
-  borderRadius: "14px",
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontSize: "15px",
-  fontWeight: "700",
-  boxSizing: "border-box",
-};
-
-const textarea = {
-  ...input,
-  minHeight: "96px",
-  padding: "12px",
-  resize: "vertical",
-  lineHeight: 1.45,
-};
-
-const textareaSmall = {
-  ...textarea,
-  minHeight: "76px",
-};
-
-const formGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
-  gap: "10px",
 };
 
 const sheetActionGrid = {

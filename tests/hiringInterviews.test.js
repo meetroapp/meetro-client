@@ -5,7 +5,11 @@ import {
   completeHiringInterview,
   createHiringInterview,
   filterHiringInterviews,
+  formatHiringInterviewSummary,
+  getUpcomingHiringInterviews,
+  hasValidHiringInterviewSchedule,
   getHiringInterviewStorageKey,
+  normalizeHiringInterview,
   projectHiringInterviewNotification,
   readHiringInterviews,
   updateHiringInterview,
@@ -108,10 +112,36 @@ test("helpers do not mutate caller input", () => {
 });
 
 test("legacy fixtures remain readable and storage failures fail safely", () => {
-  const first = readHiringInterviews({ businessId: "local-business", storage: storage() });
-  const second = readHiringInterviews({ businessId: "local-business", storage: storage() });
+  const qa = { businessId: "local-business", storage: storage(), environment: "development", qaMode: true };
+  const first = readHiringInterviews(qa);
+  const second = readHiringInterviews(qa);
   assert.equal(first.some((record) => record.id === "interview-maya-torres"), true);
   assert.deepEqual(second, first);
   const unavailable = { getItem() { throw new Error("unavailable"); }, setItem() { throw new Error("unavailable"); } };
   assert.deepEqual(readHiringInterviews({ businessId: "business-unknown", storage: unavailable }), []);
+});
+
+test("incomplete scheduled records require details and never invent date or time", () => {
+  const legacy = normalizeHiringInterview({
+    id: "legacy-incomplete",
+    businessId: "business-1",
+    positionId: "position-1",
+    applicantId: "applicant-1",
+    status: "scheduled",
+    date: "",
+    startTime: "",
+  }, { now: "2026-07-13T12:00:00.000Z" });
+  assert.equal(legacy.status, "scheduling_required");
+  assert.equal(hasValidHiringInterviewSchedule(legacy), false);
+  assert.equal(formatHiringInterviewSummary(legacy), "Scheduling details required");
+  assert.deepEqual(getUpcomingHiringInterviews([legacy]), []);
+});
+
+test("valid scheduled interviews remain upcoming while completed and cancelled history stays readable", () => {
+  const scheduled = normalizeHiringInterview({ ...validDraft, id: "scheduled-1", status: "scheduled" });
+  const completed = normalizeHiringInterview({ ...validDraft, id: "completed-1", status: "completed" });
+  const cancelled = normalizeHiringInterview({ ...validDraft, id: "cancelled-1", status: "cancelled" });
+  assert.deepEqual(getUpcomingHiringInterviews([scheduled, completed, cancelled]).map((record) => record.id), ["scheduled-1"]);
+  assert.notEqual(formatHiringInterviewSummary(completed), "Scheduling details required");
+  assert.notEqual(formatHiringInterviewSummary(cancelled), "Scheduling details required");
 });

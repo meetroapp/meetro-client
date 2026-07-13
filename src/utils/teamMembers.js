@@ -1,4 +1,5 @@
 import { HIRING_TEAM_MEMBERS } from "../data/hiringData.js";
+import { isHiringQaFixtureEnabled } from "./hiringFixtureGate.js";
 
 const STORE_PREFIX = "meetroTeamMembers";
 
@@ -121,6 +122,7 @@ export function normalizeTeamMember(record = {}, options = {}) {
     sourceApplicantId: text(record.sourceApplicantId || record.applicantId),
     sourceInterviewId: text(record.sourceInterviewId || record.interviewId),
     hiringDecision: text(record.hiringDecision || record.hiring_decision),
+    source: text(record.source),
     createdAt: text(record.createdAt || record.created_at) || now,
     updatedAt: text(record.updatedAt || record.updated_at) || now,
   };
@@ -128,7 +130,7 @@ export function normalizeTeamMember(record = {}, options = {}) {
 
 function fixtureMembersForBusiness(businessId) {
   return HIRING_TEAM_MEMBERS
-    .map((record) => normalizeTeamMember(record))
+    .map((record) => normalizeTeamMember({ ...record, source: "qa_fixture" }))
     .filter((record) => record.businessId === businessId);
 }
 
@@ -141,9 +143,11 @@ export function listTeamMembers(options = {}) {
     .map((record) => normalizeTeamMember(record))
     .filter((record) => record.id && record.businessId === businessId);
   const byId = new Map(stored.map((record) => [record.id, record]));
-  fixtureMembersForBusiness(businessId).forEach((record) => {
-    if (record.id && !byId.has(record.id)) byId.set(record.id, record);
-  });
+  if (isHiringQaFixtureEnabled({ ...options, businessId })) {
+    fixtureMembersForBusiness(businessId).forEach((record) => {
+      if (record.id && !byId.has(record.id)) byId.set(record.id, record);
+    });
+  }
   const status = text(options.status).toLowerCase();
   return [...byId.values()]
     .filter((record) => !status || record.status === status)
@@ -206,7 +210,7 @@ function persist(records, options = {}) {
   const businessId = getActiveTeamBusinessId(options);
   const safeRecords = records
     .map((record) => normalizeTeamMember(record))
-    .filter((record) => record.id && record.businessId === businessId);
+    .filter((record) => record.id && record.businessId === businessId && record.source !== "qa_fixture");
   writeArray(storage, getTeamMemberStorageKey({ ...options, businessId }), safeRecords);
   return safeRecords.map(clone);
 }

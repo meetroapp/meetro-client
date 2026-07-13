@@ -18,6 +18,7 @@ import {
   updateHiringSettingsSection,
 } from "../src/utils/hiringSettings.js";
 import {
+  closeHiringPosition,
   getStoredHiringPositions,
   saveHiringPosition,
 } from "../src/utils/hiringCenterRegistry.js";
@@ -179,7 +180,8 @@ test("position projection inherits defaults but preserves overrides and closed r
 });
 
 test("saved positions inherit defaults while explicit overrides remain stronger", () => {
-  const storage = memoryStorage();
+  const storage = memoryStorage({ activeAccountMode: "business", businessId: "business-1" });
+  const ownership = { storage, businessId: "business-1", activeBusinessId: "business-1", accountMode: "business", employmentType: "Contract" };
   const settings = getDefaultHiringSettings("business-1");
   settings.applicationRequirements.resumeRequired = true;
   const inherited = saveHiringPosition({
@@ -187,24 +189,27 @@ test("saved positions inherit defaults while explicit overrides remain stronger"
     title: "Field Assistant",
     description: "Support field work.",
     serviceArea: "Lee County",
+    employmentType: "Contract",
     status: "Draft",
-  }, { storage, hiringSettings: settings, createdAt: "2026-07-13T15:00:00.000Z" });
+  }, { ...ownership, hiringSettings: settings, createdAt: "2026-07-13T15:00:00.000Z" });
   const override = { emailRequired: true, phoneRequired: false, customQuestions: [] };
   const explicit = saveHiringPosition({
     id: "position-explicit",
     title: "Office Assistant",
     description: "Support office work.",
     serviceArea: "Lee County",
+    employmentType: "Contract",
     status: "Open",
     applicationRequirements: override,
-  }, { storage, hiringSettings: settings, createdAt: "2026-07-13T15:00:00.000Z" });
+  }, { ...ownership, hiringSettings: settings, createdAt: "2026-07-13T15:00:00.000Z" });
   const edited = saveHiringPosition({
     id: "position-explicit",
     title: "Office Assistant",
     description: "Updated office support.",
     serviceArea: "Lee County",
+    employmentType: "Contract",
     status: "Open",
-  }, { storage, hiringSettings: settings, updatedAt: "2026-07-14T15:00:00.000Z" });
+  }, { ...ownership, hiringSettings: settings, updatedAt: "2026-07-14T15:00:00.000Z" });
 
   assert.equal(inherited.position.applicationRequirements.resumeRequired, true);
   assert.equal(explicit.position.applicationRequirements.phoneRequired, false);
@@ -213,22 +218,26 @@ test("saved positions inherit defaults while explicit overrides remain stronger"
 });
 
 test("closed stored positions are never silently changed", () => {
-  const storage = memoryStorage();
+  const storage = memoryStorage({ activeAccountMode: "business", businessId: "business-1" });
+  const ownership = { storage, businessId: "business-1", activeBusinessId: "business-1", accountMode: "business" };
   const original = saveHiringPosition({
     id: "position-closed",
     title: "Closed Role",
     description: "Historical role.",
     serviceArea: "Lee County",
-    status: "Closed",
+    employmentType: "Contract",
+    status: "Open",
     applicationRequirements: { emailRequired: true, phoneRequired: false },
-  }, { storage, createdAt: "2026-07-13T15:00:00.000Z" });
+  }, { ...ownership, createdAt: "2026-07-13T15:00:00.000Z" });
+  closeHiringPosition("position-closed", ownership);
   const attempted = saveHiringPosition({
     id: "position-closed",
     title: "Changed Role",
     description: "Should not save.",
     serviceArea: "Elsewhere",
+    employmentType: "Contract",
     status: "Open",
-  }, { storage, hiringSettings: getDefaultHiringSettings("business-1") });
+  }, { ...ownership, hiringSettings: getDefaultHiringSettings("business-1") });
 
   assert.equal(original.ok, true);
   assert.equal(attempted.ok, false);

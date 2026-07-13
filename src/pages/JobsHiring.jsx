@@ -9,6 +9,10 @@ import { saveHiringConversation } from "../utils/hiringConversations";
 import { getLocalizedHiringJobDisplay } from "../utils/hiringDisplayTranslations";
 import { getLanguage, t } from "../utils/language";
 import { createNotification } from "../utils/meetroNotifications";
+import {
+  getRuntimeHiringQaOptions,
+  HIRING_QA_BUSINESS_ID,
+} from "../utils/hiringFixtureGate";
 
 const distanceOptions = ["Any distance", "10 miles", "15 miles", "25 miles", "50 miles"];
 const employmentOptions = ["Any type", "Full Time", "Part Time", "Contract", "Seasonal"];
@@ -32,7 +36,12 @@ function JobsHiring({ setPage, language }) {
     notes: "",
   });
 
-  const jobs = getHiringLocalJobOpenings();
+  const qaOptions = getRuntimeHiringQaOptions(localStorage);
+  const jobs = getHiringLocalJobOpenings({
+    ...qaOptions,
+    businessId: HIRING_QA_BUSINESS_ID,
+    publicProjection: true,
+  });
   const categories = getHiringJobCategories();
   const label = (key) => t(key, activeLanguage);
   const categoryLabel = (category) =>
@@ -96,11 +105,6 @@ function JobsHiring({ setPage, language }) {
 
   const updateApplicationDraft = (field, value) => {
     setApplicationDraft((current) => ({ ...current, [field]: value }));
-  };
-
-  const openApplicationSheet = (job) => {
-    setApplicationJob(job);
-    setNotice(null);
   };
 
   const closeApplicationSheet = () => {

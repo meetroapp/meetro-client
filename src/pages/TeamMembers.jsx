@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import MeetroIcon from "../components/MeetroIcon";
@@ -16,6 +16,7 @@ import {
   reactivateTeamMember,
   updateTeamMember,
 } from "../utils/teamMembers";
+import { getRuntimeHiringQaOptions } from "../utils/hiringFixtureGate";
 
 function emptyDraft() {
   return {
@@ -36,7 +37,8 @@ function TeamMembers({ setPage }) {
   const language = getLanguage();
   const businessId = getActiveTeamBusinessId();
   const accountMode = localStorage.getItem("activeAccountMode") || "business";
-  const [members, setMembers] = useState(() => listTeamMembers({ businessId }));
+  const qaOptions = getRuntimeHiringQaOptions(localStorage);
+  const [members, setMembers] = useState(() => listTeamMembers({ businessId, ...qaOptions }));
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedMemberId, setSelectedMemberId] = useState(() => {
     const memberId = localStorage.getItem("selectedTeamMemberId") || "";
@@ -45,17 +47,14 @@ function TeamMembers({ setPage }) {
   });
   const [editor, setEditor] = useState(null);
   const [editorErrors, setEditorErrors] = useState({});
-  const positions = useMemo(
-    () => getHiringOpenPositions().filter((position) => position.businessId === businessId),
-    [businessId]
-  );
+  const positions = getHiringOpenPositions({ businessId, ...qaOptions });
   const selectedMember = members.find((member) => member.id === selectedMemberId) || null;
   const visibleMembers = members.filter(
     (member) => statusFilter === "all" || member.status === statusFilter
   );
 
   function refreshMembers(nextSelectedId = selectedMemberId) {
-    setMembers(listTeamMembers({ businessId }));
+    setMembers(listTeamMembers({ businessId, ...qaOptions }));
     setSelectedMemberId(nextSelectedId);
   }
 

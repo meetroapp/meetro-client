@@ -6,6 +6,7 @@ import { t } from "../src/utils/language.js";
 
 const centerSource = readFileSync("src/pages/HiringCenter.jsx", "utf8");
 const workspaceSource = readFileSync("src/components/HiringSettingsWorkspace.jsx", "utf8");
+const positionEditorSource = readFileSync("src/components/HiringPositionEditor.jsx", "utf8");
 const settingsSource = readFileSync("src/utils/hiringSettings.js", "utf8");
 const cssSource = readFileSync("src/index.css", "utf8");
 
@@ -82,7 +83,7 @@ test("only grounded hiring notification events are configurable", () => {
 });
 
 test("position and application projections remain guidance-only", () => {
-  assert.match(centerSource, /hiringSettingsPositionDefaultsHelp/);
+  assert.match(positionEditorSource, /hiringSettingsPositionDefaultsHelp/);
   assert.match(centerSource, /hiringSettingsReviewGuidance/);
   assert.match(settingsSource, /historicalApplicationUnaffected: true/);
   assert.match(settingsSource, /automaticDecision: null/);

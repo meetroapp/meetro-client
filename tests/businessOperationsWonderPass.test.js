@@ -140,7 +140,8 @@ test("Business logic utilities preserve pricing, invoice, hiring, and availabili
       title: "Apprentice",
       description: "Help with field work",
       serviceArea: "Cape Coral",
-    }).valid,
+      employmentType: "Contract",
+    }, { requireOwnership: false }).valid,
     true
   );
   assert.equal(

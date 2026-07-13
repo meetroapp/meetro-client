@@ -7,7 +7,11 @@ import {
 } from "../src/utils/hiringDisplayTranslations.js";
 
 test("seeded Jobs & Hiring content can display localized text without changing originals", () => {
-  const fieldHelper = getHiringLocalJobOpenings().find(
+  const fieldHelper = getHiringLocalJobOpenings({
+    businessId: "local-business",
+    environment: "development",
+    qaMode: true,
+  }).find(
     (job) => job.id === "field-handyman-helper"
   );
 

@@ -1,9 +1,11 @@
 import {
-  HIRING_APPLICANTS,
   HIRING_INTERVIEWS,
-  HIRING_POSITIONS,
 } from "../data/hiringData.js";
-import { HIRING_POSITIONS_STORAGE_KEY } from "./hiringCenterRegistry.js";
+import {
+  getHiringApplicantById,
+  getHiringPositionById,
+} from "./hiringCenterRegistry.js";
+import { isHiringQaFixtureEnabled } from "./hiringFixtureGate.js";
 
 const STORE_PREFIX = "meetroHiringInterviews";
 export const HIRING_INTERVIEW_STATUSES = Object.freeze([
@@ -12,6 +14,7 @@ export const HIRING_INTERVIEW_STATUSES = Object.freeze([
   "completed",
   "cancelled",
   "no_show",
+  "scheduling_required",
 ]);
 export const HIRING_INTERVIEW_TYPES = Object.freeze(["in_person", "phone", "video"]);
 
@@ -69,8 +72,17 @@ function normalizeStatus(value) {
   return HIRING_INTERVIEW_STATUSES.includes(status) ? status : "scheduled";
 }
 
+function hasValidSchedule(record = {}) {
+  return validDate(record.date || record.interviewDate) &&
+    validTime(record.startTime || record.start_time);
+}
+
 export function normalizeHiringInterview(record = {}, options = {}) {
   const now = options.now || new Date().toISOString();
+  const normalizedStatus = normalizeStatus(record.status);
+  const status = ["scheduled", "rescheduled"].includes(normalizedStatus) && !hasValidSchedule(record)
+    ? "scheduling_required"
+    : normalizedStatus;
   return {
     ...record,
     id: text(record.id),
@@ -91,7 +103,7 @@ export function normalizeHiringInterview(record = {}, options = {}) {
     location: text(record.location),
     meetingUrl: text(record.meetingUrl || record.meeting_url),
     notes: text(record.notes),
-    status: normalizeStatus(record.status),
+    status,
     createdAt: text(record.createdAt || record.created_at) || now,
     updatedAt: text(record.updatedAt || record.updated_at) || now,
     createdBy: text(record.createdBy || record.created_by),
@@ -102,18 +114,14 @@ export function normalizeHiringInterview(record = {}, options = {}) {
   };
 }
 
-function getPositions(storage) {
-  return [...HIRING_POSITIONS, ...readArray(storage, HIRING_POSITIONS_STORAGE_KEY)];
-}
-
-function resolvePosition(positionId, storage, supplied) {
+function resolvePosition(positionId, options, supplied) {
   if (supplied && text(supplied.id) === text(positionId)) return supplied;
-  return getPositions(storage).find((position) => text(position.id) === text(positionId)) || null;
+  return getHiringPositionById(positionId, options);
 }
 
-function resolveApplicant(applicantId, supplied) {
+function resolveApplicant(applicantId, options, supplied) {
   if (supplied && text(supplied.id) === text(applicantId)) return supplied;
-  return HIRING_APPLICANTS.find((applicant) => text(applicant.id) === text(applicantId)) || null;
+  return getHiringApplicantById(applicantId, options);
 }
 
 function validDate(value) {
@@ -146,8 +154,8 @@ export function validateHiringInterviewDraft(draft = {}, options = {}) {
     storedAccountMode = "";
   }
   const accountMode = text(options.accountMode || storedAccountMode || "business");
-  const position = resolvePosition(draft.positionId, storage, options.position);
-  const applicant = resolveApplicant(draft.applicantId, options.applicant);
+  const position = resolvePosition(draft.positionId, options, options.position);
+  const applicant = resolveApplicant(draft.applicantId, options, options.applicant);
 
   if (accountMode !== "business") errors.accountMode = "business_account_required";
   if (!text(draft.businessId)) errors.businessId = "required";
@@ -175,7 +183,10 @@ export function validateHiringInterviewDraft(draft = {}, options = {}) {
 function fixtureInterviewsForBusiness(businessId) {
   return HIRING_INTERVIEWS
     .filter((record) => text(record.businessId) === businessId)
-    .map((record) => normalizeHiringInterview(record));
+    .map((record) => normalizeHiringInterview(
+      { ...record, source: "qa_fixture" },
+      { now: record.updatedAt || record.createdAt || "1970-01-01T00:00:00.000Z" }
+    ));
 }
 
 export function readHiringInterviews(options = {}) {
@@ -186,9 +197,11 @@ export function readHiringInterviews(options = {}) {
     .map((record) => normalizeHiringInterview(record))
     .filter((record) => record.businessId === businessId);
   const byId = new Map(stored.map((record) => [record.id, record]));
-  fixtureInterviewsForBusiness(businessId).forEach((record) => {
-    if (!byId.has(record.id)) byId.set(record.id, record);
-  });
+  if (isHiringQaFixtureEnabled({ ...options, businessId })) {
+    fixtureInterviewsForBusiness(businessId).forEach((record) => {
+      if (!byId.has(record.id)) byId.set(record.id, record);
+    });
+  }
   return [...byId.values()].map(clone);
 }
 
@@ -196,7 +209,7 @@ function writeInterviews(records, options = {}) {
   const storage = safeStorage(options);
   const businessId = getActiveHiringBusinessId(options);
   const safeRecords = records
-    .filter((record) => record.businessId === businessId)
+    .filter((record) => record.businessId === businessId && record.source !== "qa_fixture")
     .map((record) => normalizeHiringInterview(record));
   try {
     storage?.setItem?.(getHiringInterviewStorageKey({ ...options, businessId }), JSON.stringify(safeRecords));
@@ -288,7 +301,18 @@ export function completeHiringInterview(interviewId, options = {}) {
 }
 
 export function resolveHiringInterviewStatus(interview = {}) {
-  return normalizeStatus(interview.status);
+  return normalizeHiringInterview(interview).status;
+}
+
+export function hasValidHiringInterviewSchedule(interview = {}) {
+  return hasValidSchedule(interview);
+}
+
+export function getUpcomingHiringInterviews(interviews = []) {
+  return interviews
+    .map((record) => normalizeHiringInterview(record))
+    .filter((record) => ["scheduled", "rescheduled"].includes(record.status) && hasValidSchedule(record))
+    .map(clone);
 }
 
 export function filterHiringInterviews(interviews = [], filters = {}) {
@@ -301,10 +325,9 @@ export function filterHiringInterviews(interviews = [], filters = {}) {
 }
 
 export function formatHiringInterviewSummary(interview = {}) {
-  const date = validDate(interview.date)
-    ? new Date(`${interview.date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-    : "Date pending";
-  const time = [text(interview.startTime), text(interview.endTime)].filter(Boolean).join("–") || "Time pending";
+  if (!hasValidSchedule(interview)) return "Scheduling details required";
+  const date = new Date(`${interview.date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const time = [text(interview.startTime), text(interview.endTime)].filter(Boolean).join("–");
   return `${date} · ${time}`;
 }
 

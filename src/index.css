@@ -989,6 +989,181 @@ body {
   box-sizing: border-box;
 }
 
+.hiring-position-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  background: rgba(20, 29, 24, 0.48);
+  overflow: hidden;
+}
+
+.hiring-position-editor {
+  width: min(760px, 100%);
+  max-width: 100%;
+  max-height: min(860px, calc(100dvh - max(40px, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px))));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid #d9d0bd;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 24px 70px rgba(20, 45, 31, 0.24);
+  text-align: left;
+}
+
+.hiring-position-editor-header,
+.hiring-position-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e6dece;
+}
+
+.hiring-position-editor-header p {
+  color: #667560;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hiring-position-editor-header h2 {
+  margin: 3px 0 0;
+  font-size: 24px;
+}
+
+.hiring-position-icon-button {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d9d0bd;
+  border-radius: 50%;
+  background: #fff;
+  color: #173f2a;
+  font-size: 24px;
+}
+
+.hiring-position-editor-body {
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+}
+
+.hiring-position-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hiring-position-field {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  color: #173f2a;
+  font-weight: 750;
+}
+
+.hiring-position-field input,
+.hiring-position-field textarea,
+.hiring-position-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #cbc2af;
+  border-radius: 7px;
+  padding: 11px 12px;
+  font: inherit;
+  font-weight: 500;
+  resize: vertical;
+}
+
+.hiring-position-field small {
+  color: #9f2d24;
+  font-weight: 700;
+}
+
+.hiring-position-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.hiring-position-checks label {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d9d0bd;
+  border-radius: 7px;
+  color: #173f2a;
+  overflow-wrap: anywhere;
+}
+
+.hiring-position-requirements-summary {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid #c8d6c5;
+  border-radius: 7px;
+  background: #f0f5ec;
+  color: #38523c;
+}
+
+.hiring-position-editor-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  border-top: 1px solid #e6dece;
+  border-bottom: 0;
+}
+
+.hiring-position-editor-actions button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #c8d0c5;
+  border-radius: 7px;
+  background: #fffdf8;
+  color: #173f2a;
+  font-weight: 800;
+}
+
+@media (max-width: 820px) {
+  .hiring-position-form-grid,
+  .hiring-position-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .hiring-position-overlay {
+    align-items: end;
+    padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .hiring-position-editor {
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px)));
+  }
+
+  .hiring-position-editor-header,
+  .hiring-position-editor-body,
+  .hiring-position-editor-actions {
+    padding: 14px;
+  }
+
+  .hiring-position-editor-actions button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
 :root {
   --meetro-layout-breakpoint-medium: 768px;
   --meetro-layout-breakpoint-desktop: 1180px;
