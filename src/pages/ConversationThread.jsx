@@ -2999,6 +2999,25 @@ useEffect(() => {
     const normalized = String(reply).toLowerCase();
 
     if (
+      isHiringThread &&
+      isBusinessUser &&
+      (normalized.includes("schedule an interview") ||
+        normalized.includes("schedule interview") ||
+        normalized.includes("programemos entrevista") ||
+        normalized.includes("programar entrevista"))
+    ) {
+      const applicantId = conversationRegistryItem?.applicantId || conversationMeta?.applicantId || "";
+      const positionId = conversationRegistryItem?.positionId || conversationMeta?.positionId || "";
+      if (applicantId && positionId) {
+        localStorage.setItem("selectedHiringApplicantId", applicantId);
+        localStorage.setItem("selectedHiringPositionId", positionId);
+        localStorage.setItem("hiringCenterReturnPage", "conversationThread");
+        setPage("hiringCenter");
+        return;
+      }
+    }
+
+    if (
       normalized.includes("save history") ||
       normalized.includes("guardar historial")
     ) {
@@ -5821,6 +5840,19 @@ const handleImageUpload = (event) => {
                         </div>
                       )}
 
+                    {msg.type === "hiring-interview" && (
+                      <section style={hiringInterviewMessageCard} aria-label={msg.title || t("interviewDetails", language)}>
+                        <strong>{msg.title || t("interviewScheduled", language)}</strong>
+                        <span>{t("position", language)}: {msg.positionTitle}</span>
+                        <span>{t("date", language)}: {msg.interviewDate || t("required", language)}</span>
+                        <span>{t("startTime", language)}: {[msg.startTime, msg.endTime].filter(Boolean).join("–")}</span>
+                        <span>{t("interviewType", language)}: {t(`hiringInterviewType${msg.interviewType === "in_person" ? "InPerson" : String(msg.interviewType || "phone")[0].toUpperCase() + String(msg.interviewType || "phone").slice(1)}`, language)}</span>
+                        {msg.location && <span>{t("location", language)}: {msg.location}</span>}
+                        {/^https?:\/\//i.test(msg.meetingUrl || "") && <a href={msg.meetingUrl} target="_blank" rel="noreferrer" aria-label={t("meetingLink", language)}>{t("meetingLink", language)}</a>}
+                        <span>{t(`hiringInterviewStatus${String(msg.interviewStatus || "scheduled")[0].toUpperCase()}${String(msg.interviewStatus || "scheduled").slice(1)}`, language)}</span>
+                      </section>
+                    )}
+
                     {msg.type === "approval" && (
                       <div style={approvalActions}>
                         <button style={approveBtn}>
@@ -8485,6 +8517,21 @@ const materialsListCard = {
   marginTop: "12px",
   display: "grid",
   gap: "8px",
+};
+
+const hiringInterviewMessageCard = {
+  display: "grid",
+  gap: "6px",
+  minWidth: 0,
+  marginTop: "10px",
+  padding: "12px",
+  borderRadius: "8px",
+  border: "1px solid rgba(49, 95, 66, 0.2)",
+  background: "rgba(238, 244, 234, 0.92)",
+  color: "#244532",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
 };
 
 const materialsListRow = {

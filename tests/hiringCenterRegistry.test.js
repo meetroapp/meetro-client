@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getHiringApplicants,
+  getHiringApplicantById,
   getHiringApplicantsForPosition,
   getHiringInterviews,
   getHiringJobById,
@@ -132,6 +133,24 @@ test("position detail helpers return scoped applicants", () => {
 
   assert.ok(applicants.length >= 1);
   applicants.forEach((applicant) => assert.equal(applicant.positionId, position.id));
+});
+
+test("hiring conversation applicants project by stable IDs without name matching", () => {
+  const storage = createMemoryStorage();
+  storage.setItem("meetro_conversation_registry", JSON.stringify([{
+    id: "hiring-conversation-1",
+    conversation_type: "hiring_application",
+    applicantId: "applicant-conversation-1",
+    applicantName: "Same Name",
+    positionId: "field-handyman-helper",
+    positionTitle: "Field Handyman Helper",
+    businessId: "local-business",
+  }]));
+  const applicant = getHiringApplicantById("applicant-conversation-1", storage);
+  assert.equal(applicant.id, "applicant-conversation-1");
+  assert.equal(applicant.positionId, "field-handyman-helper");
+  assert.equal(applicant.businessId, "local-business");
+  assert.equal(getHiringApplicantById("Same Name", storage), null);
 });
 
 test("Hiring registry helpers return defensive copies", () => {

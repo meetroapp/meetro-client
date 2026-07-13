@@ -6,6 +6,15 @@ import {
   groupNotificationsByAge,
   sortNotificationsByAttention,
 } from "../src/utils/notificationCenter.js";
+import { upsertNotification } from "../src/utils/meetroNotifications.js";
+
+function createStorage() {
+  const values = new Map();
+  return {
+    getItem: (key) => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, String(value)),
+  };
+}
 
 test("notification categories separate project, message, quote, emergency, hiring, review, and system alerts", () => {
   assert.equal(getNotificationCategory({ type: "work_update" }), "projectUpdates");
@@ -14,6 +23,7 @@ test("notification categories separate project, message, quote, emergency, hirin
   assert.equal(getNotificationCategory({ type: "appointment_confirmed" }), "schedule");
   assert.equal(getNotificationCategory({ type: "emergency_update" }), "emergency");
   assert.equal(getNotificationCategory({ type: "hiring_application" }), "hiring");
+  assert.equal(getNotificationCategory({ type: "hiring_interview_scheduled" }), "hiring");
   assert.equal(getNotificationCategory({ type: "review_reminder" }), "reviews");
   assert.equal(getNotificationCategory({ type: "maintenance_notice" }), "system");
 });
@@ -69,4 +79,32 @@ test("notifications sort unread first and group by age", () => {
     groups.older.map((item) => item.id),
     ["old"]
   );
+});
+
+test("hiring interview notification upsert replaces repeated event without customer metadata", () => {
+  const previousStorage = globalThis.localStorage;
+  const previousWindow = globalThis.window;
+  globalThis.localStorage = createStorage();
+  globalThis.window = { dispatchEvent() {} };
+  try {
+    const base = {
+      type: "hiring_interview_rescheduled",
+      role: "applicant",
+      title: "Interview Rescheduled",
+      conversationId: "hiring-conversation-1",
+      dedupeKey: "hiring_interview_rescheduled:interview-1",
+      metadata: { interviewId: "interview-1", positionId: "position-1", applicantId: "applicant-1" },
+    };
+    upsertNotification({ ...base, message: "First time" });
+    upsertNotification({ ...base, message: "Updated time" });
+    const records = JSON.parse(localStorage.getItem("meetro_notifications"));
+    assert.equal(records.length, 1);
+    assert.equal(records[0].message, "Updated time");
+    assert.equal(records[0].role, "applicant");
+    assert.equal(records[0].requestId, "");
+    assert.equal(records[0].appointmentId, "");
+  } finally {
+    globalThis.localStorage = previousStorage;
+    globalThis.window = previousWindow;
+  }
 });

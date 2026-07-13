@@ -7,6 +7,8 @@ import {
   isHiringConversationType,
   isMessageAllowedInHiringConversation,
   saveHiringConversation,
+  resolveHiringConversation,
+  upsertHiringInterviewMessage,
 } from "../src/utils/hiringConversations.js";
 
 function createMemoryStorage() {
@@ -227,4 +229,51 @@ test("hiring message filter keeps hiring text and removes work scheduling leakag
     filtered.map((message) => message.id),
     ["hiring-text-1", "hiring-text-2"]
   );
+});
+
+test("hiring interview card is linked by stable IDs and replaced on reschedule", () => {
+  const storage = createMemoryStorage();
+  const conversation = saveHiringConversation({
+    type: "hiring_application",
+    businessId: "business-1",
+    positionId: "position-1",
+    applicantId: "applicant-1",
+    applicantName: "Alex Applicant",
+    positionTitle: "Painter",
+  }, storage);
+  assert.equal(resolveHiringConversation({ businessId: "business-1", positionId: "position-1", applicantId: "applicant-1" }, storage).id, conversation.id);
+  upsertHiringInterviewMessage({
+    id: "interview-1",
+    conversationId: conversation.id,
+    businessId: "business-1",
+    positionId: "position-1",
+    applicantId: "applicant-1",
+    positionTitle: "Painter",
+    interviewType: "phone",
+    date: "2026-08-10",
+    startTime: "10:00",
+    endTime: "10:30",
+    status: "scheduled",
+  }, storage);
+  upsertHiringInterviewMessage({
+    id: "interview-1",
+    conversationId: conversation.id,
+    businessId: "business-1",
+    positionId: "position-1",
+    applicantId: "applicant-1",
+    positionTitle: "Painter",
+    interviewType: "phone",
+    date: "2026-08-11",
+    startTime: "11:00",
+    endTime: "11:30",
+    status: "rescheduled",
+  }, storage);
+  const messages = JSON.parse(storage.getItem(`meetro_conversation_${conversation.id}`));
+  const cards = messages.filter((item) => item.interviewId === "interview-1");
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].type, "hiring-interview");
+  assert.equal(cards[0].workflowType, "hiring_interview");
+  assert.equal(cards[0].interviewStatus, "rescheduled");
+  assert.equal(cards[0].schedule, undefined);
+  assert.equal(isMessageAllowedInHiringConversation(cards[0]), true);
 });

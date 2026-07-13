@@ -1,34 +1,62 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import MeetroIcon from "../components/MeetroIcon";
+import HiringInterviewEditor from "../components/HiringInterviewEditor";
 import { getLanguage, t } from "../utils/language";
 import {
   getHiringApplicants,
+  getHiringApplicantById,
   getHiringApplicantsForPosition,
-  getHiringInterviews,
   getHiringOpenPositions,
+  getHiringPositionById,
   getHiringTeamMembers,
   HIRING_EMPLOYMENT_TYPES,
   saveHiringPosition,
   validateHiringPositionDraft,
 } from "../utils/hiringCenterRegistry";
-import { saveHiringConversation } from "../utils/hiringConversations";
+import {
+  resolveHiringConversation,
+  saveHiringConversation,
+  upsertHiringInterviewMessage,
+} from "../utils/hiringConversations";
+import {
+  cancelHiringInterview,
+  completeHiringInterview,
+  createHiringInterview,
+  filterHiringInterviews,
+  formatHiringInterviewSummary,
+  projectHiringInterviewNotification,
+  readHiringInterviews,
+  updateHiringInterview,
+} from "../utils/hiringInterviews";
+import { upsertNotification } from "../utils/meetroNotifications";
 
 function HiringCenter({ setPage }) {
   const language = getLanguage();
   const isSpanish = language === "es";
   const [selectedPosition, setSelectedPosition] = useState(null);
-  const [selectedApplicant, setSelectedApplicant] = useState(null);
+  const [selectedApplicant, setSelectedApplicant] = useState(() =>
+    getHiringApplicantById(localStorage.getItem("selectedHiringApplicantId"))
+  );
   const [notice, setNotice] = useState(null);
   const [isCreatePositionOpen, setIsCreatePositionOpen] = useState(false);
   const [createPositionError, setCreatePositionError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [positionDraft, setPositionDraft] = useState(() => createBlankPositionDraft());
+  const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "local-business";
+  const accountMode = localStorage.getItem("activeAccountMode") || "business";
+  const [interviews, setInterviews] = useState(() => readHiringInterviews({ businessId }));
+  const [interviewEditor, setInterviewEditor] = useState(null);
+  const [interviewErrors, setInterviewErrors] = useState({});
   const positions = getHiringOpenPositions();
   const applicants = getHiringApplicants();
-  const interviews = getHiringInterviews();
   const teamMembers = getHiringTeamMembers();
+
+  useEffect(() => {
+    localStorage.removeItem("selectedHiringApplicantId");
+    localStorage.removeItem("selectedHiringPositionId");
+  }, []);
 
   const copy = {
     back: t("backToBusinessTools", language),
@@ -106,6 +134,95 @@ function HiringCenter({ setPage }) {
     setSelectedApplicant(applicant);
     setSelectedPosition(null);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+
+  const ensureHiringConversation = (applicant, position) => {
+    const context = { businessId, positionId: position.id, applicantId: applicant.id };
+    const existing = resolveHiringConversation(context);
+    if (existing) return existing;
+    return saveHiringConversation({
+      type: "hiring_application",
+      businessId,
+      businessName: localStorage.getItem("businessName") || position.businessName || "Business",
+      positionId: position.id,
+      positionTitle: position.title,
+      applicantId: applicant.id,
+      applicantName: applicant.name,
+      participantName: applicant.name,
+      participantRole: "applicant",
+      source: "hiring_interview",
+      status: applicant.status || "Reviewing",
+      returnPage: "hiringCenter",
+      lastMessage: `Hiring conversation for ${position.title}.`,
+    });
+  };
+
+  const openInterview = (applicant, interview = null) => {
+    if (accountMode !== "business") {
+      setNotice({ title: t("businessAccountRequired", language), body: t("hiringInterviewIdentityError", language) });
+      return;
+    }
+    const position = getHiringPositionById(applicant.positionId);
+    if (!position || position.businessId !== businessId || applicant.businessId !== businessId) {
+      setNotice({ title: t("required", language), body: t("hiringInterviewIdentityError", language) });
+      return;
+    }
+    setInterviewErrors({});
+    setInterviewEditor({ applicant, position, interview });
+  };
+
+  const refreshInterviews = () => setInterviews(readHiringInterviews({ businessId }));
+
+  const syncInterviewArtifacts = (interview, notify = true) => {
+    upsertHiringInterviewMessage(interview);
+    if (notify && ["scheduled", "rescheduled", "cancelled"].includes(interview.status)) {
+      upsertNotification(projectHiringInterviewNotification(interview));
+    }
+    refreshInterviews();
+  };
+
+  const saveInterview = (form) => {
+    if (!interviewEditor) return;
+    const { applicant, position, interview } = interviewEditor;
+    const conversation = ensureHiringConversation(applicant, position);
+    const draft = {
+      ...form,
+      businessId,
+      positionId: position.id,
+      applicantId: applicant.id,
+      conversationId: conversation.id,
+      title: `Interview · ${position.title}`,
+      createdBy: localStorage.getItem("userId") || localStorage.getItem("userEmail") || "business-user",
+    };
+    const options = { businessId, accountMode, position, applicant };
+    const result = interview
+      ? updateHiringInterview(interview.id, draft, options)
+      : createHiringInterview(draft, options);
+    if (!result.ok) {
+      setInterviewErrors(result.errors || {});
+      return;
+    }
+    syncInterviewArtifacts(result.interview, result.created !== false || result.interview.status === "rescheduled");
+    setInterviewEditor(null);
+    setNotice({ title: t(result.interview.status === "rescheduled" ? "rescheduleInterview" : "interviewScheduled", language), body: formatHiringInterviewSummary(result.interview) });
+  };
+
+  const cancelInterview = () => {
+    if (!interviewEditor?.interview) return;
+    const result = cancelHiringInterview(interviewEditor.interview.id, { businessId, accountMode });
+    if (!result.ok) return;
+    syncInterviewArtifacts(result.interview, true);
+    setInterviewEditor(null);
+    setNotice({ title: t("interviewCancelled", language), body: formatHiringInterviewSummary(result.interview) });
+  };
+
+  const completeInterview = () => {
+    if (!interviewEditor?.interview) return;
+    const result = completeHiringInterview(interviewEditor.interview.id, { businessId, accountMode });
+    if (!result.ok) return;
+    syncInterviewArtifacts(result.interview, false);
+    setInterviewEditor(null);
+    setNotice({ title: t("interviewCompleted", language), body: formatHiringInterviewSummary(result.interview) });
   };
 
   const closeDetail = () => {
@@ -218,6 +335,9 @@ function HiringCenter({ setPage }) {
   }
 
   if (selectedApplicant) {
+    const applicantInterviews = filterHiringInterviews(interviews, { applicantId: selectedApplicant.id });
+    const activeInterview = applicantInterviews.find((item) => ["scheduled", "rescheduled"].includes(item.status));
+    const latestInterview = activeInterview || applicantInterviews[0] || null;
     return (
       <HiringPageShell
         setPage={setPage}
@@ -241,6 +361,26 @@ function HiringCenter({ setPage }) {
             <p style={bodyText}>{selectedApplicant.notes || "No notes yet."}</p>
           </div>
 
+          <section style={interviewSection} aria-labelledby="applicant-interview-heading">
+            <div>
+              <p style={fieldLabel}>{t("interviewDetails", language)}</p>
+              <h2 id="applicant-interview-heading" style={cardTitle}>
+                {latestInterview
+                  ? t(`hiringInterviewStatus${latestInterview.status[0].toUpperCase()}${latestInterview.status.slice(1)}`, language)
+                  : t("noInterviewsScheduled", language)}
+              </h2>
+              {latestInterview && <p style={bodyText}>{formatHiringInterviewSummary(latestInterview)}</p>}
+            </div>
+            <button type="button" className="meetro-visual-primary-button" style={interviewPrimaryAction} onClick={() => openInterview(selectedApplicant, latestInterview)}>
+              {activeInterview ? t("rescheduleInterview", language) : latestInterview ? t("interviewDetails", language) : t("scheduleInterview", language)}
+            </button>
+            {latestInterview?.status === "cancelled" && (
+              <button type="button" style={previewAction} onClick={() => openInterview(selectedApplicant, null)}>
+                {t("scheduleInterview", language)}
+              </button>
+            )}
+          </section>
+
           <div style={actionRow}>
             {["Message Applicant", "Schedule Interview", "Mark Reviewing", "Mark Hired", "Archive"].map((action) => (
               <button
@@ -253,19 +393,35 @@ function HiringCenter({ setPage }) {
                     return;
                   }
 
+                  if (action === "Schedule Interview") {
+                    openInterview(selectedApplicant, activeInterview);
+                    return;
+                  }
+
                   openPreview(
                     `${action} is coming soon`,
                     "Applicant workflow actions are preview-only and do not change hiring records yet."
                   );
                 }}
               >
-                {action}{action === "Message Applicant" ? "" : ` · ${copy.preview}`}
+                {action}{["Message Applicant", "Schedule Interview"].includes(action) ? "" : ` · ${copy.preview}`}
               </button>
             ))}
           </div>
         </article>
 
         <PreviewSheet notice={notice} onClose={() => setNotice(null)} />
+        {interviewEditor && (
+          <HiringInterviewEditor
+            key={interviewEditor.interview?.id || `new-${interviewEditor.applicant.id}`}
+            {...interviewEditor}
+            errors={interviewErrors}
+            onSave={saveInterview}
+            onCancelInterview={cancelInterview}
+            onComplete={completeInterview}
+            onClose={() => setInterviewEditor(null)}
+          />
+        )}
       </HiringPageShell>
     );
   }
@@ -402,13 +558,19 @@ function HiringCenter({ setPage }) {
                         return;
                       }
 
+                      if (action === "Schedule Interview") {
+                        const active = filterHiringInterviews(interviews, { applicantId: applicant.id }).find((item) => ["scheduled", "rescheduled"].includes(item.status));
+                        openInterview(applicant, active || null);
+                        return;
+                      }
+
                       openPreview(
                         `${action} is coming soon`,
                         "Applicant actions are preview-only in this hiring foundation."
                       );
                     }}
                   >
-                    {action}{action === "Message" ? "" : ` · ${copy.preview}`}
+                    {action}{["Message", "Schedule Interview"].includes(action) ? "" : ` · ${copy.preview}`}
                   </button>
                 ))}
               </div>
@@ -418,34 +580,22 @@ function HiringCenter({ setPage }) {
       </section>
 
       <section style={section}>
-        <SectionHeading title="Interviews" description="Preview-only interview coordination." />
-        <button
-          type="button"
-          style={secondaryWideButton}
-          onClick={() =>
-            openPreview(
-              "Schedule Interview is coming soon",
-              "Interview scheduling will connect applicants, times, and notes in a future version."
-            )
-          }
-        >
-          Schedule Interview · {copy.preview}
-        </button>
+        <SectionHeading title={t("upcomingInterviews", language)} description={t("interviewDetails", language)} />
+        {interviews.length === 0 && <div style={emptyState}><strong>{t("noInterviewsScheduled", language)}</strong></div>}
         <div style={cardGrid}>
           {interviews.map((interview) => (
             <article
               key={interview.id}
               style={{ ...recordCard, ...interactiveCard }}
-              onClick={() =>
-                openPreview(
-                  "Interview detail is coming soon",
-                  `${interview.applicantName} for ${interview.positionTitle} is available as a preview record.`
-                )
-              }
+              onClick={() => {
+                const applicant = getHiringApplicantById(interview.applicantId);
+                if (applicant) openInterview(applicant, interview);
+              }}
             >
               <h2 style={cardTitle}>{interview.applicantName}</h2>
               <p style={bodyText}>{interview.positionTitle}</p>
-              <span style={applicantBadge}>{interview.status}</span>
+              <p style={bodyText}>{formatHiringInterviewSummary(interview)}</p>
+              <span style={applicantBadge}>{t(`hiringInterviewStatus${interview.status[0].toUpperCase()}${interview.status.slice(1)}`, language)}</span>
             </article>
           ))}
         </div>
@@ -506,6 +656,17 @@ function HiringCenter({ setPage }) {
         onPublish={() => savePosition("Open")}
       />
       <PreviewSheet notice={notice} onClose={() => setNotice(null)} />
+      {interviewEditor && (
+        <HiringInterviewEditor
+          key={interviewEditor.interview?.id || `new-${interviewEditor.applicant.id}`}
+          {...interviewEditor}
+          errors={interviewErrors}
+          onSave={saveInterview}
+          onCancelInterview={cancelInterview}
+          onComplete={completeInterview}
+          onClose={() => setInterviewEditor(null)}
+        />
+      )}
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
     </div>
   );
@@ -888,6 +1049,25 @@ const detailCard = {
   border: "1px solid #e2e8f0",
   background: "#ffffff",
   boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
+};
+
+const interviewSection = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "8px",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
+};
+
+const interviewPrimaryAction = {
+  minHeight: "44px",
+  borderRadius: "8px",
+  padding: "10px 14px",
+  cursor: "pointer",
 };
 
 const cardTop = {

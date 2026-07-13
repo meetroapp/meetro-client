@@ -32,6 +32,9 @@ const HIRING_TYPES = new Set([
   "hiring_application",
   "job_inquiry",
   "applicant_message",
+  "hiring_interview_scheduled",
+  "hiring_interview_rescheduled",
+  "hiring_interview_cancelled",
 ]);
 const REVIEW_TYPES = new Set(["review", "review_reminder", "rating_request"]);
 

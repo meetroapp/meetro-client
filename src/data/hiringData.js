@@ -23,6 +23,7 @@ export const HIRING_APPLICANT_STATUSES = Object.freeze([
 export const HIRING_POSITIONS = Object.freeze([
   Object.freeze({
     id: "field-handyman-helper",
+    businessId: "local-business",
     title: "Field Handyman Helper",
     titleTranslations: Object.freeze({
       es: "Ayudante de mantenimiento residencial",
@@ -85,6 +86,7 @@ export const HIRING_POSITIONS = Object.freeze([
   }),
   Object.freeze({
     id: "painting-crew-assistant",
+    businessId: "local-business",
     title: "Painting Crew Assistant",
     titleTranslations: Object.freeze({
       es: "Ayudante de equipo de pintura",
@@ -143,6 +145,7 @@ export const HIRING_POSITIONS = Object.freeze([
   }),
   Object.freeze({
     id: "general-labor-assistant",
+    businessId: "local-property-maintenance",
     title: "General Labor Assistant",
     titleTranslations: Object.freeze({
       es: "Ayudante general de obra",
@@ -204,6 +207,7 @@ export const HIRING_POSITIONS = Object.freeze([
 export const HIRING_APPLICANTS = Object.freeze([
   Object.freeze({
     id: "applicant-maya-torres",
+    businessId: "local-business",
     name: "Maya Torres",
     positionId: "field-handyman-helper",
     positionAppliedFor: "Field Handyman Helper",
@@ -216,6 +220,7 @@ export const HIRING_APPLICANTS = Object.freeze([
   }),
   Object.freeze({
     id: "applicant-devin-price",
+    businessId: "local-business",
     name: "Devin Price",
     positionId: "painting-crew-assistant",
     positionAppliedFor: "Painting Crew Assistant",
@@ -231,6 +236,7 @@ export const HIRING_APPLICANTS = Object.freeze([
 export const HIRING_INTERVIEWS = Object.freeze([
   Object.freeze({
     id: "interview-maya-torres",
+    businessId: "local-business",
     applicantId: "applicant-maya-torres",
     applicantName: "Maya Torres",
     positionId: "field-handyman-helper",

@@ -55,8 +55,35 @@ export function getHiringOpenPositions(storage = safeStorage()) {
   ];
 }
 
-export function getHiringApplicants() {
-  return cloneArray(HIRING_APPLICANTS);
+function getConversationApplicants(storage = safeStorage()) {
+  return safeReadArray(storage, "meetro_conversation_registry")
+    .filter((record) =>
+      ["hiring", "hiring_application", "job_inquiry", "applicant_message"].includes(
+        String(record.conversation_type || record.type || "")
+      ) && record.applicantId && record.positionId && record.businessId
+    )
+    .map((record) => ({
+      id: String(record.applicantId),
+      businessId: String(record.businessId),
+      name: record.applicantName || record.participantName || "Applicant",
+      positionId: String(record.positionId),
+      positionAppliedFor: record.positionTitle || "Position",
+      experienceSummary: "Hiring conversation applicant",
+      applicationDate: record.createdAt || record.savedAt || "",
+      status: HIRING_APPLICANT_STATUSES.includes(record.status) ? record.status : "New",
+      contactPreference: "Hiring conversation",
+      notes: "",
+      conversationId: record.id,
+      source: "hiring_conversation",
+    }));
+}
+
+export function getHiringApplicants(storage = safeStorage()) {
+  const byId = new Map(cloneArray(HIRING_APPLICANTS).map((record) => [record.id, record]));
+  getConversationApplicants(storage).forEach((record) => {
+    if (!byId.has(record.id)) byId.set(record.id, record);
+  });
+  return [...byId.values()].map(cloneRecord);
 }
 
 export function getHiringInterviews() {
@@ -75,12 +102,12 @@ export function getHiringPositionById(positionId, storage = safeStorage()) {
   return getHiringOpenPositions(storage).find((position) => position.id === positionId) || null;
 }
 
-export function getHiringApplicantById(applicantId) {
-  return getHiringApplicants().find((applicant) => applicant.id === applicantId) || null;
+export function getHiringApplicantById(applicantId, storage = safeStorage()) {
+  return getHiringApplicants(storage).find((applicant) => applicant.id === applicantId) || null;
 }
 
-export function getHiringApplicantsForPosition(positionId) {
-  return getHiringApplicants().filter((applicant) => applicant.positionId === positionId);
+export function getHiringApplicantsForPosition(positionId, storage = safeStorage()) {
+  return getHiringApplicants(storage).filter((applicant) => applicant.positionId === positionId);
 }
 
 export function getHiringLocalJobOpenings(storage = safeStorage()) {
@@ -173,6 +200,18 @@ function getBusinessName() {
   }
 }
 
+function getBusinessId() {
+  try {
+    return (
+      globalThis.localStorage?.getItem("businessId") ||
+      globalThis.localStorage?.getItem("contractorId") ||
+      "local-business"
+    );
+  } catch {
+    return "local-business";
+  }
+}
+
 export function validateHiringPositionDraft(draft = {}) {
   const missingFields = [];
   if (!normalizeText(draft.title)) missingFields.push("title");
@@ -198,6 +237,7 @@ export function normalizeHiringPositionDraft(draft = {}, options = {}) {
 
   return {
     id,
+    businessId: normalizeText(draft.businessId) || getBusinessId(),
     title,
     businessName,
     description: normalizeText(draft.description),

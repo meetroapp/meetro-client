@@ -18,6 +18,7 @@ function normalizeRole(role) {
 }
 
 function buildDedupeKey(notification = {}) {
+  if (notification.dedupeKey) return String(notification.dedupeKey);
   return [
     notification.type || "general",
     normalizeRole(notification.role || notification.targetRole),
@@ -26,7 +27,6 @@ function buildDedupeKey(notification = {}) {
     notification.appointmentId || notification.scheduleId || "",
     notification.quoteId || "",
     notification.emergencyId || "",
-    notification.dedupeKey || "",
   ].join(":");
 }
 
@@ -93,6 +93,41 @@ export function createNotification(notification = {}) {
 
   saveNotifications([{ ...nextNotification, dedupeKey }, ...existing]);
   return nextNotification;
+}
+
+export function upsertNotification(notification = {}) {
+  const timestamp = notification.timestamp || notification.createdAt || new Date().toISOString();
+  const role = normalizeRole(notification.role || notification.targetRole);
+  const nextNotification = {
+    id: notification.id || `${notification.type || "notification"}-${Date.now()}`,
+    type: notification.type || "general",
+    title: notification.title || "Meetro notification",
+    message: notification.message || "",
+    role,
+    targetRole: role,
+    timestamp,
+    createdAt: timestamp,
+    read: Boolean(notification.read),
+    unread: notification.read ? false : true,
+    requestId: notification.requestId || "",
+    conversationId: notification.conversationId || "",
+    appointmentId: notification.appointmentId || notification.scheduleId || "",
+    quoteId: notification.quoteId || "",
+    emergencyId: notification.emergencyId || "",
+    dedupeKey: notification.dedupeKey || "",
+    metadata: notification.metadata || {},
+  };
+  const dedupeKey = buildDedupeKey(nextNotification);
+  const existing = getNotifications();
+  const previous = existing.find((item) => buildDedupeKey(item) === dedupeKey);
+  const saved = {
+    ...previous,
+    ...nextNotification,
+    id: previous?.id || nextNotification.id,
+    dedupeKey,
+  };
+  saveNotifications([saved, ...existing.filter((item) => buildDedupeKey(item) !== dedupeKey)]);
+  return saved;
 }
 
 export function markNotificationRead(notificationId) {

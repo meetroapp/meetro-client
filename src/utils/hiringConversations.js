@@ -73,6 +73,79 @@ export function filterHiringConversationMessages(messages = []) {
   return messages.filter(isMessageAllowedInHiringConversation);
 }
 
+function readConversationRegistry(storage) {
+  try {
+    const records = JSON.parse(storage?.getItem?.("meetro_conversation_registry") || "[]");
+    return Array.isArray(records) ? records : [];
+  } catch {
+    return [];
+  }
+}
+
+export function resolveHiringConversation(context = {}, storage = globalThis.localStorage) {
+  const businessId = String(context.businessId || "").trim();
+  const positionId = String(context.positionId || "").trim();
+  const applicantId = String(context.applicantId || "").trim();
+  if (!businessId || !positionId || !applicantId) return null;
+  const record = readConversationRegistry(storage).find((item) =>
+    isHiringConversationType(item.conversation_type || item.type) &&
+    String(item.businessId || "") === businessId &&
+    String(item.positionId || item.jobId || "") === positionId &&
+    String(item.applicantId || "") === applicantId
+  );
+  return record ? { ...record } : null;
+}
+
+export function upsertHiringInterviewMessage(interview = {}, storage = globalThis.localStorage) {
+  const conversationId = String(interview.conversationId || "").trim();
+  const interviewId = String(interview.id || "").trim();
+  if (!storage || !conversationId || !interviewId) return null;
+  const key = `meetro_conversation_${conversationId}`;
+  let messages;
+  try {
+    const parsed = JSON.parse(storage.getItem(key) || "[]");
+    messages = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    messages = [];
+  }
+  const statusTitle = interview.status === "cancelled"
+    ? "Interview Cancelled"
+    : interview.status === "completed"
+    ? "Interview Completed"
+    : interview.status === "rescheduled"
+    ? "Interview Rescheduled"
+    : "Interview Scheduled";
+  const message = {
+    id: `hiring-interview-${interviewId}`,
+    type: "hiring-interview",
+    sender: "system",
+    senderRole: "system",
+    workflowType: "hiring_interview",
+    interviewId,
+    businessId: interview.businessId,
+    positionId: interview.positionId,
+    applicantId: interview.applicantId,
+    title: statusTitle,
+    positionTitle: interview.positionTitle || interview.title,
+    interviewDate: interview.date,
+    startTime: interview.startTime,
+    endTime: interview.endTime,
+    interviewType: interview.interviewType,
+    location: interview.location,
+    meetingUrl: interview.meetingUrl,
+    interviewStatus: interview.status,
+    text: `${statusTitle}: ${interview.positionTitle || interview.title || "Hiring interview"}.`,
+    time: formatMessageTime(new Date(interview.updatedAt || Date.now())),
+    status: "delivered",
+    createdAt: Date.parse(interview.createdAt || "") || Date.now(),
+    updatedAt: interview.updatedAt || new Date().toISOString(),
+  };
+  const next = [message, ...messages.filter((item) => item.interviewId !== interviewId)];
+  storage.setItem(key, JSON.stringify(next));
+  globalThis.window?.dispatchEvent?.(new Event("meetro-messages-updated"));
+  return { ...message };
+}
+
 function safeId(value = "") {
   return String(value || "")
     .trim()
@@ -150,14 +223,7 @@ export function saveHiringConversation(context = {}, storage = globalThis.localS
   if (!storage) return buildHiringConversationRecord(context);
 
   const record = buildHiringConversationRecord(context);
-  const registry = (() => {
-    try {
-      const parsed = JSON.parse(storage.getItem("meetro_conversation_registry") || "[]");
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
+  const registry = readConversationRegistry(storage);
   const nextRegistry = [
     record,
     ...registry.filter((item) => String(item.id) !== String(record.id)),
@@ -176,9 +242,11 @@ export function saveHiringConversation(context = {}, storage = globalThis.localS
     `meetro_conversation_meta_${record.id}`,
     JSON.stringify({
       conversationType: record.conversation_type,
+      businessId: record.businessId,
       businessName: record.businessName,
       participantName: record.participantName,
       applicantName: record.applicantName,
+      applicantId: record.applicantId,
       positionId: record.positionId,
       positionTitle: record.positionTitle,
       projectTitle: record.positionTitle,

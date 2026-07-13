@@ -106,6 +106,39 @@ body {
   background: var(--meetro-color-paper, #fffdf8);
 }
 
+.meetro-interview-workspace {
+  position: fixed;
+  inset: 0;
+  z-index: 2150;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px)
+    max(14px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 20px)
+    max(14px, env(safe-area-inset-left, 0px));
+  background: rgba(20, 35, 27, 0.4);
+}
+
+.meetro-interview-sheet {
+  width: min(100%, 680px);
+  max-width: 100%;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 36px);
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px clamp(16px, 4vw, 24px) 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--meetro-color-paper, #fffdf8);
+}
+
 @media (min-width: 768px) {
   .meetro-address-workspace {
     align-items: center;
@@ -113,6 +146,14 @@ body {
   }
 
   .meetro-address-sheet {
+    border-radius: 8px;
+  }
+
+  .meetro-interview-workspace {
+    align-items: center;
+  }
+
+  .meetro-interview-sheet {
     border-radius: 8px;
   }
 }
