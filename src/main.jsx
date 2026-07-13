@@ -4,6 +4,11 @@ import { Capacitor } from '@capacitor/core'
 import './index.css'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
 import PublicSite, { isPublicWebsitePath } from './public/PublicSite.jsx'
+import {
+  applyAppLayoutDiagnostics,
+  getDesktopContentMetrics,
+  publishAppLayoutMetrics,
+} from './utils/appLayout.js'
 
 // Public Presence Lock:
 // The public website is intentionally separate from the authenticated application.
@@ -54,6 +59,12 @@ function prepareAppEntryPath() {
 prepareAppEntryPath();
 
 const shouldUsePublicSite = shouldRenderPublicSite();
+
+if (!shouldUsePublicSite) {
+  const initialLayoutMetrics = getDesktopContentMetrics({ capacitor: Capacitor });
+  applyAppLayoutDiagnostics(rootElement, initialLayoutMetrics);
+  publishAppLayoutMetrics(initialLayoutMetrics);
+}
 
 createRoot(rootElement).render(
   <StrictMode>

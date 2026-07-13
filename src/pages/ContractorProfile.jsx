@@ -1365,8 +1365,8 @@ function safeJsonArray(key) {
             margin-bottom: 0 !important;
           }
 
-          @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
-            .app-page.business-profile-page.meetro-readable-page {
+          @media (min-width: 1100px) {
+            #root[data-app-layout="desktop"] .app-page.business-profile-page.meetro-readable-page {
               width: min(calc(100vw - var(--meetro-sidebar-width)), 1180px) !important;
               max-width: min(calc(100vw - var(--meetro-sidebar-width)), 1180px) !important;
               margin-left: var(--meetro-sidebar-width) !important;
@@ -1378,7 +1378,7 @@ function safeJsonArray(key) {
 
             .business-profile-shell {
               display: grid;
-              grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+              grid-template-columns: minmax(0, 1fr);
               gap: 18px;
               align-items: start;
             }
@@ -1405,6 +1405,12 @@ function safeJsonArray(key) {
 
             .business-profile-info-grid {
               grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            @media (min-width: 1100px) {
+              .business-profile-shell {
+                grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+              }
             }
           }
         `}

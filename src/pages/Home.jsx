@@ -143,10 +143,8 @@ const homeLayoutMediaStyles = `
     }
   }
 
-  @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
-    .home-community-entry {
-      display: none !important;
-    }
+  #root[data-app-layout="desktop"] .home-community-entry {
+    display: none !important;
   }
 `;
 

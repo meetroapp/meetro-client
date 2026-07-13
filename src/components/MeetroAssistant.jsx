@@ -47,11 +47,11 @@ import { getConversationParticipantIdentity } from "../utils/conversationIdentit
 import { readRequestCompanionContext } from "../utils/requestCompanionContext";
 import {
   calculateExpandedPanelPlacement,
-  getCompanionLayoutMode,
   getCompanionPreferredPanelWidth,
   COMPANION_PREFERRED_CONVERSATION_HEIGHT,
   COMPANION_PREFERRED_GUIDANCE_HEIGHT,
 } from "../utils/companionPanelPlacement";
+import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
@@ -2407,6 +2407,7 @@ function getAssistantFirstName() {
 }
 
 function MeetroAssistant({ currentPage = "", setPage }) {
+  const appLayoutMetrics = useAppLayoutMetrics();
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
@@ -2470,10 +2471,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const launcherBottomClearance = isBusinessMode || isChat ? 104 : 94;
   const launcherFallbackBottom = `calc(${launcherBottomClearance}px + env(safe-area-inset-bottom))`;
   const launcherButtonSize = getAssistantLauncherButtonSize();
-  const launcherEdgeMargin =
-    typeof window !== "undefined" && window.innerWidth <= 768
-      ? ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN
-      : ASSISTANT_LAUNCHER_EDGE_MARGIN;
+  const launcherEdgeMargin = appLayoutMetrics.mobileMode
+    ? ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN
+    : ASSISTANT_LAUNCHER_EDGE_MARGIN;
   const launcherPositionOptions = {
     ...AI_BUTTON_POSITION_DEFAULTS,
     buttonSize: launcherButtonSize,
@@ -3688,7 +3688,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         bottom: launcherFallbackBottom,
       };
   const companionViewport = getLauncherViewport();
-  const companionLayoutMode = getCompanionLayoutMode(companionViewport.width);
+  const companionLayoutMode = appLayoutMetrics.layoutMode;
   const companionAnchorStyle = getCompanionAnchorStyle({
     launcherPosition,
     launcherButtonSize,

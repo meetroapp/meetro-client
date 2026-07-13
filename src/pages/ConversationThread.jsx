@@ -1,4 +1,5 @@
 import { Component, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
+import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import { getLanguage, t } from "../utils/language";
 import {
   formatDateTimeDisplay,
@@ -609,6 +610,8 @@ const MessageItem = memo(({ message }) => {
 
 
 function ConversationThreadInner({ setPage, embedded = false }) {
+  const appLayoutMetrics = useAppLayoutMetrics();
+  const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
   const [language, setLanguageState] = useState(getLanguage());
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const [messageText, setMessageText] = useState("");
@@ -651,7 +654,6 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const [aiSpeaking, setAiSpeaking] = useState(false);
   const [expandedRecord, setExpandedRecord] = useState(null);
   const [showProfileCard, setShowProfileCard] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [tenantTicketDraft, setTenantTicketDraft] = useState(null);
 
@@ -665,39 +667,6 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const scheduleSwipeStartRef = useRef({ x: 0, y: 0 });
   const gallerySwipeStartRef = useRef({ x: 0, y: 0 });
   const textareaRef = useRef(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-
-    const updateOrientation = () => {
-      setIsLandscape(
-        window.matchMedia("(orientation: landscape)").matches ||
-          window.innerWidth > window.innerHeight
-      );
-    };
-
-    updateOrientation();
-
-    const mediaQuery = window.matchMedia("(orientation: landscape)");
-    const handleChange = () => updateOrientation();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-    } else {
-      mediaQuery.addListener(handleChange);
-    }
-
-    window.addEventListener("resize", handleChange);
-
-    return () => {
-      if (typeof mediaQuery.removeEventListener === "function") {
-        mediaQuery.removeEventListener("change", handleChange);
-      } else {
-        mediaQuery.removeListener(handleChange);
-      }
-      window.removeEventListener("resize", handleChange);
-    };
-  }, []);
 
   const galleryImages = useMemo(
     () =>

@@ -727,8 +727,8 @@ function BusinessDashboard({ setPage }) {
             outline-offset: 2px;
           }
 
-          @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
-            .app-page.business-dashboard.meetro-wide-page {
+          @media (min-width: 1100px) {
+            #root[data-app-layout="desktop"] .app-page.business-dashboard.meetro-wide-page {
               width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
               max-width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
               margin-left: var(--meetro-sidebar-width) !important;
@@ -784,17 +784,17 @@ function BusinessDashboard({ setPage }) {
             }
 
             .business-dashboard-quick-access-grid {
-              grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             }
 
             .business-dashboard-glance-grid {
-              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
               gap: 10px !important;
             }
 
             .business-dashboard-main-grid {
               display: grid !important;
-              grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+              grid-template-columns: minmax(0, 1fr);
               gap: 18px;
               align-items: start;
             }
@@ -815,7 +815,7 @@ function BusinessDashboard({ setPage }) {
 
             .business-dashboard-tools-row {
               display: grid !important;
-              grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+              grid-template-columns: minmax(0, 1fr);
               gap: 18px;
               align-items: stretch;
               margin-top: 18px;
@@ -828,6 +828,24 @@ function BusinessDashboard({ setPage }) {
             .business-dashboard-tools-section > button,
             .business-dashboard-upgrade-card {
               min-height: 100%;
+            }
+
+            @media (min-width: 1100px) {
+              .business-dashboard-quick-access-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+              }
+
+              .business-dashboard-glance-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+              }
+
+              .business-dashboard-main-grid {
+                grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+              }
+
+              .business-dashboard-tools-row {
+                grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+              }
             }
           }
         `}

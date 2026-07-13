@@ -19,14 +19,14 @@ const aiButtonPositionSource = readFileSync(new URL("../src/utils/aiButtonPositi
 test("mobile app shell prevents page-level horizontal overflow", () => {
   assert.match(indexCssSource, /html,\s*body,\s*#root[\s\S]*overflow-x: hidden;/);
   assert.match(indexCssSource, /body[\s\S]*-webkit-text-size-adjust: 100%;/);
-  assert.match(indexCssSource, /@media \(max-width: 768px\)/);
+  assert.match(indexCssSource, /@media \(max-width: 1099px\)/);
   assert.match(indexCssSource, /--meetro-mobile-bottom-nav-clearance: calc\(96px \+ env\(safe-area-inset-bottom, 0px\)\);/);
   assert.match(indexCssSource, /\.app-page,[\s\S]*\.meetro-mobile-fit-page[\s\S]*width: 100% !important;[\s\S]*max-width: 100% !important;[\s\S]*min-width: 0 !important;[\s\S]*overflow-x: hidden !important;/);
   assert.match(indexCssSource, /\.app-page \*,[\s\S]*\.meetro-mobile-fit-page \*[\s\S]*min-width: 0;/);
 });
 
-test("mobile BottomNav stays compact and desktop sidebar does not activate early", () => {
-  assert.match(bottomNavSource, /@media \(min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/);
+test("mobile BottomNav stays compact while iPad uses the desktop sidebar", () => {
+  assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.desktop-sidebar/);
   assert.match(bottomNavSource, /\.bottom-nav-dock \{\n\s+display: none !important;/);
   assert.match(bottomNavSource, /width: "100%"/);
   assert.match(bottomNavSource, /maxWidth: "100%"/);
@@ -73,7 +73,7 @@ test("Ask Meetro launcher remains clamped inside mobile viewport", () => {
   assert.match(aiButtonPositionSource, /maxX: Math\.max\(horizontalLeftInset, offsetLeft \+ width - horizontalRightInset - buttonSize\)/);
   assert.match(assistantSource, /const launcherPositionOptions = \{/);
   assert.match(assistantSource, /const ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN = 20/);
-  assert.match(assistantSource, /window\.innerWidth <= 768[\s\S]*ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN/);
+  assert.match(assistantSource, /appLayoutMetrics\.mobileMode[\s\S]*ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN/);
   assert.match(assistantSource, /edgeMargin: launcherEdgeMargin/);
   assert.match(assistantSource, /right: `max\(\$\{launcherEdgeMargin\}px, env\(safe-area-inset-right, 0px\)\)`/);
   assert.match(assistantSource, /writeStoredAiButtonPosition\(\s*dragState\.lastPosition/);

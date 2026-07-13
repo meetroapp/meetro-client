@@ -856,12 +856,11 @@ const adaptiveNavigationStyles = `
     display: none;
   }
 
-  @media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
-    .desktop-sidebar {
+  #root[data-app-layout="desktop"] .desktop-sidebar {
       display: flex;
-    }
+  }
 
-    .desktop-profile-context-backdrop {
+  #root[data-app-layout="desktop"] .desktop-profile-context-backdrop {
       position: fixed;
       inset: 0;
       z-index: 10000;
@@ -872,49 +871,48 @@ const adaptiveNavigationStyles = `
       border: none;
       background: rgba(15,23,42,0.01);
       cursor: default;
-    }
+  }
 
-    .desktop-profile-context-card {
+  #root[data-app-layout="desktop"] .desktop-profile-context-card {
       display: block;
-    }
+  }
 
-    .bottom-nav-dock {
+  #root[data-app-layout="desktop"] .bottom-nav-dock {
       display: none !important;
-    }
+  }
 
-    .app-page,
-    .page-shell,
-    .business-dashboard,
-    .contractor-dashboard {
+  #root[data-app-layout="desktop"] .app-page,
+  #root[data-app-layout="desktop"] .page-shell,
+  #root[data-app-layout="desktop"] .business-dashboard,
+  #root[data-app-layout="desktop"] .contractor-dashboard {
       width: calc(100% - var(--meetro-sidebar-width)) !important;
       max-width: calc(100vw - var(--meetro-sidebar-width)) !important;
       margin-left: var(--meetro-sidebar-width) !important;
       margin-right: 0 !important;
       padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
-    }
+  }
 
-    .meetro-responsive-page,
-    .meetro-readable-page,
-    .meetro-form-page,
-    .meetro-wide-page {
+  #root[data-app-layout="desktop"] .meetro-responsive-page,
+  #root[data-app-layout="desktop"] .meetro-readable-page,
+  #root[data-app-layout="desktop"] .meetro-form-page,
+  #root[data-app-layout="desktop"] .meetro-wide-page {
       max-width: calc(100vw - var(--meetro-sidebar-width)) !important;
-    }
+  }
 
-    .desktop-sidebar-item:focus-visible {
+  #root[data-app-layout="desktop"] .desktop-sidebar-item:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
-    .desktop-profile-context-card button:focus-visible {
+  #root[data-app-layout="desktop"] .desktop-profile-context-card button:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
-    .desktop-profile-card-scroll .profile-embedded-content {
+  #root[data-app-layout="desktop"] .desktop-profile-card-scroll .profile-embedded-content {
       max-width: none !important;
       margin-left: 0 !important;
       width: 100% !important;
-    }
   }
 `;
 
@@ -923,7 +921,7 @@ const desktopSidebar = {
   top: "18px",
   left: "18px",
   bottom: "18px",
-  width: "calc(var(--meetro-layout-sidebar-width, 284px) - 36px)",
+  width: "calc(var(--meetro-sidebar-width, 284px) - 36px)",
   zIndex: 9998,
   flexDirection: "column",
   gap: "18px",

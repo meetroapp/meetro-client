@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import {
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
@@ -24,6 +25,9 @@ import GuideOverlay from "./components/GuideOverlay";
 import GlobalInsightLayer from "./components/GlobalInsightLayer";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import LoadingScreen from "./components/LoadingScreen";
+import {
+  startAppLayoutCoordinator,
+} from "./utils/appLayout";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -254,6 +258,11 @@ function withGuideLayer(component, currentPage, setPage) {
 }
 
 function App() {
+  useEffect(() => {
+    const root = document.getElementById("root");
+    return startAppLayoutCoordinator({ root, capacitor: Capacitor });
+  }, []);
+
   useEffect(() => {
     recoverStoredRequestRelationships();
   }, []);

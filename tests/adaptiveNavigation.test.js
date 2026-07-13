@@ -53,12 +53,8 @@ test("adaptive navigation keeps BottomNav for compact layouts and Sidebar for de
   assert.match(bottomNavSource, /className="desktop-sidebar"/);
   assert.match(bottomNavSource, /aria-label="Primary desktop navigation"/);
   assert.match(bottomNavSource, /\.desktop-sidebar \{\n\s+display: none;/);
-  assert.match(
-    bottomNavSource,
-    /@media \(min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/
-  );
-  assert.match(bottomNavSource, /\.desktop-sidebar \{\n\s+display: flex;/);
-  assert.match(bottomNavSource, /\.bottom-nav-dock \{\n\s+display: none !important;/);
+  assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.desktop-sidebar \{/);
+  assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.bottom-nav-dock \{/);
 });
 
 test("adaptive desktop navigation reuses the existing role-based destinations", () => {
@@ -220,7 +216,7 @@ test("desktop layout removes BottomNav reservation without changing mobile safe 
 
 test("desktop navigation width supports full workspace labels", () => {
   assert.match(indexCssSource, /--meetro-layout-sidebar-width: 284px/);
-  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-layout-sidebar-width, 284px\) - 36px\)"/);
+  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-sidebar-width, 284px\) - 36px\)"/);
   assert.match(bottomNavSource, /label: "Communication"/);
   assert.match(bottomNavSource, /label: "Meetro Moments"/);
   assert.match(bottomNavSource, /label: "Profile \/ Account"/);

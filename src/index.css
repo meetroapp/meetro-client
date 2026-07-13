@@ -123,7 +123,7 @@ h6 {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1099px) {
   :root {
     --meetro-mobile-page-inline: max(14px, env(safe-area-inset-left, 0px));
     --meetro-mobile-page-inline-end: max(14px, env(safe-area-inset-right, 0px));
@@ -254,6 +254,16 @@ h6 {
   }
 }
 
+#root[data-app-layout="desktop"] {
+  --meetro-sidebar-width: clamp(220px, 27vw, var(--meetro-layout-sidebar-width));
+}
+
+@media (min-width: 1180px) {
+  #root[data-app-layout="desktop"] {
+    --meetro-sidebar-width: var(--meetro-layout-sidebar-width);
+  }
+}
+
 .meetro-assistant-launcher {
   animation: none;
 }
@@ -264,7 +274,7 @@ h6 {
   }
 }
 
-@media (min-width: 768px) and (max-width: 1179px) {
+@media (min-width: 1100px) and (max-width: 1179px) {
   .meetro-assistant-overlay {
     align-items: flex-start !important;
     justify-content: flex-start !important;
@@ -647,36 +657,36 @@ h6 {
   max-width: 72ch;
 }
 
-@media (min-width: 768px) {
-  .meetro-responsive-page {
+@media (min-width: 1100px) {
+  #root[data-app-layout="desktop"] .meetro-responsive-page {
     max-width: var(--meetro-layout-content-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
-  .meetro-wide-page {
+  #root[data-app-layout="desktop"] .meetro-wide-page {
     max-width: var(--meetro-layout-wide-mid-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
-  .meetro-readable-page,
-  .meetro-form-page {
+  #root[data-app-layout="desktop"] .meetro-readable-page,
+  #root[data-app-layout="desktop"] .meetro-form-page {
     max-width: var(--meetro-layout-readable-mid-max) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
 
-  .meetro-form-page {
+  #root[data-app-layout="desktop"] .meetro-form-page {
     max-width: var(--meetro-layout-form-max) !important;
   }
 
-  .meetro-responsive-grid {
+  #root[data-app-layout="desktop"] .meetro-responsive-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--meetro-layout-grid-gap);
   }
 
-  .meetro-grid-2 {
+  #root[data-app-layout="desktop"] .meetro-grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1130,33 +1140,33 @@ body {
   overflow-x: hidden;
 }
 
-@media (min-width: 768px) {
-  .app-page,
-  .page-shell,
-  .business-dashboard,
-  .contractor-dashboard {
+@media (min-width: 1100px) {
+  #root[data-app-layout="desktop"] .app-page,
+  #root[data-app-layout="desktop"] .page-shell,
+  #root[data-app-layout="desktop"] .business-dashboard,
+  #root[data-app-layout="desktop"] .contractor-dashboard {
     width: min(100%, 1180px);
     margin-left: auto;
     margin-right: auto;
   }
 
-  .bottom-nav-dock {
+  #root[data-app-layout="desktop"] .bottom-nav-dock {
     display: flex;
     justify-content: center;
     padding: 0 24px;
   }
 
-  .bottom-nav {
+  #root[data-app-layout="desktop"] .bottom-nav {
     width: min(760px, 100%);
     border-radius: 22px 22px 0 0;
   }
 
-  .business-dashboard-glance-grid {
+  #root[data-app-layout="desktop"] .business-dashboard-glance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1100px) {
   .app-page,
   .page-shell,
   .business-dashboard,
@@ -1506,7 +1516,7 @@ button {
 
 
 /* HOTFIX: iPhone mobile web containment */
-@media (max-width: 767px) {
+@media (max-width: 1099px) {
   html,
   body,
   #root {

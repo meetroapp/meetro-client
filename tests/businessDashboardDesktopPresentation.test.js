@@ -20,10 +20,11 @@ test("business dashboard desktop quick access routes to existing destinations on
   assert.doesNotMatch(quickAccessBlock, /businessCommandCenter/);
 });
 
-test("business dashboard desktop presentation is wide-screen only", () => {
+test("business dashboard desktop presentation begins at the stable tablet breakpoint", () => {
   assert.match(source, /\.business-dashboard-quick-access \{\s*display: none;\s*\}/);
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: block;\s*\}/);
-  assert.match(source, /@media \(min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(source, /@media \(min-width: 1100px\)/);
+  assert.match(source, /#root\[data-app-layout="desktop"\]/);
   assert.match(
     source,
     /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*width: min\(calc\(100vw - var\(--meetro-sidebar-width\)\), 1228px\) !important;/

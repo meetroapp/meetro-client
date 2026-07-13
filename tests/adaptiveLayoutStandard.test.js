@@ -62,7 +62,7 @@ test("adaptive shells use shared width and spacing tokens instead of hard-coded 
 });
 
 test("hosted and companion desktop surfaces use the adaptive layout standard", () => {
-  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-layout-sidebar-width, 284px\) - 36px\)"/);
+  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-sidebar-width, 284px\) - 36px\)"/);
   assert.match(bottomNavSource, /width: "min\(var\(--meetro-layout-hosted-width, 414px\), calc\(100vw - 40px\)\)"/);
   assert.match(bottomNavSource, /maxHeight: "min\(82dvh, var\(--meetro-layout-hosted-max-height, 720px\)\)"/);
   assert.match(indexCssSource, /width: min\(var\(--meetro-layout-companion-width\), calc\(100vw - var\(--meetro-sidebar-width, 0px\) - \(var\(--meetro-layout-desktop-gutter\) \* 2\)\)\) !important;/);
@@ -74,7 +74,7 @@ test("adaptive layout standard explicitly protects mobile behavior", () => {
   assert.match(standardSource, /BottomNav behavior/);
   assert.match(standardSource, /Mobile route flow/);
   assert.match(standardSource, /Mobile safe-area handling/);
-  assert.match(indexCssSource, /@media \(max-width: 768px\)/);
+  assert.match(indexCssSource, /@media \(max-width: 1099px\)/);
   assert.match(bottomNavSource, /className="bottom-nav-dock"/);
   assert.match(bottomNavSource, /aria-label="Primary mobile navigation"/);
 });

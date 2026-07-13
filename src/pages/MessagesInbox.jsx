@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import { getCommunicationLayout } from "../utils/communicationLayout";
+import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import SafeBackBar from "../components/SafeBackBar";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
@@ -481,6 +483,10 @@ function createEmptyTicketComposer(relationship = {}) {
 
 function MessagesInbox({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
+  const appLayoutMetrics = useAppLayoutMetrics();
+  const communicationLayout = getCommunicationLayout(appLayoutMetrics);
+  const isSplitPane = communicationLayout.mode === "desktop";
+  const isWideWorkspace = communicationLayout.columns === 3;
 
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -491,8 +497,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
-  const [isSplitPane, setIsSplitPane] = useState(false);
-  const [isWideWorkspace, setIsWideWorkspace] = useState(false);
+  const [compactContextOpen, setCompactContextOpen] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
     localStorage.getItem("activeConversationId") || ""
   );
@@ -715,37 +720,6 @@ function MessagesInbox({ setPage, currentPage }) {
 
     return [emergencyConversation, ...withoutDuplicate];
   }
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(
-      "(min-width: 900px) and (hover: hover) and (pointer: fine)"
-    );
-    const wideQuery = window.matchMedia(
-      "(min-width: 1180px) and (hover: hover) and (pointer: fine)"
-    );
-    const updateSplitPane = () => {
-      setIsSplitPane(mediaQuery.matches);
-      setIsWideWorkspace(wideQuery.matches);
-    };
-
-    updateSplitPane();
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener("change", updateSplitPane);
-      wideQuery.addEventListener("change", updateSplitPane);
-      return () => {
-        mediaQuery.removeEventListener("change", updateSplitPane);
-        wideQuery.removeEventListener("change", updateSplitPane);
-      };
-    }
-
-    mediaQuery.addListener(updateSplitPane);
-    wideQuery.addListener(updateSplitPane);
-    return () => {
-      mediaQuery.removeListener(updateSplitPane);
-      wideQuery.removeListener(updateSplitPane);
-    };
-  }, []);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -4173,6 +4147,8 @@ function MessagesInbox({ setPage, currentPage }) {
       className={`app-page meetro-wide-page meetro-visual-page messages-inbox-page${
         focusedMessagesFlowOpen ? " messages-focused-flow-open" : ""
       }`}
+      data-communication-layout={isSplitPane ? "desktop" : "mobile"}
+      data-communication-context-mode={isWideWorkspace ? "column" : isSplitPane ? "inline" : "mobile"}
       style={{
         ...pageWrapper,
         ...(isSplitPane ? splitPageWrapper : {}),
@@ -4320,6 +4296,19 @@ function MessagesInbox({ setPage, currentPage }) {
               </button>
             )}
           </div>
+
+          {isSplitPane && !isWideWorkspace && (
+            <button
+              type="button"
+              style={compactContextToggle}
+              aria-expanded={compactContextOpen}
+              aria-controls="communication-inline-context"
+              onClick={() => setCompactContextOpen((open) => !open)}
+            >
+              <span>Relationship context</span>
+              <span aria-hidden="true">{compactContextOpen ? "−" : "+"}</span>
+            </button>
+          )}
         </>
       )}
 
@@ -5111,6 +5100,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
       {!savedHistoryOpen && (
       <div
+        data-communication-columns={isWideWorkspace ? "three" : isSplitPane ? "two" : "one"}
         style={
           isSplitPane
             ? {
@@ -5311,6 +5301,12 @@ function MessagesInbox({ setPage, currentPage }) {
       </div>
       )}
 
+      {isSplitPane && !isWideWorkspace && compactContextOpen && (
+        <div id="communication-inline-context" style={compactContextRegion}>
+          {renderWorkspaceContextPanel()}
+        </div>
+      )}
+
 
         <BottomNav setPage={setPage} currentPage="messagesInbox" />
     </div>
@@ -5354,7 +5350,7 @@ const splitPageWrapper = {
 
 const splitShell = {
   display: "grid",
-  gridTemplateColumns: "minmax(320px, 0.42fr) minmax(0, 0.58fr)",
+  gridTemplateColumns: "minmax(220px, 0.38fr) minmax(0, 0.62fr)",
   gap: "18px",
   alignItems: "stretch",
   height: "min(760px, calc(100dvh - 330px))",
@@ -5370,6 +5366,36 @@ const wideWorkspaceShell = {
     "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
   gap: "20px",
   height: "min(780px, calc(100dvh - 300px))",
+};
+
+const compactContextToggle = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  minHeight: "44px",
+  margin: "0 0 12px",
+  padding: "10px 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+  borderRadius: "16px",
+  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxSizing: "border-box",
+};
+
+const compactContextRegion = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  height: "min(360px, 42dvh)",
+  marginTop: "14px",
+  overflow: "hidden",
 };
 
 const splitListPane = {
@@ -5394,6 +5420,8 @@ const splitThreadPane = {
 };
 
 const workspaceContextPane = {
+  width: "100%",
+  maxWidth: "100%",
   minWidth: 0,
   minHeight: 0,
   height: "100%",

@@ -406,7 +406,7 @@ test("Business Profile readiness and improvement guidance use existing truth wit
   assert.match(source, /t\("publicPresenceGuidance"\)/);
   assert.match(source, /t\("portfolioProof"\)/);
   assert.match(source, /className="business-profile-shell"/);
-  assert.match(source, /grid-template-columns: minmax\(0, 1\.08fr\) minmax\(340px, 0\.92fr\)/);
+  assert.match(source, /grid-template-columns: minmax\(0, 1\.08fr\) minmax\(300px, 0\.92fr\)/);
   assert.doesNotMatch(source, /profileCompletionPercent/);
   assert.doesNotMatch(source, /92%/);
   assert.doesNotMatch(source, /trustScore|customerTrustScore|newTrustMetric/);
