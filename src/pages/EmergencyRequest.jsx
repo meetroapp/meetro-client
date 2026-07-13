@@ -15,6 +15,7 @@ import {
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import { formatMessageTime } from "../utils/displayTime";
+import { resolveWorkflowAddress } from "../utils/personalAddresses";
 
 function EmergencyRequest({ setPage }) {
   const [language, setLanguage] = useState(
@@ -295,6 +296,12 @@ const selectedService =
       selectedService
     );
 
+    const emergencyLocation = resolveWorkflowAddress({
+      explicitAddress: localStorage.getItem("emergencyLocation") || "",
+      selectedPropertyAddress: localStorage.getItem("selectedPropertyAddress") || "",
+      projectAddress: localStorage.getItem("activeProjectAddress") || "",
+      requestAddress: localStorage.getItem("activeRequestAddress") || "",
+    }) || "Emergency Service Location";
     const emergencyRecord = {
       id: emergencyRequestId,
       conversationId: emergencyConversationId,
@@ -314,7 +321,7 @@ const selectedService =
       businessPhone: localStorage.getItem("emergencyBusinessPhone") || "",
       dispatchFee: localStorage.getItem("emergencyDispatchFee") || "",
       cancellationFee: localStorage.getItem("emergencyCancellationFee") || "",
-      location: localStorage.getItem("emergencyLocation") || "Cape Coral",
+      location: emergencyLocation,
       status: "pending",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -398,9 +405,7 @@ const selectedService =
         localStorage.getItem("userName") ||
         localStorage.getItem("customerName") ||
         "Emergency Customer",
-      location:
-        localStorage.getItem("emergencyLocation") ||
-        "Emergency Service Location",
+      location: emergencyLocation,
       requestCategory: emergencyMatchingFields.requestCategory,
       serviceDomain: emergencyMatchingFields.serviceDomain,
       serviceSpecialty: emergencyMatchingFields.serviceSpecialty,

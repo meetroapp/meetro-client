@@ -24,6 +24,34 @@ import {
   guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
+import { resolveWorkflowAddress } from "../utils/personalAddresses";
+
+function readStoredRecord(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null") || {};
+  } catch {
+    return {};
+  }
+}
+
+function getInitialRequestLocation() {
+  const selectedProperty = readStoredRecord("selectedProperty");
+  const selectedProject = readStoredRecord("selectedProject");
+  const selectedRequest = readStoredRecord("selectedHomeownerRequest");
+  return resolveWorkflowAddress({
+    explicitAddress: localStorage.getItem("requestLocationDraft") || "",
+    selectedPropertyAddress:
+      localStorage.getItem("selectedPropertyAddress") ||
+      selectedProperty.fullAddress ||
+      selectedProperty.address ||
+      selectedProperty.location ||
+      "",
+    projectAddress:
+      selectedProject.fullAddress || selectedProject.address || selectedProject.location || "",
+    requestAddress:
+      selectedRequest.fullAddress || selectedRequest.address || selectedRequest.location || "",
+  });
+}
 
 function buildSuggestedRequestTitle(value = "", fallback = "") {
   const source = String(value || fallback || "").trim();
@@ -51,7 +79,7 @@ function Upload({ setPage, currentPage }) {
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(getInitialRequestLocation);
   const [unitNumber, setUnitNumber] = useState("");
   const [accessNotes, setAccessNotes] = useState("");
   const [imageUrl, setImageUrl] = useState("");

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import PersonalAddressManager from "../components/PersonalAddressManager";
 import {
   SUPPORTED_LANGUAGES,
   getLanguage,
@@ -34,6 +35,11 @@ import {
   getInsightTesterButtonGroups,
   shouldRenderInsightTester,
 } from "../utils/relationshipInsightTester";
+import {
+  formatPersonalAddress,
+  readPersonalAddresses,
+  resolveDefaultPersonalAddress,
+} from "../utils/personalAddresses";
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -41,6 +47,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [user, setUser] = useState(null);
   const [language, updateLanguage] = useState(getLanguage());
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
+  const [addressManagerOpen, setAddressManagerOpen] = useState(false);
+  const [personalAddresses, setPersonalAddresses] = useState(() => readPersonalAddresses());
   const [personalInfoOpen, setPersonalInfoOpen] = useState(false);
   const [myProfessionalsOpen, setMyProfessionalsOpen] = useState(false);
   const [personalInfoForm, setPersonalInfoForm] = useState({
@@ -177,6 +185,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
           if (nextUser.email) {
             localStorage.setItem("userEmail", nextUser.email);
           }
+          setPersonalAddresses(readPersonalAddresses({ user: nextUser }));
 
           const savedPhoto =
             nextUser.profile_photo_url ||
@@ -657,16 +666,11 @@ function Profile({ setPage, currentPage, embedded = false }) {
         { month: "short", year: "numeric" }
       )
     : t("notSet");
-  const primaryAddress =
-    localStorage.getItem("primaryPropertyAddress") ||
-    localStorage.getItem("primaryServiceAddress") ||
-    localStorage.getItem("fullServiceAddress") ||
-    localStorage.getItem("userAddress") ||
-    "";
-  const savedAddresses = [
-    ...readLocalQueue("meetroSavedAddresses"),
-    ...readLocalQueue("savedAddresses"),
-  ];
+  const defaultPersonalAddress = resolveDefaultPersonalAddress();
+  const primaryAddress = defaultPersonalAddress
+    ? formatPersonalAddress(defaultPersonalAddress)
+    : "";
+  const savedAddresses = personalAddresses;
   const completedRecords = [
     ...readLocalQueue("completedProjects"),
     ...readLocalQueue("homeownerRequests").filter((request) =>
@@ -917,8 +921,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
           <ProfileActionButton
             icon="location"
             label={t("manageAddresses")}
-            badge={t("comingSoon")}
-            disabled
+            onClick={() => setAddressManagerOpen(true)}
           />
           <ProfileActionButton
             icon="payment"
@@ -952,9 +955,9 @@ function Profile({ setPage, currentPage, embedded = false }) {
                 ? `${savedAddresses.length}`
                 : primaryAddress
                 ? t("ready")
-                : t("comingSoon")
+                : t("notSet")
             }
-            disabled={!savedAddresses.length && !primaryAddress}
+            onClick={() => setAddressManagerOpen(true)}
           />
 
           <SettingRow
@@ -1265,6 +1268,14 @@ function Profile({ setPage, currentPage, embedded = false }) {
               </div>
             </div>
           </div>
+        )}
+
+        {addressManagerOpen && (
+          <PersonalAddressManager
+            addresses={personalAddresses}
+            onChange={setPersonalAddresses}
+            onClose={() => setAddressManagerOpen(false)}
+          />
         )}
 
         {languagePickerOpen && (
