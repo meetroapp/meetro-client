@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   calculateExpandedPanelPlacement,
   getCompanionLayoutMode,
+  getCompanionPreferredPanelWidth,
 } from "../src/utils/companionPanelPlacement.js";
 
 const assistantSource = readFileSync(
@@ -31,11 +32,12 @@ test("iPad portrait shifts a right-edge launcher panel fully inward", () => {
     bottomClearance: 94,
     edgeGap: 14,
     preferredHeight: 520,
+    preferredWidth: getCompanionPreferredPanelWidth(768),
   });
 
   assert.equal(placement.layoutMode, "desktop");
   assert.equal(placement.horizontalPlacement, "left");
-  assert.equal(placement.width, 388);
+  assert.equal(placement.width, 720);
   assertContained(placement);
 });
 
@@ -47,6 +49,7 @@ test("iPad landscape bounds conversation height and prevents stale portrait over
     bottomClearance: 94,
     edgeGap: 14,
     preferredHeight: 720,
+    preferredWidth: getCompanionPreferredPanelWidth(1024),
   });
 
   assert.equal(placement.layoutMode, "desktop");
@@ -115,6 +118,10 @@ test("layout mode uses usable width rather than touch or user agent", () => {
   assert.equal(getCompanionLayoutMode(768), "desktop");
   assert.equal(getCompanionLayoutMode(1024), "desktop");
   assert.equal(getCompanionLayoutMode(1440), "desktop");
+  assert.equal(getCompanionPreferredPanelWidth(390), 388);
+  assert.equal(getCompanionPreferredPanelWidth(768), 720);
+  assert.equal(getCompanionPreferredPanelWidth(1024), 720);
+  assert.equal(getCompanionPreferredPanelWidth(1440), 388);
 });
 
 test("expanded placement leaves saved launcher coordinates untouched", () => {
@@ -132,6 +139,8 @@ test("iPad CSS uses desktop-style floating hierarchy without pointer detection",
   assert.match(stylesSource, /@media \(min-width: 768px\) and \(max-width: 1179px\)/);
   assert.match(stylesSource, /@media \(min-width: 768px\) and \(max-width: 1179px\) \{[\s\S]*background: transparent !important/);
   assert.match(stylesSource, /@media \(min-width: 768px\) and \(max-width: 1179px\) \{[\s\S]*\.meetro-assistant-sheet[\s\S]*border-radius: 28px !important/);
+  assert.match(stylesSource, /@media \(min-width: 768px\) and \(max-width: 1179px\) \{[\s\S]*overflow-y: auto !important/);
+  assert.doesNotMatch(stylesSource, /@media \(min-width: 768px\) and \(max-width: 1179px\) \{[\s\S]*data-companion-section[\s\S]*display:\s*none/);
   assert.doesNotMatch(stylesSource, /iPad|Macintosh|navigator\.userAgent/);
 });
 
@@ -147,6 +156,20 @@ test("desktop-style section hierarchy remains shared on tablet", () => {
   assert.ok(input > suggestions);
   assert.match(assistantSource, /lanternContext\.status/);
   assert.match(assistantSource, /assistantCompanionSuggestedActions/);
+  assert.match(assistantSource, /data-companion-layout=\{companionLayoutMode\}/);
+  assert.match(assistantSource, /data-companion-section="header"/);
+  assert.match(assistantSource, /data-companion-section="todays-focus"/);
+  assert.match(assistantSource, /data-companion-section="suggested-actions"/);
+  assert.match(assistantSource, /data-companion-section="ask-anything"/);
+  assert.equal(assistantSource.match(/className={`meetro-assistant-sheet/g)?.length, 1);
+});
+
+test("iPad and desktop share one desktop content path while iPhone stays mobile", () => {
+  assert.match(assistantSource, /const companionLayoutMode = getCompanionLayoutMode\(companionViewport\.width\)/);
+  assert.match(assistantSource, /data-companion-viewport-width=\{Math\.round\(companionViewport\.width\)\}/);
+  assert.match(assistantSource, /data-companion-panel-mode=\{companionMode\}/);
+  assert.doesNotMatch(assistantSource, /navigator\.(?:userAgent|maxTouchPoints)/);
+  assert.doesNotMatch(assistantSource, /isTablet|tabletLayout|compactDesktop|hybridMobile/);
 });
 
 test("visual viewport and orientation listeners recalculate and clean up", () => {

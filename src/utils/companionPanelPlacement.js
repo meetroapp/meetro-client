@@ -1,5 +1,6 @@
 export const COMPANION_TABLET_MIN_WIDTH = 768;
 export const COMPANION_PREFERRED_WIDTH = 388;
+export const COMPANION_TABLET_DESKTOP_WIDTH = 720;
 export const COMPANION_PREFERRED_GUIDANCE_HEIGHT = 520;
 export const COMPANION_PREFERRED_CONVERSATION_HEIGHT = 720;
 
@@ -16,6 +17,13 @@ export function getCompanionLayoutMode(usableViewportWidth = 0) {
   return finite(usableViewportWidth) >= COMPANION_TABLET_MIN_WIDTH
     ? "desktop"
     : "mobile";
+}
+
+export function getCompanionPreferredPanelWidth(usableViewportWidth = 0) {
+  const width = finite(usableViewportWidth);
+  return width >= COMPANION_TABLET_MIN_WIDTH && width < 1180
+    ? COMPANION_TABLET_DESKTOP_WIDTH
+    : COMPANION_PREFERRED_WIDTH;
 }
 
 export function calculateExpandedPanelPlacement({

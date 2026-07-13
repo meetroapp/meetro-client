@@ -276,12 +276,19 @@ h6 {
   }
 
   .meetro-assistant-presence {
+    width: 100% !important;
+    max-width: 100% !important;
     margin: 0 !important;
+    min-height: 0 !important;
   }
 
   .meetro-assistant-sheet {
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
     border-radius: 28px !important;
   }
 }

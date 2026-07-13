@@ -47,6 +47,8 @@ import { getConversationParticipantIdentity } from "../utils/conversationIdentit
 import { readRequestCompanionContext } from "../utils/requestCompanionContext";
 import {
   calculateExpandedPanelPlacement,
+  getCompanionLayoutMode,
+  getCompanionPreferredPanelWidth,
   COMPANION_PREFERRED_CONVERSATION_HEIGHT,
   COMPANION_PREFERRED_GUIDANCE_HEIGHT,
 } from "../utils/companionPanelPlacement";
@@ -3686,6 +3688,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         bottom: launcherFallbackBottom,
       };
   const companionViewport = getLauncherViewport();
+  const companionLayoutMode = getCompanionLayoutMode(companionViewport.width);
   const companionAnchorStyle = getCompanionAnchorStyle({
     launcherPosition,
     launcherButtonSize,
@@ -3772,6 +3775,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
             assistantClosing ? "meetro-assistant-overlay-closing" : "meetro-assistant-overlay-open"
           }`}
           style={assistantOverlay}
+          data-companion-layout={companionLayoutMode}
+          data-companion-viewport-width={Math.round(companionViewport.width)}
+          data-companion-panel-mode={companionMode}
           onClick={closeAssistant}
         >
           <div
@@ -3779,6 +3785,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
               assistantClosing ? "meetro-assistant-presence-closing" : "meetro-assistant-presence-open"
             }`}
             style={companionAnchorStyle}
+            data-companion-layout={companionLayoutMode}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="meetro-assistant-ambient-glow" aria-hidden="true" />
@@ -3800,7 +3807,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
           >
             <div style={assistantHandle} />
 
-            <div style={assistantHeader}>
+            <div style={assistantHeader} data-companion-section="header">
               <div style={assistantHeaderCopy}>
                 <span style={assistantEyebrow}>{lanternContext.title}</span>
                 <h2 style={assistantTitle}>{t("assistantCompanionPanelTitle", language)}</h2>
@@ -3817,6 +3824,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
             {isGuidanceMode && (
               <section
                 style={companionGuidancePanel}
+                data-companion-section="todays-focus"
                 aria-label={t("assistantCompanionWorkspaceGuidance", language)}
               >
                 <div style={companionGuidanceItem}>
@@ -3891,7 +3899,10 @@ function MeetroAssistant({ currentPage = "", setPage }) {
               </div>
 
               {companionSuggestedActions.length > 0 && (
-                <div style={companionSuggestionPanel}>
+                <div
+                  style={companionSuggestionPanel}
+                  data-companion-section="suggested-actions"
+                >
                   <span style={companionSuggestionTitle}>
                     {t("assistantCompanionSuggestedActions", language)}
                   </span>
@@ -3994,7 +4005,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
               {voiceError && <p style={voiceErrorText}>{voiceError}</p>}
 
-              <form style={companionInputForm} onSubmit={submitTypedQuestion}>
+              <form
+                style={companionInputForm}
+                data-companion-section="ask-anything"
+                onSubmit={submitTypedQuestion}
+              >
                 <input
                   value={typedQuestion}
                   onChange={(event) => setTypedQuestion(event.target.value)}
@@ -4310,6 +4325,7 @@ function getCompanionAnchorMetrics({
     edgeGap: ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN,
     panelGap: ASSISTANT_EXPANDED_CARD_GAP,
     preferredHeight,
+    preferredWidth: getCompanionPreferredPanelWidth(viewport.width),
   });
 
   return {
