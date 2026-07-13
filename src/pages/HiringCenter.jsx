@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import MeetroIcon from "../components/MeetroIcon";
 import HiringInterviewEditor from "../components/HiringInterviewEditor";
+import HiringSettingsWorkspace from "../components/HiringSettingsWorkspace";
 import { getLanguage, t } from "../utils/language";
 import {
   getHiringApplicants,
@@ -31,6 +32,14 @@ import {
 } from "../utils/hiringInterviews";
 import { upsertNotification } from "../utils/meetroNotifications";
 import {
+  applyHiringSettingsToPositionDraft,
+  getHiringSettingsSummary,
+  isHiringNotificationEnabled,
+  projectSettingsIntoApplicationReview,
+  readHiringSettings,
+  saveHiringSettings,
+} from "../utils/hiringSettings";
+import {
   createTeamMember,
   listTeamMembers,
 } from "../utils/teamMembers";
@@ -38,6 +47,9 @@ import {
 function HiringCenter({ setPage }) {
   const language = getLanguage();
   const isSpanish = language === "es";
+  const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "local-business";
+  const accountMode = localStorage.getItem("activeAccountMode") || "business";
+  const initialHiringSettings = readHiringSettings({ businessId, accountMode });
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [selectedApplicant, setSelectedApplicant] = useState(() =>
     getHiringApplicantById(localStorage.getItem("selectedHiringApplicantId"))
@@ -46,9 +58,13 @@ function HiringCenter({ setPage }) {
   const [isCreatePositionOpen, setIsCreatePositionOpen] = useState(false);
   const [createPositionError, setCreatePositionError] = useState("");
   const [, setRefreshKey] = useState(0);
-  const [positionDraft, setPositionDraft] = useState(() => createBlankPositionDraft());
-  const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "local-business";
-  const accountMode = localStorage.getItem("activeAccountMode") || "business";
+  const [hiringSettings, setHiringSettings] = useState(
+    () => initialHiringSettings.settings
+  );
+  const [isHiringSettingsOpen, setIsHiringSettingsOpen] = useState(false);
+  const [positionDraft, setPositionDraft] = useState(() =>
+    applyHiringSettingsToPositionDraft(createBlankPositionDraft(), initialHiringSettings.settings)
+  );
   const [interviews, setInterviews] = useState(() => readHiringInterviews({ businessId }));
   const [interviewEditor, setInterviewEditor] = useState(null);
   const [interviewErrors, setInterviewErrors] = useState({});
@@ -69,7 +85,6 @@ function HiringCenter({ setPage }) {
       ? "Crea y administra tu equipo."
       : "Build and manage your team.",
     preview: isSpanish ? "Vista previa" : "Preview",
-    comingSoon: isSpanish ? "Próximamente" : "Coming Soon",
   };
 
   const openPreview = (title, body) => {
@@ -78,8 +93,16 @@ function HiringCenter({ setPage }) {
 
   const openCreatePosition = () => {
     setCreatePositionError("");
-    setPositionDraft(createBlankPositionDraft());
+    setPositionDraft(
+      applyHiringSettingsToPositionDraft(createBlankPositionDraft(), hiringSettings)
+    );
     setIsCreatePositionOpen(true);
+  };
+
+  const persistHiringSettings = (draft) => {
+    const result = saveHiringSettings(draft, { businessId, accountMode });
+    if (result.ok) setHiringSettings(result.settings);
+    return result;
   };
 
   const updatePositionDraft = (field, value) => {
@@ -106,7 +129,7 @@ function HiringCenter({ setPage }) {
       return;
     }
 
-    const result = saveHiringPosition(nextDraft);
+    const result = saveHiringPosition(nextDraft, { hiringSettings });
     if (!result.ok || !result.position) {
       setCreatePositionError("Position could not be saved. Check the required fields and try again.");
       return;
@@ -178,8 +201,11 @@ function HiringCenter({ setPage }) {
 
   const syncInterviewArtifacts = (interview, notify = true) => {
     upsertHiringInterviewMessage(interview);
-    if (notify && ["scheduled", "rescheduled", "cancelled"].includes(interview.status)) {
-      upsertNotification(projectHiringInterviewNotification(interview));
+    if (notify && ["scheduled", "rescheduled", "cancelled", "completed"].includes(interview.status)) {
+      const notification = projectHiringInterviewNotification(interview);
+      if (isHiringNotificationEnabled(notification, { businessId, accountMode })) {
+        upsertNotification(notification);
+      }
     }
     refreshInterviews();
   };
@@ -223,7 +249,7 @@ function HiringCenter({ setPage }) {
     if (!interviewEditor?.interview) return;
     const result = completeHiringInterview(interviewEditor.interview.id, { businessId, accountMode });
     if (!result.ok) return;
-    syncInterviewArtifacts(result.interview, false);
+    syncInterviewArtifacts(result.interview, true);
     setInterviewEditor(null);
     setNotice({ title: t("interviewCompleted", language), body: formatHiringInterviewSummary(result.interview) });
   };
@@ -276,7 +302,11 @@ function HiringCenter({ setPage }) {
       {
         businessId,
         accountMode,
-        onNotification: upsertNotification,
+        onNotification: (notification) => {
+          if (isHiringNotificationEnabled(notification, { businessId, accountMode })) {
+            upsertNotification(notification);
+          }
+        },
       }
     );
 
@@ -379,6 +409,18 @@ function HiringCenter({ setPage }) {
     const applicantInterviews = filterHiringInterviews(interviews, { applicantId: selectedApplicant.id });
     const activeInterview = applicantInterviews.find((item) => ["scheduled", "rescheduled"].includes(item.status));
     const latestInterview = activeInterview || applicantInterviews[0] || null;
+    const applicationGuidance = projectSettingsIntoApplicationReview(
+      hiringSettings,
+      getHiringPositionById(selectedApplicant.positionId) || {},
+      selectedApplicant
+    );
+    const applicationSummary = getHiringSettingsSummary({
+      ...hiringSettings,
+      applicationRequirements: applicationGuidance.requirements,
+    });
+    const applicationReviewSummary = t("hiringSettingsReviewSummary", language)
+      .replace("{count}", String(applicationSummary.requiredApplicationFieldCount))
+      .replace("{questions}", String(applicationSummary.customQuestionCount));
     return (
       <HiringPageShell
         setPage={setPage}
@@ -401,6 +443,16 @@ function HiringCenter({ setPage }) {
             <p style={fieldLabel}>Notes</p>
             <p style={bodyText}>{selectedApplicant.notes || "No notes yet."}</p>
           </div>
+
+          <section style={interviewSection} aria-labelledby="applicant-requirements-heading">
+            <div>
+              <p style={fieldLabel}>{t("hiringSettingsApplicationRequirements", language)}</p>
+              <h2 id="applicant-requirements-heading" style={cardTitle}>
+                {t("hiringSettingsReviewGuidance", language)}
+              </h2>
+              <p style={bodyText}>{applicationReviewSummary}</p>
+            </div>
+          </section>
 
           <section style={interviewSection} aria-labelledby="applicant-interview-heading">
             <div>
@@ -697,30 +749,18 @@ function HiringCenter({ setPage }) {
       </section>
 
       <section style={section}>
-        <SectionHeading title="Hiring Settings" description="Future hiring preferences." />
+        <SectionHeading title={t("hiringSettings", language)} description={t("hiringSettingsSectionHelp", language)} />
         <div style={settingsList}>
           {[
-            "Application requirements",
-            "Hiring notifications",
-            "Background-check preferences",
-            "Work eligibility requirements",
-          ].map((item) => (
-            <button
-              key={item}
-              type="button"
-              style={settingRow}
-              onClick={() =>
-                openPreview(
-                  "Hiring Settings are coming soon",
-                  `${item} will be configurable in a future hiring release.`
-                )
-              }
-            >
-              <span>{item}</span>
-              <span style={soonBadge}>{copy.comingSoon}</span>
-            </button>
-          ))}
+            t("hiringSettingsApplicationRequirements", language),
+            t("hiringSettingsNotifications", language),
+            t("hiringSettingsBackgroundChecks", language),
+            t("hiringSettingsWorkEligibility", language),
+          ].map((item) => <div key={item} style={settingRow}><span>{item}</span></div>)}
         </div>
+        <button type="button" className="meetro-visual-primary-button" style={interviewPrimaryAction} onClick={() => setIsHiringSettingsOpen(true)}>
+          {t("hiringSettingsManage", language)}
+        </button>
       </section>
 
       <CreatePositionSheet
@@ -731,7 +771,17 @@ function HiringCenter({ setPage }) {
         onCancel={closeCreatePosition}
         onSaveDraft={() => savePosition("Draft")}
         onPublish={() => savePosition("Open")}
+        applicationRequirements={positionDraft.applicationRequirements}
+        language={language}
       />
+      {isHiringSettingsOpen && (
+        <HiringSettingsWorkspace
+          settings={hiringSettings}
+          language={language}
+          onSave={persistHiringSettings}
+          onClose={() => setIsHiringSettingsOpen(false)}
+        />
+      )}
       <PreviewSheet notice={notice} onClose={() => setNotice(null)} />
       {interviewEditor && (
         <HiringInterviewEditor
@@ -772,6 +822,8 @@ function CreatePositionSheet({
   onCancel,
   onSaveDraft,
   onPublish,
+  applicationRequirements,
+  language,
 }) {
   if (!isOpen) return null;
 
@@ -806,6 +858,16 @@ function CreatePositionSheet({
             placeholder="Field Handyman Helper"
           />
         </label>
+
+        <div style={notesBox}>
+          <p style={fieldLabel}>{t("hiringSettingsApplicationRequirements", language)}</p>
+          <p style={sheetBody}>{t("hiringSettingsPositionDefaultsHelp", language)}</p>
+          <strong>
+            {Object.entries(applicationRequirements || {}).filter(
+              ([key, value]) => key !== "customQuestions" && value === true
+            ).length} {t("hiringSettingsRequired", language).toLowerCase()}
+          </strong>
+        </div>
 
         <label style={formField}>
           <span>Short description</span>
@@ -1311,13 +1373,6 @@ const settingRow = {
   color: "#334155",
   fontSize: "13px",
   fontWeight: "800",
-  cursor: "pointer",
-};
-
-const soonBadge = {
-  ...baseBadge,
-  background: "#f1f5f9",
-  color: "#475569",
 };
 
 const sheetOverlay = {

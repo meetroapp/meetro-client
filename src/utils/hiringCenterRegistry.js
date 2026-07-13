@@ -8,6 +8,10 @@ import {
   HIRING_POSITIONS,
   HIRING_TEAM_MEMBERS,
 } from "../data/hiringData.js";
+import {
+  normalizeApplicationRequirements,
+  projectSettingsIntoPosition,
+} from "./hiringSettings.js";
 
 export const HIRING_POSITIONS_STORAGE_KEY = "meetroHiringPositions";
 
@@ -20,6 +24,9 @@ export {
 function cloneRecord(item) {
   return {
     ...item,
+    applicationRequirements: item.applicationRequirements
+      ? normalizeApplicationRequirements(item.applicationRequirements)
+      : undefined,
     requirements: item.requirements ? [...item.requirements] : undefined,
     skillsNeeded: item.skillsNeeded ? [...item.skillsNeeded] : undefined,
     titleTranslations: cloneTranslationMap(item.titleTranslations),
@@ -138,6 +145,9 @@ export function getHiringLocalJobOpenings(storage = safeStorage()) {
       scheduleTranslations: cloneTranslationMap(position.scheduleTranslations),
       contactPreference: position.contactPreference || "",
       status: position.status,
+      applicationRequirements: position.applicationRequirements
+        ? normalizeApplicationRequirements(position.applicationRequirements)
+        : undefined,
       sourcePositionId: position.id,
     }));
 }
@@ -234,6 +244,11 @@ export function normalizeHiringPositionDraft(draft = {}, options = {}) {
   const status = HIRING_POSITION_STATUSES.includes(draft.status)
     ? draft.status
     : "Draft";
+  const applicationRequirements = draft.applicationRequirements
+    ? normalizeApplicationRequirements(draft.applicationRequirements)
+    : options.hiringSettings
+    ? projectSettingsIntoPosition(options.hiringSettings, draft).requirements
+    : undefined;
 
   return {
     id,
@@ -257,6 +272,7 @@ export function normalizeHiringPositionDraft(draft = {}, options = {}) {
     skillsNeeded: normalizeList(draft.skillsNeeded),
     scheduleAvailability: normalizeText(draft.scheduleAvailability),
     contactPreference: normalizeText(draft.contactPreference),
+    ...(applicationRequirements ? { applicationRequirements } : {}),
     source: "local_hiring_position",
     createdAt,
     updatedAt: options.updatedAt || new Date().toISOString(),
@@ -278,8 +294,21 @@ export function saveHiringPosition(draft = {}, options = {}) {
     };
   }
 
-  const position = normalizeHiringPositionDraft(draft, options);
   const existing = getStoredHiringPositions(storage);
+  const current = existing.find((item) => item.id === normalizeText(draft.id));
+  if (current?.status === "Closed") {
+    return {
+      ok: false,
+      validation: { valid: false, missingFields: [], errors: { status: "closed_position_immutable" } },
+      position: cloneRecord(current),
+    };
+  }
+  const position = normalizeHiringPositionDraft(
+    current?.applicationRequirements && !draft.applicationRequirements
+      ? { ...draft, applicationRequirements: current.applicationRequirements }
+      : draft,
+    options
+  );
   const withoutDuplicate = existing.filter((item) => item.id !== position.id);
   safeWriteArray(storage, HIRING_POSITIONS_STORAGE_KEY, [
     position,

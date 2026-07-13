@@ -313,11 +313,13 @@ export function projectHiringInterviewNotification(interview = {}) {
     ? "hiring_interview_cancelled"
     : interview.status === "rescheduled"
     ? "hiring_interview_rescheduled"
+    : interview.status === "completed"
+    ? "hiring_interview_completed"
     : "hiring_interview_scheduled";
   return {
     type: eventType,
     role: "applicant",
-    title: interview.status === "cancelled" ? "Interview Cancelled" : interview.status === "rescheduled" ? "Interview Rescheduled" : "Interview Scheduled",
+    title: interview.status === "cancelled" ? "Interview Cancelled" : interview.status === "rescheduled" ? "Interview Rescheduled" : interview.status === "completed" ? "Interview Completed" : "Interview Scheduled",
     message: `${interview.positionTitle || interview.title} · ${formatHiringInterviewSummary(interview)}`,
     conversationId: interview.conversationId,
     dedupeKey: `${eventType}:${interview.id}`,

@@ -35,6 +35,7 @@ const HIRING_TYPES = new Set([
   "hiring_interview_scheduled",
   "hiring_interview_rescheduled",
   "hiring_interview_cancelled",
+  "hiring_interview_completed",
   "team_member_created",
   "team_member_archived",
   "team_member_reactivated",
