@@ -70,13 +70,13 @@ test("Ask Meetro launcher remains clamped inside mobile viewport", () => {
   assert.match(aiButtonPositionSource, /safeAreaLeft/);
   assert.match(aiButtonPositionSource, /safeAreaRight/);
   assert.match(aiButtonPositionSource, /safeAreaTop/);
-  assert.match(aiButtonPositionSource, /maxX: Math\.max\(horizontalLeftInset, width - horizontalRightInset - buttonSize\)/);
+  assert.match(aiButtonPositionSource, /maxX: Math\.max\(horizontalLeftInset, offsetLeft \+ width - horizontalRightInset - buttonSize\)/);
   assert.match(assistantSource, /const launcherPositionOptions = \{/);
   assert.match(assistantSource, /const ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN = 20/);
   assert.match(assistantSource, /window\.innerWidth <= 768[\s\S]*ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN/);
   assert.match(assistantSource, /edgeMargin: launcherEdgeMargin/);
   assert.match(assistantSource, /right: `max\(\$\{launcherEdgeMargin\}px, env\(safe-area-inset-right, 0px\)\)`/);
-  assert.match(assistantSource, /writeStoredAiButtonPosition\(position/);
+  assert.match(assistantSource, /writeStoredAiButtonPosition\(\s*dragState\.lastPosition/);
   assert.match(assistantSource, /window\.addEventListener\("resize", handleViewportChange\)/);
   assert.match(assistantSource, /window\.addEventListener\("orientationchange", handleViewportChange\)/);
 });

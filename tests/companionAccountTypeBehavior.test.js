@@ -155,6 +155,10 @@ test("MeetroAssistant keeps pointer dragging enabled in both modes without chang
   assert.doesNotMatch(source, /!launcherAccountBehavior\.draggable/);
   assert.doesNotMatch(source, /getProfessionalAiButtonPosition/);
   assert.match(source, /window\.addEventListener\("accountModeChanged", handleAccountModeChange\)/);
+  assert.match(source, /window\.visualViewport\?\.addEventListener\("resize", handleViewportChange\)/);
+  assert.match(source, /window\.visualViewport\?\.addEventListener\("scroll", handleViewportChange\)/);
+  assert.match(source, /window\.visualViewport\?\.removeEventListener\("resize", handleViewportChange\)/);
+  assert.match(source, /window\.visualViewport\?\.removeEventListener\("scroll", handleViewportChange\)/);
   assert.match(source, /resolveAiButtonPositionForAccount\(\{[\s\S]*accountMode: roleMode/);
   assert.match(source, /storageKey: getAiButtonPositionStorageKey\(roleMode\)/);
   assert.match(source, /ensureExpandedCompanionViewportSafety\(nextCompanionMode\)/);

@@ -264,6 +264,28 @@ h6 {
   }
 }
 
+@media (min-width: 768px) and (max-width: 1179px) {
+  .meetro-assistant-overlay {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .meetro-assistant-presence {
+    margin: 0 !important;
+  }
+
+  .meetro-assistant-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 28px !important;
+  }
+}
+
 .spotlight-showcase-image {
   animation: meetro-spotlight-fade 360ms ease both;
 }

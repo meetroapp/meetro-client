@@ -45,6 +45,11 @@ import {
 import { getCompanionContext } from "../utils/companionContext";
 import { getConversationParticipantIdentity } from "../utils/conversationIdentity";
 import { readRequestCompanionContext } from "../utils/requestCompanionContext";
+import {
+  calculateExpandedPanelPlacement,
+  COMPANION_PREFERRED_CONVERSATION_HEIGHT,
+  COMPANION_PREFERRED_GUIDANCE_HEIGHT,
+} from "../utils/companionPanelPlacement";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
@@ -2403,6 +2408,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
+  const [, setViewportRevision] = useState(0);
   const [activeAccountMode, setActiveAccountMode] = useState(
     () => localStorage.getItem("activeAccountMode") || "personal"
   );
@@ -2607,9 +2613,17 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   function getLauncherViewport() {
     const safeAreaInsets = getViewportSafeAreaInsets();
+    const visualViewport =
+      typeof window === "undefined" ? null : window.visualViewport;
     return {
-      width: typeof window === "undefined" ? 0 : window.innerWidth,
-      height: typeof window === "undefined" ? 0 : window.innerHeight,
+      width:
+        Number(visualViewport?.width) ||
+        (typeof window === "undefined" ? 0 : window.innerWidth),
+      height:
+        Number(visualViewport?.height) ||
+        (typeof window === "undefined" ? 0 : window.innerHeight),
+      offsetLeft: Number(visualViewport?.offsetLeft) || 0,
+      offsetTop: Number(visualViewport?.offsetTop) || 0,
       ...safeAreaInsets,
     };
   }
@@ -2629,68 +2643,17 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     );
   }
 
-  function preserveLauncherPosition(position) {
+  function ensureExpandedCompanionViewportSafety() {
     const viewport = getLauncherViewport();
-    const nextPosition = writeStoredAiButtonPosition(position, {
-      storageKey: getAiButtonPositionStorageKey(roleMode),
-      viewport,
-      options: launcherPositionOptions,
-    });
-    setLauncherPosition(nextPosition);
-    return nextPosition;
-  }
-
-  function ensureExpandedCompanionViewportSafety(nextMode) {
-    const viewport = getLauncherViewport();
-    const currentPosition =
+    return (
       launcherPosition ||
       readStoredAiButtonPosition({
         storageKey: getAiButtonPositionStorageKey(roleMode),
         viewport,
         options: launcherPositionOptions,
       }) ||
-      getLauncherFallbackPosition(viewport);
-    const metrics = getCompanionAnchorMetrics({
-      launcherPosition: currentPosition,
-      launcherButtonSize,
-      viewport,
-      fallbackBottom: launcherBottomClearance,
-      companionMode: nextMode,
-      launcherEdgeMargin,
-    });
-
-    if (!metrics.positionAdjustmentRequired) return currentPosition;
-
-    return preserveLauncherPosition({
-      ...currentPosition,
-      y: currentPosition.y + metrics.launcherAdjustmentY,
-    });
-  }
-
-  function adjustAssistantPositionForMeasuredSheet() {
-    const sheetNode = assistantSheetRef.current;
-    if (!sheetNode) return;
-
-    const viewport = getLauncherViewport();
-    const rect = sheetNode.getBoundingClientRect();
-    const visibleTop =
-      ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN + Number(viewport.safeAreaTop || 0);
-    const visibleBottom =
-      Number(viewport.height || window.innerHeight || 0) -
-      ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN -
-      Number(viewport.safeAreaBottom || 0) -
-      launcherBottomClearance;
-    const overflowTop = Math.max(0, visibleTop - rect.top);
-    const overflowBottom = Math.max(0, rect.bottom - visibleBottom);
-    if (overflowTop < 1 && overflowBottom < 1) return;
-
-    const currentPosition = launcherPosition || getLauncherFallbackPosition(viewport);
-    const adjustedPosition = {
-      ...currentPosition,
-      y: currentPosition.y + overflowTop - overflowBottom,
-    };
-
-    preserveLauncherPosition(adjustedPosition);
+      getLauncherFallbackPosition(viewport)
+    );
   }
 
   useEffect(() => {
@@ -2744,24 +2707,40 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }, []);
 
   useEffect(() => {
-    function handleViewportChange() {
-      const viewport = getLauncherViewport();
-      setLauncherPosition((currentPosition) => {
-        if (!currentPosition) return currentPosition;
-        return clampAiButtonPosition(
-          currentPosition,
-          viewport,
-          launcherPositionOptions
-        );
+    let frame = 0;
+
+    function scheduleViewportChange() {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        setViewportRevision((revision) => revision + 1);
+        const viewport = getLauncherViewport();
+        setLauncherPosition((currentPosition) => {
+          if (!currentPosition) return currentPosition;
+          return clampAiButtonPosition(
+            currentPosition,
+            viewport,
+            launcherPositionOptions
+          );
+        });
       });
+    }
+
+    function handleViewportChange() {
+      scheduleViewportChange();
     }
 
     window.addEventListener("resize", handleViewportChange);
     window.addEventListener("orientationchange", handleViewportChange);
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
+    window.visualViewport?.addEventListener("scroll", handleViewportChange);
 
     return () => {
+      if (frame) window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", handleViewportChange);
       window.removeEventListener("orientationchange", handleViewportChange);
+      window.visualViewport?.removeEventListener("resize", handleViewportChange);
+      window.visualViewport?.removeEventListener("scroll", handleViewportChange);
     };
   }, [launcherBottomClearance]);
 
@@ -2816,16 +2795,6 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       block: "nearest",
     });
   }, [open, isConversationMode, voiceAnswer]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const frame = window.requestAnimationFrame(() => {
-      adjustAssistantPositionForMeasuredSheet();
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [open, companionMode, voiceAnswer, voiceTranscript, launcherBottomClearance]);
 
   useEffect(() => {
     if (!wakeOpen) return undefined;
@@ -3716,10 +3685,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         right: `max(${launcherEdgeMargin}px, env(safe-area-inset-right, 0px))`,
         bottom: launcherFallbackBottom,
       };
+  const companionViewport = getLauncherViewport();
   const companionAnchorStyle = getCompanionAnchorStyle({
     launcherPosition,
     launcherButtonSize,
-    viewport: getLauncherViewport(),
+    viewport: companionViewport,
     fallbackBottom: launcherBottomClearance,
     companionMode,
     launcherEdgeMargin,
@@ -3755,7 +3725,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
           style={getAssistantWakeBubbleStyle({
             launcherPosition,
             launcherButtonSize,
-            viewport: getLauncherViewport(),
+            viewport: companionViewport,
             fallbackBottom: launcherBottomClearance,
             reducedMotion: getAssistantReducedMotion(),
           })}
@@ -3821,6 +3791,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
               ...assistantSheet,
               ...companionStateStyles[companionMode],
               ...(assistantModeGlow[assistantMode] || assistantModeGlow.ready),
+              maxHeight: companionAnchorStyle.maxHeight,
               paddingBottom: isChat
                 ? "calc(18px + env(safe-area-inset-bottom))"
                 : "calc(22px + env(safe-area-inset-bottom))",
@@ -4296,30 +4267,6 @@ function getAssistantWakeBubbleStyle({
   };
 }
 
-function getEstimatedCompanionExpandedHeight({
-  companionMode = COMPANION_STATES.guidance,
-  viewport = {},
-  fallbackBottom = 94,
-} = {}) {
-  const safeHeight = Math.max(520, Number(viewport.height || 0));
-  const safeAreaTop = Number(viewport.safeAreaTop || 0);
-  const safeAreaBottom = Number(viewport.safeAreaBottom || 0);
-  const protectedHeight =
-    safeAreaTop +
-    safeAreaBottom +
-    fallbackBottom +
-    ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN * 2;
-  const availableHeight = Math.max(280, safeHeight - protectedHeight);
-  const modeHeight =
-    companionMode === COMPANION_STATES.conversation
-      ? Math.min(safeHeight * 0.86, 720)
-      : companionMode === COMPANION_STATES.guidance
-      ? Math.min(safeHeight * 0.72, 520)
-      : Math.min(safeHeight * 0.84, 620);
-
-  return Math.min(availableHeight, modeHeight);
-}
-
 function getCompanionAnchorMetrics({
   launcherPosition = null,
   launcherButtonSize = 126,
@@ -4328,77 +4275,51 @@ function getCompanionAnchorMetrics({
   companionMode = COMPANION_STATES.guidance,
   launcherEdgeMargin = ASSISTANT_LAUNCHER_EDGE_MARGIN,
 } = {}) {
-  const safeWidth = Math.max(320, Number(viewport.width || 0));
-  const safeHeight = Math.max(520, Number(viewport.height || 0));
-  const companionWidth = Math.min(388, Math.max(288, safeWidth - 32));
-  const launcherHeight = 50;
-  const viewportPadding = safeWidth < 520 ? 12 : 16;
-  const safeAreaTop = Number(viewport.safeAreaTop || 0);
-  const safeAreaBottom = Number(viewport.safeAreaBottom || 0);
-  const visibleTop = ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN + safeAreaTop;
-  const visibleBottom =
-    safeHeight -
-    ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN -
-    safeAreaBottom -
-    fallbackBottom;
-  const estimatedCompanionHeight = getEstimatedCompanionExpandedHeight({
-    companionMode,
-    viewport,
-    fallbackBottom,
-  });
   const fallbackLauncherPosition = {
-    x: safeWidth - launcherEdgeMargin - launcherButtonSize,
-    y: safeHeight - fallbackBottom - launcherHeight,
+    x:
+      Number(viewport.offsetLeft || 0) +
+      Number(viewport.width || 0) -
+      launcherEdgeMargin -
+      launcherButtonSize,
+    y:
+      Number(viewport.offsetTop || 0) +
+      Number(viewport.height || 0) -
+      fallbackBottom -
+      50,
   };
   const anchorPosition = launcherPosition || fallbackLauncherPosition;
-  const launcherY = Number(anchorPosition.y || 0);
-  const availableAbove =
-    launcherY - ASSISTANT_EXPANDED_CARD_GAP - visibleTop;
-  const availableBelow =
-    visibleBottom -
-    (launcherY + launcherHeight + ASSISTANT_EXPANDED_CARD_GAP);
-  const hasRoomAbove = availableAbove >= estimatedCompanionHeight;
-  const placeBelow =
-    availableBelow >= estimatedCompanionHeight ||
-    (availableBelow > availableAbove && !hasRoomAbove);
-  const targetLeft =
-    Number(anchorPosition.x || 0) + launcherButtonSize / 2 < safeWidth / 2
-      ? Number(anchorPosition.x || 0)
-      : Number(anchorPosition.x || 0) + launcherButtonSize - companionWidth;
-  const maxLeft = Math.max(viewportPadding, safeWidth - companionWidth - viewportPadding);
-  const left = Math.min(Math.max(viewportPadding, targetLeft), maxLeft);
-  const desiredVisualTop = launcherY + launcherHeight + ASSISTANT_EXPANDED_CARD_GAP;
-  const desiredVisualBottom = launcherY - ASSISTANT_EXPANDED_CARD_GAP;
-  const visualTop = placeBelow
-    ? Math.min(
-        Math.max(visibleTop, desiredVisualTop),
-        Math.max(visibleTop, visibleBottom - estimatedCompanionHeight)
-      )
-    : Math.min(
-        Math.max(visibleTop, desiredVisualBottom - estimatedCompanionHeight),
-        Math.max(visibleTop, visibleBottom - estimatedCompanionHeight)
-      );
-  const visualBottom = placeBelow
-    ? visualTop + estimatedCompanionHeight
-    : Math.min(
-        Math.max(visibleTop + estimatedCompanionHeight, desiredVisualBottom),
-        visibleBottom
-      );
-  const top = placeBelow ? visualTop : visualBottom;
-  const desiredAnchor = placeBelow ? desiredVisualTop : desiredVisualBottom;
-  const clampedAnchor = top;
-  const launcherAdjustmentY = clampedAnchor - desiredAnchor;
+  const preferredHeight =
+    companionMode === COMPANION_STATES.conversation
+      ? COMPANION_PREFERRED_CONVERSATION_HEIGHT
+      : COMPANION_PREFERRED_GUIDANCE_HEIGHT;
+  const placement = calculateExpandedPanelPlacement({
+    viewport,
+    launcherRect: {
+      left: Number(anchorPosition.x || 0),
+      top: Number(anchorPosition.y || 0),
+      width: launcherButtonSize,
+      height: 50,
+    },
+    safeInsets: {
+      top: Number(viewport.safeAreaTop || 0),
+      right: Number(viewport.safeAreaRight || 0),
+      bottom: Number(viewport.safeAreaBottom || 0),
+      left: Number(viewport.safeAreaLeft || 0),
+    },
+    bottomClearance: fallbackBottom,
+    edgeGap: ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN,
+    panelGap: ASSISTANT_EXPANDED_CARD_GAP,
+    preferredHeight,
+  });
 
   return {
-    left,
-    top,
-    transform: placeBelow ? "none" : "translateY(-100%)",
-    estimatedCompanionHeight,
-    visualTop: placeBelow ? visualTop : visualBottom - estimatedCompanionHeight,
-    visualBottom,
-    launcherAdjustmentY,
-    positionAdjustmentRequired: Math.abs(launcherAdjustmentY) >= 1,
-    placeBelow,
+    ...placement,
+    estimatedCompanionHeight: placement.maxHeight,
+    visualTop: placement.top,
+    visualBottom: placement.top + placement.maxHeight,
+    launcherAdjustmentY: 0,
+    positionAdjustmentRequired: false,
+    placeBelow: placement.verticalPlacement === "below",
   };
 }
 
@@ -4411,9 +4332,12 @@ function getCompanionAnchorStyle(options = {}) {
     top: metrics.top,
     right: "auto",
     bottom: "auto",
+    width: metrics.width,
+    maxWidth: metrics.width,
+    maxHeight: metrics.maxHeight,
     margin: 0,
-    transform: metrics.transform,
-    transition: "left 160ms ease, top 160ms ease, transform 160ms ease",
+    transform: "none",
+    transition: "left 160ms ease, top 160ms ease",
   };
 }
 

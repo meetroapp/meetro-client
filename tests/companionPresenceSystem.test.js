@@ -66,8 +66,9 @@ test("Companion panel anchors to the launcher position on desktop and mobile", (
   assert.doesNotMatch(assistantSource, /if \(!isDesktopCompanionSurface\(\)\) return \{\};/);
   assert.match(assistantSource, /launcherPosition \|\| fallbackLauncherPosition/);
   assert.match(assistantSource, /estimatedCompanionHeight/);
-  assert.match(assistantSource, /hasRoomAbove/);
-  assert.match(assistantSource, /transform: placeBelow \? "none" : "translateY\(-100%\)"/);
+  assert.match(assistantSource, /calculateExpandedPanelPlacement\(\{/);
+  assert.match(assistantSource, /maxHeight: companionAnchorStyle\.maxHeight/);
+  assert.match(assistantSource, /transform: "none"/);
   assert.match(stylesSource, /align-items: flex-start !important/);
   assert.match(stylesSource, /justify-content: flex-start !important/);
   assert.match(stylesSource, /margin: 0 !important/);

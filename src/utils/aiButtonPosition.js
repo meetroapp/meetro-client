@@ -50,15 +50,17 @@ export function getAiButtonBounds(viewport = {}, options = {}) {
     0,
     toFiniteNumber(options.safeAreaTop, toFiniteNumber(viewport.safeAreaTop, 0))
   );
-  const horizontalLeftInset = edgeMargin + safeAreaLeft;
+  const offsetLeft = Math.max(0, toFiniteNumber(viewport.offsetLeft, 0));
+  const offsetTop = Math.max(0, toFiniteNumber(viewport.offsetTop, 0));
+  const horizontalLeftInset = offsetLeft + edgeMargin + safeAreaLeft;
   const horizontalRightInset = edgeMargin + safeAreaRight;
-  const topInset = edgeMargin + safeAreaTop;
+  const topInset = offsetTop + edgeMargin + safeAreaTop;
 
   return {
     minX: horizontalLeftInset,
-    maxX: Math.max(horizontalLeftInset, width - horizontalRightInset - buttonSize),
+    maxX: Math.max(horizontalLeftInset, offsetLeft + width - horizontalRightInset - buttonSize),
     minY: topInset,
-    maxY: Math.max(edgeMargin, height - bottomClearance - buttonSize),
+    maxY: Math.max(topInset, offsetTop + height - bottomClearance - buttonSize),
     buttonSize,
     edgeMargin,
     bottomClearance,
