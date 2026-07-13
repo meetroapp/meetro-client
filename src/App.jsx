@@ -76,6 +76,7 @@ const ProfessionalOnboarding = lazy(() => import("./pages/ProfessionalOnboarding
 import BusinessAvailability from "./pages/BusinessAvailability";
 import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
 import HiringCenter from "./pages/HiringCenter";
+import TeamMembers from "./pages/TeamMembers";
 import AssetCenter from "./pages/AssetCenter";
 import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
@@ -292,6 +293,7 @@ function App() {
   "emergencyOperationsCenter",
   "invoiceBuilder",
   "hiringCenter",
+  "teamMembers",
   "jobUpdate",
   "materialsLibrary",
   "permitCenter",
@@ -1057,6 +1059,10 @@ if (page === "customerRelationshipsCenter") {
 
 if (page === "hiringCenter") {
   return withStartupChrome(<HiringCenter setPage={setPage} />, updateNotice);
+}
+
+if (page === "teamMembers") {
+  return withStartupChrome(<TeamMembers setPage={setPage} />, updateNotice);
 }
 
 if (page === "assetCenter") {

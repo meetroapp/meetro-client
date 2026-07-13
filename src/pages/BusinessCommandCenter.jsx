@@ -158,6 +158,13 @@ function BusinessCommandCenter({ setPage }) {
       desc: isSpanish ? "Crea y administra tu equipo." : "Build and manage your team.",
       badge: statusLabel("hiringCenter", BUSINESS_TOOL_STATUS.PREVIEW),
     },
+    teamMembers: {
+      id: "teamMembers",
+      icon: "hiringCenter",
+      title: t("teamMembers"),
+      desc: t("teamMembersSubtitle"),
+      badge: statusLabel("teamMembers", BUSINESS_TOOL_STATUS.READY),
+    },
     reportsCenter: {
       id: "reportsCenter",
       icon: "reportsCenter",
@@ -308,6 +315,7 @@ function BusinessCommandCenter({ setPage }) {
       collapsible: true,
       toolIds: [
         "hiringCenter",
+        "teamMembers",
         "reportsCenter",
         "businessIntelligence",
         "reviews",
@@ -407,6 +415,11 @@ function BusinessCommandCenter({ setPage }) {
 
     if (toolId === "hiringCenter") {
       setPage("hiringCenter");
+      return;
+    }
+
+    if (toolId === "teamMembers") {
+      setPage("teamMembers");
       return;
     }
 

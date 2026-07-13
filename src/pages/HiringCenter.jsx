@@ -10,7 +10,6 @@ import {
   getHiringApplicantsForPosition,
   getHiringOpenPositions,
   getHiringPositionById,
-  getHiringTeamMembers,
   HIRING_EMPLOYMENT_TYPES,
   saveHiringPosition,
   validateHiringPositionDraft,
@@ -31,6 +30,10 @@ import {
   updateHiringInterview,
 } from "../utils/hiringInterviews";
 import { upsertNotification } from "../utils/meetroNotifications";
+import {
+  createTeamMember,
+  listTeamMembers,
+} from "../utils/teamMembers";
 
 function HiringCenter({ setPage }) {
   const language = getLanguage();
@@ -42,7 +45,7 @@ function HiringCenter({ setPage }) {
   const [notice, setNotice] = useState(null);
   const [isCreatePositionOpen, setIsCreatePositionOpen] = useState(false);
   const [createPositionError, setCreatePositionError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [, setRefreshKey] = useState(0);
   const [positionDraft, setPositionDraft] = useState(() => createBlankPositionDraft());
   const businessId = localStorage.getItem("businessId") || localStorage.getItem("contractorId") || "local-business";
   const accountMode = localStorage.getItem("activeAccountMode") || "business";
@@ -51,7 +54,7 @@ function HiringCenter({ setPage }) {
   const [interviewErrors, setInterviewErrors] = useState({});
   const positions = getHiringOpenPositions();
   const applicants = getHiringApplicants();
-  const teamMembers = getHiringTeamMembers();
+  const teamMembers = listTeamMembers({ businessId });
 
   useEffect(() => {
     localStorage.removeItem("selectedHiringApplicantId");
@@ -252,6 +255,44 @@ function HiringCenter({ setPage }) {
     setPage("conversationThread");
   };
 
+  const createMemberFromApplicant = (applicant, interview) => {
+    const position = getHiringPositionById(applicant.positionId);
+    const result = createTeamMember(
+      {
+        displayName: applicant.name,
+        email: applicant.email || "",
+        phone: applicant.phone || "",
+        positionId: applicant.positionId,
+        positionTitle: applicant.positionAppliedFor || position?.title || "",
+        role: applicant.positionAppliedFor || position?.title || "",
+        memberType: "employee",
+        status: "active",
+        hireDate: new Date().toISOString().slice(0, 10),
+        notes: applicant.notes || "",
+        sourceApplicantId: applicant.id,
+        sourceInterviewId: interview?.id || "",
+        hiringDecision: "offer_accepted",
+      },
+      {
+        businessId,
+        accountMode,
+        onNotification: upsertNotification,
+      }
+    );
+
+    if (!result.ok) {
+      setNotice({
+        title: t("teamMemberCreateFromApplicant", language),
+        body: t("teamMemberRequiredFields", language),
+      });
+      return;
+    }
+
+    localStorage.setItem("selectedTeamMemberId", result.member.id);
+    setRefreshKey((value) => value + 1);
+    setPage("teamMembers");
+  };
+
   if (selectedPosition) {
     const positionApplicants = getHiringApplicantsForPosition(selectedPosition.id);
 
@@ -381,8 +422,40 @@ function HiringCenter({ setPage }) {
             )}
           </section>
 
+          {latestInterview?.status === "completed" && (
+            <section style={interviewSection} aria-labelledby="applicant-hiring-decision-heading">
+              <div>
+                <p style={fieldLabel}>{t("teamMemberHiringDecision", language)}</p>
+                <h2 id="applicant-hiring-decision-heading" style={cardTitle}>
+                  {teamMembers.some((member) => member.sourceApplicantId === selectedApplicant.id)
+                    ? t("teamMemberOfferAccepted", language)
+                    : t("teamMemberDecisionReady", language)}
+                </h2>
+                <p style={bodyText}>
+                  {teamMembers.some((member) => member.sourceApplicantId === selectedApplicant.id)
+                    ? t("teamMemberCreatedHelp", language)
+                    : t("teamMemberDecisionReadyHelp", language)}
+                </p>
+              </div>
+              {teamMembers.some((member) => member.sourceApplicantId === selectedApplicant.id) ? (
+                <button type="button" style={previewAction} onClick={() => setPage("teamMembers")}>
+                  {t("teamMemberManage", language)}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="meetro-visual-primary-button"
+                  style={interviewPrimaryAction}
+                  onClick={() => createMemberFromApplicant(selectedApplicant, latestInterview)}
+                >
+                  {t("teamMemberOfferAcceptedCreate", language)}
+                </button>
+              )}
+            </section>
+          )}
+
           <div style={actionRow}>
-            {["Message Applicant", "Schedule Interview", "Mark Reviewing", "Mark Hired", "Archive"].map((action) => (
+            {["Message Applicant", "Schedule Interview", "Mark Reviewing", "Archive"].map((action) => (
               <button
                 key={action}
                 type="button"
@@ -602,21 +675,25 @@ function HiringCenter({ setPage }) {
       </section>
 
       <section style={section}>
-        <SectionHeading title="Team Members" description="People hired into your business." />
+        <SectionHeading title={t("teamMembers", language)} description={t("teamMembersSubtitle", language)} />
         {teamMembers.length === 0 ? (
           <div style={emptyState}>
-            <strong>No team members yet.</strong>
-            <span>Team members will appear after successful hires.</span>
+            <strong>{t("teamMembersEmpty", language)}</strong>
+            <span>{t("teamMembersEmptyHelp", language)}</span>
           </div>
         ) : (
           <div style={cardGrid}>
             {teamMembers.map((member) => (
               <article key={member.id} style={{ ...recordCard, ...interactiveCard }}>
-                <h2 style={cardTitle}>{member.name}</h2>
+                <h2 style={cardTitle}>{member.displayName}</h2>
+                <p style={bodyText}>{member.positionTitle}</p>
               </article>
             ))}
           </div>
         )}
+        <button type="button" style={previewAction} onClick={() => setPage("teamMembers")}>
+          {t("teamMemberManage", language)}
+        </button>
       </section>
 
       <section style={section}>

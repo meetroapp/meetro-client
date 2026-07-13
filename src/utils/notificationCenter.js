@@ -35,6 +35,9 @@ const HIRING_TYPES = new Set([
   "hiring_interview_scheduled",
   "hiring_interview_rescheduled",
   "hiring_interview_cancelled",
+  "team_member_created",
+  "team_member_archived",
+  "team_member_reactivated",
 ]);
 const REVIEW_TYPES = new Set(["review", "review_reminder", "rating_request"]);
 
@@ -55,11 +58,22 @@ export function getNotificationCategory(notification = {}) {
 
 export function getNotificationRoute(notification = {}, activeAccountMode = "personal") {
   const category = getNotificationCategory(notification);
+  const notificationType = String(notification.type || "").toLowerCase();
   const metadata = notification.metadata || {};
   const conversationId = notification.conversationId || metadata.conversationId || "";
   const requestId = notification.requestId || metadata.requestId || metadata.projectId || "";
   const quoteId = notification.quoteId || metadata.quoteId || "";
   const emergencyId = notification.emergencyId || metadata.emergencyId || "";
+
+  if (notificationType.startsWith("team_member_")) {
+    return {
+      page: activeAccountMode === "business" ? "teamMembers" : "home",
+      context: {
+        selectedTeamMemberId:
+          activeAccountMode === "business" ? metadata.memberId || "" : "",
+      },
+    };
+  }
 
   if (conversationId) {
     return {
