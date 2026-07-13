@@ -22,6 +22,10 @@ import {
 } from "../utils/twoFactorVerification";
 import { getAccountConnectionStateFromLoginData } from "../utils/accountConnection";
 import { getProfessionalSignupCategoriesFromTaxonomy } from "../utils/communityTaxonomy";
+import {
+  LOGIN_FAILURE,
+  normalizeLoginFailure,
+} from "../utils/loginErrorPresentation";
 import MeetroIcon from "../components/MeetroIcon";
 
 function Login({ setPage }) {
@@ -44,6 +48,7 @@ function Login({ setPage }) {
   const [verificationError, setVerificationError] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
 
@@ -96,6 +101,13 @@ function Login({ setPage }) {
       serverError: "Server error",
       enterEmailPassword: "Enter email and password",
       loginFailed: "Login failed",
+      invalidCredentials: "Email or password is incorrect.",
+      accountServiceUnavailable:
+        "Meetro could not connect to the account service. Please try again.",
+      tooManyLoginAttempts: "Too many attempts. Please try again later.",
+      unexpectedLoginResponse:
+        "Meetro could not complete that request. Please try again.",
+      accountAlreadyExists: "An account with this email already exists.",
       acceptTermsRequired:
         "Please agree to the Terms of Use and Privacy Policy to create your account.",
     },
@@ -150,6 +162,13 @@ function Login({ setPage }) {
       serverError: "Error del servidor",
       enterEmailPassword: "Ingresa correo y contraseña",
       loginFailed: "Error al iniciar sesión",
+      invalidCredentials: "El correo electrónico o la contraseña son incorrectos.",
+      accountServiceUnavailable:
+        "Meetro no pudo conectarse al servicio de cuentas. Inténtalo de nuevo.",
+      tooManyLoginAttempts: "Demasiados intentos. Inténtalo más tarde.",
+      unexpectedLoginResponse:
+        "Meetro no pudo completar la solicitud. Inténtalo de nuevo.",
+      accountAlreadyExists: "Ya existe una cuenta con este correo electrónico.",
       acceptTermsRequired:
         "Acepta los Términos de Uso y la Política de Privacidad para crear tu cuenta.",
     },
@@ -205,6 +224,13 @@ function Login({ setPage }) {
       serverError: "Erreur du serveur",
       enterEmailPassword: "Entrez l’e-mail et le mot de passe",
       loginFailed: "Échec de la connexion",
+      invalidCredentials: "L’adresse e-mail ou le mot de passe est incorrect.",
+      accountServiceUnavailable:
+        "Meetro n’a pas pu joindre le service de compte. Veuillez réessayer.",
+      tooManyLoginAttempts: "Trop de tentatives. Veuillez réessayer plus tard.",
+      unexpectedLoginResponse:
+        "Meetro n’a pas pu terminer cette demande. Veuillez réessayer.",
+      accountAlreadyExists: "Un compte existe déjà avec cette adresse e-mail.",
       acceptTermsRequired:
         "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour créer votre compte.",
     },
@@ -259,6 +285,13 @@ function Login({ setPage }) {
       serverError: "Erro do servidor",
       enterEmailPassword: "Digite e-mail e senha",
       loginFailed: "Falha ao entrar",
+      invalidCredentials: "O e-mail ou a senha estão incorretos.",
+      accountServiceUnavailable:
+        "O Meetro não conseguiu se conectar ao serviço de contas. Tente novamente.",
+      tooManyLoginAttempts: "Muitas tentativas. Tente novamente mais tarde.",
+      unexpectedLoginResponse:
+        "O Meetro não conseguiu concluir essa solicitação. Tente novamente.",
+      accountAlreadyExists: "Já existe uma conta com este e-mail.",
       acceptTermsRequired:
         "Aceite os Termos de Uso e a Política de Privacidade para criar sua conta.",
     },
@@ -487,13 +520,14 @@ function Login({ setPage }) {
 
   async function handleSubmit() {
     try {
+      setAuthError("");
       if (!email.trim() || !password.trim()) {
-        alert(T.enterEmailPassword);
+        setAuthError(T.enterEmailPassword);
         return;
       }
 
       if (mode === "signup" && !legalAccepted) {
-        alert(T.acceptTermsRequired);
+        setAuthError(T.acceptTermsRequired);
         return;
       }
 
@@ -533,10 +567,24 @@ function Login({ setPage }) {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        setAuthError(
+          getAuthFailureMessage(
+            normalizeLoginFailure({ malformedResponse: true, mode })
+          )
+        );
+        return;
+      }
 
       if (!response.ok) {
-        alert(data.error || data.message || T.loginFailed);
+        setAuthError(
+          getAuthFailureMessage(
+            normalizeLoginFailure({ status: response.status, mode })
+          )
+        );
         return;
       }
 
@@ -553,11 +601,29 @@ function Login({ setPage }) {
       }
 
       setTwoFactorStep(true);
-    } catch (error) {
-      console.error(error);
-      alert(T.serverError);
+    } catch {
+      setAuthError(
+        getAuthFailureMessage(
+          normalizeLoginFailure({ networkError: true, mode })
+        )
+      );
     } finally {
       setLoading(false);
+    }
+  }
+
+  function getAuthFailureMessage(failure) {
+    switch (failure) {
+      case LOGIN_FAILURE.INVALID_CREDENTIALS:
+        return T.invalidCredentials;
+      case LOGIN_FAILURE.TOO_MANY_ATTEMPTS:
+        return T.tooManyLoginAttempts;
+      case LOGIN_FAILURE.ACCOUNT_ALREADY_EXISTS:
+        return T.accountAlreadyExists;
+      case LOGIN_FAILURE.UNEXPECTED_RESPONSE:
+        return T.unexpectedLoginResponse;
+      default:
+        return T.accountServiceUnavailable;
     }
   }
 
@@ -808,6 +874,7 @@ function Login({ setPage }) {
               onClick={() => {
                 localStorage.setItem("meetroLoginMode", "signup");
                 setMode("signup");
+                setAuthError("");
               }}
             >
               <MeetroIcon name="profile" size={18} decorative />
@@ -828,6 +895,7 @@ function Login({ setPage }) {
                 localStorage.setItem("meetroLoginMode", "login");
                 setMode("login");
                 setLegalAccepted(false);
+                setAuthError("");
               }}
             >
               ← {t("backToLogin", normalizedLanguage)}
@@ -999,7 +1067,10 @@ function Login({ setPage }) {
               type="email"
               placeholder={T.email}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setAuthError("");
+              }}
             />
 
             <input
@@ -1007,7 +1078,10 @@ function Login({ setPage }) {
               type="password"
               placeholder={T.password}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setAuthError("");
+              }}
             />
 
             {mode === "login" && (
@@ -1049,6 +1123,17 @@ function Login({ setPage }) {
                     .
                   </span>
                 </label>
+              </div>
+            )}
+
+            {authError && (
+              <div
+                style={authErrorBox}
+                role="alert"
+                aria-live="polite"
+                data-auth-error="true"
+              >
+                {authError}
               </div>
             )}
 
@@ -1623,6 +1708,19 @@ const verificationErrorBox = {
   lineHeight: 1.4,
   fontWeight: "800",
   textAlign: "center",
+};
+
+const authErrorBox = {
+  margin: "2px 0 4px",
+  borderRadius: "14px",
+  border: "1px solid rgba(153, 27, 27, 0.2)",
+  background: "#fef2f2",
+  color: "#7f1d1d",
+  padding: "12px 14px",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.45,
+  textAlign: "left",
 };
 
 const submitButton = {
