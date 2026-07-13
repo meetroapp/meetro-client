@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   APP_BUILD_DISMISSED_KEY,
   APP_BUILD_STORAGE_KEY,
+  APP_UPDATE_RELOAD_GUARD_KEY,
   STARTUP_READINESS,
   applyAppUpdateNow,
   coordinateAppStartup,
@@ -105,7 +106,7 @@ test("update detector shows notice for a changed build and Later dismisses tempo
   );
 });
 
-test("Update now accepts the current web build, reloads safely, and preserves session data", () => {
+test("Update now accepts the current web build, reloads safely, and preserves session data", async () => {
   const storage = createStorage({
     [APP_BUILD_STORAGE_KEY]: "old-build",
     token: "still-authenticated",
@@ -113,9 +114,13 @@ test("Update now accepts the current web build, reloads safely, and preserves se
   });
   let reloaded = false;
 
-  const result = applyAppUpdateNow({
+  const sessionStorage = createStorage();
+  const result = await applyAppUpdateNow({
     currentBuildId: "new-build",
     storage,
+    sessionStorage,
+    capacitor: { isNativePlatform: () => false, getPlatform: () => "web" },
+    serviceWorkerContainer: undefined,
     reload: () => {
       reloaded = true;
     },
@@ -126,4 +131,5 @@ test("Update now accepts the current web build, reloads safely, and preserves se
   assert.equal(storage.getItem(APP_BUILD_STORAGE_KEY), "new-build");
   assert.equal(storage.getItem("token"), "still-authenticated");
   assert.equal(storage.getItem("user"), JSON.stringify({ id: "user-1" }));
+  assert.equal(sessionStorage.getItem(APP_UPDATE_RELOAD_GUARD_KEY), "new-build");
 });

@@ -18,6 +18,9 @@ export const STARTUP_DIAGNOSTIC_STEPS = Object.freeze([
 
 export const APP_BUILD_STORAGE_KEY = "meetroAppBuildId";
 export const APP_BUILD_DISMISSED_KEY = "meetroAppBuildNoticeDismissed";
+export const APP_UPDATE_RELOAD_GUARD_KEY = "meetroAppUpdateReloading";
+
+let activeUpdatePromise = null;
 
 function safeStorageGet(storage, key, fallback = "") {
   try {
@@ -30,6 +33,14 @@ function safeStorageGet(storage, key, fallback = "") {
 function safeStorageSet(storage, key, value) {
   try {
     storage?.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in restricted browser or native contexts.
+  }
+}
+
+function safeStorageRemove(storage, key) {
+  try {
+    storage?.removeItem(key);
   } catch {
     // Storage can be unavailable in restricted browser or native contexts.
   }
@@ -163,30 +174,100 @@ export function acceptCurrentAppBuild({
   safeStorageSet(storage, APP_BUILD_STORAGE_KEY, currentBuildId);
 }
 
-export function isNativeUpdateSurface() {
+export function isNativeUpdateSurface(capacitor = globalThis.Capacitor) {
   return Boolean(
-    globalThis.Capacitor?.isNativePlatform?.() ||
-      globalThis.Capacitor?.getPlatform?.() === "ios"
+    capacitor?.isNativePlatform?.() || capacitor?.getPlatform?.() === "ios"
   );
 }
 
-export function applyAppUpdateNow({
+function waitForServiceWorkerControllerChange(serviceWorkerContainer, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      serviceWorkerContainer?.removeEventListener?.("controllerchange", handleChange);
+      callback();
+    };
+    const handleChange = () => finish(resolve);
+    const timeoutId = setTimeout(
+      () => finish(() => reject(new Error("update_controller_timeout"))),
+      timeoutMs
+    );
+
+    serviceWorkerContainer?.addEventListener?.("controllerchange", handleChange, {
+      once: true,
+    });
+  });
+}
+
+async function performAppUpdate({
   currentBuildId = getCurrentAppBuildId(),
   storage = globalThis.localStorage,
+  sessionStorage = globalThis.sessionStorage,
   reload = () => globalThis.location?.reload?.(),
-  notifyNativeUpdate,
+  capacitor = globalThis.Capacitor,
+  serviceWorkerContainer = globalThis.navigator?.serviceWorker,
+  serviceWorkerRegistration,
+  controllerChangeTimeoutMs = 4000,
+  nativeUpdateAction = globalThis.MeetroNative?.openAppUpdate,
 } = {}) {
-  if (isNativeUpdateSurface()) {
-    if (globalThis.MeetroNative?.openAppUpdate) {
-      globalThis.MeetroNative.openAppUpdate();
+  if (safeStorageGet(sessionStorage, APP_UPDATE_RELOAD_GUARD_KEY, "") === currentBuildId) {
+    return "reload_already_requested";
+  }
+
+  const reloadCurrentBuild = (result) => {
+    const previousBuildId = safeStorageGet(storage, APP_BUILD_STORAGE_KEY, "");
+    acceptCurrentAppBuild({ currentBuildId, storage });
+    safeStorageSet(sessionStorage, APP_UPDATE_RELOAD_GUARD_KEY, currentBuildId);
+    try {
+      reload();
+      return result;
+    } catch (error) {
+      if (previousBuildId) {
+        safeStorageSet(storage, APP_BUILD_STORAGE_KEY, previousBuildId);
+      } else {
+        safeStorageRemove(storage, APP_BUILD_STORAGE_KEY);
+      }
+      safeStorageRemove(sessionStorage, APP_UPDATE_RELOAD_GUARD_KEY);
+      throw error;
+    }
+  };
+
+  if (isNativeUpdateSurface(capacitor)) {
+    if (typeof nativeUpdateAction === "function") {
+      await nativeUpdateAction();
       return "native_update_opened";
     }
 
-    notifyNativeUpdate?.();
-    return "native_update_instruction";
+    return reloadCurrentBuild("native_bundle_reload");
   }
 
-  acceptCurrentAppBuild({ currentBuildId, storage });
-  reload();
-  return "web_reload";
+  const registration =
+    serviceWorkerRegistration ||
+    (await serviceWorkerContainer?.getRegistration?.());
+
+  if (registration?.waiting) {
+    const controllerChange = waitForServiceWorkerControllerChange(
+      serviceWorkerContainer,
+      controllerChangeTimeoutMs
+    );
+    registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    await controllerChange;
+  }
+
+  return reloadCurrentBuild(
+    registration?.waiting ? "service_worker_reload" : "web_reload"
+  );
+}
+
+export function applyAppUpdateNow(options = {}) {
+  if (activeUpdatePromise) return activeUpdatePromise;
+
+  activeUpdatePromise = performAppUpdate(options).finally(() => {
+    activeUpdatePromise = null;
+  });
+
+  return activeUpdatePromise;
 }

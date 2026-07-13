@@ -121,8 +121,10 @@ test("update available notice is build-based and preserves session data", () => 
   assert.match(appSource, /withStartupChrome/);
   assert.match(startupSource, /APP_BUILD_STORAGE_KEY/);
   assert.match(startupSource, /APP_BUILD_DISMISSED_KEY/);
-  assert.match(startupSource, /reload\(\)/);
-  assert.match(appSource, /TestFlight or the App Store/);
+  assert.match(startupSource, /reloadCurrentBuild/);
+  assert.match(appSource, /capacitor: Capacitor/);
+  assert.match(appSource, /Updating…/);
+  assert.match(appSource, /The update could not be completed\. Please try again\./);
   assert.doesNotMatch(startupSource, /removeItem\("token"\)|clear\(\)/);
   assert.match(viteSource, /globalThis\.__MEETRO_BUILD_ID__/);
   assert.match(viteSource, /VITE_APP_BUILD_ID/);

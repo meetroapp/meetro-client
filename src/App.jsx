@@ -101,7 +101,8 @@ const SessionRestoringScreen = () => (
   <LoadingScreen text="Restoring your Meetro session..." />
 );
 
-function AppUpdateNotice({ onUpdateNow, onLater }) {
+function AppUpdateNotice({ onUpdateNow, onLater, status = "idle", error = "" }) {
+  const updating = status === "updating";
   return (
     <div style={updateNoticeWrap} role="status" aria-live="polite">
       <div style={updateNoticeCard}>
@@ -111,6 +112,7 @@ function AppUpdateNotice({ onUpdateNow, onLater }) {
             A newer version of Meetro Community is ready. Update to continue
             with the latest improvements.
           </p>
+          {error && <p style={updateNoticeError}>{error}</p>}
         </div>
         <div style={updateNoticeActions}>
           <button
@@ -118,13 +120,16 @@ function AppUpdateNotice({ onUpdateNow, onLater }) {
             className="meetro-visual-primary-button"
             style={updateNoticePrimary}
             onClick={onUpdateNow}
+            disabled={updating}
+            aria-busy={updating}
           >
-            Update now
+            {updating ? "Updating…" : "Update now"}
           </button>
           <button
             type="button"
             style={updateNoticeSecondary}
             onClick={onLater}
+            disabled={updating}
           >
             Later
           </button>
@@ -512,6 +517,10 @@ function App() {
     available: false,
     currentBuildId: getCurrentAppBuildId(),
   });
+  const [updateActionState, setUpdateActionState] = useState({
+    status: "idle",
+    error: "",
+  });
   const [page, setPageState] = useState(() =>
     initialSessionHydration.status === SESSION_HYDRATION.restoring
       ? "sessionRestoring"
@@ -784,22 +793,22 @@ function App() {
 
   
 
-  const handleUpdateNow = () => {
-    applyAppUpdateNow({
-      currentBuildId: updateNoticeState.currentBuildId,
-      notifyNativeUpdate: () => {
-        window.dispatchEvent(
-          new CustomEvent("meetroPremiumNotice", {
-            detail: {
-              title: "Update available",
-              message:
-                "A newer version is ready. Please update Meetro Community from TestFlight or the App Store.",
-              type: "info",
-            },
-          })
-        );
-      },
-    });
+  const handleUpdateNow = async () => {
+    if (updateActionState.status === "updating") return;
+
+    setUpdateActionState({ status: "updating", error: "" });
+    try {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      await applyAppUpdateNow({
+        currentBuildId: updateNoticeState.currentBuildId,
+        capacitor: Capacitor,
+      });
+    } catch {
+      setUpdateActionState({
+        status: "idle",
+        error: "The update could not be completed. Please try again.",
+      });
+    }
   };
 
   const handleUpdateLater = () => {
@@ -807,12 +816,15 @@ function App() {
       currentBuildId: updateNoticeState.currentBuildId,
     });
     setUpdateNoticeState((current) => ({ ...current, available: false }));
+    setUpdateActionState({ status: "idle", error: "" });
   };
 
   const updateNotice = updateNoticeState.available ? (
     <AppUpdateNotice
       onUpdateNow={handleUpdateNow}
       onLater={handleUpdateLater}
+      status={updateActionState.status}
+      error={updateActionState.error}
     />
   ) : null;
 
@@ -1230,6 +1242,14 @@ const updateNoticeCopy = {
   fontWeight: "750",
 };
 
+const updateNoticeError = {
+  margin: "7px 0 0",
+  color: "var(--meetro-color-error, #9f2d24)",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "800",
+};
+
 const updateNoticeActions = {
   display: "flex",
   gap: "8px",
@@ -1248,6 +1268,7 @@ const updateNoticePrimary = {
   fontWeight: "950",
   cursor: "pointer",
   whiteSpace: "nowrap",
+  minHeight: "44px",
 };
 
 const updateNoticeSecondary = {
@@ -1260,6 +1281,7 @@ const updateNoticeSecondary = {
   fontWeight: "900",
   cursor: "pointer",
   whiteSpace: "nowrap",
+  minHeight: "44px",
 };
 
   export default App;
