@@ -96,3 +96,15 @@ test("business dashboard refreshes canonical profile truth without HTTP cache re
     /"\/my-contractor-profile",\s*\{ cache: "no-store" \}/
   );
 });
+
+test("business dashboard prefers canonical identity and fails truthfully", () => {
+  assert.match(
+    source,
+    /profile\?\.business_name\s*\|\|\s*localStorage\.getItem\("businessName"\)/
+  );
+  assert.match(source, /const \[profileLoadFailed, setProfileLoadFailed\]/);
+  assert.match(source, /setProfileLoadFailed\(true\)/);
+  assert.match(source, /Business profile unavailable/);
+  assert.match(source, /onClick=\{fetchProfile\}/);
+  assert.doesNotMatch(source, /catch \([^)]*\) \{\s*console\.error/);
+});

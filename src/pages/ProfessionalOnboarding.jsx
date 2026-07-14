@@ -5,8 +5,11 @@ import ServiceSelectorSheet, {
 import { getLanguage, t } from "../utils/language";
 import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
-  inferProfessionalSpecialtiesFromLegacyCategories,
 } from "../utils/professionalOnboardingSpecialties";
+import {
+  normalizeProfessionalOnboardingDraft,
+  normalizeProfessionalOnboardingStep,
+} from "../utils/professionalOnboardingDraft";
 import { getBusinessProfileCapabilityOptionsFromTaxonomy } from "../utils/communityTaxonomy";
 import {
   readBusinessServiceProfile,
@@ -71,47 +74,26 @@ function removeStorageValue(key) {
 
 function createInitialDraft() {
   const saved = readJson(PROFILE_DRAFT_KEY, {});
-  const savedServiceCategories = Array.isArray(saved.serviceCategories)
-    ? saved.serviceCategories
-    : [];
-  const savedServiceSpecialties = Array.isArray(saved.serviceSpecialties)
-    ? saved.serviceSpecialties
-    : inferProfessionalSpecialtiesFromLegacyCategories(savedServiceCategories);
-
-  return {
-    businessName: saved.businessName || readStorageValue("businessName") || "",
+  return normalizeProfessionalOnboardingDraft(saved, {
+    businessName: readStorageValue("businessName"),
     contactName:
-      saved.contactName ||
-      readStorageValue("businessContactName") ||
-      readStorageValue("userName") ||
-      "",
+      readStorageValue("businessContactName") || readStorageValue("userName"),
     phone:
-      saved.phone ||
       readStorageValue("businessPhone") ||
-      readStorageValue("emergencyBusinessPhone") ||
-      "",
-    email:
-      saved.email ||
-      readStorageValue("businessEmail") ||
-      readStorageValue("userEmail") ||
-      "",
-    serviceCategories: savedServiceCategories,
-    serviceSpecialties: savedServiceSpecialties,
-    primaryServiceCategory: saved.primaryServiceCategory || saved.primary_service_category || "",
-    otherService: saved.otherService || "",
-    primaryCity: saved.primaryCity || readStorageValue("businessPrimaryCity") || "",
-    zipCodes: saved.zipCodes || readStorageValue("businessZipCodes") || "",
-    serviceRadius: saved.serviceRadius || "15 miles",
-    customRadius: saved.customRadius || "",
-    availability: Array.isArray(saved.availability) ? saved.availability : [],
-  };
+      readStorageValue("emergencyBusinessPhone"),
+    email: readStorageValue("businessEmail") || readStorageValue("userEmail"),
+    primaryCity: readStorageValue("businessPrimaryCity"),
+    zipCodes: readStorageValue("businessZipCodes"),
+  });
 }
 
 function ProfessionalOnboarding({ setPage }) {
   const language = getLanguage();
   const returnPage = readStorageValue("meetroProfessionalOnboardingReturnPage");
   const savedProgress = readJson(ONBOARDING_KEY, {});
-  const [step, setStep] = useState(Number(savedProgress.step || 1));
+  const [step, setStep] = useState(
+    normalizeProfessionalOnboardingStep(savedProgress.step)
+  );
   const [draft, setDraft] = useState(createInitialDraft);
   const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
 

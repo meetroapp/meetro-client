@@ -72,6 +72,29 @@ function truthyProfileFlag(value) {
   );
 }
 
+function explicitBoolean(value) {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["true", "yes", "1"].includes(normalized)) return true;
+  if (["false", "no", "0"].includes(normalized)) return false;
+  return undefined;
+}
+
+export function getExplicitBusinessProfileOwnership(user = {}) {
+  const explicit = [
+    user.has_business_profile,
+    user.hasBusinessProfile,
+    user.contractor_profile_complete,
+    user.contractorProfileComplete,
+  ]
+    .map(explicitBoolean)
+    .find((value) => value !== undefined);
+
+  if (explicit !== undefined) return explicit;
+  if (user.contractor_profile_id || user.contractorProfileId) return true;
+  return undefined;
+}
+
 function hasProfileIdentity(profile = {}) {
   return Boolean(
     profile.id ||
@@ -89,6 +112,9 @@ function hasProfileIdentity(profile = {}) {
 }
 
 export function hasBusinessProfileOwnership(user = {}) {
+  const explicitOwnership = getExplicitBusinessProfileOwnership(user);
+  if (explicitOwnership !== undefined) return explicitOwnership;
+
   if (typeof localStorage === "undefined") {
     return Boolean(
       truthyProfileFlag(user.hasBusinessProfile) ||
@@ -160,6 +186,7 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
   }
 
   const ownsBusinessProfile = hasBusinessProfileOwnership(user);
+  const explicitBusinessOwnership = getExplicitBusinessProfileOwnership(user);
   const isProfessional = isProfessionalUser(user) || ownsBusinessProfile;
 
   const finalAccountType = isProfessional ? "professional" : "homeowner";
@@ -214,32 +241,40 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
   localStorage.setItem("isProfessional", isProfessional ? "true" : "false");
   localStorage.setItem(
     "hasBusinessProfile",
-    ownsBusinessProfile || isProfessional ? "true" : "false"
+    ownsBusinessProfile ? "true" : "false"
   );
+  const canonicalBusinessName = user.business_name || user.businessName || "";
+  const canonicalBusinessCategory =
+    user.business_category || user.businessCategory || "";
   localStorage.setItem(
     "businessName",
-    user.business_name ||
-      user.businessName ||
-      localStorage.getItem("businessName") ||
-      safeReadStoredBusinessProfile().business_name ||
-      safeReadStoredBusinessProfile().businessName ||
-      safeReadStoredBusinessProfile().name ||
-      ""
+    explicitBusinessOwnership !== undefined
+      ? canonicalBusinessName
+      : canonicalBusinessName ||
+          localStorage.getItem("businessName") ||
+          safeReadStoredBusinessProfile().business_name ||
+          safeReadStoredBusinessProfile().businessName ||
+          safeReadStoredBusinessProfile().name ||
+          ""
   );
   localStorage.setItem(
     "businessCategory",
-    user.business_category ||
-      user.businessCategory ||
-      localStorage.getItem("businessCategory") ||
-      safeReadStoredBusinessProfile().category ||
-      safeReadStoredBusinessProfile().business_category ||
-      safeReadStoredBusinessProfile().businessCategory ||
-      ""
+    explicitBusinessOwnership !== undefined
+      ? canonicalBusinessCategory
+      : canonicalBusinessCategory ||
+          localStorage.getItem("businessCategory") ||
+          safeReadStoredBusinessProfile().category ||
+          safeReadStoredBusinessProfile().business_category ||
+          safeReadStoredBusinessProfile().businessCategory ||
+          ""
   );
   localStorage.setItem(
     "contractorProfileComplete",
-    ownsBusinessProfile || isProfessional ? "true" : "false"
+    ownsBusinessProfile ? "true" : "false"
   );
+  if (explicitBusinessOwnership === false) {
+    localStorage.removeItem("contractorProfile");
+  }
   if (nextIdentity) {
     localStorage.setItem("meetroLastAccountIdentity", nextIdentity);
   }

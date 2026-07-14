@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
+  getExplicitBusinessProfileOwnership,
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
   syncAccountModeForPage,
@@ -398,7 +399,12 @@ function App() {
   };
 
   const hasRequiredProfessionalSetupData = () => {
-    let contractorProfile = {};
+    const authenticatedUser = safeReadJsonStorage("user", {});
+    const explicitOwnership =
+      getExplicitBusinessProfileOwnership(authenticatedUser);
+    if (explicitOwnership !== undefined) return explicitOwnership;
+
+    let contractorProfile;
     try {
       contractorProfile = safeReadJsonStorage("contractorProfile", {});
     } catch {

@@ -23,9 +23,33 @@ import {
   getConfirmedBusinessProfile,
 } from "../utils/businessProfilePersistence";
 
+const profileLoadText = {
+  en: {
+    title: "Business profile unavailable",
+    body: "Meetro could not restore your business profile. Try again before continuing.",
+    retry: "Try Again",
+  },
+  es: {
+    title: "Perfil de negocio no disponible",
+    body: "Meetro no pudo restaurar tu perfil de negocio. Intenta de nuevo antes de continuar.",
+    retry: "Intentar de nuevo",
+  },
+  fr: {
+    title: "Profil professionnel indisponible",
+    body: "Meetro n’a pas pu restaurer votre profil professionnel. Réessayez avant de continuer.",
+    retry: "Réessayer",
+  },
+  "pt-BR": {
+    title: "Perfil comercial indisponível",
+    body: "O Meetro não conseguiu restaurar seu perfil comercial. Tente novamente antes de continuar.",
+    retry: "Tentar novamente",
+  },
+};
+
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [language, updateLanguage] = useState(getLanguage());
   const [liveUnreadCount, setLiveUnreadCount] = useState(
     getConversationMetrics({ role: "business" }).unreadConversationCount
@@ -34,13 +58,14 @@ function BusinessDashboard({ setPage }) {
   const [availableNow, setAvailableNow] = useState(false);
 
   const businessName =
-    localStorage.getItem("businessName") ||
     profile?.business_name ||
+    localStorage.getItem("businessName") ||
     t("yourBusiness");
 
   const businessCategory =
-    localStorage.getItem("businessCategory") ||
     profile?.business_category ||
+    profile?.category ||
+    localStorage.getItem("businessCategory") ||
     localStorage.getItem("userRole") ||
     "professional";
   const professionalMatchProfile = {
@@ -133,6 +158,9 @@ function BusinessDashboard({ setPage }) {
   }, [language]);
 
   async function fetchProfile() {
+    setLoading(true);
+    setProfileLoadFailed(false);
+
     try {
       const result = await authFetch(
         "/my-contractor-profile",
@@ -163,9 +191,19 @@ function BusinessDashboard({ setPage }) {
             status: "active",
           })
         );
+        localStorage.setItem(
+          "businessName",
+          backendProfile.business_name || ""
+        );
+        localStorage.setItem(
+          "businessCategory",
+          backendProfile.business_category || backendProfile.category || ""
+        );
+      } else if (result?.response?.status !== 401) {
+        setProfileLoadFailed(true);
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
+      setProfileLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -203,6 +241,27 @@ function BusinessDashboard({ setPage }) {
 
   if (loading) {
     return <LoadingScreen text={t("loadingBusinessDashboard")} />;
+  }
+
+  if (profileLoadFailed || !profile) {
+    const statusText = profileLoadText[language] || profileLoadText.en;
+
+    return (
+      <div style={profileUnavailablePage}>
+        <section style={profileUnavailableCard} role="alert">
+          <h1 style={profileUnavailableTitle}>{statusText.title}</h1>
+          <p style={profileUnavailableBody}>{statusText.body}</p>
+          <button
+            type="button"
+            onClick={fetchProfile}
+            style={profileUnavailableButton}
+          >
+            {statusText.retry}
+          </button>
+        </section>
+        <BottomNav active="home" setPage={setPage} />
+      </div>
+    );
   }
 
   const dashboardEmergencyRecord = (() => {
@@ -1609,6 +1668,50 @@ const heroSubtitle = {
   margin: "0 0 5px",
   color: "#aebee3",
   lineHeight: 1.5,
+};
+
+const profileUnavailablePage = {
+  minHeight: "100dvh",
+  display: "grid",
+  placeItems: "center",
+  boxSizing: "border-box",
+  padding: "max(24px, env(safe-area-inset-top)) 20px max(104px, calc(84px + env(safe-area-inset-bottom)))",
+  background: "#f4f7f4",
+};
+
+const profileUnavailableCard = {
+  width: "min(100%, 520px)",
+  boxSizing: "border-box",
+  padding: "28px 24px",
+  border: "1px solid #d8e1da",
+  borderRadius: "8px",
+  background: "#fff",
+  textAlign: "center",
+};
+
+const profileUnavailableTitle = {
+  margin: "0 0 10px",
+  color: "#102417",
+  fontSize: "24px",
+  lineHeight: 1.2,
+};
+
+const profileUnavailableBody = {
+  margin: "0 0 20px",
+  color: "#5f6f63",
+  fontSize: "16px",
+  lineHeight: 1.5,
+};
+
+const profileUnavailableButton = {
+  width: "100%",
+  minHeight: "48px",
+  border: 0,
+  borderRadius: "8px",
+  background: "#174f32",
+  color: "#fff",
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 const businessNameLine = {

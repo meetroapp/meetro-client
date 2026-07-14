@@ -42,11 +42,35 @@ import {
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 
+const profileRestoreText = {
+  en: {
+    title: "Business profile unavailable",
+    body: "Meetro could not restore your business profile. Try again before continuing.",
+    retry: "Try Again",
+  },
+  es: {
+    title: "Perfil de negocio no disponible",
+    body: "Meetro no pudo restaurar tu perfil de negocio. Intenta de nuevo antes de continuar.",
+    retry: "Intentar de nuevo",
+  },
+  fr: {
+    title: "Profil professionnel indisponible",
+    body: "Meetro n’a pas pu restaurer votre profil professionnel. Réessayez avant de continuer.",
+    retry: "Réessayer",
+  },
+  "pt-BR": {
+    title: "Perfil comercial indisponível",
+    body: "O Meetro não conseguiu restaurar seu perfil comercial. Tente novamente antes de continuar.",
+    retry: "Tentar novamente",
+  },
+};
+
 function ContractorProfile({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
   const isBusinessToolsReturn = sharedReturnPage === "businessCommandCenter";
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [language, updateLanguage] = useState(getLanguage());
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
@@ -240,39 +264,29 @@ function ContractorProfile({ setPage, currentPage }) {
   setActiveAccountMode("business");
 }
 
-  function lockBusinessAccess() {
-    localStorage.removeItem("contractorProfileComplete");
-    setActiveAccountMode("personal");
-  }
-
   async function fetchMyProfile() {
     try {
       setLoading(true);
+      setProfileLoadFailed(false);
       const result = await authFetch(
         "/my-contractor-profile",
         { cache: "no-store" },
         setPage
       );
 
-      if (!result) {
-        lockBusinessAccess();
-        return;
-      }
-
-      const data = result.data;
+      const data = result?.data || {};
 
       if (data.profile) {
         setProfile(data.profile);
         fillForm(data.profile);
         projectConfirmedBusinessProfile(data.profile);
-      } else {
+      } else if (result?.response?.status !== 401) {
         setProfile(null);
-        lockBusinessAccess();
+        setProfileLoadFailed(true);
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       setProfile(null);
-      lockBusinessAccess();
+      setProfileLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -513,6 +527,23 @@ function ContractorProfile({ setPage, currentPage }) {
 
   if (loading) {
     return <LoadingScreen text={t("loadingContractorProfile")} />;
+  }
+
+  if (profileLoadFailed || !profile) {
+    const statusText = profileRestoreText[language] || profileRestoreText.en;
+
+    return (
+      <div style={profileRestorePage}>
+        <section style={profileRestoreCard} role="alert">
+          <h1 style={profileRestoreTitle}>{statusText.title}</h1>
+          <p style={profileRestoreBody}>{statusText.body}</p>
+          <button type="button" onClick={fetchMyProfile} style={profileRestoreButton}>
+            {statusText.retry}
+          </button>
+        </section>
+        <BottomNav setPage={setPage} currentPage="contractorProfile" />
+      </div>
+    );
   }
 
   const reviewCount = Number(profileReviewStats.totalReviews || 0);
@@ -2981,4 +3012,49 @@ const secondaryButtonFull = {
   cursor: "pointer",
   marginTop: "12px",
 };
+
+const profileRestorePage = {
+  minHeight: "100dvh",
+  display: "grid",
+  placeItems: "center",
+  boxSizing: "border-box",
+  padding: "max(24px, env(safe-area-inset-top)) 20px max(104px, calc(84px + env(safe-area-inset-bottom)))",
+  background: "#f4f7f4",
+};
+
+const profileRestoreCard = {
+  width: "min(100%, 520px)",
+  boxSizing: "border-box",
+  padding: "28px 24px",
+  border: "1px solid #d8e1da",
+  borderRadius: "8px",
+  background: "#fff",
+  textAlign: "center",
+};
+
+const profileRestoreTitle = {
+  margin: "0 0 10px",
+  color: "#102417",
+  fontSize: "24px",
+  lineHeight: 1.2,
+};
+
+const profileRestoreBody = {
+  margin: "0 0 20px",
+  color: "#5f6f63",
+  fontSize: "16px",
+  lineHeight: 1.5,
+};
+
+const profileRestoreButton = {
+  width: "100%",
+  minHeight: "48px",
+  border: 0,
+  borderRadius: "8px",
+  background: "#174f32",
+  color: "#fff",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
 export default ContractorProfile;

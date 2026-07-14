@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   getAccountModeForPage,
   getDashboardPageForAccountMode,
+  getExplicitBusinessProfileOwnership,
   hasBusinessProfileOwnership,
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
@@ -212,4 +213,63 @@ test("saving a session does not erase an existing business profile when user pay
   assert.equal(localStorage.getItem("businessName"), "Bgone Home Renovation");
   assert.equal(localStorage.getItem("businessCategory"), "handyman");
   assert.equal(setActiveAccountMode("business"), true);
+});
+
+test("explicit backend business ownership restores the canonical professional session", () => {
+  installStorage();
+  localStorage.setItem("businessName", "Stale Browser Business");
+  localStorage.setItem("businessCategory", "stale-category");
+  localStorage.setItem("hasBusinessProfile", "false");
+
+  const user = {
+    id: "user-1",
+    email: "william@example.com",
+    role: "professional",
+    account_type: "professional",
+    contractor_profile_id: "profile-42",
+    has_business_profile: true,
+    business_name: "Bgone Home Renovation & Handyman Services",
+    business_category: "handyman",
+  };
+  const session = saveMeetroSession({ token: "token-123", user });
+
+  assert.equal(getExplicitBusinessProfileOwnership(user), true);
+  assert.equal(session.isProfessional, true);
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "true");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "true");
+  assert.equal(
+    localStorage.getItem("businessName"),
+    "Bgone Home Renovation & Handyman Services"
+  );
+  assert.equal(localStorage.getItem("businessCategory"), "handyman");
+});
+
+test("explicit missing backend profile cannot be overridden by stale browser identity", () => {
+  installStorage();
+  localStorage.setItem("businessName", "Stale Browser Business");
+  localStorage.setItem("businessCategory", "handyman");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({ id: "stale-profile", business_name: "Stale Browser Business" })
+  );
+
+  const user = {
+    id: "user-2",
+    email: "new@example.com",
+    role: "professional",
+    account_type: "professional",
+    contractor_profile_id: null,
+    has_business_profile: false,
+    business_name: null,
+    business_category: null,
+  };
+  saveMeetroSession({ token: "token-456", user });
+
+  assert.equal(getExplicitBusinessProfileOwnership(user), false);
+  assert.equal(hasBusinessProfileOwnership(user), false);
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "false");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "false");
+  assert.equal(localStorage.getItem("businessName"), "");
+  assert.equal(localStorage.getItem("businessCategory"), "");
+  assert.equal(localStorage.getItem("contractorProfile"), null);
 });
