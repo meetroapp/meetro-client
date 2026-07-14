@@ -179,6 +179,14 @@ test("position projection inherits defaults but preserves overrides and closed r
   assert.deepEqual(applyHiringSettingsToPositionDraft(closed, settings), closed);
 });
 
+test("position projection tolerates unavailable settings during route initialization", () => {
+  const inherited = applyHiringSettingsToPositionDraft({ id: "position-1", status: "Draft" }, null);
+
+  assert.equal(inherited.applicationRequirements.emailRequired, true);
+  assert.equal(inherited.applicationRequirements.phoneRequired, true);
+  assert.equal(inherited.applicationRequirements.resumeRequired, false);
+});
+
 test("saved positions inherit defaults while explicit overrides remain stronger", () => {
   const storage = memoryStorage({ activeAccountMode: "business", businessId: "business-1" });
   const ownership = { storage, businessId: "business-1", activeBusinessId: "business-1", accountMode: "business", employmentType: "Contract" };

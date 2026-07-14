@@ -241,10 +241,11 @@ export function normalizeApplicationRequirements(value = {}, options = {}) {
 }
 
 export function normalizeHiringSettings(record = {}, options = {}) {
-  const businessId = text(options.businessId || record.businessId || record.business_id);
+  const source = record && typeof record === "object" && !Array.isArray(record) ? record : {};
+  const businessId = text(options.businessId || source.businessId || source.business_id);
   const defaults = getDefaultHiringSettings(businessId);
   const notificationSource =
-    record.notificationPreferences || record.notifications || {};
+    source.notificationPreferences || source.notifications || {};
   const notificationPreferences = {};
   SUPPORTED_HIRING_NOTIFICATION_EVENTS.forEach((event) => {
     notificationPreferences[event] =
@@ -254,7 +255,7 @@ export function normalizeHiringSettings(record = {}, options = {}) {
   });
 
   const backgroundSource =
-    record.backgroundCheckPreferences || record.backgroundChecks || {};
+    source.backgroundCheckPreferences || source.backgroundChecks || {};
   const backgroundCheckPreferences = defaultBackgroundCheckPreferences();
   BACKGROUND_CHECK_PREFERENCE_KEYS.forEach((key) => {
     backgroundCheckPreferences[key] = Boolean(backgroundSource[key]);
@@ -262,7 +263,7 @@ export function normalizeHiringSettings(record = {}, options = {}) {
   backgroundCheckPreferences.notes = text(backgroundSource.notes);
 
   const eligibilitySource =
-    record.workEligibilityRequirements || record.workEligibility || {};
+    source.workEligibilityRequirements || source.workEligibility || {};
   const workEligibilityRequirements = defaultWorkEligibilityRequirements();
   WORK_ELIGIBILITY_BOOLEAN_KEYS.forEach((key) => {
     workEligibilityRequirements[key] = Boolean(eligibilitySource[key]);
@@ -280,14 +281,14 @@ export function normalizeHiringSettings(record = {}, options = {}) {
   return {
     businessId,
     applicationRequirements: normalizeApplicationRequirements(
-      record.applicationRequirements || record.requirements,
+      source.applicationRequirements || source.requirements,
       options
     ),
     notificationPreferences,
     backgroundCheckPreferences,
     workEligibilityRequirements,
-    createdAt: text(record.createdAt || record.created_at),
-    updatedAt: text(record.updatedAt || record.updated_at),
+    createdAt: text(source.createdAt || source.created_at),
+    updatedAt: text(source.updatedAt || source.updated_at),
     version: SETTINGS_VERSION,
   };
 }
