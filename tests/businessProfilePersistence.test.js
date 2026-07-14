@@ -123,4 +123,5 @@ test("Business Profile contains no browser-local persistence authority for edita
     source,
     /setServiceArea\(existingProfile\.service_area \|\| existingProfile\.location \|\| ""\)/
   );
+  assert.match(source, /"\/my-contractor-profile",\s*\{ cache: "no-store" \}/);
 });

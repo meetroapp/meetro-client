@@ -89,3 +89,10 @@ test("business dashboard quick access language preserves supported locales", () 
     assert.equal(matches.length, 4, `${key} should exist for EN/ES/FR/PT-BR`);
   });
 });
+
+test("business dashboard refreshes canonical profile truth without HTTP cache reuse", () => {
+  assert.match(
+    source,
+    /"\/my-contractor-profile",\s*\{ cache: "no-store" \}/
+  );
+});

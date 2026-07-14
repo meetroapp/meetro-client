@@ -134,7 +134,11 @@ function BusinessDashboard({ setPage }) {
 
   async function fetchProfile() {
     try {
-      const result = await authFetch("/my-contractor-profile", {}, setPage);
+      const result = await authFetch(
+        "/my-contractor-profile",
+        { cache: "no-store" },
+        setPage
+      );
 
       if (result?.data?.profile) {
         const backendProfile = result.data.profile;

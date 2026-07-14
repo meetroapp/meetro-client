@@ -248,7 +248,11 @@ function ContractorProfile({ setPage, currentPage }) {
   async function fetchMyProfile() {
     try {
       setLoading(true);
-      const result = await authFetch("/my-contractor-profile", {}, setPage);
+      const result = await authFetch(
+        "/my-contractor-profile",
+        { cache: "no-store" },
+        setPage
+      );
 
       if (!result) {
         lockBusinessAccess();
