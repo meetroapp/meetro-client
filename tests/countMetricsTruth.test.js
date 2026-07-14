@@ -105,7 +105,7 @@ test("business proof metrics share portfolio service review and rating counts", 
   assert.equal(metrics.rating, "4.5");
 });
 
-test("professional metrics keep leads schedule active quote and history counts aligned", () => {
+test("professional metrics fail closed for leads while keeping work counts aligned", () => {
   withStorage(
     {
       homeownerRequests: JSON.stringify([
@@ -152,7 +152,9 @@ test("professional metrics keep leads schedule active quote and history counts a
         professional: professional(),
       });
 
-      assert.equal(metrics.newLeadCount, 1);
+      assert.equal(metrics.leadProjectionAvailable, false);
+      assert.equal(metrics.newLeadCount, null);
+      assert.deepEqual(metrics.newLeads, []);
       assert.equal(metrics.scheduledJobsCount, metrics.scheduleItems.length);
       assert.ok(metrics.scheduledJobsCount >= 1);
       assert.ok(metrics.activeWorkCount >= 1);

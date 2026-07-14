@@ -222,7 +222,9 @@ function Home({ setPage }) {
     professional: professionalMatchProfile,
   });
 
-  const realBusinessLeadCount = String(professionalMetrics.newLeadCount);
+  const realBusinessLeadCount = professionalMetrics.leadProjectionAvailable
+    ? String(professionalMetrics.newLeadCount)
+    : "—";
   const businessUnreadMessageCount = String(
     getConversationMetrics({ registry: conversationRegistry, role: "business" })
       .unreadConversationCount
@@ -351,7 +353,11 @@ function Home({ setPage }) {
           <p style={businessText}>{t("businessDashboardText")}</p>
 
           <div className="meetro-responsive-grid meetro-grid-4" style={statsGrid}>
-            <StatCard title={t("newLeads")} value={realBusinessLeadCount} note={t("live")} />
+            <StatCard
+              title={t("newLeads")}
+              value={realBusinessLeadCount}
+              note={t("professionalLeadsUnavailableShort")}
+            />
             <StatCard title={t("messages")} value={businessUnreadMessageCount} note={t("unread")} />
             <StatCard title={t("activeJobs")} value={professionalMetrics.activeWorkCount} note={t("workCenter")} />
             <StatCard title={t("completedJobs")} value={professionalMetrics.completedJobsCount} note={t("jobHistory")} />
@@ -377,7 +383,7 @@ function Home({ setPage }) {
           <ToolCard
             icon="opportunities"
             title={t("leads")}
-            text={t("openRequests")}
+            text={t("professionalLeadsUnavailableShort")}
             onClick={() => setPage("businessLeads")}
           />
 

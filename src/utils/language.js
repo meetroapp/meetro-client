@@ -11979,6 +11979,61 @@ const hiringPositionLanguage = {
   },
 };
 
+const professionalLeadTruthLanguage = {
+  en: {
+    professionalLeadsUnavailable: "Professional leads are not available yet.",
+    professionalLeadsUnavailableShort: "Not available yet",
+    professionalLeadsUnavailableSummary:
+      "Opportunities will appear only when Meetro can share them through an authorized business projection.",
+    professionalLeadsUnavailableText:
+      "Homeowner requests are private unless the backend can confirm that they are eligible for professional discovery. No browser-local requests are shown here.",
+    professionalLeadsAccessRequired: "Professional access required",
+    professionalLeadsAccessRequiredText:
+      "Only professional accounts can open the Business Leads workspace.",
+    professionalLeadsReviewProfile: "Review Profile",
+  },
+  es: {
+    professionalLeadsUnavailable: "Las oportunidades profesionales aún no están disponibles.",
+    professionalLeadsUnavailableShort: "Aún no disponible",
+    professionalLeadsUnavailableSummary:
+      "Las oportunidades aparecerán solo cuando Meetro pueda compartirlas mediante una proyección empresarial autorizada.",
+    professionalLeadsUnavailableText:
+      "Las solicitudes de propietarios son privadas salvo que el servidor confirme que pueden descubrirlas profesionales. Aquí no se muestran solicitudes guardadas en el navegador.",
+    professionalLeadsAccessRequired: "Se requiere acceso profesional",
+    professionalLeadsAccessRequiredText:
+      "Solo las cuentas profesionales pueden abrir el espacio de oportunidades del negocio.",
+    professionalLeadsReviewProfile: "Revisar perfil",
+  },
+  fr: {
+    professionalLeadsUnavailable: "Les opportunités professionnelles ne sont pas encore disponibles.",
+    professionalLeadsUnavailableShort: "Pas encore disponible",
+    professionalLeadsUnavailableSummary:
+      "Les opportunités apparaîtront uniquement lorsque Meetro pourra les partager par une projection professionnelle autorisée.",
+    professionalLeadsUnavailableText:
+      "Les demandes des particuliers restent privées tant que le serveur ne confirme pas leur éligibilité à la découverte professionnelle. Aucune demande locale au navigateur n’est affichée ici.",
+    professionalLeadsAccessRequired: "Accès professionnel requis",
+    professionalLeadsAccessRequiredText:
+      "Seuls les comptes professionnels peuvent ouvrir l’espace des opportunités professionnelles.",
+    professionalLeadsReviewProfile: "Examiner le profil",
+  },
+  "pt-BR": {
+    professionalLeadsUnavailable: "As oportunidades profissionais ainda não estão disponíveis.",
+    professionalLeadsUnavailableShort: "Ainda não disponível",
+    professionalLeadsUnavailableSummary:
+      "As oportunidades aparecerão somente quando o Meetro puder compartilhá-las por uma projeção empresarial autorizada.",
+    professionalLeadsUnavailableText:
+      "As solicitações de moradores permanecem privadas até o servidor confirmar que podem ser descobertas por profissionais. Nenhuma solicitação local do navegador é exibida aqui.",
+    professionalLeadsAccessRequired: "Acesso profissional necessário",
+    professionalLeadsAccessRequiredText:
+      "Somente contas profissionais podem abrir o espaço de oportunidades do negócio.",
+    professionalLeadsReviewProfile: "Revisar perfil",
+  },
+};
+
+Object.entries(professionalLeadTruthLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
 Object.entries(hiringPositionLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });

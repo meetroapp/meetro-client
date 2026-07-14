@@ -1,6 +1,5 @@
 import { getBusinessServicesProjection } from "./businessServiceProfile.js";
 import { getBusinessPortfolioProofProjection } from "./businessPortfolioProof.js";
-import { getEligibleSharedProfessionalLeads } from "./businessLeadSourceTruth.js";
 import {
   getActiveWorkItems,
   getCompletedWorkItems,
@@ -67,25 +66,18 @@ export function getBusinessProofMetrics(source = {}, options = {}) {
   };
 }
 
-export function getProfessionalWorkMetrics({
-  homeownerRequests,
-  professional,
-} = {}) {
-  const requests =
-    Array.isArray(homeownerRequests)
-      ? homeownerRequests
-      : getStoredHomeownerRequests();
+export function getProfessionalWorkMetrics() {
   const workCenter = getWorkCenterSummary();
   const scheduleItems = getScheduleItems();
   const quoteItems = getQuoteItems();
   const activeWorkItems = getActiveWorkItems();
   const completedWorkItems = getCompletedWorkItems();
   const timelineEvents = getTimelineEvents();
-  const newLeads = getEligibleSharedProfessionalLeads(requests, professional || {});
 
   return {
-    newLeadCount: newLeads.length,
-    newLeads,
+    leadProjectionAvailable: false,
+    newLeadCount: null,
+    newLeads: [],
     scheduledJobsCount: scheduleItems.length,
     scheduleItems,
     pendingQuoteCount: workCenter.pendingQuoteCount,

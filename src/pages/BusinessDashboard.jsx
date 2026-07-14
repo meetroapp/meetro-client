@@ -74,31 +74,7 @@ function BusinessDashboard({ setPage }) {
     category: businessCategory,
   };
 
-  const liveHomeownerRequests = getStoredHomeownerRequests();
-  const professionalMetrics = getProfessionalWorkMetrics({
-    homeownerRequests: liveHomeownerRequests,
-    professional: professionalMatchProfile,
-  });
-
-  const matchingDashboardLeads = professionalMetrics.newLeads.slice(0, 3);
-
-  const formatLeadTitle = (request) =>
-    request.title ||
-    request.project_title ||
-    request.category ||
-    request.serviceCategory ||
-    t("dashboardNewRequest");
-
-  const formatLeadLocation = (request) =>
-    request.location ||
-    request.city ||
-    request.address ||
-    t("locationPending");
-
-  const formatLeadCategory = (request) =>
-    formatCategory(
-      inferRequestCategory(request)
-    );
+  const professionalMetrics = getProfessionalWorkMetrics();
 
 
   useEffect(() => {
@@ -479,9 +455,12 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continue Work",
       newLeads: "New Leads Near You",
       viewAllLeads: "Review leads",
-      upgradeTitle: "Unlock unlimited homeowner leads",
+      leadsUnavailable: "Professional leads are not available yet.",
+      leadsUnavailableText:
+        "Meetro will show opportunities here only after requests can be shared through an authorized business projection.",
+      upgradeTitle: "Founding professional access",
       upgradeText:
-        "Priority placement, unlimited lead access, and verified business visibility.",
+        "Business profile and operational tools remain available while Meetro prepares authorized opportunity sharing.",
       upgrade: "Upgrade to Meetro Pro",
     },
     es: {
@@ -540,9 +519,12 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabajo",
       newLeads: "Nuevas Oportunidades Cerca",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Desbloquea clientes ilimitados",
+      leadsUnavailable: "Las oportunidades profesionales aún no están disponibles.",
+      leadsUnavailableText:
+        "Meetro mostrará oportunidades aquí solo cuando las solicitudes puedan compartirse mediante una proyección empresarial autorizada.",
+      upgradeTitle: "Acceso profesional fundador",
       upgradeText:
-        "Prioridad, acceso ilimitado a oportunidades y visibilidad verificada.",
+        "El perfil y las herramientas operativas permanecen disponibles mientras Meetro prepara el intercambio autorizado de oportunidades.",
       upgrade: "Actualizar a Meetro Pro",
     },
     fr: {
@@ -601,9 +583,12 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuer le travail",
       newLeads: "Nouveaux prospects près de vous",
       viewAllLeads: "Examiner les prospects",
-      upgradeTitle: "Débloquez des prospects illimités",
+      leadsUnavailable: "Les opportunités professionnelles ne sont pas encore disponibles.",
+      leadsUnavailableText:
+        "Meetro affichera ici les opportunités uniquement lorsque les demandes pourront être partagées par une projection professionnelle autorisée.",
+      upgradeTitle: "Accès professionnel fondateur",
       upgradeText:
-        "Placement prioritaire, accès illimité aux prospects et visibilité vérifiée.",
+        "Le profil et les outils opérationnels restent disponibles pendant que Meetro prépare le partage autorisé des opportunités.",
       upgrade: "Passer à Meetro Pro",
     },
     "pt-BR": {
@@ -662,9 +647,12 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabalho",
       newLeads: "Novas oportunidades perto de você",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Desbloqueie oportunidades ilimitadas",
+      leadsUnavailable: "As oportunidades profissionais ainda não estão disponíveis.",
+      leadsUnavailableText:
+        "O Meetro mostrará oportunidades aqui somente quando as solicitações puderem ser compartilhadas por uma projeção empresarial autorizada.",
+      upgradeTitle: "Acesso profissional fundador",
       upgradeText:
-        "Prioridade, acesso ilimitado a oportunidades e visibilidade verificada.",
+        "O perfil e as ferramentas operacionais permanecem disponíveis enquanto o Meetro prepara o compartilhamento autorizado de oportunidades.",
       upgrade: "Atualizar para Meetro Pro",
     },
   };
@@ -1216,32 +1204,16 @@ function BusinessDashboard({ setPage }) {
 
                 <button
                   style={linkButton}
-                  onClick={() => openWorkCenterSection("pending")}
+                  onClick={() => setPage("businessLeads")}
                 >
                   {text.viewAllLeads} →
                 </button>
               </div>
 
-              {matchingDashboardLeads.length > 0 ? (
-                matchingDashboardLeads.map((request) => (
-                  <LeadCard
-                    key={request.id || request.requestId || formatLeadTitle(request)}
-                    request={request}
-                    category={formatLeadCategory(request)}
-                    title={formatLeadTitle(request)}
-                    location={formatLeadLocation(request)}
-                    time={request.posted || request.date || t("dashboardRecentlyPosted")}
-                    setPage={setPage}
-                    openWorkCenterSection={openWorkCenterSection}
-                  />
-                ))
-              ) : (
-                <div style={emptyLeadsState}>
-                  <strong>{t("dashboardNoNewLeads")}</strong>
-
-                  <p>{t("dashboardNoNewLeadsText")}</p>
-                </div>
-              )}
+              <div style={emptyLeadsState}>
+                <strong>{text.leadsUnavailable}</strong>
+                <p>{text.leadsUnavailableText}</p>
+              </div>
             </section>
           </div>
         </div>
@@ -1388,60 +1360,6 @@ function WorkRow({ title, meta, status, time, dateLabel, onClick }) {
     </button>
   );
 }
-
-function LeadCard({ request, category, title, location, time, openWorkCenterSection }) {
-  return (
-    <button
-      onClick={() => {
-        const lead = {
-          ...request,
-          id: request.id || request.requestId,
-          requestId: request.requestId || request.id,
-          title,
-          category,
-          location,
-          posted: time,
-          description:
-            request.description ||
-            request.project_description ||
-            request.service ||
-            "",
-          urgency: request.urgency || "New",
-          verified: request.verified ?? true,
-        };
-
-        // preserved selectedActiveProject
-        localStorage.removeItem("lastCompletedProject");
-        localStorage.removeItem("selectedHomeownerRequestId");
-        localStorage.removeItem("selectedWorkCenterRequest");
-        localStorage.removeItem("activeWorkCenterQuoteRequestId");
-
-        localStorage.setItem("selectedPostId", lead.id || lead.requestId);
-
-        localStorage.setItem("selectedQuoteRequest", JSON.stringify(lead));
-        localStorage.setItem("projectDetailsReturnPage", "businessDashboard");
-        localStorage.setItem("selectedWorkCenterRequest", JSON.stringify(lead));
-
-        localStorage.setItem("leadWorkflowStage", "project_review");
-        localStorage.setItem("leadWorkflowIntent", "review_contact_schedule");
-
-        openWorkCenterSection("pending");
-      }}
-      style={leadCard}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <span style={leadBadge}>{category}</span>
-        <h3 style={leadTitle}>{title}</h3>
-        <p style={leadMeta}>{location}</p>
-        <p style={leadMeta}>{time}</p>
-      </div>
-
-      <span style={newBadge}>New</span>
-    </button>
-  );
-}
-
-
 
 const pendingQuoteGlowWrap = {
   borderRadius: "20px",
@@ -2333,61 +2251,6 @@ const leadsCard = {
   marginBottom: "16px",
   border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
-};
-
-const leadCard = {
-  width: "100%",
-  border: "1px solid #eef2f7",
-  background: "linear-gradient(135deg,#ffffff,#fbfdff)",
-  borderRadius: "20px",
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  flexWrap: "wrap",
-  padding: "14px",
-  marginTop: "10px",
-  textAlign: "left",
-  cursor: "pointer",
-};
-
-const leadThumb = {
-  width: "58px",
-  height: "58px",
-  borderRadius: "18px",
-  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "28px",
-};
-
-const leadBadge = {
-  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  padding: "4px 8px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-};
-
-const leadTitle = {
-  margin: "6px 0 4px",
-  fontSize: "16px",
-};
-
-const leadMeta = {
-  margin: 0,
-  color: "#667085",
-  fontSize: "13px",
-};
-
-const newBadge = {
-  background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  padding: "7px 10px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px",
 };
 
 const upgradeCard = {

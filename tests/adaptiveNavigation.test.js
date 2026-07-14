@@ -145,7 +145,7 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
 test("removed mobile nav actions remain reachable from their owning launch surfaces", () => {
   assert.match(homeSource, /onClick=\{\(\) => setPage\("upload"\)\}/);
   assert.match(homeSource, /t\("requestService"\)/);
-  assert.match(businessDashboardSource, /openWorkCenterSection\("pending"\)/);
+  assert.match(businessDashboardSource, /setPage\("businessLeads"\)/);
   assert.match(businessDashboardSource, /text\.viewAllLeads/);
   assert.match(contractorDashboardSource, /setPage\("businessLeads"\)/);
 });
