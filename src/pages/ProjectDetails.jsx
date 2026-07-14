@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import API_URL from "../api";
 import { getLanguage, t } from "../utils/language";
@@ -24,8 +24,114 @@ import {
   writeRequestCompanionContext,
 } from "../utils/requestCompanionContext";
 
+const UNSUPPORTED_COMPLETION_CLOSURE_STATUSES = new Set([
+  "completed",
+  "complete",
+  "work_completed",
+  "closed",
+  "closure",
+  "closure_completed",
+  "history",
+  "archived",
+]);
+
+function normalizeWorkflowValue(value = "") {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function isUnsupportedCompletionOrClosureStatus(value = "") {
+  return UNSUPPORTED_COMPLETION_CLOSURE_STATUSES.has(normalizeWorkflowValue(value));
+}
+
+function isCompletionOrClosureRecord(record = {}) {
+  const values = [
+    record.status,
+    record.workflowStatus,
+    record.workflowStage,
+    record.workflowType,
+    record.type,
+    record.title,
+  ];
+
+  return values.some((value) => /completion|complete|completed|closure|closeout|closed|history/i.test(String(value || "")));
+}
+
+function hasUnsupportedCompletionOrClosure(project = {}, records = []) {
+  if (!project) return false;
+
+  const statusValues = [
+    project.status,
+    project.workflowStatus,
+    project.workflowStage,
+    project.closureStatus,
+    project.completionStatus,
+  ];
+
+  return Boolean(
+    statusValues.some(isUnsupportedCompletionOrClosureStatus) ||
+      project.completedAt ||
+      project.closedAt ||
+      project.closeDate ||
+      project.closureDate ||
+      project.closureDecisionRef ||
+      project.needsReview ||
+      (Array.isArray(records) && records.some(isCompletionOrClosureRecord))
+  );
+}
+
+function getTruthfulProjectDetailsRecord(project = null) {
+  if (!project) return project;
+  if (!hasUnsupportedCompletionOrClosure(project)) return project;
+
+  const fallbackStatus =
+    normalizeWorkflowValue(project.status) === "scheduled"
+      ? "scheduled"
+      : normalizeWorkflowValue(project.status) === "active"
+      ? "active"
+      : "active";
+
+  return {
+    ...project,
+    status: fallbackStatus,
+    workflowStatus: project.workflowStatus ? "active" : project.workflowStatus,
+    workflowStage: project.workflowStage ? "active" : project.workflowStage,
+    closureStatus: null,
+    completionStatus: null,
+    completedAt: null,
+    closedAt: null,
+    closeDate: null,
+    closureDate: null,
+    closureDecisionRef: null,
+    needsReview: false,
+    revenue: null,
+    finalAmount: null,
+  };
+}
+
+function getTruthfulJobRecords(records = []) {
+  return Array.isArray(records)
+    ? records.filter((record) => !isCompletionOrClosureRecord(record))
+    : [];
+}
+
+function getCompletionClosureUnavailableCopy(language = "en") {
+  if (language === "es") {
+    return {
+      title: "La finalización y el cierre del proyecto aún no están disponibles.",
+      body:
+        "Puedes revisar los detalles del trabajo y continuar la conversación, pero Meetro todavía no guarda finalización, cierre, historial ni ingresos como estado de producción.",
+    };
+  }
+
+  return {
+    title: "Project completion and closure are not available yet.",
+    body:
+      "You can review the work details and continue the conversation, but Meetro does not yet save completion, closure, history, or revenue as production state.",
+  };
+}
+
 function ProjectDetails({ setPage, currentPage }) {
-  const activeJobSnapshot = getActiveJobSnapshot();
+  const activeJobSnapshot = useMemo(() => getActiveJobSnapshot(), []);
 
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,8 +143,10 @@ function ProjectDetails({ setPage, currentPage }) {
   const [touchStartX, setTouchStartX] = useState(null);
   const [showGalleryGrid, setShowGalleryGrid] = useState(false);
   const [language, setLanguage] = useState(getLanguage());
+  const [workflowUnavailableNotice, setWorkflowUnavailableNotice] = useState(false);
 
   const activeProjectData = getSelectedActiveProject();
+  const activeJobSnapshotJobId = activeJobSnapshot?.jobId || "";
   const openedFromConversation = Boolean(getConversationOriginContext());
   const projectDetailsReturnPageValue =
     localStorage.getItem("projectDetailsReturnPage") || "";
@@ -53,33 +161,32 @@ function ProjectDetails({ setPage, currentPage }) {
     (projectDetailsReturnPageValue === "businessLeads" ||
       projectDetailsReturnPageValue === "businessDashboard");
 
+  const truthfulJobRecords = useMemo(() => getTruthfulJobRecords(jobRecords), [jobRecords]);
+  const hasUnsupportedWorkflow = useMemo(
+    () => hasUnsupportedCompletionOrClosure(post, jobRecords),
+    [post, jobRecords]
+  );
+  const projectForPresentation = useMemo(
+    () => getTruthfulProjectDetailsRecord(post),
+    [post]
+  );
+  const unavailableCopy = useMemo(
+    () => getCompletionClosureUnavailableCopy(language),
+    [language]
+  );
+
   const memoryStats = {
-    updates: jobRecords.filter((item) => item.type === "update").length,
-    photos: jobRecords.filter((item) => item.type === "photoWorkflow").length,
-    approvals: jobRecords.filter((item) => item.type === "approval").length,
-    payments: jobRecords.filter((item) => item.type === "payment").length,
-    materials: jobRecords.filter((item) => item.type === "materials").length,
+    updates: truthfulJobRecords.filter((item) => item.type === "update").length,
+    photos: truthfulJobRecords.filter((item) => item.type === "photoWorkflow").length,
+    approvals: truthfulJobRecords.filter((item) => item.type === "approval").length,
+    payments: truthfulJobRecords.filter((item) => item.type === "payment").length,
+    materials: truthfulJobRecords.filter((item) => item.type === "materials").length,
     issues: jobRecords.filter(
       (item) => item.workflowType === "issue" || item.title?.toLowerCase().includes("issue")
     ).length,
-    completions: jobRecords.filter(
-      (item) => item.workflowType === "completion" || item.title?.toLowerCase().includes("completion")
-    ).length,
   };
 
-  const liveProjectStatus = memoryStats.completions > 0
-    ? "Completed"
-    : memoryStats.issues > 0
-    ? "Issue documented"
-    : memoryStats.payments > 0
-    ? "Payment pending"
-    : memoryStats.updates > 0 || memoryStats.photos > 0
-    ? "In progress"
-    : isProfessionalProject
-    ? post?.status || "Active"
-    : "Request active";
-
-  const latestActivity = jobRecords[0] || null;
+  const latestActivity = truthfulJobRecords[0] || null;
 
   useEffect(() => {
     const handleLanguageChange = () => setLanguage(getLanguage());
@@ -146,9 +253,7 @@ function ProjectDetails({ setPage, currentPage }) {
       actionKey === "reviewCompletion" ||
       actionKey === "viewRecord"
     ) {
-      localStorage.setItem("lastCompletedProject", JSON.stringify(post));
-      localStorage.setItem("completedJobViewMode", "homeowner");
-      setPage("completedJobDetails");
+      setWorkflowUnavailableNotice(true);
       return;
     }
 
@@ -192,7 +297,7 @@ function ProjectDetails({ setPage, currentPage }) {
         activeProject?.requestId ||
         activeProject?.project?.id ||
         activeProject?.id ||
-        activeJobSnapshot?.jobId ||
+        activeJobSnapshotJobId ||
         localStorage.getItem("activeJobId") ||
         localStorage.getItem("selectedPostId") ||
         localStorage.getItem("activeConversationId") ||
@@ -219,7 +324,7 @@ function ProjectDetails({ setPage, currentPage }) {
       window.removeEventListener("meetroJobRecordUpdated", loadJobRecords);
       window.removeEventListener("storage", loadJobRecords);
     };
-  }, []);
+  }, [activeJobSnapshotJobId]);
 
   useEffect(() => {
     async function fetchPost() {
@@ -286,7 +391,7 @@ if (data.post) {
   useEffect(() => {
     if (loading) return undefined;
 
-    if (!post) {
+    if (!projectForPresentation) {
       clearRequestCompanionContext();
       return undefined;
     }
@@ -295,9 +400,9 @@ if (data.post) {
       ? t("opportunityNextStep", language)
       : isProfessionalProject
       ? t("projectReviewWorkCenterNote", language)
-      : getHomeownerProjectJourney(post, language).nextStep;
+      : getHomeownerProjectJourney(projectForPresentation, language).nextStep;
     const context = buildRequestCompanionContext({
-      request: post,
+      request: projectForPresentation,
       rolePerspective:
         isProfessionalProject || isBusinessLeadReviewPage ? "professional" : "homeowner",
       nextStep: safeNextStep,
@@ -309,7 +414,7 @@ if (data.post) {
     return () => {
       clearRequestCompanionContext();
     };
-  }, [loading, post, language, isBusinessLeadReviewPage, isProfessionalProject]);
+  }, [loading, projectForPresentation, language, isBusinessLeadReviewPage, isProfessionalProject]);
 
   return (
     <div className="app-page meetro-readable-page" style={pageWrapper}>
@@ -384,7 +489,7 @@ if (data.post) {
 
                 <div>
                   <strong>
-                    {post.status === "scheduled"
+                    {projectForPresentation?.status === "scheduled"
                       ? t("projectScheduled")
                       : t("projectUnderReview")}
                   </strong>
@@ -397,7 +502,7 @@ if (data.post) {
             )}
 
             {!isProfessionalProject && !isBusinessLeadReviewPage ? (
-              <HomeownerProjectHeader request={post} language={language} />
+              <HomeownerProjectHeader request={projectForPresentation} language={language} />
             ) : !isBusinessLeadReviewPage && (
               <h1 style={projectTitle}>
                 {post.title || post.service || post.category || "Project"}
@@ -406,7 +511,7 @@ if (data.post) {
 
             {!isProfessionalProject && !isBusinessLeadReviewPage ? (
               <ProjectJourneyPanel
-                request={post}
+                request={projectForPresentation}
                 language={language}
                 onPrimaryAction={handleJourneyPrimaryAction}
                 onMessageProfessional={openProjectConversation}
@@ -420,11 +525,9 @@ if (data.post) {
                   { key: "active", label: t("active") },
                   { key: "completed", label: t("done") },
                 ].map((step) => {
-                  const status = String(post.status || "").toLowerCase();
+                  const status = String(projectForPresentation?.status || "").toLowerCase();
                   const currentStep =
-                    status === "completed"
-                      ? "completed"
-                      : status === "active"
+                    status === "active"
                       ? "active"
                       : status === "quoted" || status === "quote"
                       ? "quote"
@@ -787,12 +890,12 @@ if (data.post) {
                 <strong>Meetro Service Summary</strong>
 
                 <p>
-                  {jobRecords.length === 0
+                  {truthfulJobRecords.length === 0
                     ? "No service memory has been saved yet. Updates, photos, approvals, materials, and payments saved from the conversation will appear here."
-                    : `This service has ${jobRecords.length} saved workflow item${jobRecords.length === 1 ? "" : "s"}: ${memoryStats.photos} photo record${memoryStats.photos === 1 ? "" : "s"}, ${memoryStats.issues} issue${memoryStats.issues === 1 ? "" : "s"}, ${memoryStats.approvals} approval${memoryStats.approvals === 1 ? "" : "s"}, ${memoryStats.payments} payment request${memoryStats.payments === 1 ? "" : "s"}, and ${memoryStats.materials} material note${memoryStats.materials === 1 ? "" : "s"}.`}
+                    : `This service has ${truthfulJobRecords.length} saved workflow item${truthfulJobRecords.length === 1 ? "" : "s"}: ${memoryStats.photos} photo record${memoryStats.photos === 1 ? "" : "s"}, ${memoryStats.issues} issue${memoryStats.issues === 1 ? "" : "s"}, ${memoryStats.approvals} approval${memoryStats.approvals === 1 ? "" : "s"}, ${memoryStats.payments} payment request${memoryStats.payments === 1 ? "" : "s"}, and ${memoryStats.materials} material note${memoryStats.materials === 1 ? "" : "s"}.`}
                 </p>
 
-                {jobRecords.length > 0 && (
+                {truthfulJobRecords.length > 0 && (
                   <div style={statusChipWrap}>
                     {memoryStats.issues > 0 && (
                       <span style={warningChip}> {memoryStats.issues} issue</span>
@@ -810,9 +913,6 @@ if (data.post) {
                       <span style={infoChip}> materials</span>
                     )}
 
-                    {memoryStats.completions > 0 && (
-                      <span style={successChip}> completed</span>
-                    )}
                   </div>
                 )}
               </div>
@@ -855,16 +955,16 @@ if (data.post) {
               <div style={jobMemoryBox}>
               <div style={jobMemoryHeader}>
                 <strong> Project Memory</strong>
-                <span>{jobRecords.length} saved</span>
+                <span>{truthfulJobRecords.length} saved</span>
               </div>
 
-              {jobRecords.length === 0 ? (
+              {truthfulJobRecords.length === 0 ? (
                 <p style={jobMemoryEmpty}>
                   Saved updates, photos, approvals, materials, and payments will appear here.
                 </p>
               ) : (
                 <div style={jobMemoryList}>
-                  {jobRecords.slice(0, 5).map((item) => (
+                  {truthfulJobRecords.slice(0, 5).map((item) => (
                     <div key={item.id} style={memoryTimelineItem}>
                       <div style={memoryTimelineIcon}>
                         {item.type === "approval" && ""}
@@ -896,6 +996,15 @@ if (data.post) {
                   ))}
                 </div>
               )}
+              </div>
+            )}
+
+            {(workflowUnavailableNotice ||
+              hasUnsupportedWorkflow ||
+              (isProfessionalProject && projectForPresentation?.status === "active")) && (
+              <div style={workflowUnavailableCard}>
+                <strong>{unavailableCopy.title}</strong>
+                <p>{unavailableCopy.body}</p>
               </div>
             )}
 
@@ -947,110 +1056,6 @@ if (data.post) {
                   </button>
                 )}
 
-                {post.status === "active" && (
-                  <button
-                    style={completeProjectButton}
-                    onClick={() => {
-                      const requestId = post.requestId || post.id;
-
-                      const homeownerRequests = JSON.parse(
-                        localStorage.getItem("homeownerRequests") || "[]"
-                      );
-
-                      const updatedRequests = homeownerRequests.map((item) => {
-                        const itemId = item.requestId || item.id;
-
-                        if (itemId !== requestId) return item;
-
-                        return {
-                          ...item,
-                          status: "completed",
-                          completedAt: new Date().toISOString(),
-                          needsReview: true,
-                        };
-                      });
-
-                      localStorage.setItem(
-                        "homeownerRequests",
-                        JSON.stringify(updatedRequests)
-                      );
-
-                      const completedProjects = JSON.parse(
-                        localStorage.getItem("completedProjects") || "[]"
-                      );
-
-                      const acceptedAmount =
-                        Number(
-                          post?.acceptedQuote?.amount ||
-                          post?.quoteAmount ||
-                          0
-                        );
-
-                      const completedProjectRecord = {
-                        ...post,
-                        requestId,
-                        status: "completed",
-                        completedAt: new Date().toISOString(),
-                        revenue: acceptedAmount,
-                        source: "homeownerProject",
-                      };
-
-                      localStorage.setItem(
-                        "completedProjects",
-                        JSON.stringify([
-                          completedProjectRecord,
-                          ...completedProjects,
-                        ])
-                      );
-
-                      const currentCompletedCount =
-                        Number(
-                          localStorage.getItem("completedJobsCount") || "0"
-                        );
-
-                      localStorage.setItem(
-                        "completedJobsCount",
-                        String(currentCompletedCount + 1)
-                      );
-
-                      const currentRevenue =
-                        Number(
-                          localStorage.getItem("totalJobRevenue") || "0"
-                        );
-
-                      localStorage.setItem(
-                        "totalJobRevenue",
-                        String(currentRevenue + acceptedAmount)
-                      );
-
-                      saveSelectedActiveProject({
-                        ...activeProjectData,
-                        status: "completed",
-                        project: {
-                          ...post,
-                          status: "completed",
-                          completedAt: new Date().toISOString(),
-                          needsReview: true,
-                        },
-                      });
-
-                      localStorage.setItem(
-                        "homeownerNeedsReview",
-                        "true"
-                      );
-
-                      localStorage.setItem(
-                        "lastCompletedProject",
-                        JSON.stringify(completedProjectRecord)
-                      );
-
-                      window.dispatchEvent(new Event("storage"));
-                      window.location.reload();
-                    }}
-                  >
-                     Mark Work Completed
-                  </button>
-                )}
               </div>
             )}
 
@@ -1384,13 +1389,16 @@ const moneyChip = {
   fontWeight: "900",
 };
 
-const successChip = {
-  background: "#dcfce7",
-  color: "#166534",
-  padding: "6px 9px",
-  borderRadius: "999px",
-  fontSize: "11px",
-  fontWeight: "900",
+const workflowUnavailableCard = {
+  background: "var(--meetro-surface-paper, #fffaf0)",
+  border: "1px solid var(--meetro-border-warm, rgba(126, 92, 54, 0.2))",
+  borderRadius: "18px",
+  padding: "16px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  display: "grid",
+  gap: "6px",
+  lineHeight: "1.45",
+  marginTop: "16px",
 };
 
 const aiSummaryIcon = {
@@ -1525,16 +1533,6 @@ const memoryTimelineImage = {
   borderRadius: "16px",
   marginTop: "10px",
 };
-
-const jobMemoryItem = {
-  display: "flex",
-  gap: "12px",
-  alignItems: "flex-start",
-  background: "#f8fafc",
-  borderRadius: "16px",
-  padding: "12px",
-};
-
 
 const acceptedQuoteBox = {
   background: "#f8f7ff",
@@ -1760,15 +1758,6 @@ const journeyShell = {
   boxSizing: "border-box",
 };
 
-const journeyHeaderRow = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "12px",
-  flexWrap: "wrap",
-  marginBottom: "10px",
-};
-
 const journeyEyebrow = {
   display: "block",
   color: "var(--meetro-color-forest, #1f4d34)",
@@ -1777,14 +1766,6 @@ const journeyEyebrow = {
   letterSpacing: "0.08em",
   textTransform: "uppercase",
   marginBottom: "4px",
-};
-
-const journeyTitle = {
-  margin: 0,
-  color: "#0f172a",
-  fontSize: "19px",
-  lineHeight: 1.15,
-  fontWeight: "950",
 };
 
 const journeyStageBadge = {
@@ -1859,16 +1840,6 @@ const journeyProgressLabel = {
 
 const journeyProgressLabelCurrent = {
   color: "#4f28e8",
-};
-
-const journeyCarousel = {
-  display: "flex",
-  gap: "12px",
-  overflowX: "auto",
-  WebkitOverflowScrolling: "touch",
-  scrollSnapType: "x mandatory",
-  maxWidth: "100%",
-  padding: "4px 0 12px",
 };
 
 const journeyStageCard = {
@@ -2172,15 +2143,6 @@ const projectImage = {
   boxShadow: "0 10px 24px rgba(15,23,42,.10)",
 };
 
-const projectDescription = {
-  color: "#475569",
-  lineHeight: "1.55",
-  fontSize: "15px",
-  textAlign: "left",
-  margin: "0 0 18px",
-  fontWeight: "650",
-};
-
 const projectActionGrid = {
   display: "grid",
   gap: "12px",
@@ -2198,32 +2160,6 @@ const startProjectButton = {
   fontSize: "16px",
   cursor: "pointer",
   boxShadow: "0 12px 24px rgba(34,197,94,0.24)",
-};
-
-const completeProjectButton = {
-  width: "100%",
-  padding: "16px 20px",
-  background: "linear-gradient(135deg,#111827,#334155)",
-  color: "white",
-  border: "none",
-  borderRadius: "18px",
-  fontWeight: "900",
-  fontSize: "16px",
-  cursor: "pointer",
-  boxShadow: "0 12px 24px rgba(15,23,42,0.22)",
-};
-
-const secondaryButton = {
-  width: "100%",
-  marginTop: "12px",
-  padding: "15px 20px",
-  background: "white",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  border: "1px solid #ddd6fe",
-  borderRadius: "18px",
-  fontWeight: "900",
-  fontSize: "16px",
-  cursor: "pointer",
 };
 
 const projectPrimaryActions = {

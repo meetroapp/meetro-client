@@ -111,7 +111,7 @@ test("Companion receives request detail context from Project Details", () => {
   assert.match(projectDetailsSource, /writeRequestCompanionContext\(context\)/);
   assert.match(projectDetailsSource, /clearRequestCompanionContext\(\)/);
   assert.match(projectDetailsSource, /pageContext: "request_detail"/);
-  assert.match(projectDetailsSource, /request: post/);
+  assert.match(projectDetailsSource, /request: projectForPresentation/);
   assert.match(projectDetailsSource, /rolePerspective:[\s\S]*"professional"[\s\S]*"homeowner"/);
   assert.match(assistantSource, /readRequestCompanionContext/);
   assert.match(assistantSource, /pageContext: "request_detail"/);
