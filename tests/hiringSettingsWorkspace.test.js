@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createServer } from "vite";
 
 import { t } from "../src/utils/language.js";
 
@@ -20,6 +23,43 @@ test("four dead settings actions are replaced by one functional workspace", () =
   assert.match(centerSource, /hiringSettingsWorkEligibility/);
   assert.doesNotMatch(centerSource, /Hiring Settings are coming soon/);
   assert.doesNotMatch(centerSource, /will be configurable in a future hiring release/);
+});
+
+test("Manage Hiring Settings renders safely for missing and malformed settings", async () => {
+  const vite = await createServer({
+    appType: "custom",
+    logLevel: "silent",
+    server: { middlewareMode: true, hmr: false },
+  });
+
+  try {
+    const { default: HiringSettingsWorkspace } = await vite.ssrLoadModule(
+      "/src/components/HiringSettingsWorkspace.jsx"
+    );
+    const renderWorkspace = (settings) => renderToStaticMarkup(React.createElement(
+      HiringSettingsWorkspace,
+      {
+        settings,
+        language: "en",
+        onSave: () => ({ ok: false }),
+        onClose: () => {},
+      }
+    ));
+
+    for (const settings of [null, undefined, [], "stale", 7, {}, { applicationRequirements: null }]) {
+      const markup = renderWorkspace(settings);
+      assert.match(markup, /role="dialog"/);
+      assert.match(markup, /Hiring Settings are unavailable/);
+      assert.doesNotMatch(markup, /Save Changes/);
+    }
+
+    const validMarkup = renderWorkspace({ businessId: "business-1" });
+    assert.match(validMarkup, /Application Requirements/);
+    assert.match(validMarkup, /Save Changes/);
+    assert.doesNotMatch(validMarkup, /Hiring Settings are unavailable/);
+  } finally {
+    await vite.close();
+  }
 });
 
 test("Hiring Center delegates settings persistence and policy to the central registry", () => {
@@ -146,6 +186,7 @@ test("required Hiring Settings labels exist in all supported languages", () => {
     "hiringSettingsCustomEligibilityNotes",
     "hiringSettingsSaving",
     "hiringSettingsUpdated",
+    "hiringSettingsUnavailable",
   ];
   for (const language of ["en", "es", "fr", "pt-BR"]) {
     keys.forEach((key) => {

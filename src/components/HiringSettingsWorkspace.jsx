@@ -51,7 +51,7 @@ const ELIGIBILITY_LABELS = Object.freeze({
 
 export default function HiringSettingsWorkspace({ settings, language, onSave, onClose }) {
   const [draft, setDraft] = useState(() => normalizeHiringSettings(settings, {
-    businessId: settings.businessId,
+    businessId: settings?.businessId || "",
   }));
   const [questionPrompt, setQuestionPrompt] = useState("");
   const [questionError, setQuestionError] = useState("");
@@ -70,6 +70,43 @@ export default function HiringSettingsWorkspace({ settings, language, onSave, on
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  const isAvailable = Boolean(draft.businessId);
+
+  if (!isAvailable) {
+    return (
+      <div className="hiring-settings-overlay" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}>
+        <section
+          className="hiring-settings-workspace meetro-visual-surface"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hiring-settings-title"
+        >
+          <header className="hiring-settings-header">
+            <div>
+              <p>{t("businessTools", language)}</p>
+              <h2 id="hiring-settings-title" ref={titleRef} tabIndex={-1}>
+                {t("hiringSettings", language)}
+              </h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label={t("close", language)}>×</button>
+          </header>
+          <div className="hiring-settings-content">
+            <p className="hiring-settings-intro" role="status">
+              {t("hiringSettingsUnavailable", language)}
+            </p>
+            <div className="hiring-settings-actions">
+              <button type="button" className="meetro-visual-primary-button" onClick={onClose}>
+                {t("cancel", language)}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   function updateSection(section, field, value) {
     setSaved(false);
@@ -162,7 +199,7 @@ export default function HiringSettingsWorkspace({ settings, language, onSave, on
       >
         <header className="hiring-settings-header">
           <div>
-            <p>{t("hiringCenter", language)}</p>
+            <p>{t("businessTools", language)}</p>
             <h2 id="hiring-settings-title" ref={titleRef} tabIndex={-1}>
               {t("hiringSettings", language)}
             </h2>
