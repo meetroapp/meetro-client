@@ -289,7 +289,7 @@ function ContractorProfile({ setPage, currentPage }) {
     setBusinessState(existingProfile.state_province || "");
     setBusinessPostalCode(existingProfile.postal_code || "");
     setCountry(existingProfile.country || "");
-    setServiceArea(existingProfile.service_area || "");
+    setServiceArea(existingProfile.service_area || existingProfile.location || "");
     setShowBusinessAddressPublic(existingProfile.show_business_address_public === true);
     setLocation(existingProfile.location || "");
     setBio(existingProfile.bio || "");

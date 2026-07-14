@@ -74,7 +74,7 @@ export function buildBusinessProfilePayloadFromCanonical(profile = {}, overrides
     state_province: clean(profile.state_province),
     postal_code: clean(profile.postal_code),
     country: clean(profile.country),
-    service_area: clean(profile.service_area),
+    service_area: clean(profile.service_area || profile.location),
     show_business_address_public: profile.show_business_address_public === true,
     business_hours: clean(profile.business_hours),
     license_number: clean(profile.license_number),

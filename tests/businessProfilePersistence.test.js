@@ -60,6 +60,18 @@ test("dashboard availability updates preserve the complete canonical profile pay
   assert.equal(payload.dispatch_ready, true);
 });
 
+test("legacy canonical location is preserved as service area during reconciliation", () => {
+  const payload = buildBusinessProfilePayloadFromCanonical({
+    id: "profile-legacy",
+    business_name: "Legacy Services",
+    category: "handyman",
+    location: "Lee County",
+  });
+
+  assert.equal(payload.location, "Lee County");
+  assert.equal(payload.service_area, "Lee County");
+});
+
 test("public address setting controls the canonical location projection", () => {
   const payload = buildBusinessProfilePayload({
     businessName: "Business",
@@ -107,4 +119,8 @@ test("Business Profile contains no browser-local persistence authority for edita
   assert.doesNotMatch(source, /localStorage\.setItem\("businessCountry"/);
   assert.doesNotMatch(source, /hasRequiredAddressFields/);
   assert.match(source, /!businessName\.trim\(\) \|\| !category\.trim\(\)/);
+  assert.match(
+    source,
+    /setServiceArea\(existingProfile\.service_area \|\| existingProfile\.location \|\| ""\)/
+  );
 });
