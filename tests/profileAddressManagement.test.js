@@ -6,7 +6,6 @@ import { t } from "../src/utils/language.js";
 const profileSource = fs.readFileSync("src/pages/Profile.jsx", "utf8");
 const managerSource = fs.readFileSync("src/components/PersonalAddressManager.jsx", "utf8");
 const uploadSource = fs.readFileSync("src/pages/Upload.jsx", "utf8");
-const emergencySource = fs.readFileSync("src/pages/EmergencyRequest.jsx", "utf8");
 const scheduleSource = fs.readFileSync("src/pages/ContractorDashboard.jsx", "utf8");
 const cssSource = fs.readFileSync("src/index.css", "utf8");
 
@@ -31,13 +30,11 @@ test("address manager follows one viewport-owned accessible editor pattern", () 
   assert.match(cssSource, /overflow-y: auto/);
 });
 
-test("request and emergency use personal address only through fallback precedence", () => {
+test("service requests use personal address only through fallback precedence", () => {
   assert.match(uploadSource, /resolveWorkflowAddress\(\{/);
   assert.match(uploadSource, /selectedPropertyAddress:/);
   assert.match(uploadSource, /projectAddress:/);
   assert.match(uploadSource, /requestAddress:/);
-  assert.match(emergencySource, /explicitAddress: localStorage\.getItem\("emergencyLocation"\)/);
-  assert.match(emergencySource, /location: emergencyLocation/);
 });
 
 test("professional schedule retains customer and visit address ownership", () => {

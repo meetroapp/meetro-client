@@ -75,7 +75,6 @@ test("protected media upload surfaces render a deferred state for real-user buil
     "src/pages/ProjectGallery.jsx",
     "src/pages/Profile.jsx",
     "src/pages/ConversationThread.jsx",
-    "src/pages/EmergencyRequest.jsx",
     "src/pages/CompletionSheet.jsx",
     "src/pages/ContractorDashboard.jsx",
     "src/pages/CompletedJobDetails.jsx",

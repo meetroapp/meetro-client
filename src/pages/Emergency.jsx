@@ -25,9 +25,10 @@ function Emergency({ setPage }) {
  const text = {
     en: {
       title: "Emergency Help",
-      subtitle: "Fast access to urgent local services near you.",
-      available: "Available now",
-      request: "Request Help",
+      subtitle: "Emergency request delivery is not available right now.",
+      available: "Requests unavailable",
+      request: "Unavailable",
+      safety: "If anyone is in immediate danger, contact local emergency services now.",
       back: "Back Home",
       services: [
         {
@@ -64,9 +65,10 @@ function Emergency({ setPage }) {
     },
     es: {
       title: "Ayuda de Emergencia",
-      subtitle: "Acceso rápido a servicios urgentes cerca de ti.",
-      available: "Disponible ahora",
-      request: "Pedir Ayuda",
+      subtitle: "El envio de solicitudes de emergencia no esta disponible en este momento.",
+      available: "Solicitudes no disponibles",
+      request: "No disponible",
+      safety: "Si alguien esta en peligro inmediato, comunicate ahora con los servicios de emergencia locales.",
       back: "Regresar al Inicio",
       services: [
         {
@@ -105,34 +107,6 @@ function Emergency({ setPage }) {
 
   const t = text[language] || text.en;
 
-  function openRequest(service) {
-    const activeStatus = localStorage.getItem("emergencyDispatchStatus");
-
-    if (
-      activeStatus &&
-      !["completed", "cancelled", "closed"].includes(activeStatus)
-    ) {
-      localStorage.setItem("meetroConversationType", "emergency");
-      localStorage.setItem("conversationReturnPage", "home");
-      localStorage.setItem("dispatchReturnPage", "conversationThread");
-      setPage("conversationThread");
-      return;
-    }
-
-    localStorage.removeItem("emergencyIssue");
-    localStorage.removeItem("emergencyGateCode");
-    localStorage.removeItem("emergencyEntryNotes");
-    localStorage.removeItem("emergencyPetWarning");
-    localStorage.removeItem("emergencyUrgency");
-    localStorage.removeItem("emergencyPhotos");
-    localStorage.removeItem("activeEmergencyRequestId");
-    localStorage.removeItem("emergencyRequestId");
-    localStorage.removeItem("emergencyConversationId");
-
-    localStorage.setItem("selectedEmergencyService", service.name);
-    setPage("emergencyBusinessSelection");
-  }
-
   return (
     <div className="app-page meetro-responsive-page" style={page}>
       <div style={card}>
@@ -148,6 +122,7 @@ function Emergency({ setPage }) {
 
         <h1 style={title}>{t.title}</h1>
         <p style={subtitle}>{t.subtitle}</p>
+        <p style={safetyNotice} role="status">{t.safety}</p>
 
         <div style={grid}>
           {t.services.map((service, index) => (
@@ -164,8 +139,10 @@ function Emergency({ setPage }) {
               </div>
 
               <button
-                style={primaryButton}
-                onClick={() => openRequest(service)}
+                type="button"
+                style={{ ...primaryButton, ...disabledButton }}
+                disabled
+                aria-disabled="true"
               >
                 {t.request}
               </button>
@@ -238,6 +215,26 @@ const subtitle = {
   lineHeight: "1.5",
   fontSize: "16px",
   textAlign: "center",
+};
+
+const safetyNotice = {
+  margin: "0 0 22px",
+  padding: "14px 16px",
+  border: "1px solid #fecaca",
+  borderRadius: "14px",
+  background: "#fff7f7",
+  color: "#991b1b",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.5,
+  textAlign: "center",
+};
+
+const disabledButton = {
+  background: "#e5e7eb",
+  color: "#6b7280",
+  cursor: "not-allowed",
+  boxShadow: "none",
 };
 
 const grid = {
