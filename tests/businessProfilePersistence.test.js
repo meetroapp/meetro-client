@@ -105,4 +105,6 @@ test("Business Profile contains no browser-local persistence authority for edita
   assert.doesNotMatch(source, /persistBusinessAddressFields|persistBusinessDetailFields/);
   assert.doesNotMatch(source, /saveBusinessToDirectory/);
   assert.doesNotMatch(source, /localStorage\.setItem\("businessCountry"/);
+  assert.doesNotMatch(source, /hasRequiredAddressFields/);
+  assert.match(source, /!businessName\.trim\(\) \|\| !category\.trim\(\)/);
 });

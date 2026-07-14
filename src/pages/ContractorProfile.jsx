@@ -304,16 +304,6 @@ function ContractorProfile({ setPage, currentPage }) {
   }
 
 
-  function hasRequiredAddressFields() {
-    return (
-      businessCity.trim() &&
-      businessState.trim() &&
-      businessPostalCode.trim() &&
-      country.trim() &&
-      serviceArea.trim()
-    );
-  }
-
   function formatCategory(value) {
     const found = categories.find((item) => item[0] === value);
     return found ? found[1] : value || t("categoryNotSet");
@@ -451,7 +441,7 @@ function ContractorProfile({ setPage, currentPage }) {
 
   async function handleCreateProfile() {
     try {
-      if (!businessName.trim() || !category.trim() || !hasRequiredAddressFields()) {
+      if (!businessName.trim() || !category.trim()) {
         alert(t("completeAllFields"));
         return;
       }
@@ -488,7 +478,7 @@ function ContractorProfile({ setPage, currentPage }) {
         return;
       }
 
-      if (!businessName.trim() || !category.trim() || !hasRequiredAddressFields()) {
+      if (!businessName.trim() || !category.trim()) {
         alert(t("completeAllFields"));
         return;
       }
