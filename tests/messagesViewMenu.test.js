@@ -687,7 +687,7 @@ test("ConversationThread relationship header avoids nested buttons", () => {
   assert.match(headerBlock, /event\.stopPropagation\(\)/);
 });
 
-test("ConversationThread sends messages local-first before backend sync", () => {
+test("ConversationThread keeps local messages visible without claiming failed delivery", () => {
   assert.match(conversationThreadSource, /const \[messageText, setMessageText\] = useState\(""\)/);
   assert.match(conversationThreadSource, /const sendMessage = \(textOverride = null\) =>/);
   assert.match(conversationThreadSource, /const text = textOverride \|\| messageText\.trim\(\)/);
@@ -698,7 +698,12 @@ test("ConversationThread sends messages local-first before backend sync", () => 
   assert.match(conversationThreadSource, /onKeyDown=\{\(e\) => \{[\s\S]*sendMessage\(\);/);
   assert.match(conversationThreadSource, /onClick=\{\(\) => sendMessage\(\)\}/);
   assert.match(conversationThreadSource, /setMessageText\(""\)/);
-  assert.doesNotMatch(conversationThreadSource, /updateMessageStatus\(messageWithRole\.id, "failed", 0\)/);
+  assert.match(conversationThreadSource, /updateMessageStatus\(messageWithRole\.id, "failed", 0\)/);
+  assert.match(conversationThreadSource, /updateMessageStatus\(messageWithRole\.id, "failed", 400\)/);
+  assert.doesNotMatch(
+    conversationThreadSource,
+    /else \{\s*updateMessageStatus\(messageWithRole\.id, "sent", 0\);\s*\}/
+  );
 });
 
 test("Relationship identity opens on a fast path before inbox projections rebuild", () => {

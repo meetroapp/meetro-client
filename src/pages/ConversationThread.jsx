@@ -2974,14 +2974,14 @@ useEffect(() => {
             )
           );
         } else {
-          updateMessageStatus(messageWithRole.id, "sent", 0);
+          updateMessageStatus(messageWithRole.id, "failed", 0);
         }
       } catch (err) {
         console.error("Failed to persist message to backend", err);
-        updateMessageStatus(messageWithRole.id, "sent", 0);
+        updateMessageStatus(messageWithRole.id, "failed", 0);
       }
     } else {
-      updateMessageStatus(messageWithRole.id, "sent", 400);
+      updateMessageStatus(messageWithRole.id, "failed", 400);
     }
 
     setReplyingTo(null);
