@@ -9,10 +9,7 @@ import {
 } from "../utils/invoiceCalculations";
 import {
   getActiveJobSnapshot,
-  getBusinessSchedule,
-  saveBusinessSchedule,
 } from "../utils/workCenter";
-import { formatMessageTime } from "../utils/displayTime";
 import { restoreConversationOriginContext } from "../utils/conversationOrigin";
 
 function todayIsoDate() {
@@ -31,34 +28,6 @@ function createEmptyLineItem() {
 
 function formatMoney(value) {
   return `$${moneyValue(value).toFixed(2)}`;
-}
-
-function getInvoiceFingerprint(invoice) {
-  return JSON.stringify({
-    invoiceNumber: invoice.invoiceNumber || "",
-    invoiceDate: invoice.invoiceDate || "",
-    dueDate: invoice.dueDate || "",
-    customerName: invoice.customerName || "",
-    customerPhone: invoice.customerPhone || "",
-    customerEmail: invoice.customerEmail || "",
-    serviceAddress: invoice.serviceAddress || "",
-    serviceDescription: invoice.serviceDescription || "",
-    jobReference: invoice.jobReference || "",
-    completionDate: invoice.completionDate || "",
-    workPerformed: invoice.workPerformed || "",
-    lineItems: normalizeInvoiceLineItems(invoice.lineItems || []),
-    labor: invoice.labor || "",
-    materials: invoice.materials || "",
-    serviceFee: invoice.serviceFee || "",
-    discount: invoice.discount || "",
-    tax: invoice.tax || "",
-    otherCharges: invoice.otherCharges || "",
-    total: moneyValue(invoice.total),
-    notes: invoice.notes || "",
-    paymentTerms: invoice.paymentTerms || "",
-    warrantyNotes: invoice.warrantyNotes || "",
-    customerMessage: invoice.customerMessage || "",
-  });
 }
 
 function InvoiceBuilder({ setPage }) {
@@ -124,8 +93,8 @@ function InvoiceBuilder({ setPage }) {
       : "Line items are optional. Existing labor, materials, service fee, and other charge fields still calculate the invoice total.",
     charges: isSpanish ? "Cargos" : "Charges",
     chargesHint: isSpanish
-      ? "Estos totales siguen disponibles para facturas simples y datos guardados anteriores."
-      : "These totals remain available for simple invoices and older saved invoice data.",
+      ? "Estos campos de cargos resumidos siguen disponibles para facturas simples."
+      : "These summary charge fields remain available for simple invoices.",
     discount: isSpanish ? "Descuento" : "Discount",
     tax: isSpanish ? "Impuesto" : "Tax",
     otherCharges: isSpanish ? "Otros cargos" : "Other charges",
@@ -140,54 +109,19 @@ function InvoiceBuilder({ setPage }) {
     materialsTotal: isSpanish ? "Total de materiales" : "Materials total",
     subtotal: isSpanish ? "Subtotal" : "Subtotal",
     totalDue: isSpanish ? "Total a pagar" : "Total due",
-    saveReceipt: isSpanish ? "Guardar recibo" : "Save Receipt",
-    saveInvoice: isSpanish ? "Guardar factura" : "Save Invoice",
     hidePreview: isSpanish ? "Ocultar vista previa" : "Hide Preview",
     previewInvoice: isSpanish ? "Vista previa de factura" : "Preview Invoice",
     copySummary: isSpanish ? "Copiar resumen" : "Copy Summary",
     printInvoice: isSpanish ? "Imprimir factura" : "Print Invoice",
-    sendInvoice: isSpanish ? "Enviar factura" : "Send Invoice",
-    saveInvoiceFirst: isSpanish ? "Guarda la factura primero" : "Save invoice first",
-    saveInvoiceEyebrow: isSpanish ? "Guardar factura" : "Save Invoice",
-    saveQuestion: isSpanish ? "¿Dónde quieres guardar esta factura?" : "Where do you want to save this invoice?",
-    closeSaveOptions: isSpanish ? "Cerrar opciones de guardado" : "Close save options",
-    saveToThisJob: isSpanish ? "Guardar en este trabajo" : "Save to this job",
-    saveToThisJobHelp: isSpanish
-      ? "Adjunta esta factura al trabajo actual de Work Center y sus registros de soporte."
-      : "Attaches this invoice to the current Work Center job and its supporting records.",
-    saveToThisJobUnavailable: isSpanish
-      ? "Abre desde un trabajo de Work Center para usar esta opción."
-      : "Start from a Work Center job to use this option.",
-    saveToCustomerHistory: isSpanish ? "Guardar en historial del cliente" : "Save to customer history",
-    saveToCustomerHistoryHelp: isSpanish
-      ? "Guarda un registro local de solo lectura bajo esta relación con el cliente."
-      : "Saves a local read-only invoice record under this customer relationship.",
-    saveToCustomerHistoryUnavailable: isSpanish
-      ? "Agrega un nombre de cliente para usar esta opción."
-      : "Add a customer name to use this option.",
-    downloadSavePdf: isSpanish ? "Descargar / guardar PDF" : "Download / Save PDF",
-    downloadSavePdfHelp: isSpanish
-      ? "Abre el diseño limpio de impresión. En web, elige Guardar como PDF. En iPhone, usa Compartir/Imprimir para guardar en Archivos."
-      : "Opens the clean print layout. On web, choose Save as PDF in the print dialog. On iPhone, use Share/Print to save to Files.",
-    copySummaryHelp: isSpanish
-      ? "Copia el resumen de la factura para mensajes o registros."
-      : "Copies the invoice summary text for messages or records.",
     invoiceSummaryCopied: isSpanish ? "Resumen de factura copiado." : "Invoice summary copied.",
     copyUnavailable: isSpanish
       ? "Copiar no está disponible. Usa el texto de vista previa como respaldo."
       : "Copy is unavailable. Use the preview text as a fallback.",
-    invoiceReadyPdf: isSpanish
-      ? "Factura lista. Usa el diálogo de impresión para guardar como PDF."
-      : "Invoice ready. Use the print dialog to save as PDF.",
-    saveAfterAdding: isSpanish ? "Guarda la factura después de agregar" : "Save invoice after adding",
-    openFromCustomerContext: isSpanish
-      ? "Abre esta factura desde una conversación con cliente o un trabajo de Work Center antes de enviarla."
-      : "Start this invoice from a customer conversation or Work Center job before sending.",
     noLineItemsSaved: isSpanish
-      ? "No hay partidas guardadas. Los cargos de resumen aparecen abajo."
-      : "No line items saved. Summary charges are shown below.",
+      ? "No hay partidas agregadas. Los cargos de resumen aparecen abajo."
+      : "No line items added. Summary charges are shown below.",
     invoice: isSpanish ? "Factura" : "Invoice",
-    draftInvoice: isSpanish ? "Factura borrador" : "Draft Invoice",
+    draftInvoice: isSpanish ? "Vista previa de factura" : "Invoice Preview",
     customer: isSpanish ? "Cliente" : "Customer",
     jobRef: isSpanish ? "Ref. del trabajo" : "Job Ref",
     completed: isSpanish ? "Completado" : "Completed",
@@ -195,16 +129,8 @@ function InvoiceBuilder({ setPage }) {
   const returnPage = localStorage.getItem("invoiceBuilderReturnPage") || "";
   const isWorkCenterReceipt = returnPage === "workCenter";
   const isBusinessToolsInvoice = returnPage === "businessCommandCenter";
-  const hasContextInvoice = !isBusinessToolsInvoice;
   const workCenterScheduleId = localStorage.getItem("invoiceBuilderScheduleId") || "";
   const workCenterQuoteId = localStorage.getItem("invoiceBuilderQuoteId") || "";
-
-  const conversationId = hasContextInvoice
-    ? localStorage.getItem("activeConversationId") || ""
-    : "";
-  const canSendInvoiceToConversation = Boolean(
-    conversationId && conversationId !== "general"
-  );
 
   const service = isBusinessToolsInvoice
     ? ""
@@ -280,8 +206,6 @@ function InvoiceBuilder({ setPage }) {
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiSuggestionTarget, setAiSuggestionTarget] = useState("workPerformed");
   const [lineItems, setLineItems] = useState([]);
-  const [savedInvoiceFingerprint, setSavedInvoiceFingerprint] = useState("");
-  const [saveSheetOpen, setSaveSheetOpen] = useState(false);
 
   const invoiceTotals = useMemo(
     () =>
@@ -314,75 +238,6 @@ function InvoiceBuilder({ setPage }) {
 
   const safeTotal = invoiceTotals.totalDue;
 
-  const currentInvoiceFingerprint = useMemo(
-    () =>
-      getInvoiceFingerprint({
-        invoiceNumber,
-        invoiceDate,
-        dueDate,
-        customerName,
-        customerPhone,
-        customerEmail,
-        serviceAddress,
-        serviceDescription,
-        jobReference,
-        completionDate,
-        workPerformed,
-        lineItems,
-        laborPricingType,
-        labor,
-        laborHours,
-        laborRate,
-        materials,
-        serviceFee,
-        discount,
-        tax,
-        otherCharges,
-        total: safeTotal,
-        notes,
-        paymentTerms,
-        warrantyNotes,
-        customerMessage,
-      }),
-    [
-      invoiceNumber,
-      invoiceDate,
-      dueDate,
-      customerName,
-      customerPhone,
-      customerEmail,
-      serviceAddress,
-      serviceDescription,
-      jobReference,
-      completionDate,
-      workPerformed,
-      lineItems,
-      laborPricingType,
-      labor,
-      laborHours,
-      laborRate,
-      materials,
-      serviceFee,
-      discount,
-      tax,
-      otherCharges,
-      safeTotal,
-      notes,
-      paymentTerms,
-      warrantyNotes,
-      customerMessage,
-    ]
-  );
-
-  const invoiceIsValid = getMissingInvoiceDetails().length === 0;
-  const invoiceIsSaved =
-    Boolean(savedInvoiceFingerprint) &&
-    savedInvoiceFingerprint === currentInvoiceFingerprint;
-  const canSendInvoice =
-    canSendInvoiceToConversation && invoiceIsValid && invoiceIsSaved;
-  const canSaveToCurrentJob = Boolean(isWorkCenterReceipt && workCenterScheduleId);
-  const canSaveToCustomerHistory = Boolean(customerName.trim());
-
   function getMissingInvoiceDetails() {
     return [
       !customerName.trim() ? "customer name" : "",
@@ -402,8 +257,8 @@ function InvoiceBuilder({ setPage }) {
       setAiSuggestionTarget("notes");
       setAiSuggestion(
         missing.length
-          ? `This invoice may need ${missing.join(", ")} before sharing.`
-          : "This invoice has the main details. Review charges, due date, and payment terms before sending."
+          ? `This invoice may need ${missing.join(", ")} before review.`
+          : "This invoice has the main details. Review charges, due date, and payment terms before leaving this page."
       );
       return;
     }
@@ -463,15 +318,11 @@ function InvoiceBuilder({ setPage }) {
     );
   }
 
-  function buildInvoicePayload(status = "draft") {
-    const finalInvoiceNumber =
-      invoiceNumber.trim() || `INV-${Date.now().toString().slice(-6)}`;
-
+  function buildInvoicePayload() {
     return {
-      invoiceNumber: finalInvoiceNumber,
+      invoiceNumber: invoiceNumber.trim(),
       invoiceDate,
       dueDate,
-      conversationId,
       service,
       serviceDescription,
       jobReference,
@@ -497,23 +348,18 @@ function InvoiceBuilder({ setPage }) {
       total: safeTotal,
       subtotal: invoiceTotals.subtotal,
       lineItemsSubtotal: invoiceTotals.lineItemsSubtotal,
-      laborPricingType: invoiceTotals.laborPricingType,
-      laborTotal: invoiceTotals.laborTotal,
-      materialsTotal: invoiceTotals.materialsTotal,
       fallbackSubtotal: invoiceTotals.fallbackSubtotal,
       notes,
       paymentTerms,
       warrantyNotes,
       customerMessage,
-      status,
-      quoteId: workCenterQuoteId,
     };
   }
 
   function buildInvoiceSummary() {
-    const invoice = buildInvoicePayload("preview");
+    const invoice = buildInvoicePayload();
     const untitledItem = isSpanish ? "Partida sin título" : "Untitled item";
-    return `${isSpanish ? "Factura" : "Invoice"}: ${invoice.invoiceNumber}
+    return `${isSpanish ? "Factura" : "Invoice"}: ${invoice.invoiceNumber || (isSpanish ? "Vista previa" : "Preview")}
 ${invoiceCopy.customerName}: ${invoice.customerName || "—"}
 ${invoiceCopy.phone}: ${invoice.customerPhone || "—"}
 ${invoiceCopy.email}: ${invoice.customerEmail || "—"}
@@ -573,173 +419,6 @@ ${invoice.customerMessage || "—"}`;
     }
   }
 
-  function saveInvoiceToCustomerHistory(invoice, savedAt) {
-    const historyKey = "meetro_customer_invoice_history";
-    const existingHistory = JSON.parse(localStorage.getItem(historyKey) || "[]");
-    const customerKey =
-      customerName.trim().toLowerCase() ||
-      conversationId ||
-      invoice.customerName ||
-      "unknown_customer";
-    const historyRecord = {
-      ...invoice,
-      id:
-        invoice.invoiceNumber ||
-        `invoice_${Date.now().toString(36)}`,
-      customerKey,
-      customerName: invoice.customerName,
-      source: "invoice_builder",
-      savedTo: "customer_history",
-      savedAt,
-    };
-    const nextHistory = [
-      historyRecord,
-      ...existingHistory.filter(
-        (item) => String(item.id || item.invoiceNumber || "") !== String(historyRecord.id)
-      ),
-    ];
-
-    localStorage.setItem(historyKey, JSON.stringify(nextHistory));
-    window.dispatchEvent(new Event("meetroCustomerHistoryUpdated"));
-  }
-
-  function persistInvoice(status = "draft", options = {}) {
-    const { saveToJob = false, returnToWorkCenter = false } = options;
-    const savedAt = new Date().toISOString();
-    const invoiceStatus = saveToJob ? "created" : status;
-    const invoice = buildInvoicePayload(invoiceStatus);
-    setInvoiceNumber(invoice.invoiceNumber);
-    localStorage.setItem("activeInvoiceConversationId", conversationId);
-    localStorage.setItem("activeInvoiceService", invoice.serviceDescription || service);
-    localStorage.setItem("activeInvoiceCustomerName", invoice.customerName);
-    localStorage.setItem("activeInvoiceCustomerPhone", invoice.customerPhone);
-    localStorage.setItem("activeInvoiceCustomerEmail", invoice.customerEmail);
-    localStorage.setItem("activeInvoiceServiceAddress", invoice.serviceAddress);
-    localStorage.setItem("activeInvoiceNumber", invoice.invoiceNumber);
-    localStorage.setItem("activeInvoiceDate", invoice.invoiceDate);
-    localStorage.setItem("activeInvoiceDueDate", invoice.dueDate);
-    localStorage.setItem("activeInvoiceWorkPerformed", workPerformed);
-    localStorage.setItem("activeInvoiceLineItems", JSON.stringify(invoice.lineItems));
-    localStorage.setItem("activeInvoiceLaborPricingType", invoice.laborPricingType);
-    localStorage.setItem("activeInvoiceLabor", String(invoice.laborTotal));
-    localStorage.setItem("activeInvoiceLaborFee", labor);
-    localStorage.setItem("activeInvoiceLaborHours", laborHours);
-    localStorage.setItem("activeInvoiceLaborRate", laborRate);
-    localStorage.setItem("activeInvoiceMaterials", materials);
-    localStorage.setItem("activeInvoiceFee", serviceFee);
-    localStorage.setItem("activeInvoiceDiscount", discount);
-    localStorage.setItem("activeInvoiceTax", tax);
-    localStorage.setItem("activeInvoiceOtherCharges", otherCharges);
-    localStorage.setItem("activeInvoiceNotes", notes);
-    localStorage.setItem("activeInvoicePaymentTerms", paymentTerms);
-    localStorage.setItem("activeInvoiceWarrantyNotes", warrantyNotes);
-    localStorage.setItem("activeInvoiceCustomerMessage", customerMessage);
-    localStorage.setItem("activeInvoiceTotal", String(safeTotal));
-    localStorage.setItem("activeInvoiceStatus", invoiceStatus);
-    localStorage.setItem("activeInvoiceCreatedAt", savedAt);
-    if (invoiceStatus === "sent") {
-      localStorage.setItem("activeInvoiceSentAt", savedAt);
-    }
-
-    localStorage.setItem("emergencyLaborCharge", labor);
-    localStorage.setItem("emergencyMaterialCharge", materials);
-    localStorage.setItem("emergencyServiceFee", serviceFee);
-
-    if (saveToJob && workCenterScheduleId) {
-      const schedule = getBusinessSchedule();
-      const updatedSchedule = schedule.map((item) =>
-        String(item.id || item.scheduleId || "") === String(workCenterScheduleId)
-          ? {
-              ...item,
-              invoiceStatus: "created",
-              receiptStatus: "created",
-              invoiceCreatedAt: savedAt,
-              receiptCreatedAt: savedAt,
-              receipt: {
-                ...invoice,
-                status: "created",
-                createdAt: savedAt,
-              },
-              updatedAt: savedAt,
-            }
-          : item
-      );
-      saveBusinessSchedule(updatedSchedule);
-      window.dispatchEvent(new Event("meetroJobRecordUpdated"));
-      if (returnToWorkCenter) {
-        localStorage.removeItem("invoiceBuilderReturnPage");
-        localStorage.removeItem("invoiceBuilderScheduleId");
-        localStorage.removeItem("invoiceBuilderQuoteId");
-        setPage("workCenter");
-      }
-    }
-
-    setSavedInvoiceFingerprint(getInvoiceFingerprint(invoice));
-    setStatusMessage(
-      invoiceStatus === "sent" ? "Invoice sent." : "Invoice saved."
-    );
-
-    return invoice;
-  }
-
-  function saveInvoice() {
-    setSaveSheetOpen(true);
-  }
-
-  function saveInvoiceToJob() {
-    if (!canSaveToCurrentJob) {
-      setStatusMessage("Open this invoice from a Work Center job to save it to that job.");
-      return;
-    }
-
-    persistInvoice("draft", { saveToJob: true });
-    setSaveSheetOpen(false);
-    setStatusMessage("Invoice saved to this job.");
-  }
-
-  function saveInvoiceToHistory() {
-    if (!canSaveToCustomerHistory) {
-      setStatusMessage("Add a customer name before saving to customer history.");
-      return;
-    }
-
-    const savedAt = new Date().toISOString();
-    const invoice = persistInvoice("draft");
-    saveInvoiceToCustomerHistory(invoice, savedAt);
-    setSaveSheetOpen(false);
-    setStatusMessage("Invoice saved to customer history.");
-  }
-
-  async function saveInvoiceAsPdfOrDownload() {
-    setSaveSheetOpen(false);
-    setPreviewOpen(true);
-
-    if (navigator.share && /iPhone|iPad|iPod/i.test(navigator.userAgent || "")) {
-      try {
-        await navigator.share({
-          title: invoiceNumber || "Invoice",
-          text: buildInvoiceSummary(),
-        });
-        setStatusMessage(
-          "Invoice summary shared. Use Share/Print to save a PDF to Files."
-        );
-        return;
-      } catch {
-        setStatusMessage("Use Share/Print to save this invoice to Files.");
-        return;
-      }
-    }
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => window.print());
-    });
-    setStatusMessage(invoiceCopy.invoiceReadyPdf);
-  }
-
-  async function copySummaryFromSaveSheet() {
-    await copySummary();
-    setSaveSheetOpen(false);
-  }
 
   function printInvoice() {
     setPreviewOpen(true);
@@ -748,104 +427,6 @@ ${invoice.customerMessage || "—"}`;
     });
   }
 
-  function sendInvoice() {
-    if (!invoiceIsValid) {
-      setStatusMessage(
-        `${invoiceCopy.saveAfterAdding}: ${getMissingInvoiceDetails().join(", ")}.`
-      );
-      return;
-    }
-
-    if (!invoiceIsSaved) {
-      setStatusMessage(`${invoiceCopy.saveInvoiceFirst}.`);
-      return;
-    }
-
-    if (!canSendInvoiceToConversation) {
-      setStatusMessage(
-        invoiceCopy.openFromCustomerContext
-      );
-      return;
-    }
-
-    const savedAt = new Date().toISOString();
-    const invoice = persistInvoice("sent");
-
-    const storageKey = `meetro_conversation_${conversationId}`;
-    const existingMessages = JSON.parse(localStorage.getItem(storageKey) || "[]");
-
-    const invoiceMessage = {
-      id: Date.now(),
-      sender: "business",
-      role: "business",
-      type: "workflow_invoice_request",
-      text:
-        language === "es"
-          ? `Factura enviada — Total: $${safeTotal}`
-          : `Invoice sent — Total: $${safeTotal}`,
-      title:
-        language === "es"
-          ? "Solicitud de pago"
-          : "Payment Request",
-      subtitle:
-        language === "es"
-          ? "Revisa los cargos y confirma el pago."
-          : "Review charges and confirm payment.",
-      requestId:
-        localStorage.getItem("activeRequestId") ||
-        conversationId,
-      projectTitle: service,
-      invoice: {
-        ...invoice,
-        status: "payment_requested",
-      },
-      paymentStatus: "payment_requested",
-      time: formatMessageTime(new Date()),
-      createdAt: savedAt,
-    };
-
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify([...existingMessages, invoiceMessage])
-    );
-
-    localStorage.setItem(`meetro_conversation_read_${conversationId}`, "false");
-
-    const registry = JSON.parse(
-      localStorage.getItem("meetro_conversation_registry") || "[]"
-    );
-
-    const updatedRegistry = registry.map((item) =>
-      String(item.id) === String(conversationId)
-        ? {
-            ...item,
-            unread: true,
-	            project_description:
-	              language === "es"
-                ? `Factura enviada — Total: $${safeTotal}`
-                : `Invoice sent — Total: $${safeTotal}`,
-            status: language === "es" ? "Factura enviada" : "Invoice sent",
-            updatedAt: Date.now(),
-          }
-        : item
-    );
-
-    localStorage.setItem(
-      "meetro_conversation_registry",
-      JSON.stringify(updatedRegistry)
-    );
-
-    const unreadCount = updatedRegistry.filter(
-      (item) => item.unread && !item.saved_to_history
-    ).length;
-
-    localStorage.setItem("mockUnreadMessages", String(unreadCount));
-
-    window.dispatchEvent(new Event("meetroInvoiceUpdated"));
-    window.dispatchEvent(new Event("meetro-messages-updated"));
-
-    setPage("emergencyCompletionActions");
-  }
 
   return (
     <div className="app-page meetro-form-page" style={page}>
@@ -935,7 +516,7 @@ ${invoice.customerMessage || "—"}`;
 
         <p style={subtitle}>
           {language === "es"
-            ? "Agrega cargos, notas y envía la factura al cliente."
+            ? "Prepara una factura editable con información del cliente, detalles del trabajo, cargos y términos."
             : "Create an editable invoice with customer information, work details, charges, and terms."}
         </p>
 
@@ -1156,10 +737,23 @@ ${invoice.customerMessage || "—"}`;
           </div>
         </section>
 
+        <section style={availabilityNotice} role="status">
+          <p style={availabilityEyebrow}>
+            {isSpanish ? "Disponibilidad" : "Availability"}
+          </p>
+          <h2 style={availabilityTitle}>
+            {isSpanish
+              ? "Guardar y entregar facturas aún no está disponible."
+              : "Invoice saving and delivery are not available yet."}
+          </h2>
+          <p style={availabilityText}>
+            {isSpanish
+              ? "Puedes preparar y revisar esta factura en esta página, pero no se guarda ni se entrega al cliente."
+              : "You can prepare and review this invoice on this page, but it is not saved or delivered to the customer."}
+          </p>
+        </section>
+
         <div style={actionsGrid}>
-          <button style={sendBtn} onClick={saveInvoice}>
-            {isWorkCenterReceipt ? invoiceCopy.saveReceipt : invoiceCopy.saveInvoice}
-          </button>
           <button style={secondaryBtn} onClick={() => setPreviewOpen((open) => !open)}>
             {previewOpen ? invoiceCopy.hidePreview : invoiceCopy.previewInvoice}
           </button>
@@ -1169,102 +763,13 @@ ${invoice.customerMessage || "—"}`;
           <button style={secondaryBtn} onClick={printInvoice}>
             {invoiceCopy.printInvoice}
           </button>
-          <button
-            style={{
-              ...sendBtn,
-              opacity: canSendInvoice ? 1 : 0.55,
-              cursor: canSendInvoice ? "pointer" : "not-allowed",
-            }}
-            onClick={sendInvoice}
-            disabled={!canSendInvoice}
-          >
-            {canSendInvoice ? invoiceCopy.sendInvoice : invoiceCopy.saveInvoiceFirst}
-          </button>
         </div>
 
         {statusMessage && <p style={statusText}>{statusMessage}</p>}
         {previewOpen && (
-          <InvoicePreview invoice={buildInvoicePayload("preview")} copy={invoiceCopy} />
+          <InvoicePreview invoice={buildInvoicePayload()} copy={invoiceCopy} />
         )}
       </div>
-
-      {saveSheetOpen && (
-        <div style={sheetOverlay} onClick={() => setSaveSheetOpen(false)}>
-          <div style={saveSheet} onClick={(event) => event.stopPropagation()}>
-            <div style={sheetHandle}></div>
-            <div style={sheetHeader}>
-              <div>
-                <p style={sheetEyebrow}>{invoiceCopy.saveInvoiceEyebrow}</p>
-                <h2 style={sheetTitle}>{invoiceCopy.saveQuestion}</h2>
-              </div>
-              <button
-                type="button"
-                style={sheetClose}
-                onClick={() => setSaveSheetOpen(false)}
-                aria-label={invoiceCopy.closeSaveOptions}
-              >
-                ×
-              </button>
-            </div>
-
-            <button
-              type="button"
-              style={{
-                ...saveOption,
-                opacity: canSaveToCurrentJob ? 1 : 0.55,
-              }}
-              onClick={saveInvoiceToJob}
-              disabled={!canSaveToCurrentJob}
-            >
-              <strong>{invoiceCopy.saveToThisJob}</strong>
-              <span>
-                {invoiceCopy.saveToThisJobHelp}
-              </span>
-              {!canSaveToCurrentJob && (
-                <em>{invoiceCopy.saveToThisJobUnavailable}</em>
-              )}
-            </button>
-
-            <button
-              type="button"
-              style={{
-                ...saveOption,
-                opacity: canSaveToCustomerHistory ? 1 : 0.55,
-              }}
-              onClick={saveInvoiceToHistory}
-              disabled={!canSaveToCustomerHistory}
-            >
-              <strong>{invoiceCopy.saveToCustomerHistory}</strong>
-              <span>
-                {invoiceCopy.saveToCustomerHistoryHelp}
-              </span>
-              {!canSaveToCustomerHistory && (
-                <em>{invoiceCopy.saveToCustomerHistoryUnavailable}</em>
-              )}
-            </button>
-
-            <button
-              type="button"
-              style={saveOption}
-              onClick={saveInvoiceAsPdfOrDownload}
-            >
-              <strong>{invoiceCopy.downloadSavePdf}</strong>
-              <span>
-                {invoiceCopy.downloadSavePdfHelp}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              style={saveOption}
-              onClick={copySummaryFromSaveSheet}
-            >
-              <strong>{invoiceCopy.copySummary}</strong>
-              <span>{invoiceCopy.copySummaryHelp}</span>
-            </button>
-          </div>
-        </div>
-      )}
 
       <BottomNav
         setPage={setPage}
@@ -1778,6 +1283,36 @@ const aiSuggestionBox = {
   gap: "8px",
 };
 
+const availabilityNotice = {
+  marginTop: "18px",
+  padding: "16px",
+  borderRadius: "18px",
+  border: "1px solid rgba(31,77,52,0.18)",
+  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
+};
+
+const availabilityEyebrow = {
+  margin: "0 0 6px",
+  color: "var(--meetro-color-coffee, #4a3428)",
+  fontSize: "12px",
+  fontWeight: "900",
+  textTransform: "uppercase",
+};
+
+const availabilityTitle = {
+  margin: "0 0 6px",
+  color: "#111827",
+  fontSize: "17px",
+  lineHeight: 1.3,
+};
+
+const availabilityText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.45,
+};
+
 const actionsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -1786,109 +1321,15 @@ const actionsGrid = {
   maxWidth: "100%",
 };
 
-const sheetOverlay = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 14000,
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  padding:
-    "16px max(14px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))",
-  background: "rgba(15,23,42,0.38)",
-  boxSizing: "border-box",
-};
-
-const saveSheet = {
-  width: "100%",
-  maxWidth: "520px",
-  maxHeight: "min(82dvh, 680px)",
-  overflowY: "auto",
-  background: "#ffffff",
-  borderRadius: "28px 28px 22px 22px",
-  padding: "10px 16px 18px",
-  boxShadow: "0 -18px 56px rgba(15,23,42,0.22)",
-  border: "1px solid rgba(226,232,240,0.95)",
-};
-
-const sheetHandle = {
-  width: "44px",
-  height: "5px",
-  borderRadius: "999px",
-  background: "#cbd5e1",
-  margin: "0 auto 14px",
-};
-
-const sheetHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "12px",
-  marginBottom: "12px",
-};
-
-const sheetEyebrow = {
-  margin: "0 0 4px",
-  color: "var(--meetro-color-coffee, #4a3428)",
-  fontSize: "11px",
-  fontWeight: "950",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-};
-
-const sheetTitle = {
-  margin: 0,
-  color: "#111827",
-  fontSize: "21px",
-  lineHeight: 1.15,
-};
-
-const sheetClose = {
-  width: "38px",
-  height: "38px",
-  border: "1px solid rgba(148,163,184,0.42)",
-  borderRadius: "50%",
-  background: "#ffffff",
-  color: "#334155",
-  fontSize: "24px",
-  fontWeight: "900",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const saveOption = {
-  width: "100%",
-  border: "1px solid #e2e8f0",
-  background: "linear-gradient(135deg,#ffffff,#f8fafc)",
-  borderRadius: "18px",
-  padding: "14px",
-  marginTop: "10px",
-  display: "grid",
-  gap: "5px",
-  textAlign: "left",
-  color: "#334155",
-  fontSize: "13px",
-  lineHeight: 1.4,
-  fontWeight: "750",
-  cursor: "pointer",
-};
-
-const sendBtn = {
-  width: "100%",
-  padding: "16px",
-  border: "none",
-  borderRadius: "18px",
-  background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
-  color: "#ffffff",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
 const secondaryBtn = {
-  ...sendBtn,
+  width: "100%",
+  padding: "14px",
+  borderRadius: "16px",
   background: "#ffffff",
   color: "var(--meetro-color-forest, #1f4d34)",
   border: "1px solid rgba(31,77,52,0.22)",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const statusText = {
@@ -1899,20 +1340,6 @@ const statusText = {
   borderRadius: "14px",
   padding: "10px 12px",
   fontWeight: "850",
-};
-
-const previewBox = {
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-word",
-  overflowX: "hidden",
-  background: "#0f172a",
-  color: "#f8fafc",
-  borderRadius: "16px",
-  padding: "14px",
-  fontSize: "13px",
-  lineHeight: 1.5,
-  maxWidth: "100%",
-  boxSizing: "border-box",
 };
 
 const printPreview = {

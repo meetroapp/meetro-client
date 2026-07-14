@@ -57,7 +57,6 @@ test("Business Operations primary actions use forest operational styling", () =>
     sources.leads,
     sources.profile,
     sources.portfolio,
-    sources.invoice,
     sources.compliance,
   ].forEach((source) => {
     assert.match(source, /var\(--meetro-gradient-community-action/);
@@ -66,6 +65,8 @@ test("Business Operations primary actions use forest operational styling", () =>
 
   assert.match(sources.quote, /var\(--meetro-color-forest/);
   assert.match(sources.quote, /Quote saving and delivery are not available yet\./);
+  assert.match(sources.invoice, /var\(--meetro-color-forest/);
+  assert.match(sources.invoice, /Invoice saving and delivery are not available yet\./);
 });
 
 test("Business Operations removes legacy purple primary treatments", () => {
