@@ -25,14 +25,14 @@ import {
   getBusinessProfileCategoryOptionsFromTaxonomy,
 } from "../utils/communityTaxonomy";
 import {
-  readBusinessServiceProfile,
   writeBusinessServiceProfile,
 } from "../utils/businessServiceProfile";
 import { applyBusinessIdentityFields, getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { setBusinessAvailability } from "../utils/businessAvailability";
 import {
-  readBusinessAvailability,
-  setBusinessAvailability,
-} from "../utils/businessAvailability";
+  buildBusinessProfilePayload,
+  getConfirmedBusinessProfile,
+} from "../utils/businessProfilePersistence";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import { readBusinessPortfolioStorage } from "../utils/businessPortfolioStorage";
 import { getActiveTeamMemberCount } from "../utils/teamMembers";
@@ -51,73 +51,32 @@ function ContractorProfile({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
 
-  const [businessName, setBusinessName] = useState(
-    localStorage.getItem("businessName") || ""
-  );
-  const [category, setCategory] = useState(
-    localStorage.getItem("businessCategory") || ""
-  );
-  const [serviceSpecialties, setServiceSpecialties] = useState(
-    () => readBusinessServiceProfile().serviceSpecialties
-  );
+  const [businessName, setBusinessName] = useState("");
+  const [category, setCategory] = useState("");
+  const [serviceSpecialties, setServiceSpecialties] = useState([]);
   const [expandedProfileSections, setExpandedProfileSections] = useState({});
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
-  const [country, setCountry] = useState(
-  
-  localStorage.getItem("businessCountry") || ""
-  );
-  const [streetAddress, setStreetAddress] = useState(
-    localStorage.getItem("businessStreetAddress") || ""
-  );
-  const [addressLine2, setAddressLine2] = useState(
-    localStorage.getItem("businessAddressLine2") || ""
-  );
-  const [businessCity, setBusinessCity] = useState(
-    localStorage.getItem("businessCity") ||
-      localStorage.getItem("businessPrimaryCity") ||
-      ""
-  );
-  const [businessState, setBusinessState] = useState(
-    localStorage.getItem("businessState") || ""
-  );
-  const [businessPostalCode, setBusinessPostalCode] = useState(
-    localStorage.getItem("businessPostalCode") ||
-      localStorage.getItem("businessZipCodes") ||
-      ""
-  );
-  const [serviceArea, setServiceArea] = useState(
-    localStorage.getItem("businessServiceArea") ||
-      localStorage.getItem("meetroServiceAreaNotes") ||
-      ""
-  );
-  const [showBusinessAddressPublic, setShowBusinessAddressPublic] = useState(
-    localStorage.getItem("showBusinessAddressPublic") === "true"
-  );
+  const [country, setCountry] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [businessCity, setBusinessCity] = useState("");
+  const [businessState, setBusinessState] = useState("");
+  const [businessPostalCode, setBusinessPostalCode] = useState("");
+  const [serviceArea, setServiceArea] = useState("");
+  const [showBusinessAddressPublic, setShowBusinessAddressPublic] = useState(false);
   
   const [bio, setBio] = useState("");
-  const [businessHours, setBusinessHours] = useState(
-    localStorage.getItem("businessHours") || ""
-  );
-  const [licenseNumber, setLicenseNumber] = useState(
-    localStorage.getItem("businessLicenseNumber") || ""
-  );
-  const [licenseState, setLicenseState] = useState(
-    localStorage.getItem("businessLicenseState") || ""
-  );
-  const [licenseType, setLicenseType] = useState(
-    localStorage.getItem("businessLicenseType") || ""
-  );
-  const [licenseExpiration, setLicenseExpiration] = useState(
-    localStorage.getItem("businessLicenseExpiration") || ""
-  );
+  const [businessHours, setBusinessHours] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [licenseState, setLicenseState] = useState("");
+  const [licenseType, setLicenseType] = useState("");
+  const [licenseExpiration, setLicenseExpiration] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
   const [uploading, setUploading] = useState(false);
-  const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
-  const [dispatchReady, setDispatchReady] = useState(
-  localStorage.getItem("meetroDispatchReady") === "true"
-);
+  const [availableNow, setAvailableNow] = useState(false);
+  const [dispatchReady, setDispatchReady] = useState(false);
   const profileReviews = getProfessionalReviews({
     professionalId: profile?.id || localStorage.getItem("selectedProfessionalId") || "",
     professionalName: profile?.business_name || businessName,
@@ -141,26 +100,14 @@ function ContractorProfile({ setPage, currentPage }) {
   }, []);
 
   useEffect(() => {
-    const syncAvailability = () => {
-      setAvailableNow(readBusinessAvailability());
-    };
-
-    window.addEventListener("meetroAvailabilityChanged", syncAvailability);
-    window.addEventListener("storage", syncAvailability);
-
-    return () => {
-      window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
-      window.removeEventListener("storage", syncAvailability);
-    };
-  }, []);
-
-  useEffect(() => {
     fetchMyProfile();
   }, [language]);
 
   function unlockBusinessAccess(profileData) {
   if (!profileData) return;
-  const serviceProfile = readBusinessServiceProfile(localStorage, profileData);
+  const serviceProfile = writeBusinessServiceProfile({
+    serviceSpecialties: profileData.service_specialties || [],
+  });
 
   localStorage.setItem("contractorProfileComplete", "true");
 
@@ -311,12 +258,9 @@ function ContractorProfile({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.profile) {
-        const mergedProfile = mergeStoredBusinessDetailFields(
-          mergeStoredAddressFields(data.profile)
-        );
-        setProfile(mergedProfile);
-        fillForm(mergedProfile);
-        unlockBusinessAccess(mergedProfile);
+        setProfile(data.profile);
+        fillForm(data.profile);
+        projectConfirmedBusinessProfile(data.profile);
       } else {
         setProfile(null);
         lockBusinessAccess();
@@ -331,346 +275,34 @@ function ContractorProfile({ setPage, currentPage }) {
   }
 
   function fillForm(existingProfile) {
-    const serviceProfile = readBusinessServiceProfile(localStorage, existingProfile);
     setBusinessName(existingProfile.business_name || "");
     setCategory(existingProfile.category || "");
-    setServiceSpecialties(serviceProfile.serviceSpecialties);
+    setServiceSpecialties(
+      Array.isArray(existingProfile.service_specialties)
+        ? existingProfile.service_specialties
+        : []
+    );
     setPhone(existingProfile.phone || "");
-    setStreetAddress(existingProfile.streetAddress || existingProfile.street_address || "");
-    setAddressLine2(existingProfile.addressLine2 || existingProfile.address_line_2 || "");
-    setBusinessCity(
-      existingProfile.city ||
-        existingProfile.businessCity ||
-        existingProfile.primaryCity ||
-        ""
-    );
-    setBusinessState(
-      existingProfile.state ||
-        existingProfile.stateProvince ||
-        existingProfile.state_province ||
-        ""
-    );
-    setBusinessPostalCode(
-      existingProfile.postalCode ||
-        existingProfile.postal_code ||
-        existingProfile.zip ||
-        ""
-    );
-    setCountry(existingProfile.country || localStorage.getItem("businessCountry") || "");
-    setServiceArea(
-      existingProfile.serviceArea ||
-        existingProfile.service_area ||
-        existingProfile.location ||
-        ""
-    );
-    setShowBusinessAddressPublic(
-      existingProfile.showBusinessAddressPublic === true ||
-        existingProfile.show_business_address_public === true
-    );
-    setLocation(existingProfile.location || existingProfile.serviceArea || "");
+    setStreetAddress(existingProfile.street_address || "");
+    setAddressLine2(existingProfile.address_line_2 || "");
+    setBusinessCity(existingProfile.city || "");
+    setBusinessState(existingProfile.state_province || "");
+    setBusinessPostalCode(existingProfile.postal_code || "");
+    setCountry(existingProfile.country || "");
+    setServiceArea(existingProfile.service_area || "");
+    setShowBusinessAddressPublic(existingProfile.show_business_address_public === true);
+    setLocation(existingProfile.location || "");
     setBio(existingProfile.bio || "");
-    setBusinessHours(
-      existingProfile.businessHours ||
-        existingProfile.business_hours ||
-        localStorage.getItem("businessHours") ||
-        ""
-    );
-    setLicenseNumber(
-      existingProfile.licenseNumber ||
-        existingProfile.license_number ||
-        existingProfile.businessLicenseNumber ||
-        localStorage.getItem("businessLicenseNumber") ||
-        ""
-    );
-    setLicenseState(
-      existingProfile.licenseState ||
-        existingProfile.license_state ||
-        existingProfile.businessLicenseState ||
-        localStorage.getItem("businessLicenseState") ||
-        ""
-    );
-    setLicenseType(
-      existingProfile.licenseType ||
-        existingProfile.license_type ||
-        existingProfile.businessLicenseType ||
-        localStorage.getItem("businessLicenseType") ||
-        ""
-    );
-    setLicenseExpiration(
-      existingProfile.licenseExpiration ||
-        existingProfile.license_expiration ||
-        existingProfile.businessLicenseExpiration ||
-        localStorage.getItem("businessLicenseExpiration") ||
-        ""
-    );
+    setBusinessHours(existingProfile.business_hours || "");
+    setLicenseNumber(existingProfile.license_number || "");
+    setLicenseState(existingProfile.license_state || "");
+    setLicenseType(existingProfile.license_type || "");
+    setLicenseExpiration(existingProfile.license_expiration || "");
     setImageUrl(existingProfile.image_url || "");
+    setAvailableNow(existingProfile.available_now === true);
+    setDispatchReady(existingProfile.dispatch_ready === true);
   }
 
-  function getStoredAddressFields() {
-    const showPublic = localStorage.getItem("showBusinessAddressPublic") === "true";
-    const storedStreetAddress = localStorage.getItem("businessStreetAddress") || "";
-    const storedAddressLine2 = localStorage.getItem("businessAddressLine2") || "";
-    const storedCity =
-      localStorage.getItem("businessCity") ||
-      localStorage.getItem("businessPrimaryCity") ||
-      "";
-    const storedState = localStorage.getItem("businessState") || "";
-    const storedPostalCode =
-      localStorage.getItem("businessPostalCode") ||
-      localStorage.getItem("businessZipCodes") ||
-      "";
-    const storedCountry = localStorage.getItem("businessCountry") || "";
-    const storedServiceArea =
-      localStorage.getItem("businessServiceArea") ||
-      localStorage.getItem("meetroServiceAreaNotes") ||
-      "";
-    const fullAddress = [
-      storedStreetAddress,
-      storedAddressLine2,
-      storedCity,
-      storedState,
-      storedPostalCode,
-      storedCountry,
-    ]
-      .filter(Boolean)
-      .join(", ");
-    const publicLocation = showPublic
-      ? fullAddress || storedServiceArea
-      : storedServiceArea;
-
-    return {
-      streetAddress: storedStreetAddress,
-      street_address: storedStreetAddress,
-      addressLine2: storedAddressLine2,
-      address_line_2: storedAddressLine2,
-      city: storedCity,
-      businessCity: storedCity,
-      state: storedState,
-      stateProvince: storedState,
-      state_province: storedState,
-      postalCode: storedPostalCode,
-      postal_code: storedPostalCode,
-      zip: storedPostalCode,
-      country: storedCountry,
-      serviceArea: storedServiceArea,
-      service_area: storedServiceArea,
-      showBusinessAddressPublic: showPublic,
-      show_business_address_public: showPublic,
-      fullAddress,
-      full_address: fullAddress,
-      publicAddress: publicLocation,
-      public_address: publicLocation,
-      location: publicLocation,
-    };
-  }
-
-  function mergeStoredAddressFields(profileData = {}) {
-    const storedAddressFields = getStoredAddressFields();
-    const hasStoredAddress = Boolean(
-      storedAddressFields.city ||
-        storedAddressFields.state ||
-        storedAddressFields.postalCode ||
-        storedAddressFields.country ||
-        storedAddressFields.serviceArea
-    );
-
-    if (!hasStoredAddress) return profileData;
-
-    return {
-      ...storedAddressFields,
-      ...profileData,
-      location:
-        profileData.location ||
-        storedAddressFields.publicAddress ||
-        storedAddressFields.serviceArea ||
-        "",
-      serviceArea:
-        profileData.serviceArea ||
-        profileData.service_area ||
-        storedAddressFields.serviceArea ||
-        "",
-      showBusinessAddressPublic:
-        profileData.showBusinessAddressPublic === true ||
-        profileData.show_business_address_public === true ||
-        storedAddressFields.showBusinessAddressPublic,
-    };
-  }
-
-  function getStoredBusinessDetailFields() {
-    return {
-      businessHours: localStorage.getItem("businessHours") || "",
-      business_hours: localStorage.getItem("businessHours") || "",
-      licenseNumber: localStorage.getItem("businessLicenseNumber") || "",
-      license_number: localStorage.getItem("businessLicenseNumber") || "",
-      businessLicenseNumber: localStorage.getItem("businessLicenseNumber") || "",
-      licenseState: localStorage.getItem("businessLicenseState") || "",
-      license_state: localStorage.getItem("businessLicenseState") || "",
-      businessLicenseState: localStorage.getItem("businessLicenseState") || "",
-      licenseType: localStorage.getItem("businessLicenseType") || "",
-      license_type: localStorage.getItem("businessLicenseType") || "",
-      businessLicenseType: localStorage.getItem("businessLicenseType") || "",
-      licenseExpiration: localStorage.getItem("businessLicenseExpiration") || "",
-      license_expiration: localStorage.getItem("businessLicenseExpiration") || "",
-      businessLicenseExpiration: localStorage.getItem("businessLicenseExpiration") || "",
-    };
-  }
-
-  function mergeStoredBusinessDetailFields(profileData = {}) {
-    const storedDetailFields = getStoredBusinessDetailFields();
-
-    return {
-      ...storedDetailFields,
-      ...profileData,
-      businessHours:
-        profileData.businessHours ||
-        profileData.business_hours ||
-        storedDetailFields.businessHours ||
-        "",
-      business_hours:
-        profileData.businessHours ||
-        profileData.business_hours ||
-        storedDetailFields.businessHours ||
-        "",
-      licenseNumber:
-        profileData.licenseNumber ||
-        profileData.license_number ||
-        profileData.businessLicenseNumber ||
-        storedDetailFields.licenseNumber ||
-        "",
-      license_number:
-        profileData.licenseNumber ||
-        profileData.license_number ||
-        profileData.businessLicenseNumber ||
-        storedDetailFields.licenseNumber ||
-        "",
-      licenseState:
-        profileData.licenseState ||
-        profileData.license_state ||
-        profileData.businessLicenseState ||
-        storedDetailFields.licenseState ||
-        "",
-      license_state:
-        profileData.licenseState ||
-        profileData.license_state ||
-        profileData.businessLicenseState ||
-        storedDetailFields.licenseState ||
-        "",
-      licenseType:
-        profileData.licenseType ||
-        profileData.license_type ||
-        profileData.businessLicenseType ||
-        storedDetailFields.licenseType ||
-        "",
-      license_type:
-        profileData.licenseType ||
-        profileData.license_type ||
-        profileData.businessLicenseType ||
-        storedDetailFields.licenseType ||
-        "",
-      licenseExpiration:
-        profileData.licenseExpiration ||
-        profileData.license_expiration ||
-        profileData.businessLicenseExpiration ||
-        storedDetailFields.licenseExpiration ||
-        "",
-      license_expiration:
-        profileData.licenseExpiration ||
-        profileData.license_expiration ||
-        profileData.businessLicenseExpiration ||
-        storedDetailFields.licenseExpiration ||
-        "",
-    };
-  }
-
-  function buildFullAddress() {
-    return [
-      streetAddress.trim(),
-      addressLine2.trim(),
-      businessCity.trim(),
-      businessState.trim(),
-      businessPostalCode.trim(),
-      country.trim(),
-    ]
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  function buildAddressProfileFields() {
-    const fullAddress = buildFullAddress();
-    const publicLocation = showBusinessAddressPublic
-      ? fullAddress || serviceArea.trim()
-      : serviceArea.trim();
-
-    return {
-      streetAddress: streetAddress.trim(),
-      street_address: streetAddress.trim(),
-      addressLine2: addressLine2.trim(),
-      address_line_2: addressLine2.trim(),
-      city: businessCity.trim(),
-      businessCity: businessCity.trim(),
-      state: businessState.trim(),
-      stateProvince: businessState.trim(),
-      state_province: businessState.trim(),
-      postalCode: businessPostalCode.trim(),
-      postal_code: businessPostalCode.trim(),
-      zip: businessPostalCode.trim(),
-      country: country.trim(),
-      serviceArea: serviceArea.trim(),
-      service_area: serviceArea.trim(),
-      showBusinessAddressPublic,
-      show_business_address_public: showBusinessAddressPublic,
-      fullAddress,
-      full_address: fullAddress,
-      publicAddress: publicLocation,
-      public_address: publicLocation,
-      location: publicLocation,
-    };
-  }
-
-  function persistBusinessAddressFields(fields) {
-    localStorage.setItem("businessStreetAddress", fields.streetAddress || "");
-    localStorage.setItem("businessAddressLine2", fields.addressLine2 || "");
-    localStorage.setItem("businessCity", fields.city || "");
-    localStorage.setItem("businessPrimaryCity", fields.city || "");
-    localStorage.setItem("businessState", fields.stateProvince || fields.state || "");
-    localStorage.setItem("businessPostalCode", fields.postalCode || "");
-    localStorage.setItem("businessZipCodes", fields.postalCode || "");
-    localStorage.setItem("businessCountry", fields.country || "");
-    localStorage.setItem("businessServiceArea", fields.serviceArea || "");
-    localStorage.setItem("meetroServiceAreaNotes", fields.serviceArea || "");
-    localStorage.setItem(
-      "showBusinessAddressPublic",
-      String(Boolean(fields.showBusinessAddressPublic))
-    );
-    localStorage.setItem("businessLocation", fields.location || "");
-  }
-
-  function buildBusinessDetailFields() {
-    return {
-      businessHours: businessHours.trim(),
-      business_hours: businessHours.trim(),
-      licenseNumber: licenseNumber.trim(),
-      license_number: licenseNumber.trim(),
-      businessLicenseNumber: licenseNumber.trim(),
-      licenseState: licenseState.trim(),
-      license_state: licenseState.trim(),
-      businessLicenseState: licenseState.trim(),
-      licenseType: licenseType.trim(),
-      license_type: licenseType.trim(),
-      businessLicenseType: licenseType.trim(),
-      licenseExpiration: licenseExpiration.trim(),
-      license_expiration: licenseExpiration.trim(),
-      businessLicenseExpiration: licenseExpiration.trim(),
-    };
-  }
-
-  function persistBusinessDetailFields(fields) {
-    localStorage.setItem("businessHours", fields.businessHours || "");
-    localStorage.setItem("businessLicenseNumber", fields.licenseNumber || "");
-    localStorage.setItem("businessLicenseState", fields.licenseState || "");
-    localStorage.setItem("businessLicenseType", fields.licenseType || "");
-    localStorage.setItem("businessLicenseExpiration", fields.licenseExpiration || "");
-  }
 
   function hasRequiredAddressFields() {
     return (
@@ -708,9 +340,63 @@ function ContractorProfile({ setPage, currentPage }) {
     );
   }
 
-  function updateBusinessAvailability(nextValue) {
-    const normalizedValue = setBusinessAvailability(nextValue);
-    setAvailableNow(normalizedValue);
+  function projectConfirmedBusinessProfile(profileData) {
+    writeBusinessServiceProfile({
+      serviceSpecialties: profileData.service_specialties || [],
+    });
+    setBusinessAvailability(profileData.available_now === true);
+    localStorage.setItem(
+      "meetroDispatchReady",
+      String(profileData.dispatch_ready === true)
+    );
+    unlockBusinessAccess(profileData);
+  }
+
+  function getBusinessProfilePayload(overrides = {}) {
+    return buildBusinessProfilePayload({
+      businessName,
+      category,
+      phone,
+      bio,
+      imageUrl,
+      streetAddress,
+      addressLine2,
+      businessCity,
+      businessState,
+      businessPostalCode,
+      country,
+      serviceArea,
+      showBusinessAddressPublic,
+      businessHours,
+      licenseNumber,
+      licenseState,
+      licenseType,
+      licenseExpiration,
+      serviceSpecialties,
+      availableNow,
+      dispatchReady,
+      ...overrides,
+    });
+  }
+
+  async function updateBusinessAvailability(nextValue) {
+    if (!profile?.id) return;
+    const result = await authFetch(
+      `/contractor-profiles/${profile.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(getBusinessProfilePayload({ availableNow: nextValue })),
+      },
+      setPage
+    );
+    const confirmedProfile = getConfirmedBusinessProfile(result);
+    if (!confirmedProfile) {
+      alert(result?.data?.error || t("failedUpdateProfile"));
+      return;
+    }
+    setProfile(confirmedProfile);
+    fillForm(confirmedProfile);
+    projectConfirmedBusinessProfile(confirmedProfile);
   }
 
   function reviewBusinessSetup() {
@@ -763,247 +449,31 @@ function ContractorProfile({ setPage, currentPage }) {
     }
   }
 
-   function saveBusinessToDirectory(profileData) {
-  const existingBusinesses = JSON.parse(
-    localStorage.getItem("meetroBusinesses") || "[]"
-  );
-
-  const businessRecord = {
-    id: profileData.id || Date.now(),
-    name: profileData.business_name || businessName,
-    category: profileData.category || category,
-    phone: profileData.phone || phone,
-    businessHours: profileData.businessHours || profileData.business_hours || businessHours,
-    business_hours: profileData.businessHours || profileData.business_hours || businessHours,
-    licenseNumber:
-      profileData.licenseNumber ||
-      profileData.license_number ||
-      profileData.businessLicenseNumber ||
-      licenseNumber,
-    license_number:
-      profileData.licenseNumber ||
-      profileData.license_number ||
-      profileData.businessLicenseNumber ||
-      licenseNumber,
-    licenseState:
-      profileData.licenseState ||
-      profileData.license_state ||
-      profileData.businessLicenseState ||
-      licenseState,
-    license_state:
-      profileData.licenseState ||
-      profileData.license_state ||
-      profileData.businessLicenseState ||
-      licenseState,
-    licenseType:
-      profileData.licenseType ||
-      profileData.license_type ||
-      profileData.businessLicenseType ||
-      licenseType,
-    license_type:
-      profileData.licenseType ||
-      profileData.license_type ||
-      profileData.businessLicenseType ||
-      licenseType,
-    licenseExpiration:
-      profileData.licenseExpiration ||
-      profileData.license_expiration ||
-      profileData.businessLicenseExpiration ||
-      licenseExpiration,
-    license_expiration:
-      profileData.licenseExpiration ||
-      profileData.license_expiration ||
-      profileData.businessLicenseExpiration ||
-      licenseExpiration,
-    license:
-      profileData.license ||
-      profileData.licenseNumber ||
-      profileData.license_number ||
-      profileData.businessLicenseNumber ||
-      licenseNumber,
-    location: profileData.location || location,
-    streetAddress: profileData.streetAddress || profileData.street_address || "",
-    addressLine2: profileData.addressLine2 || profileData.address_line_2 || "",
-    city: profileData.city || profileData.businessCity || "",
-    state: profileData.state || profileData.stateProvince || profileData.state_province || "",
-    postalCode: profileData.postalCode || profileData.postal_code || profileData.zip || "",
-    country: profileData.country || "",
-    serviceArea: profileData.serviceArea || profileData.service_area || profileData.location || "",
-    showBusinessAddressPublic: Boolean(
-      profileData.showBusinessAddressPublic ||
-        profileData.show_business_address_public
-    ),
-    publicAddress: profileData.publicAddress || profileData.public_address || profileData.location || "",
-    bio: profileData.bio || bio,
-    imageUrl: profileData.image_url || imageUrl,
-    serviceDomain:
-      profileData.serviceDomain ||
-      profileData.service_domain ||
-      localStorage.getItem("businessServiceDomain") ||
-      localStorage.getItem("businessDomain") ||
-      "",
-    businessServiceDomain:
-      profileData.businessServiceDomain ||
-      profileData.business_service_domain ||
-      localStorage.getItem("businessServiceDomain") ||
-      "",
-    serviceCategories:
-      profileData.serviceCategories ||
-      profileData.service_categories ||
-      safeJsonArray("businessServiceCategories"),
-    businessServiceCategories:
-      profileData.businessServiceCategories ||
-      profileData.business_service_categories ||
-      safeJsonArray("businessServiceCategories"),
-    serviceCapabilities:
-      profileData.serviceCapabilities ||
-      profileData.service_capabilities ||
-      safeJsonArray("businessServiceCapabilities"),
-    businessServiceCapabilities:
-      profileData.businessServiceCapabilities ||
-      profileData.business_service_capabilities ||
-      safeJsonArray("businessServiceCapabilities"),
-    serviceSpecialties:
-      profileData.serviceSpecialties ||
-      profileData.service_specialties ||
-      safeJsonArray("businessServiceSpecialties"),
-    businessServiceSpecialties:
-      profileData.businessServiceSpecialties ||
-      profileData.business_service_specialties ||
-      safeJsonArray("businessServiceSpecialties"),
-    primaryCity:
-      profileData.primaryCity ||
-      profileData.primary_city ||
-      localStorage.getItem("businessPrimaryCity") ||
-      "",
-    city:
-      profileData.city ||
-      profileData.primaryCity ||
-      localStorage.getItem("businessPrimaryCity") ||
-      "",
-    serviceZipCodes:
-      profileData.serviceZipCodes ||
-      profileData.service_zip_codes ||
-      localStorage.getItem("businessZipCodes") ||
-      "",
-    businessZipCodes:
-      profileData.businessZipCodes ||
-      profileData.business_zip_codes ||
-      localStorage.getItem("businessZipCodes") ||
-      "",
-    serviceRadiusMiles:
-      profileData.serviceRadiusMiles ||
-      profileData.service_radius_miles ||
-      localStorage.getItem("businessServiceRadius") ||
-      "",
-    localDemoSafe:
-      profileData.localDemoSafe ||
-      profileData.demoSafe ||
-      localStorage.getItem("businessLocalDemoSafe") === "true" ||
-      undefined,
-    portfolio: profileData.portfolio || [],
-    gallery: profileData.gallery || [],
-    photos: profileData.photos || [],
-    portfolioImages: profileData.portfolioImages || [],
-    businessPortfolio: profileData.businessPortfolio || [],
-    media: profileData.media || [],
-    images: profileData.images || [],
-    rating: profileReviewStats.totalReviews ? profileReviewStats.averageRating : "",
-  };
-
-  const filteredBusinesses =
-    existingBusinesses.filter(
-      (item) => item.id !== businessRecord.id
-    );
-
-  localStorage.setItem(
-    "meetroBusinesses",
-    JSON.stringify([
-      businessRecord,
-      ...filteredBusinesses,
-    ])
-  );
-}
-
-function safeJsonArray(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
   async function handleCreateProfile() {
     try {
       if (!businessName.trim() || !category.trim() || !hasRequiredAddressFields()) {
         alert(t("completeAllFields"));
         return;
       }
-      const addressFields = buildAddressProfileFields();
-      const businessDetailFields = buildBusinessDetailFields();
-      const serviceProfile = writeBusinessServiceProfile({ serviceSpecialties });
 
       const result = await authFetch(
         "/contractor-profiles",
         {
           method: "POST",
-          body: JSON.stringify({
-            business_name: businessName.trim(),
-            category,
-            phone,
-            location: addressFields.location,
-            bio,
-            image_url: imageUrl,
-            serviceDomain: serviceProfile.serviceDomain,
-            businessServiceDomain: serviceProfile.serviceDomain,
-            serviceDomains: serviceProfile.serviceDomains,
-            businessServiceDomains: serviceProfile.serviceDomains,
-            serviceCategories: serviceProfile.serviceCategories,
-            businessServiceCategories: serviceProfile.serviceCategories,
-            serviceSpecialties: serviceProfile.serviceSpecialties,
-            businessServiceSpecialties: serviceProfile.serviceSpecialties,
-            serviceCapabilities: serviceProfile.serviceCapabilities,
-            businessServiceCapabilities: serviceProfile.serviceCapabilities,
-            ...businessDetailFields,
-            ...addressFields,
-          }),
+          body: JSON.stringify(getBusinessProfilePayload()),
         },
         setPage
       );
 
-      if (!result) return;
-
-      const data = result.data;
-
-      if (data.profile) {
-        const savedProfile = {
-          ...data.profile,
-          ...addressFields,
-          phone,
-          ...businessDetailFields,
-          serviceDomain: serviceProfile.serviceDomain,
-          businessServiceDomain: serviceProfile.serviceDomain,
-          serviceDomains: serviceProfile.serviceDomains,
-          businessServiceDomains: serviceProfile.serviceDomains,
-          serviceCategories: serviceProfile.serviceCategories,
-          businessServiceCategories: serviceProfile.serviceCategories,
-          serviceSpecialties: serviceProfile.serviceSpecialties,
-          businessServiceSpecialties: serviceProfile.serviceSpecialties,
-          serviceCapabilities: serviceProfile.serviceCapabilities,
-          businessServiceCapabilities: serviceProfile.serviceCapabilities,
-        };
+      const savedProfile = getConfirmedBusinessProfile(result);
+      if (savedProfile) {
         alert(t("contractorProfileCreated"));
         setProfile(savedProfile);
         fillForm(savedProfile);
-        persistBusinessAddressFields(addressFields);
-        persistBusinessDetailFields(businessDetailFields);
-        unlockBusinessAccess(savedProfile);
-      
-        saveBusinessToDirectory(savedProfile);
-        
+        projectConfirmedBusinessProfile(savedProfile);
         setPage("profile");
       } else {
-        alert(data.error || t("failedCreateProfile"));
+        alert(result?.data?.error || t("failedCreateProfile"));
       }
     } catch (error) {
       console.error(error);
@@ -1022,72 +492,24 @@ function safeJsonArray(key) {
         alert(t("completeAllFields"));
         return;
       }
-      const addressFields = buildAddressProfileFields();
-      const businessDetailFields = buildBusinessDetailFields();
-      const serviceProfile = writeBusinessServiceProfile({ serviceSpecialties });
-
       const result = await authFetch(
         `/contractor-profiles/${profile.id}`,
         {
           method: "PUT",
-          body: JSON.stringify({
-            business_name: businessName.trim(),
-            category,
-            phone,
-            location: addressFields.location,
-            bio,
-            image_url: imageUrl,
-            serviceDomain: serviceProfile.serviceDomain,
-            businessServiceDomain: serviceProfile.serviceDomain,
-            serviceDomains: serviceProfile.serviceDomains,
-            businessServiceDomains: serviceProfile.serviceDomains,
-            serviceCategories: serviceProfile.serviceCategories,
-            businessServiceCategories: serviceProfile.serviceCategories,
-            serviceSpecialties: serviceProfile.serviceSpecialties,
-            businessServiceSpecialties: serviceProfile.serviceSpecialties,
-            serviceCapabilities: serviceProfile.serviceCapabilities,
-            businessServiceCapabilities: serviceProfile.serviceCapabilities,
-            ...businessDetailFields,
-            ...addressFields,
-          }),
+          body: JSON.stringify(getBusinessProfilePayload()),
         },
         setPage
       );
 
-      if (!result) return;
-
-      const data = result.data;
-
-      if (data.profile) {
-        const savedProfile = {
-          ...profile,
-          ...data.profile,
-          ...addressFields,
-          phone,
-          ...businessDetailFields,
-          serviceDomain: serviceProfile.serviceDomain,
-          businessServiceDomain: serviceProfile.serviceDomain,
-          serviceDomains: serviceProfile.serviceDomains,
-          businessServiceDomains: serviceProfile.serviceDomains,
-          serviceCategories: serviceProfile.serviceCategories,
-          businessServiceCategories: serviceProfile.serviceCategories,
-          serviceSpecialties: serviceProfile.serviceSpecialties,
-          businessServiceSpecialties: serviceProfile.serviceSpecialties,
-          serviceCapabilities: serviceProfile.serviceCapabilities,
-          businessServiceCapabilities: serviceProfile.serviceCapabilities,
-        };
+      const savedProfile = getConfirmedBusinessProfile(result);
+      if (savedProfile) {
         alert(t("profileUpdated"));
         setProfile(savedProfile);
         fillForm(savedProfile);
-        persistBusinessAddressFields(addressFields);
-        persistBusinessDetailFields(businessDetailFields);
-        unlockBusinessAccess(savedProfile);
-        
-        saveBusinessToDirectory(savedProfile);         
-
+        projectConfirmedBusinessProfile(savedProfile);
         setEditing(false);
       } else {
-        alert(data.error || t("failedUpdateProfile"));
+        alert(result?.data?.error || t("failedUpdateProfile"));
       }
     } catch (error) {
       console.error(error);
@@ -1104,10 +526,19 @@ function safeJsonArray(key) {
   const reviewAverage = hasReviews
     ? Number(profileReviewStats.averageRating || 0).toFixed(1)
     : "";
-  const profileDisplayAddress =
-    profile?.showBusinessAddressPublic && profile?.fullAddress
-      ? profile.fullAddress
-      : profile?.serviceArea || profile?.location || "";
+  const confirmedFullAddress = [
+    profile?.street_address,
+    profile?.address_line_2,
+    profile?.city,
+    profile?.state_province,
+    profile?.postal_code,
+    profile?.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const profileDisplayAddress = profile?.show_business_address_public
+    ? confirmedFullAddress || profile?.service_area || profile?.location || ""
+    : profile?.service_area || profile?.location || "";
   const businessIdentity = getBusinessIdentityProjection(profile || {
     businessName,
     category,
@@ -1239,7 +670,7 @@ function safeJsonArray(key) {
         category: profile?.category || category,
         displayCategory: formatCategory(profile?.category || category),
         location: profileDisplayAddress || serviceArea || location,
-        serviceArea: profile?.serviceArea || serviceArea,
+        serviceArea: profile?.service_area || serviceArea,
         phone: profile?.phone || phone,
         bio: profile?.bio || bio,
         businessHours: profileBusinessHours,
@@ -1516,7 +947,7 @@ function safeJsonArray(key) {
           setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
-          onAvailabilityChange={updateBusinessAvailability}
+          onAvailabilityChange={setAvailableNow}
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
@@ -1758,7 +1189,7 @@ function safeJsonArray(key) {
                 <InfoCard
                   icon="location"
                   label={
-                    profile.showBusinessAddressPublic
+                    profile.show_business_address_public
                       ? t("businessAddress")
                       : t("serviceArea")
                   }
@@ -1927,7 +1358,7 @@ function safeJsonArray(key) {
           setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
-          onAvailabilityChange={updateBusinessAvailability}
+          onAvailabilityChange={setAvailableNow}
           dispatchReady={dispatchReady}
           setDispatchReady={setDispatchReady}
           handleImageUpload={handleImageUpload}
@@ -2136,10 +1567,7 @@ function ProfileForm({
 
           <select
             value={country}
-            onChange={(e) => {
-              setCountry(e.target.value);
-              localStorage.setItem("businessCountry", e.target.value);
-            }}
+            onChange={(e) => setCountry(e.target.value)}
             style={inputStyle}
           >
             <option value="">{t("selectCountry")}</option>

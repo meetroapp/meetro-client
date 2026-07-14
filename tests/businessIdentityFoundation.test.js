@@ -263,7 +263,8 @@ test("Business Profile renders Services Offered from the shared onboarding regis
 
   assert.match(source, /ServicesOfferedSection/);
   assert.match(source, /PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS/);
-  assert.match(source, /writeBusinessServiceProfile\(\{ serviceSpecialties \}\)/);
+  assert.match(source, /serviceSpecialties: profileData\.service_specialties \|\| \[\]/);
+  assert.match(source, /getConfirmedBusinessProfile/);
   assert.match(source, /ServiceSelectorSheet/);
   assert.match(source, /flattenServiceGroups/);
 });
@@ -466,7 +467,8 @@ test("Business Profile availability control uses shared Dashboard availability t
   const dashboardSource = fs.readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
 
   assert.match(profileSource, /function updateBusinessAvailability\(nextValue\)/);
-  assert.match(profileSource, /setBusinessAvailability\(nextValue\)/);
+  assert.match(profileSource, /availableNow: nextValue/);
+  assert.match(profileSource, /setBusinessAvailability\(profileData\.available_now === true\)/);
   assert.match(profileSource, /onClick=\{\(\) => updateBusinessAvailability\(!availableNow\)\}/);
   assert.doesNotMatch(profileSource, /availabilityHealthButton/);
   assert.doesNotMatch(profileSource, /availabilityEditorOpen/);
@@ -474,9 +476,9 @@ test("Business Profile availability control uses shared Dashboard availability t
   assert.match(profileSource, /t\("currentlyInactive"\)/);
   assert.match(profileSource, /t\("setAvailable"\)/);
   assert.match(profileSource, /t\("setUnavailable"\)/);
-  assert.match(dashboardSource, /setBusinessAvailability\(!availableNow\)/);
-  assert.match(dashboardSource, /readBusinessAvailability\(\)/);
-  assert.match(dashboardSource, /window\.addEventListener\("meetroAvailabilityChanged", syncAvailability\)/);
+  assert.match(dashboardSource, /updateBusinessAvailability\(!availableNow\)/);
+  assert.match(dashboardSource, /buildBusinessProfilePayloadFromCanonical/);
+  assert.doesNotMatch(dashboardSource, /readBusinessAvailability\(\)/);
 });
 
 test("Business Profile owns business hours and license information", () => {
@@ -487,11 +489,11 @@ test("Business Profile owns business hours and license information", () => {
   assert.match(source, /const \[licenseState, setLicenseState\]/);
   assert.match(source, /const \[licenseType, setLicenseType\]/);
   assert.match(source, /const \[licenseExpiration, setLicenseExpiration\]/);
-  assert.match(source, /function buildBusinessDetailFields\(\)/);
-  assert.match(source, /function persistBusinessDetailFields\(fields\)/);
-  assert.match(source, /businessHours: businessHours\.trim\(\)/);
-  assert.match(source, /licenseNumber: licenseNumber\.trim\(\)/);
-  assert.match(source, /persistBusinessDetailFields\(businessDetailFields\)/);
+  assert.match(source, /buildBusinessProfilePayload/);
+  assert.match(source, /businessHours,/);
+  assert.match(source, /licenseNumber,/);
+  assert.match(source, /getConfirmedBusinessProfile\(result\)/);
+  assert.doesNotMatch(source, /persistBusinessDetailFields/);
   assert.match(source, /value=\{profileBusinessHours \|\| t\("addBusinessHours"\)\}/);
   assert.match(source, /value=\{profileLicenseSummary \|\| t\("addLicenseInformation"\)\}/);
   assert.match(source, /t\("editBusinessInformation"\)/);

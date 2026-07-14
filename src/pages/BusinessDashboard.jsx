@@ -17,10 +17,11 @@ import {
   getConversationMetrics,
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
+import { setBusinessAvailability } from "../utils/businessAvailability";
 import {
-  readBusinessAvailability,
-  setBusinessAvailability,
-} from "../utils/businessAvailability";
+  buildBusinessProfilePayloadFromCanonical,
+  getConfirmedBusinessProfile,
+} from "../utils/businessProfilePersistence";
 
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
@@ -30,7 +31,7 @@ function BusinessDashboard({ setPage }) {
     getConversationMetrics({ role: "business" }).unreadConversationCount
   );
 
-  const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
+  const [availableNow, setAvailableNow] = useState(false);
 
   const businessName =
     localStorage.getItem("businessName") ||
@@ -74,20 +75,6 @@ function BusinessDashboard({ setPage }) {
       inferRequestCategory(request)
     );
 
-
-  useEffect(() => {
-    const syncAvailability = () => {
-      setAvailableNow(readBusinessAvailability());
-    };
-
-    window.addEventListener("meetroAvailabilityChanged", syncAvailability);
-    window.addEventListener("storage", syncAvailability);
-
-    return () => {
-      window.removeEventListener("meetroAvailabilityChanged", syncAvailability);
-      window.removeEventListener("storage", syncAvailability);
-    };
-  }, []);
 
   useEffect(() => {
     const syncUnreadMessages = () => {
@@ -153,6 +140,8 @@ function BusinessDashboard({ setPage }) {
         const backendProfile = result.data.profile;
 
         setProfile(backendProfile);
+        setAvailableNow(backendProfile.available_now === true);
+        setBusinessAvailability(backendProfile.available_now === true);
 
         localStorage.setItem(
           "contractorProfile",
@@ -176,6 +165,27 @@ function BusinessDashboard({ setPage }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function updateBusinessAvailability(nextValue) {
+    if (!profile?.id) return;
+    const result = await authFetch(
+      `/contractor-profiles/${profile.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(
+          buildBusinessProfilePayloadFromCanonical(profile, {
+            available_now: nextValue,
+          })
+        ),
+      },
+      setPage
+    );
+    const confirmedProfile = getConfirmedBusinessProfile(result);
+    if (!confirmedProfile) return;
+    setProfile(confirmedProfile);
+    setAvailableNow(confirmedProfile.available_now === true);
+    setBusinessAvailability(confirmedProfile.available_now === true);
   }
 
   function formatCategory(value) {
@@ -906,10 +916,7 @@ function BusinessDashboard({ setPage }) {
           <div className="business-dashboard-status-strip" style={statusStrip}>
             <button
               style={statusItem}
-              onClick={() => {
-                const next = setBusinessAvailability(!availableNow);
-                setAvailableNow(next);
-              }}
+              onClick={() => updateBusinessAvailability(!availableNow)}
             >
               <span style={statusDot(availableNow)}></span>
               <div>
