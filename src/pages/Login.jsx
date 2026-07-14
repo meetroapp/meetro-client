@@ -105,6 +105,8 @@ function Login({ setPage }) {
       unexpectedLoginResponse:
         "Meetro could not complete that request. Please try again.",
       accountAlreadyExists: "An account with this email already exists.",
+      passwordRequirements:
+        "Use at least 10 characters with uppercase, lowercase, and a number.",
       acceptTermsRequired:
         "Please agree to the Terms of Use and Privacy Policy to create your account.",
     },
@@ -166,6 +168,8 @@ function Login({ setPage }) {
       unexpectedLoginResponse:
         "Meetro no pudo completar la solicitud. Inténtalo de nuevo.",
       accountAlreadyExists: "Ya existe una cuenta con este correo electrónico.",
+      passwordRequirements:
+        "Usa al menos 10 caracteres con mayúsculas, minúsculas y un número.",
       acceptTermsRequired:
         "Acepta los Términos de Uso y la Política de Privacidad para crear tu cuenta.",
     },
@@ -228,6 +232,8 @@ function Login({ setPage }) {
       unexpectedLoginResponse:
         "Meetro n’a pas pu terminer cette demande. Veuillez réessayer.",
       accountAlreadyExists: "Un compte existe déjà avec cette adresse e-mail.",
+      passwordRequirements:
+        "Utilisez au moins 10 caractères avec une majuscule, une minuscule et un chiffre.",
       acceptTermsRequired:
         "Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité pour créer votre compte.",
     },
@@ -289,6 +295,8 @@ function Login({ setPage }) {
       unexpectedLoginResponse:
         "O Meetro não conseguiu concluir essa solicitação. Tente novamente.",
       accountAlreadyExists: "Já existe uma conta com este e-mail.",
+      passwordRequirements:
+        "Use pelo menos 10 caracteres com maiúsculas, minúsculas e um número.",
       acceptTermsRequired:
         "Aceite os Termos de Uso e a Política de Privacidade para criar sua conta.",
     },
@@ -555,7 +563,7 @@ function Login({ setPage }) {
       if (!response.ok) {
         setAuthError(
           getAuthFailureMessage(
-            normalizeLoginFailure({ status: response.status, mode })
+            normalizeLoginFailure({ status: response.status, mode, code: data.code })
           )
         );
         return;
@@ -593,6 +601,8 @@ function Login({ setPage }) {
         return T.tooManyLoginAttempts;
       case LOGIN_FAILURE.ACCOUNT_ALREADY_EXISTS:
         return T.accountAlreadyExists;
+      case LOGIN_FAILURE.PASSWORD_POLICY_FAILED:
+        return T.passwordRequirements;
       case LOGIN_FAILURE.UNEXPECTED_RESPONSE:
         return T.unexpectedLoginResponse;
       default:
@@ -1018,6 +1028,10 @@ function Login({ setPage }) {
                 setAuthError("");
               }}
             />
+
+            {mode === "signup" && (
+              <div style={passwordRequirementText}>{T.passwordRequirements}</div>
+            )}
 
             {mode === "login" && (
               <button
@@ -1670,6 +1684,14 @@ const submitButton = {
   cursor: "pointer",
   marginTop: "10px",
   boxShadow: "0 12px 24px rgba(49,35,20,0.18)",
+};
+
+const passwordRequirementText = {
+  margin: "-4px 2px 2px",
+  color: "var(--meetro-color-coffee, #5f5548)",
+  fontSize: "13px",
+  fontWeight: "700",
+  lineHeight: 1.4,
 };
 
 const forgotPasswordButton = {

@@ -37,6 +37,10 @@ test("login failures map to safe user-facing categories", () => {
     normalizeLoginFailure({ status: 409, mode: "signup" }),
     LOGIN_FAILURE.ACCOUNT_ALREADY_EXISTS
   );
+  assert.equal(
+    normalizeLoginFailure({ status: 400, mode: "signup", code: "PASSWORD_POLICY_FAILED" }),
+    LOGIN_FAILURE.PASSWORD_POLICY_FAILED
+  );
 });
 
 test("login card renders a calm accessible inline error instead of auth alerts", () => {
@@ -55,7 +59,9 @@ test("login card renders a calm accessible inline error instead of auth alerts",
 
 test("failed authentication clears pending state without rendering raw server errors", () => {
   assert.match(loginSource, /finally \{\s*setLoading\(false\);\s*\}/);
-  assert.match(loginSource, /normalizeLoginFailure\(\{ status: response\.status, mode \}\)/);
+  assert.match(loginSource, /normalizeLoginFailure\(\{ status: response\.status, mode, code: data\.code \}\)/);
+  assert.match(loginSource, /Use at least 10 characters with uppercase, lowercase, and a number\./);
+  assert.match(loginSource, /mode === "signup" && \(\s*<div style=\{passwordRequirementText\}>/);
   assert.doesNotMatch(loginSource, /setAuthError\(data\.(error|message)/);
 });
 
