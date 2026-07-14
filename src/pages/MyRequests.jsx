@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
-import { formatScheduleTime } from "../utils/displayTime";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
 import {
@@ -16,7 +15,105 @@ import {
   isRequestVisibleToHomeowner,
 } from "../utils/homeownerLifecycle";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
-import { saveActiveJobSnapshot, saveActiveWorkSnapshot } from "../utils/workCenter";
+import { saveSelectedActiveProject } from "../utils/workCenter";
+
+const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
+  "accepted",
+  "approved",
+  "quote_approved",
+  "scheduled",
+  "work_scheduled",
+  "scheduled_work",
+]);
+
+function isUnsupportedApprovalOrScheduleStatus(value) {
+  return UNSUPPORTED_WORKFLOW_STATUSES.has(String(value || "").toLowerCase());
+}
+
+function hasUnsupportedApprovalOrSchedule(record = {}) {
+  if (
+    isUnsupportedApprovalOrScheduleStatus(record.status) ||
+    isUnsupportedApprovalOrScheduleStatus(record.quoteStatus) ||
+    isUnsupportedApprovalOrScheduleStatus(record.workflowStage) ||
+    isUnsupportedApprovalOrScheduleStatus(record.workflowStatus)
+  ) {
+    return true;
+  }
+
+  if (
+    record.acceptedQuote ||
+    record.acceptedAt ||
+    record.acceptedBy ||
+    record.scheduledAt ||
+    record.appointmentDate ||
+    record.linkedAppointment ||
+    record.appointment ||
+    record.schedule
+  ) {
+    return true;
+  }
+
+  return Array.isArray(record.quotesReceived)
+    ? record.quotesReceived.some((quote) =>
+        isUnsupportedApprovalOrScheduleStatus(quote?.status || quote?.quoteStatus)
+      )
+    : false;
+}
+
+function getTruthfulWorkflowRequest(request = {}) {
+  if (!hasUnsupportedApprovalOrSchedule(request)) return request;
+
+  return {
+    ...request,
+    status: Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0 ? "quoted" : "pending",
+    quoteStatus: "",
+    workflowStage: "",
+    workflowStatus: "",
+    nextAction: "",
+    acceptedQuote: null,
+    acceptedAt: null,
+    acceptedBy: null,
+    selectedProfessional: request.selectedProfessional,
+    scheduledAt: null,
+    appointmentDate: null,
+    linkedAppointment: null,
+    appointment: null,
+    schedule: null,
+    quotesReceived: Array.isArray(request.quotesReceived)
+      ? request.quotesReceived.map((quote) =>
+          isUnsupportedApprovalOrScheduleStatus(quote?.status || quote?.quoteStatus)
+            ? {
+                ...quote,
+                status: "pending",
+                quoteStatus: "pending",
+                workflowStage: "",
+                nextAction: "",
+                acceptedAt: null,
+                acceptedBy: null,
+              }
+            : quote
+        )
+      : request.quotesReceived,
+    projectTimeline: Array.isArray(request.projectTimeline)
+      ? request.projectTimeline.filter(
+          (item) => !String(item?.type || "").toLowerCase().includes("quoteaccepted")
+        )
+      : request.projectTimeline,
+  };
+}
+
+function getApprovalSchedulingUnavailableCopy(language) {
+  return {
+    title:
+      language === "es"
+        ? "La aprobación de cotizaciones y la programación no están disponibles todavía."
+        : "Quote approval and scheduling are not available yet.",
+    body:
+      language === "es"
+        ? "Puedes revisar la cotización y continuar la conversación, pero Meetro todavía no guarda ni comparte aprobaciones o programación en producción."
+        : "You can review the quote and continue the conversation, but Meetro does not yet save or share approvals or scheduling in production.",
+  };
+}
 
 function PhotoStrip({ request, onPreview, language }) {
   const photos = [
@@ -539,9 +636,8 @@ function MyRequests({ setPage }) {
   const [editingId, setEditingId] = useState(null);
   const [revisionQuoteId, setRevisionQuoteId] = useState(null);
   const [revisionText, setRevisionText] = useState("");
-  const [acceptQuoteId, setAcceptQuoteId] = useState(null);
-  const [nextStepsQuoteId, setNextStepsQuoteId] = useState(null);
   const [pendingCancelId, setPendingCancelId] = useState(null);
+  const [cancellationCheckAt, setCancellationCheckAt] = useState(null);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
@@ -562,8 +658,8 @@ function MyRequests({ setPage }) {
     ? new Date(pendingCancelRequest.acceptedQuote.acceptedAt).getTime()
     : null;
 
-  const minutesSinceAccepted = acceptedAtTime
-    ? Math.floor((Date.now() - acceptedAtTime) / 60000)
+  const minutesSinceAccepted = acceptedAtTime && cancellationCheckAt
+    ? Math.floor((cancellationCheckAt - acceptedAtTime) / 60000)
     : null;
 
   const isAcceptedCancellation =
@@ -582,36 +678,6 @@ function MyRequests({ setPage }) {
     const bSelected = (b.requestId || b.id) === selectedId ? 1 : 0;
     return bSelected - aSelected;
   });
-
-  function getStatusLabel(status) {
-    const value = status || "pending";
-
-    if (language === "es") {
-      return value
-        .replace("pending", "Esperando respuesta profesional")
-        .replace("Awaiting Quotes", "Esperando respuesta profesional")
-        .replace("viewed", "Visto por profesionales")
-        .replace("quoted", "Cotización recibida")
-        .replace("messaged", "Mensaje recibido")
-        .replace("accepted", "Cotización aceptada")
-        .replace("scheduled", "Programado")
-        .replace("active", "En progreso")
-        .replace("completed", "Completado")
-        .replace("cancelled", "Cancelado");
-    }
-
-    return value
-      .replace("pending", "Awaiting professional response")
-      .replace("Awaiting Quotes", "Awaiting professional response")
-      .replace("viewed", "Viewed by professionals")
-      .replace("quoted", "Quote received")
-      .replace("messaged", "Message received")
-      .replace("accepted", "Quote accepted")
-      .replace("scheduled", "Scheduled")
-      .replace("active", "In progress")
-      .replace("completed", "Completed")
-      .replace("cancelled", "Cancelled");
-  }
 
   function getCount(value) {
     return Array.isArray(value) ? value.length : value || 0;
@@ -668,319 +734,9 @@ function MyRequests({ setPage }) {
         );
 
         localStorage.setItem(key, JSON.stringify(updatedQuotes));
-      } catch {}
-    });
-  }
-
-  function getBusinessScheduleItems() {
-    try {
-      const savedSchedule = JSON.parse(
-        localStorage.getItem("meetro_business_schedule") || "[]"
-      );
-      return Array.isArray(savedSchedule) ? savedSchedule : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function getAppointmentStatus(appointment = {}) {
-    const rawStatus =
-      appointment.customerConfirmationStatus ||
-      appointment.confirmationStatus ||
-      appointment.workflowStatus ||
-      appointment.status ||
-      "";
-    const normalizedStatus = String(rawStatus).toLowerCase();
-
-    if (
-      normalizedStatus === "confirmed" ||
-      normalizedStatus.includes("appointment_confirmed")
-    ) {
-      return "confirmed";
-    }
-
-    if (
-      normalizedStatus === "change_requested" ||
-      normalizedStatus.includes("change_requested") ||
-      normalizedStatus.includes("reschedule")
-    ) {
-      return "change_requested";
-    }
-
-    if (normalizedStatus.includes("cancel")) {
-      return "cancelled";
-    }
-
-    return "pending_customer_confirmation";
-  }
-
-  function getAppointmentStatusLabel(status) {
-    if (status === "confirmed") {
-      return language === "es" ? "Cita confirmada" : "Appointment confirmed";
-    }
-
-    if (status === "change_requested") {
-      return language === "es"
-        ? "Cambio de horario solicitado"
-        : "Different time requested";
-    }
-
-    if (status === "cancelled") {
-      return language === "es" ? "Cita cancelada" : "Appointment cancelled";
-    }
-
-    return language === "es"
-      ? "Esperando confirmación"
-      : "Waiting for confirmation";
-  }
-
-  function getLinkedAppointment(request) {
-    const requestId = String(request.requestId || request.id || "");
-    const requestConversationId = String(
-      request.conversationId || request.activeConversationId || ""
-    );
-    const requestTitle = String(request.title || request.projectTitle || "").toLowerCase();
-    const requestAppointment =
-      request.linkedAppointment || request.appointment || request.schedule;
-
-    const scheduleItems = getBusinessScheduleItems();
-    const linkedSchedule = scheduleItems.find((item) => {
-      const itemRequestId = String(
-        item.requestId ||
-          item.selectedHomeownerRequestId ||
-          item.quoteRequestId ||
-          item.selectedHomeownerRequest?.requestId ||
-          item.selectedHomeownerRequest?.id ||
-          ""
-      );
-      const itemConversationId = String(
-        item.conversationId ||
-          item.activeConversationId ||
-          item.projectConversationId ||
-          ""
-      );
-      const itemTitle = String(
-        item.requestTitle || item.projectTitle || item.title || ""
-      ).toLowerCase();
-
-      return (
-        (requestId && itemRequestId && itemRequestId === requestId) ||
-        (requestConversationId &&
-          itemConversationId &&
-          itemConversationId === requestConversationId) ||
-        (requestTitle && itemTitle && itemTitle === requestTitle)
-      );
-    });
-
-    return linkedSchedule || requestAppointment || null;
-  }
-
-  function updateConversationScheduleMessage(appointment, confirmationStatus, statusLabel) {
-    const conversationId =
-      appointment.conversationId ||
-      appointment.activeConversationId ||
-      appointment.projectConversationId ||
-      "";
-    if (!conversationId) return;
-
-    try {
-      const storageKey = `meetro_conversation_${conversationId}`;
-      const storedMessages = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      if (!Array.isArray(storedMessages)) return;
-
-      const updatedAt = new Date().toISOString();
-      const appointmentId = appointment.id || appointment.scheduleId || "";
-      const updatedMessages = storedMessages.map((message) => {
-        const messageAppointmentId =
-          message.schedule?.id || message.scheduleId || message.appointmentId || "";
-        if (
-          message.type !== "schedule" ||
-          (appointmentId && String(messageAppointmentId) !== String(appointmentId))
-        ) {
-          return message;
-        }
-
-        const updatedSchedule = {
-          ...(message.schedule || {}),
-          customerConfirmationStatus: confirmationStatus,
-          confirmationStatus,
-          confirmationStatusLabel: statusLabel,
-          workflowStatus:
-            confirmationStatus === "confirmed"
-              ? "appointment_confirmed"
-              : "appointment_change_requested",
-          confirmedAt:
-            confirmationStatus === "confirmed"
-              ? updatedAt
-              : message.schedule?.confirmedAt,
-          changeRequestedAt:
-            confirmationStatus === "change_requested"
-              ? updatedAt
-              : message.schedule?.changeRequestedAt,
-          updatedAt,
-        };
-
-        return {
-          ...message,
-          customerConfirmationStatus: confirmationStatus,
-          confirmationStatus,
-          status: confirmationStatus,
-          subtitle: `${updatedSchedule.date || ""} • ${
-            formatScheduleTime(updatedSchedule.time || "")
-          } • ${statusLabel}`,
-          text:
-            confirmationStatus === "confirmed"
-              ? language === "es"
-                ? "Cita confirmada. El profesional verá esta actualización."
-                : "Appointment confirmed. The professional will see this update."
-              : language === "es"
-              ? "Solicitaste otro horario. Envía un mensaje con tu disponibilidad."
-              : "You requested a different time. Send a message with your availability.",
-          schedule: updatedSchedule,
-          updatedAt,
-        };
-      });
-
-      localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
-    } catch {}
-  }
-
-  function updateLinkedAppointmentStatus(request, appointment, confirmationStatus) {
-    const statusLabel = getAppointmentStatusLabel(confirmationStatus);
-    const updatedAt = new Date().toISOString();
-    const appointmentId = appointment.id || appointment.scheduleId || "";
-
-    const updateAppointment = (item = {}) => ({
-      ...item,
-      customerConfirmationStatus: confirmationStatus,
-      confirmationStatus,
-      confirmationStatusLabel: statusLabel,
-      workflowStatus:
-        confirmationStatus === "confirmed"
-          ? "appointment_confirmed"
-          : "appointment_change_requested",
-      confirmedAt:
-        confirmationStatus === "confirmed" ? updatedAt : item.confirmedAt,
-      changeRequestedAt:
-        confirmationStatus === "change_requested" ? updatedAt : item.changeRequestedAt,
-      updatedAt,
-    });
-
-    const updatedSchedule = getBusinessScheduleItems().map((item) =>
-      appointmentId && String(item.id) === String(appointmentId)
-        ? updateAppointment(item)
-        : item
-    );
-
-    if (updatedSchedule.length > 0) {
-      localStorage.setItem("meetro_business_schedule", JSON.stringify(updatedSchedule));
-    }
-
-    const requestId = request.requestId || request.id;
-    const updatedAppointment = updateAppointment(appointment);
-    const updatedRequests = requests.map((item) => {
-      const itemId = item.requestId || item.id;
-      if (String(itemId) !== String(requestId)) return item;
-
-      return {
-        ...item,
-        status: ["completed", "cancelled"].includes(item.status)
-          ? item.status
-          : "scheduled",
-        workflowStage:
-          confirmationStatus === "confirmed"
-            ? "scheduled"
-            : item.workflowStage || "scheduling",
-        nextAction:
-          confirmationStatus === "confirmed"
-            ? "evaluation"
-            : "coordinate_schedule",
-        linkedAppointment: updatedAppointment,
-        appointmentStatus: confirmationStatus,
-        appointmentStatusLabel: statusLabel,
-        scheduledAt: item.scheduledAt || updatedAt,
-        conversationId:
-          item.conversationId ||
-          updatedAppointment.conversationId ||
-          updatedAppointment.activeConversationId ||
-          requestId,
-      };
-    });
-
-    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
-
-    updateConversationScheduleMessage(updatedAppointment, confirmationStatus, statusLabel);
-
-    addNotification({
-      type:
-        confirmationStatus === "confirmed"
-          ? "appointment_confirmed"
-          : "appointment_change_requested",
-      title: statusLabel,
-      message:
-        confirmationStatus === "confirmed"
-          ? language === "es"
-            ? "El cliente confirmó la cita."
-            : "The customer confirmed the appointment."
-          : language === "es"
-          ? "El cliente solicitó otro horario."
-          : "The customer requested a different time.",
-      priority: "high",
-      targetRole: "professional",
-      requestId,
-      scheduleId: appointmentId,
-      conversationId:
-        updatedAppointment.conversationId ||
-        updatedAppointment.activeConversationId ||
-        "",
-    });
-
-    window.dispatchEvent(new Event("meetro-messages-updated"));
-    window.dispatchEvent(new Event("meetro-workcenter-updated"));
-
-    if (confirmationStatus === "change_requested") {
-      openRequestConversation(updatedRequests.find(
-        (item) => String(item.requestId || item.id) === String(requestId)
-      ) || request, updatedAppointment);
-    }
-  }
-
-  function stageAcceptedQuoteForWork(request, acceptedQuote) {
-    const requestId = request.requestId || request.id || acceptedQuote.quoteId || "";
-    const quoteId = acceptedQuote.quoteId || acceptedQuote.id || "";
-    const conversationId =
-      acceptedQuote.conversationId ||
-      request.conversationId ||
-      request.activeConversationId ||
-      requestId;
-    const service = request.title || acceptedQuote.projectTitle || acceptedQuote.title || "Approved Service";
-    const location = request.location || acceptedQuote.location || "";
-
-    saveActiveWorkSnapshot({
-      requestId,
-      quoteId,
-      conversationId,
-      status: "accepted",
-      stage: "approved",
-      service,
-      location,
-      type: "quote_approved",
-      source: "my_requests_quote_acceptance",
-    });
-
-    saveActiveJobSnapshot({
-      id: quoteId || requestId,
-      jobId: quoteId || requestId,
-      conversationId,
-      service,
-      location,
-      status: "accepted",
-      customer:
-        request.homeownerName ||
-        request.customerName ||
-        acceptedQuote.homeownerName ||
-        acceptedQuote.customerName ||
-        "Customer",
+      } catch {
+        return;
+      }
     });
   }
 
@@ -1113,7 +869,8 @@ function MyRequests({ setPage }) {
     }
 
     localStorage.removeItem("meetroOpenHomeownerRequestEdit");
-    startEdit(selectedRequest);
+    const timeoutId = window.setTimeout(() => startEdit(selectedRequest), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [requests, selectedId]);
 
   function saveEdit(requestId) {
@@ -1149,7 +906,7 @@ function MyRequests({ setPage }) {
       };
     });
 
-    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
+    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: pendingCancelId })) return;
     setEditingId(null);
   }
 
@@ -1222,6 +979,7 @@ function MyRequests({ setPage }) {
   }
 
   function requestCancelProject(requestId) {
+    setCancellationCheckAt(Date.now());
     setPendingCancelId(requestId);
   }
 
@@ -1260,9 +1018,10 @@ function MyRequests({ setPage }) {
       };
     });
 
-    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId })) return;
+    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: pendingCancelId })) return;
     setEditingId(null);
     setPendingCancelId(null);
+    setCancellationCheckAt(null);
   }
 
   function restoreProject(requestId) {
@@ -1290,17 +1049,6 @@ function MyRequests({ setPage }) {
     });
 
     saveHomeownerRequests(updatedRequests, { selectedRequestId: requestId });
-  }
-
-  function getCreatedDate(request) {
-    return request.createdAt
-      ? new Date(request.createdAt).toLocaleDateString(
-          language === "es" ? "es-US" : "en-US",
-          { month: "short", day: "numeric", year: "numeric" }
-        )
-      : language === "es"
-      ? "Fecha pendiente"
-      : "Date pending";
   }
 
   function goBackFromRequests() {
@@ -1371,19 +1119,17 @@ function MyRequests({ setPage }) {
           {sortedRequests.map((request) => {
             const requestId = request.requestId || request.id;
             const isSelected = requestId === selectedId;
-            const lifecycle = getHomeownerLifecycleStage(request, language);
-            const linkedAppointment = getLinkedAppointment(request);
-            const appointmentStatus = linkedAppointment
-              ? getAppointmentStatus(linkedAppointment)
-              : "";
-            const appointmentStatusLabel = linkedAppointment
-              ? getAppointmentStatusLabel(appointmentStatus)
-              : "";
+            const truthfulRequest = getTruthfulWorkflowRequest(request);
+            const unsupportedWorkflow = truthfulRequest !== request;
+            const unavailableCopy = getApprovalSchedulingUnavailableCopy(language);
+            const lifecycle = getHomeownerLifecycleStage(truthfulRequest, language);
+            const linkedAppointment = null;
             const hasQuoteReview =
-              Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0;
+              Array.isArray(truthfulRequest.quotesReceived) &&
+              truthfulRequest.quotesReceived.length > 0;
 
             const viewsCount = getCount(request.viewedByBusinesses);
-            const quotesCount = getCount(request.quotesReceived);
+            const quotesCount = getCount(truthfulRequest.quotesReceived);
 
             return (
               <div
@@ -1532,12 +1278,12 @@ function MyRequests({ setPage }) {
                 {isSelected && (
                   <>
                     <HomeownerWorkflowHub
-                      request={request}
+                      request={truthfulRequest}
                       language={language}
                       linkedAppointment={linkedAppointment}
                       onOpenConversation={() => openRequestConversation(request)}
                       onPrimaryAction={(workflow) =>
-                        openHomeownerWorkflow(request, workflow)
+                        openHomeownerWorkflow(truthfulRequest, workflow)
                       }
                       hideCommunicationAction={hasQuoteReview}
                     />
@@ -1631,160 +1377,19 @@ function MyRequests({ setPage }) {
                       )}
                     </div>
 
-	                    {request.status === "accepted" && request.acceptedQuote && (
-	                  <div style={acceptedNotice}>
-                    <div style={acceptedCheck}>✓</div>
-
-                    <div>
-                      <strong style={acceptedNoticeTitle}>
-                        {t("myRequestsQuoteAccepted", language)}
-                      </strong>
-
-                      <p style={acceptedNoticeText}>
-                        {t("myRequestsSelectedProfessionalNotice", language).replace(
-                          "{professional}",
-                          request.selectedProfessional ||
-                            t("myRequestsFallbackProfessional", language)
-                        )}
-                      </p>
-
-                      <div style={acceptedNoticeMeta}>
-                        <span>
-                          {t("myRequestsAcceptedTotal", language)}
-                        </span>
-
-                        <strong>${request.acceptedQuote.amount || 0}</strong>
-                      </div>
-                    </div>
-	                  </div>
-	                )}
-
-                {linkedAppointment && (
-                  <div style={scheduleSummaryCard}>
-                    <div style={scheduleSummaryHeader}>
-                      <div>
-                        <span style={scheduleSummaryEyebrow}>
-                          {t("myRequestsLinkedAppointment", language)}
-                        </span>
-                        <h3 style={scheduleSummaryTitle}>
-                          {linkedAppointment.title ||
-                            t("myRequestsScheduledEvaluation", language)}
-                        </h3>
-                      </div>
-
-                      <span
-                        style={{
-                          ...scheduleSummaryStatus,
-                          ...(appointmentStatus === "confirmed"
-                            ? scheduleSummaryStatusConfirmed
-                            : appointmentStatus === "change_requested"
-                            ? scheduleSummaryStatusAttention
-                            : {}),
-                        }}
-                      >
-                        {appointmentStatusLabel}
-                      </span>
-                    </div>
-
-                    <div style={scheduleSummaryGrid}>
-                      <div style={scheduleSummaryItem}>
-                        <span>{t("myRequestsDate", language)}</span>
-                        <strong>{linkedAppointment.date || "—"}</strong>
-                      </div>
-
-                      <div style={scheduleSummaryItem}>
-                        <span>{t("myRequestsTime", language)}</span>
-                        <strong>{formatScheduleTime(linkedAppointment.time || "") || "—"}</strong>
-                      </div>
-
-                      <div style={scheduleSummaryItem}>
-                        <span>{t("myRequestsProfessional", language)}</span>
-                        <strong>
-                          {linkedAppointment.businessName ||
-                            request.selectedProfessional ||
-                            request.businessName ||
-                            "Professional"}
+                    {unsupportedWorkflow && (
+                      <div style={workflowUnavailableCard}>
+                        <strong style={workflowUnavailableTitle}>
+                          {unavailableCopy.title}
                         </strong>
+                        <p style={workflowUnavailableText}>
+                          {unavailableCopy.body}
+                        </p>
                       </div>
-
-                      <div style={scheduleSummaryItem}>
-                        <span>{t("myRequestsLocation", language)}</span>
-                        <strong>
-                          {linkedAppointment.location || request.location || "—"}
-                        </strong>
-                      </div>
-                    </div>
-
-                    {linkedAppointment.notes && (
-                      <p style={scheduleSummaryNotes}>{linkedAppointment.notes}</p>
                     )}
 
-                    <div style={scheduleSummaryActions}>
-                      {appointmentStatus === "pending_customer_confirmation" && (
-                        <>
-                          <button
-                            type="button"
-                            style={scheduleConfirmButton}
-                            onClick={() =>
-                              updateLinkedAppointmentStatus(
-                                request,
-                                linkedAppointment,
-                                "confirmed"
-                              )
-                            }
-                          >
-                            {language === "es"
-                              ? "Confirmar cita"
-                              : "Confirm appointment"}
-                          </button>
-
-                          <button
-                            type="button"
-                            style={scheduleDifferentTimeButton}
-                            onClick={() =>
-                              updateLinkedAppointmentStatus(
-                                request,
-                                linkedAppointment,
-                                "change_requested"
-                              )
-                            }
-                          >
-                            {language === "es"
-                              ? "Pedir otro horario"
-                              : "Request different time"}
-                          </button>
-                        </>
-                      )}
-
-                      {appointmentStatus === "change_requested" && !hasQuoteReview && (
-                        <button
-                          type="button"
-                          style={scheduleDifferentTimeButton}
-                          onClick={() => openRequestConversation(request, linkedAppointment)}
-                        >
-                          {language === "es"
-                            ? "Enviar disponibilidad"
-                            : "Send availability"}
-                        </button>
-                      )}
-
-                      {!hasQuoteReview && (
-                        <button
-                          type="button"
-                          style={scheduleConversationButton}
-                          onClick={() => openRequestConversation(request, linkedAppointment)}
-                        >
-                          {language === "es"
-                            ? "Continuar conversación"
-                            : "Continue Conversation"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {Array.isArray(request.quotesReceived) &&
-                  request.quotesReceived.length > 0 && (
+                {Array.isArray(truthfulRequest.quotesReceived) &&
+                  truthfulRequest.quotesReceived.length > 0 && (
                     <div style={quoteSection}>
                       <div style={quoteHeader}>
                         <div>
@@ -1797,25 +1402,16 @@ function MyRequests({ setPage }) {
                         </div>
 
                         <span style={quoteCountBadge}>
-                          {request.quotesReceived.length}
+                          {truthfulRequest.quotesReceived.length}
                         </span>
                       </div>
 
                       <div style={quoteList}>
-                        {request.quotesReceived.map((quote) => (
+                        {truthfulRequest.quotesReceived.map((quote) => (
                           <div
                             key={quote.quoteId}
-                            style={{
-                              ...quoteCard,
-                              ...(quote.status === "accepted" ? acceptedQuoteCard : {}),
-                            }}
+                            style={quoteCard}
                           >
-                            {quote.status === "accepted" && (
-                              <div style={acceptedQuoteBanner}>
-                                ✓ {t("selectedQuote", language)}
-                              </div>
-                            )}
-
                             <div style={quoteTop}>
                               <div>
                                 <strong style={quoteBusiness}>
@@ -1929,52 +1525,16 @@ function MyRequests({ setPage }) {
                                 {t("messageProfessional", language)}
                               </button>
 
-                              <button
-                                style={
-                                  quote.status === "accepted"
-                                    ? acceptedStatusPill
-                                    : acceptQuoteButton
-                                }
-                                disabled={quote.status === "accepted"}
-                                onClick={() => {
-                                  if (quote.status === "accepted") return;
-
-                                  setAcceptQuoteId(
-                                    acceptQuoteId === quote.quoteId
-                                      ? null
-                                      : quote.quoteId
-                                  );
-                                }}
-                              >
-                                {quote.status === "accepted"
-                                  ? `✓ ${t("quoteApproved", language)}`
-                                  : t("approveQuote", language)}
-                              </button>
+                              <div style={quoteUnavailableNotice}>
+                                <strong>{unavailableCopy.title}</strong>
+                                <span>{unavailableCopy.body}</span>
+                              </div>
 
                               <div style={quoteSecondaryActions}>
                                 <button
                                   type="button"
                                   style={quoteSecondaryButton}
                                   onClick={() => {
-                                    if (quote.status === "accepted") {
-                                      localStorage.setItem(
-                                        "selectedConversation",
-                                        JSON.stringify({
-                                          businessName:
-                                            quote.businessName || "Business",
-                                          projectTitle:
-                                            request.title || "Service",
-                                        })
-                                      );
-
-                                      setNextStepsQuoteId(
-                                        nextStepsQuoteId === quote.quoteId
-                                          ? null
-                                          : quote.quoteId
-                                      );
-                                      return;
-                                    }
-
                                     setRevisionQuoteId(
                                       revisionQuoteId === quote.quoteId
                                         ? null
@@ -1984,9 +1544,7 @@ function MyRequests({ setPage }) {
                                     setRevisionText(quote.revisionNote || "");
                                   }}
                                 >
-                                  {quote.status === "accepted"
-                                    ? t("viewNextSteps", language)
-                                    : quote.status === "revision_requested"
+                                  {quote.status === "revision_requested"
                                     ? t("changesRequested", language)
                                     : t("requestChanges", language)}
                                 </button>
@@ -2008,313 +1566,6 @@ function MyRequests({ setPage }) {
                                 )}
                               </div>
                             </div>
-                            )}
-
-                            {acceptQuoteId === quote.quoteId && (
-                              <div style={acceptConfirmBox}>
-                                <div style={acceptConfirmIcon}>✓</div>
-
-                                <div style={{ flex: 1 }}>
-                                  <strong style={acceptConfirmTitle}>
-                                    {language === "es"
-                                      ? "Aceptar esta cotización"
-                                      : "Accept this quote"}
-                                  </strong>
-
-                                  <p style={acceptConfirmText}>
-                                    {language === "es"
-                                      ? "Estás seleccionando este profesional para continuar con tu servicio."
-                                      : "You are selecting this professional to continue with your service."}
-                                  </p>
-
-                                  <div style={acceptConfirmSummary}>
-                                    <span>
-                                      {quote.businessName || "Business"}
-                                    </span>
-                                    <strong>${quote.amount || 0}</strong>
-                                  </div>
-
-                                  <div style={acceptConfirmActions}>
-                                    <button
-                                      style={confirmAcceptButton}
-                                      onClick={() => {
-                                        const acceptedAt = new Date().toISOString();
-                                        const updatedRequests = requests.map((item) => {
-                                          const itemId = item.requestId || item.id;
-
-                                          if (String(itemId) !== String(requestId)) return item;
-
-                                          const updatedQuotes = Array.isArray(item.quotesReceived)
-                                            ? item.quotesReceived.map((savedQuote) => ({
-                                                ...savedQuote,
-                                                status:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? "accepted"
-                                                    : "not_selected",
-                                                quoteStatus:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? "accepted"
-                                                    : savedQuote.quoteStatus,
-                                                workflowStage:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? "approved"
-                                                    : savedQuote.workflowStage,
-                                                nextAction:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? "move_to_active"
-                                                    : savedQuote.nextAction,
-                                                acceptedAt:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? acceptedAt
-                                                    : savedQuote.acceptedAt,
-                                                acceptedBy:
-                                                  savedQuote.quoteId === quote.quoteId
-                                                    ? "customer"
-                                                    : savedQuote.acceptedBy,
-                                              }))
-                                            : [];
-
-                                          const acceptedQuote = {
-                                            ...quote,
-                                            status: "accepted",
-                                            quoteStatus: "accepted",
-                                            workflowStage: "approved",
-                                            nextAction: "move_to_active",
-                                            acceptedAt,
-                                            acceptedBy: "customer",
-                                            requestId,
-                                            conversationId:
-                                              quote.conversationId ||
-                                              item.conversationId ||
-                                              requestId,
-                                          };
-
-                                          return {
-                                            ...item,
-                                            status: "accepted",
-                                            workflowStage: "approved",
-                                            nextAction: "move_to_active",
-                                            quotesReceived: updatedQuotes,
-                                            acceptedQuote,
-                                            selectedProfessional:
-                                              quote.businessName || "Business",
-                                            acceptedAt,
-                                            acceptedBy: "customer",
-                                            conversationId:
-                                              item.conversationId ||
-                                              quote.conversationId ||
-                                              requestId,
-                                            projectTimeline: [
-                                              {
-                                                type: "quoteAccepted",
-                                                label: `Quote accepted from ${quote.businessName || "Business"}`,
-                                                createdAt: acceptedAt,
-                                                quoteId: quote.quoteId || "",
-                                                amount: quote.amount || "",
-                                                businessName: quote.businessName || "",
-                                              },
-                                              ...(Array.isArray(item.projectTimeline)
-                                                ? item.projectTimeline
-                                                : []),
-                                            ],
-                                          };
-                                        });
-
-                                        const updatedRequest = updatedRequests.find(
-                                          (item) => String(item.requestId || item.id) === String(requestId)
-                                        );
-                                        const acceptedQuote =
-                                          updatedRequest?.acceptedQuote || {
-                                            ...quote,
-                                            status: "accepted",
-                                            quoteStatus: "accepted",
-                                            workflowStage: "approved",
-                                            nextAction: "move_to_active",
-                                            acceptedAt,
-                                            acceptedBy: "customer",
-                                            requestId,
-                                            conversationId:
-                                              quote.conversationId ||
-                                              updatedRequest?.conversationId ||
-                                              requestId,
-                                          };
-
-                                        if (
-                                          !saveHomeownerRequests(updatedRequests, {
-                                            selectedRequestId: requestId,
-                                          })
-                                        ) {
-                                          return;
-                                        }
-
-                                        addNotification({
-                                          type: "quote_accepted",
-                                          title:
-                                            language === "es"
-                                              ? "Cotización aceptada"
-                                              : "Quote accepted",
-                                          message:
-                                            language === "es"
-                                              ? `El cliente aceptó la cotización de $${quote.amount || 0}.`
-                                              : `The customer accepted your $${quote.amount || 0} quote.`,
-                                          priority: "high",
-                                          targetRole: "professional",
-                                          requestId,
-                                          quoteId: quote.quoteId || "",
-                                        });
-
-                                        updateQuoteHistories(quote.quoteId, (savedQuote) => ({
-                                          ...savedQuote,
-                                          status: "accepted",
-                                          quoteStatus: "accepted",
-                                          workflowStage: "approved",
-                                          nextAction: "move_to_active",
-                                          acceptedAt,
-                                          acceptedBy: "customer",
-                                          requestId: savedQuote.requestId || requestId,
-                                          conversationId:
-                                            savedQuote.conversationId ||
-                                            acceptedQuote.conversationId ||
-                                            requestId,
-                                        }));
-
-                                        if (updatedRequest) {
-                                          stageAcceptedQuoteForWork(updatedRequest, acceptedQuote);
-                                        }
-
-                                        setAcceptQuoteId(null);
-                                      }}
-                                    >
-                                      {language === "es"
-                                        ? "Confirmar Aceptación"
-                                        : "Confirm Acceptance"}
-                                    </button>
-
-                                    <button
-                                      style={cancelAcceptButton}
-                                      onClick={() => setAcceptQuoteId(null)}
-                                    >
-                                      {language === "es" ? "Cancelar" : "Cancel"}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {nextStepsQuoteId === quote.quoteId && (
-                              <div style={nextStepsBox}>
-                                <div style={nextStepsHeader}>
-                                  <span style={nextStepsIcon}>OK</span>
-                                  <div>
-                                    <strong>
-                                      {language === "es"
-                                        ? "Próximos pasos"
-                                        : "Service Next Steps"}
-                                    </strong>
-                                    <p>
-                                      {language === "es"
-                                        ? "Tu cotización fue aceptada. Ahora puedes coordinar con el profesional."
-                                        : "Your quote was accepted. You can now coordinate with the professional."}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div
-                                  style={
-                                    request.status === "scheduled"
-                                      ? scheduledStatus
-                                      : nextStepsStatus
-                                  }
-                                >
-                                  <span
-                                    style={
-                                      request.status === "scheduled"
-                                        ? scheduledStatusDot
-                                        : nextStepsStatusDot
-                                    }
-                                  ></span>
-
-                                  <strong>
-                                    {request.status === "scheduled"
-                                      ? language === "es"
-                                        ? "Servicio programado"
-                                        : "Service Scheduled"
-                                      : language === "es"
-                                      ? "Servicio en programación"
-                                      : "Service entering scheduling"}
-                                  </strong>
-                                </div>
-
-                                <div style={nextStepsList}>
-                                  <div
-                                    style={
-                                      request.status === "scheduled"
-                                        ? completedStepItem
-                                        : nextStepItem
-                                    }
-                                  >
-                                    {request.status === "scheduled" ? "" : "1."}{" "}
-                                    {language === "es"
-                                      ? "Confirmar fecha de inicio"
-                                      : "Confirm start date"}
-                                  </div>
-
-                                  <div style={nextStepItem}>
-                                    {request.status === "scheduled" ? "" : "2."}{" "}
-                                    {language === "es"
-                                      ? "Servicio programado"
-                                      : "Service scheduled"}
-                                  </div>
-
-                                  <div style={pendingStepItem}>
-                                    {" "}
-                                    {language === "es"
-                                      ? "Coordinar materiales y acceso"
-                                      : "Coordinate materials and access"}
-                                  </div>
-
-                                  <div style={pendingStepItem}>
-                                    {" "}
-                                    {language === "es"
-                                      ? "Seguir progreso del servicio"
-                                      : "Track service progress"}
-                                  </div>
-                                </div>
-
-                                <div style={nextStepsActionGrid}>
-                                  <button
-                                    style={nextPrimaryButton}
-                                    onClick={() => {
-                                      const updatedRequests = requests.map((item) => {
-                                        const itemId = item.requestId || item.id;
-
-                                        if (String(itemId) !== String(requestId)) return item;
-
-                                        return {
-                                          ...item,
-                                          status: "scheduled",
-                                          workflowStage: "scheduled",
-                                          nextAction: "evaluation",
-                                          scheduledAt: new Date().toISOString(),
-                                        };
-                                      });
-
-                                      saveHomeownerRequests(updatedRequests, {
-                                        selectedRequestId: requestId,
-                                      });
-                                    }}
-                                  >
-                                    {request.status === "scheduled"
-                                      ? language === "es"
-                                        ? "Programado"
-                                        : "Scheduled"
-                                      : language === "es"
-                                      ? "Coordinar programación"
-                                      : "Coordinate Scheduling"}
-                                  </button>
-
-                                </div>
-                              </div>
                             )}
 
                             {revisionQuoteId === quote.quoteId && (
@@ -2686,7 +1937,10 @@ function MyRequests({ setPage }) {
             <div style={confirmActions}>
               <button
                 style={confirmKeepButton}
-                onClick={() => setPendingCancelId(null)}
+                onClick={() => {
+                  setPendingCancelId(null);
+                  setCancellationCheckAt(null);
+                }}
               >
                 {t("myRequestsKeepRequest", language)}
               </button>
@@ -2731,12 +1985,6 @@ const backButton = {
 const header = {
   textAlign: "center",
   margin: "18px 0 24px",
-};
-
-const eyebrow = {
-  margin: "0 0 8px",
-  color: "var(--meetro-color-wood)",
-  fontWeight: "900",
 };
 
 const title = {
@@ -2813,49 +2061,6 @@ const list = {
   gap: "16px",
   minWidth: 0,
   overflowX: "hidden",
-};
-
-const miniTimeline = {
-  marginTop: "12px",
-  display: "grid",
-  gap: "8px",
-  background: "rgba(238, 244, 234, 0.78)",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "18px",
-  padding: "10px",
-};
-
-const miniTimelineItem = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-};
-
-const miniTimelineDot = {
-  width: "28px",
-  height: "28px",
-  borderRadius: "999px",
-  background: "var(--meetro-surface-paper)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "13px",
-  boxShadow: "0 4px 10px rgba(20,53,31,0.08)",
-  flexShrink: 0,
-};
-
-const miniTimelineLabel = {
-  display: "block",
-  fontSize: "12px",
-  fontWeight: "900",
-  color: "var(--meetro-color-ink)",
-};
-
-const miniTimelineDate = {
-  margin: "2px 0 0",
-  fontSize: "11px",
-  fontWeight: "800",
-  color: "var(--meetro-color-muted)",
 };
 
 const requestCard = {
@@ -3004,47 +2209,6 @@ const workflowHubSecondaryButton = {
   fontWeight: "950",
 };
 
-const requestSplit = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "18px",
-  alignItems: "stretch",
-};
-
-const requestMainPanel = {
-  background: "white",
-  borderRadius: "22px",
-  minWidth: 0,
-  maxWidth: "100%",
-};
-
-const requestMediaPanel = {
-  background: "var(--meetro-surface-warm)",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "22px",
-  padding: "18px",
-  minWidth: 0,
-};
-
-const mediaHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  alignItems: "center",
-  marginBottom: "12px",
-  color: "#111827",
-  fontSize: "13px",
-  fontWeight: "900",
-};
-
-const cardTop = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
-  flexWrap: "wrap",
-  minWidth: 0,
-};
-
 const cardPillRow = {
   display: "flex",
   gap: "8px",
@@ -3069,24 +2233,6 @@ const selectedPill = {
   borderRadius: "999px",
   fontWeight: "900",
   fontSize: "12px",
-};
-
-const cardTitle = {
-  fontSize: "24px",
-  margin: "12px 0 6px",
-  color: "#111827",
-};
-
-const cardText = {
-  color: "#475569",
-  fontWeight: "700",
-  lineHeight: 1.5,
-};
-
-const dateText = {
-  color: "#475569",
-  fontWeight: "800",
-  fontSize: "13px",
 };
 
 const swipeGalleryWrap = {
@@ -3185,136 +2331,30 @@ const galleryEmptyIcon = {
   fontSize: "34px",
 };
 
-const scheduleSummaryCard = {
+const workflowUnavailableCard = {
   marginTop: 14,
   padding: 16,
-  borderRadius: 22,
-  background: "linear-gradient(135deg,#eff6ff,#f8fafc)",
-  border: "1px solid #bfdbfe",
-  boxShadow: "0 12px 28px rgba(37, 99, 235, 0.08)",
+  borderRadius: 20,
+  background: "var(--meetro-surface-paper, #fffaf0)",
+  border: "1px solid rgba(116, 86, 48, 0.22)",
+  color: "var(--meetro-color-charcoal, #172317)",
+  boxShadow: "0 10px 24px rgba(46, 74, 53, 0.08)",
 };
 
-const scheduleSummaryHeader = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-  marginBottom: 12,
-};
-
-const scheduleSummaryEyebrow = {
+const workflowUnavailableTitle = {
   display: "block",
-  color: "#2563eb",
-  fontSize: 11,
+  marginBottom: 6,
+  fontSize: 15,
+  lineHeight: 1.3,
   fontWeight: 950,
-  textTransform: "uppercase",
-  letterSpacing: "0.07em",
-  marginBottom: 4,
 };
 
-const scheduleSummaryTitle = {
+const workflowUnavailableText = {
   margin: 0,
-  color: "#0f172a",
-  fontSize: 18,
-  lineHeight: 1.2,
-  fontWeight: 950,
-};
-
-const scheduleSummaryStatus = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: 999,
-  padding: "7px 10px",
-  background: "#fff7ed",
-  color: "#c2410c",
-  border: "1px solid #fed7aa",
-  fontSize: 12,
-  fontWeight: 950,
-};
-
-const scheduleSummaryStatusConfirmed = {
-  background: "#ecfdf5",
-  color: "#047857",
-  border: "1px solid #bbf7d0",
-};
-
-const scheduleSummaryStatusAttention = {
-  background: "#fef3c7",
-  color: "#92400e",
-  border: "1px solid #fde68a",
-};
-
-const scheduleSummaryGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-  gap: 10,
-};
-
-const scheduleSummaryItem = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  padding: 12,
-  borderRadius: 16,
-  background: "rgba(255,255,255,0.82)",
-  border: "1px solid rgba(191, 219, 254, 0.72)",
-  color: "#0f172a",
+  color: "var(--meetro-color-coffee, #5f4b3b)",
   fontSize: 13,
-  fontWeight: 900,
-};
-
-const scheduleSummaryNotes = {
-  margin: "12px 0 0",
-  padding: 12,
-  borderRadius: 16,
-  background: "#ffffff",
-  border: "1px solid #dbeafe",
-  color: "#475569",
-  fontSize: 13,
-  lineHeight: 1.45,
-  fontWeight: 700,
-};
-
-const scheduleSummaryActions = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-  gap: 10,
-  marginTop: 12,
-};
-
-const scheduleConfirmButton = {
-  border: "none",
-  borderRadius: 16,
-  padding: "12px 14px",
-  background: "#16a34a",
-  color: "#ffffff",
-  fontSize: 14,
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const scheduleDifferentTimeButton = {
-  border: "1px solid #fed7aa",
-  borderRadius: 16,
-  padding: "12px 14px",
-  background: "#fff7ed",
-  color: "#c2410c",
-  fontSize: 14,
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const scheduleConversationButton = {
-  border: "1px solid #bfdbfe",
-  borderRadius: 16,
-  padding: "12px 14px",
-  background: "#ffffff",
-  color: "#2563eb",
-  fontSize: 14,
-  fontWeight: 950,
-  cursor: "pointer",
+  lineHeight: 1.5,
+  fontWeight: 750,
 };
 
 const imageModal = {
@@ -3358,135 +2398,6 @@ const closePreview = {
   fontSize: "28px",
   fontWeight: "900",
   cursor: "pointer",
-};
-
-const metricsGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3,1fr)",
-  gap: "10px",
-  margin: "16px 0",
-};
-
-const metricBox = {
-  background: "#f8fafc",
-  borderRadius: "18px",
-  padding: "14px",
-  textAlign: "center",
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-  color: "#111827",
-  fontWeight: "900",
-};
-
-const quoteAlertMetricBox = {
-  ...metricBox,
-  background: "linear-gradient(135deg,#f5f3ff,#ffffff)",
-  border: "2px solid var(--meetro-color-forest, #1f4d34)",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  boxShadow: "0 0 0 4px rgba(31,77,52,0.10), 0 0 28px rgba(31,77,52,0.35)",
-};
-
-const quoteAlertText = {
-  color: "var(--meetro-color-forest, #1f4d34)",
-  fontSize: "11px",
-  fontWeight: "900",
-};
-
-const timelineBox = {
-  display: "flex",
-  gap: "12px",
-  background: "#faf9ff",
-  border: "1px solid #ede9fe",
-  borderRadius: "20px",
-  padding: "14px",
-  color: "#4c1d95",
-  marginBottom: "14px",
-};
-
-const timelineDot = {
-  width: "12px",
-  height: "12px",
-  borderRadius: "50%",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  marginTop: "5px",
-  flexShrink: 0,
-};
-
-const acceptedMiniText = {
-  color: "#047857",
-  fontSize: "11px",
-  fontWeight: "900",
-};
-
-const acceptedNotice = {
-  display: "flex",
-  gap: "10px",
-  alignItems: "center",
-  background: "linear-gradient(135deg,#ecfdf5,#ffffff)",
-  border: "1px solid #86efac",
-  borderRadius: "18px",
-  padding: "12px",
-  marginBottom: "12px",
-  boxShadow: "0 8px 20px rgba(16,185,129,0.08)",
-};
-
-const acceptedCheck = {
-  width: "34px",
-  height: "34px",
-  borderRadius: "50%",
-  background: "#16a34a",
-  color: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900",
-  fontSize: "16px",
-  flexShrink: 0,
-};
-
-const acceptedNoticeTitle = {
-  display: "block",
-  color: "#065f46",
-  fontSize: "15px",
-  marginBottom: "2px",
-};
-
-const acceptedNoticeText = {
-  margin: "0 0 6px",
-  color: "#047857",
-  fontWeight: "700",
-  lineHeight: 1.35,
-  fontSize: "12px",
-};
-
-const acceptedNoticeMeta = {
-  background: "white",
-  border: "1px solid #bbf7d0",
-  borderRadius: "12px",
-  padding: "8px 10px",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  color: "#065f46",
-  fontWeight: "900",
-  fontSize: "12px",
-};
-
-const acceptedQuoteCard = {
-  border: "2px solid #22c55e",
-  boxShadow: "0 12px 30px rgba(34,197,94,0.14)",
-};
-
-const acceptedQuoteBanner = {
-  background: "#dcfce7",
-  color: "#047857",
-  borderRadius: "999px",
-  padding: "6px 10px",
-  display: "inline-flex",
-  fontWeight: "900",
-  marginBottom: "10px",
-  fontSize: "11px",
 };
 
 const quoteSection = {
@@ -3631,6 +2542,19 @@ const quoteDecisionPanel = {
   gap: "10px",
 };
 
+const quoteUnavailableNotice = {
+  display: "grid",
+  gap: 5,
+  border: "1px solid rgba(116, 86, 48, 0.22)",
+  background: "var(--meetro-surface-paper, #fffaf0)",
+  color: "var(--meetro-color-charcoal, #172317)",
+  borderRadius: 16,
+  padding: "12px 14px",
+  fontSize: 13,
+  lineHeight: 1.45,
+  fontWeight: 800,
+};
+
 const quoteMessageButton = {
   border: "1px solid #d8d4fe",
   background: "#ffffff",
@@ -3651,104 +2575,6 @@ const quoteSecondaryButton = {
   border: "1px solid #d8d4fe",
   background: "#ffffff",
   color: "#4f28e8",
-  borderRadius: "14px",
-  padding: "12px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const acceptQuoteButton = {
-  border: "none",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-  boxShadow: "0 0 0 4px rgba(31,77,52,0.12), 0 0 30px rgba(31,77,52,0.45)",
-};
-
-const rejectQuoteButton = {
-  border: "1px solid #fca5a5",
-  background: "#fff5f5",
-  color: "#dc2626",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const acceptConfirmBox = {
-  marginTop: "10px",
-  border: "1px solid #ddd6fe",
-  background: "#faf7ff",
-  borderRadius: "16px",
-  padding: "12px",
-  display: "flex",
-  gap: "10px",
-  alignItems: "flex-start",
-};
-
-const acceptConfirmIcon = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "50%",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900",
-  flexShrink: 0,
-};
-
-const acceptConfirmTitle = {
-  display: "block",
-  fontSize: "18px",
-  color: "#111827",
-  marginBottom: "4px",
-};
-
-const acceptConfirmText = {
-  margin: "0 0 12px",
-  color: "#475569",
-  fontWeight: "700",
-  lineHeight: 1.5,
-};
-
-const acceptConfirmSummary = {
-  background: "white",
-  border: "1px solid #ede9fe",
-  borderRadius: "16px",
-  padding: "12px",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "12px",
-  color: "#111827",
-  fontWeight: "900",
-  marginBottom: "12px",
-};
-
-const acceptConfirmActions = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
-};
-
-const confirmAcceptButton = {
-  border: "none",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  borderRadius: "14px",
-  padding: "12px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const cancelAcceptButton = {
-  border: "1px solid #e5e7eb",
-  background: "white",
-  color: "#475569",
   borderRadius: "14px",
   padding: "12px",
   fontWeight: "900",
@@ -3803,107 +2629,6 @@ const cancelRevisionButton = {
   cursor: "pointer",
 };
 
-const nextStepsBox = {
-  marginTop: "10px",
-  border: "1px solid #dbeafe",
-  background: "linear-gradient(135deg,#f8fbff,#ffffff)",
-  borderRadius: "16px",
-  padding: "12px",
-};
-
-const nextStepsHeader = {
-  display: "flex",
-  gap: "12px",
-  alignItems: "flex-start",
-  marginBottom: "12px",
-};
-
-const nextStepsIcon = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "50%",
-  background: "#16a34a",
-  color: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-};
-
-const scheduledStatus = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  background: "#ecfdf5",
-  border: "1.5px solid #22c55e",
-  borderRadius: "999px",
-  padding: "10px 14px",
-  marginBottom: "14px",
-  color: "#047857",
-  fontWeight: "900",
-  boxShadow: "0 8px 22px rgba(34,197,94,0.14)",
-};
-
-const scheduledStatusDot = {
-  width: "10px",
-  height: "10px",
-  borderRadius: "50%",
-  background: "#16a34a",
-};
-
-const nextStepsStatus = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  background: "white",
-  border: "1px solid #bbf7d0",
-  borderRadius: "999px",
-  padding: "10px 14px",
-  marginBottom: "14px",
-  color: "#047857",
-  fontWeight: "900",
-};
-
-const nextStepsStatusDot = {
-  width: "10px",
-  height: "10px",
-  borderRadius: "50%",
-  background: "#16a34a",
-};
-
-const nextStepsActionGrid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
-  marginTop: "14px",
-};
-
-const nextPrimaryButton = {
-  border: "none",
-  background: "#16a34a",
-  color: "white",
-  borderRadius: "14px",
-  padding: "13px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const nextSecondaryButton = {
-  border: "1px solid #bbf7d0",
-  background: "white",
-  color: "#047857",
-  borderRadius: "14px",
-  padding: "13px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const nextStepsList = {
-  display: "grid",
-  gap: "8px",
-};
-
-
 const input = {
   width: "100%",
   boxSizing: "border-box",
@@ -3929,96 +2654,12 @@ const textarea = {
   resize: "vertical",
 };
 
-const completedStepItem = {
-  background: "#ecfdf5",
-  border: "1px solid #86efac",
-  borderRadius: "14px",
-  padding: "12px 14px",
-  fontWeight: "900",
-  color: "#047857",
-};
-
-const pendingStepItem = {
-  background: "#ffffff",
-  border: "1px solid #d1fae5",
-  borderRadius: "14px",
-  padding: "12px 14px",
-  fontWeight: "800",
-  color: "#065f46",
-};
-
-const nextStepItem = {
-  background: "white",
-  border: "1px solid #bbf7d0",
-  borderRadius: "14px",
-  padding: "10px 12px",
-  fontWeight: "900",
-};
-
-const nextStepsButton = {
-  border: "none",
-  background: "linear-gradient(135deg,#16a34a,#22c55e)",
-  color: "white",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-  boxShadow: "0 0 0 4px rgba(34,197,94,0.12), 0 12px 26px rgba(34,197,94,0.25)",
-};
-
-const disabledQuoteButton = {
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-  color: "#475569",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "not-allowed",
-};
-
-const editBox = {
-  display: "grid",
-  gap: "10px",
-  marginTop: "12px",
-};
-
-const editLabel = {
-  fontSize: "13px",
-  fontWeight: "900",
-  color: "#111827",
-};
-
-const editInput = {
-  width: "100%",
-  padding: "13px",
-  borderRadius: "14px",
-  border: "1px solid #dbeafe",
-  fontSize: "16px",
-  boxSizing: "border-box",
-};
-
-const editTextarea = {
-  ...editInput,
-  minHeight: "90px",
-  resize: "vertical",
-};
-
 const actionRow = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
   gap: "10px",
   maxWidth: "100%",
   minWidth: 0,
-};
-
-const acceptedStatusPill = {
-  border: "none",
-  background: "#dcfce7",
-  color: "#166534",
-  borderRadius: "999px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "default",
 };
 
 const completedStateBox = {
@@ -4053,18 +2694,6 @@ const completedPrimaryButton = {
   padding: "14px",
   fontWeight: "900",
   cursor: "pointer",
-};
-
-const completedProjectButton = {
-  width: "100%",
-  border: "1px solid #e5e7eb",
-  background: "white",
-  color: "#111827",
-  borderRadius: "20px",
-  padding: "16px",
-  fontWeight: "900",
-  cursor: "pointer",
-  boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
 };
 
 const reviewButton = {
