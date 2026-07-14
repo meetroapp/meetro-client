@@ -7120,8 +7120,13 @@ const settingsArchitectureLabels = {
     account: "Account",
     personalInformation: "Personal Information",
     personalInformationHelp:
-      "These details stay with your account on this device for TestFlight review.",
+      "Name changes are saved only after Meetro confirms the update.",
     personalInformationSaved: "Personal information saved.",
+    personalInformationSaving: "Saving...",
+    personalInformationSaveFailed: "Personal information could not be saved. Your existing profile remains unchanged.",
+    personalInformationNameRequired: "Enter your name before saving.",
+    personalInformationEmailReadOnly: "Email changes require a separate security verification and are not available here.",
+    personalInformationPhoneUnavailable: "Mobile number updates are not available until secure account storage is ready.",
     privatePhoneNumber: "Private phone number",
     privatePhoneHelp:
       "Used only after a relationship exists so a professional can call you about an active project.",
@@ -7191,8 +7196,13 @@ const settingsArchitectureLabels = {
     account: "Cuenta",
     personalInformation: "Información personal",
     personalInformationHelp:
-      "Estos datos permanecen con tu cuenta en este dispositivo para revisión de TestFlight.",
+      "Los cambios de nombre se guardan solo después de que Meetro confirme la actualización.",
     personalInformationSaved: "Información personal guardada.",
+    personalInformationSaving: "Guardando...",
+    personalInformationSaveFailed: "No se pudo guardar la información personal. Tu perfil existente no cambió.",
+    personalInformationNameRequired: "Ingresa tu nombre antes de guardar.",
+    personalInformationEmailReadOnly: "Los cambios de correo requieren una verificación de seguridad separada y no están disponibles aquí.",
+    personalInformationPhoneUnavailable: "Las actualizaciones del número móvil no están disponibles hasta que el almacenamiento seguro de la cuenta esté listo.",
     privatePhoneNumber: "Teléfono privado",
     privatePhoneHelp:
       "Se usa solo después de que existe una relación para que un profesional pueda llamarte sobre un proyecto activo.",
@@ -7262,8 +7272,13 @@ const settingsArchitectureLabels = {
     account: "Compte",
     personalInformation: "Informations personnelles",
     personalInformationHelp:
-      "Ces informations restent avec votre compte sur cet appareil pour l’examen TestFlight.",
+      "Les changements de nom ne sont enregistrés qu’après confirmation de Meetro.",
     personalInformationSaved: "Informations personnelles enregistrées.",
+    personalInformationSaving: "Enregistrement...",
+    personalInformationSaveFailed: "Les informations personnelles n’ont pas pu être enregistrées. Votre profil existant reste inchangé.",
+    personalInformationNameRequired: "Saisissez votre nom avant d’enregistrer.",
+    personalInformationEmailReadOnly: "Les changements d’adresse e-mail nécessitent une vérification de sécurité distincte et ne sont pas disponibles ici.",
+    personalInformationPhoneUnavailable: "La mise à jour du numéro de mobile n’est pas disponible tant que le stockage sécurisé du compte n’est pas prêt.",
     privatePhoneNumber: "Numéro privé",
     privatePhoneHelp:
       "Utilisé uniquement après l’existence d’une relation afin qu’un professionnel puisse vous appeler au sujet d’un projet actif.",
@@ -7333,8 +7348,13 @@ const settingsArchitectureLabels = {
     account: "Conta",
     personalInformation: "Informações pessoais",
     personalInformationHelp:
-      "Esses dados permanecem com sua conta neste dispositivo para revisão do TestFlight.",
+      "As alterações de nome são salvas somente depois que o Meetro confirma a atualização.",
     personalInformationSaved: "Informações pessoais salvas.",
+    personalInformationSaving: "Salvando...",
+    personalInformationSaveFailed: "Não foi possível salvar as informações pessoais. Seu perfil existente permanece inalterado.",
+    personalInformationNameRequired: "Digite seu nome antes de salvar.",
+    personalInformationEmailReadOnly: "Alterações de e-mail exigem uma verificação de segurança separada e não estão disponíveis aqui.",
+    personalInformationPhoneUnavailable: "As atualizações do número de celular não estão disponíveis até que o armazenamento seguro da conta esteja pronto.",
     privatePhoneNumber: "Telefone privado",
     privatePhoneHelp:
       "Usado somente depois que existe um relacionamento para que um profissional possa ligar sobre um projeto ativo.",

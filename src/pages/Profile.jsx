@@ -41,6 +41,10 @@ import {
   readPersonalAddresses,
   resolveDefaultPersonalAddress,
 } from "../utils/personalAddresses";
+import {
+  reconcileAuthenticatedUser,
+  updatePersonalProfile,
+} from "../utils/personalProfile";
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -56,11 +60,9 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [personalInfoForm, setPersonalInfoForm] = useState({
     name: localStorage.getItem("userName") || "",
     email: localStorage.getItem("userEmail") || "",
-    phone:
-      localStorage.getItem("meetroHomeownerPrivatePhone") ||
-      localStorage.getItem("homeownerPrivatePhone") ||
-      "",
   });
+  const [personalInfoSaving, setPersonalInfoSaving] = useState(false);
+  const [personalInfoError, setPersonalInfoError] = useState("");
   const [activeSection, setActiveSection] = useState(
     localStorage.getItem("meetroProfileOpenSection") || ""
   );
@@ -174,19 +176,10 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
         const nextUser = result.data?.user || null;
 
-        setUser(nextUser);
+        const reconciled = reconcileAuthenticatedUser(nextUser);
+        setUser(reconciled.ok ? reconciled.user : null);
 
-        if (nextUser) {
-          localStorage.setItem("user", JSON.stringify(nextUser));
-          if (nextUser.id || nextUser.userId || nextUser.user_id) {
-            localStorage.setItem(
-              "userId",
-              String(nextUser.id || nextUser.userId || nextUser.user_id)
-            );
-          }
-          if (nextUser.email) {
-            localStorage.setItem("userEmail", nextUser.email);
-          }
+        if (reconciled.ok) {
           setPersonalAddresses(readPersonalAddresses({ user: nextUser }));
 
           const savedPhoto =
@@ -417,83 +410,38 @@ function Profile({ setPage, currentPage, embedded = false }) {
   function openPersonalInfoSheet() {
     setPersonalInfoForm({
       name:
-        localStorage.getItem("userName") ||
+        user?.username ||
         user?.name ||
-        localStorage.getItem("businessName") ||
         "",
       email: user?.email || localStorage.getItem("userEmail") || "",
-      phone:
-        localStorage.getItem("meetroHomeownerPrivatePhone") ||
-        localStorage.getItem("homeownerPrivatePhone") ||
-        user?.phone ||
-        "",
     });
+    setPersonalInfoError("");
     setPersonalInfoOpen(true);
   }
 
-  function savePersonalInfo() {
-    const nextName = personalInfoForm.name.trim();
-    const nextEmail = personalInfoForm.email.trim();
-    const nextPhone = personalInfoForm.phone.trim();
-    const previousPhoneOwnerKeys = [
-      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerName"),
-      localStorage.getItem("meetroHomeownerPrivatePhoneOwnerEmail"),
-    ]
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter(Boolean);
-
-    previousPhoneOwnerKeys.forEach((key) => {
-      localStorage.removeItem(`meetroHomeownerPrivatePhone:${key}`);
+  async function savePersonalInfo() {
+    setPersonalInfoError("");
+    setPersonalInfoSaving(true);
+    const result = await updatePersonalProfile({
+      username: personalInfoForm.name,
+      setPage,
     });
+    setPersonalInfoSaving(false);
 
-    if (nextName) {
-      localStorage.setItem("userName", nextName);
+    if (!result.ok) {
+      setPersonalInfoError(
+        result.code === "PROFILE_NAME_REQUIRED"
+          ? t("personalInformationNameRequired")
+          : t("personalInformationSaveFailed")
+      );
+      return;
     }
 
-    if (nextEmail) {
-      localStorage.setItem("userEmail", nextEmail);
-    }
-
-    if (nextPhone) {
-      localStorage.setItem("meetroHomeownerPrivatePhone", nextPhone);
-      localStorage.setItem("homeownerPrivatePhone", nextPhone);
-      if (nextName) {
-        localStorage.setItem(
-          `meetroHomeownerPrivatePhone:${nextName.trim().toLowerCase()}`,
-          nextPhone
-        );
-      }
-      if (nextEmail) {
-        localStorage.setItem(
-          `meetroHomeownerPrivatePhone:${nextEmail.trim().toLowerCase()}`,
-          nextPhone
-        );
-      }
-      localStorage.setItem("meetroHomeownerPrivatePhoneOwnerName", nextName);
-      localStorage.setItem("meetroHomeownerPrivatePhoneOwnerEmail", nextEmail);
-    } else {
-      localStorage.removeItem("meetroHomeownerPrivatePhone");
-      localStorage.removeItem("homeownerPrivatePhone");
-      if (nextName) {
-        localStorage.removeItem(
-          `meetroHomeownerPrivatePhone:${nextName.trim().toLowerCase()}`
-        );
-      }
-      if (nextEmail) {
-        localStorage.removeItem(
-          `meetroHomeownerPrivatePhone:${nextEmail.trim().toLowerCase()}`
-        );
-      }
-      localStorage.removeItem("meetroHomeownerPrivatePhoneOwnerName");
-      localStorage.removeItem("meetroHomeownerPrivatePhoneOwnerEmail");
-    }
-
-    setUser((currentUser) => ({
-      ...(currentUser || {}),
-      ...(nextName ? { name: nextName } : {}),
-      ...(nextEmail ? { email: nextEmail } : {}),
-      phone: nextPhone,
-    }));
+    setUser(result.user);
+    setPersonalInfoForm({
+      name: result.user.username,
+      email: result.user.email || "",
+    });
     setProfileNotice(t("personalInformationSaved"));
     setPersonalInfoOpen(false);
   }
@@ -521,36 +469,17 @@ function Profile({ setPage, currentPage, embedded = false }) {
             type="email"
             style={personalInfoInput}
             value={personalInfoForm.email}
-            onChange={(event) =>
-              setPersonalInfoForm((current) => ({
-                ...current,
-                email: event.target.value,
-              }))
-            }
+            readOnly
+            aria-readonly="true"
           />
+          <span style={assistantSettingHelp}>{t("personalInformationEmailReadOnly")}</span>
         </label>
 
-        <label style={feedbackLabel}>
-          {t("homeownerMobileNumber")}
-          <input
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            style={personalInfoInput}
-            value={personalInfoForm.phone}
-            onChange={(event) =>
-              setPersonalInfoForm((current) => ({
-                ...current,
-                phone: event.target.value,
-              }))
-            }
-          />
-        </label>
-
-        <p style={privatePhoneHelpText}>
+        <p style={privatePhoneHelpText} role="status">
           <MeetroIcon name="privacy" size={14} decorative />
-          {t("homeownerMobilePrivacyNotice")}
+          {t("personalInformationPhoneUnavailable")}
         </p>
+        {personalInfoError && <p style={profileNoticeText} role="alert">{personalInfoError}</p>}
         <p style={assistantSettingHelp}>{t("personalInformationHelp")}</p>
       </>
     );
@@ -655,7 +584,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const displayName =
     isBusinessMode && businessName
       ? businessName
-      : userName || user?.name || user?.email || userEmail || t("meetroAccount");
+      : user?.username || user?.name || userName || user?.email || userEmail || t("meetroAccount");
 
   const displayEmail = user?.email || userEmail || t("emailNotAvailable");
   const homeownerCity =
@@ -1278,8 +1207,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
                     {t("backToSettings")}
                   </button>
 
-                  <button type="button" style={primaryButton} onClick={savePersonalInfo}>
-                    {t("saveChanges")}
+                  <button type="button" style={primaryButton} onClick={savePersonalInfo} disabled={personalInfoSaving}>
+                    {personalInfoSaving ? t("personalInformationSaving") : t("saveChanges")}
                   </button>
                 </div>
               </div>
@@ -1772,8 +1701,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
                   {t("backToSettings")}
                 </button>
 
-                <button type="button" style={primaryButton} onClick={savePersonalInfo}>
-                  {t("saveChanges")}
+                <button type="button" style={primaryButton} onClick={savePersonalInfo} disabled={personalInfoSaving}>
+                  {personalInfoSaving ? t("personalInformationSaving") : t("saveChanges")}
                 </button>
               </div>
             </div>
