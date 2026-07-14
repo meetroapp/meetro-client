@@ -13,16 +13,10 @@ const positionEditorSource = readFileSync("src/components/HiringPositionEditor.j
 const settingsSource = readFileSync("src/utils/hiringSettings.js", "utf8");
 const cssSource = readFileSync("src/index.css", "utf8");
 
-test("four dead settings actions are replaced by one functional workspace", () => {
-  assert.match(centerSource, /<HiringSettingsWorkspace/);
-  assert.match(centerSource, /setIsHiringSettingsOpen\(true\)/);
-  assert.match(centerSource, /persistHiringSettings/);
-  assert.match(centerSource, /hiringSettingsApplicationRequirements/);
-  assert.match(centerSource, /hiringSettingsNotifications/);
-  assert.match(centerSource, /hiringSettingsBackgroundChecks/);
-  assert.match(centerSource, /hiringSettingsWorkEligibility/);
-  assert.doesNotMatch(centerSource, /Hiring Settings are coming soon/);
-  assert.doesNotMatch(centerSource, /will be configurable in a future hiring release/);
+test("production Hiring Center does not present local settings as business truth", () => {
+  assert.doesNotMatch(centerSource, /<HiringSettingsWorkspace|readHiringSettings|saveHiringSettings/);
+  assert.doesNotMatch(centerSource, /localStorage|sessionStorage/);
+  assert.match(centerSource, /HiringUnavailableState/);
 });
 
 test("Manage Hiring Settings renders safely for missing and malformed settings", async () => {
@@ -62,11 +56,8 @@ test("Manage Hiring Settings renders safely for missing and malformed settings",
   }
 });
 
-test("Hiring Center delegates settings persistence and policy to the central registry", () => {
-  assert.match(centerSource, /readHiringSettings/);
-  assert.match(centerSource, /saveHiringSettings/);
-  assert.match(centerSource, /applyHiringSettingsToPositionDraft/);
-  assert.match(centerSource, /projectSettingsIntoApplicationReview/);
+test("legacy settings registry remains centralized but is disconnected from production Hiring", () => {
+  assert.doesNotMatch(centerSource, /readHiringSettings|saveHiringSettings/);
   assert.doesNotMatch(centerSource, /meetroHiringSettings/);
   assert.match(settingsSource, /const STORE_PREFIX = "meetroHiringSettings"/);
 });
@@ -119,12 +110,12 @@ test("only grounded hiring notification events are configurable", () => {
   }
   assert.doesNotMatch(settingsSource, /"offerAccepted",/);
   assert.doesNotMatch(settingsSource, /"positionClosingSoon",/);
-  assert.match(centerSource, /isHiringNotificationEnabled/);
+  assert.doesNotMatch(centerSource, /isHiringNotificationEnabled|upsertNotification/);
 });
 
 test("position and application projections remain guidance-only", () => {
   assert.match(positionEditorSource, /hiringSettingsPositionDefaultsHelp/);
-  assert.match(centerSource, /hiringSettingsReviewGuidance/);
+  assert.doesNotMatch(centerSource, /hiringSettingsReviewGuidance/);
   assert.match(settingsSource, /historicalApplicationUnaffected: true/);
   assert.match(settingsSource, /automaticDecision: null/);
   assert.doesNotMatch(settingsSource, /autoReject|autoHire|rankApplicant/);

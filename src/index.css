@@ -3067,3 +3067,111 @@ button {
     min-width: 0;
   }
 }
+
+.hiring-truth-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top, 0px) + 50px)
+    max(20px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 104px)
+    max(20px, env(safe-area-inset-left, 0px));
+  overflow-x: hidden;
+  box-sizing: border-box;
+  background: #f8fafc;
+}
+
+.hiring-truth-workspace {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  margin: 24px auto 0;
+}
+
+.hiring-truth-card {
+  width: 100%;
+  min-width: 0;
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid #d9e2d6;
+  border-radius: 18px;
+  background: #fffdf8;
+  box-shadow: 0 14px 34px rgba(31, 77, 52, 0.08);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.hiring-truth-icon {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #edf5eb;
+  color: #1f4d34;
+}
+
+.hiring-truth-card h2 {
+  margin: 16px 0 0;
+  color: #14351f;
+  font-size: clamp(22px, 4vw, 30px);
+  line-height: 1.25;
+}
+
+.hiring-truth-card p {
+  max-width: 600px;
+  margin: 14px auto 0;
+  color: #5f6f62;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.hiring-truth-card button {
+  min-width: min(240px, 100%);
+  min-height: 48px;
+  margin-top: 24px;
+}
+
+.hiring-truth-public-header {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.hiring-truth-public-header button {
+  min-height: 44px;
+  margin-bottom: 18px;
+  border: 0;
+  background: transparent;
+  color: #1f4d34;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hiring-truth-public-header p,
+.hiring-truth-public-header h1,
+.hiring-truth-public-header span {
+  display: block;
+  margin: 0;
+}
+
+.hiring-truth-public-header p {
+  color: #607064;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hiring-truth-public-header h1 {
+  margin-top: 6px;
+  color: #122b1b;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.15;
+}
+
+.hiring-truth-public-header span {
+  margin-top: 10px;
+  color: #607064;
+  line-height: 1.5;
+}

@@ -65,10 +65,10 @@ test("Community Discover uses warm Meetro tokens instead of legacy purple surfac
 test("Community visual adoption preserves progressive discovery destinations", () => {
   assert.match(discoverSource, /useState\("communityHub"\)/);
   assert.match(discoverSource, /communityBusinessPreview\.map\(\(business\) => renderBusinessCard\(business\)\)/);
-  assert.match(discoverSource, /hiringPreviewJobs\.map\(\(job\) => renderHiringPreviewCard\(job\)\)/);
+  assert.match(discoverSource, /t\("hiringOperationsUnavailable", language\)/);
   assert.match(discoverSource, /style=\{communitySpotlightCard\}/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
-  assert.match(discoverSource, /toggleCommunitySectionExpansion\("hiring"\)/);
+  assert.doesNotMatch(discoverSource, /renderHiringPreviewCard/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);

@@ -35,7 +35,6 @@ import {
 } from "../utils/businessProfilePersistence";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import { readBusinessPortfolioStorage } from "../utils/businessPortfolioStorage";
-import { getActiveTeamMemberCount } from "../utils/teamMembers";
 import {
   getMediaDeferredCopy,
   guardFriendsAndFamilyMediaUpload,
@@ -580,13 +579,6 @@ function ContractorProfile({ setPage, currentPage }) {
     translate: (key) => t(key, language),
   });
   const businessVerification = businessIdentity.verification;
-  const internalBusinessId =
-    localStorage.getItem("businessId") ||
-    localStorage.getItem("contractorId") ||
-    profile?.contractor_id ||
-    profile?.businessId ||
-    "local-business";
-  const activeTeamMemberCount = getActiveTeamMemberCount({ businessId: internalBusinessId });
   const businessVerificationLabel = businessVerification.verificationLabel;
   const profileBusinessHours =
     profile?.businessHours || profile?.business_hours || businessHours || "";
@@ -1234,11 +1226,6 @@ function ContractorProfile({ setPage, currentPage }) {
                   icon="verified"
                   label={t("licenseInformation")}
                   value={profileLicenseSummary || t("addLicenseInformation")}
-                />
-                <InfoCard
-                  icon="hiringCenter"
-                  label={t("teamMemberInternalCount")}
-                  value={String(activeTeamMemberCount)}
                 />
               </div>
               <button

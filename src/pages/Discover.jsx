@@ -5,10 +5,6 @@ import MeetroIcon from "../components/MeetroIcon";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
-import { getHiringLocalJobOpenings } from "../utils/hiringCenterRegistry";
-import { saveHiringConversation } from "../utils/hiringConversations";
-import { getLocalizedHiringJobDisplay } from "../utils/hiringDisplayTranslations";
-import { createNotification } from "../utils/meetroNotifications";
 import { isProfessionalSession, professionalRoles } from "../utils/session";
 import {
   getStoredProfessionalMatchProfile,
@@ -59,7 +55,6 @@ function Discover({ setPage, currentPage }) {
   const [expandedCommunitySections, setExpandedCommunitySections] = useState(
     collapsedCommunitySections
   );
-  const [selectedCommunityHiringJob, setSelectedCommunityHiringJob] = useState(null);
 
   const userRole = localStorage.getItem("userRole") || "standard";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -378,34 +373,6 @@ function Discover({ setPage, currentPage }) {
     );
   }
 
-  function jobMatchesSearch(job = {}, query = "") {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return true;
-
-    const jobDisplay = getLocalizedHiringJobDisplay(job, language);
-    const searchableFields = [
-      job.title,
-      jobDisplay.title,
-      job.businessName,
-      job.category,
-      jobDisplay.category,
-      job.description,
-      jobDisplay.description,
-      job.location,
-      job.serviceArea,
-      job.payRange,
-      job.employmentType,
-      job.experienceRequired,
-      job.scheduleAvailability,
-      ...(Array.isArray(job.requirements) ? job.requirements : []),
-      ...(Array.isArray(job.skillsNeeded) ? job.skillsNeeded : []),
-    ];
-
-    return searchableFields.some((field) =>
-      String(field || "").toLowerCase().includes(normalizedQuery)
-    );
-  }
-
   function spotlightMatchesSearch(query = "") {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return true;
@@ -509,7 +476,6 @@ function Discover({ setPage, currentPage }) {
     if (searchTerm) {
       const sectionHasSearchMatch =
         (sectionId === "businesses" && communitySearchBusinesses.length > 0) ||
-        (sectionId === "hiring" && communitySearchHiringJobs.length > 0) ||
         (sectionId === "spotlight" && spotlightMatchesSearch(searchTerm));
 
       if (sectionHasSearchMatch) score -= 12;
@@ -567,7 +533,6 @@ function Discover({ setPage, currentPage }) {
       businessMatchesSearch(business, searchQuery)
   );
   const featuredBusinesses = businesses.filter((business) => !isPausedBusiness(business));
-  const allHiringJobs = getHiringLocalJobOpenings();
   const communitySearchBusinesses = searchQuery.trim()
     ? businesses.filter((business) => businessMatchesSearch(business, searchQuery))
     : featuredBusinesses.length
@@ -581,19 +546,6 @@ function Discover({ setPage, currentPage }) {
     0,
     expandedCommunitySections.professionals
       ? communityBusinessResults.length
-      : COMMUNITY_PREVIEW_LIMIT
-  );
-  const communitySearchHiringJobs = searchQuery.trim()
-    ? allHiringJobs.filter((job) => jobMatchesSearch(job, searchQuery))
-    : allHiringJobs;
-  const communityHiringResults = orderByDiscoveryInterests(
-    communitySearchHiringJobs,
-    jobMatchesSearch
-  );
-  const hiringPreviewJobs = communityHiringResults.slice(
-    0,
-    expandedCommunitySections.hiring
-      ? communityHiringResults.length
       : COMMUNITY_PREVIEW_LIMIT
   );
   const communitySpotlightBusinessResults = communityBusinessResults.filter(
@@ -965,71 +917,6 @@ function Discover({ setPage, currentPage }) {
     setPage("conversationThread");
   }
 
-  function getHiringApplicantIdentity() {
-    const userId =
-      localStorage.getItem("userId") ||
-      localStorage.getItem("userEmail") ||
-      localStorage.getItem("homeownerEmail") ||
-      localStorage.getItem("userName") ||
-      "guest";
-    const participantName =
-      localStorage.getItem("userName") ||
-      localStorage.getItem("homeownerName") ||
-      t("jobsHiringJobSeeker", language);
-
-    return {
-      userId,
-      applicantId: String(userId || "guest"),
-      participantName,
-      applicantName: participantName,
-    };
-  }
-
-  function expressHiringInterest(job) {
-    const jobDisplay = getLocalizedHiringJobDisplay(job, language);
-    const applicant = getHiringApplicantIdentity();
-    const positionTitle = jobDisplay.title || job.title;
-    const interestMessage = t("communityHiringInterestStarted", language)
-      .replace("{applicant}", applicant.participantName)
-      .replace("{title}", positionTitle);
-    const record = saveHiringConversation({
-      type: "hiring",
-      userId: applicant.userId,
-      applicantId: applicant.applicantId,
-      applicantName: applicant.applicantName,
-      participantName: applicant.participantName,
-      participantRole: "applicant",
-      jobId: job.id,
-      positionId: job.sourcePositionId || job.id,
-      positionTitle,
-      businessId: job.businessId || job.businessName,
-      businessName: job.businessName,
-      source: "community_hiring",
-      status: t("jobsHiringNewInquiry", language),
-      location: job.location || job.serviceArea || t("jobsHiringLabel", language),
-      returnPage: "discover",
-      lastMessage: interestMessage,
-    });
-
-    createNotification({
-      type: "hiring_application",
-      role: "professional",
-      title: t("communityHiringNotificationTitle", language),
-      message: interestMessage,
-      conversationId: record.id,
-      dedupeKey: `community_hiring_interest_${record.id}`,
-      metadata: {
-        conversationType: record.conversation_type,
-        positionId: record.positionId,
-        positionTitle: record.positionTitle,
-        applicantId: record.applicantId,
-        businessId: record.businessId,
-      },
-    });
-
-    setPage("conversationThread");
-  }
-
   if (loading) {
     return <LoadingScreen />;
   }
@@ -1147,132 +1034,6 @@ function Discover({ setPage, currentPage }) {
           </div>
         </div>
       </div>
-    );
-  };
-
-  const renderHiringPreviewCard = (job) => {
-    const jobDisplay = getLocalizedHiringJobDisplay(job, language);
-
-    return (
-      <article
-        key={job.id}
-        style={communityHiringCard}
-        role="button"
-        tabIndex={0}
-        aria-label={t("communityHiringOpenOpportunityAria", language).replace(
-          "{title}",
-          jobDisplay.title || job.title
-        )}
-        onClick={() => setSelectedCommunityHiringJob(job)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setSelectedCommunityHiringJob(job);
-          }
-        }}
-      >
-        <div style={communityHiringTop}>
-          <span style={communityHiringIcon}>
-            <MeetroIcon name="jobsHiring" size={20} decorative />
-          </span>
-          <span style={communityHiringBadge}>{job.employmentType}</span>
-        </div>
-        <p style={communityHiringCategory}>{jobDisplay.category || job.category}</p>
-        <h3 style={communityHiringTitle}>{jobDisplay.title || job.title}</h3>
-        <p style={communityHiringBusiness}>{job.businessName}</p>
-        <p style={communityHiringDescription}>{jobDisplay.description || job.description}</p>
-        <div style={communityHiringMeta}>
-          <span>{job.payRange}</span>
-          <span>{job.location}</span>
-        </div>
-        <button
-          type="button"
-          style={communityHiringDetailButton}
-          onClick={(event) => {
-            event.stopPropagation();
-            setSelectedCommunityHiringJob(job);
-          }}
-        >
-          {t("communityHiringViewOpportunity", language)}
-        </button>
-      </article>
-    );
-  };
-
-  const renderCommunityHiringOpportunityDetails = () => {
-    const job = selectedCommunityHiringJob;
-    if (!job) return null;
-
-    const jobDisplay = getLocalizedHiringJobDisplay(job, language);
-    const requirements = Array.isArray(jobDisplay.requirements)
-      ? jobDisplay.requirements
-      : [];
-
-    return (
-      <>
-        <button
-          type="button"
-          style={communityBackButton}
-          onClick={() => setSelectedCommunityHiringJob(null)}
-        >
-          ← {t("communityHiringBackToCommunity", language)}
-        </button>
-
-        <section
-          className="meetro-visual-surface"
-          style={communityHiringDetailPanel}
-          aria-label={t("communityHiringOpportunityDetailsAria", language)}
-        >
-          <div style={communityHiringDetailHeader}>
-            <span style={communityHiringDetailIcon}>
-              <MeetroIcon name="jobsHiring" size={24} decorative />
-            </span>
-            <div>
-              <p style={headerEyebrow}>
-                {t("communityHiringOpportunityEyebrow", language)}
-              </p>
-              <h1 style={compactTitle}>{jobDisplay.title || job.title}</h1>
-              <p style={compactSubtitle}>{job.businessName}</p>
-            </div>
-          </div>
-
-          <p style={communityHiringDetailDescription}>
-            {jobDisplay.description || job.description}
-          </p>
-
-          <dl style={communityHiringDetailGrid}>
-            <Detail label={t("jobsHiringEmploymentType", language)} value={job.employmentType} />
-            <Detail label={t("jobsHiringPayRange", language)} value={job.payRange} />
-            <Detail label={t("jobsHiringLocation", language)} value={job.location} />
-            <Detail
-              label={t("communityHiringCapabilityArea", language)}
-              value={jobDisplay.category || job.category}
-            />
-          </dl>
-
-          {requirements.length > 0 && (
-            <div>
-              <p style={communityHiringRequirementLabel}>
-                {t("jobsHiringRequirements", language)}
-              </p>
-              <ul style={communityHiringRequirementList}>
-                {requirements.map((requirement) => (
-                  <li key={requirement}>{requirement}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="meetro-visual-primary-button"
-            style={communityHiringInterestedButton}
-            onClick={() => expressHiringInterest(job)}
-          >
-            {t("communityHiringInterested", language)}
-          </button>
-        </section>
-      </>
     );
   };
 
@@ -1442,32 +1203,15 @@ function Discover({ setPage, currentPage }) {
           </div>
 
           <div style={communityHiringGrid}>
-            {hiringPreviewJobs.length > 0 ? (
-              hiringPreviewJobs.map((job) => renderHiringPreviewCard(job))
-            ) : (
-              <div className="meetro-visual-empty-state" style={communityHiringEmptyCard}>
-                <h3 style={emptyTitle}>
-                  {t("communityHiringEmptyTitle", language)}
-                </h3>
-                <p style={emptyText}>
-                  {t("communityHiringEmptyText", language)}
-                </p>
-              </div>
-            )}
+            <div className="meetro-visual-empty-state" style={communityHiringEmptyCard}>
+              <h3 style={emptyTitle}>
+                {t("hiringOperationsUnavailable", language)}
+              </h3>
+              <p style={emptyText}>
+                {t("hiringOpportunitiesTruthDescription", language)}
+              </p>
+            </div>
           </div>
-
-          {communityHiringResults.length > COMMUNITY_PREVIEW_LIMIT && (
-            <button
-              type="button"
-              className="meetro-visual-primary-button"
-              style={communitySectionAction}
-              onClick={() => toggleCommunitySectionExpansion("hiring")}
-            >
-              {expandedCommunitySections.hiring
-                ? t("communityShowFewerOpportunities", language)
-                : t("communityExploreMoreOpportunities", language)}
-            </button>
-          )}
         </section>
 
         <section
@@ -1663,23 +1407,9 @@ function Discover({ setPage, currentPage }) {
     <div className="app-page meetro-wide-page meetro-visual-page" style={pageWrapper}>
       {discoverMode === "businessDirectory" && renderBusinessesSection()}
       {discoverMode === "spotlight" && renderSpotlightSection()}
-      {discoverMode === "communityHub" &&
-        (selectedCommunityHiringJob
-          ? renderCommunityHiringOpportunityDetails()
-          : renderCommunityHub())}
+      {discoverMode === "communityHub" && renderCommunityHub()}
 
       <BottomNav setPage={setPage} currentPage="discover" />
-    </div>
-  );
-}
-
-function Detail({ label, value }) {
-  if (!value) return null;
-
-  return (
-    <div style={communityHiringDetailItem}>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
     </div>
   );
 }
@@ -1915,170 +1645,6 @@ const communityHiringGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
   gap: "12px",
-};
-
-const communityHiringCard = {
-  display: "grid",
-  gap: "10px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid var(--meetro-color-line)",
-  background: "var(--meetro-surface-paper)",
-  boxShadow: "var(--meetro-shadow-soft)",
-  cursor: "pointer",
-};
-
-const communityHiringTop = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "10px",
-};
-
-const communityHiringIcon = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "14px",
-  display: "grid",
-  placeItems: "center",
-  background: "var(--meetro-surface-sage)",
-  color: "var(--meetro-color-forest)",
-};
-
-const communityHiringBadge = {
-  padding: "5px 8px",
-  borderRadius: "999px",
-  background: "#ecfdf5",
-  color: "#047857",
-  fontSize: "11px",
-  fontWeight: "900",
-};
-
-const communityHiringCategory = {
-  margin: 0,
-  color: "var(--meetro-color-wood)",
-  fontSize: "12px",
-  fontWeight: "950",
-  textTransform: "uppercase",
-  letterSpacing: 0,
-};
-
-const communityHiringTitle = {
-  margin: 0,
-  color: "var(--meetro-color-ink)",
-  fontSize: "18px",
-  lineHeight: 1.12,
-  fontWeight: "950",
-  letterSpacing: 0,
-};
-
-const communityHiringBusiness = {
-  margin: 0,
-  color: "var(--meetro-color-coffee)",
-  fontSize: "13px",
-  fontWeight: "850",
-};
-
-const communityHiringDescription = {
-  margin: 0,
-  color: "var(--meetro-color-muted)",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  fontWeight: "650",
-};
-
-const communityHiringMeta = {
-  display: "grid",
-  gap: "6px",
-  color: "var(--meetro-color-coffee)",
-  fontSize: "12px",
-  fontWeight: "800",
-};
-
-const communityHiringDetailButton = {
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "999px",
-  background: "var(--meetro-surface-sage)",
-  color: "var(--meetro-color-forest)",
-  minHeight: "38px",
-  padding: "0 12px",
-  fontSize: "13px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const communityHiringDetailPanel = {
-  display: "grid",
-  gap: "16px",
-  padding: "20px",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "26px",
-  background: "var(--meetro-surface-paper)",
-  boxShadow: "var(--meetro-shadow-soft)",
-};
-
-const communityHiringDetailHeader = {
-  display: "grid",
-  gridTemplateColumns: "52px 1fr",
-  gap: "12px",
-  alignItems: "start",
-};
-
-const communityHiringDetailIcon = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "18px",
-  display: "grid",
-  placeItems: "center",
-  background: "var(--meetro-surface-sage)",
-  color: "var(--meetro-color-forest)",
-};
-
-const communityHiringDetailDescription = {
-  margin: 0,
-  color: "var(--meetro-color-muted)",
-  fontSize: "15px",
-  lineHeight: 1.5,
-  fontWeight: "700",
-};
-
-const communityHiringDetailGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-  gap: "10px",
-  margin: 0,
-};
-
-const communityHiringDetailItem = {
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "16px",
-  background: "var(--meetro-surface-warm)",
-  padding: "12px",
-  display: "grid",
-  gap: "5px",
-};
-
-const communityHiringRequirementLabel = {
-  margin: "0 0 8px",
-  color: "var(--meetro-color-coffee)",
-  fontSize: "13px",
-  fontWeight: "950",
-};
-
-const communityHiringRequirementList = {
-  margin: 0,
-  paddingLeft: "18px",
-  color: "var(--meetro-color-muted)",
-  fontSize: "14px",
-  lineHeight: 1.5,
-  fontWeight: "700",
-};
-
-const communityHiringInterestedButton = {
-  minHeight: "48px",
-  borderRadius: "999px",
-  fontSize: "14px",
-  fontWeight: "950",
 };
 
 const communityHiringEmptyCard = {

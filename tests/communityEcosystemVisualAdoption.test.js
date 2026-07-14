@@ -18,6 +18,10 @@ const jobsHiringSource = readFileSync(
   new URL("../src/pages/JobsHiring.jsx", import.meta.url),
   "utf8"
 );
+const hiringUnavailableSource = readFileSync(
+  new URL("../src/components/HiringUnavailableState.jsx", import.meta.url),
+  "utf8"
+);
 const contractorDetailsSource = readFileSync(
   new URL("../src/pages/ContractorDetails.jsx", import.meta.url),
   "utf8"
@@ -70,7 +74,7 @@ test("Community ecosystem pages use shared visual classes and tokens", () => {
   assert.match(contractorDetailsSource, /meetro-readable-page meetro-visual-page/);
   assert.match(uploadSource, /meetro-form-page meetro-visual-page/);
 
-  for (const source of [discoverSource, jobsHiringSource, contractorDetailsSource, uploadSource]) {
+  for (const source of [discoverSource, contractorDetailsSource, uploadSource]) {
     assertIncludesTokens(source, [
       "var(--meetro-gradient-community-page)",
       "var(--meetro-surface-paper)",
@@ -85,8 +89,8 @@ test("Community ecosystem pages use shared visual classes and tokens", () => {
 
   assert.match(discoverSource, /meetro-visual-hero/);
   assert.match(discoverSource, /meetro-visual-primary-button/);
-  assert.match(jobsHiringSource, /meetro-visual-surface/);
-  assert.match(jobsHiringSource, /meetro-visual-empty-state/);
+  assert.match(jobsHiringSource, /HiringUnavailableState/);
+  assert.match(hiringUnavailableSource, /hiring-truth-card/);
   assert.match(contractorDetailsSource, /meetro-visual-surface/);
   assert.match(contractorDetailsSource, /meetro-visual-empty-state/);
   assert.match(uploadSource, /meetro-visual-surface/);
@@ -106,14 +110,14 @@ test("Community connected routes and handoffs remain preserved", () => {
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
-  assert.match(discoverSource, /toggleCommunitySectionExpansion\("hiring"\)/);
+  assert.doesNotMatch(discoverSource, /renderHiringPreviewCard/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.match(discoverSource, /setPage\("contractorDetails"\)/);
   assert.match(discoverSource, /setPage\("upload"\)/);
   assert.match(contractorDetailsSource, /setPage\("discover"\)/);
   assert.match(contractorDetailsSource, /setPage\("conversationThread"\)/);
   assert.match(jobsHiringSource, /setPage\("discover"\)/);
-  assert.match(jobsHiringSource, /setPage\("conversationThread"\)/);
+  assert.doesNotMatch(jobsHiringSource, /setPage\("conversationThread"\)/);
 });
 
 test("Community remains desktop/sidebar only and is not added to mobile bottom nav", () => {

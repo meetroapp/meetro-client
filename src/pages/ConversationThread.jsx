@@ -10,6 +10,7 @@ import { authFetch } from "../utils/authFetch";
 import { isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
+import HiringUnavailableState from "../components/HiringUnavailableState";
 import CompletionWorkflowPresentation from "../components/workflows/presentations/CompletionWorkflowPresentation";
 import InvoiceWorkflowPresentation from "../components/workflows/presentations/InvoiceWorkflowPresentation";
 import MaterialsWorkflowPresentation from "../components/workflows/presentations/MaterialsWorkflowPresentation";
@@ -4480,6 +4481,17 @@ const handleImageUpload = (event) => {
 
     setTimeout(() => setSaveNotice(""), 1800);
   };
+
+  if (isHiringThread) {
+    return (
+      <div className="app-page meetro-responsive-page meetro-visual-page hiring-truth-page">
+        <HiringUnavailableState
+          language={language}
+          onBack={() => setPage("messagesInbox")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

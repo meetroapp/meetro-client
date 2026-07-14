@@ -12030,7 +12030,58 @@ const professionalLeadTruthLanguage = {
   },
 };
 
+const hiringTruthLanguage = {
+  en: {
+    hiringOperationsDescription: "A business workspace for verified positions, applicants, and interviews.",
+    hiringOperationsUnavailable: "Hiring operations are not available yet.",
+    hiringOperationsUnavailableText:
+      "Positions, applicants, interviews, and hiring decisions will appear here after they are connected to secure business-owned records. Device-local hiring records are not shown.",
+    teamMembersTruthDescription: "An internal workspace for verified business personnel records.",
+    teamMembersUnavailable: "Team member records are not available yet.",
+    teamMembersUnavailableText:
+      "Verified team members will appear here after this workspace is connected to secure business-owned records. Device-local personnel records are not shown.",
+    hiringOpportunitiesTruthDescription: "Verified community opportunities will appear here when available.",
+  },
+  es: {
+    hiringOperationsDescription: "Un espacio empresarial para puestos, candidatos y entrevistas verificados.",
+    hiringOperationsUnavailable: "Las operaciones de contratación aún no están disponibles.",
+    hiringOperationsUnavailableText:
+      "Los puestos, candidatos, entrevistas y decisiones de contratación aparecerán aquí cuando estén conectados a registros empresariales seguros. No se muestran registros guardados en el dispositivo.",
+    teamMembersTruthDescription: "Un espacio interno para registros verificados del personal del negocio.",
+    teamMembersUnavailable: "Los registros de miembros del equipo aún no están disponibles.",
+    teamMembersUnavailableText:
+      "Los miembros verificados aparecerán aquí cuando este espacio esté conectado a registros empresariales seguros. No se muestran registros de personal guardados en el dispositivo.",
+    hiringOpportunitiesTruthDescription: "Las oportunidades verificadas de la comunidad aparecerán aquí cuando estén disponibles.",
+  },
+  fr: {
+    hiringOperationsDescription: "Un espace professionnel pour les postes, candidats et entretiens vérifiés.",
+    hiringOperationsUnavailable: "Les opérations de recrutement ne sont pas encore disponibles.",
+    hiringOperationsUnavailableText:
+      "Les postes, candidats, entretiens et décisions de recrutement apparaîtront ici lorsqu’ils seront reliés à des dossiers professionnels sécurisés. Aucun dossier local à l’appareil n’est affiché.",
+    teamMembersTruthDescription: "Un espace interne pour les dossiers vérifiés du personnel de l’entreprise.",
+    teamMembersUnavailable: "Les dossiers des membres de l’équipe ne sont pas encore disponibles.",
+    teamMembersUnavailableText:
+      "Les membres vérifiés apparaîtront ici lorsque cet espace sera relié à des dossiers professionnels sécurisés. Aucun dossier local à l’appareil n’est affiché.",
+    hiringOpportunitiesTruthDescription: "Les opportunités communautaires vérifiées apparaîtront ici lorsqu’elles seront disponibles.",
+  },
+  "pt-BR": {
+    hiringOperationsDescription: "Um espaço empresarial para vagas, candidatos e entrevistas verificados.",
+    hiringOperationsUnavailable: "As operações de contratação ainda não estão disponíveis.",
+    hiringOperationsUnavailableText:
+      "Vagas, candidatos, entrevistas e decisões de contratação aparecerão aqui quando estiverem conectados a registros empresariais seguros. Registros locais do dispositivo não são exibidos.",
+    teamMembersTruthDescription: "Um espaço interno para registros verificados da equipe da empresa.",
+    teamMembersUnavailable: "Os registros de membros da equipe ainda não estão disponíveis.",
+    teamMembersUnavailableText:
+      "Membros verificados aparecerão aqui quando este espaço estiver conectado a registros empresariais seguros. Registros locais de pessoal não são exibidos.",
+    hiringOpportunitiesTruthDescription: "Oportunidades verificadas da comunidade aparecerão aqui quando estiverem disponíveis.",
+  },
+};
+
 Object.entries(professionalLeadTruthLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(hiringTruthLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 

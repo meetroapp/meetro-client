@@ -145,6 +145,8 @@ function filterDeletedConversations(list) {
   const deletedIds = getDeletedConversationIds();
 
   return list.filter((item) => {
+    if (isHiringConversationType(item)) return false;
+
     if (item.conversation_type === "emergency" && !item.saved_to_history) {
       return true;
     }

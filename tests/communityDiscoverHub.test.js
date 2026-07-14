@@ -140,7 +140,6 @@ test("Community preview actions expand progressively without route changes", () 
   assert.match(discoverSource, /toggleCommunitySectionExpansion/);
   assert.match(discoverSource, /setExpandedCommunitySections\(collapsedCommunitySections\)/);
   assert.match(hubBlock, /toggleCommunitySectionExpansion\("professionals"\)/);
-  assert.match(hubBlock, /toggleCommunitySectionExpansion\("hiring"\)/);
   assert.match(hubBlock, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.doesNotMatch(hubBlock, /openCommunitySection\("businessDirectory"\)/);
   assert.doesNotMatch(hubBlock, /setPage\("jobsHiring"\)/);
@@ -210,7 +209,7 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
   assert.equal(t("communityInterestSkip", "en"), "Skip for now");
 });
 
-test("Community discovery search filters businesses, specialties, and hiring without removing sections", () => {
+test("Community discovery search filters verified business data without reviving local hiring records", () => {
   assert.match(discoverSource, /function businessMatchesSearch\(business = \{\}, query = ""\)/);
   assert.match(discoverSource, /services\.shortSummary/);
   assert.match(discoverSource, /services\.publicSummary/);
@@ -233,15 +232,9 @@ test("Community discovery search filters businesses, specialties, and hiring wit
   assert.equal(resolveCommunityDiscoveryInterestForSearch("kitchen remodel")?.ecosystemId, "home_services");
   assert.equal(resolveCommunityDiscoveryInterestForSearch("cabinets")?.ecosystemId, "home_services");
   assert.equal(resolveCommunityDiscoveryInterestForSearch("unknown community phrase"), null);
-  assert.match(discoverSource, /function jobMatchesSearch\(job = \{\}, query = ""\)/);
-  assert.match(discoverSource, /jobDisplay\.title/);
-  assert.match(discoverSource, /jobDisplay\.category/);
-  assert.match(discoverSource, /jobDisplay\.description/);
-  assert.match(discoverSource, /\.\.\.\(Array\.isArray\(job\.skillsNeeded\)/);
   assert.match(discoverSource, /communitySearchBusinesses = searchQuery\.trim\(\)/);
   assert.match(discoverSource, /businesses\.filter\(\(business\) => businessMatchesSearch\(business, searchQuery\)\)/);
-  assert.match(discoverSource, /communitySearchHiringJobs = searchQuery\.trim\(\)/);
-  assert.match(discoverSource, /allHiringJobs\.filter\(\(job\) => jobMatchesSearch\(job, searchQuery\)\)/);
+  assert.doesNotMatch(discoverSource, /getHiringLocalJobOpenings|communitySearchHiringJobs|jobMatchesSearch/);
   assert.match(discoverSource, /spotlightMatchesSearch\(searchTerm\)/);
   assert.match(discoverSource, /getCommunitySectionOrder\("businesses"\)/);
   assert.match(discoverSource, /getCommunitySectionOrder\("hiring"\)/);
@@ -260,8 +253,6 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
   assert.match(discoverSource, /discoverMode === "communityHub"/);
-  assert.match(discoverSource, /selectedCommunityHiringJob/);
-  assert.match(discoverSource, /renderCommunityHiringOpportunityDetails\(\)/);
   assert.match(discoverSource, /renderCommunityHub\(\)/);
   assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
 });
@@ -285,68 +276,27 @@ test("Businesses preview reuses existing business cards and full Businesses page
     discoverSource,
     /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/
   );
-  assert.match(discoverSource, /selectedCommunityHiringJob/);
-  assert.match(discoverSource, /renderCommunityHiringOpportunityDetails\(\)/);
   assert.match(discoverSource, /renderCommunityHub\(\)/);
 });
 
-test("Hiring cards are actionable and open Community opportunity details", () => {
-  assert.match(discoverSource, /const allHiringJobs = getHiringLocalJobOpenings\(\)/);
-  assert.match(discoverSource, /communityHiringResults = orderByDiscoveryInterests/);
-  assert.match(discoverSource, /hiringPreviewJobs = communityHiringResults\.slice/);
-  assert.match(discoverSource, /COMMUNITY_PREVIEW_LIMIT/);
-  assert.match(discoverSource, /const renderHiringPreviewCard = \(job\) =>/);
-  assert.match(discoverSource, /getLocalizedHiringJobDisplay\(job, language\)/);
-  assert.match(discoverSource, /role="button"/);
-  assert.match(discoverSource, /tabIndex=\{0\}/);
-  assert.match(discoverSource, /setSelectedCommunityHiringJob\(job\)/);
-  assert.match(discoverSource, /t\("communityHiringOpenOpportunityAria", language\)/);
-  assert.match(discoverSource, /t\("communityHiringViewOpportunity", language\)/);
-  assert.match(discoverSource, /const renderCommunityHiringOpportunityDetails = \(\) =>/);
-  assert.match(discoverSource, /t\("communityHiringOpportunityEyebrow", language\)/);
-  assert.match(discoverSource, /t\("jobsHiringEmploymentType", language\)/);
-  assert.match(discoverSource, /t\("jobsHiringPayRange", language\)/);
-  assert.match(discoverSource, /t\("jobsHiringLocation", language\)/);
-  assert.match(discoverSource, /t\("jobsHiringRequirements", language\)/);
-  assert.match(discoverSource, /t\("communityHiringInterested", language\)/);
-  assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
-  assert.equal(t("communityHiringViewOpportunity", "en"), "View Opportunity");
-  assert.equal(t("communityHiringInterested", "en"), "I'm Interested");
-  assert.equal(t("communityHiringOpportunityEyebrow", "en"), "Hiring Opportunity");
+test("Community Hiring remains visible but does not render local opportunities as shared truth", () => {
+  assert.match(discoverSource, /t\("communityHiringTitle", language\)/);
+  assert.match(discoverSource, /t\("hiringOperationsUnavailable", language\)/);
+  assert.match(discoverSource, /t\("hiringOpportunitiesTruthDescription", language\)/);
+  assert.doesNotMatch(discoverSource, /getHiringLocalJobOpenings|getLocalizedHiringJobDisplay/);
+  assert.doesNotMatch(discoverSource, /renderHiringPreviewCard|renderCommunityHiringOpportunityDetails/);
 });
 
-test("Community hiring interest creates a Hiring conversation and notification", () => {
-  assert.match(discoverSource, /import \{ saveHiringConversation \} from "\.\.\/utils\/hiringConversations"/);
-  assert.match(discoverSource, /import \{ createNotification \} from "\.\.\/utils\/meetroNotifications"/);
-  assert.match(discoverSource, /function expressHiringInterest\(job\)/);
-  assert.match(discoverSource, /type: "hiring"/);
-  assert.match(discoverSource, /source: "community_hiring"/);
-  assert.match(discoverSource, /userId: applicant\.userId/);
-  assert.match(discoverSource, /applicantId: applicant\.applicantId/);
-  assert.match(discoverSource, /positionId: job\.sourcePositionId \|\| job\.id/);
-  assert.match(discoverSource, /lastMessage: interestMessage/);
-  assert.match(discoverSource, /type: "hiring_application"/);
-  assert.match(discoverSource, /role: "professional"/);
-  assert.match(discoverSource, /conversationId: record\.id/);
-  assert.match(discoverSource, /dedupeKey: `community_hiring_interest_\$\{record\.id\}`/);
-  assert.match(discoverSource, /setPage\("conversationThread"\)/);
-  assert.equal(
-    t("communityHiringInterestStarted", "en"),
-    "{applicant} is interested in {title}."
-  );
-  assert.equal(t("communityHiringNotificationTitle", "en"), "New hiring interest");
+test("Community cannot create local hiring conversations or notifications", () => {
+  assert.doesNotMatch(discoverSource, /saveHiringConversation|expressHiringInterest/);
+  assert.doesNotMatch(discoverSource, /createNotification|community_hiring_interest/);
 });
 
 test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
   assert.match(discoverSource, /COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT/);
   assert.match(discoverSource, /communitySpotlightStories\.map/);
-  assert.match(discoverSource, /t\("communityHiringEmptyTitle", language\)/);
-  assert.match(discoverSource, /t\("communityHiringEmptyText", language\)/);
-  assert.equal(t("communityHiringEmptyTitle", "en"), "Hiring opportunities will appear here.");
-  assert.equal(
-    t("communityHiringEmptyText", "en"),
-    "As local teams grow, Meetro will show opportunities to work, collaborate, and build together."
-  );
+  assert.match(discoverSource, /t\("hiringOperationsUnavailable", language\)/);
+  assert.match(discoverSource, /t\("hiringOpportunitiesTruthDescription", language\)/);
   assert.match(discoverSource, /t\("communitySpotlightEyebrow", language\)/);
   assert.match(discoverSource, /t\("communitySpotlightStoryTitle", language\)/);
   assert.match(discoverSource, /t\("communitySpotlightCue", language\)/);
