@@ -65,10 +65,6 @@ import {
   getTimelineReconciliationReport,
 } from "../utils/workCenterSelectors";
 import {
-  fetchQaWorkflowRecords,
-  hydrateQaWorkflowRecords,
-} from "../utils/qaWorkflowHydration";
-import {
   getContexts,
   getServiceTypes,
   resolveEvaluationTemplate,
@@ -5142,34 +5138,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const [quoteHistoryVersion, setQuoteHistoryVersion] = useState(0);
   quoteHistoryVersion;
-
-  const qaWorkflowHydrationAttempted = useRef(false);
-
-  useEffect(() => {
-    if (qaWorkflowHydrationAttempted.current) return undefined;
-    qaWorkflowHydrationAttempted.current = true;
-
-    let cancelled = false;
-
-    async function hydrateStagingQaWorkflows() {
-      const qaWorkflowRecords = await fetchQaWorkflowRecords();
-      if (cancelled || !qaWorkflowRecords) return;
-
-      const result = hydrateQaWorkflowRecords(qaWorkflowRecords);
-      if (!result.hydrated) return;
-
-      window.dispatchEvent(new Event("storage"));
-      window.dispatchEvent(new Event("meetroJobRecordUpdated"));
-      setRefreshKey((key) => key + 1);
-      setQuoteHistoryVersion((version) => version + 1);
-    }
-
-    hydrateStagingQaWorkflows();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const [quoteStatusFilter, setQuoteStatusFilter] = useState("pending");
 

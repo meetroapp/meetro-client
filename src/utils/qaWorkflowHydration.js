@@ -4,6 +4,10 @@ import { normalizeEvaluationFindingsPayload } from "./findingsEngineRegistry.js"
 
 const QA_WORKFLOW_SOURCE = "qa_backend_workflow";
 
+export function isQaWorkflowHydrationEnabled(env = import.meta.env) {
+  return env?.DEV === true;
+}
+
 function parseJson(value, fallback) {
   try {
     const parsed = JSON.parse(value || "null");
@@ -53,7 +57,8 @@ function normalizeResponse(data) {
   return customers.length > 0 ? { ...data, customers } : null;
 }
 
-export async function fetchQaWorkflowRecords() {
+export async function fetchQaWorkflowRecords({ env = import.meta.env } = {}) {
+  if (!isQaWorkflowHydrationEnabled(env)) return null;
   if (!hasProfessionalSession()) return null;
 
   const token = localStorage.getItem("token");
@@ -535,7 +540,10 @@ function mapQaWorkflows(data) {
   return { schedules, quotes, histories, registry, conversations, jobRecords };
 }
 
-export function hydrateQaWorkflowRecords(data) {
+export function hydrateQaWorkflowRecords(data, { env = import.meta.env } = {}) {
+  if (!isQaWorkflowHydrationEnabled(env)) {
+    return { hydrated: false, customers: [] };
+  }
   if (typeof localStorage === "undefined") return { hydrated: false, customers: [] };
 
   const normalized = normalizeResponse(data);

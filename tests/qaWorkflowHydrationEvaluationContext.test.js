@@ -82,7 +82,7 @@ test("hydrates Sarah and William evaluation service/context without cross-custom
         },
       },
     ],
-  });
+  }, { env: { DEV: true } });
 
   assert.equal(result.hydrated, true);
 
@@ -205,7 +205,7 @@ test("hydrates kitchen remodel Findings into deduped service recommendations", (
         },
       },
     ],
-  });
+  }, { env: { DEV: true } });
 
   assert.equal(result.hydrated, true);
 
@@ -339,7 +339,7 @@ test("hydrates closed kitchen remodel history with visible Findings and recommen
         },
       },
     ],
-  });
+  }, { env: { DEV: true } });
 
   assert.equal(result.hydrated, true);
 
@@ -479,7 +479,7 @@ test("hydrates closed Sarah and William history as scoped read-only records", ()
         },
       },
     ],
-  });
+  }, { env: { DEV: true } });
 
   assert.equal(result.hydrated, true);
 
