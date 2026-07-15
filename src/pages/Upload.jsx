@@ -24,6 +24,7 @@ import {
   guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { resolveWorkflowAddress } from "../utils/personalAddresses";
 
 function readStoredRecord(key) {
@@ -414,9 +415,9 @@ function Upload({ setPage, currentPage }) {
       const data = result.data || {};
 
       if (data.post) {
-        const existingRequests = JSON.parse(
-          localStorage.getItem("homeownerRequests") || "[]"
-        );
+        const existingRequests = canReadLegacyWorkflowStorage()
+          ? JSON.parse(localStorage.getItem("homeownerRequests") || "[]")
+          : [];
 
         const requestId = String(data.post.id || Date.now());
 
@@ -491,7 +492,10 @@ function Upload({ setPage, currentPage }) {
 
         const updatedHomeownerRequests = [requestRecord, ...existingRequests];
 
-        if (!saveHomeownerRequestList(updatedHomeownerRequests)) {
+        if (
+          canReadLegacyWorkflowStorage() &&
+          !saveHomeownerRequestList(updatedHomeownerRequests)
+        ) {
           return;
         }
 

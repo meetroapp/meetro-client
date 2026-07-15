@@ -692,7 +692,11 @@ test("ConversationThread keeps local messages visible without claiming failed de
   assert.match(conversationThreadSource, /const sendMessage = \(textOverride = null\) =>/);
   assert.match(conversationThreadSource, /const text = textOverride \|\| messageText\.trim\(\)/);
   assert.match(conversationThreadSource, /setMessages\(\(prev\) => \{/);
-  assert.match(conversationThreadSource, /localStorage\.setItem\(storageKey, JSON\.stringify\(nextMessages\)\)/);
+  assert.match(conversationThreadSource, /writeLocalConversationValue\(JSON\.stringify\(nextMessages\)\)/);
+  assert.match(
+    conversationThreadSource,
+    /if \(canReadLegacyWorkflowStorage\(\)\) \{\s*localStorage\.setItem\(storageKey, value\);/
+  );
   assert.match(conversationThreadSource, /Conversation local save failed; message remains visible/);
   assert.match(conversationThreadSource, /Conversation registry update failed; message remains visible/);
   assert.match(conversationThreadSource, /onKeyDown=\{\(e\) => \{[\s\S]*sendMessage\(\);/);

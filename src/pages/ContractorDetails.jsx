@@ -18,6 +18,7 @@ import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
 import { getBusinessVerificationProjection } from "../utils/businessVerification";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 function ContractorDetails({ setPage, currentPage }) {
   const [profile, setProfile] = useState(null);
@@ -1093,6 +1094,7 @@ function isProfileAllowedForHomeownerContext(profile = {}) {
 }
 
 function getHomeownerRequestContexts() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   let requests = [];
 
   try {

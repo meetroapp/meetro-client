@@ -13,11 +13,13 @@ import {
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
 import { glassActionMenu } from "../styles/liquidGlass";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import MeetroIcon from "./MeetroIcon";
 
 const EmbeddedProfile = lazy(() => import("../pages/Profile"));
 
 function getUnreadMessageCount() {
+  if (!canReadLegacyWorkflowStorage()) return 0;
   try {
     const registry = JSON.parse(
       localStorage.getItem("meetro_conversation_registry") || "[]"
@@ -34,6 +36,7 @@ function getUnreadMessageCount() {
 }
 
 function hasUnreadEmergencyConversation() {
+  if (!canReadLegacyWorkflowStorage()) return false;
   try {
     const registry = JSON.parse(
       localStorage.getItem("meetro_conversation_registry") || "[]"
@@ -55,6 +58,7 @@ function getWorkCenterAlertDestination() {
   );
 
   let quoteHistory = [];
+  if (!canReadLegacyWorkflowStorage()) return { tab: "pending" };
   try {
     quoteHistory = JSON.parse(localStorage.getItem("workCenterQuoteHistory") || "[]");
   } catch {
@@ -125,6 +129,7 @@ function getAcceptedQuoteReadyCount() {
 }
 
 function getActiveEmergencyAlertCount() {
+  if (!canReadLegacyWorkflowStorage()) return 0;
   try {
     const activeRecord = JSON.parse(
       localStorage.getItem("activeEmergencyRecord") || "{}"

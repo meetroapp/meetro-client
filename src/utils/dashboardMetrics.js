@@ -20,6 +20,7 @@ import {
 import {
   isRequestActiveForHomeowner,
 } from "./homeownerLifecycle.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 function safeStorage() {
   try {
@@ -30,6 +31,7 @@ function safeStorage() {
 }
 
 function readValue(key, fallback = "") {
+  if (!canReadLegacyWorkflowStorage()) return fallback;
   try {
     return safeStorage()?.getItem(key) ?? fallback;
   } catch {

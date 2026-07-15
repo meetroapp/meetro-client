@@ -23,6 +23,7 @@ import {
   clearRequestCompanionContext,
   writeRequestCompanionContext,
 } from "../utils/requestCompanionContext";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 const UNSUPPORTED_COMPLETION_CLOSURE_STATUSES = new Set([
   "completed",
@@ -1015,6 +1016,7 @@ if (data.post) {
                   <button
                     style={startProjectButton}
                     onClick={() => {
+                      if (!canReadLegacyWorkflowStorage()) return;
                       const requestId = post.requestId || post.id;
 
                       const homeownerRequests = JSON.parse(

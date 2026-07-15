@@ -10,6 +10,7 @@ import {
   isVerifiedTimelineMoment,
   readTimelineMoments,
 } from "../utils/meetroTimeline";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 const STAGED_MOMENT_INSPIRATION = [
   {
@@ -141,6 +142,7 @@ function getActiveAccountContext() {
 }
 
 function getVisibleMoments(account) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const moments = readTimelineMoments(localStorage);
   return getTimelineMomentsForViewer(moments, account);
 }

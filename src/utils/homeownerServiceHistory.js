@@ -1,3 +1,5 @@
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
+
 function safeReadArray(storage, key) {
   try {
     const parsed = JSON.parse(storage.getItem(key) || "[]");
@@ -242,6 +244,7 @@ export function normalizeHomeownerServiceHistoryRecord(
 }
 
 export function getHomeownerServiceHistory(storage = globalThis.localStorage) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   if (!storage) return [];
 
   const homeownerIdentity = getCurrentHomeownerIdentity(storage);

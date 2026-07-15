@@ -42,8 +42,10 @@ function installBrowserMocks(seed = {}) {
   return storage;
 }
 
-test("account workflow cleanup preserves durable workflow records", () => {
+test("account workflow cleanup removes durable workflow records and preserves preferences", () => {
   installBrowserMocks({
+    language: "fr",
+    meetroLanguage: "fr",
     homeownerRequests: "[{\"id\":\"request-1\"}]",
     meetro_business_schedule:
       "[{\"id\":\"visit-1\",\"evaluation\":{\"notes\":\"checked site\"},\"workItems\":[{\"title\":\"Door\"}]}]",
@@ -70,26 +72,20 @@ test("account workflow cleanup preserves durable workflow records", () => {
 
   clearAccountWorkflowData();
 
-  assert.equal(localStorage.getItem("homeownerRequests"), "[{\"id\":\"request-1\"}]");
-  assert.equal(
-    localStorage.getItem("meetro_business_schedule"),
-    "[{\"id\":\"visit-1\",\"evaluation\":{\"notes\":\"checked site\"},\"workItems\":[{\"title\":\"Door\"}]}]"
-  );
-  assert.equal(
-    localStorage.getItem("workCenterQuoteHistory"),
-    "[{\"quoteId\":\"quote-1\",\"scheduleId\":\"visit-1\"}]"
-  );
-  assert.equal(localStorage.getItem("meetroQuoteHistory"), "[{\"quoteId\":\"quote-1\"}]");
-  assert.equal(localStorage.getItem("quoteHistory"), "[{\"quoteId\":\"quote-1\"}]");
-  assert.equal(localStorage.getItem("meetro_conversation_visit-1"), "[{\"text\":\"hello\"}]");
-  assert.equal(localStorage.getItem("meetro_job_record_visit-1"), "[{\"type\":\"completion\"}]");
-  assert.equal(localStorage.getItem("activeWorkRequestId"), "request-1");
-  assert.equal(localStorage.getItem("activeWorkQuoteId"), "quote-1");
-  assert.equal(localStorage.getItem("activeWorkScheduleId"), "visit-1");
-  assert.equal(localStorage.getItem("activeWorkStatus"), "working");
-  assert.equal(localStorage.getItem("activeJobStatus"), "arrived");
-  assert.equal(localStorage.getItem("completedProjects"), "[{\"id\":\"completed-1\"}]");
-  assert.equal(localStorage.getItem("lastCompletedProject"), "{\"id\":\"completed-1\"}");
+  assert.equal(localStorage.getItem("homeownerRequests"), null);
+  assert.equal(localStorage.getItem("meetro_business_schedule"), null);
+  assert.equal(localStorage.getItem("workCenterQuoteHistory"), null);
+  assert.equal(localStorage.getItem("meetroQuoteHistory"), null);
+  assert.equal(localStorage.getItem("quoteHistory"), null);
+  assert.equal(localStorage.getItem("meetro_conversation_visit-1"), null);
+  assert.equal(localStorage.getItem("meetro_job_record_visit-1"), null);
+  assert.equal(localStorage.getItem("activeWorkRequestId"), null);
+  assert.equal(localStorage.getItem("activeWorkQuoteId"), null);
+  assert.equal(localStorage.getItem("activeWorkScheduleId"), null);
+  assert.equal(localStorage.getItem("activeWorkStatus"), null);
+  assert.equal(localStorage.getItem("activeJobStatus"), null);
+  assert.equal(localStorage.getItem("completedProjects"), null);
+  assert.equal(localStorage.getItem("lastCompletedProject"), null);
 
   assert.equal(localStorage.getItem("selectedQuoteRequest"), null);
   assert.equal(localStorage.getItem("activeConversationId"), null);
@@ -98,4 +94,6 @@ test("account workflow cleanup preserves durable workflow records", () => {
   assert.equal(localStorage.getItem("activeEmergencyRequestId"), null);
   assert.equal(localStorage.getItem("emergencyDispatchStatus"), null);
   assert.equal(localStorage.getItem("selectedEmergencyService_plumbing"), null);
+  assert.equal(localStorage.getItem("language"), "fr");
+  assert.equal(localStorage.getItem("meetroLanguage"), "fr");
 });

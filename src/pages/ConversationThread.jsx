@@ -7,6 +7,7 @@ import {
   formatScheduleTime,
 } from "../utils/displayTime";
 import { authFetch } from "../utils/authFetch";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
@@ -734,9 +735,17 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   }
 
   const conversationId =
-    localStorage.getItem("activeConversationId") || "demo-homeowner-1";
+    localStorage.getItem("activeConversationId") ||
+    (canReadLegacyWorkflowStorage() ? "demo-homeowner-1" : "");
 
   const storageKey = `meetro_conversation_${conversationId}`;
+  const readLocalConversationValue = () =>
+    canReadLegacyWorkflowStorage() ? localStorage.getItem(storageKey) : null;
+  const writeLocalConversationValue = (value) => {
+    if (canReadLegacyWorkflowStorage()) {
+      localStorage.setItem(storageKey, value);
+    }
+  };
 
   const selectedBusiness = (() => {
     try {
@@ -2492,7 +2501,12 @@ useEffect(() => {
     };
 
     const loadLocalMessages = () => {
-      const saved = localStorage.getItem(storageKey);
+      if (!canReadLegacyWorkflowStorage()) {
+        if (!cancelled) setMessages([]);
+        return [];
+      }
+
+      const saved = readLocalConversationValue();
 
       if (saved) {
         try {
@@ -2549,7 +2563,7 @@ useEffect(() => {
               (migrated.length !== parsed.length ||
                 shouldPersistEmergencyMigration)
             ) {
-              localStorage.setItem(storageKey, JSON.stringify(migrated));
+              writeLocalConversationValue(JSON.stringify(migrated));
             }
           }
 
@@ -2604,9 +2618,7 @@ useEffect(() => {
             let localMessages = [];
 
             try {
-              const savedMessages = JSON.parse(
-                localStorage.getItem(storageKey) || "[]"
-              );
+              const savedMessages = JSON.parse(readLocalConversationValue() || "[]");
               localMessages = Array.isArray(savedMessages) ? savedMessages : [];
             } catch {
               localMessages = [];
@@ -2618,7 +2630,7 @@ useEffect(() => {
 
             auditShadowTimeline(merged, "backend-message");
             setMessages(merged);
-            localStorage.setItem(storageKey, JSON.stringify(merged));
+            writeLocalConversationValue(JSON.stringify(merged));
             try {
               markConversationRead(conversationId, {}, currentViewerRole);
               window.dispatchEvent(new Event("meetro-messages-updated"));
@@ -2669,13 +2681,13 @@ useEffect(() => {
       const messagesForConversation = sanitizeMessagesForConversation(messages);
 
       if (isHiringThread && messagesForConversation.length !== messages.length) {
-        localStorage.setItem(storageKey, JSON.stringify(messagesForConversation));
+        writeLocalConversationValue(JSON.stringify(messagesForConversation));
         setMessages(messagesForConversation);
         window.dispatchEvent(new Event("meetro-messages-updated"));
         return;
       }
 
-      localStorage.setItem(storageKey, JSON.stringify(messagesForConversation));
+      writeLocalConversationValue(JSON.stringify(messagesForConversation));
 
       const lastMessage = messagesForConversation[messagesForConversation.length - 1];
 
@@ -2855,7 +2867,7 @@ useEffect(() => {
       const nextMessages = mergeConversationMessages(prev, [messageWithRole]);
 
       try {
-        localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+        writeLocalConversationValue(JSON.stringify(nextMessages));
       } catch (error) {
         console.warn("Conversation local save failed; message remains visible", error);
       }
@@ -3918,7 +3930,7 @@ const handleImageUpload = (event) => {
 
     setMessages((prev) => {
       const nextMessages = prev.map(updateMessage);
-      localStorage.setItem(storageKey, JSON.stringify(nextMessages));
+      writeLocalConversationValue(JSON.stringify(nextMessages));
       return nextMessages;
     });
 
@@ -4265,13 +4277,8 @@ const handleImageUpload = (event) => {
       ? [scheduleMessage, reminderSystemMessage]
       : [scheduleMessage];
 
-    const storageKey = `meetro_conversation_${conversationId}`;
-    const existingMessages = JSON.parse(
-      localStorage.getItem(storageKey) || "[]"
-    );
-
-    localStorage.setItem(
-      storageKey,
+    const existingMessages = JSON.parse(readLocalConversationValue() || "[]");
+    writeLocalConversationValue(
       JSON.stringify([...existingMessages, ...messagesToAdd])
     );
 

@@ -20,6 +20,10 @@ function installStorage() {
     setItem: (key, value) => store.set(key, String(value)),
     removeItem: (key) => store.delete(key),
     clear: () => store.clear(),
+    key: (index) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
   };
 
   global.window = {
@@ -185,7 +189,7 @@ test("Discover preserves personal account mode for standard users", () => {
   assert.equal(localStorage.getItem("userRole"), "homeowner");
 });
 
-test("saving a session does not erase an existing business profile when user payload is personal", () => {
+test("a personal backend session does not inherit browser-only business profile authority", () => {
   installStorage();
   localStorage.setItem("activeAccountMode", "personal");
   localStorage.setItem(
@@ -207,12 +211,13 @@ test("saving a session does not erase an existing business profile when user pay
     },
   });
 
-  assert.equal(session.isProfessional, true);
-  assert.equal(localStorage.getItem("hasBusinessProfile"), "true");
-  assert.equal(localStorage.getItem("contractorProfileComplete"), "true");
-  assert.equal(localStorage.getItem("businessName"), "Bgone Home Renovation");
-  assert.equal(localStorage.getItem("businessCategory"), "handyman");
-  assert.equal(setActiveAccountMode("business"), true);
+  assert.equal(session.isProfessional, false);
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "false");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "false");
+  assert.equal(localStorage.getItem("businessName"), "");
+  assert.equal(localStorage.getItem("businessCategory"), "");
+  assert.equal(localStorage.getItem("contractorProfile"), null);
+  assert.equal(setActiveAccountMode("business"), false);
 });
 
 test("explicit backend business ownership restores the canonical professional session", () => {
@@ -272,4 +277,38 @@ test("explicit missing backend profile cannot be overridden by stale browser ide
   assert.equal(localStorage.getItem("businessName"), "");
   assert.equal(localStorage.getItem("businessCategory"), "");
   assert.equal(localStorage.getItem("contractorProfile"), null);
+});
+
+test("switching authenticated accounts purges unscoped workflow records and preserves safe preferences", () => {
+  installStorage();
+  localStorage.setItem("meetroLastAccountIdentity", "id:account-a");
+  localStorage.setItem("userId", "account-a");
+  localStorage.setItem("homeownerRequests", '[{"id":"account-a-request"}]');
+  localStorage.setItem("meetro_business_schedule", '[{"id":"account-a-visit"}]');
+  localStorage.setItem("meetro_conversation_account-a", '[{"text":"private"}]');
+  localStorage.setItem("meetroTimelineMoments", '[{"id":"account-a-moment"}]');
+  localStorage.setItem("language", "fr");
+  localStorage.setItem("meetroCommunityDiscoveryInterests", '["creative"]');
+
+  saveMeetroSession({
+    token: "account-b-token",
+    user: {
+      id: "account-b",
+      email: "account-b@example.com",
+      role: "homeowner",
+      account_type: "homeowner",
+      has_business_profile: false,
+      contractor_profile_id: null,
+    },
+  });
+
+  assert.equal(localStorage.getItem("homeownerRequests"), null);
+  assert.equal(localStorage.getItem("meetro_business_schedule"), null);
+  assert.equal(localStorage.getItem("meetro_conversation_account-a"), null);
+  assert.equal(localStorage.getItem("meetroTimelineMoments"), null);
+  assert.equal(localStorage.getItem("userId"), "account-b");
+  assert.equal(localStorage.getItem("token"), "account-b-token");
+  assert.equal(localStorage.getItem("meetroLastAccountIdentity"), "id:account-b");
+  assert.equal(localStorage.getItem("language"), "fr");
+  assert.equal(localStorage.getItem("meetroCommunityDiscoveryInterests"), '["creative"]');
 });

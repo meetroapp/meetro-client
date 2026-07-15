@@ -1,3 +1,5 @@
+import { purgeLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
+
 const ACCOUNT_TRANSIENT_CONTEXT_KEYS = [
   "activeConversationId",
   "activeConversationName",
@@ -75,6 +77,8 @@ export function clearAccountWorkflowData() {
       localStorage.removeItem(key);
     }
   });
+
+  purgeLegacyWorkflowStorage(localStorage);
 
   window.dispatchEvent(new Event("storage"));
   window.dispatchEvent(new Event("meetro-messages-updated"));

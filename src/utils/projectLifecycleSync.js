@@ -1,4 +1,5 @@
 import { getCanonicalProjectId } from "./projectIdentity.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 const ARRAY_KEYS = {
   homeownerRequests: "homeownerRequests",
@@ -260,6 +261,9 @@ function updateConversationRegistry(storage, target, nextState, metadata = {}) {
 }
 
 export function updateProjectLifecycleState(target = {}, nextState = "active", metadata = {}, options = {}) {
+  if (!canReadLegacyWorkflowStorage()) {
+    return { updated: false, reason: "browser-workflow-storage-disabled" };
+  }
   const storage = options.storage || getDefaultStorage();
   if (!storage || !target || typeof target !== "object") {
     return { updated: false, reason: "missing-storage-or-target" };
@@ -356,6 +360,9 @@ function buildHistoryRecord(target = {}, metadata = {}) {
 }
 
 export function moveJobToHistory(target = {}, metadata = {}, options = {}) {
+  if (!canReadLegacyWorkflowStorage()) {
+    return { moved: false, reason: "browser-workflow-storage-disabled", record: null };
+  }
   const storage = options.storage || getDefaultStorage();
   if (!storage || !target || typeof target !== "object") {
     return { moved: false, reason: "missing-storage-or-target", record: null };

@@ -1,6 +1,8 @@
 import { recoverRequestRelationships } from "./requestRelationshipRecovery.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 export function getStoredHomeownerRequests() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const readArray = (key) => {
     try {
       const value = localStorage.getItem(key);
@@ -53,7 +55,9 @@ export function getStoredHomeownerRequests() {
 }
 
 export function saveStoredHomeownerRequests(requests) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   localStorage.setItem("homeownerRequests", JSON.stringify(requests));
+  return requests;
 }
 
 export function requestMatchesWorkflowMessage(request, msg) {

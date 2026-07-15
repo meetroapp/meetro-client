@@ -12,6 +12,7 @@ import {
   isRequestProfessionalWork,
 } from "./professionalLifecycleProjection.js";
 import { recoverRequestRelationships } from "./requestRelationshipRecovery.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 export const WORK_CENTER_READ_CONTRACTS = Object.freeze([
   {
@@ -101,6 +102,7 @@ function getStorage() {
 }
 
 function readValue(key) {
+  if (!canReadLegacyWorkflowStorage()) return null;
   return getStorage()?.getItem(key) ?? null;
 }
 
@@ -127,6 +129,7 @@ function getRequestKey(request = {}) {
 }
 
 function readHomeownerRequestsSnapshot() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const primary = readArray("homeownerRequests");
   const backup = readArray("meetroHomeownerRequestsBackup");
   if (backup.length === 0) {

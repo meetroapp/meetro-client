@@ -13,6 +13,7 @@ import MeetroIcon from "../MeetroIcon";
 import { formatMessageTime } from "../../utils/displayTime";
 import { t } from "../../utils/language";
 import UniversalDocumentCard from "../documents/UniversalDocumentCard";
+import { canReadLegacyWorkflowStorage } from "../../utils/clientWorkflowStoragePolicy";
 
 function WorkflowQuoteSentCard({
   msg,
@@ -33,6 +34,7 @@ function WorkflowQuoteSentCard({
   const requestId = msg.requestId || conversation?.requestId || "";
 
   function getSavedQuotes() {
+    if (!canReadLegacyWorkflowStorage()) return [];
     try {
       const quotes = JSON.parse(
         localStorage.getItem("workCenterQuoteHistory") ||
@@ -48,6 +50,7 @@ function WorkflowQuoteSentCard({
   }
 
   function writeQuoteHistories(quotes) {
+    if (!canReadLegacyWorkflowStorage()) return;
     localStorage.setItem("workCenterQuoteHistory", JSON.stringify(quotes));
     localStorage.setItem("meetroQuoteHistory", JSON.stringify(quotes));
     localStorage.setItem("quoteHistory", JSON.stringify(quotes));

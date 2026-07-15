@@ -43,6 +43,7 @@ import {
   getHomeownerRequestMetrics,
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import {
   attachSpotlightPortfolioMedia,
   buildSpotlightProfessionalProfile,
@@ -183,9 +184,9 @@ function Home({ setPage }) {
     history: historyRequests,
   });
   const activeHomeownerRequests = homeownerMetrics.activeRequests;
-  const conversationRegistry = JSON.parse(
-    localStorage.getItem("meetro_conversation_registry") || "[]"
-  );
+  const conversationRegistry = canReadLegacyWorkflowStorage()
+    ? JSON.parse(localStorage.getItem("meetro_conversation_registry") || "[]")
+    : [];
   const homeownerConversationMetrics = getConversationMetrics({
     registry: conversationRegistry,
     role: "homeowner",
@@ -918,6 +919,7 @@ function getHomeEmergencyStatusLabel(status = "", language = "en") {
 }
 
 function getHomeActiveEmergencyInfo(language = "en") {
+  if (!canReadLegacyWorkflowStorage()) return null;
   const activeEmergencyRecord = readHomeJson("activeEmergencyRecord", {});
   const emergencyStatus =
     activeEmergencyRecord.status ||

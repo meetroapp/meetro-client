@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import { getStoredHomeownerRequests, saveStoredHomeownerRequests } from "../utils/workflowTimeline";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 function QuoteRequests({ setPage, currentPage }) {
   const [quotes, setQuotes] = useState([]);
@@ -133,7 +134,7 @@ function QuoteRequests({ setPage, currentPage }) {
       const data = result.data;
 
       if (data.data) {
-        try {
+        if (canReadLegacyWorkflowStorage()) try {
           const homeownerRequests = JSON.parse(
             localStorage.getItem("homeownerRequests") || "[]"
           );

@@ -52,6 +52,10 @@ import {
   COMPANION_PREFERRED_GUIDANCE_HEIGHT,
 } from "../utils/companionPanelPlacement";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
+import {
+  canReadLegacyWorkflowStorage,
+  isLegacyWorkflowStorageKey,
+} from "../utils/clientWorkflowStoragePolicy";
 
 const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
@@ -575,6 +579,18 @@ const actionTargets = {
 function getSelectedContext() {
   const requestDetailContext = readRequestCompanionContext();
 
+  if (!canReadLegacyWorkflowStorage()) {
+    return {
+      selectedRequestId: "",
+      selectedProjectId: "",
+      selectedJobId: "",
+      conversationId: "",
+      appointmentId: "",
+      quoteId: "",
+      workCenterSection: "",
+    };
+  }
+
   return {
     selectedRequestId:
       requestDetailContext?.requestId ||
@@ -618,11 +634,17 @@ function isActiveEmergencyStatus(status) {
 
 function isEmergencyAssistantContext(currentPage) {
   const page = String(currentPage || "").toLowerCase();
+
+  if (!canReadLegacyWorkflowStorage()) {
+    return page.includes("emergency");
+  }
+
   const context = getSelectedContext();
-  const emergencyStatus =
-    localStorage.getItem("emergencyDispatchStatus") ||
-    safeJson("activeEmergencyRecord", {})?.status ||
-    "";
+  const emergencyStatus = canReadLegacyWorkflowStorage()
+    ? localStorage.getItem("emergencyDispatchStatus") ||
+      safeJson("activeEmergencyRecord", {})?.status ||
+      ""
+    : "";
   const conversationType = localStorage.getItem("meetroConversationType") || "";
   const activeConversationId = localStorage.getItem("activeConversationId") || "";
   const workCenterSection = String(context.workCenterSection || "").toLowerCase();
@@ -683,6 +705,10 @@ function getRoleLabel(currentPage, language) {
 }
 
 function safeJson(key, fallback) {
+  if (!canReadLegacyWorkflowStorage() && isLegacyWorkflowStorageKey(key)) {
+    return fallback;
+  }
+
   try {
     const value = JSON.parse(localStorage.getItem(key) || "");
     return value ?? fallback;
@@ -867,6 +893,19 @@ function doesEmergencyRecordBelongToAccount(record = {}, scope = {}) {
 }
 
 function getEmergencySummary(scope = {}) {
+  if (!canReadLegacyWorkflowStorage()) {
+    return {
+      active: false,
+      status: "",
+      requestId: "",
+      issue: "",
+      customer: "",
+      accountId: scope?.accountId || "",
+      role: scope?.role || "personal",
+      homeownerSafe: true,
+    };
+  }
+
   const activeRecord = safeJson("activeEmergencyRecord", {});
   const status = String(localStorage.getItem("emergencyDispatchStatus") || "").toLowerCase();
   const requestId =
@@ -2535,6 +2574,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const assistantFirstName = getAssistantFirstName();
   const companionTopInsight = useMemo(() => {
     try {
+      if (!canReadLegacyWorkflowStorage()) return null;
       if (!areRelationshipInsightsEnabled()) return null;
       return getTopInsight(
         buildGlobalInsightContextFromStorage({

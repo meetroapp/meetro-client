@@ -16,6 +16,8 @@ import {
 } from "../utils/homeownerLifecycle";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { isRequestOwnedByAuthenticatedUser } from "../utils/authenticatedRequestOwnership";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -527,6 +529,7 @@ function MyRequests({ setPage }) {
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
 
   const [recoveryTick, setRecoveryTick] = useState(0);
+  const [backendRequests, setBackendRequests] = useState([]);
 
   function readRequestArray(key) {
     try {
@@ -538,6 +541,7 @@ function MyRequests({ setPage }) {
   }
 
   function getDurableHomeownerRequests() {
+    if (!canReadLegacyWorkflowStorage()) return backendRequests;
     const primaryRequests = getStoredHomeownerRequests();
     if (primaryRequests.length > 0) return primaryRequests;
 
@@ -575,22 +579,12 @@ function MyRequests({ setPage }) {
         const currentUserEmail = localStorage.getItem("userEmail");
 
         const recoveredRequests = posts
-          .filter((post) => {
-            const sameUserId =
-              currentUserId &&
-              String(post.user_id || post.userId || "") === String(currentUserId);
-
-            const sameEmail =
-              currentUserEmail &&
-              String(post.email || post.user_email || "").toLowerCase() ===
-                String(currentUserEmail).toLowerCase();
-
-            const looksLikeHomeownerQuoteRequest =
-              String(post.post_type || post.type || "").includes("quote_request") ||
-              String(post.status || "").toLowerCase() === "open";
-
-            return sameUserId || sameEmail || looksLikeHomeownerQuoteRequest;
-          })
+          .filter((post) =>
+            isRequestOwnedByAuthenticatedUser(post, {
+              id: currentUserId,
+              email: currentUserEmail,
+            })
+          )
           .map((post) => ({
             id: post.id,
             requestId: post.id,
@@ -610,17 +604,16 @@ function MyRequests({ setPage }) {
 
         if (recoveredRequests.length === 0) return;
 
-        localStorage.setItem(
-          "homeownerRequests",
-          JSON.stringify(recoveredRequests)
-        );
-
-        localStorage.setItem(
-          "meetroHomeownerRequestsBackup",
-          JSON.stringify(recoveredRequests)
-        );
-
-        setRecoveryTick((tick) => tick + 1);
+        if (canReadLegacyWorkflowStorage()) {
+          localStorage.setItem("homeownerRequests", JSON.stringify(recoveredRequests));
+          localStorage.setItem(
+            "meetroHomeownerRequestsBackup",
+            JSON.stringify(recoveredRequests)
+          );
+          setRecoveryTick((tick) => tick + 1);
+        } else {
+          setBackendRequests(recoveredRequests);
+        }
       } catch (error) {
         console.error("Failed to recover homeowner requests", error);
       }
@@ -684,6 +677,7 @@ function MyRequests({ setPage }) {
   }
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
+    if (!canReadLegacyWorkflowStorage()) return false;
     try {
       localStorage.setItem("homeownerRequests", JSON.stringify(updatedRequests));
       localStorage.setItem(

@@ -1,6 +1,8 @@
 import { createNotification } from "./meetroNotifications.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 export function getConversationRegistry() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   try {
     const registry = JSON.parse(
       localStorage.getItem("meetro_conversation_registry") || "[]"
@@ -27,6 +29,7 @@ export function isConversationUserSavedToHistory(conversation = {}) {
 }
 
 export function saveConversationToUserHistory(conversationId, fallback = {}) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const id = String(conversationId || fallback.id || fallback.conversationId || "");
 
   if (!id) return getConversationRegistry();
@@ -81,6 +84,7 @@ function getRoleReadKey(conversationId, role) {
 }
 
 export function isConversationUnreadForRole(conversationId, role, fallbackUnread = false) {
+  if (!canReadLegacyWorkflowStorage()) return false;
   const id = String(conversationId || "");
 
   if (!id) return false;
@@ -108,12 +112,14 @@ export function getUnreadConversationCount(registry = getConversationRegistry(),
 }
 
 export function writeUnreadConversationCount(registry = getConversationRegistry()) {
+  if (!canReadLegacyWorkflowStorage()) return 0;
   const unreadCount = getUnreadConversationCount(registry);
   localStorage.setItem("mockUnreadMessages", String(unreadCount));
   return unreadCount;
 }
 
 export function setConversationUnread(conversationId, unread, fallback = {}, role) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const id = String(conversationId || "");
 
   if (!id) return getConversationRegistry();

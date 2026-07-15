@@ -11,6 +11,7 @@ import {
   normalizeEmergencyClosedJob,
   upsertUnifiedClosedJob,
 } from "../utils/unifiedJobHistory";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 function EmergencyCompletionActions({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -24,6 +25,7 @@ function EmergencyCompletionActions({ setPage }) {
   })();
 
   function saveEmergencyRecordPatch(patch = {}) {
+    if (!canReadLegacyWorkflowStorage()) return {};
     const nextRecord = {
       ...activeEmergencyRecord,
       ...patch,
@@ -102,6 +104,7 @@ function EmergencyCompletionActions({ setPage }) {
   };
 
   function saveToHistory() {
+    if (!canReadLegacyWorkflowStorage()) return;
     const closedAt = new Date().toISOString();
     const emergencyConversationId =
       activeEmergencyRecord.conversationId ||

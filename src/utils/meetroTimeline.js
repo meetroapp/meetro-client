@@ -1,3 +1,5 @@
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
+
 const TIMELINE_STORAGE_KEY = "meetroTimelineMoments";
 
 export const MEETRO_TIMELINE_STORAGE_KEY = TIMELINE_STORAGE_KEY;
@@ -348,6 +350,7 @@ export function buildTimelineMomentFromClosedProject(project = {}, options = {})
 }
 
 export function readTimelineMoments(storage = getDefaultStorage()) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   if (!storage) return [];
 
   try {
@@ -359,6 +362,9 @@ export function readTimelineMoments(storage = getDefaultStorage()) {
 }
 
 export function saveTimelineMoment(storage = getDefaultStorage(), moment = {}) {
+  if (!canReadLegacyWorkflowStorage()) {
+    return { saved: false, reason: "browser-workflow-storage-disabled", moments: [] };
+  }
   if (!storage || !moment?.id) {
     return { saved: false, reason: "missing-storage-or-moment", moments: readTimelineMoments(storage) };
   }

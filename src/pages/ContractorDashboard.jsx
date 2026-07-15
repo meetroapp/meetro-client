@@ -90,6 +90,7 @@ import {
 import { getWorkCenterPrimaryCtaLabel } from "../utils/workCenterCtaLabels";
 import { getProfessionalWorkMetrics } from "../utils/dashboardMetrics";
 import { readBusinessAvailability } from "../utils/businessAvailability";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
@@ -242,6 +243,7 @@ function getEvaluationMaterialsTotal(workItems = []) {
 }
 
 function readMeetroJson(key, fallback) {
+  if (!canReadLegacyWorkflowStorage()) return fallback;
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || "null");
     return parsed ?? fallback;
@@ -657,6 +659,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
   useEffect(() => {
     const scheduleEditId = localStorage.getItem("meetroScheduleEditId");
     if (!scheduleEditId) return;
+    if (!canReadLegacyWorkflowStorage()) {
+      localStorage.removeItem("meetroScheduleEditId");
+      return;
+    }
 
     try {
       const schedule = JSON.parse(
@@ -741,6 +747,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       "quoteBuilderReturnEvaluationScheduleId"
     );
     if (!returnScheduleId) return;
+    if (!canReadLegacyWorkflowStorage()) {
+      localStorage.removeItem("quoteBuilderReturnEvaluationScheduleId");
+      return;
+    }
 
     try {
       const schedule = JSON.parse(
@@ -2528,6 +2538,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function saveEvaluationRecord(item = evaluationTarget, options = {}) {
+    if (!canReadLegacyWorkflowStorage()) return null;
     setEvaluationSaveNotice("");
     setEvaluationSaveError("");
     setEvaluationToast(null);
@@ -4224,6 +4235,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
 
   async function saveManualScheduleVisit() {
+    if (!canReadLegacyWorkflowStorage()) return;
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
     );
@@ -4803,6 +4815,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function completeScheduleVisit(item, outcome) {
+    if (!canReadLegacyWorkflowStorage()) return;
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
     );
@@ -5086,6 +5099,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   async function confirmDeleteScheduleVisit() {
     if (!scheduleDeleteTarget) return;
+    if (!canReadLegacyWorkflowStorage()) return;
 
     const schedule = JSON.parse(
       localStorage.getItem("meetro_business_schedule") || "[]"
@@ -5107,6 +5121,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   const activeEmergencyRecord = (() => {
+    if (!canReadLegacyWorkflowStorage()) return {};
     try {
       return JSON.parse(
         localStorage.getItem("activeEmergencyRecord") || "{}"
@@ -5133,8 +5148,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
     dispatchStatus !== "closed" &&
     dispatchStatus !== "archived";
 
-  const storedCompletedJobsCount =
-    Number(localStorage.getItem("completedJobsCount") || "0");
+  const storedCompletedJobsCount = canReadLegacyWorkflowStorage()
+    ? Number(localStorage.getItem("completedJobsCount") || "0")
+    : 0;
 
   const [quoteHistoryVersion, setQuoteHistoryVersion] = useState(0);
   quoteHistoryVersion;
@@ -5495,6 +5511,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   );
 
   function updateQuoteLifecycleStatus(quoteId, nextStatus) {
+    if (!canReadLegacyWorkflowStorage()) return;
     const savedQuotes = JSON.parse(
       localStorage.getItem("workCenterQuoteHistory") ||
         localStorage.getItem("meetroQuoteHistory") ||
@@ -5683,8 +5700,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const materialsAlertCount =
     dispatchStatus === "paused_materials" ? 1 : 0;
 
-  const storedTotalJobRevenue =
-    Number(localStorage.getItem("totalJobRevenue") || "0");
+  const storedTotalJobRevenue = canReadLegacyWorkflowStorage()
+    ? Number(localStorage.getItem("totalJobRevenue") || "0")
+    : 0;
 
   const businessCategory =
     localStorage.getItem("businessCategory") || "";
@@ -6374,6 +6392,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function setOperationalActiveWorkStatus(job = {}, nextStatus = "active") {
+    if (!canReadLegacyWorkflowStorage()) return;
     const jobId = job.id || job.requestId || job.jobId || `job-${Date.now()}`;
     const nextStage = normalizeWorkflowStage(nextStatus);
     const updatedJob = {
@@ -8531,6 +8550,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     : null;
 
   const updateWorkCenterJobScheduleRecord = (job = {}, patch = {}) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     if (!job.schedule?.id) return null;
     const schedule = readMeetroArray("meetro_business_schedule");
     let updatedRecord = null;
@@ -8563,6 +8583,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const updateWorkCenterJobQuoteRecord = (job = {}, patch = {}) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     if (!job.quote?.quoteId && !job.quote?.id) return null;
     const quoteId = String(job.quote.quoteId || job.quote.id);
     const savedQuotes = readMeetroArray("workCenterQuoteHistory");
@@ -8594,6 +8615,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const createSarahPageVisitRecord = (job = {}) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     const now = new Date().toISOString();
     const visitId = `job-visit-${Date.now()}`;
     const newVisit = {
@@ -8641,6 +8663,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const createSarahPageWorkAppointmentRecord = (job = {}) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     const now = new Date().toISOString();
     const workAppointmentId = `job-work-${Date.now()}`;
     const evaluationVisit =
@@ -9091,6 +9114,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const createSarahPageQuoteRecord = (job = {}) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     const now = new Date().toISOString();
     const quoteId = `job-quote-${Date.now()}`;
     const quote = {
@@ -9374,6 +9398,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     label = "",
     patch = {}
   ) => {
+    if (!canReadLegacyWorkflowStorage()) return null;
     const scheduleId = String(job.schedule?.id || job.schedule?.scheduleId || "");
     if (!scheduleId) {
       showJobActionErrorToast();
@@ -14059,9 +14084,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           )}
 
           {!evaluationTarget && (() => {
-            const rawScheduleItems = JSON.parse(
-              localStorage.getItem("meetro_business_schedule") || "[]"
-            );
+            const rawScheduleItems = readMeetroArray("meetro_business_schedule");
             const todayKey = new Date().toISOString().slice(0, 10);
             const isTodayFilter = getScheduleFilter() === "today";
             const scheduleItems = isTodayFilter
@@ -14963,9 +14986,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           </div>
 
           {(() => {
-            const homeownerProjects = JSON.parse(
-              localStorage.getItem("homeownerRequests") || "[]"
-            );
+            const homeownerProjects = readMeetroArray("homeownerRequests");
 
             const scheduledProjects = homeownerProjects
               .filter((project) =>
@@ -16015,6 +16036,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <button
                         style={moveToActiveButton}
                         onClick={() => {
+                          if (!canReadLegacyWorkflowStorage()) return;
                           const homeownerRequests = JSON.parse(
                             localStorage.getItem("homeownerRequests") || "[]"
                           );

@@ -45,6 +45,7 @@ import {
   reconcileAuthenticatedUser,
   updatePersonalProfile,
 } from "../utils/personalProfile";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -516,6 +517,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   }
 
   function readLocalQueue(key) {
+    if (!canReadLegacyWorkflowStorage()) return [];
     try {
       const saved = JSON.parse(localStorage.getItem(key) || "[]");
       return Array.isArray(saved) ? saved : [];

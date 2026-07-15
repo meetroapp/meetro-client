@@ -8,6 +8,7 @@ import MeetroIcon from "../components/MeetroIcon";
 import RelationshipIdentityPage from "../components/RelationshipIdentityPage";
 import ConversationThread from "./ConversationThread";
 import { authFetch, clearMeetroSession } from "../utils/authFetch";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { getDashboardPageForAccountMode } from "../utils/session";
 import {
   getAccountConnectionStateFromAuthResult,
@@ -582,6 +583,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const isSpanish = language === "es";
 
   function readActiveEmergencyRecord() {
+    if (!canReadLegacyWorkflowStorage()) return {};
     try {
       const parsed = JSON.parse(
         localStorage.getItem("activeEmergencyRecord") || "{}"
@@ -594,6 +596,7 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getEmergencyConversation() {
+  if (!canReadLegacyWorkflowStorage()) return null;
   const currentUserKey =
     localStorage.getItem("userId") ||
     localStorage.getItem("userEmail") ||
@@ -834,6 +837,7 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getScopedContactConversationsForList() {
+    if (!canReadLegacyWorkflowStorage()) return [];
     const { profileScopeKey } = getActiveProfileScopeDescriptor({
       activeAccountMode,
     });
@@ -848,6 +852,7 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getLocalBusinessConversationsForList() {
+    if (!canReadLegacyWorkflowStorage()) return [];
     return Object.keys(localStorage)
       .filter((key) => key.startsWith("meetro_conversation_business_"))
       .map((key) => {

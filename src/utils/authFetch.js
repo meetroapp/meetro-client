@@ -1,7 +1,10 @@
 import API_URL from "../api.js";
 import { getAccountConnectionStateFromAuthResult } from "./accountConnection.js";
+import { clearAccountWorkflowData } from "./accountStorage.js";
 
 export function clearMeetroSession() {
+  clearAccountWorkflowData();
+
   const keysToRemove = [
     "token",
     "user",

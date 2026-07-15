@@ -4,6 +4,7 @@ import {
   isRequestConnectedToProfessional,
 } from "./professionalLifecycleProjection.js";
 import { getStoredHomeownerRequests } from "./workflowTimeline.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 export function safeJsonParse(value, fallback) {
   try {
@@ -14,6 +15,7 @@ export function safeJsonParse(value, fallback) {
 }
 
 export function getBusinessSchedule() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   const storedSchedule = safeJsonParse(
     localStorage.getItem("meetro_business_schedule"),
     []
@@ -38,15 +40,18 @@ export function getBusinessSchedule() {
 }
 
 export function saveBusinessSchedule(schedule = []) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   localStorage.setItem(
     "meetro_business_schedule",
     JSON.stringify(Array.isArray(schedule) ? schedule : [])
   );
 
   window.dispatchEvent(new Event("meetro-workcenter-updated"));
+  return schedule;
 }
 
 export function getQuoteHistory() {
+  if (!canReadLegacyWorkflowStorage()) return [];
   return safeJsonParse(
     localStorage.getItem("workCenterQuoteHistory"),
     []
@@ -54,15 +59,18 @@ export function getQuoteHistory() {
 }
 
 export function saveQuoteHistory(quotes = []) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   localStorage.setItem(
     "workCenterQuoteHistory",
     JSON.stringify(Array.isArray(quotes) ? quotes : [])
   );
 
   window.dispatchEvent(new Event("meetro-workcenter-updated"));
+  return quotes;
 }
 
 export function getConversationMeta(conversationId) {
+  if (!canReadLegacyWorkflowStorage()) return {};
   if (!conversationId) return {};
 
   return safeJsonParse(
@@ -72,6 +80,7 @@ export function getConversationMeta(conversationId) {
 }
 
 export function saveConversationMeta(conversationId, meta = {}) {
+  if (!canReadLegacyWorkflowStorage()) return;
   if (!conversationId) return;
 
   localStorage.setItem(
@@ -83,6 +92,7 @@ export function saveConversationMeta(conversationId, meta = {}) {
 }
 
 export function getJobRecord(conversationId) {
+  if (!canReadLegacyWorkflowStorage()) return [];
   if (!conversationId) return [];
 
   return safeJsonParse(
@@ -92,6 +102,7 @@ export function getJobRecord(conversationId) {
 }
 
 export function saveJobRecord(conversationId, records = []) {
+  if (!canReadLegacyWorkflowStorage()) return;
   if (!conversationId) return;
 
   localStorage.setItem(
@@ -104,6 +115,7 @@ export function saveJobRecord(conversationId, records = []) {
 
 
 export function getSelectedActiveProject() {
+  if (!canReadLegacyWorkflowStorage()) return null;
   return safeJsonParse(
     localStorage.getItem("selectedActiveProject"),
     null
@@ -111,6 +123,7 @@ export function getSelectedActiveProject() {
 }
 
 export function saveSelectedActiveProject(project = null) {
+  if (!canReadLegacyWorkflowStorage()) return;
   if (!project) return;
 
   localStorage.setItem(
@@ -129,6 +142,7 @@ export function clearSelectedActiveProject() {
 
 
 export function getActiveWorkSnapshot() {
+  if (!canReadLegacyWorkflowStorage()) return {};
   return {
     id:
       localStorage.getItem("activeWorkRequestId") ||
@@ -150,6 +164,7 @@ export function getActiveWorkSnapshot() {
 }
 
 export function saveActiveWorkSnapshot(work = {}) {
+  if (!canReadLegacyWorkflowStorage()) return;
   if (work.requestId) localStorage.setItem("activeWorkRequestId", String(work.requestId));
   if (work.quoteId) localStorage.setItem("activeWorkQuoteId", String(work.quoteId));
   if (work.conversationId) localStorage.setItem("activeWorkConversationId", String(work.conversationId));
@@ -184,6 +199,7 @@ export function clearActiveWorkSnapshot() {
 }
 
 export function getActiveJobSnapshot(fallbackConversationId = "") {
+  if (!canReadLegacyWorkflowStorage()) return {};
   return {
     id:
       localStorage.getItem("activeJobId") ||
@@ -209,6 +225,7 @@ export function getActiveJobSnapshot(fallbackConversationId = "") {
 }
 
 export function saveActiveJobSnapshot(job = {}) {
+  if (!canReadLegacyWorkflowStorage()) return;
   if (job.id) localStorage.setItem("activeJobId", String(job.id));
   if (job.conversationId) {
     localStorage.setItem("activeConversationId", String(job.conversationId));

@@ -22,6 +22,7 @@ import {
   buildBusinessProfilePayloadFromCanonical,
   getConfirmedBusinessProfile,
 } from "../utils/businessProfilePersistence";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 const profileLoadText = {
   en: {
@@ -241,6 +242,7 @@ function BusinessDashboard({ setPage }) {
   }
 
   const dashboardEmergencyRecord = (() => {
+    if (!canReadLegacyWorkflowStorage()) return {};
     try {
       return JSON.parse(
         localStorage.getItem("activeEmergencyRecord") || "{}"

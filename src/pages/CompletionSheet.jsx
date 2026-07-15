@@ -25,6 +25,7 @@ import {
 import { formatMessageTime } from "../utils/displayTime";
 import { normalizePricingModel } from "../utils/pricingCalculations";
 import { updateProjectLifecycleState } from "../utils/projectLifecycleSync";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
 function CompletionSheet({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -229,6 +230,7 @@ function CompletionSheet({ setPage }) {
   }
 
   function saveCompletion() {
+    if (!canReadLegacyWorkflowStorage()) return;
     const completedAt = new Date().toISOString();
 
     const finalNotes = workSummary || aiDraft || "";
