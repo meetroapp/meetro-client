@@ -238,14 +238,14 @@ test("Work Center mission counts use shared professional metrics", () => {
   );
 });
 
-test("Discover business cards use shared public proof metrics", () => {
+test("Discover business cards omit browser-derived proof metrics", () => {
   const source = fs.readFileSync(
     new URL("../src/pages/Discover.jsx", import.meta.url),
     "utf8"
   );
 
-  assert.match(source, /getBusinessPortfolioProofProjection/);
-  assert.match(source, /const portfolioProof = getBusinessPortfolioProofProjection/);
-  assert.match(source, /portfolioProof\.averageRating \|\| t\("discoverRatingPending"/);
-  assert.match(source, /reviewCount: proof\.reviewCount/);
+  assert.doesNotMatch(source, /getBusinessPortfolioProofProjection/);
+  assert.doesNotMatch(source, /portfolioProof\.averageRating/);
+  assert.doesNotMatch(source, /reviewCount|discoverRatingPending/);
+  assert.match(source, /business\.available_now === true/);
 });

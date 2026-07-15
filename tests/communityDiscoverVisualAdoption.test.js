@@ -66,10 +66,11 @@ test("Community visual adoption preserves progressive discovery destinations", (
   assert.match(discoverSource, /useState\("communityHub"\)/);
   assert.match(discoverSource, /communityBusinessPreview\.map\(\(business\) => renderBusinessCard\(business\)\)/);
   assert.match(discoverSource, /t\("hiringOperationsUnavailable", language\)/);
-  assert.match(discoverSource, /style=\{communitySpotlightCard\}/);
+  assert.match(discoverSource, /style=\{communitySpotlightStack\}/);
+  assert.match(discoverSource, /communitySpotlightUnavailableTitle/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
   assert.doesNotMatch(discoverSource, /renderHiringPreviewCard/);
-  assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
+  assert.doesNotMatch(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
 });

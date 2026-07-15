@@ -111,7 +111,7 @@ test("Community connected routes and handoffs remain preserved", () => {
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion\("professionals"\)/);
   assert.doesNotMatch(discoverSource, /renderHiringPreviewCard/);
-  assert.match(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
+  assert.doesNotMatch(discoverSource, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.match(discoverSource, /setPage\("contractorDetails"\)/);
   assert.match(discoverSource, /setPage\("upload"\)/);
   assert.match(contractorDetailsSource, /setPage\("discover"\)/);

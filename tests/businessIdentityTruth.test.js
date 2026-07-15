@@ -157,7 +157,6 @@ test("business-facing trust surfaces use the shared verification projection", ()
     "src/pages/ContractorProfile.jsx",
     "src/pages/ContractorDetails.jsx",
     "src/pages/ProjectGallery.jsx",
-    "src/pages/Discover.jsx",
     "src/utils/businessIdentity.js",
   ];
 
@@ -165,6 +164,15 @@ test("business-facing trust surfaces use the shared verification projection", ()
     const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
     assert.match(source, /businessVerification|getBusinessVerificationProjection|verification\./);
   });
+
+  const discoverSource = readFileSync(
+    new URL("../src/pages/Discover.jsx", import.meta.url),
+    "utf8"
+  );
+  assert.doesNotMatch(
+    discoverSource,
+    /businessVerification|getBusinessVerificationProjection|verification\./
+  );
 
   const quoteSource = readFileSync(new URL("../src/pages/QuoteBuilder.jsx", import.meta.url), "utf8");
   const invoiceSource = readFileSync(new URL("../src/pages/InvoiceBuilder.jsx", import.meta.url), "utf8");

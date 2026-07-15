@@ -36,16 +36,16 @@ const duplicateCommunityPageUrl = new URL(
 function installStorage() {
   const store = new Map();
 
-  global.localStorage = {
+  globalThis.localStorage = {
     getItem: (key) => (store.has(key) ? store.get(key) : null),
     setItem: (key, value) => store.set(key, String(value)),
     removeItem: (key) => store.delete(key),
     clear: () => store.clear(),
   };
-  global.window = {
+  globalThis.window = {
     dispatchEvent: () => true,
   };
-  global.CustomEvent = class CustomEvent {
+  globalThis.CustomEvent = class CustomEvent {
     constructor(type, options = {}) {
       this.type = type;
       this.detail = options.detail;
@@ -123,9 +123,9 @@ test("Community landing renders human Community copy and progressive preview sec
   assert.match(discoverSource, /style=\{communityBusinessPreviewGrid\}/);
   assert.match(discoverSource, /style=\{communityWarmEmptyCard\}/);
   assert.match(discoverSource, /style=\{communityHiringGrid\}/);
-  assert.match(discoverSource, /style=\{communitySpotlightCard\}/);
-  assert.match(discoverSource, /style=\{communitySpotlightCue\}/);
-  assert.match(discoverSource, /style=\{communitySpotlightMeta\}/);
+  assert.match(discoverSource, /style=\{communitySpotlightStack\}/);
+  assert.match(discoverSource, /communitySpotlightUnavailableTitle/);
+  assert.match(discoverSource, /communitySpotlightUnavailableText/);
 });
 
 test("Community preview actions expand progressively without route changes", () => {
@@ -135,12 +135,11 @@ test("Community preview actions expand progressively without route changes", () 
   );
 
   assert.match(discoverSource, /const COMMUNITY_PREVIEW_LIMIT = 3/);
-  assert.match(discoverSource, /const COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT = 1/);
   assert.match(discoverSource, /expandedCommunitySections/);
   assert.match(discoverSource, /toggleCommunitySectionExpansion/);
   assert.match(discoverSource, /setExpandedCommunitySections\(collapsedCommunitySections\)/);
   assert.match(hubBlock, /toggleCommunitySectionExpansion\("professionals"\)/);
-  assert.match(hubBlock, /toggleCommunitySectionExpansion\("spotlight"\)/);
+  assert.doesNotMatch(hubBlock, /toggleCommunitySectionExpansion\("spotlight"\)/);
   assert.doesNotMatch(hubBlock, /openCommunitySection\("businessDirectory"\)/);
   assert.doesNotMatch(hubBlock, /setPage\("jobsHiring"\)/);
   assert.doesNotMatch(hubBlock, /openCommunitySection\("spotlight"\)/);
@@ -246,8 +245,9 @@ test("Community discovery search filters verified business data without reviving
 test("Community discovery keeps one destination and supports Companion handoff", () => {
   assert.match(discoverSource, /window\.addEventListener\("meetro:community-discovery"/);
   assert.match(discoverSource, /meetroCommunityDiscoveryQuery/);
-  assert.match(discoverSource, /setSearchQuery\(String\(detail\.query\)\)/);
-  assert.match(discoverSource, /saveDiscoveryInterests\(validInterestIds\)/);
+  assert.match(discoverSource, /const nextQuery = String\(detail\.query\)/);
+  assert.match(discoverSource, /setSearchQuery\(nextQuery\)/);
+  assert.match(discoverSource, /setSelectedDiscoveryInterests\(validInterestIds\)/);
   assert.match(discoverSource, /selectedDiscoveryInterests\[0\] === taxonomyMatch\.ecosystemId/);
   assert.match(discoverSource, /copy: t\(copyKey, language\)/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
@@ -292,19 +292,13 @@ test("Community cannot create local hiring conversations or notifications", () =
   assert.doesNotMatch(discoverSource, /createNotification|community_hiring_interest/);
 });
 
-test("Hiring and Spotlight previews are lightweight and Phase 5A safe", () => {
-  assert.match(discoverSource, /COMMUNITY_SPOTLIGHT_PREVIEW_LIMIT/);
-  assert.match(discoverSource, /communitySpotlightStories\.map/);
+test("Hiring and Spotlight previews fail closed without local shared-state projections", () => {
   assert.match(discoverSource, /t\("hiringOperationsUnavailable", language\)/);
   assert.match(discoverSource, /t\("hiringOpportunitiesTruthDescription", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightEyebrow", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightStoryTitle", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightCue", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightStoryFallbackMeta", language\)/);
-  assert.equal(t("communitySpotlightEyebrow", "en"), "Today’s Spotlight");
-  assert.equal(t("communitySpotlightStoryTitle", "en"), "Trusted work is already shaping your community.");
-  assert.equal(t("communitySpotlightCue", "en"), "Meet the professional who helped make it possible.");
-  assert.match(t("communitySpotlightStoryFallbackMeta", "en"), /does not require media uploads/);
+  assert.match(discoverSource, /t\("communitySpotlightUnavailableTitle", language\)/);
+  assert.match(discoverSource, /t\("communitySpotlightUnavailableText", language\)/);
+  assert.doesNotMatch(discoverSource, /communitySpotlightStories\.map/);
+  assert.doesNotMatch(discoverSource, /getBusinessPortfolioProofProjection/);
   assert.doesNotMatch(discoverSource, /createObjectURL|FileReader|input type="file"/);
 });
 
@@ -317,9 +311,8 @@ test("Spotlight destination is editorial discovery without social or Moments beh
   assert.match(spotlightBlock, /t\("communityTitle", language\)/);
   assert.match(spotlightBlock, /t\("communitySpotlightPageTitle", language\)/);
   assert.match(spotlightBlock, /t\("communitySpotlightPageSubtitle", language\)/);
-  assert.match(spotlightBlock, /t\("communitySpotlightFeaturedEyebrow", language\)/);
-  assert.match(spotlightBlock, /t\("communitySpotlightWarmupEyebrow", language\)/);
-  assert.match(spotlightBlock, /t\("communitySpotlightWarmupCue", language\)/);
+  assert.match(spotlightBlock, /t\("communitySpotlightUnavailableTitle", language\)/);
+  assert.match(spotlightBlock, /t\("communitySpotlightUnavailableText", language\)/);
   assert.match(spotlightBlock, /t\("communitySpotlightPrincipleTitle", language\)/);
   assert.match(spotlightBlock, /t\("communitySpotlightPrincipleText", language\)/);
   assert.equal(t("communitySpotlightPageTitle", "en"), "Stories Behind Trusted Work");
@@ -327,32 +320,27 @@ test("Spotlight destination is editorial discovery without social or Moments beh
     t("communitySpotlightPageSubtitle", "en"),
     "Discover the professionals, relationships, and local work helping your community feel more connected."
   );
-  assert.equal(t("communitySpotlightFeaturedEyebrow", "en"), "Featured Community Story");
-  assert.equal(t("communitySpotlightWarmupEyebrow", "en"), "Spotlight Is Warming Up");
-  assert.equal(
-    t("communitySpotlightWarmupCue", "en"),
-    "Meaningful local stories will appear here as Meetro grows."
-  );
+  assert.equal(t("communitySpotlightUnavailableTitle", "en"), "Community stories are unavailable right now.");
   assert.equal(t("communitySpotlightPrincipleTitle", "en"), "Spotlight is discovery, not preservation.");
   assert.match(t("communitySpotlightPrincipleText", "en"), /Meetro Moments preserves completed accomplishments/);
   assert.doesNotMatch(spotlightBlock, /\b(feed|post|posts|social|like|comment|share|followers|hashtags)\b/i);
   assert.doesNotMatch(spotlightBlock, /renderBusinessCard\(business\)/);
 });
 
-test("Community preview empty states feel alive without promising unavailable data", () => {
-  assert.match(discoverSource, /t\("communityBusinessesEmptyTitle", language\)/);
-  assert.match(discoverSource, /t\("communityBusinessesEmptyText", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightStoryFallbackTitle", language\)/);
-  assert.match(discoverSource, /t\("communitySpotlightStoryFallbackText", language\)/);
-  assert.equal(t("communityBusinessesEmptyTitle", "en"), "Local businesses will appear here as Meetro grows.");
+test("Community preview states distinguish confirmed empty from unavailable content", () => {
+  assert.match(discoverSource, /t\(titleKey, language\)/);
+  assert.match(discoverSource, /communityDirectoryEmptyTitle/);
+  assert.match(discoverSource, /communityDirectoryFailedTitle/);
+  assert.match(discoverSource, /communitySpotlightUnavailableTitle/);
+  assert.match(discoverSource, /communitySpotlightUnavailableText/);
+  assert.equal(t("communityDirectoryEmptyTitle", "en"), "No community results match this view yet.");
   assert.equal(
-    t("communityBusinessesEmptyText", "en"),
-    "Soon, this space will introduce trusted professionals serving your community."
+    t("communityDirectoryEmptyText", "en"),
+    "The business directory responded successfully, but no businesses are available yet."
   );
-  assert.equal(t("communitySpotlightStoryFallbackTitle", "en"), "Spotlight stories are beginning here.");
   assert.equal(
-    t("communitySpotlightStoryFallbackText", "en"),
-    "As trusted work grows, this space will introduce the people, relationships, and care behind it."
+    t("communitySpotlightUnavailableTitle", "en"),
+    "Community stories are unavailable right now."
   );
 });
 
@@ -397,7 +385,7 @@ test("iPhone Community certification keeps one shared destination for both role 
   assert.match(businessDashboardSource, /t\("communityEntryBusinessCopy", language\)/);
   assert.match(businessDashboardSource, /t\("communityOpenAction", language\)/);
   assert.match(businessDashboardSource, /onClick=\{\(\) => setPage\("discover"\)\}/);
-  assert.match(discoverSource, /function Discover\(\{ setPage, currentPage \}\)/);
+  assert.match(discoverSource, /function Discover\(\{ setPage \}\)/);
   assert.match(discoverSource, /useState\("communityHub"\)/);
   assert.equal(existsSync(duplicateCommunityPageUrl), false);
 });

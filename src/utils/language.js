@@ -4424,6 +4424,26 @@ const highTrafficParityLabels = {
       "Local businesses will appear here as Meetro grows.",
     communityBusinessesEmptyText:
       "Soon, this space will introduce trusted professionals serving your community.",
+    communityDirectoryLoadingTitle: "Loading community businesses...",
+    communityDirectoryLoadingText:
+      "Meetro is checking the current business directory.",
+    communityDirectoryEmptyTitle: "No community results match this view yet.",
+    communityDirectoryEmptyText:
+      "The business directory responded successfully, but no businesses are available yet.",
+    communityDirectoryFilteredEmptyTitle: "No businesses match this search yet.",
+    communityDirectoryFilteredEmptyText:
+      "Try another search or Discovery Interest without changing the confirmed directory results.",
+    communityDirectoryUnauthorizedTitle: "Business directory access needs attention.",
+    communityDirectoryUnauthorizedText:
+      "Sign in again before continuing with Community discovery.",
+    communityDirectoryFailedTitle: "Community businesses could not be loaded.",
+    communityDirectoryFailedText:
+      "The directory request did not complete. Try again to check the current results.",
+    communityDirectoryUnavailableTitle: "Business discovery is unavailable right now.",
+    communityDirectoryUnavailableText:
+      "Meetro cannot confirm the current directory, so no business results are being shown.",
+    communityDirectoryRetry: "Try again",
+    communityDirectorySignIn: "Back to Login",
     communityViewAllBusinesses: "Explore More Businesses",
     communityExploreMoreProfessionals: "Explore More Professionals",
     communityShowFewerProfessionals: "Show Fewer Professionals",
@@ -4438,6 +4458,9 @@ const highTrafficParityLabels = {
     communityShowFewerOpportunities: "Show Fewer Opportunities",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Discover today’s featured community story.",
+    communitySpotlightUnavailableTitle: "Community stories are unavailable right now.",
+    communitySpotlightUnavailableText:
+      "Meetro will show Spotlight stories when an authoritative story source is available.",
     communitySpotlightEyebrow: "Today’s Spotlight",
     communitySpotlightCue:
       "Meet the professional who helped make it possible.",
@@ -4804,6 +4827,26 @@ const highTrafficParityLabels = {
       "Los negocios locales aparecerán aquí a medida que Meetro crezca.",
     communityBusinessesEmptyText:
       "Pronto, este espacio presentará profesionales de confianza que sirven a tu comunidad.",
+    communityDirectoryLoadingTitle: "Cargando negocios de la comunidad...",
+    communityDirectoryLoadingText:
+      "Meetro está consultando el directorio actual de negocios.",
+    communityDirectoryEmptyTitle: "Aún no hay resultados comunitarios para esta vista.",
+    communityDirectoryEmptyText:
+      "El directorio respondió correctamente, pero todavía no hay negocios disponibles.",
+    communityDirectoryFilteredEmptyTitle: "Aún no hay negocios que coincidan con esta búsqueda.",
+    communityDirectoryFilteredEmptyText:
+      "Prueba otra búsqueda o interés sin cambiar los resultados confirmados del directorio.",
+    communityDirectoryUnauthorizedTitle: "El acceso al directorio necesita atención.",
+    communityDirectoryUnauthorizedText:
+      "Vuelve a iniciar sesión antes de continuar descubriendo la comunidad.",
+    communityDirectoryFailedTitle: "No se pudieron cargar los negocios de la comunidad.",
+    communityDirectoryFailedText:
+      "La solicitud no se completó. Inténtalo de nuevo para consultar los resultados actuales.",
+    communityDirectoryUnavailableTitle: "El descubrimiento de negocios no está disponible ahora.",
+    communityDirectoryUnavailableText:
+      "Meetro no puede confirmar el directorio actual, por lo que no muestra resultados.",
+    communityDirectoryRetry: "Intentar de nuevo",
+    communityDirectorySignIn: "Volver al inicio de sesión",
     communityViewAllBusinesses: "Explorar más negocios",
     communityExploreMoreProfessionals: "Explorar más profesionales",
     communityShowFewerProfessionals: "Mostrar menos profesionales",
@@ -4818,6 +4861,9 @@ const highTrafficParityLabels = {
     communityShowFewerOpportunities: "Mostrar menos oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubre la historia destacada de la comunidad de hoy.",
+    communitySpotlightUnavailableTitle: "Las historias de la comunidad no están disponibles ahora.",
+    communitySpotlightUnavailableText:
+      "Meetro mostrará historias de Spotlight cuando exista una fuente autorizada.",
     communitySpotlightEyebrow: "Spotlight de hoy",
     communitySpotlightCue:
       "Conoce al profesional que ayudó a hacerlo posible.",
@@ -5186,6 +5232,26 @@ const highTrafficParityLabels = {
       "Les entreprises locales apparaîtront ici à mesure que Meetro grandira.",
     communityBusinessesEmptyText:
       "Bientôt, cet espace présentera des professionnels de confiance au service de votre communauté.",
+    communityDirectoryLoadingTitle: "Chargement des entreprises de la communauté...",
+    communityDirectoryLoadingText:
+      "Meetro consulte le répertoire actuel des entreprises.",
+    communityDirectoryEmptyTitle: "Aucun résultat communautaire ne correspond encore à cette vue.",
+    communityDirectoryEmptyText:
+      "Le répertoire a répondu correctement, mais aucune entreprise n’est encore disponible.",
+    communityDirectoryFilteredEmptyTitle: "Aucune entreprise ne correspond encore à cette recherche.",
+    communityDirectoryFilteredEmptyText:
+      "Essayez une autre recherche ou un autre centre d’intérêt sans modifier les résultats confirmés.",
+    communityDirectoryUnauthorizedTitle: "L’accès au répertoire nécessite votre attention.",
+    communityDirectoryUnauthorizedText:
+      "Reconnectez-vous avant de poursuivre la découverte de la communauté.",
+    communityDirectoryFailedTitle: "Les entreprises de la communauté n’ont pas pu être chargées.",
+    communityDirectoryFailedText:
+      "La demande n’a pas abouti. Réessayez pour consulter les résultats actuels.",
+    communityDirectoryUnavailableTitle: "La découverte des entreprises est indisponible actuellement.",
+    communityDirectoryUnavailableText:
+      "Meetro ne peut pas confirmer le répertoire actuel et n’affiche donc aucun résultat.",
+    communityDirectoryRetry: "Réessayer",
+    communityDirectorySignIn: "Retour à la connexion",
     communityViewAllBusinesses: "Explorer plus d’entreprises",
     communityExploreMoreProfessionals: "Explorer plus de professionnels",
     communityShowFewerProfessionals: "Afficher moins de professionnels",
@@ -5201,6 +5267,9 @@ const highTrafficParityLabels = {
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy:
       "Découvrez l’histoire communautaire mise en lumière aujourd’hui.",
+    communitySpotlightUnavailableTitle: "Les histoires de la communauté sont indisponibles actuellement.",
+    communitySpotlightUnavailableText:
+      "Meetro affichera les histoires Spotlight lorsqu’une source faisant autorité sera disponible.",
     communitySpotlightEyebrow: "Spotlight du jour",
     communitySpotlightCue:
       "Rencontrez le professionnel qui a aidé à rendre cela possible.",
@@ -5591,6 +5660,26 @@ const highTrafficParityLabels = {
       "Empresas locais aparecerão aqui à medida que o Meetro crescer.",
     communityBusinessesEmptyText:
       "Em breve, este espaço apresentará profissionais de confiança que atendem sua comunidade.",
+    communityDirectoryLoadingTitle: "Carregando empresas da comunidade...",
+    communityDirectoryLoadingText:
+      "O Meetro está consultando o diretório atual de empresas.",
+    communityDirectoryEmptyTitle: "Nenhum resultado da comunidade corresponde a esta visão ainda.",
+    communityDirectoryEmptyText:
+      "O diretório respondeu com sucesso, mas ainda não há empresas disponíveis.",
+    communityDirectoryFilteredEmptyTitle: "Nenhuma empresa corresponde a esta busca ainda.",
+    communityDirectoryFilteredEmptyText:
+      "Tente outra busca ou interesse sem alterar os resultados confirmados do diretório.",
+    communityDirectoryUnauthorizedTitle: "O acesso ao diretório precisa de atenção.",
+    communityDirectoryUnauthorizedText:
+      "Entre novamente antes de continuar a descoberta da comunidade.",
+    communityDirectoryFailedTitle: "Não foi possível carregar as empresas da comunidade.",
+    communityDirectoryFailedText:
+      "A solicitação não foi concluída. Tente novamente para consultar os resultados atuais.",
+    communityDirectoryUnavailableTitle: "A descoberta de empresas está indisponível agora.",
+    communityDirectoryUnavailableText:
+      "O Meetro não pode confirmar o diretório atual, por isso nenhum resultado é exibido.",
+    communityDirectoryRetry: "Tentar novamente",
+    communityDirectorySignIn: "Voltar ao Login",
     communityViewAllBusinesses: "Explorar mais empresas",
     communityExploreMoreProfessionals: "Explorar mais profissionais",
     communityShowFewerProfessionals: "Mostrar menos profissionais",
@@ -5605,6 +5694,9 @@ const highTrafficParityLabels = {
     communityShowFewerOpportunities: "Mostrar menos oportunidades",
     communitySpotlightTitle: "Spotlight",
     communitySpotlightCopy: "Descubra a história em destaque da comunidade de hoje.",
+    communitySpotlightUnavailableTitle: "As histórias da comunidade estão indisponíveis agora.",
+    communitySpotlightUnavailableText:
+      "O Meetro mostrará histórias do Spotlight quando houver uma fonte oficial disponível.",
     communitySpotlightEyebrow: "Spotlight de hoje",
     communitySpotlightCue:
       "Conheça o profissional que ajudou a tornar isso possível.",
