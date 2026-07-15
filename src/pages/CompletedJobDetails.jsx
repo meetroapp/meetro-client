@@ -24,28 +24,22 @@ import {
   guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
-
-function safeJsonParse(value, fallback = null) {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+import {
+  getDisplayPhotoUrl,
+  getMomentPreviewPhotos,
+  normalizeCompletedJobRecord,
+} from "../utils/completedJobDetails";
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function CompletedJobDetails({ setPage }) {
+function CompletedJobDetails({ setPage, completedRecord = null }) {
   const language = localStorage.getItem("language") || "en";
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const mediaDeferredCopy = getMediaDeferredCopy(language);
   const openedFromConversation = Boolean(getConversationOriginContext());
-  const completedProject = safeJsonParse(
-    localStorage.getItem("lastCompletedProject"),
-    null
-  );
+  const completedProject = normalizeCompletedJobRecord(completedRecord);
   const [savedReview, setSavedReview] = useState(completedProject?.review || null);
   const [completionApproved, setCompletionApproved] = useState(
     Boolean(
@@ -76,6 +70,43 @@ function CompletedJobDetails({ setPage }) {
   const [momentPreviewReflection, setMomentPreviewReflection] = useState("");
   const [momentCoverPhotoIndex, setMomentCoverPhotoIndex] = useState(0);
 
+  if (!completedProject) {
+    const isBusinessMode =
+      localStorage.getItem("activeAccountMode") === "business" ||
+      localStorage.getItem("accountType") === "professional";
+    const returnFromUnavailableRecord = () => {
+      if (isBusinessMode) {
+        localStorage.setItem("meetroWorkCenterTab", "history");
+        localStorage.setItem("activeWorkCenterTab", "history");
+        setPage("contractorDashboard");
+        return;
+      }
+      setPage("home");
+    };
+
+    return (
+      <div className="app-page meetro-readable-page" style={page}>
+        <main style={unavailableCard} aria-labelledby="completed-record-unavailable-title">
+          <h1 id="completed-record-unavailable-title" style={unavailableTitle}>
+            {t("completedJobDetailsUnavailable")}
+          </h1>
+          <p style={unavailableCopy}>{t("completedJobDetailsUnavailableBody")}</p>
+          <button
+            type="button"
+            style={primaryButton}
+            onClick={returnFromUnavailableRecord}
+          >
+            {isBusinessMode ? t("returnToWorkCenter") : t("backHome")}
+          </button>
+        </main>
+        <BottomNav
+          setPage={setPage}
+          currentPage={isBusinessMode ? "contractorDashboard" : "home"}
+        />
+      </div>
+    );
+  }
+
   const completedDateValue =
     completedProject?.completedAt ||
     completedProject?.closedAt ||
@@ -88,36 +119,29 @@ function CompletedJobDetails({ setPage }) {
   const service =
     completedProject?.title ||
     completedProject?.service ||
-    localStorage.getItem("completedJobService") ||
-    "Completed Job";
+    "";
 
   const type =
     completedProject?.category ||
     completedProject?.source ||
-    localStorage.getItem("completedJobType") ||
-    "Service";
+    "";
 
   const customer =
     completedProject?.homeownerName ||
     completedProject?.customerName ||
     completedProject?.customer ||
     completedProject?.username ||
-    localStorage.getItem("completedJobCustomer") ||
-    t("homeowner");
+    "";
 
   const location =
     completedProject?.location ||
-    localStorage.getItem("completedJobLocation") ||
-    "Cape Coral, FL";
+    "";
 
   const date =
-    completedDate?.toLocaleDateString() ||
-    localStorage.getItem("completedJobDate") ||
-    "Today";
+    completedDate?.toLocaleDateString() || "";
 
   const time =
-    formatMessageTime(completedDate || localStorage.getItem("completedJobTime")) ||
-    "";
+    formatMessageTime(completedDate) || "";
 
   const rawAmount =
     completedProject?.finalAmount ||
@@ -126,16 +150,13 @@ function CompletedJobDetails({ setPage }) {
     completedProject?.acceptedQuote?.amount ||
     completedProject?.quote?.amount ||
     completedProject?.quote?.total ||
-    localStorage.getItem("completedJobAmount") ||
-    "0";
+    "";
 
   const cleanAmount = Number(String(rawAmount).replace(/[^0-9.]/g, "")) || 0;
-  const amount = `+$${cleanAmount}`;
+  const amount = rawAmount === "" ? "" : `+$${cleanAmount}`;
 
   const rawMaterialCost =
-    completedProject?.acceptedQuote?.materials ||
-    localStorage.getItem("completedJobMaterialCost") ||
-    "0";
+    completedProject?.acceptedQuote?.materials || "";
 
   const materialCost = String(
     Math.max(Number(rawMaterialCost), 0)
@@ -150,13 +171,11 @@ function CompletedJobDetails({ setPage }) {
       ? safeArray(completedProject?.finalPhotos)
       : safeArray(completedProject?.completionRecord?.photos).length > 0
       ? safeArray(completedProject?.completionRecord?.photos)
-      : safeArray(safeJsonParse(localStorage.getItem("completedJobPhotos"), []));
+      : [];
 
   const rawCompletionNotes =
     completedProject?.acceptedQuote?.notes ||
-    completedProject?.description ||
-    localStorage.getItem("completedJobNotes") ||
-    "Customer reported issue resolved and work completed successfully.";
+    completedProject?.description || "";
 
   const completionNotes =
     String(rawCompletionNotes).toLowerCase().includes("after approval work starts")
@@ -168,9 +187,7 @@ function CompletedJobDetails({ setPage }) {
     completedProject?.businessName ||
     completedProject?.selectedProfessional ||
     completedProject?.acceptedQuote?.businessName ||
-    completedProject?.quote?.businessName ||
-    localStorage.getItem("businessName") ||
-    "Business";
+    completedProject?.quote?.businessName || "";
   const submittedReview = savedReview || completedProject?.review || null;
   const requestId =
     completedProject?.requestId ||
@@ -1495,29 +1512,6 @@ function recordIdentity(record = {}) {
     .map((value) => String(value));
 }
 
-function getDisplayPhotoUrl(photo) {
-  if (!photo) return "";
-  if (typeof photo === "string") return photo;
-  return photo.dataUrl || photo.url || photo.src || photo.previewUrl || photo.imageUrl || "";
-}
-
-function getMomentPreviewPhotos(moment = {}, completionPhotos = []) {
-  const photos = [
-    moment.coverPhoto,
-    ...(Array.isArray(moment.afterPhotos) ? moment.afterPhotos : []),
-    ...(Array.isArray(moment.beforePhotos) ? moment.beforePhotos : []),
-    ...(Array.isArray(completionPhotos) ? completionPhotos : []),
-  ].filter(Boolean);
-
-  const seen = new Set();
-  return photos.filter((photo) => {
-    const identity = getDisplayPhotoUrl(photo) || JSON.stringify(photo);
-    if (!identity || seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
-}
-
 function updateReviewedRecordInStorage(key, reviewedProject) {
   try {
     const records = JSON.parse(localStorage.getItem(key) || "[]");
@@ -1642,6 +1636,26 @@ const card = {
   borderRadius: "24px",
   padding: "16px",
   boxShadow: "0 18px 44px rgba(15,23,42,.08)",
+};
+
+const unavailableCard = {
+  ...card,
+  marginTop: "clamp(48px, 18vh, 160px)",
+  display: "grid",
+  gap: "16px",
+  textAlign: "center",
+};
+
+const unavailableTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "clamp(24px, 5vw, 32px)",
+};
+
+const unavailableCopy = {
+  margin: 0,
+  color: "#64748b",
+  lineHeight: 1.6,
 };
 
 const completionHeader = {

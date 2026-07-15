@@ -12185,11 +12185,42 @@ const hiringTruthLanguage = {
   },
 };
 
+const completedHistoryTruthLanguage = {
+  en: {
+    completedJobDetailsUnavailable: "Completed job details are not available.",
+    completedJobDetailsUnavailableBody:
+      "This record could not be found or is no longer available.",
+    returnToWorkCenter: "Return to Work Center",
+  },
+  es: {
+    completedJobDetailsUnavailable: "Los detalles del trabajo completado no están disponibles.",
+    completedJobDetailsUnavailableBody:
+      "No se pudo encontrar este registro o ya no está disponible.",
+    returnToWorkCenter: "Volver al Centro de Trabajo",
+  },
+  fr: {
+    completedJobDetailsUnavailable: "Les détails du travail terminé ne sont pas disponibles.",
+    completedJobDetailsUnavailableBody:
+      "Ce dossier est introuvable ou n’est plus disponible.",
+    returnToWorkCenter: "Retourner au Centre de Travail",
+  },
+  "pt-BR": {
+    completedJobDetailsUnavailable: "Os detalhes do trabalho concluído não estão disponíveis.",
+    completedJobDetailsUnavailableBody:
+      "Este registro não foi encontrado ou não está mais disponível.",
+    returnToWorkCenter: "Voltar ao Centro de Trabalho",
+  },
+};
+
 Object.entries(professionalLeadTruthLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
 Object.entries(hiringTruthLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(completedHistoryTruthLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
