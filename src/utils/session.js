@@ -391,9 +391,39 @@ export function restoreAuthenticatedSessionFromStorage(targetPage = "") {
   }
 
   const user = safeReadStoredUser();
+  const explicitBusinessOwnership = getExplicitBusinessProfileOwnership(user);
   const ownsBusinessProfile = hasBusinessProfileOwnership(user);
   const isProfessional = isProfessionalSession() || ownsBusinessProfile;
   let repaired = false;
+
+  const canonicalBusinessName = user.business_name || user.businessName || "";
+  const canonicalBusinessCategory =
+    user.business_category || user.businessCategory || "";
+
+  if (localStorage.getItem("businessName") !== canonicalBusinessName) {
+    localStorage.setItem("businessName", canonicalBusinessName);
+    repaired = true;
+  }
+
+  if (localStorage.getItem("businessCategory") !== canonicalBusinessCategory) {
+    localStorage.setItem("businessCategory", canonicalBusinessCategory);
+    repaired = true;
+  }
+
+  if (explicitBusinessOwnership === false) {
+    if (localStorage.getItem("hasBusinessProfile") !== "false") {
+      localStorage.setItem("hasBusinessProfile", "false");
+      repaired = true;
+    }
+    if (localStorage.getItem("contractorProfileComplete") !== "false") {
+      localStorage.setItem("contractorProfileComplete", "false");
+      repaired = true;
+    }
+    if (localStorage.getItem("contractorProfile")) {
+      localStorage.removeItem("contractorProfile");
+      repaired = true;
+    }
+  }
 
   if (isProfessional && localStorage.getItem("isProfessional") !== "true") {
     localStorage.setItem("isProfessional", "true");

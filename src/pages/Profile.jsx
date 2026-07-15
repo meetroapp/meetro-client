@@ -127,16 +127,10 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const userName = localStorage.getItem("userName") || "";
   const userEmail = localStorage.getItem("userEmail") || "";
 
-  const contractorProfileComplete =
-    localStorage.getItem("contractorProfileComplete") === "true";
-
   const hasBusinessAccess =
     hasBusinessProfileOwnership(user || {}) ||
     hasBusinessProfileOwnership(businessProfile || {}) ||
-    isProfessionalSession() ||
-    contractorProfileComplete ||
-    Boolean(localStorage.getItem("businessName")) ||
-    Boolean(localStorage.getItem("businessCategory"));
+    isProfessionalSession();
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
   const businessModeStatusLabel = isBusinessMode
@@ -584,8 +578,12 @@ function Profile({ setPage, currentPage, embedded = false }) {
   }
 
   const displayName =
-    isBusinessMode && businessName
-      ? businessName
+    isBusinessMode
+      ? businessProfile?.business_name ||
+        user?.business_name ||
+        user?.businessName ||
+        businessName ||
+        t("yourBusiness")
       : user?.username || user?.name || userName || user?.email || userEmail || t("meetroAccount");
 
   const displayEmail = user?.email || userEmail || t("emailNotAvailable");

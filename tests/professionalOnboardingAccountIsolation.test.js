@@ -181,3 +181,12 @@ test("Professional Onboarding reconciles only the authenticated owned profile", 
   assert.doesNotMatch(source, /readStorageValue\("businessEmail"\)/);
   assert.doesNotMatch(source, /readJson\(PROFILE_DRAFT_KEY/);
 });
+
+test("Profile does not use browser-global business identity as ownership", () => {
+  const source = readFileSync("src/pages/Profile.jsx", "utf8");
+
+  assert.doesNotMatch(source, /Boolean\(localStorage\.getItem\("businessName"\)\)/);
+  assert.doesNotMatch(source, /Boolean\(localStorage\.getItem\("businessCategory"\)\)/);
+  assert.match(source, /businessProfile\?\.business_name/);
+  assert.match(source, /user\?\.business_name/);
+});

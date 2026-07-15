@@ -323,3 +323,37 @@ test("switching authenticated accounts purges unscoped workflow records and pres
   assert.equal(localStorage.getItem("language"), "fr");
   assert.equal(localStorage.getItem("meetroCommunityDiscoveryInterests"), '["creative"]');
 });
+
+test("startup replaces stale business identity with the authenticated backend user", () => {
+  installStorage();
+  localStorage.setItem("token", "account-b-token");
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      id: "account-b",
+      email: "account-b@example.com",
+      account_type: "professional",
+      business_name: "Account B Business",
+      has_business_profile: false,
+    })
+  );
+  localStorage.setItem("userId", "account-b");
+  localStorage.setItem("businessName", "Account A Business");
+  localStorage.setItem("businessCategory", "account-a-category");
+  localStorage.setItem("hasBusinessProfile", "true");
+  localStorage.setItem("contractorProfileComplete", "true");
+  localStorage.setItem(
+    "contractorProfile",
+    JSON.stringify({ id: "profile-a", business_name: "Account A Business" })
+  );
+
+  const restored = restoreAuthenticatedSessionFromStorage("professionalOnboarding");
+
+  assert.equal(restored.authenticated, true);
+  assert.equal(restored.repaired, true);
+  assert.equal(localStorage.getItem("businessName"), "Account B Business");
+  assert.equal(localStorage.getItem("businessCategory"), "");
+  assert.equal(localStorage.getItem("hasBusinessProfile"), "false");
+  assert.equal(localStorage.getItem("contractorProfileComplete"), "false");
+  assert.equal(localStorage.getItem("contractorProfile"), null);
+});
