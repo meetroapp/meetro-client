@@ -593,13 +593,13 @@ test("professional setup gate preserves completed businesses on login", () => {
   assert.doesNotMatch(appSource, /meetroProfessionalOnboardingSkipped"\) === "true"\) return false/);
 });
 
-test("professional setup finalization persists services before marking setup complete", () => {
+test("professional setup finalization confirms backend profile before marking setup complete", () => {
   const onboardingSource = fs.readFileSync("src/pages/ProfessionalOnboarding.jsx", "utf8");
   const completionFlagIndex = onboardingSource.indexOf(
     "completed: true"
   );
-  const writeServiceIndex = onboardingSource.indexOf("writeBusinessServiceProfile");
-  const readBackIndex = onboardingSource.indexOf("readBusinessServiceProfile(localStorage)");
+  const writeServiceIndex = onboardingSource.lastIndexOf("writeBusinessServiceProfile");
+  const confirmedProfileIndex = onboardingSource.indexOf("getConfirmedBusinessProfile(result)");
 
   assert.match(onboardingSource, /hasRequiredCompletionData/);
   assert.match(onboardingSource, /try \{/);
@@ -607,17 +607,19 @@ test("professional setup finalization persists services before marking setup com
   assert.match(onboardingSource, /writeProfessionalOnboardingState/);
   assert.doesNotMatch(onboardingSource, /ONBOARDING_COMPLETED_KEY/);
   assert.ok(writeServiceIndex >= 0);
-  assert.ok(readBackIndex > writeServiceIndex);
-  assert.ok(completionFlagIndex > readBackIndex);
+  assert.ok(confirmedProfileIndex >= 0);
+  assert.ok(writeServiceIndex > confirmedProfileIndex);
+  assert.ok(completionFlagIndex > writeServiceIndex);
 });
 
 test("professional setup completion uses a safe post-setup destination", () => {
   const onboardingSource = fs.readFileSync("src/pages/ProfessionalOnboarding.jsx", "utf8");
 
   assert.match(onboardingSource, /SAFE_RETURN_PAGES/);
-  assert.match(onboardingSource, /"contractorProfile"/);
   assert.match(onboardingSource, /getSafeCompletionDestination/);
-  assert.match(onboardingSource, /SAFE_RETURN_PAGES\.has\(returnPage\) \? returnPage : "contractorProfile"/);
+  assert.match(onboardingSource, /SAFE_RETURN_PAGES\.has\(returnPage\) \? returnPage : "businessDashboard"/);
+  assert.match(onboardingSource, /getConfirmedBusinessProfile/);
+  assert.match(onboardingSource, /projectConfirmedProfessionalProfile/);
 });
 
 test("professional setup services persist in the expected shared capability format", () => {

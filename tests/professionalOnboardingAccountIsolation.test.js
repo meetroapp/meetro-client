@@ -6,6 +6,7 @@ import {
   getOwnedProfessionalProfile,
   getProfessionalOnboardingAccount,
   getProfessionalOnboardingKeys,
+  projectConfirmedProfessionalProfile,
   purgeLegacyProfessionalOnboardingStorage,
   readProfessionalOnboardingState,
   writeProfessionalOnboardingState,
@@ -133,6 +134,49 @@ test("only a contractor profile owned by the authenticated user can initialize s
   );
 });
 
+test("only a confirmed owned profile can unlock completed professional setup", () => {
+  const storage = createStorage();
+  installUser(storage, {
+    id: "user-b",
+    email: "owner-b@example.test",
+    business_name: "Business B",
+    has_business_profile: false,
+  });
+
+  assert.equal(
+    projectConfirmedProfessionalProfile(
+      {
+        id: "profile-a",
+        user_id: "user-a",
+        business_name: "Business A",
+        category: "marketing",
+      },
+      storage
+    ),
+    false
+  );
+  assert.equal(storage.getItem("hasBusinessProfile"), null);
+
+  assert.equal(
+    projectConfirmedProfessionalProfile(
+      {
+        id: "profile-b",
+        user_id: "user-b",
+        business_name: "Business B",
+        category: "marketing",
+      },
+      storage
+    ),
+    true
+  );
+  const user = JSON.parse(storage.getItem("user"));
+  assert.equal(user.contractor_profile_id, "profile-b");
+  assert.equal(user.has_business_profile, true);
+  assert.equal(storage.getItem("businessName"), "Business B");
+  assert.equal(storage.getItem("hasBusinessProfile"), "true");
+  assert.equal(storage.getItem("contractorProfileComplete"), "true");
+});
+
 test("identity mismatch fails closed before setup fields initialize", () => {
   const storage = createStorage({
     user: JSON.stringify({ id: "user-b", email: "owner-b@example.test" }),
@@ -180,6 +224,10 @@ test("Professional Onboarding reconciles only the authenticated owned profile", 
   assert.doesNotMatch(source, /readStorageValue\("businessPhone"\)/);
   assert.doesNotMatch(source, /readStorageValue\("businessEmail"\)/);
   assert.doesNotMatch(source, /readJson\(PROFILE_DRAFT_KEY/);
+  assert.match(source, /method: ownedProfile\?\.id \? "PUT" : "POST"/);
+  assert.match(source, /getConfirmedBusinessProfile/);
+  assert.match(source, /projectConfirmedProfessionalProfile/);
+  assert.match(source, /disabled=\{completionSaving\}/);
 });
 
 test("Profile does not use browser-global business identity as ownership", () => {

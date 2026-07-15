@@ -25,6 +25,8 @@ export function clearMeetroSession() {
     "firstLogin",
     "pendingLoginData",
     "pendingTwoFactorSession",
+    "contractorProfile",
+    "meetroDispatchReady",
   ];
 
   keysToRemove.forEach((key) => localStorage.removeItem(key));

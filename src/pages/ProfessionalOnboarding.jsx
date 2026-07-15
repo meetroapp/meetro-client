@@ -5,17 +5,21 @@ import ServiceSelectorSheet, {
 import { getLanguage, t } from "../utils/language";
 import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
+  buildProfessionalSpecialtyProfile,
 } from "../utils/professionalOnboardingSpecialties";
 import { getBusinessProfileCapabilityOptionsFromTaxonomy } from "../utils/communityTaxonomy";
-import {
-  readBusinessServiceProfile,
-  writeBusinessServiceProfile,
-} from "../utils/businessServiceProfile";
+import { writeBusinessServiceProfile } from "../utils/businessServiceProfile";
 import { authFetch } from "../utils/authFetch";
 import {
+  getOwnedProfessionalProfile,
+  projectConfirmedProfessionalProfile,
   readProfessionalOnboardingState,
   writeProfessionalOnboardingState,
 } from "../utils/professionalOnboardingStorage";
+import {
+  buildBusinessProfilePayload,
+  getConfirmedBusinessProfile,
+} from "../utils/businessProfilePersistence";
 
 const SAFE_RETURN_PAGES = new Set([
   "businessDashboard",
@@ -70,6 +74,9 @@ function ProfessionalOnboarding({ setPage }) {
   const [step, setStep] = useState(initialState.step);
   const [draft, setDraft] = useState(initialState.draft);
   const [profileReady, setProfileReady] = useState(false);
+  const [ownedProfile, setOwnedProfile] = useState(null);
+  const [completionSaving, setCompletionSaving] = useState(false);
+  const [completionError, setCompletionError] = useState("");
   const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
 
   useEffect(() => {
@@ -94,8 +101,15 @@ function ProfessionalOnboarding({ setPage }) {
       }
 
       if (!active) return;
-      const nextState = readProfessionalOnboardingState({ ownedProfile });
+      const confirmedOwnedProfile = getOwnedProfessionalProfile(
+        ownedProfile,
+        initialState.account
+      );
+      const nextState = readProfessionalOnboardingState({
+        ownedProfile: confirmedOwnedProfile,
+      });
       if (nextState.ready && nextState.account.identity === accountIdentity) {
+        setOwnedProfile(confirmedOwnedProfile);
         setDraft(nextState.draft);
         setStep(nextState.step);
       }
@@ -106,7 +120,7 @@ function ProfessionalOnboarding({ setPage }) {
     return () => {
       active = false;
     };
-  }, [accountIdentity, setPage]);
+  }, [accountIdentity, initialState.account, setPage]);
 
   const stepTitles = useMemo(
     () => [
@@ -178,7 +192,7 @@ function ProfessionalOnboarding({ setPage }) {
   };
 
   const getSafeCompletionDestination = () =>
-    SAFE_RETURN_PAGES.has(returnPage) ? returnPage : "contractorProfile";
+    SAFE_RETURN_PAGES.has(returnPage) ? returnPage : "businessDashboard";
 
   const goDashboard = () => {
     writeStorageValue("activeAccountMode", "business");
@@ -200,30 +214,75 @@ function ProfessionalOnboarding({ setPage }) {
         draft.availability.length > 0
     );
 
-  const completeOnboarding = () => {
+  const completeOnboarding = async () => {
+    if (completionSaving) return;
+    setCompletionError("");
+    setCompletionSaving(true);
+
     try {
+      const specialtyProfile = buildProfessionalSpecialtyProfile({
+        serviceSpecialties: draft.serviceSpecialties,
+        otherService: draft.otherService,
+      });
+
+      if (!hasRequiredCompletionData(specialtyProfile)) {
+        writeProfessionalOnboardingState({ draft, step: 2 });
+        setStep(2);
+        return;
+      }
+
+      const category =
+        draft.primaryServiceCategory || specialtyProfile.serviceCategories[0] || "";
+      const serviceArea = [
+        draft.primaryCity,
+        draft.zipCodes,
+        draft.serviceRadius === "Custom" ? draft.customRadius : draft.serviceRadius,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" · ");
+      const payload = buildBusinessProfilePayload({
+        businessName: draft.businessName,
+        category,
+        phone: draft.phone,
+        businessCity: draft.primaryCity,
+        businessPostalCode: draft.zipCodes,
+        serviceArea,
+        serviceSpecialties: specialtyProfile.serviceSpecialties,
+        availableNow: draft.availability.includes("Available Now"),
+        dispatchReady: draft.availability.includes("Same-Day Jobs"),
+      });
+      const endpoint = ownedProfile?.id
+        ? `/contractor-profiles/${ownedProfile.id}`
+        : "/contractor-profiles";
+      const result = await authFetch(
+        endpoint,
+        {
+          method: ownedProfile?.id ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+        },
+        setPage
+      );
+      const savedProfile = getConfirmedBusinessProfile(result);
+
+      if (!savedProfile || !projectConfirmedProfessionalProfile(savedProfile)) {
+        setCompletionError(result?.data?.error || t("failedCreateProfile"));
+        return;
+      }
+
+      setOwnedProfile(savedProfile);
       writeStorageValue("activeAccountMode", "business");
-      writeStorageValue("businessName", draft.businessName);
       writeStorageValue("businessContactName", draft.contactName);
-      writeStorageValue("businessPhone", draft.phone);
+      writeStorageValue("businessPhone", savedProfile.phone || "");
       writeStorageValue("businessEmail", draft.email);
       writeStorageValue("businessPrimaryCity", draft.primaryCity);
       writeStorageValue("businessZipCodes", draft.zipCodes);
       writeStorageValue("businessServiceRadius", draft.serviceRadius);
       writeStorageValue("businessAvailability", JSON.stringify(draft.availability));
-
-      const specialtyProfile = writeBusinessServiceProfile({
-        serviceSpecialties: draft.serviceSpecialties,
-        otherService: draft.otherService,
+      writeBusinessServiceProfile({
+        serviceSpecialties: savedProfile.service_specialties || [],
         serviceRadius: draft.serviceRadius,
       });
-      const savedProfile = readBusinessServiceProfile(localStorage);
-
-      if (!hasRequiredCompletionData(savedProfile)) {
-        writeProfessionalOnboardingState({ draft, step: 2 });
-        setStep(2);
-        return;
-      }
 
       writeProfessionalOnboardingState({
         draft: {
@@ -240,8 +299,9 @@ function ProfessionalOnboarding({ setPage }) {
       goDashboard();
     } catch (error) {
       console.error("Meetro professional setup finalization failed", error);
-      writeProfessionalOnboardingState({ draft, step: 2 });
-      setStep(2);
+      setCompletionError(t("serverError"));
+    } finally {
+      setCompletionSaving(false);
     }
   };
 
@@ -447,8 +507,18 @@ function ProfessionalOnboarding({ setPage }) {
                 </li>
               ))}
             </ul>
-            <button type="button" style={primaryButton} onClick={completeOnboarding}>
-              {t("professionalOnboardingGoDashboard")}
+            {completionError && (
+              <p role="alert" style={helperText}>{completionError}</p>
+            )}
+            <button
+              type="button"
+              style={primaryButton}
+              onClick={completeOnboarding}
+              disabled={completionSaving}
+            >
+              {completionSaving
+                ? t("pleaseWait")
+                : t("professionalOnboardingGoDashboard")}
             </button>
             <button type="button" style={secondaryButton} onClick={() => setStep(2)}>
               {t("professionalOnboardingReviewSetup")}

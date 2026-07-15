@@ -23,6 +23,8 @@ export const LEGACY_PROFESSIONAL_ONBOARDING_KEYS = Object.freeze([
   "businessServiceSpecialties",
   "businessServiceDomains",
   "businessServiceDomain",
+  "contractorProfile",
+  "meetroDispatchReady",
 ]);
 
 function parseObject(value) {
@@ -169,4 +171,29 @@ export function purgeLegacyProfessionalOnboardingStorage(
   if (!storage?.removeItem) return [];
   LEGACY_PROFESSIONAL_ONBOARDING_KEYS.forEach((key) => storage.removeItem(key));
   return [...LEGACY_PROFESSIONAL_ONBOARDING_KEYS];
+}
+
+export function projectConfirmedProfessionalProfile(
+  profile,
+  storage = globalThis.localStorage
+) {
+  const account = getProfessionalOnboardingAccount(storage);
+  const ownedProfile = getOwnedProfessionalProfile(profile, account);
+  if (!ownedProfile || !ownedProfile.id || !storage?.setItem) return false;
+
+  const nextUser = {
+    ...account.user,
+    business_name: ownedProfile.business_name || "",
+    business_category: ownedProfile.category || "",
+    has_business_profile: true,
+    hasBusinessProfile: true,
+    contractor_profile_id: ownedProfile.id,
+  };
+
+  storage.setItem("user", JSON.stringify(nextUser));
+  storage.setItem("businessName", ownedProfile.business_name || "");
+  storage.setItem("businessCategory", ownedProfile.category || "");
+  storage.setItem("hasBusinessProfile", "true");
+  storage.setItem("contractorProfileComplete", "true");
+  return true;
 }
