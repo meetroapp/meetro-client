@@ -24,7 +24,7 @@ test("parser-backed localization contract has no duplicate or unknown active key
 
 test("certified shared-interface keys have complete non-deferred parity", async () => {
   const audit = await auditLocalization();
-  assert.equal(SHARED_INTERFACE_KEYS.length, 84);
+  assert.equal(SHARED_INTERFACE_KEYS.length, 86);
   for (const missing of Object.values(audit.sharedMissingByLanguage)) {
     assert.deepEqual(missing, []);
   }
@@ -46,8 +46,8 @@ test("every active FR/PT gap is explicitly inventoried and EN/ES require no fall
   const audit = await auditLocalization();
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.en, []);
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.es, []);
-  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 446);
-  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 446);
+  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 444);
+  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 444);
   assert.deepEqual(audit.missingActiveByLanguage.fr, DEFERRED_TRANSLATION_KEYS.fr);
   assert.deepEqual(
     audit.missingActiveByLanguage["pt-BR"],

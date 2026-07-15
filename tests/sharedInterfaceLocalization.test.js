@@ -116,3 +116,14 @@ test("proper names and user content are not passed through translation lookup", 
   assert.match(nav, /label: "Meetro Moments"/);
   assert.doesNotMatch(nav, /t\(item\.label/);
 });
+
+test("shared account-mode controls do not depend on deferred route keys", () => {
+  const profile = read("src/pages/Profile.jsx");
+  const home = read("src/pages/Home.jsx");
+  assert.match(profile, /t\("accountModeBusiness", language\)/);
+  assert.match(profile, /t\("accountModePersonal", language\)/);
+  assert.match(home, /t\("accountModePersonal", language\)/);
+  assert.doesNotMatch(profile, /t\("businessMode"\)/);
+  assert.doesNotMatch(profile, /t\("personalMode"\)/);
+  assert.doesNotMatch(home, /t\("personalMode"\)/);
+});

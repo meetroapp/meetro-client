@@ -12477,6 +12477,8 @@ const sharedInterfaceLanguage = {
     accountRoleProfessional: "Professional",
     accountRolePersonal: "Personal",
     accountRoleBusiness: "Business",
+    accountModePersonal: "Personal Mode",
+    accountModeBusiness: "Business Mode",
     accountSwitchMode: "Switch account mode",
   },
   es: {
@@ -12563,6 +12565,8 @@ const sharedInterfaceLanguage = {
     accountRoleProfessional: "Profesional",
     accountRolePersonal: "Personal",
     accountRoleBusiness: "Negocio",
+    accountModePersonal: "Modo personal",
+    accountModeBusiness: "Modo negocio",
     accountSwitchMode: "Cambiar modo de cuenta",
   },
   fr: {
@@ -12649,6 +12653,8 @@ const sharedInterfaceLanguage = {
     accountRoleProfessional: "Professionnel",
     accountRolePersonal: "Personnel",
     accountRoleBusiness: "Entreprise",
+    accountModePersonal: "Mode personnel",
+    accountModeBusiness: "Mode entreprise",
     accountSwitchMode: "Changer de mode de compte",
   },
   "pt-BR": {
@@ -12735,6 +12741,8 @@ const sharedInterfaceLanguage = {
     accountRoleProfessional: "Profissional",
     accountRolePersonal: "Pessoal",
     accountRoleBusiness: "Empresa",
+    accountModePersonal: "Modo pessoal",
+    accountModeBusiness: "Modo empresarial",
     accountSwitchMode: "Alterar modo da conta",
   },
 };

@@ -1059,7 +1059,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
                 <span style={rowIcon}>
                   <ProfileIcon name="businessTools" size={18} />
                 </span>
-                <span>{t("businessMode")}</span>
+                <span>{t("accountModeBusiness", language)}</span>
               </span>
               <strong style={settingValue}>
                 {businessModeStatusLabel}
@@ -1312,7 +1312,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
           <h1 style={settingsTitle}>{t("profile")}</h1>
           <p style={settingsSubtitle}>
             {hasBusinessAccess
-              ? `${t("businessMode")} · ${businessModeStatusLabel}`
+              ? `${t("accountModeBusiness", language)} · ${businessModeStatusLabel}`
               : t("settingsPageSubtitle")}
           </p>
         </div>
@@ -1403,7 +1403,9 @@ function Profile({ setPage, currentPage, embedded = false }) {
           <p style={summaryEmail}>{displayEmail}</p>
         </div>
         <span style={summaryBadge}>
-          {isBusinessMode ? t("businessMode") : t("personalMode")}
+          {isBusinessMode
+            ? t("accountModeBusiness", language)
+            : t("accountModePersonal", language)}
         </span>
       </div>
 
@@ -1471,7 +1473,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
               <span style={rowIcon}>
                 <ProfileIcon name="businessTools" size={18} />
               </span>
-              <span>{t("businessMode")}</span>
+              <span>{t("accountModeBusiness", language)}</span>
             </span>
             <strong style={settingValue}>
               {businessModeStatusLabel}

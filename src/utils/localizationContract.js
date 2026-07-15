@@ -139,6 +139,8 @@ export const SHARED_INTERFACE_KEYS = Object.freeze([
   "accountRoleProfessional",
   "accountRolePersonal",
   "accountRoleBusiness",
+  "accountModePersonal",
+  "accountModeBusiness",
   "accountSwitchMode",
 ]);
 

@@ -374,7 +374,7 @@ function Home({ setPage }) {
           </button>
 
           <button style={secondaryButton} onClick={() => switchMode("personal")}>
-            {t("personalMode")}
+            {t("accountModePersonal", language)}
           </button>
         </div>
 
