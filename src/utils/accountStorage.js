@@ -1,4 +1,5 @@
 import { purgeLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
+import { purgeLegacyProfessionalOnboardingStorage } from "./professionalOnboardingStorage.js";
 
 const ACCOUNT_TRANSIENT_CONTEXT_KEYS = [
   "activeConversationId",
@@ -79,6 +80,7 @@ export function clearAccountWorkflowData() {
   });
 
   purgeLegacyWorkflowStorage(localStorage);
+  purgeLegacyProfessionalOnboardingStorage(localStorage);
 
   window.dispatchEvent(new Event("storage"));
   window.dispatchEvent(new Event("meetro-messages-updated"));

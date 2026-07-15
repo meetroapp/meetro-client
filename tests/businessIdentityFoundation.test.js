@@ -596,7 +596,7 @@ test("professional setup gate preserves completed businesses on login", () => {
 test("professional setup finalization persists services before marking setup complete", () => {
   const onboardingSource = fs.readFileSync("src/pages/ProfessionalOnboarding.jsx", "utf8");
   const completionFlagIndex = onboardingSource.indexOf(
-    'writeStorageValue(ONBOARDING_COMPLETED_KEY, "true")'
+    "completed: true"
   );
   const writeServiceIndex = onboardingSource.indexOf("writeBusinessServiceProfile");
   const readBackIndex = onboardingSource.indexOf("readBusinessServiceProfile(localStorage)");
@@ -604,7 +604,8 @@ test("professional setup finalization persists services before marking setup com
   assert.match(onboardingSource, /hasRequiredCompletionData/);
   assert.match(onboardingSource, /try \{/);
   assert.match(onboardingSource, /catch \(error\)/);
-  assert.match(onboardingSource, /removeStorageValue\(ONBOARDING_COMPLETED_KEY\)/);
+  assert.match(onboardingSource, /writeProfessionalOnboardingState/);
+  assert.doesNotMatch(onboardingSource, /ONBOARDING_COMPLETED_KEY/);
   assert.ok(writeServiceIndex >= 0);
   assert.ok(readBackIndex > writeServiceIndex);
   assert.ok(completionFlagIndex > readBackIndex);

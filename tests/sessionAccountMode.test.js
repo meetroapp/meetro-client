@@ -287,6 +287,13 @@ test("switching authenticated accounts purges unscoped workflow records and pres
   localStorage.setItem("meetro_business_schedule", '[{"id":"account-a-visit"}]');
   localStorage.setItem("meetro_conversation_account-a", '[{"text":"private"}]');
   localStorage.setItem("meetroTimelineMoments", '[{"id":"account-a-moment"}]');
+  localStorage.setItem(
+    "meetroProfessionalProfileDraft",
+    '{"businessName":"Account A Business","contactName":"Account A Owner"}'
+  );
+  localStorage.setItem("businessContactName", "Account A Owner");
+  localStorage.setItem("businessPhone", "1111111111");
+  localStorage.setItem("businessEmail", "account-a@example.com");
   localStorage.setItem("language", "fr");
   localStorage.setItem("meetroCommunityDiscoveryInterests", '["creative"]');
 
@@ -306,6 +313,10 @@ test("switching authenticated accounts purges unscoped workflow records and pres
   assert.equal(localStorage.getItem("meetro_business_schedule"), null);
   assert.equal(localStorage.getItem("meetro_conversation_account-a"), null);
   assert.equal(localStorage.getItem("meetroTimelineMoments"), null);
+  assert.equal(localStorage.getItem("meetroProfessionalProfileDraft"), null);
+  assert.equal(localStorage.getItem("businessContactName"), null);
+  assert.equal(localStorage.getItem("businessPhone"), null);
+  assert.equal(localStorage.getItem("businessEmail"), null);
   assert.equal(localStorage.getItem("userId"), "account-b");
   assert.equal(localStorage.getItem("token"), "account-b-token");
   assert.equal(localStorage.getItem("meetroLastAccountIdentity"), "id:account-b");

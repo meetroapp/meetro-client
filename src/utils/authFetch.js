@@ -24,6 +24,7 @@ export function clearMeetroSession() {
     "activeAccountMode",
     "firstLogin",
     "pendingLoginData",
+    "pendingTwoFactorSession",
   ];
 
   keysToRemove.forEach((key) => localStorage.removeItem(key));

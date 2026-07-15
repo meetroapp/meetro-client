@@ -6,19 +6,17 @@ import { getLanguage, t } from "../utils/language";
 import {
   PROFESSIONAL_ONBOARDING_SPECIALTY_GROUPS,
 } from "../utils/professionalOnboardingSpecialties";
-import {
-  normalizeProfessionalOnboardingDraft,
-  normalizeProfessionalOnboardingStep,
-} from "../utils/professionalOnboardingDraft";
 import { getBusinessProfileCapabilityOptionsFromTaxonomy } from "../utils/communityTaxonomy";
 import {
   readBusinessServiceProfile,
   writeBusinessServiceProfile,
 } from "../utils/businessServiceProfile";
+import { authFetch } from "../utils/authFetch";
+import {
+  readProfessionalOnboardingState,
+  writeProfessionalOnboardingState,
+} from "../utils/professionalOnboardingStorage";
 
-const ONBOARDING_KEY = "meetroProfessionalOnboarding";
-const ONBOARDING_COMPLETED_KEY = "meetroProfessionalOnboardingCompleted";
-const PROFILE_DRAFT_KEY = "meetroProfessionalProfileDraft";
 const SAFE_RETURN_PAGES = new Set([
   "businessDashboard",
   "businessCommandCenter",
@@ -39,14 +37,6 @@ const availabilityOptions = [
   { value: "Emergency Calls", labelKey: "professionalOnboardingAvailabilityEmergency" },
   { value: "Same-Day Jobs", labelKey: "professionalOnboardingAvailabilitySameDay" },
 ];
-
-function readJson(key, fallback = {}) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || "null") || fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 function readStorageValue(key, fallback = "") {
   try {
@@ -72,30 +62,51 @@ function removeStorageValue(key) {
   }
 }
 
-function createInitialDraft() {
-  const saved = readJson(PROFILE_DRAFT_KEY, {});
-  return normalizeProfessionalOnboardingDraft(saved, {
-    businessName: readStorageValue("businessName"),
-    contactName:
-      readStorageValue("businessContactName") || readStorageValue("userName"),
-    phone:
-      readStorageValue("businessPhone") ||
-      readStorageValue("emergencyBusinessPhone"),
-    email: readStorageValue("businessEmail") || readStorageValue("userEmail"),
-    primaryCity: readStorageValue("businessPrimaryCity"),
-    zipCodes: readStorageValue("businessZipCodes"),
-  });
-}
-
 function ProfessionalOnboarding({ setPage }) {
   const language = getLanguage();
   const returnPage = readStorageValue("meetroProfessionalOnboardingReturnPage");
-  const savedProgress = readJson(ONBOARDING_KEY, {});
-  const [step, setStep] = useState(
-    normalizeProfessionalOnboardingStep(savedProgress.step)
-  );
-  const [draft, setDraft] = useState(createInitialDraft);
+  const initialState = useMemo(() => readProfessionalOnboardingState(), []);
+  const accountIdentity = initialState.account.identity;
+  const [step, setStep] = useState(initialState.step);
+  const [draft, setDraft] = useState(initialState.draft);
+  const [profileReady, setProfileReady] = useState(false);
   const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function reconcileOwnedProfile() {
+      if (!accountIdentity) {
+        if (active) setProfileReady(true);
+        return;
+      }
+
+      let ownedProfile = null;
+      try {
+        const result = await authFetch(
+          "/my-contractor-profile",
+          { cache: "no-store", skipAuthExpirationHandling: true },
+          setPage
+        );
+        if (result?.response?.ok) ownedProfile = result.data?.profile || null;
+      } catch {
+        ownedProfile = null;
+      }
+
+      if (!active) return;
+      const nextState = readProfessionalOnboardingState({ ownedProfile });
+      if (nextState.ready && nextState.account.identity === accountIdentity) {
+        setDraft(nextState.draft);
+        setStep(nextState.step);
+      }
+      setProfileReady(true);
+    }
+
+    reconcileOwnedProfile();
+    return () => {
+      active = false;
+    };
+  }, [accountIdentity, setPage]);
 
   const stepTitles = useMemo(
     () => [
@@ -133,17 +144,9 @@ function ProfessionalOnboarding({ setPage }) {
     .filter(Boolean);
 
   useEffect(() => {
-    writeStorageValue(PROFILE_DRAFT_KEY, JSON.stringify(draft));
-    writeStorageValue(
-      ONBOARDING_KEY,
-      JSON.stringify({
-        step,
-        skipped: readStorageValue("meetroProfessionalOnboardingSkipped") === "true",
-        completed: readStorageValue(ONBOARDING_COMPLETED_KEY) === "true",
-        updatedAt: new Date().toISOString(),
-      })
-    );
-  }, [draft, step]);
+    if (!profileReady || !accountIdentity) return;
+    writeProfessionalOnboardingState({ draft, step });
+  }, [accountIdentity, draft, profileReady, step]);
 
   const updateDraft = (field, value) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -185,16 +188,7 @@ function ProfessionalOnboarding({ setPage }) {
   };
 
   const skipOnboarding = () => {
-    writeStorageValue("meetroProfessionalOnboardingSkipped", "true");
-    writeStorageValue(
-      ONBOARDING_KEY,
-      JSON.stringify({
-        step,
-        skipped: true,
-        completed: false,
-        updatedAt: new Date().toISOString(),
-      })
-    );
+    writeProfessionalOnboardingState({ draft, step, skipped: true });
     goDashboard();
   };
 
@@ -226,37 +220,27 @@ function ProfessionalOnboarding({ setPage }) {
       const savedProfile = readBusinessServiceProfile(localStorage);
 
       if (!hasRequiredCompletionData(savedProfile)) {
-        removeStorageValue(ONBOARDING_COMPLETED_KEY);
+        writeProfessionalOnboardingState({ draft, step: 2 });
         setStep(2);
         return;
       }
 
-      writeStorageValue(
-        PROFILE_DRAFT_KEY,
-        JSON.stringify({
+      writeProfessionalOnboardingState({
+        draft: {
           ...draft,
           serviceCategories: specialtyProfile.serviceCategories,
           serviceSpecialties: specialtyProfile.serviceSpecialties,
           serviceDomains: specialtyProfile.serviceDomains,
           serviceDomain: specialtyProfile.serviceDomain,
           primaryServiceCategory: draft.primaryServiceCategory,
-        })
-      );
-      writeStorageValue(
-        ONBOARDING_KEY,
-        JSON.stringify({
-          step: 6,
-          skipped: false,
-          completed: true,
-          updatedAt: new Date().toISOString(),
-        })
-      );
-      writeStorageValue(ONBOARDING_COMPLETED_KEY, "true");
-      removeStorageValue("meetroProfessionalOnboardingSkipped");
+        },
+        step: 6,
+        completed: true,
+      });
       goDashboard();
     } catch (error) {
       console.error("Meetro professional setup finalization failed", error);
-      removeStorageValue(ONBOARDING_COMPLETED_KEY);
+      writeProfessionalOnboardingState({ draft, step: 2 });
       setStep(2);
     }
   };
@@ -279,6 +263,19 @@ function ProfessionalOnboarding({ setPage }) {
       done: draft.availability.length > 0,
     },
   ];
+
+  if (!initialState.ready || !profileReady) {
+    return (
+      <main className="professional-onboarding-page" style={page}>
+        <section style={shell}>
+          <div style={card} aria-live="polite">
+            <p style={eyebrow}>{t("professionalSetup")}</p>
+            <h1 style={titleStyle}>{t("pleaseWait")}</h1>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="professional-onboarding-page" style={page}>
