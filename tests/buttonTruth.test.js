@@ -89,13 +89,13 @@ test("Work Center landing copy stays responsibility-first and avoids duplicate c
     "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes."
   );
   assert.match(contractorDashboardSource, /workCenterProfessionalPerspectiveLine/);
-  assert.match(contractorDashboardSource, /New requests that need a decision\./);
-  assert.match(contractorDashboardSource, /Accepted work that still needs action\./);
-  assert.match(contractorDashboardSource, /Upcoming visits and appointments\./);
-  assert.match(contractorDashboardSource, /Proposals that need review or response\./);
-  assert.match(contractorDashboardSource, /On-site work that needs an update\./);
-  assert.match(contractorDashboardSource, /Closed jobs and saved records\./);
-  assert.match(contractorDashboardSource, /Payments, balances, and closed jobs\./);
+  assert.match(contractorDashboardSource, /workCenterNewRequestsThatNeedADecision/);
+  assert.match(contractorDashboardSource, /workCenterAcceptedWorkThatStillNeedsAction/);
+  assert.match(contractorDashboardSource, /workCenterUpcomingVisitsAndAppointments/);
+  assert.match(contractorDashboardSource, /workCenterProposalsThatNeedReviewOrResponse/);
+  assert.match(contractorDashboardSource, /workCenterOnSiteWorkThatNeedsAnUpdate/);
+  assert.match(contractorDashboardSource, /workCenterClosedJobsAndSavedRecords/);
+  assert.match(contractorDashboardSource, /workCenterPaymentsBalancesAndClosedJobs/);
   assert.doesNotMatch(
     contractorDashboardSource,
     /workCenterDashboardSummary[\s\S]{0,260}newOpportunity/

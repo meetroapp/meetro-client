@@ -319,5 +319,5 @@ test("ConversationThread delegates display identity normalization to the shared 
   assert.doesNotMatch(threadSource, /localStorage\.getItem\("meetroBusinessProfilePhoto"\)/);
   assert.doesNotMatch(threadSource, /localStorage\.getItem\("meetroPersonalProfilePhoto"\)/);
   assert.match(threadSource, /function textActiveContact\(\)/);
-  assert.match(threadSource, /Edit \/ More/);
+  assert.match(threadSource, /messagesEditMore/);
 });

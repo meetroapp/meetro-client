@@ -1,5 +1,6 @@
 import { Component, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
+import useLanguage from "../hooks/useLanguage";
 import { getLanguage, t } from "../utils/language";
 import {
   formatDateTimeDisplay,
@@ -670,6 +671,18 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const gallerySwipeStartRef = useRef({ x: 0, y: 0 });
   const textareaRef = useRef(null);
 
+  const getLocalizedMessageField = useCallback(
+    (message, field) => {
+      const key = message?.[`${field}Key`];
+      const value = key
+        ? t(key, language, message?.[`${field}Variables`] || {})
+        : message?.[field] || "";
+      const prefix = message?.[`${field}Prefix`];
+      return prefix && value ? `${prefix} • ${value}` : value;
+    },
+    [language]
+  );
+
   const galleryImages = useMemo(
     () =>
       messages
@@ -677,9 +690,9 @@ function ConversationThreadInner({ setPage, embedded = false }) {
         .map((message) => ({
           id: String(message.id),
           imageUrl: message.imageUrl,
-          alt: message.fileName || message.title || t("conversationPhoto"),
+          alt: message.fileName || getLocalizedMessageField(message, "title") || t("conversationPhoto"),
         })),
-    [messages, language]
+    [messages, getLocalizedMessageField]
   );
 
   const activeGalleryIndex = previewImage
@@ -699,7 +712,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     setPreviewImage({
       id: String(message.id),
       imageUrl: message.imageUrl,
-      alt: message.fileName || message.title || t("conversationPhoto"),
+      alt: message.fileName || getLocalizedMessageField(message, "title") || t("conversationPhoto"),
     });
   }
 
@@ -874,34 +887,22 @@ useEffect(() => {
 
   const emergencyStatusSubtitle = {
     pending:
-      language === "es"
-        ? "Esperando aceptación"
-        : "Waiting for acceptance",
+      t("conversationWaitingForAcceptance", language),
 
     accepted:
-      language === "es"
-        ? "Solicitud aceptada"
-        : "Request accepted",
+      t("requestAccepted", language),
 
     enroute:
-      language === "es"
-        ? "Profesional en camino"
-        : "Professional on the way",
+      t("professionalOnTheWay", language),
 
     arrived:
-      language === "es"
-        ? "Profesional llegó"
-        : "Professional arrived",
+      t("statusArrived", language),
 
     started:
-      language === "es"
-        ? "Trabajo en progreso"
-        : "Work in progress",
+      t("workflowNoteWorking", language),
 
     completed:
-      language === "es"
-        ? "Conversación archivada en historial"
-        : "Conversation archived in history",
+      t("conversationConversationArchivedInHistory", language),
   }[emergencyDispatchStatus];
 
   const emergencyStepIndex = {
@@ -959,10 +960,10 @@ useEffect(() => {
   const activeName = isEmergencyConversation
     ? activeJobService ||
       localStorage.getItem("activeConversationName") ||
-      (language === "es" ? "Emergencia" : "Emergency")
+      (t("messagesSectionEmergency", language))
     : conversationBusinessName ||
       localStorage.getItem("activeConversationName") ||
-      (language === "es" ? "Negocio de Meetro" : "Meetro Business");
+      (t("conversationMeetroBusiness", language));
 
   const activeCategory =
     selectedBusiness?.category || selectedBusiness?.businessCategory || "";
@@ -1091,21 +1092,21 @@ useEffect(() => {
     activeEmergencyRecord.title ||
     activeJobService ||
     localStorage.getItem("selectedEmergencyService") ||
-    (language === "es" ? "Servicio de emergencia" : "Emergency Service");
+    (t("messagesEmergencyService", language));
 
   const emergencyCustomerName =
     activeEmergencyRecord.customerName ||
     localStorage.getItem("emergencyCustomerName") ||
     localStorage.getItem("homeownerName") ||
     localStorage.getItem("userName") ||
-    (language === "es" ? "Cliente" : "Customer");
+    (t("messagesContactType_customer", language));
 
   const emergencyBusinessName =
     activeEmergencyRecord.businessName ||
     localStorage.getItem("emergencyBusinessName") ||
     localStorage.getItem("selectedEmergencyBusiness") ||
     localStorage.getItem("businessName") ||
-    (language === "es" ? "Profesional" : "Professional");
+    (t("messagesOwnerProfessional", language));
 
   const emergencyBusinessPhone =
     activeEmergencyRecord.businessPhone ||
@@ -1208,9 +1209,7 @@ useEffect(() => {
 
     if (!phoneNumber) {
       alert(
-        language === "es"
-          ? "No hay teléfono agregado para este contacto."
-          : "No phone number has been added for this contact."
+        t("conversationNoPhoneNumberHasBeenAddedForThisContact", language)
       );
       return;
     }
@@ -1225,9 +1224,7 @@ useEffect(() => {
 
     if (!phoneNumber) {
       alert(
-        language === "es"
-          ? "No hay teléfono agregado para este contacto."
-          : "No phone number has been added for this contact."
+        t("conversationNoPhoneNumberHasBeenAddedForThisContact", language)
       );
       return;
     }
@@ -1242,9 +1239,7 @@ useEffect(() => {
 
     if (!email) {
       alert(
-        language === "es"
-          ? "No hay correo agregado para este contacto."
-          : "No email address has been added for this contact."
+        t("conversationNoEmailAddressHasBeenAddedForThisContact", language)
       );
       return;
     }
@@ -1282,7 +1277,7 @@ useEffect(() => {
   const activeHeaderProject = isEmergencyThread
     ? emergencyServiceName
     : isHiringThread
-    ? hiringPositionTitle || (language === "es" ? "Posición" : "Position")
+    ? hiringPositionTitle || (t("position", language))
     : firstIdentityValue(
       conversationRegistryItem?.project_title,
       conversationRegistryItem?.projectTitle,
@@ -1290,7 +1285,7 @@ useEffect(() => {
       conversationLinkedSelectedConversation?.projectTitle,
       conversationLinkedSelectedConversation?.project_title
     ) ||
-      (language === "es" ? "Conversación de proyecto" : "Project Conversation");
+      (t("conversationProjectConversation", language));
 
   const activeWorkConversationId = localStorage.getItem("activeWorkConversationId") || "";
   const isActiveWorkLinkedToConversation =
@@ -1312,44 +1307,44 @@ useEffect(() => {
 
   const activeProjectStageLabel = (() => {
     if (isEmergencyThread) {
-      return language === "es" ? "Despacho de emergencia" : "Emergency Dispatch";
+      return t("emergencyDispatch", language);
     }
 
     if (isHiringThread) {
-      return language === "es" ? "Contratación" : "Hiring";
+      return t("messagesSectionHiring", language);
     }
 
     const stage = String(activeProjectStage || "").toLowerCase();
 
     if (stage.includes("quote") || stage.includes("quoted")) {
-      return language === "es" ? "Cotización" : "Quote";
+      return t("assistantProjectBriefDocumentQuote", language);
     }
 
     if (stage.includes("schedule") || stage.includes("visit")) {
-      return language === "es" ? "Programación" : "Schedule";
+      return t("workCenterScheduleTitle", language);
     }
 
     if (stage.includes("accepted")) {
-      return language === "es" ? "Aceptado" : "Accepted";
+      return t("accepted", language);
     }
 
     if (stage.includes("active") || stage.includes("working")) {
-      return language === "es" ? "Trabajo activo" : "Active Job";
+      return t("activeJob", language);
     }
 
     if (stage.includes("completed")) {
-      return language === "es" ? "Completado" : "Completed";
+      return t("momentDetailJourney_completed", language);
     }
 
     if (stage.includes("revision")) {
-      return language === "es" ? "Revisión" : "Revision";
+      return t("workCenterRevision", language);
     }
 
     if (stage.includes("materials")) {
-      return language === "es" ? "Materiales" : "Materials";
+      return t("workStageMaterials", language);
     }
 
-    return language === "es" ? "Conversación de proyecto" : "Project Conversation";
+    return t("conversationProjectConversation", language);
   })();
 
   const openReviewProjectFromMessage = (messageRecord = {}) => {
@@ -1434,15 +1429,11 @@ useEffect(() => {
 
   const displayCategory =
     isHiringThread
-      ? language === "es"
-        ? "Contratación"
-        : "Hiring"
+      ? t("messagesSectionHiring", language)
       :
     currentViewerRole === "business"
-      ? language === "es"
-        ? "Cliente"
-        : "Customer"
-      : activeCategory || (language === "es" ? "Profesional" : "Professional");
+      ? t("messagesContactType_customer", language)
+      : activeCategory || (t("messagesOwnerProfessional", language));
 
   const displayLocation =
     isHiringThread
@@ -1804,9 +1795,7 @@ useEffect(() => {
     if (!contactName) {
       setShowThreadMenu(false);
       setSaveNotice(
-        language === "es"
-          ? "No se encontró un nombre para guardar."
-          : "No contact name was available to save."
+        t("conversationNoContactNameWasAvailableToSave", language)
       );
       setTimeout(() => setSaveNotice(""), 2200);
       return;
@@ -1944,17 +1933,13 @@ useEffect(() => {
 
       setShowThreadMenu(false);
       setSaveNotice(
-        language === "es"
-          ? "Guardado en Contactos."
-          : "Saved to Contacts."
+        t("conversationSavedToContacts", language)
       );
     } catch (error) {
       console.error("Save to Contacts failed", error);
       setShowThreadMenu(false);
       setSaveNotice(
-        language === "es"
-          ? "No se pudo guardar en Contactos. Inténtalo de nuevo."
-          : "Could not save to Contacts. Please try again."
+        t("conversationCouldNotSaveToContactsPleaseTryAgain", language)
       );
     }
     setTimeout(() => setSaveNotice(""), 2200);
@@ -2075,12 +2060,12 @@ useEffect(() => {
     .reverse()
     .map((message) => ({
       title:
-        message.title ||
+        getLocalizedMessageField(message, "title") ||
         message.receipt?.service ||
         message.invoice?.service ||
         t("documentReceipt", language),
       meta:
-        message.subtitle ||
+        getLocalizedMessageField(message, "subtitle") ||
         message.receipt?.total ||
         message.invoice?.total ||
         message.time ||
@@ -2103,16 +2088,16 @@ useEffect(() => {
     .slice(0, 4)
     .map((item) => ({
       title:
-        item.title ||
+        getLocalizedMessageField(item, "title") ||
         item.fileName ||
         item.photoType ||
         t("relationshipDocument", language),
-      meta: item.subtitle || item.time || item.createdAt || "",
+      meta: getLocalizedMessageField(item, "subtitle") || item.time || item.createdAt || "",
     }));
 
   const relationshipMemoryItems = jobRecords.slice(0, 3).map((item) => ({
-    title: item.title || t("relationshipMemory", language),
-    meta: item.subtitle || item.savedAt || item.time || "",
+    title: getLocalizedMessageField(item, "title") || t("relationshipMemory", language),
+    meta: getLocalizedMessageField(item, "subtitle") || item.savedAt || item.time || "",
   }));
   const relationshipIdentityActions = [
     {
@@ -2121,28 +2106,28 @@ useEffect(() => {
       onClick: () => setShowProfileCard(false),
     },
     {
-      label: language === "es" ? "Texto" : "Text",
+      label: t("messagesTextAction", language),
       onClick: () => {
         setShowProfileCard(false);
         textActiveContact();
       },
     },
     {
-      label: language === "es" ? "Llamar" : "Call",
+      label: t("messagesCallAction", language),
       onClick: () => {
         setShowProfileCard(false);
         callActiveContact();
       },
     },
     {
-      label: language === "es" ? "Correo" : "Email",
+      label: t("relationshipEmail", language),
       onClick: () => {
         setShowProfileCard(false);
         emailActiveContact();
       },
     },
     {
-      label: language === "es" ? "Editar / más" : "Edit / More",
+      label: t("messagesEditMore", language),
       onClick: () => {
         setShowProfileCard(false);
         setShowThreadMenu(true);
@@ -2276,114 +2261,44 @@ useEffect(() => {
 
     const isBusinessUser =
       currentViewerRole === "business";
+    const addReplyKeys = (keys) => addReplies(keys.map((key) => t(key, language)));
 
     if (activeConversationType === "emergency" && isBusinessUser) {
       const emergencyState = asEmergencyState();
 
       if (emergencyState === "completed") {
-        addReplies(
-          language === "es"
-            ? ["Gracias", "Guardar historial", "Enviar seguimiento"]
-            : ["Thank you", "Save history", "Send follow-up"]
-        );
+        addReplyKeys(["conversationReplyThankYou", "conversationReplySaveHistory", "conversationReplySendFollowUp"]);
       } else if (emergencyState === "started") {
-        addReplies(
-          language === "es"
-            ? [
-                "Completar trabajo",
-                "Enviar actualización",
-                "Necesito piezas",
-              ]
-            : [
-                "Complete Job",
-                "Send update",
-                "Need parts",
-              ]
-        );
+        addReplyKeys(["conversationReplyCompleteJob", "conversationReplySendUpdate", "conversationReplyNeedParts"]);
       } else if (emergencyState === "arrived") {
-        addReplies(
-          language === "es"
-            ? ["Enviar actualización", "Trabajo completado", "¿Necesitas algo más?"]
-            : ["Send update", "Work completed", "Anything else needed?"]
-        );
+        addReplyKeys(["conversationReplySendUpdate", "conversationReplyWorkCompleted", "conversationReplyAnythingElse"]);
       } else if (emergencyState === "onway") {
-        addReplies(
-          language === "es"
-            ? ["Voy en camino", "Te llamo", "Estoy revisando"]
-            : ["On the way", "I’m calling", "Checking now"]
-        );
+        addReplyKeys(["conversationReplyOnTheWay", "conversationReplyCalling", "conversationReplyCheckingNow"]);
       } else {
-        addReplies(
-          language === "es"
-            ? ["Voy en camino", "Llegué", "Estoy revisando", "Trabajo iniciado"]
-            : ["On the way", "I arrived", "Checking now", "Job started"]
-        );
+        addReplyKeys(["conversationReplyOnTheWay", "conversationReplyArrived", "conversationReplyCheckingNow", "conversationReplyJobStarted"]);
       }
     } else if (activeConversationType === "emergency" && !isBusinessUser) {
       const emergencyState = asEmergencyState();
 
       if (emergencyState === "completed") {
-        addReplies(
-          language === "es"
-            ? ["Gracias", "Dejar reseña", "Guardar historial"]
-            : ["Thank you", "Leave review", "Save history"]
-        );
+        addReplyKeys(["conversationReplyThankYou", "conversationReplyLeaveReview", "conversationReplySaveHistory"]);
       }
 
       if (emergencyState === "started" || emergencyState === "arrived") {
-        addReplies(
-          language === "es"
-            ? ["¿Todo bien?", "Gracias", "Necesito actualizar"]
-            : ["Is everything okay?", "Thank you", "Need an update"]
-        );
+        addReplyKeys(["conversationReplyEverythingOkay", "conversationReplyThankYou", "conversationReplyNeedUpdate"]);
       } else {
-        addReplies(
-          language === "es"
-            ? ["¿Alguna actualización?", "Gracias", "La puerta está abierta"]
-            : ["Any update?", "Thank you", "Door is unlocked"]
-        );
+        addReplyKeys(["conversationReplyAnyUpdate", "conversationReplyThankYou", "conversationReplyDoorUnlocked"]);
       }
     } else if (isHiringConversationType(activeConversationType)) {
       if (isBusinessUser) {
-        addReplies(
-          language === "es"
-            ? [
-                "Gracias por aplicar",
-                "¿Cuándo estás disponible?",
-                "Cuéntame tu experiencia",
-                "Programemos entrevista",
-              ]
-            : [
-                "Thanks for applying",
-                "When are you available?",
-                "Tell me about your experience",
-                "Let’s schedule an interview",
-              ]
-        );
+        addReplyKeys(["conversationReplyThanksForApplying", "conversationReplyWhenAvailable", "conversationReplyTellExperience", "conversationReplyScheduleInterview"]);
       } else {
-        addReplies(
-          language === "es"
-            ? ["Estoy interesado", "Tengo transporte", "Estoy disponible esta semana", "Gracias"]
-            : ["I’m interested", "I have transportation", "I’m available this week", "Thank you"]
-        );
+        addReplyKeys(["conversationReplyInterested", "conversationReplyHaveTransportation", "conversationReplyAvailableThisWeek", "conversationReplyThankYou"]);
       }
     } else if (isBusinessUser) {
-      addReplies(
-        language === "es"
-          ? ["Puedo ayudarte", "Envíame fotos", "Te aviso pronto", "Gracias"]
-          : ["I can help", "Send me photos", "I’ll update you soon", "Thank you"]
-      );
+      addReplyKeys(["conversationReplyCanHelp", "conversationReplySendPhotos", "conversationReplyUpdateSoon", "conversationReplyThankYou"]);
     } else {
-      addReplies(
-        language === "es"
-          ? ["¿Cuándo estás disponible?", "¿Me puedes dar precio?", "Te envío fotos", "Gracias"]
-          : [
-              "When are you available?",
-              "Can you send pricing?",
-              "I’ll send photos",
-              "Thank you",
-            ]
-      );
+      addReplyKeys(["conversationReplyWhenAvailable", "conversationReplyCanSendPricing", "conversationReplyWillSendPhotos", "conversationReplyThankYou"]);
     }
 
     return dedupeReplies(replies).slice(0, 4);
@@ -2395,9 +2310,7 @@ useEffect(() => {
         type: "text",
         sender: "client",
         text:
-          language === "es"
-            ? "Hola, necesito ayuda con un proyecto en mi casa."
-            : "Hi, I need help with a project at my house.",
+          t("conversationHiINeedHelpWithAProjectAtMyHouse", language),
         time: "9:42 AM",
         status: "seen",
         seenAt: "9:44 AM",
@@ -2692,17 +2605,11 @@ useEffect(() => {
 
       const lastMessageText =
         lastMessage?.type === "image"
-          ? language === "es"
-            ? "Imagen adjunta"
-            : "Image attached"
+          ? t("conversationImageAttached", language)
           : lastMessage?.type === "location"
-          ? language === "es"
-            ? "Ubicación compartida"
-            : "Location shared"
+          ? t("conversationLocationShared", language)
           : lastMessage?.type === "scan"
-          ? language === "es"
-            ? "Documento escaneado"
-            : "Document scan"
+          ? t("conversationDocumentScan", language)
           : lastMessage?.title || lastMessage?.text || "";
 
       const metaPayload = {
@@ -3061,49 +2968,31 @@ useEffect(() => {
     const id = `msg-${Date.now()}`;
 
     if (pendingImage) {
+      const enteredPhotoText = text || (pendingPhotoPurpose === "explain" ? photoExplanationText.trim() : "");
+      const defaultTextKey = pendingPhotoPurpose === "explain"
+        ? "conversationProjectExplanationPhoto"
+        : currentViewerRole === "business"
+          ? "conversationProjectPhoto"
+          : "conversationCustomerUploadedPhoto";
+      const titleKey = pendingPhotoPurpose === "explain"
+        ? "conversationProjectExplanationPhoto2"
+        : currentViewerRole === "business"
+          ? "conversationProjectPhoto2"
+          : "conversationCustomerPhoto";
+      const subtitleKey = pendingPhotoPurpose === "explain"
+        ? "conversationImageSentToHelpExplainTheJob"
+        : currentViewerRole === "business"
+          ? "conversationPhotoSharedWithCustomer"
+          : "conversationImageSentToExplainTheProject";
       const imageMessagePayload = {
         id,
         type: "image",
         sender: "me",
         senderRole: currentViewerRole,
-        text:
-          text ||
-          (pendingPhotoPurpose === "explain"
-            ? photoExplanationText.trim() ||
-              (language === "es"
-                ? "Foto para explicar el proyecto"
-                : "Project explanation photo")
-            : currentViewerRole === "business"
-            ? language === "es"
-              ? "Foto del proyecto"
-              : "Project photo"
-            : language === "es"
-            ? "Foto enviada por el cliente"
-            : "Customer uploaded photo"),
-        title:
-          pendingPhotoPurpose === "explain"
-            ? language === "es"
-              ? "Explicación con foto"
-              : "Project Explanation Photo"
-            : currentViewerRole === "business"
-            ? language === "es"
-              ? "Foto del proyecto"
-              : "Project Photo"
-            : language === "es"
-            ? "Foto del cliente"
-            : "Customer Photo",
-        subtitle:
-          pendingPhotoPurpose === "explain"
-            ? language === "es"
-              ? "Imagen enviada para ayudar a explicar el trabajo"
-              : "Image sent to help explain the job"
-            : currentViewerRole === "business"
-            ? language === "es"
-              ? "Foto compartida con el cliente"
-              : "Photo shared with customer"
-            : language === "es"
-            ? "Imagen enviada para explicar el proyecto"
-            : "Image sent to explain the project",
+        text: enteredPhotoText,
+        textKey: enteredPhotoText ? "" : defaultTextKey,
+        titleKey,
+        subtitleKey,
         imageUrl: pendingImage.url,
         fileName: pendingImage.name,
         time: getTime(),
@@ -3122,15 +3011,10 @@ useEffect(() => {
           id: `job-record-${Date.now()}`,
           conversationId,
           type: "project_explanation_photo",
-          title:
-            language === "es"
-              ? "Foto de explicación"
-              : "Project Explanation Photo",
-          subtitle:
-            language === "es"
-              ? "Contexto enviado por el cliente"
-              : "Customer project context",
+          titleKey: "conversationProjectExplanationPhoto3",
+          subtitleKey: "conversationCustomerProjectContext",
           text: imageMessagePayload.text || "",
+          textKey: imageMessagePayload.textKey || "",
           imageUrl: imageMessagePayload.imageUrl || "",
           fileName: imageMessagePayload.fileName || "",
           workflowType: "customer_explanation",
@@ -3180,12 +3064,9 @@ useEffect(() => {
       type: "location",
       sender: "me",
       senderRole: currentViewerRole,
-      text: language === "es" ? "Ubicación compartida" : "Location shared",
-      title: language === "es" ? "Ubicación del proyecto" : "Project location",
-      subtitle:
-        language === "es"
-          ? "Mapa y dirección próximamente"
-          : "Map and address coming soon",
+      textKey: "conversationLocationShared",
+      titleKey: "momentDetailLocation",
+      subtitleKey: "conversationMapAndAddressComingSoon",
       time: getTime(),
       status: "sending",
       unsent: false,
@@ -3201,12 +3082,9 @@ useEffect(() => {
       type: "scan",
       sender: "me",
       senderRole: currentViewerRole,
-      text: language === "es" ? "Documento compartido" : "Document shared",
-      title: language === "es" ? "Documento" : "Document",
-      subtitle:
-        language === "es"
-          ? "Permisos, recibos, estimados o notas"
-          : "Permits, receipts, estimates, or notes",
+      textKey: "conversationDocumentShared",
+      titleKey: "relationshipDocument",
+      subtitleKey: "conversationPermitsReceiptsEstimatesOrNotes",
       time: getTime(),
       status: "sending",
       unsent: false,
@@ -3222,12 +3100,9 @@ useEffect(() => {
       type: "update",
       sender: "me",
       senderRole: currentViewerRole,
-      text: language === "es" ? "Video compartido" : "Video shared",
-      title: language === "es" ? "Video" : "Video",
-      subtitle:
-        language === "es"
-          ? "Video agregado a esta conversación"
-          : "Video added to this conversation",
+      textKey: "conversationVideoShared",
+      titleKey: "hiringInterviewTypeVideo",
+      subtitleKey: "conversationVideoAddedToThisConversation",
       time: getTime(),
       status: "sending",
       unsent: false,
@@ -3243,12 +3118,9 @@ useEffect(() => {
       type: "update",
       sender: "me",
       senderRole: currentViewerRole,
-      text: language === "es" ? "Mensaje de voz compartido" : "Voice message shared",
-      title: language === "es" ? "Mensaje de voz" : "Voice Message",
-      subtitle:
-        language === "es"
-          ? "Nota de voz agregada a esta conversación"
-          : "Voice note added to this conversation",
+      textKey: "conversationVoiceMessageShared",
+      titleKey: "conversationVoiceMessage",
+      subtitleKey: "conversationVoiceNoteAddedToThisConversation",
       time: getTime(),
       status: "sending",
       unsent: false,
@@ -3514,51 +3386,27 @@ const handleImageUpload = (event) => {
       const map = {
         before: {
           icon: "photo",
-          title: language === "es" ? "Foto Antes" : "Before Photo",
-          subtitle:
-            language === "es"
-              ? "Área antes del trabajo"
-              : "Area before work begins",
-          text: language === "es" ? "Foto antes enviada" : "Before photo added",
+          titleKey: "conversationBeforePhoto",
+          subtitleKey: "conversationAreaBeforeWorkBegins",
+          textKey: "conversationBeforePhotoAdded",
         },
         progress: {
           icon: "work",
-          title: language === "es" ? "Foto Progreso" : "Progress Photo",
-          subtitle:
-            language === "es"
-              ? "Actualización de progreso"
-              : "Work progress update",
-          text:
-            language === "es"
-              ? "Foto de progreso enviada"
-              : "Progress photo added",
+          titleKey: "conversationProgressPhoto2",
+          subtitleKey: "conversationWorkProgressUpdate",
+          textKey: "conversationProgressPhotoAdded",
         },
         issue: {
           icon: "alert",
-          title: language === "es" ? "Problema Encontrado" : "Issue Found",
-          subtitle:
-            language === "es"
-              ? "Problema o retraso detectado"
-              : "Problem or delay detected",
-          text:
-            language === "es"
-              ? "Problema documentado"
-              : "Issue documented",
+          titleKey: "conversationIssueFound",
+          subtitleKey: "conversationProblemOrDelayDetected",
+          textKey: "conversationIssueDocumented",
         },
         completion: {
           icon: "done",
-          title:
-            language === "es"
-              ? "Trabajo Finalizado"
-              : "Completion Photo",
-          subtitle:
-            language === "es"
-              ? "Trabajo completado"
-              : "Completed work result",
-          text:
-            language === "es"
-              ? "Foto final enviada"
-              : "Completion photo added",
+          titleKey: "conversationCompletionPhoto",
+          subtitleKey: "conversationCompletedWorkResult",
+          textKey: "conversationCompletionPhotoAdded",
         },
       };
 
@@ -3571,9 +3419,9 @@ const handleImageUpload = (event) => {
         icon: data.icon,
         sender: "me",
         senderRole: currentViewerRole,
-        text: data.text,
-        title: data.title,
-        subtitle: data.subtitle,
+        textKey: data.textKey,
+        titleKey: data.titleKey,
+        subtitleKey: data.subtitleKey,
         imageUrl,
         fileName: file.name,
         time: getTime(),
@@ -3622,7 +3470,8 @@ const handleImageUpload = (event) => {
               ...msg,
               type: "text",
               unsent: true,
-              text: language === "es" ? "Mensaje eliminado" : "Message was unsent",
+              text: "",
+              textKey: "conversationMessageWasUnsent",
               imageUrl: null,
               amount: null,
               title: null,
@@ -3719,7 +3568,7 @@ const handleImageUpload = (event) => {
     if (status === "change_requested") return t("appointmentChangeRequested", language);
     if (status === "cancelled") return t("appointmentCancelled", language);
     if (status === "replaced") {
-      return language === "es" ? "Horario actualizado" : "Schedule updated";
+      return t("workCenterScheduleUpdated", language);
     }
     return t("appointmentPendingConfirmation", language);
   };
@@ -3732,10 +3581,10 @@ const handleImageUpload = (event) => {
 
   const getScheduleCardTitle = (message = {}) => {
     if (isWorkScheduleMessage(message)) {
-      return language === "es" ? "Trabajo programado" : "Work Scheduled";
+      return t("workScheduled", language);
     }
 
-    return message.title || (language === "es" ? "Cita programada" : "Appointment Scheduled");
+    return getLocalizedMessageField(message, "title") || t("messagesAppointmentScheduled", language);
   };
 
   const getScheduleServices = (message = {}) => {
@@ -3777,9 +3626,7 @@ const handleImageUpload = (event) => {
     const scheduleId = getScheduleMessageVisitId(scheduleMessage);
     if (!scheduleId) {
       setSaveNotice(
-        language === "es"
-          ? "No se encontró la visita vinculada para editar."
-          : "No linked visit was found to edit."
+        t("conversationNoLinkedVisitWasFoundToEdit", language)
       );
       setTimeout(() => setSaveNotice(""), 2400);
       return;
@@ -3814,25 +3661,17 @@ const handleImageUpload = (event) => {
 
     const statusLabel =
       isWorkSchedule && confirmationStatus === "confirmed"
-        ? language === "es"
-          ? "Trabajo confirmado"
-          : "Work confirmed"
+        ? t("conversationWorkConfirmed", language)
         : isWorkSchedule && confirmationStatus === "change_requested"
-          ? language === "es"
-            ? "Cambio solicitado"
-            : "Change requested"
+          ? t("conversationChangeRequested", language)
           : getAppointmentConfirmationLabel(confirmationStatus);
     const confirmationText =
       confirmationStatus === "confirmed"
         ? isWorkSchedule
-          ? language === "es"
-            ? "Trabajo confirmado. El horario programado funciona para el cliente."
-            : "Work schedule confirmed. The scheduled time works for the customer."
+          ? t("conversationWorkScheduleConfirmedTheScheduledTimeWorksForTheCustomer", language)
           : t("appointmentConfirmedChatText", language)
         : isWorkSchedule
-          ? language === "es"
-            ? "El cliente solicitó otro horario para el trabajo programado."
-            : "Customer requested a different time for the scheduled work."
+          ? t("conversationCustomerRequestedADifferentTimeForTheScheduledWork", language)
           : t("appointmentChangeRequestedChatText", language);
 
     const updateSchedule = (schedule = {}) => ({
@@ -3868,9 +3707,7 @@ const handleImageUpload = (event) => {
           : schedule.nextAction,
       nextResponsibility:
         confirmationStatus === "confirmed" && !isWorkSchedule
-          ? language === "es"
-            ? "Registrar evaluación"
-            : "Record Evaluation"
+          ? t("workCenterRecordEvaluation", language)
           : schedule.nextResponsibility,
       evaluationStatus:
         confirmationStatus === "confirmed" && !isWorkSchedule
@@ -3896,9 +3733,7 @@ const handleImageUpload = (event) => {
         setAppointmentReminderNotice({
           context: "conversation",
           message:
-            language === "es"
-              ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
-              : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+            t("workCenterMeetroCanRemindYouAboutUpcomingAppointmentsNotificationsAreBlockedOpenIPhone", language),
         });
       } else {
         setAppointmentReminderNotice(null);
@@ -4080,9 +3915,7 @@ const handleImageUpload = (event) => {
     saveConversationToUserHistory(conversationId, fallback);
     setShowThreadMenu(false);
     setSaveNotice(
-      language === "es"
-        ? "Conversación guardada en el historial."
-        : "Conversation saved to history."
+      t("conversationConversationSavedToHistory", language)
     );
     setTimeout(() => setSaveNotice(""), 2200);
   };
@@ -4093,10 +3926,8 @@ const handleImageUpload = (event) => {
       sender: message.sender,
       text:
         message.type === "image"
-          ? language === "es"
-            ? "Imagen adjunta"
-            : "Image attached"
-          : message.title || message.text || "",
+          ? t("conversationImageAttached", language)
+          : getLocalizedMessageField(message, "title") || getLocalizedMessageField(message, "text") || "",
     });
 
     setActiveMessageId(null);
@@ -4104,7 +3935,8 @@ const handleImageUpload = (event) => {
   };
 
   const copyMessage = (message) => {
-    if (message?.text) navigator.clipboard?.writeText(message.text);
+    const copyText = getLocalizedMessageField(message, "text");
+    if (copyText) navigator.clipboard?.writeText(copyText);
     setActiveMessageId(null);
     setShowMobileSheet(false);
   };
@@ -4119,9 +3951,7 @@ const handleImageUpload = (event) => {
 
     if (currentViewerRole !== "business") {
       setSaveNotice(
-        language === "es"
-          ? "La programación la administra el profesional. Puedes escribirle sobre el horario aquí."
-          : "Scheduling is managed by the professional. You can message them about the schedule here."
+        t("conversationSchedulingIsManagedByTheProfessionalYouCanMessageThemAboutThe", language)
       );
       setTimeout(() => setSaveNotice(""), 2600);
       requestAnimationFrame(() => {
@@ -4147,9 +3977,7 @@ const handleImageUpload = (event) => {
       conversationId,
       scheduleId: schedule.id,
       text:
-        language === "es"
-          ? "Recordatorios programados:\n• 1 día antes\n• 2 horas antes\n• 30 minutos antes"
-          : "Reminder scheduled:\n• 1 day before\n• 2 hours before\n• 30 minutes before",
+        t("conversationReminderScheduled1DayBefore2HoursBefore30MinutesBefore", language),
       time: formatMessageTime(new Date()),
       createdAt: new Date().toISOString(),
     };
@@ -4178,11 +4006,11 @@ const handleImageUpload = (event) => {
       "";
 
     const appointmentMeta = {
-      walkthrough: language === "es" ? "Recorrido" : "Walkthrough",
-      estimate: language === "es" ? "Visita de estimado" : "Estimate Visit",
-      consultation: language === "es" ? "Consulta" : "Consultation",
-      virtual: language === "es" ? "Reunión virtual" : "Virtual Meeting",
-      emergency: language === "es" ? "Despacho de emergencia" : "Emergency Dispatch",
+      walkthrough: t("conversationWalkthrough", language),
+      estimate: t("conversationEstimateVisit", language),
+      consultation: t("momentDetailJourney_consultation", language),
+      virtual: t("virtualMeeting", language),
+      emergency: t("emergencyDispatch", language),
     };
 
     let newVisit = {
@@ -4229,9 +4057,7 @@ const handleImageUpload = (event) => {
       setAppointmentReminderNotice({
         context: "conversation",
         message:
-          language === "es"
-            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
-            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+          t("workCenterMeetroCanRemindYouAboutUpcomingAppointmentsNotificationsAreBlockedOpenIPhone", language),
       });
     } else {
       setAppointmentReminderNotice(null);
@@ -4252,18 +4078,14 @@ const handleImageUpload = (event) => {
       workflowSource: "meetro_chat_schedule",
       customerConfirmationStatus: "pending_customer_confirmation",
       confirmationStatus: "pending_customer_confirmation",
-      title:
-        language === "es"
-          ? "Cita programada"
-          : "Appointment Scheduled",
-      subtitle: `${getDisplayScheduleSummary(newVisit)} • ${t(
-        "appointmentPendingConfirmation",
-        language
-      )}`,
-      text:
-        language === "es"
-          ? ` ${appointmentMeta[newVisit.appointmentType] || "Cita"} programada para ${newVisit.date} a las ${getDisplayScheduleTime(newVisit.time)}.`
-          : ` ${appointmentMeta[newVisit.appointmentType] || "Appointment"} scheduled for ${newVisit.date} at ${getDisplayScheduleTime(newVisit.time)}.`,
+      titleKey: "messagesAppointmentScheduled",
+      subtitleKey: "appointmentPendingConfirmation",
+      subtitlePrefix: getDisplayScheduleSummary(newVisit),
+      textKey: "conversationAppointmentScheduledMessage",
+      textVariables: {
+        date: newVisit.date,
+        time: getDisplayScheduleTime(newVisit.time),
+      },
       schedule: newVisit,
       time: formatMessageTime(new Date()),
       createdAt: new Date().toISOString(),
@@ -4285,11 +4107,12 @@ const handleImageUpload = (event) => {
 
     createNotification({
       type: "appointment_scheduled",
-      title: language === "es" ? "Cita programada" : "Appointment scheduled",
-      message:
-        language === "es"
-          ? `${activeBusinessName || "El profesional"} programó una cita para ${newVisit.date} a las ${getDisplayScheduleTime(newVisit.time)}.`
-          : `${activeBusinessName || "The professional"} scheduled an appointment for ${newVisit.date} at ${getDisplayScheduleTime(newVisit.time)}.`,
+      title: t("conversationAppointmentScheduled", language),
+      message: t("conversationAppointmentNotification", language, {
+        business: activeBusinessName || t("conversationProfessionalFallback", language),
+        date: newVisit.date,
+        time: getDisplayScheduleTime(newVisit.time),
+      }),
       role: "homeowner",
       requestId: linkedRequestId,
       conversationId,
@@ -4309,9 +4132,7 @@ const handleImageUpload = (event) => {
 
     if (currentViewerRole !== "business") {
       setSaveNotice(
-        language === "es"
-          ? "La programación la administra el profesional. Puedes escribirle sobre el horario aquí."
-          : "Scheduling is managed by the professional. You can message them about the schedule here."
+        t("conversationSchedulingIsManagedByTheProfessionalYouCanMessageThemAboutThe", language)
       );
       setTimeout(() => setSaveNotice(""), 2600);
       setActiveMessageId(null);
@@ -4324,23 +4145,13 @@ const handleImageUpload = (event) => {
     setShowMobileSheet(false);
   };
 
-  const getStatusLabel = (status) => {
-    if (language === "es") {
-      if (status === "sending") return "Enviando...";
-      if (status === "sent") return "Enviado";
-      if (status === "delivered") return "Entregado";
-      if (status === "seen") return "Visto";
-      if (status === "failed") return "Falló";
-      return "";
-    }
-
-    if (status === "sending") return "Sending...";
-    if (status === "sent") return "Sent";
-    if (status === "delivered") return "Delivered";
-    if (status === "seen") return "Seen";
-    if (status === "failed") return "Failed";
-    return "";
-  };
+  const getStatusLabel = (status) => ({
+    sending: t("stateSending", language),
+    sent: t("stateSent", language),
+    delivered: t("conversationStatusDelivered", language),
+    seen: t("conversationStatusSeen", language),
+    failed: t("stateFailed", language),
+  })[status] || "";
 
   const startLongPress = (msg, event = null) => {
     clearTimeout(longPressTimerRef.current);
@@ -4479,9 +4290,7 @@ const handleImageUpload = (event) => {
 
     window.dispatchEvent(new Event("meetroJobRecordUpdated"));
     setSaveNotice(
-      language === "es"
-        ? "Guardado en el registro del trabajo"
-        : "Saved to job record"
+      t("conversationSavedToJobRecord", language)
     );
     setJobStory(null);
 
@@ -4596,7 +4405,7 @@ const handleImageUpload = (event) => {
             <div style={chatProjectLabel}>
               <span style={chatProjectTitleText}>
                  {isHiringThread
-                   ? `${language === "es" ? "Contratación" : "Hiring"} · ${activeHeaderProject}`
+                   ? `${t("messagesSectionHiring", language)} · ${activeHeaderProject}`
                    : activeHeaderProject}
               </span>
 
@@ -4618,12 +4427,8 @@ const handleImageUpload = (event) => {
             <div style={statusRow}>
               <span style={greenDot}></span>
               {typing
-                ? language === "es"
-                  ? "Escribiendo..."
-                  : "Typing..."
-                : language === "es"
-                ? "Activo ahora"
-                : "Active now"}
+                ? t("conversationTyping", language)
+                : t("conversationActiveNow", language)}
 
               {relationshipHasCurrentWork && (
                 <span style={relationshipActiveWorkBadge}>
@@ -4678,9 +4483,7 @@ const handleImageUpload = (event) => {
           <div style={appointmentReminderNoticeCard}>
             <div>
               <strong>
-                {language === "es"
-                  ? "Notificaciones necesarias"
-                  : "Notifications Needed"}
+                {t("conversationNotificationsNeeded", language)}
               </strong>
               <p>{appointmentReminderNotice.message}</p>
             </div>
@@ -4691,16 +4494,14 @@ const handleImageUpload = (event) => {
                 style={appointmentReminderSettingsButton}
                 onClick={openNotificationSettings}
               >
-                {language === "es" ? "Abrir Configuración" : "Open Settings"}
+                {t("conversationOpenSettings", language)}
               </button>
               <button
                 type="button"
                 style={appointmentReminderContinueButton}
                 onClick={() => setAppointmentReminderNotice(null)}
               >
-                {language === "es"
-                  ? "Continuar sin recordatorios"
-                  : "Continue Without Reminders"}
+                {t("conversationContinueWithoutReminders", language)}
               </button>
             </div>
           </div>
@@ -4718,7 +4519,7 @@ const handleImageUpload = (event) => {
                 location: threadRelationshipIdentity.location,
               }}
               onBack={() => setShowProfileCard(false)}
-              backLabel={language === "es" ? "Volver" : "Back"}
+              backLabel={t("actionBack", language)}
               intro={t("relationshipIdentityIntro", language)}
               details={relationshipIdentityFactRows}
               actions={relationshipIdentityActions}
@@ -4728,7 +4529,11 @@ const handleImageUpload = (event) => {
         )}
 
         {tenantTicketDraft && (
-          <div style={tenantTicketOverlay} role="dialog" aria-label="Tenant Ticket">
+          <div
+            style={tenantTicketOverlay}
+            role="dialog"
+            aria-label={t("conversationTenantTicket", language)}
+          >
             <div style={tenantTicketPanel}>
               <div style={tenantTicketHeader}>
                 <button
@@ -4742,14 +4547,16 @@ const handleImageUpload = (event) => {
                     setTenantTicketDraft(null);
                   }}
                 >
-                  {tenantTicketDraft.step === "review" ? "Back" : "Cancel"}
+                  {tenantTicketDraft.step === "review"
+                    ? t("actionBack", language)
+                    : t("actionCancel", language)}
                 </button>
                 <strong>
                   {tenantTicketDraft.step === "created"
-                    ? "Ticket Created"
+                    ? t("conversationTicketCreated", language)
                     : tenantTicketDraft.step === "review"
-                    ? "Review Ticket"
-                    : "New Tenant Ticket"}
+                    ? t("conversationReviewTicket", language)
+                    : t("conversationNewTenantTicket", language)}
                 </strong>
                 {tenantTicketDraft.step === "edit" ? (
                   <button
@@ -4757,7 +4564,7 @@ const handleImageUpload = (event) => {
                     style={tenantTicketHeaderAction}
                     onClick={reviewTenantTicketDraft}
                   >
-                    Review
+                    {t("conversationReviewAction", language)}
                   </button>
                 ) : tenantTicketDraft.step === "review" ? (
                   <button
@@ -4765,7 +4572,7 @@ const handleImageUpload = (event) => {
                     style={tenantTicketHeaderAction}
                     onClick={submitTenantTicketDraft}
                   >
-                    Submit
+                    {t("conversationSubmitAction", language)}
                   </button>
                 ) : (
                   <button
@@ -4773,7 +4580,7 @@ const handleImageUpload = (event) => {
                     style={tenantTicketHeaderAction}
                     onClick={() => setTenantTicketDraft(null)}
                   >
-                    Done
+                    {t("actionDone", language)}
                   </button>
                 )}
               </div>
@@ -4781,7 +4588,7 @@ const handleImageUpload = (event) => {
               {tenantTicketDraft.step === "edit" && (
                 <form style={tenantTicketForm} onSubmit={reviewTenantTicketDraft}>
                   <label style={tenantTicketField}>
-                    <span>Property / Unit</span>
+                    <span>{t("conversationPropertyUnit", language)}</span>
                     <input
                       value={tenantTicketDraft.propertyUnit}
                       onChange={(event) =>
@@ -4792,7 +4599,7 @@ const handleImageUpload = (event) => {
                     />
                   </label>
                   <label style={tenantTicketField}>
-                    <span>Issue Type</span>
+                    <span>{t("conversationIssueType", language)}</span>
                     <select
                       value={tenantTicketDraft.issueType}
                       onChange={(event) =>
@@ -4800,16 +4607,16 @@ const handleImageUpload = (event) => {
                       }
                       style={tenantTicketInput}
                     >
-                      <option>Plumbing</option>
-                      <option>HVAC</option>
-                      <option>Electrical</option>
-                      <option>Appliance</option>
-                      <option>General Maintenance</option>
-                      <option>Other</option>
+                      <option value="Plumbing">{t("conversationIssuePlumbing", language)}</option>
+                      <option value="HVAC">{t("conversationIssueHvac", language)}</option>
+                      <option value="Electrical">{t("conversationIssueElectrical", language)}</option>
+                      <option value="Appliance">{t("conversationIssueAppliance", language)}</option>
+                      <option value="General Maintenance">{t("conversationIssueGeneralMaintenance", language)}</option>
+                      <option value="Other">{t("conversationIssueOther", language)}</option>
                     </select>
                   </label>
                   <label style={tenantTicketField}>
-                    <span>Priority</span>
+                    <span>{t("conversationPriority", language)}</span>
                     <select
                       value={tenantTicketDraft.priority}
                       onChange={(event) =>
@@ -4817,32 +4624,32 @@ const handleImageUpload = (event) => {
                       }
                       style={tenantTicketInput}
                     >
-                      <option>Low</option>
-                      <option>Normal</option>
-                      <option>High</option>
-                      <option>Emergency</option>
+                      <option value="Low">{t("conversationPriorityLow", language)}</option>
+                      <option value="Normal">{t("conversationPriorityNormal", language)}</option>
+                      <option value="High">{t("conversationPriorityHigh", language)}</option>
+                      <option value="Emergency">{t("conversationPriorityEmergency", language)}</option>
                     </select>
                   </label>
                   <label style={tenantTicketField}>
-                    <span>Description</span>
+                    <span>{t("conversationDescription", language)}</span>
                     <textarea
                       value={tenantTicketDraft.description}
                       onChange={(event) =>
                         updateTenantTicketDraft("description", event.target.value)
                       }
-                      placeholder="Describe what needs attention."
+                      placeholder={t("conversationDescribeNeedsAttention", language)}
                       style={tenantTicketTextarea}
                     />
                   </label>
                   <div style={tenantTicketPhotos}>
-                    <span>Photos</span>
-                    <strong>Photo upload stays in conversation tools.</strong>
+                    <span>{t("conversationPhotos", language)}</span>
+                    <strong>{t("conversationPhotoUploadInTools", language)}</strong>
                   </div>
                   {tenantTicketDraft.notice && (
                     <p style={tenantTicketNotice}>{tenantTicketDraft.notice}</p>
                   )}
                   <button type="submit" style={tenantTicketPrimaryButton}>
-                    Review Ticket
+                    {t("conversationReviewTicket", language)}
                   </button>
                 </form>
               )}
@@ -4850,18 +4657,18 @@ const handleImageUpload = (event) => {
               {tenantTicketDraft.step === "review" && (
                 <div style={tenantTicketForm}>
                   <div style={tenantTicketReviewCard}>
-                    <strong>Tenant Ticket</strong>
+                    <strong>{t("conversationTenantTicket", language)}</strong>
                     <span>{tenantTicketDraft.issueType}</span>
                     <div style={tenantTicketReviewRow}>
-                      <span>Property / Unit</span>
+                      <span>{t("conversationPropertyUnit", language)}</span>
                       <strong>{tenantTicketDraft.propertyUnit}</strong>
                     </div>
                     <div style={tenantTicketReviewRow}>
-                      <span>Priority</span>
+                      <span>{t("conversationPriority", language)}</span>
                       <strong>{tenantTicketDraft.priority}</strong>
                     </div>
                     <div style={tenantTicketReviewRow}>
-                      <span>Description</span>
+                      <span>{t("conversationDescription", language)}</span>
                       <strong>{tenantTicketDraft.description}</strong>
                     </div>
                   </div>
@@ -4870,7 +4677,7 @@ const handleImageUpload = (event) => {
                     style={tenantTicketPrimaryButton}
                     onClick={submitTenantTicketDraft}
                   >
-                    Submit Ticket
+                    {t("conversationSubmitTicket", language)}
                   </button>
                 </div>
               )}
@@ -4878,16 +4685,18 @@ const handleImageUpload = (event) => {
               {tenantTicketDraft.step === "created" && (
                 <div style={tenantTicketSuccess}>
                   <div style={tenantTicketSuccessIcon}>✓</div>
-                  <h2>Tenant Ticket Created</h2>
+                  <h2>{t("conversationTenantTicketCreated", language)}</h2>
                   <p>
-                    Ticket {tenantTicketDraft.createdTicketId} was added to this conversation.
+                    {t("conversationTicketAddedToConversation", language, {
+                      ticketId: tenantTicketDraft.createdTicketId,
+                    })}
                   </p>
                   <button
                     type="button"
                     style={tenantTicketPrimaryButton}
                     onClick={() => setTenantTicketDraft(null)}
                   >
-                    Continue Conversation
+                    {t("continueConversation", language)}
                   </button>
                 </div>
               )}
@@ -4904,7 +4713,7 @@ const handleImageUpload = (event) => {
                 callActiveContact();
               }}
             >
-              {language === "es" ? "Llamar" : "Call"}
+              {t("messagesCallAction", language)}
             </button>
 
             <button style={callMenuBtn} onClick={openRelationshipDetails}>
@@ -4917,7 +4726,7 @@ const handleImageUpload = (event) => {
           <div style={threadMenu}>
             <div style={menuSection}>
               <div style={menuSectionTitle}>
-                {language === "es" ? "RELACIÓN" : "RELATIONSHIP"}
+                {t("conversationRelationshipKicker", language)}
               </div>
 
               <button
@@ -4932,14 +4741,14 @@ const handleImageUpload = (event) => {
                   style={{ ...threadMenuBtn, ...threadMenuBtnDisabled }}
                   disabled
                 >
-                  {language === "es" ? "Guardado" : "Saved"}
+                  {t("stateSaved", language)}
                 </button>
               ) : (
                 <button
                   style={threadMenuBtn}
                   onClick={saveThreadRelationshipToContacts}
                 >
-                  {language === "es" ? "Guardar en Contactos" : "Save to Contacts"}
+                  {t("conversationSaveToContacts", language)}
                 </button>
               )}
 
@@ -4951,7 +4760,7 @@ const handleImageUpload = (event) => {
                     callActiveContact();
                   }}
                 >
-                  {language === "es" ? "Cliente" : "Customer"}
+                  {t("messagesContactType_customer", language)}
                 </button>
               )}
 
@@ -4963,13 +4772,13 @@ const handleImageUpload = (event) => {
                   setShowJobRecords(true);
                 }}
               >
-                {language === "es" ? "Historial de relación" : "Relationship History"}
+                {t("relationshipTimeline", language)}
               </button>
             </div>
 
             <div style={menuSection}>
               <div style={menuSectionTitle}>
-                {language === "es" ? "RECURSOS" : "RESOURCES"}
+                {t("conversationResourcesKicker", language)}
               </div>
 
               <button
@@ -4979,7 +4788,7 @@ const handleImageUpload = (event) => {
                   setShowJobRecords(true);
                 }}
               >
-                {language === "es" ? "Documentos" : "Documents"}
+                {t("messagesDocuments", language)}
               </button>
 
               <button
@@ -4989,7 +4798,7 @@ const handleImageUpload = (event) => {
                   setShowJobRecords(true);
                 }}
               >
-                {language === "es" ? "Fotos" : "Photos"}
+                {t("assistantProjectBriefDocumentPhotos", language)}
               </button>
 
               {currentViewerRole === "business" && (
@@ -5000,14 +4809,14 @@ const handleImageUpload = (event) => {
                     openChatScheduleModal();
                   }}
                 >
-                  {language === "es" ? "Programación" : "Schedule"}
+                  {t("workCenterScheduleTitle", language)}
                 </button>
               )}
             </div>
 
             <div style={menuSection}>
               <div style={menuSectionTitle}>
-                {language === "es" ? "CONVERSACIÓN" : "CONVERSATION"}
+                {t("conversationConversationKicker", language)}
               </div>
 
               <button
@@ -5017,7 +4826,7 @@ const handleImageUpload = (event) => {
                   markUnread();
                 }}
               >
-                {language === "es" ? "Marcar como no leído" : "Mark as unread"}
+                {t("conversationMarkUnread", language)}
               </button>
 
               <button
@@ -5032,12 +4841,8 @@ const handleImageUpload = (event) => {
                 disabled={threadUserSavedToHistory}
               >
                 {threadUserSavedToHistory
-                  ? language === "es"
-                    ? "Guardado en historial"
-                    : "Saved to History"
-                  : language === "es"
-                  ? "Guardar conversación en historial"
-                  : "Save Conversation to History"}
+                  ? t("conversationSavedToHistory", language)
+                  : t("conversationSaveToHistory", language)}
               </button>
 
               <button
@@ -5049,7 +4854,7 @@ const handleImageUpload = (event) => {
                   }, 0);
                 }}
               >
-                {language === "es" ? "Buscar en esta conversación" : "Search"}
+                {t("conversationSearchAction", language)}
               </button>
 
               <button
@@ -5059,7 +4864,7 @@ const handleImageUpload = (event) => {
                   setShowClearConfirm(true);
                 }}
               >
-                {language === "es" ? "Limpiar chat local" : "Clear local chat"}
+                {t("conversationClearLocalChat", language)}
               </button>
             </div>
           </div>
@@ -5085,12 +4890,8 @@ const handleImageUpload = (event) => {
                   }
                 >
                   {emergencyPanelExpanded
-                    ? language === "es"
-                      ? "Ocultar ▲"
-                      : "Hide ▲"
-                    : language === "es"
-                    ? "Revisar detalles ▼"
-                    : "Review Details ▼"}
+                    ? t("conversationHideDetails", language)
+                    : t("conversationReviewDetails", language)}
                 </button>
 
                 <div
@@ -5105,16 +4906,14 @@ const handleImageUpload = (event) => {
                 <div>
                   <div style={emergencyBannerTitle}>
                     {emergencyDispatchStatus === "completed"
-                      ? language === "es"
-                        ? "Servicio completado"
-                        : "Service Completed"
+                      ? t("conversationServiceCompleted", language)
                       : emergencyServiceName}
                   </div>
 
                   <div style={emergencyBannerSubtitle}>
                     {activeAccountMode === "business" &&
                     emergencyDispatchStatus !== "completed"
-                      ? `${language === "es" ? "Cliente" : "Customer"}: ${emergencyCustomerName}`
+                      ? `${t("messagesContactType_customer", language)}: ${emergencyCustomerName}`
                       : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
                   </div>
                 </div>
@@ -5197,7 +4996,7 @@ const handleImageUpload = (event) => {
                       <>
                         <div style={completedEmergencyPill}> {t("completed")}</div>
                         <div style={completedEmergencyPill}>
-                           {language === "es" ? "Cierre pendiente" : "Closure pending"}
+                           {t("conversationClosurePending", language)}
                         </div>
                         <div style={completedEmergencyPill}> {t("summary")}</div>
                       </>
@@ -5261,9 +5060,7 @@ const handleImageUpload = (event) => {
                           setPage("emergencyComplete");
                         }}
                       >
-                         {language === "es"
-                          ? "Revisar finalización"
-                          : "Review Completion"}
+                         {t("assistantFieldActionReviewCompletion", language)}
                       </button>
 
                       <button
@@ -5334,15 +5131,11 @@ const handleImageUpload = (event) => {
             <div style={scheduleModalOverlay}>
               <div style={scheduleModalCard}>
                 <h3 style={scheduleModalTitle}>
-                  {language === "es"
-                    ? "Programar evaluación / visita"
-                    : "Schedule Evaluation / Visit"}
+                  {t("conversationScheduleEvaluation", language)}
                 </h3>
 
                 <p style={scheduleModalSubtitle}>
-                  {language === "es"
-                    ? "Agrega los detalles de la evaluación o visita para guardarla en Work Center y compartirla en el chat."
-                    : "Add the evaluation or visit details to save it in Work Center and share it in chat."}
+                  {t("conversationScheduleEvaluationHelp", language)}
                 </p>
 
                 <select
@@ -5356,26 +5149,26 @@ const handleImageUpload = (event) => {
                   }
                 >
                   <option value="walkthrough">
-                    {language === "es" ? "Recorrido" : "Walkthrough"}
+                    {t("conversationWalkthrough", language)}
                   </option>
                   <option value="estimate">
-                    {language === "es" ? "Visita de estimado" : "Estimate Visit"}
+                    {t("conversationEstimateVisit", language)}
                   </option>
                   <option value="consultation">
-                    {language === "es" ? "Consulta" : "Consultation"}
+                    {t("momentDetailJourney_consultation", language)}
                   </option>
                   <option value="virtual">
-                    {language === "es" ? "Reunión virtual" : "Virtual Meeting"}
+                    {t("virtualMeeting", language)}
                   </option>
                   <option value="emergency">
-                    {language === "es" ? "Despacho de emergencia" : "Emergency Dispatch"}
+                    {t("emergencyDispatch", language)}
                   </option>
                 </select>
 
                 <input
                   style={scheduleModalInput}
                   value={chatScheduleForm.title}
-                  placeholder={language === "es" ? "Título de la cita" : "Appointment title"}
+                  placeholder={t("conversationAppointmentTitle", language)}
                   onChange={(e) =>
                     setChatScheduleForm({
                       ...chatScheduleForm,
@@ -5413,7 +5206,7 @@ const handleImageUpload = (event) => {
                 <input
                   style={scheduleModalInput}
                   value={chatScheduleForm.location}
-                  placeholder={language === "es" ? "Ubicación" : "Location"}
+                  placeholder={t("assistantProjectBriefLocation", language)}
                   onChange={(e) =>
                     setChatScheduleForm({
                       ...chatScheduleForm,
@@ -5425,7 +5218,7 @@ const handleImageUpload = (event) => {
                 <textarea
                   style={scheduleModalTextarea}
                   value={chatScheduleForm.notes}
-                  placeholder={language === "es" ? "Notas" : "Notes"}
+                  placeholder={t("messagesNotes", language)}
                   onChange={(e) =>
                     setChatScheduleForm({
                       ...chatScheduleForm,
@@ -5439,14 +5232,14 @@ const handleImageUpload = (event) => {
                     style={scheduleModalSecondary}
                     onClick={() => setShowScheduleModal(false)}
                   >
-                    {language === "es" ? "Cancelar" : "Cancel"}
+                    {t("actionCancel", language)}
                   </button>
 
                   <button
                     style={scheduleModalPrimary}
                     onClick={saveChatScheduleAppointment}
                   >
-                    {language === "es" ? "Guardar cita" : "Save Appointment"}
+                    {t("saveAppointment", language)}
                   </button>
                 </div>
               </div>
@@ -5467,9 +5260,7 @@ const handleImageUpload = (event) => {
                   value={threadSearchTerm}
                   onChange={(event) => setThreadSearchTerm(event.target.value)}
                   placeholder={
-                    language === "es"
-                      ? "Buscar en la conversación"
-                      : "Search in conversation"
+                    t("conversationSearchPlaceholder", language)
                   }
                 />
 
@@ -5478,7 +5269,7 @@ const handleImageUpload = (event) => {
                     type="button"
                     style={threadSearchClear}
                     onClick={() => setThreadSearchTerm("")}
-                    aria-label={language === "es" ? "Limpiar búsqueda" : "Clear search"}
+                    aria-label={t("discoverClearSearch", language)}
                   >
                     ×
                   </button>
@@ -5488,28 +5279,27 @@ const handleImageUpload = (event) => {
 
             <div style={dateRow}>
               <span style={dateLine}></span>
-              <strong>{language === "es" ? "Hoy" : "Today"}</strong>
+              <strong>{t("today", language)}</strong>
               <span style={dateLine}></span>
             </div>
 
             {threadMessages.length === 0 && hasThreadSearch ? (
               <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
-                {language === "es"
-                  ? "No se encontró esta conversación"
-                  : "No messages found in this conversation."}
+                {t("conversationNoSearchMessages", language)}
               </div>
             ) : null}
 
             {threadMessages.length === 0 && !hasThreadSearch ? (
               <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
-                {language === "es"
-                  ? "Aún no hay mensajes en esta conversación."
-                  : "No messages yet."}
+                {t("conversationNoMessages", language)}
               </div>
             ) : null}
 
           {threadMessages.map((msg) => {
             const mine = msg.senderRole === currentViewerRole;
+            const localizedTitle = getLocalizedMessageField(msg, "title");
+            const localizedSubtitle = getLocalizedMessageField(msg, "subtitle");
+            const localizedText = getLocalizedMessageField(msg, "text");
 
             const isWorkflow = isWorkflowType(msg.type);
             const workflowMessageProps = isWorkflow
@@ -5573,7 +5363,7 @@ const handleImageUpload = (event) => {
                           setScheduleDeleteCandidate(msg);
                         }}
                       >
-                        {language === "es" ? "Eliminar" : "Delete"}
+                        {t("delete", language)}
                       </button>
                     )}
 
@@ -5652,32 +5442,24 @@ const handleImageUpload = (event) => {
 
                       <div>
                         <strong>
-                          {msg.title ||
+                          {getLocalizedMessageField(msg, "title") ||
                             (workflowMessageProps
                               ? workflowMessageProps.title
                               : msg.type === "materials-list"
-                              ? language === "es"
-                                ? "Lista de materiales"
-                                : "Materials List"
+                              ? t("materialsList", language)
                               : msg.type === "schedule"
-                              ? language === "es"
-                                ? "Visita programada"
-                                : "Scheduled Visit"
+                              ? t("messagesScheduledVisit", language)
                               : "")}
                         </strong>
 
                         <div style={operationalSubtitle}>
-                          {msg.subtitle ||
+                          {getLocalizedMessageField(msg, "subtitle") ||
                             (workflowMessageProps
                               ? workflowMessageProps.subtitle
                               : msg.type === "materials-list"
                               ? msg.approvalRequired
-                                ? language === "es"
-                                  ? "Requiere aprobación del cliente"
-                                  : "Customer approval required"
-                                : language === "es"
-                                ? "Materiales enviados al cliente"
-                                : "Materials sent to customer"
+                                ? t("conversationCustomerApprovalRequired", language)
+                                : t("conversationMaterialsSent", language)
                               : msg.type === "schedule" && msg.schedule
                               ? getDisplayScheduleSummary(msg.schedule)
                               : "")}
@@ -5701,38 +5483,38 @@ const handleImageUpload = (event) => {
                     {msg.type === "tenant_ticket" && msg.ticket && (
                       <div style={scheduleCardDetails}>
                         <div style={scheduleCustomerTitle}>
-                          {language === "es" ? "Ticket creado" : "Ticket Created"}
+                          {t("conversationTicketCreated", language)}
                         </div>
                         <div style={scheduleDetailRow}>
-                          <span>{language === "es" ? "Número" : "Ticket"}</span>
+                          <span>{t("conversationTicketNumber", language)}</span>
                           <strong>{msg.ticket.id}</strong>
                         </div>
                         {msg.ticket.propertyUnit && (
                           <div style={scheduleDetailRow}>
-                            <span>{language === "es" ? "Propiedad / unidad" : "Property / Unit"}</span>
+                            <span>{t("conversationPropertyUnit", language)}</span>
                             <strong>{msg.ticket.propertyUnit}</strong>
                           </div>
                         )}
                         {msg.ticket.issueType && (
                           <div style={scheduleDetailRow}>
-                            <span>{language === "es" ? "Tipo" : "Issue Type"}</span>
+                            <span>{t("conversationIssueType", language)}</span>
                             <strong>{msg.ticket.issueType}</strong>
                           </div>
                         )}
                         {msg.ticket.issue && (
                           <div style={scheduleDetailRow}>
-                            <span>{language === "es" ? "Descripción" : "Description"}</span>
+                            <span>{t("messagesDescription", language)}</span>
                             <strong>{msg.ticket.issue}</strong>
                           </div>
                         )}
                         {msg.ticket.priority && (
                           <div style={scheduleDetailRow}>
-                            <span>{language === "es" ? "Prioridad" : "Priority"}</span>
+                            <span>{t("messagesPriority", language)}</span>
                             <strong>{msg.ticket.priority}</strong>
                           </div>
                         )}
                         <div style={scheduleDetailRow}>
-                          <span>{language === "es" ? "Estado" : "Status"}</span>
+                          <span>{t("teamMemberStatus", language)}</span>
                           <strong>{msg.ticket.status || "Open"}</strong>
                         </div>
                       </div>
@@ -5746,17 +5528,15 @@ const handleImageUpload = (event) => {
                         <div style={scheduleDetailRow}>
                           <span>
                             {isWorkScheduleMessage(msg)
-                              ? language === "es"
-                                ? "Servicios"
-                                : "Services"
+                              ? t("services", language)
                               : t("appointmentType", language)}
                           </span>
                           <strong>
                             {isWorkScheduleMessage(msg)
                               ? getScheduleServices(msg).length > 1
-                                ? language === "es"
-                                  ? `${getScheduleServices(msg).length} servicios`
-                                  : `${getScheduleServices(msg).length} services`
+                                ? t("conversationServiceCount", language, {
+                                    count: getScheduleServices(msg).length,
+                                  })
                                 : getScheduleServices(msg)[0] ||
                                   t("scheduledVisit", language)
                               : msg.schedule.appointmentType ||
@@ -5776,14 +5556,14 @@ const handleImageUpload = (event) => {
                         </div>
 
                         <div style={scheduleDetailRow}>
-                          <span>{language === "es" ? "Lugar" : "Location"}</span>
+                          <span>{t("jobsHiringLocationPlaceholder", language)}</span>
                           <strong>{msg.schedule.location || "—"}</strong>
                         </div>
 
                         {isWorkScheduleMessage(msg) &&
                           getScheduleServices(msg).length > 1 && (
                             <div style={scheduleDetailNotes}>
-                              <span>{language === "es" ? "Servicios" : "Services"}</span>
+                              <span>{t("services", language)}</span>
                               <ul style={scheduleServiceList}>
                                 {getScheduleServices(msg).map((service, index) => (
                                   <li key={`${service}-${index}`}>{service}</li>
@@ -5852,15 +5632,15 @@ const handleImageUpload = (event) => {
                           {msg.materials.length > 6 && (
                             <p style={materialsMoreText}>
                               +{msg.materials.length - 6}{" "}
-                              {language === "es" ? "más" : "more"}
+                              {t("conversationMore", language)}
                             </p>
                           )}
                         </div>
                       )}
 
                     {msg.type === "hiring-interview" && (
-                      <section style={hiringInterviewMessageCard} aria-label={msg.title || t("interviewDetails", language)}>
-                        <strong>{msg.title || t("interviewScheduled", language)}</strong>
+                      <section style={hiringInterviewMessageCard} aria-label={getLocalizedMessageField(msg, "title") || t("interviewDetails", language)}>
+                        <strong>{getLocalizedMessageField(msg, "title") || t("interviewScheduled", language)}</strong>
                         <span>{t("position", language)}: {msg.positionTitle}</span>
                         <span>{t("date", language)}: {msg.interviewDate || t("required", language)}</span>
                         <span>{t("startTime", language)}: {[msg.startTime, msg.endTime].filter(Boolean).join("–")}</span>
@@ -5874,11 +5654,11 @@ const handleImageUpload = (event) => {
                     {msg.type === "approval" && (
                       <div style={approvalActions}>
                         <button style={approveBtn}>
-                          {language === "es" ? "Aprobar" : "Approve"}
+                          {t("conversationApprove", language)}
                         </button>
 
                         <button style={requestChangeBtn}>
-                          {language === "es" ? "Cambios" : "Request Change"}
+                          {t("requestChange", language)}
                         </button>
                       </div>
                     )}
@@ -5889,7 +5669,7 @@ const handleImageUpload = (event) => {
                         language={language}
                         projectTitle={
                           msg.projectTitle ||
-                          msg.title ||
+                          getLocalizedMessageField(msg, "title") ||
                           activeProjectTitle ||
                           selectedQuoteRequest?.projectTitle ||
                           selectedQuoteRequest?.title ||
@@ -5965,7 +5745,7 @@ const handleImageUpload = (event) => {
                         language={language}
                         projectTitle={
                           msg.projectTitle ||
-                          msg.title ||
+                          getLocalizedMessageField(msg, "title") ||
                           msg.receipt?.service ||
                           activeProjectTitle ||
                           selectedQuoteRequest?.projectTitle ||
@@ -6030,7 +5810,7 @@ const handleImageUpload = (event) => {
                         language={language}
                         projectTitle={
                           msg.projectTitle ||
-                          msg.title ||
+                          getLocalizedMessageField(msg, "title") ||
                           selectedQuoteRequest?.projectTitle ||
                           selectedQuoteRequest?.title ||
                           t("documentQuote", language)
@@ -6136,9 +5916,7 @@ const handleImageUpload = (event) => {
                     <div style={mine ? replyPreviewMine : replyPreviewTheirs}>
                       <strong>
                         {mine
-                          ? language === "es"
-                            ? "Tú"
-                            : "You"
+                          ? t("messagesOwnerYou", language)
                           : activeName}
                       </strong>
                       <span>{msg.replyTo.text}</span>
@@ -6146,7 +5924,7 @@ const handleImageUpload = (event) => {
                   )}
 
                   {msg.type === "image" && msg.imageUrl && (() => {
-                    const mediaText = [msg.title, msg.subtitle, msg.text];
+                    const mediaText = [localizedTitle, localizedSubtitle, localizedText];
                     const normalized = (value) =>
                       (value || "").trim().toLowerCase().replace(/\s+/g, " ");
                     const imageLines = mediaText.filter(Boolean).filter(
@@ -6154,8 +5932,8 @@ const handleImageUpload = (event) => {
                         array.findIndex((item) => normalized(item) === normalized(value)) === index
                     );
                     const shouldRenderImageText = Boolean(
-                      msg.text &&
-                        !isDefaultImageCaption(msg.text)
+                      localizedText &&
+                        !isDefaultImageCaption(localizedText)
                     );
 
                     return (
@@ -6176,7 +5954,7 @@ const handleImageUpload = (event) => {
                         />
 
                         {shouldRenderImageText ? (
-                          <div style={imageBodyText}>{msg.text}</div>
+                          <div style={imageSubtitle}>{localizedText}</div>
                         ) : null}
                       </>
                     );
@@ -6188,8 +5966,8 @@ const handleImageUpload = (event) => {
                         <IconLocationClean />
                       </div>
                       <div>
-                        <strong>{msg.title}</strong>
-                        <p>{msg.subtitle}</p>
+                        <strong>{localizedTitle}</strong>
+                        <p>{localizedSubtitle}</p>
                       </div>
                     </div>
                   )}
@@ -6200,14 +5978,14 @@ const handleImageUpload = (event) => {
                         <IconScanClean />
                       </div>
                       <div>
-                        <strong>{msg.title}</strong>
-                        <p>{msg.subtitle}</p>
+                        <strong>{localizedTitle}</strong>
+                        <p>{localizedSubtitle}</p>
                       </div>
                     </div>
                   )}
 
                   {msg.type !== "image" ? (
-                    <div style={messageTextBlock}>{msg.text}</div>
+                    <div style={messageTextBlock}>{localizedText}</div>
                   ) : null}
 
                   <div style={timeRow}>
@@ -6235,11 +6013,11 @@ const handleImageUpload = (event) => {
         {activeMessage && !activeMessage.unsent && (
           <div style={actionMenu}>
             <button style={actionBtn} onClick={() => startReply(activeMessage)}>
-              {language === "es" ? "Responder" : "Reply"}
+              {t("conversationReply", language)}
             </button>
 
             <button style={actionBtn} onClick={() => copyMessage(activeMessage)}>
-              {language === "es" ? "Copiar" : "Copy"}
+              {t("conversationCopy", language)}
             </button>
 
             {!isHiringThread && (
@@ -6247,7 +6025,7 @@ const handleImageUpload = (event) => {
                 style={actionBtn}
                 onClick={() => saveMessageAsSchedule(activeMessage)}
               >
-                 {language === "es" ? "Revisar programación" : "Review Schedule"}
+                 {t("assistantActionOpenSchedule", language)}
               </button>
             )}
 
@@ -6256,7 +6034,7 @@ const handleImageUpload = (event) => {
                 style={{ ...actionBtn, color: "#ef4444" }}
                 onClick={() => unsendMessage(activeMessage.id)}
               >
-                {language === "es" ? "Eliminar" : "Unsend"}
+                {t("conversationUnsend", language)}
               </button>
             )}
           </div>
@@ -6285,7 +6063,7 @@ const handleImageUpload = (event) => {
           {replyingTo && (
             <div style={replyComposer}>
               <div style={{ minWidth: 0 }}>
-                <strong>{language === "es" ? "Respondiendo" : "Replying"}</strong>
+                <strong>{t("conversationReplying", language)}</strong>
                 <div style={replyComposerText}>{replyingTo.text}</div>
               </div>
 
@@ -6303,7 +6081,7 @@ const handleImageUpload = (event) => {
               <img src={pendingImage.url} alt="" style={pendingImageThumb} />
 
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong>{language === "es" ? "Imagen lista para enviar" : "Image ready to send"}</strong>
+                <strong>{t("conversationImageReady", language)}</strong>
                 <div style={pendingImageName}>{pendingImage.name}</div>
               </div>
 
@@ -6323,7 +6101,7 @@ const handleImageUpload = (event) => {
             <div style={attachMenu}>
               <div style={menuSection}>
                 <div style={menuSectionTitle}>
-                  {language === "es" ? "Compartir" : "Share"}
+                  {t("documentShare", language)}
                 </div>
                 <div style={attachMenuGrid}>
                   <button
@@ -6340,12 +6118,8 @@ const handleImageUpload = (event) => {
                     </span>
                     <span>
                       {mediaUploadDeferred
-                        ? language === "es"
-                          ? "Fotos próximamente"
-                          : "Photos coming soon"
-                        : language === "es"
-                          ? "Cámara"
-                          : "Camera"}
+                        ? t("conversationPhotosComingSoon", language)
+                        : t("conversationCamera", language)}
                     </span>
                   </button>
 
@@ -6363,12 +6137,8 @@ const handleImageUpload = (event) => {
                     </span>
                     <span>
                       {mediaUploadDeferred
-                        ? language === "es"
-                          ? "Fotos próximamente"
-                          : "Photos coming soon"
-                        : language === "es"
-                          ? "Fotos"
-                          : "Photos"}
+                        ? t("conversationPhotosComingSoon", language)
+                        : t("assistantProjectBriefDocumentPhotos", language)}
                     </span>
                   </button>
 
@@ -6376,35 +6146,35 @@ const handleImageUpload = (event) => {
                     <span style={attachIconCircle}>
                       <IconCameraClean />
                     </span>
-                    <span>{language === "es" ? "Video" : "Video"}</span>
+                    <span>{t("hiringInterviewTypeVideo", language)}</span>
                   </button>
 
                   <button style={attachMenuBtn} onClick={sendScanCard}>
                     <span style={attachIconCircle}>
                       <IconScanClean />
                     </span>
-                    <span>{language === "es" ? "Documento" : "Document"}</span>
+                    <span>{t("relationshipDocument", language)}</span>
                   </button>
 
                   <button style={attachMenuBtn} onClick={sendVoiceMessageCard}>
                     <span style={attachIconCircle}>
                       <IconPhone />
                     </span>
-                    <span>{language === "es" ? "Mensaje de voz" : "Voice Message"}</span>
+                    <span>{t("conversationVoiceMessage", language)}</span>
                   </button>
 
                   <button style={attachMenuBtn} onClick={sendLocationCard}>
                     <span style={attachIconCircle}>
                       <IconLocationClean />
                     </span>
-                    <span>{language === "es" ? "Ubicación" : "Location"}</span>
+                    <span>{t("assistantProjectBriefLocation", language)}</span>
                   </button>
                 </div>
               </div>
 
               <div style={menuSection}>
                 <div style={menuSectionTitle}>
-                  {language === "es" ? "Flujo de trabajo" : "Workflow"}
+                  {t("conversationWorkflow", language)}
                 </div>
                 <div style={attachMenuGrid}>
 	                  {!isHiringThread && (
@@ -6414,7 +6184,7 @@ const handleImageUpload = (event) => {
 	                          <span style={attachIconCircle}>
 	                            <IconCalendarClean />
 	                          </span>
-	                            <span>{language === "es" ? "Revisar programación" : "Review Schedule"}</span>
+	                            <span>{t("assistantActionOpenSchedule", language)}</span>
 	                        </button>
 	                      )}
 
@@ -6422,7 +6192,7 @@ const handleImageUpload = (event) => {
                         <span style={attachIconCircle}>
                           <IconIssueClean />
                         </span>
-                        <span>{language === "es" ? "Continuar trabajo" : "Continue Work"}</span>
+                        <span>{t("assistantCompanionOpenWorkCenter", language)}</span>
                       </button>
 
                       <button
@@ -6438,7 +6208,7 @@ const handleImageUpload = (event) => {
                           {resolvePhotoWorkflowIcon("progress")}
                         </span>
                         <span>
-                          {language === "es" ? "Foto de progreso" : "Progress Photo"}
+                          {t("conversationProgressPhoto", language)}
                         </span>
                       </button>
 
@@ -6454,21 +6224,21 @@ const handleImageUpload = (event) => {
                         <span style={attachIconCircle}>
                           {resolvePhotoWorkflowIcon("issue")}
                         </span>
-                        <span>{language === "es" ? "Reportar problema" : "Report Issue"}</span>
+                        <span>{t("conversationReportIssue", language)}</span>
                       </button>
 
                       <button style={menuActionPrimary} onClick={sendMaterialsCard}>
                         <span style={attachIconCircle}>
                           <IconMaterialsClean />
                         </span>
-                        <span>{language === "es" ? "Continuar trabajo" : "Continue Work"}</span>
+                        <span>{t("assistantCompanionOpenWorkCenter", language)}</span>
                       </button>
 
                       <button style={menuActionPrimary} onClick={sendPaymentCard}>
                         <span style={attachIconCircle}>
                           <IconPaymentClean />
                         </span>
-                        <span>{language === "es" ? "Preparar factura" : "Prepare Invoice"}</span>
+                        <span>{t("conversationPrepareInvoice", language)}</span>
                       </button>
 
                       <button
@@ -6483,7 +6253,7 @@ const handleImageUpload = (event) => {
                         <span style={attachIconCircle}>
                           {resolvePhotoWorkflowIcon("completion")}
                         </span>
-                        <span>{language === "es" ? "Finalización" : "Completion"}</span>
+                        <span>{t("assistantProjectBriefDocumentCompletion", language)}</span>
                       </button>
 
                       <button
@@ -6498,7 +6268,7 @@ const handleImageUpload = (event) => {
                           <IconDocumentClean />
                         </span>
                         <span>
-                          {language === "es" ? "Registros" : "Job Records"}
+                          {t("conversationJobRecords", language)}
                           {jobRecordCount > 0 ? ` (${jobRecordCount})` : ""}
                         </span>
                       </button>
@@ -6514,24 +6284,20 @@ const handleImageUpload = (event) => {
           {pendingPhotoPurpose === "explain" && (
             <div style={photoExplainCard}>
               <div style={photoExplainTitle}>
-                {language === "es"
-                  ? "¿Qué te gustaría explicarle al profesional?"
-                  : "What would you like the professional to know?"}
+                {t("conversationExplainPrompt", language)}
               </div>
 
               <div style={photoExplainSubtitle}>
-                {language === "es"
-                  ? "Ayuda a explicar el problema o el trabajo que necesitas."
-                  : "Help explain the issue or work you need done."}
+                {t("conversationExplainHelp", language)}
               </div>
 
               <div style={photoChipRow}>
                 {[
-                  language === "es" ? "Fuga" : "Leak",
-                  language === "es" ? "Roto" : "Broken",
-                  language === "es" ? "Reparación" : "Repair",
-                  language === "es" ? "Pregunta" : "Question",
-                  language === "es" ? "Urgente" : "Urgent",
+                  t("conversationQuickLeak", language),
+                  t("conversationQuickBroken", language),
+                  t("conversationQuickRepair", language),
+                  t("hiringSettingsQuestion", language),
+                  t("homeUrgent", language),
                 ].map((chip) => (
                   <button
                     key={chip}
@@ -6553,9 +6319,7 @@ const handleImageUpload = (event) => {
                 value={photoExplanationText}
                 onChange={(e) => setPhotoExplanationText(e.target.value)}
                 placeholder={
-                  language === "es"
-                    ? "Explica lo que está pasando..."
-                    : "Explain what is going on..."
+                  t("conversationExplainPlaceholder", language)
                 }
               />
             </div>
@@ -6590,9 +6354,7 @@ const handleImageUpload = (event) => {
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                 }}
                 placeholder={
-                  language === "es"
-                    ? "Escribe un mensaje..."
-                    : "Type a message..."
+                  t("typeMessage", language)
                 }
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -6609,9 +6371,7 @@ const handleImageUpload = (event) => {
               style={circleBtn}
               onClick={() =>
                 alert(
-                  language === "es"
-                    ? "Notas de voz próximamente."
-                    : "Voice notes coming soon."
+                  t("conversationVoiceComingSoon", language)
                 )
               }
             >
@@ -6655,22 +6415,20 @@ const handleImageUpload = (event) => {
           <div style={confirmOverlay}>
             <div style={confirmBox}>
               <h3 style={confirmTitle}>
-                {language === "es" ? "¿Limpiar chat?" : "Clear chat?"}
+                {t("conversationClearChatTitle", language)}
               </h3>
 
               <p style={confirmText}>
-                {language === "es"
-                  ? "Esto eliminará los mensajes guardados localmente en este dispositivo."
-                  : "This will delete locally saved messages on this device."}
+                {t("conversationClearChatBody", language)}
               </p>
 
               <div style={confirmActions}>
                 <button style={confirmCancelBtn} onClick={() => setShowClearConfirm(false)}>
-                  {language === "es" ? "Cancelar" : "Cancel"}
+                  {t("actionCancel", language)}
                 </button>
 
                 <button style={confirmDeleteBtn} onClick={clearLocalChat}>
-                  {language === "es" ? "Limpiar" : "Clear"}
+                  {t("conversationClear", language)}
                 </button>
               </div>
             </div>
@@ -6690,14 +6448,12 @@ const handleImageUpload = (event) => {
               <div style={recordHeader}>
                 <div>
                   <h2 style={recordTitle}>
-                     {language === "es" ? "Registro del trabajo" : "Job Record"}
+                     {t("conversationJobRecord", language)}
                   </h2>
 
                   <p style={recordSubtitle}>
                     {jobRecordCount} 
-                    {language === "es"
-                      ? " elementos guardados"
-                      : " saved workflow items"}
+                    {t("conversationSavedWorkflowItems", language)}
                   </p>
                 </div>
 
@@ -6713,23 +6469,19 @@ const handleImageUpload = (event) => {
               </div>
 
               <div style={recordDescription}>
-                {language === "es"
-                  ? "El Registro del Trabajo guarda fotos, actualizaciones, aprobaciones, materiales y eventos importantes del proyecto en un historial operativo permanente."
-                  : "Job Record saves photos, updates, approvals, materials, and important project events into a permanent operating history."}
+                {t("conversationJobRecordHelp", language)}
               </div>
 
               <div style={recordTools}>
                 <button style={recordSpeakBtn} onClick={speakJobRecords}>
-                  {aiSpeaking ? " Stop Meetro Voice" : " " + (language === "es" ? "Leer registro" : "Read Job Record")}
+                  {aiSpeaking ? " Stop Meetro Voice" : " " + (t("conversationReadJobRecord", language))}
                 </button>
               </div>
 
               <div style={recordList}>
                 {jobRecords.length === 0 ? (
                   <div style={emptyRecord}>
-                    {language === "es"
-                      ? "Aún no hay registros guardados."
-                      : "No saved job records yet."}
+                    {t("conversationNoJobRecords", language)}
                   </div>
                 ) : (
                   jobRecords.map((item) => (
@@ -6776,22 +6528,20 @@ const handleImageUpload = (event) => {
                         {expandedRecord === item.id && (
                           <div style={expandedPanel}>
                             <div style={expandedPreview}>
-                               Meetro Moment preview
+                              {t("conversationMomentPreview", language)}
                             </div>
 
                             <div style={expandedInfo}>
                               <div style={expandedInfoRow}>
-                                 Documentation attached
+                                {t("conversationDocumentationAttached", language)}
                               </div>
 
                               <div style={expandedInfoRow}>
-                                 Meetro workflow summary available
+                                {t("conversationWorkflowSummaryAvailable", language)}
                               </div>
 
                               <div style={expandedInfoRow}>
-                                 {language === "es"
-                                  ? "Guardado como memoria de la relación"
-                                  : "Saved as relationship memory"}
+                                 {t("conversationSavedRelationshipMemory", language)}
                               </div>
                             </div>
 
@@ -6840,13 +6590,11 @@ const handleImageUpload = (event) => {
           <div style={scheduleDeleteConfirmOverlay}>
             <div style={scheduleDeleteConfirmCard}>
               <h3 style={scheduleDeleteConfirmTitle}>
-                {language === "es" ? "¿Eliminar cita?" : "Delete appointment?"}
+                {t("conversationDeleteAppointmentTitle", language)}
               </h3>
 
               <p style={scheduleDeleteConfirmText}>
-                {language === "es"
-                  ? "Esta cita se eliminará del chat y del calendario de trabajo local."
-                  : "This appointment will be removed from chat and the local Work Center schedule."}
+                {t("conversationDeleteAppointmentBody", language)}
               </p>
 
               <div style={scheduleDeleteConfirmActions}>
@@ -6857,7 +6605,7 @@ const handleImageUpload = (event) => {
                     setSwipedScheduleId(null);
                   }}
                 >
-                  {language === "es" ? "Cancelar" : "Cancel"}
+                  {t("actionCancel", language)}
                 </button>
 
                 <button
@@ -6867,7 +6615,7 @@ const handleImageUpload = (event) => {
                     setScheduleDeleteCandidate(null);
                   }}
                 >
-                  {language === "es" ? "Eliminar" : "Delete"}
+                  {t("delete", language)}
                 </button>
               </div>
             </div>
@@ -6891,44 +6639,42 @@ const handleImageUpload = (event) => {
               </div>
 
               <h2 style={storyTitle}>
-                {language === "es"
-                  ? "Detalles de la cita"
-                  : "Appointment Details"}
+                {t("conversationAppointmentDetails", language)}
               </h2>
 
               <p style={storyText}>
                 {appointmentDetails.schedule?.title ||
                   appointmentDetails.title ||
-                  (language === "es" ? "Cita programada" : "Scheduled Appointment")}
+                  (t("conversationScheduledAppointment", language))}
               </p>
 
               <div style={appointmentDetailBox}>
                 <div style={appointmentDetailRow}>
-                  <span>{language === "es" ? "Tipo" : "Type"}</span>
+                  <span>{t("messagesType", language)}</span>
                   <strong>
                     {appointmentDetails.schedule?.appointmentType ||
                       appointmentDetails.schedule?.type ||
-                      (language === "es" ? "Cita" : "Appointment")}
+                      (t("journeyAppointment", language))}
                   </strong>
                 </div>
 
                 <div style={appointmentDetailRow}>
-                  <span>{language === "es" ? "Fecha" : "Date"}</span>
+                  <span>{t("myRequestsDate", language)}</span>
                   <strong>{appointmentDetails.schedule?.date || "—"}</strong>
                 </div>
 
                 <div style={appointmentDetailRow}>
-                  <span>{language === "es" ? "Hora" : "Time"}</span>
+                  <span>{t("myRequestsTime", language)}</span>
                   <strong>{getDisplayScheduleTime(appointmentDetails.schedule?.time)}</strong>
                 </div>
 
                 <div style={appointmentDetailRow}>
-                  <span>{language === "es" ? "Ubicación" : "Location"}</span>
+                  <span>{t("assistantProjectBriefLocation", language)}</span>
                   <strong>{appointmentDetails.schedule?.location || "—"}</strong>
                 </div>
 
                 <div style={appointmentDetailRow}>
-                  <span>{language === "es" ? "Estado" : "Status"}</span>
+                  <span>{t("teamMemberStatus", language)}</span>
                   <strong>
                     {getAppointmentConfirmationLabel(
                       getAppointmentConfirmationStatus(appointmentDetails)
@@ -6938,7 +6684,7 @@ const handleImageUpload = (event) => {
 
                 {appointmentDetails.schedule?.notes && (
                   <div style={appointmentDetailNotes}>
-                    <span>{language === "es" ? "Notas" : "Notes"}</span>
+                    <span>{t("messagesNotes", language)}</span>
                     <p>{appointmentDetails.schedule.notes}</p>
                   </div>
                 )}
@@ -6977,9 +6723,7 @@ const handleImageUpload = (event) => {
                   style={storySpeakBtn}
                   onClick={() => editScheduleFromMessage(appointmentDetails)}
                 >
-                  {language === "es"
-                    ? "Editar programación"
-                    : "Edit Schedule"}
+                  {t("conversationEditSchedule", language)}
                 </button>
               )}
 
@@ -6987,7 +6731,7 @@ const handleImageUpload = (event) => {
                 style={storySaveBtn}
                 onClick={() => setAppointmentDetails(null)}
               >
-                {language === "es" ? "Cerrar" : "Close"}
+                {t("actionClose", language)}
               </button>
             </div>
           </div>
@@ -7023,21 +6767,19 @@ const handleImageUpload = (event) => {
                   <IconPhotosClean />
                 </div>
                 <strong>
-                  {language === "es" ? "Vista previa del trabajo" : "Job preview"}
+                  {t("conversationJobPreview", language)}
                 </strong>
                 <span>
-                  {language === "es"
-                    ? "Fotos, notas y documentación aparecerán aquí."
-                    : "Photos, notes, and documentation will appear here."}
+                  {t("conversationJobPreviewHelp", language)}
                 </span>
               </div>
 
               <button style={storySpeakBtn} onClick={speakJobStory}>
-                {aiSpeaking ? " Stop Meetro Voice" : " " + (language === "es" ? "Leer resumen" : "Read Summary")}
+                {aiSpeaking ? " Stop Meetro Voice" : " " + (t("conversationReadSummary", language))}
               </button>
 
               <button style={storySaveBtn} onClick={saveToJobRecord}>
-                 {language === "es" ? "Guardar en trabajo" : "Save to Job Record"}
+                 {t("conversationSaveJobRecord", language)}
               </button>
             </div>
           </div>
@@ -10206,12 +9948,14 @@ class ConversationThreadErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div style={{ padding: 24, fontFamily: "system-ui", color: "#111827" }}>
-          <h2>Conversation error</h2>
-          <p>The conversation screen crashed instead of loading.</p>
+          <h2>{t("conversationErrorTitle", this.props.language)}</h2>
+          <p>{t("conversationErrorBody", this.props.language)}</p>
           <pre style={{ whiteSpace: "pre-wrap", background: "#fee2e2", padding: 12, borderRadius: 12 }}>
             {String(this.state.error?.message || this.state.error)}
           </pre>
-          <button onClick={() => this.props.setPage("messagesInbox")}>Back to Communication Center</button>
+          <button onClick={() => this.props.setPage("messagesInbox")}>
+            {t("conversationBackToCenter", this.props.language)}
+          </button>
         </div>
       );
     }
@@ -10221,8 +9965,9 @@ class ConversationThreadErrorBoundary extends Component {
 }
 
 function ConversationThread({ setPage, embedded = false }) {
+  const language = useLanguage();
   return (
-    <ConversationThreadErrorBoundary setPage={setPage}>
+    <ConversationThreadErrorBoundary setPage={setPage} language={language}>
       <ConversationThreadInner setPage={setPage} embedded={embedded} />
     </ConversationThreadErrorBoundary>
   );

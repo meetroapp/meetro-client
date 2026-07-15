@@ -1,3 +1,5 @@
+import { CORE_WORKFLOW_KEYS } from "./coreRouteParityLanguage.js";
+
 // Explicit Phase 1 inventory. These active-route keys require reviewed FR/PT translations.
 const DEFERRED_FR_PT_KEYS = Object.freeze([
   "aboutBusiness",
@@ -79,8 +81,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "cancelRequest",
   "cancelRequestWarning",
   "cancelledJobNote",
-  "cardPayment",
-  "cash",
   "categoryExample",
   "categoryNotSet",
   "changeLogo",
@@ -272,7 +272,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "pauseJob",
   "paverSealingProject",
   "paymentMethod",
-  "paymentReceived",
   "paymentSummary",
   "pendingDecisionWarning",
   "pendingOperationalReview",
@@ -440,7 +439,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "workSummary",
   "workSummaryPlaceholder",
   "workTabMaterials",
-  "working",
   "writeReview",
   "yes",
   "yourBusiness",
@@ -449,6 +447,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
 export const DEFERRED_TRANSLATION_KEYS = Object.freeze({
   en: Object.freeze([]),
   es: Object.freeze([]),
-  fr: DEFERRED_FR_PT_KEYS,
-  "pt-BR": DEFERRED_FR_PT_KEYS,
+  fr: Object.freeze(DEFERRED_FR_PT_KEYS.filter((key) => !CORE_WORKFLOW_KEYS.includes(key))),
+  "pt-BR": Object.freeze(DEFERRED_FR_PT_KEYS.filter((key) => !CORE_WORKFLOW_KEYS.includes(key))),
 });

@@ -201,8 +201,8 @@ test("Work Center history is source-aware and remains read-only", () => {
   );
 
   assert.match(source, /job\.history\?\.sourceType === "emergency"/);
-  assert.match(source, />Emergency<\/span>/);
+  assert.match(source, /workCenterEmergency/);
   assert.match(source, /isJobHistoryMode/);
-  assert.match(source, /Review Job Report/);
-  assert.match(source, /Print Job Report/);
+  assert.match(source, /workCenterReviewJobReport/);
+  assert.match(source, /workCenterPrintJobReport/);
 });

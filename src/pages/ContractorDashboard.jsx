@@ -8,6 +8,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
+import { formatLocaleCurrency, formatLocaleDate, formatLocaleNumber, getFormattingLocale } from "../utils/localeFormat";
 import {
   CAMERA_PERMISSION_MESSAGE,
   createPhotoInputEvent,
@@ -853,36 +854,36 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     doc.setFontSize(11);
     doc.setFont(undefined, "normal");
-    doc.text(activeLanguage === "es" ? "Cotización Profesional" : "Professional Estimate", 14, 28);
+    doc.text(translate("workCenterProfessionalEstimate", activeLanguage), 14, 28);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(18);
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Resumen de Cotización" : "Quote Summary", 14, 56);
+    doc.text(translate("quoteSummary", activeLanguage), 14, 56);
 
     doc.setFontSize(10);
     doc.setFont(undefined, "normal");
-    doc.text(`${activeLanguage === "es" ? "Cotización" : "Quote"} #: ${quoteNumber}`, 145, 54);
-    doc.text(`${activeLanguage === "es" ? "Fecha" : "Date"}: ${today}`, 145, 61);
+    doc.text(`${translate("journeyQuote", activeLanguage)} #: ${quoteNumber}`, 145, 54);
+    doc.text(`${translate("date", activeLanguage)}: ${today}`, 145, 61);
 
     doc.setDrawColor(226, 232, 240);
     doc.line(14, 68, 196, 68);
 
     doc.setFontSize(12);
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Proyecto" : "Project", 14, 82);
+    doc.text(translate("project", activeLanguage), 14, 82);
 
     doc.setFont(undefined, "normal");
     doc.setFontSize(11);
     doc.text(doc.splitTextToSize(quote.projectTitle || "Project", 170), 14, 90);
 
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Cliente" : "Customer", 14, 108);
+    doc.text(translate("wcCustomer", activeLanguage), 14, 108);
     doc.setFont(undefined, "normal");
     doc.text(doc.splitTextToSize(quote.homeownerName || quote.customer || "Customer", 170), 14, 116);
 
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Ubicación" : "Location", 14, 134);
+    doc.text(translate("jobsHiringLocationPlaceholder", activeLanguage), 14, 134);
     doc.setFont(undefined, "normal");
     doc.text(doc.splitTextToSize(quote.location || "Location pending", 170), 14, 142);
 
@@ -892,13 +893,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
     doc.roundedRect(14, tableTop - 10, 182, 48, 4, 4, "F");
 
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Precio" : "Pricing", 20, tableTop);
+    doc.text(translate("workCenterPricing", activeLanguage), 20, tableTop);
 
     doc.setFont(undefined, "normal");
-    doc.text(activeLanguage === "es" ? "Mano de obra" : "Labor", 20, tableTop + 12);
+    doc.text(translate("workCenterLabor", activeLanguage), 20, tableTop + 12);
     doc.text(`$${getQuoteLaborAmount(quote).toFixed(2)}`, 165, tableTop + 12, { align: "right" });
 
-    doc.text(activeLanguage === "es" ? "Materiales" : "Materials", 20, tableTop + 24);
+    doc.text(translate("workTabMaterials", activeLanguage), 20, tableTop + 24);
     doc.text(`$${getQuoteMaterialsAmount(quote).toFixed(2)}`, 165, tableTop + 24, { align: "right" });
 
     doc.setDrawColor(203, 213, 225);
@@ -909,12 +910,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
     doc.text(`$${getQuoteTotalAmount(quote).toFixed(2)}`, 165, tableTop + 40, { align: "right" });
 
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Tiempo estimado" : "Estimated Timeline", 14, 232);
+    doc.text(translate("estimatedTimeline", activeLanguage), 14, 232);
     doc.setFont(undefined, "normal");
     doc.text(quote.timeline || "—", 14, 240);
 
     doc.setFont(undefined, "bold");
-    doc.text(activeLanguage === "es" ? "Notas" : "Notes", 14, 254);
+    doc.text(translate("jobsHiringApplicantNotes", activeLanguage), 14, 254);
     doc.setFont(undefined, "normal");
     doc.text(doc.splitTextToSize(quote.notes || "—", 170), 14, 262);
 
@@ -946,14 +947,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       await Share.share({
         title: `Quote - ${quote.projectTitle || "Project"}`,
         text:
-          activeLanguage === "es"
-            ? "Adjunto la cotización profesional."
-            : "Attached is the professional quote.",
+          translate("workCenterAttachedIsTheProfessionalQuote", activeLanguage),
         url: savedFile.uri,
         dialogTitle:
-          activeLanguage === "es"
-            ? "Compartir cotización"
-            : "Share Quote",
+          translate("workCenterShareQuote", activeLanguage),
       });
     } catch (error) {
       console.error("Native quote share failed:", error);
@@ -1033,9 +1030,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const t = text[language] || text.en;
 
   const materialsMicBlockedMessage =
-    activeLanguage === "es"
-      ? "El acceso al micrófono está desactivado."
-      : "Microphone access is currently disabled.";
+    translate("workCenterMicrophoneAccessIsCurrentlyDisabled", activeLanguage);
 
   function showMaterialsMicrophonePermissionCard() {
     setIsListeningMaterials(false);
@@ -1111,7 +1106,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = activeLanguage === "es" ? "es-US" : "en-US";
+    recognition.lang = getFormattingLocale(activeLanguage);
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -1287,14 +1282,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   const evaluationMeasurementUnits = [
-    { value: "inches", label: activeLanguage === "es" ? "Pulgadas" : "Inches" },
-    { value: "feet", label: activeLanguage === "es" ? "Pies" : "Feet" },
-    { value: "feet_inches", label: activeLanguage === "es" ? "Pies + pulgadas" : "Feet + Inches" },
-    { value: "centimeters", label: activeLanguage === "es" ? "Centímetros" : "Centimeters" },
-    { value: "meters", label: activeLanguage === "es" ? "Metros" : "Meters" },
-    { value: "count", label: activeLanguage === "es" ? "Cantidad" : "Count" },
-    { value: "square_feet", label: activeLanguage === "es" ? "Pies cuadrados" : "Square feet" },
-    { value: "linear_feet", label: activeLanguage === "es" ? "Pies lineales" : "Linear feet" },
+    { value: "inches", label: translate("workCenterInches", activeLanguage) },
+    { value: "feet", label: translate("workCenterFeet", activeLanguage) },
+    { value: "feet_inches", label: translate("workCenterFeetInches", activeLanguage) },
+    { value: "centimeters", label: translate("workCenterCentimeters", activeLanguage) },
+    { value: "meters", label: translate("workCenterMeters", activeLanguage) },
+    { value: "count", label: translate("workCenterCount", activeLanguage) },
+    { value: "square_feet", label: translate("workCenterSquareFeet", activeLanguage) },
+    { value: "linear_feet", label: translate("workCenterLinearFeet", activeLanguage) },
   ];
 
   function getEvaluationMeasurementUnitLabel(unit = "") {
@@ -1326,15 +1321,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
   function formatEvaluationMeasurement(measurement = {}) {
     const unitLabel = getEvaluationMeasurementUnitLabel(measurement.unit);
     const dimensionParts = [
-      measurement.width ? `${activeLanguage === "es" ? "Ancho" : "Width"} ${measurement.width}` : "",
-      measurement.height ? `${activeLanguage === "es" ? "Alto" : "Height"} ${measurement.height}` : "",
-      measurement.depth ? `${activeLanguage === "es" ? "Profundidad" : "Depth"} ${measurement.depth}` : "",
+      measurement.width ? `${translate("workCenterWidth", activeLanguage)} ${measurement.width}` : "",
+      measurement.height ? `${translate("workCenterHeight", activeLanguage)} ${measurement.height}` : "",
+      measurement.depth ? `${translate("workCenterDepth", activeLanguage)} ${measurement.depth}` : "",
     ].filter(Boolean);
     const measurementValue =
       measurement.unit === "feet_inches"
         ? [
-            measurement.feet ? `${measurement.feet} ${activeLanguage === "es" ? "pies" : "ft"}` : "",
-            measurement.inches ? `${measurement.inches} ${activeLanguage === "es" ? "pulg." : "in"}` : "",
+            measurement.feet ? `${measurement.feet} ${translate("workCenterFt", activeLanguage)}` : "",
+            measurement.inches ? `${measurement.inches} ${translate("workCenterIn", activeLanguage)}` : "",
           ]
             .filter(Boolean)
             .join(" ")
@@ -1345,7 +1340,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       dimensionParts.length > 0
         ? `${dimensionParts.join(" × ")}${unitLabel ? ` ${unitLabel}` : ""}`
         : measurementValue,
-      measurement.quantity ? `${activeLanguage === "es" ? "Cantidad" : "Qty"} ${measurement.quantity}` : "",
+      measurement.quantity ? `${translate("workCenterQty", activeLanguage)} ${measurement.quantity}` : "",
       measurement.notes,
     ]
       .filter(Boolean)
@@ -1544,7 +1539,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return (
       <div style={evaluationSelectionPanel}>
         <label style={evaluationFieldLabel}>
-          {activeLanguage === "es" ? "Tipo de servicio" : "Service Type"}
+          {translate("serviceType", activeLanguage)}
         </label>
         <select
           style={evaluationSelect}
@@ -1565,9 +1560,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           }
         >
           <option value="">
-            {activeLanguage === "es"
-              ? "Selecciona tipo de servicio"
-              : "Select service type"}
+            {translate("workCenterSelectServiceType", activeLanguage)}
           </option>
           {evaluationServiceTypeOptions.map((serviceType) => (
             <option key={serviceType.id} value={serviceType.id}>
@@ -1577,7 +1570,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </select>
 
         <label style={evaluationFieldLabel}>
-          {activeLanguage === "es" ? "Contexto" : "Context"}
+          {translate("workCenterContext", activeLanguage)}
         </label>
         <select
           style={evaluationSelect}
@@ -1598,9 +1591,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           }
         >
           <option value="">
-            {activeLanguage === "es"
-              ? "Selecciona contexto"
-              : "Select context"}
+            {translate("workCenterSelectContext", activeLanguage)}
           </option>
           {evaluationContextOptions.map((context) => (
             <option key={context.id} value={context.id}>
@@ -1612,12 +1603,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
         {hasEvaluationSelection() && (
           <p style={evaluationSelectionHint}>
             {evaluationForm.evaluationTemplate
-              ? activeLanguage === "es"
-                ? `Plantilla: ${evaluationForm.evaluationTemplate}`
-                : `Template: ${evaluationForm.evaluationTemplate}`
-              : activeLanguage === "es"
-                ? "Sin plantilla exacta. Puedes continuar con notas de evaluación."
-                : "No exact template match. You can continue with Evaluation Notes."}
+              ? translate("workCenterTemplateValue", activeLanguage, {
+                  template: evaluationForm.evaluationTemplate,
+                })
+              : translate("workCenterNoExactTemplateMatchYouCanContinueWithEvaluationNotes", activeLanguage)}
           </p>
         )}
 
@@ -1625,12 +1614,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
           <div style={evaluationRequirementPreview}>
             <strong>
               {templateRequirements.length > 0
-                ? activeLanguage === "es"
-                  ? "Documentación recomendada para esta evaluación"
-                  : "Recommended documentation for this evaluation"
-                : activeLanguage === "es"
-                  ? "No se encontró una plantilla específica"
-                  : "No specific template found"}
+                ? translate("workCenterRecommendedDocumentationForThisEvaluation", activeLanguage)
+                : translate("workCenterNoSpecificTemplateFound", activeLanguage)}
             </strong>
             {templateRequirements.length > 0 ? (
               <ul style={evaluationRequirementList}>
@@ -1640,9 +1625,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               </ul>
             ) : (
               <p style={evaluationRequirementEmpty}>
-                {activeLanguage === "es"
-                  ? "Usa notas generales de evaluación."
-                  : "Use general evaluation notes."}
+                {translate("workCenterUseGeneralEvaluationNotes", activeLanguage)}
               </p>
             )}
           </div>
@@ -1695,7 +1678,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             ? [
                 {
                   id: `measurement-${Date.now()}`,
-                  label: activeLanguage === "es" ? "Medidas / hallazgos" : "Measurements / findings",
+                  label: translate("workCenterMeasurementsFindings", activeLanguage),
                   value: item.evaluationFindings,
                   unit: "count",
                   notes: "",
@@ -1788,19 +1771,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
       )
       .map((workItem, index) => {
         const lines = [
-          `${activeLanguage === "es" ? "Elemento de trabajo" : "Work Item"} ${index + 1}: ${
-            workItem.title || (activeLanguage === "es" ? "Sin título" : "Untitled")
+          `${translate("workCenterWorkItem", activeLanguage)} ${index + 1}: ${
+            workItem.title || (translate("workCenterUntitled", activeLanguage))
           }`,
         ];
 
-        if (workItem.notes) lines.push(`${activeLanguage === "es" ? "Notas" : "Notes"}: ${workItem.notes}`);
-        if (workItem.safetyNotes) lines.push(`${activeLanguage === "es" ? "Seguridad" : "Safety"}: ${workItem.safetyNotes}`);
+        if (workItem.notes) lines.push(`${translate("jobsHiringApplicantNotes", activeLanguage)}: ${workItem.notes}`);
+        if (workItem.safetyNotes) lines.push(`${translate("workCenterSafety", activeLanguage)}: ${workItem.safetyNotes}`);
         if (Array.isArray(workItem.photos) && workItem.photos.length > 0) {
-          lines.push(`${activeLanguage === "es" ? "Fotos" : "Photos"}: ${workItem.photos.length}`);
+          lines.push(`${translate("photos", activeLanguage)}: ${workItem.photos.length}`);
         }
         if (Array.isArray(workItem.measurements) && workItem.measurements.length > 0) {
           lines.push(
-            `${activeLanguage === "es" ? "Medidas" : "Measurements"}: ${workItem.measurements
+            `${translate("workCenterMeasurements", activeLanguage)}: ${workItem.measurements
               .map((measurement) =>
                 formatEvaluationMeasurement(measurement)
               )
@@ -1810,19 +1793,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
         }
         if (Array.isArray(workItem.materials) && workItem.materials.length > 0) {
           lines.push(
-            `${activeLanguage === "es" ? "Materiales" : "Materials"}: ${workItem.materials
+            `${translate("workTabMaterials", activeLanguage)}: ${workItem.materials
               .map((material) =>
                 [
                   material.name,
                   material.quantity
-                    ? `${activeLanguage === "es" ? "Cantidad" : "Qty"} ${material.quantity}`
+                    ? `${translate("workCenterQty", activeLanguage)} ${material.quantity}`
                     : "",
                   parseMeetroAmount(material.unitPrice) !== null
-                    ? `${activeLanguage === "es" ? "Precio unitario" : "Unit Price"} $${parseMeetroAmount(material.unitPrice).toFixed(2)}`
+                    ? `${translate("workCenterUnitPrice", activeLanguage)} $${parseMeetroAmount(material.unitPrice).toFixed(2)}`
                     : "",
                   getMaterialLineTotal(material) === null
                     ? ""
-                    : `${activeLanguage === "es" ? "Total" : "Line Total"} $${getMaterialLineTotal(material).toFixed(2)}`,
+                    : `${translate("workCenterLineTotal", activeLanguage)} $${getMaterialLineTotal(material).toFixed(2)}`,
                   material.provider,
                   material.notes,
                 ]
@@ -1839,31 +1822,31 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     const sections = [
       {
-        label: activeLanguage === "es" ? "Notas de visita" : "Visit notes",
+        label: translate("workCenterVisitNotes", activeLanguage),
         value: form.notes,
       },
       {
-        label: activeLanguage === "es" ? "Medidas / hallazgos" : "Measurements / findings",
+        label: translate("workCenterMeasurementsFindings", activeLanguage),
         value: form.findings,
       },
       {
-        label: activeLanguage === "es" ? "Materiales / precios" : "Materials / pricing",
+        label: translate("workCenterMaterialsPricing", activeLanguage),
         value: form.materialsNeeded,
       },
       {
-        label: activeLanguage === "es" ? "Notas de mano de obra" : "Labor notes",
+        label: translate("workCenterLaborNotes", activeLanguage),
         value: form.laborNotes,
       },
       {
-        label: activeLanguage === "es" ? "Notas de seguridad" : "Safety notes",
+        label: translate("tenantTicketFieldSafetyNotes", activeLanguage),
         value: form.safetyNotes,
       },
       {
-        label: activeLanguage === "es" ? "Fotos" : "Photos",
+        label: translate("photos", activeLanguage),
         value:
           form.photoNotes ||
           (Array.isArray(form.photos) && form.photos.length > 0
-            ? `${form.photos.length} ${activeLanguage === "es" ? "foto(s) agregada(s)" : "photo(s) added"}`
+            ? `${form.photos.length} ${translate("workCenterPhotoSAdded", activeLanguage)}`
             : ""),
       },
     ];
@@ -2224,7 +2207,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       item.customerName ||
       item.homeownerName ||
       customerValue ||
-      (activeLanguage === "es" ? "Cliente" : "Customer")
+      (translate("wcCustomer", activeLanguage))
     );
   }
 
@@ -2239,7 +2222,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       item.address ||
       item.location ||
       customerAddress ||
-      (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+      (translate("workCenterAddressPending", activeLanguage))
     );
   }
 
@@ -2272,11 +2255,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
       item.workflowStage === "work_scheduled" ||
       visitStatus === "work_scheduled"
     ) {
-      return activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled";
+      return translate("workScheduled", activeLanguage);
     }
 
     if (["completed", "work_completed"].includes(visitStatus)) {
-      return activeLanguage === "es" ? "Completado" : "Completed";
+      return translate("completed", activeLanguage);
     }
 
     if (
@@ -2284,22 +2267,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
         quoteStatus
       )
     ) {
-      return activeLanguage === "es" ? "Aprobado" : "Approved";
+      return translate("documentStatusApproved", activeLanguage);
     }
 
     if (quote) {
-      return activeLanguage === "es" ? "Propuesta enviada" : "Proposal Sent";
+      return translate("workCenterProposalSent", activeLanguage);
     }
 
     if (hasEvaluationForAppointment(item)) {
-      return activeLanguage === "es" ? "Listo para propuesta" : "Ready For Proposal";
+      return translate("workCenterReadyForProposal", activeLanguage);
     }
 
     if (isSchedulePast(item)) {
-      return activeLanguage === "es" ? "Visita completada" : "Visit Completed";
+      return translate("workCenterVisitCompleted", activeLanguage);
     }
 
-    return activeLanguage === "es" ? "Visita programada" : "Visit Scheduled";
+    return translate("workCenterVisitScheduled", activeLanguage);
   }
 
   function getJobWorkspaceNextStep(item = {}) {
@@ -2313,7 +2296,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       item.workflowStage === "work_scheduled" ||
       String(item.status || "").toLowerCase() === "work_scheduled"
     ) {
-      return activeLanguage === "es" ? "Realiza el trabajo." : "Perform the work.";
+      return translate("workCenterPerformTheWork", activeLanguage);
     }
 
     if (
@@ -2322,9 +2305,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       ) &&
       quotePaymentSatisfied
     ) {
-      return activeLanguage === "es"
-        ? "Programa el trabajo o solicita depósito."
-        : "Schedule work or request a deposit.";
+      return translate("workCenterScheduleWorkOrRequestADeposit", activeLanguage);
     }
 
     if (
@@ -2332,32 +2313,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
         quoteStatus
       )
     ) {
-      return activeLanguage === "es"
-        ? "Registra el pago o depósito antes de programar el trabajo."
-        : "Record payment or deposit before scheduling work.";
+      return translate("workCenterRecordPaymentOrDepositBeforeSchedulingWork", activeLanguage);
     }
 
     if (quote) {
-      return activeLanguage === "es"
-        ? "Espera aprobación del cliente."
-        : "Await customer approval.";
+      return translate("workCenterAwaitCustomerApproval", activeLanguage);
     }
 
     if (hasEvaluationForAppointment(item)) {
-      return activeLanguage === "es"
-        ? "Crea una propuesta para el cliente."
-        : "Create a customer proposal.";
+      return translate("workCenterCreateACustomerProposal", activeLanguage);
     }
 
     if (isSchedulePast(item)) {
-      return activeLanguage === "es"
-        ? "Captura notas de la visita."
-        : "Capture notes from the visit.";
+      return translate("workCenterCaptureNotesFromTheVisit", activeLanguage);
     }
 
-    return activeLanguage === "es"
-      ? "Asiste a la visita programada."
-      : "Attend the scheduled visit.";
+    return translate("workCenterAttendTheScheduledVisit", activeLanguage);
   }
 
   function getJobWorkspacePrimaryAction(item = {}) {
@@ -2373,7 +2344,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       String(item.status || "").toLowerCase() === "work_scheduled"
     ) {
       return {
-        label: activeLanguage === "es" ? "Continuar trabajo activo" : "Continue Active Work",
+        label: translate("openActiveWorkAction", activeLanguage),
         onClick: () => {
           setEvaluationTarget(null);
           openWorkTab("active");
@@ -2383,7 +2354,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (canScheduleWork({ quote: quote || {} })) {
       return {
-        label: activeLanguage === "es" ? "Programar trabajo" : "Schedule Work",
+        label: translate("workCenterScheduleWork", activeLanguage),
         onClick: () => {
           setEvaluationTarget(null);
           setShowScheduleForm(true);
@@ -2410,9 +2381,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               manualCustomerEmail: item.customerEmail || item.email || "",
               manualCustomerAddress: getJobWorkspaceAddress(item),
               location: getJobWorkspaceAddress(item),
-              notes: activeLanguage === "es"
-                ? "Visita de regreso para trabajo aprobado."
-                : "Return visit for approved work.",
+              notes: translate("workCenterReturnVisitForApprovedWork", activeLanguage),
             })
           );
         },
@@ -2425,28 +2394,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
       )
     ) {
       return {
-        label: activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal",
+        label: translate("assistantActionViewQuote", activeLanguage),
         onClick: () => setQuoteViewTarget(quote),
       };
     }
 
     if (quote) {
       return {
-        label: activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal",
+        label: translate("assistantActionViewQuote", activeLanguage),
         onClick: () => setQuoteViewTarget(quote),
       };
     }
 
     if (hasEvaluationForAppointment(item)) {
       return {
-        label: activeLanguage === "es" ? "Preparar propuesta" : "Prepare Proposal",
+        label: translate("assistantProjectBriefNextCreateProposal", activeLanguage),
         onClick: () => continueEvaluationToQuote(item),
       };
     }
 
     if (isSchedulePast(item)) {
       return {
-        label: activeLanguage === "es" ? "Agregar notas" : "Add Visit Notes",
+        label: translate("workCenterAddVisitNotes", activeLanguage),
         onClick: () => {
           const notesSection = document.getElementById("job-evaluation-notes");
           if (notesSection) {
@@ -2458,7 +2427,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     }
 
     return {
-      label: activeLanguage === "es" ? "Editar visita" : "Edit Visit",
+      label: translate("workCenterEditVisit", activeLanguage),
       onClick: () => startEditScheduleVisit(item),
     };
   }
@@ -2503,7 +2472,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       quote.project_title ||
       quote.title ||
       quote.service ||
-      (activeLanguage === "es" ? "Trabajo aprobado" : "Approved Work");
+      (translate("workCenterApprovedWork", activeLanguage));
 
     setEvaluationTarget(null);
     setShowScheduleForm(true);
@@ -2527,9 +2496,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         quoteId: quote.quoteId || quote.id || "",
         services: getQuoteServiceLines(quote),
         notes:
-          activeLanguage === "es"
-            ? "Trabajo aprobado por el cliente. Comparte la fecha y hora programadas."
-            : "Customer-approved work. Share the scheduled work date and time.",
+          translate("workCenterCustomerApprovedWorkShareTheScheduledWorkDateAndTime", activeLanguage),
       })
     );
     localStorage.setItem("meetroWorkCenterTab", "schedule");
@@ -2546,9 +2513,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const scheduleId = String(item?.id || item?.scheduleId || "");
     if (!item || !scheduleId) {
       const message =
-        activeLanguage === "es"
-          ? "No se encontró la visita. Vuelve a abrir la visita e inténtalo de nuevo."
-          : "Visit record is missing. Open the visit again and try saving.";
+        translate("workCenterVisitRecordIsMissingOpenTheVisitAgainAndTrySaving", activeLanguage);
       console.warn("Evaluation Notes save blocked: missing visit identity.", {
         hasItem: Boolean(item),
         scheduleId,
@@ -2572,9 +2537,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       });
     } catch (error) {
       const message =
-        activeLanguage === "es"
-          ? "No se pudieron preparar las notas de evaluación."
-          : "Evaluation Notes could not be prepared for saving.";
+        translate("workCenterEvaluationNotesCouldNotBePreparedForSaving", activeLanguage);
       console.warn("Evaluation Notes save blocked: unserializable payload.", {
         scheduleId,
         error,
@@ -2588,9 +2551,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       schedule = JSON.parse(localStorage.getItem("meetro_business_schedule") || "[]");
     } catch (error) {
       const message =
-        activeLanguage === "es"
-          ? "No se pudo leer el calendario guardado."
-          : "Saved schedule could not be read.";
+        translate("workCenterSavedScheduleCouldNotBeRead", activeLanguage);
       console.warn("Evaluation Notes save blocked: schedule JSON parse failed.", {
         scheduleId,
         error,
@@ -2601,9 +2562,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (!Array.isArray(schedule)) {
       const message =
-        activeLanguage === "es"
-          ? "El calendario guardado no tiene un formato válido."
-          : "Saved schedule is not in a valid format.";
+        translate("workCenterSavedScheduleIsNotInAValidFormat", activeLanguage);
       console.warn("Evaluation Notes save blocked: schedule storage is not an array.", {
         scheduleId,
         scheduleType: typeof schedule,
@@ -2618,9 +2577,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (!matchingVisit) {
       const message =
-        activeLanguage === "es"
-          ? "No se pudo encontrar esta visita en el calendario guardado."
-          : "This visit was not found in the saved schedule.";
+        translate("workCenterThisVisitWasNotFoundInTheSavedSchedule", activeLanguage);
       console.warn("Evaluation Notes save blocked: visit not found in schedule.", {
         scheduleId,
         availableVisitIds: schedule.map((visit) => visit.id || visit.scheduleId).filter(Boolean),
@@ -2631,9 +2588,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (!hasEvaluationSelection()) {
       const message =
-        activeLanguage === "es"
-          ? "Selecciona tipo de servicio y contexto antes de guardar notas de evaluación."
-          : "Select Service Type and Context before saving Evaluation Notes.";
+        translate("workCenterSelectServiceTypeAndContextBeforeSavingEvaluationNotes", activeLanguage);
       showEvaluationSaveFeedback("error", message);
       return null;
     }
@@ -2668,7 +2623,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	      id: evaluationId,
       type: "evaluation",
       source: "schedule",
-      title: activeLanguage === "es" ? "Evaluación registrada" : "Evaluation recorded",
+      title: translate("workCenterEvaluationRecorded", activeLanguage),
       text: summary,
       notes: summary,
       serviceType: selection.serviceType,
@@ -2758,17 +2713,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
       if (!options.silent) {
         showEvaluationSaveFeedback(
           "success",
-          activeLanguage === "es"
-            ? "Notas de evaluación guardadas."
-            : "Evaluation Notes saved."
+          translate("workCenterEvaluationNotesSaved", activeLanguage)
         );
       }
       window.dispatchEvent(new Event("storage"));
     } catch (error) {
       const message =
-        activeLanguage === "es"
-          ? "No se pudieron guardar las notas de evaluación."
-          : "Evaluation Notes could not be saved.";
+        translate("workCenterEvaluationNotesCouldNotBeSaved", activeLanguage);
       console.warn("Evaluation Notes save failed: schedule write failed.", {
         scheduleId,
         errorName: error?.name || "Error",
@@ -2809,9 +2760,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (!item || !scheduleId) {
       showEvaluationSaveFeedback(
         "error",
-        activeLanguage === "es"
-          ? "No se encontró la visita. Vuelve a abrir la visita e inténtalo de nuevo."
-          : "Visit record is missing. Open the visit again and try creating a quote."
+        translate("workCenterVisitRecordIsMissingOpenTheVisitAgainAndTryCreatingA", activeLanguage)
       );
       return;
     }
@@ -2822,9 +2771,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (currentWorkItems.length === 0) {
       showEvaluationSaveFeedback(
         "error",
-        activeLanguage === "es"
-          ? "Agrega al menos un elemento de trabajo antes de crear una cotización."
-          : "Add at least one work item before creating a quote."
+        translate("workCenterAddAtLeastOneWorkItemBeforeCreatingAQuote", activeLanguage)
       );
       return;
     }
@@ -2832,9 +2779,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (!hasEvaluationNoteContent()) {
       showEvaluationSaveFeedback(
         "error",
-        activeLanguage === "es"
-          ? "Agrega notas, fotos, medidas o materiales antes de crear una cotización."
-          : "Add notes, photos, measurements, or materials before creating a quote."
+        translate("workCenterAddNotesPhotosMeasurementsOrMaterialsBeforeCreatingAQuote", activeLanguage)
       );
       return;
     }
@@ -2969,9 +2914,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       localStorage.setItem("quoteBuilderScheduleId", scheduleId);
       showEvaluationSaveFeedback(
         "success",
-        activeLanguage === "es"
-          ? "Notas guardadas. Abriendo cotización..."
-          : "Notes saved. Opening quote builder..."
+        translate("workCenterNotesSavedOpeningQuoteBuilder", activeLanguage)
       );
       if (typeof setPage !== "function") {
         throw new Error("Quote Builder navigation is unavailable.");
@@ -2982,9 +2925,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       console.warn("Could not open Quote Builder after saving notes.", error);
       showEvaluationSaveFeedback(
         "error",
-        activeLanguage === "es"
-          ? "Notas guardadas, pero el creador de cotización no se abrió."
-          : "Notes saved, but quote builder did not open."
+        translate("workCenterNotesSavedButQuoteBuilderDidNotOpen", activeLanguage)
       );
     }
   }
@@ -3126,9 +3067,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (!description) {
       setMaterialsCatalogMatches([]);
       setMaterialsAiSuggestion(
-        activeLanguage === "es"
-          ? "Describe los materiales que faltan o usa el micrófono del teléfono para dictarlos."
-          : "Describe the missing materials or use your phone microphone to dictate them."
+        translate("workCenterDescribeTheMissingMaterialsOrUseYourPhoneMicrophoneToDictateThem", activeLanguage)
       );
       return;
     }
@@ -3220,7 +3159,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       category: "custom",
       country,
       estimatedPrice: "",
-      supplier: activeLanguage === "es" ? "No confirmado" : "Not confirmed",
+      supplier: translate("workCenterNotConfirmed", activeLanguage),
       keywords: [item],
       customItem: true,
     }));
@@ -3233,12 +3172,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     setMaterialsAiSuggestion(
       matchedCatalogItems.length
-        ? activeLanguage === "es"
-          ? `${matchedCatalogItems.length} materiales encontrados en el catálogo. Revisa y agrega los correctos al proyecto.`
-          : `${matchedCatalogItems.length} catalog materials found. Review and add the correct items to the project.`
-        : activeLanguage === "es"
-        ? "No se encontró una coincidencia exacta en el catálogo. Se prepararon opciones personalizadas para revisar."
-        : "No exact catalog match found. Custom review items were prepared."
+        ? translate("workCenterCatalogMaterialsFound", activeLanguage, {
+            count: matchedCatalogItems.length,
+          })
+        : translate("workCenterNoExactCatalogMatchFoundCustomReviewItemsWerePrepared", activeLanguage)
     );
   }
 
@@ -3280,11 +3217,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
     localStorage.setItem("activeWorkStage", "pausedMaterials");
     localStorage.setItem("activeWorkPauseReason", "materials");
 
-    setMaterialsAiSuggestion(
-      activeLanguage === "es"
-        ? `${material.title} agregado a la lista de materiales del proyecto.`
-        : `${material.title} added to this project's materials list.`
-    );
+    setMaterialsAiSuggestion(translate("workCenterMaterialAddedToList", activeLanguage, {
+      material: material.title,
+    }));
 
     setMaterialsCatalogMatches((items) =>
       items.filter((item) => item.id !== material.id)
@@ -3351,12 +3286,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     alert(
       editingMaterial
-        ? activeLanguage === "es"
-          ? "Material actualizado."
-          : "Material updated."
-        : activeLanguage === "es"
-        ? "Material guardado y trabajo pausado por materiales."
-        : "Material saved and job paused for materials."
+        ? translate("workCenterMaterialUpdated", activeLanguage)
+        : translate("workCenterMaterialSavedAndJobPausedForMaterials", activeLanguage)
     );
 
     window.dispatchEvent(
@@ -3397,7 +3328,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         activeContext.service ||
         selectedRequest?.title ||
         selectedRequest?.service ||
-        (activeLanguage === "es" ? "Trabajo activo" : "Active Work"),
+        (translate("workCenterActiveWorkTitle", activeLanguage)),
       location:
         activeContext.location ||
         selectedRequest?.location ||
@@ -3408,7 +3339,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         selectedRequest?.customerName ||
         localStorage.getItem("activeConversationName") ||
         localStorage.getItem("activeJobCustomer") ||
-        (activeLanguage === "es" ? "Cliente" : "Customer"),
+        (translate("wcCustomer", activeLanguage)),
       customerPhone:
         selectedRequest?.phone ||
         selectedRequest?.customerPhone ||
@@ -3429,65 +3360,61 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const value = String(provider || "").toLowerCase();
 
     if (value === "customer" || value === "homeowner") {
-      return activeLanguage === "es" ? "Cliente" : "Customer";
+      return translate("wcCustomer", activeLanguage);
     }
 
     if (value === "business" || value === "professional" || value === "pro") {
-      return activeLanguage === "es" ? "Negocio" : "Business";
+      return translate("business", activeLanguage);
     }
 
     if (value === "supplier") {
-      return activeLanguage === "es" ? "Proveedor" : "Supplier";
+      return translate("workCenterSupplier", activeLanguage);
     }
 
-    return provider || (activeLanguage === "es" ? "No especificado" : "Not specified");
+    return provider || (translate("workCenterNotSpecified", activeLanguage));
   }
 
   function getMaterialStatusLabel(status) {
     const value = String(status || "").toLowerCase();
 
-    if (value === "needed") return activeLanguage === "es" ? "Necesario" : "Needed";
-    if (value === "ordered") return activeLanguage === "es" ? "Ordenado" : "Ordered";
-    if (value === "ready") return activeLanguage === "es" ? "Listo" : "Ready";
-    if (value === "delivered") return activeLanguage === "es" ? "Entregado" : "Delivered";
+    if (value === "needed") return translate("needed", activeLanguage);
+    if (value === "ordered") return translate("workCenterOrdered", activeLanguage);
+    if (value === "ready") return translate("ready", activeLanguage);
+    if (value === "delivered") return translate("workCenterDelivered", activeLanguage);
 
-    return status || (activeLanguage === "es" ? "No especificado" : "Not specified");
+    return status || (translate("workCenterNotSpecified", activeLanguage));
   }
 
   function buildMaterialsShareText(materials = []) {
     const context = getMaterialsShareContext(materials);
-    const notProvided = activeLanguage === "es" ? "No asignada" : "Not provided";
+    const notProvided = translate("workCenterNotProvided", activeLanguage);
     const lines = materials.flatMap((item, index) => {
       const materialName = item.title || translate("material");
       const itemLines = [
         `${index + 1}. ${materialName}`,
-        `   ${activeLanguage === "es" ? "Cantidad" : "Qty"}: ${item.quantity || "1"}`,
-        `   ${activeLanguage === "es" ? "Estado" : "Status"}: ${getMaterialStatusLabel(item.status)}`,
-        `   ${activeLanguage === "es" ? "Proporcionado por" : "Provided by"}: ${getMaterialProviderLabel(item.provider)}`,
+        `   ${translate("workCenterQty", activeLanguage)}: ${item.quantity || "1"}`,
+        `   ${translate("homeStatus", activeLanguage)}: ${getMaterialStatusLabel(item.status)}`,
+        `   ${translate("workCenterProvidedBy", activeLanguage)}: ${getMaterialProviderLabel(item.provider)}`,
       ];
 
       if (item.notes) {
-        itemLines.push(`   ${activeLanguage === "es" ? "Notas" : "Notes"}: ${item.notes}`);
+        itemLines.push(`   ${translate("jobsHiringApplicantNotes", activeLanguage)}: ${item.notes}`);
       }
 
       return itemLines;
     });
 
     return [
-      activeLanguage === "es" ? "Lista de materiales" : "Materials List",
-      `${activeLanguage === "es" ? "Trabajo" : "Job"}: ${context.service}`,
-      `${activeLanguage === "es" ? "Ubicación" : "Location"}: ${context.location || notProvided}`,
+      translate("materialsList", activeLanguage),
+      `${translate("workCenterJob", activeLanguage)}: ${context.service}`,
+      `${translate("jobsHiringLocationPlaceholder", activeLanguage)}: ${context.location || notProvided}`,
       "",
-      activeLanguage === "es" ? "Artículos:" : "Items:",
+      translate("workCenterItems", activeLanguage),
       ...lines,
       "",
-      activeLanguage === "es" ? "Propósito:" : "Purpose:",
-      activeLanguage === "es"
-        ? "Compartido por el profesional para preparar el trabajo."
-        : "Shared by the professional for job preparation.",
-      activeLanguage === "es"
-        ? "Esta lista no solicita aprobación ni cambia el estado del trabajo."
-        : "This list does not request approval or change job status.",
+      translate("workCenterPurpose", activeLanguage),
+      translate("workCenterSharedByTheProfessionalForJobPreparation", activeLanguage),
+      translate("workCenterThisListDoesNotRequestApprovalOrChangeJobStatus", activeLanguage),
     ]
       .join("\n");
   }
@@ -3506,12 +3433,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       customer: context.customerName,
       type: "materials_shared",
       workflowType: "materialsListShared",
-      title: activeLanguage === "es" ? "Lista de materiales compartida" : "Materials list shared",
+      title: translate("workCenterMaterialsListShared", activeLanguage),
       subtitle: method,
-      text:
-        activeLanguage === "es"
-          ? `Lista de materiales compartida por ${method}.`
-          : `Materials list shared via ${method}.`,
+      text: translate("workCenterMaterialsSharedVia", activeLanguage, { method }),
       materialCount: materials.length,
       method,
       savedAt: now,
@@ -3530,15 +3454,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     try {
       await navigator.clipboard?.writeText(text);
       alert(
-        activeLanguage === "es"
-          ? "Lista de materiales copiada. Puedes pegarla en Mensajes, Mail, Notas o cualquier app."
-          : "Materials list copied. You can paste it into Messages, Mail, Notes, or any app."
+        translate("workCenterMaterialsListCopiedYouCanPasteItIntoMessagesMailNotesOr", activeLanguage)
       );
     } catch {
       alert(
-        activeLanguage === "es"
-          ? "No se pudo copiar automáticamente. Copia el texto de la lista manualmente."
-          : "Could not copy automatically. Copy the materials list text manually."
+        translate("workCenterCouldNotCopyAutomaticallyCopyTheMaterialsListTextManually", activeLanguage)
       );
     }
   }
@@ -3546,9 +3466,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   async function shareMaterialsOutsideMeetro(materials) {
     if (materials.length === 0) {
       alert(
-        activeLanguage === "es"
-          ? "Agrega materiales antes de compartir la lista."
-          : "Add materials before sharing the list."
+        translate("workCenterAddMaterialsBeforeSharingTheList", activeLanguage)
       );
       return;
     }
@@ -3558,16 +3476,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
     try {
       if (Share?.share) {
         await Share.share({
-          title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+          title: translate("materialsList", activeLanguage),
           text,
           dialogTitle:
-            activeLanguage === "es"
-              ? "Compartir lista de materiales"
-              : "Share Materials List",
+            translate("workCenterShareMaterialsList", activeLanguage),
         });
       } else if (navigator.share) {
         await navigator.share({
-          title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+          title: translate("materialsList", activeLanguage),
           text,
         });
       } else {
@@ -3588,18 +3504,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (materials.length === 0) {
       alert(
-        activeLanguage === "es"
-          ? "Agrega materiales antes de compartir la lista."
-          : "Add materials before sharing the list."
+        translate("workCenterAddMaterialsBeforeSharingTheList", activeLanguage)
       );
       return;
     }
 
     if (!context.conversationId) {
       alert(
-        activeLanguage === "es"
-          ? "No hay conversación vinculada para enviar esta lista."
-          : "No linked customer conversation found for this materials list."
+        translate("workCenterNoLinkedCustomerConversationFoundForThisMaterialsList", activeLanguage)
       );
       return;
     }
@@ -3616,11 +3528,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       workflowSource: "materials-center",
       conversationId: context.conversationId,
       requestId: context.requestId,
-      title: activeLanguage === "es" ? "Lista de materiales" : "Materials List",
+      title: translate("materialsList", activeLanguage),
       subtitle:
-        activeLanguage === "es"
-          ? "Compartida por el profesional • Para preparar el trabajo"
-          : "Shared by professional • For job preparation",
+        translate("workCenterSharedByProfessionalForJobPreparation", activeLanguage),
       approvalRequired: false,
       jobService: context.service,
       jobLocation: context.location,
@@ -3641,11 +3551,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       id: context.conversationId,
       project_title: context.service,
       project_description:
-        activeLanguage === "es"
-          ? "Lista de materiales compartida."
-          : "Materials list shared.",
+        translate("workCenterMaterialsListShared2", activeLanguage),
       homeowner_email: context.customerName,
-      status: activeLanguage === "es" ? "Materiales compartidos" : "Materials shared",
+      status: translate("workCenterMaterialsShared", activeLanguage),
       conversation_type: "standard",
     });
 
@@ -3654,18 +3562,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
     window.dispatchEvent(new Event("meetro-messages-updated"));
     window.dispatchEvent(new Event("storage"));
     alert(
-      activeLanguage === "es"
-        ? "Lista de materiales enviada por Meetro Chat."
-        : "Materials list sent through Meetro Chat."
+      translate("workCenterMaterialsListSentThroughMeetroChat", activeLanguage)
     );
   }
 
   function saveMaterialsListPdf(materials = []) {
     if (materials.length === 0) {
       alert(
-        activeLanguage === "es"
-          ? "Agrega materiales antes de crear el PDF."
-          : "Add materials before creating the PDF."
+        translate("workCenterAddMaterialsBeforeCreatingThePDF", activeLanguage)
       );
       return;
     }
@@ -3673,11 +3577,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const context = getMaterialsShareContext(materials);
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text(activeLanguage === "es" ? "Lista de materiales" : "Materials List", 14, 20);
+    doc.text(translate("materialsList", activeLanguage), 14, 20);
     doc.setFontSize(11);
-    doc.text(`${activeLanguage === "es" ? "Trabajo" : "Job"}: ${context.service}`, 14, 32);
+    doc.text(`${translate("workCenterJob", activeLanguage)}: ${context.service}`, 14, 32);
     if (context.location) {
-      doc.text(`${activeLanguage === "es" ? "Ubicación" : "Location"}: ${context.location}`, 14, 40);
+      doc.text(`${translate("jobsHiringLocationPlaceholder", activeLanguage)}: ${context.location}`, 14, 40);
     }
 
     let y = context.location ? 54 : 46;
@@ -3727,25 +3631,25 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const displayTime = formatScheduleTime(visit.time);
     const lines = [
       visit.scheduleUpdate || visit.isScheduleUpdate
-        ? activeLanguage === "es"
-          ? `${visit.businessName || "Tu profesional"} actualizó una cita.`
-          : `${visit.businessName || "Your professional"} updated an appointment.`
-        : activeLanguage === "es"
-          ? `${visit.businessName || "Tu profesional"} programó una cita.`
-          : `${visit.businessName || "Your professional"} scheduled an appointment.`,
+        ? translate("workCenterProfessionalUpdatedAppointment", activeLanguage, {
+            business: visit.businessName || translate("workCenterYourProfessional", activeLanguage),
+          })
+        : translate("workCenterProfessionalScheduledAppointment", activeLanguage, {
+            business: visit.businessName || translate("workCenterYourProfessional", activeLanguage),
+          }),
       "",
-      `${activeLanguage === "es" ? "Servicio" : "Service"}: ${
+      `${translate("service", activeLanguage)}: ${
         visit.requestTitle || visit.title || translate("scheduledVisit")
       }`,
-      `${activeLanguage === "es" ? "Fecha" : "Date"}: ${visit.date || ""}`,
-      `${activeLanguage === "es" ? "Hora" : "Time"}: ${displayTime}`,
-      `${activeLanguage === "es" ? "Lugar" : "Location"}: ${
+      `${translate("date", activeLanguage)}: ${visit.date || ""}`,
+      `${translate("myRequestsTime", activeLanguage)}: ${displayTime}`,
+      `${translate("jobsHiringLocationPlaceholder", activeLanguage)}: ${
         visit.location || visit.customerAddress || translate("customerLocation")
       }`,
       "",
-      activeLanguage === "es"
-        ? `Puedes revisar Meetro aquí: ${visit.inviteLink || MEETRO_PUBLIC_INVITE_LINK}`
-        : `You can review Meetro here: ${visit.inviteLink || MEETRO_PUBLIC_INVITE_LINK}`,
+      translate("workCenterReviewMeetroHere", activeLanguage, {
+        link: visit.inviteLink || MEETRO_PUBLIC_INVITE_LINK,
+      }),
     ];
 
     return lines.filter((line) => line !== null && line !== undefined).join("\n");
@@ -3754,7 +3658,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   async function shareExternalScheduleVisit(visit = {}) {
     const text = buildExternalScheduleShareText(visit);
     const title =
-      activeLanguage === "es" ? "Cita de Meetro" : "Meetro appointment";
+      translate("workCenterMeetroAppointment", activeLanguage);
 
     try {
       if (Share?.share) {
@@ -3789,14 +3693,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     setAppointmentReminderNotice({
       title:
-        activeLanguage === "es"
-          ? "Comparte por Mensajes"
-          : "Share by Text",
+        translate("workCenterShareByText", activeLanguage),
       actions: false,
       message:
-        activeLanguage === "es"
-          ? "Visita guardada. Agrega un teléfono del cliente para compartirla por Mensajes."
-          : "Visit saved. Add the customer's phone number to share it through Messages.",
+        translate("workCenterVisitSavedAddTheCustomersPhoneNumberToShareItThroughMessages", activeLanguage),
     });
     return false;
   }
@@ -3825,32 +3725,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
       ? visit.services
       : [visit.requestTitle || visit.title].filter(Boolean);
     const customerScheduleTitle = isWorkSchedule
-      ? activeLanguage === "es"
-        ? "Trabajo programado"
-        : "Work Scheduled"
+      ? translate("workScheduled", activeLanguage)
       : isScheduleUpdate
-        ? activeLanguage === "es"
-          ? "Cita actualizada"
-          : "Appointment Updated"
-        : activeLanguage === "es"
-          ? "Cita programada"
-          : "Appointment Scheduled";
+        ? translate("workCenterAppointmentUpdated", activeLanguage)
+        : translate("appointmentScheduled", activeLanguage);
     const displayVisitTime = formatScheduleTime(visit.time);
     const customerScheduleText = isWorkSchedule
       ? isScheduleUpdate
-        ? activeLanguage === "es"
-          ? `Trabajo actualizado para ${visit.date} a las ${displayVisitTime}.`
-          : `Work schedule updated for ${visit.date} at ${displayVisitTime}.`
-        : activeLanguage === "es"
-          ? `Trabajo programado para ${visit.date} a las ${displayVisitTime}.`
-          : `Work scheduled for ${visit.date} at ${displayVisitTime}.`
+        ? translate("workCenterWorkScheduleUpdated", activeLanguage, { date: visit.date, time: displayVisitTime })
+        : translate("workCenterWorkScheduledMessage", activeLanguage, { date: visit.date, time: displayVisitTime })
       : isScheduleUpdate
-        ? activeLanguage === "es"
-          ? `Cita actualizada: ${visit.title} — ${visit.date} a las ${displayVisitTime}.`
-          : `Appointment updated: ${visit.title} — ${visit.date} at ${displayVisitTime}.`
-        : activeLanguage === "es"
-          ? ` ${visit.appointmentLabel}: ${visit.title} — ${visit.date} a las ${displayVisitTime}.`
-          : ` ${visit.appointmentLabel}: ${visit.title} — ${visit.date} at ${displayVisitTime}.`;
+        ? translate("workCenterAppointmentUpdatedMessage", activeLanguage, { title: visit.title, date: visit.date, time: displayVisitTime })
+        : translate("workCenterAppointmentScheduledLabelMessage", activeLanguage, { label: visit.appointmentLabel, title: visit.title, date: visit.date, time: displayVisitTime });
     const scheduleMessageId = isScheduleUpdate
       ? `schedule-update-msg-${visit.id}-${Date.now()}`
       : Date.now();
@@ -3885,7 +3771,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             status: "replaced",
             subtitle: `${message.schedule?.date || ""} • ${formatScheduleTime(
               message.schedule?.time
-            )} • ${activeLanguage === "es" ? "Horario actualizado" : "Schedule updated"}`,
+            )} • ${translate("workCenterScheduleUpdated", activeLanguage)}`,
             schedule: {
               ...(message.schedule || {}),
               customerConfirmationStatus: "replaced",
@@ -3965,17 +3851,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setPendingScheduleDelivery(null);
     setAppointmentReminderNotice({
       title: isScheduleUpdate
-        ? activeLanguage === "es"
-          ? "Cita actualizada"
-          : "Appointment Updated"
-        : activeLanguage === "es"
-          ? "Cita enviada"
-          : "Appointment Sent",
+        ? translate("workCenterAppointmentUpdated", activeLanguage)
+        : translate("workCenterAppointmentSent", activeLanguage),
       actions: false,
       message:
-        activeLanguage === "es"
-          ? "Tarjeta de cita enviada en el mismo Meetro Chat."
-          : "Appointment card sent in the same Meetro Chat.",
+        translate("workCenterAppointmentCardSentInTheSameMeetroChat", activeLanguage),
     });
   }
 
@@ -3988,14 +3868,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       if (!sent) {
         setAppointmentReminderNotice({
           title:
-            activeLanguage === "es"
-              ? "Elige otra forma de enviar"
-              : "Choose Another Delivery Method",
+            translate("workCenterChooseAnotherDeliveryMethod", activeLanguage),
           actions: false,
           message:
-            activeLanguage === "es"
-              ? "Esta visita no tiene un chat de Meetro vinculado. Compártela por Mensajes."
-              : "This visit does not have a linked Meetro Chat. Share it by text instead.",
+            translate("workCenterThisVisitDoesNotHaveALinkedMeetroChatShareItBy", activeLanguage),
         });
         return;
       }
@@ -4003,14 +3879,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setPendingScheduleDelivery(null);
       setAppointmentReminderNotice({
         title:
-          activeLanguage === "es"
-            ? "Cita enviada"
-            : "Appointment Sent",
+          translate("workCenterAppointmentSent", activeLanguage),
         actions: false,
         message:
-          activeLanguage === "es"
-            ? "Tarjeta de cita enviada en Meetro Chat."
-            : "Appointment card sent in Meetro Chat.",
+          translate("workCenterAppointmentCardSentInMeetroChat", activeLanguage),
       });
       setRefreshKey((prev) => prev + 1);
       return;
@@ -4021,14 +3893,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setPendingScheduleDelivery(null);
       setAppointmentReminderNotice({
         title:
-          activeLanguage === "es"
-            ? "Compartir cita"
-            : "Share Appointment",
+          translate("workCenterShareAppointment", activeLanguage),
         actions: false,
         message:
-          activeLanguage === "es"
-            ? "Opciones de Mensajes abiertas para compartir la cita."
-            : "Message sharing opened for this appointment.",
+          translate("workCenterMessageSharingOpenedForThisAppointment", activeLanguage),
       });
       setRefreshKey((prev) => prev + 1);
     }
@@ -4103,7 +3971,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const normalized = String(rawStatus || "").toLowerCase().replace(/\s+/g, "_");
 
     if (normalized === "work_scheduled") {
-      return activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled";
+      return translate("workScheduled", activeLanguage);
     }
     if (normalized === "completed") return translate("completed");
     if (
@@ -4133,7 +4001,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const appointmentDateTime = new Date(`${item.date || ""} ${item.time || "09:00"}`);
 
     if (item.reminders?.enabled) {
-      labels.push(activeLanguage === "es" ? "Recordatorio activo" : "Reminder set");
+      labels.push(translate("workCenterReminderSet", activeLanguage));
     }
 
     if (!Number.isNaN(appointmentDateTime.getTime())) {
@@ -4144,9 +4012,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
         appointmentDateTime.getDate() === now.getDate();
       const minutesUntil = (appointmentDateTime.getTime() - now.getTime()) / 60000;
 
-      if (sameDay) labels.push(activeLanguage === "es" ? "Hoy" : "Due today");
+      if (sameDay) labels.push(translate("workCenterDueToday", activeLanguage));
       if (minutesUntil >= 0 && minutesUntil <= 120) {
-        labels.push(activeLanguage === "es" ? "Pronto" : "Starting soon");
+        labels.push(translate("workCenterStartingSoon", activeLanguage));
       }
     }
 
@@ -4220,8 +4088,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       },
       {
         value: "work_visit",
-        label: activeLanguage === "es" ? "Trabajo programado" : "Scheduled Work",
-        title: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
+        label: translate("scheduledWork", activeLanguage),
+        title: translate("workScheduled", activeLanguage),
       },
     ];
   }
@@ -4417,7 +4285,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           : existingVisit?.nextAction || "record_evaluation_after_visit",
       nextResponsibility:
         existingVisit?.nextResponsibility ||
-        (activeLanguage === "es" ? "Registrar evaluación" : "Record Evaluation"),
+        (translate("workCenterRecordEvaluation", activeLanguage)),
       selectedHomeownerRequestId:
         existingVisit?.selectedHomeownerRequestId ||
         localStorage.getItem("selectedHomeownerRequestId") ||
@@ -4492,9 +4360,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (duplicateVisit) {
       setAppointmentReminderNotice({
         message:
-          activeLanguage === "es"
-            ? "Esta visita ya está guardada para este cliente."
-            : "This visit is already saved for this customer.",
+          translate("workCenterThisVisitIsAlreadySavedForThisCustomer", activeLanguage),
       });
       localStorage.setItem("activeWorkScheduleId", getScheduleVisitId(duplicateVisit));
       resetScheduleForm();
@@ -4512,9 +4378,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (reminderResult.permissionDenied) {
       setAppointmentReminderNotice({
         message:
-          activeLanguage === "es"
-            ? "Meetro puede recordarte tus próximas citas. Las notificaciones están bloqueadas. Abre Configuración de iPhone para permitir recordatorios."
-            : "Meetro can remind you about upcoming appointments. Notifications are blocked. Open iPhone Settings to allow Meetro reminders.",
+          translate("workCenterMeetroCanRemindYouAboutUpcomingAppointmentsNotificationsAreBlockedOpenIPhone", activeLanguage),
       });
     } else {
       setAppointmentReminderNotice(null);
@@ -4657,9 +4521,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (!scheduleId) {
       alert(
-        activeLanguage === "es"
-          ? "Esta visita no tiene un identificador editable. Vuelve a abrir la agenda e inténtalo de nuevo."
-          : "This visit is missing an editable appointment id. Open the schedule again and try editing."
+        translate("workCenterThisVisitIsMissingAnEditableAppointmentIdOpenTheScheduleAgain", activeLanguage)
       );
       return;
     }
@@ -4840,9 +4702,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       {
         type: "appointment_completed",
         title:
-          activeLanguage === "es"
-            ? "Visita completada"
-            : "Visit completed",
+          translate("workCenterVisitCompleted2", activeLanguage),
         service: item.title || "",
         location: item.location || "",
         scheduleId: item.id || "",
@@ -4908,9 +4768,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         {
           type: "quote_required",
           title:
-            activeLanguage === "es"
-              ? "Cotización requerida"
-              : "Quote required",
+            translate("workCenterQuoteRequired", activeLanguage),
           service: baseRequest.service,
           location: baseRequest.location,
           requestId: baseRequest.requestId,
@@ -4963,12 +4821,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
           type: outcome,
           title:
             outcome === "emergency_dispatch"
-              ? activeLanguage === "es"
-                ? "Despacho de emergencia iniciado"
-                : "Emergency dispatch started"
-              : activeLanguage === "es"
-              ? "Trabajo listo para comenzar"
-              : "Work ready to start",
+              ? translate("workCenterEmergencyDispatchStarted", activeLanguage)
+              : translate("workCenterWorkReadyToStart", activeLanguage),
           service: baseRequest.service,
           location: baseRequest.location,
           requestId: baseRequest.requestId,
@@ -5026,9 +4880,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         {
           type: "materials_needed",
           title:
-            activeLanguage === "es"
-              ? "Materiales necesarios"
-              : "Materials needed",
+            translate("workCenterMaterialsNeeded", activeLanguage),
           service: baseRequest.service,
           location: baseRequest.location,
           requestId: baseRequest.requestId,
@@ -5071,16 +4923,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
         type: outcome,
         title:
           outcome === "follow_up_required"
-            ? activeLanguage === "es"
-              ? "Seguimiento requerido"
-              : "Follow up required"
+            ? translate("workCenterFollowUpRequired", activeLanguage)
             : outcome === "not_good_fit"
-            ? activeLanguage === "es"
-              ? "No es buen ajuste"
-              : "Not a good fit"
-            : activeLanguage === "es"
-            ? "Esperando decisión del cliente"
-            : "Waiting customer decision",
+            ? translate("workCenterNotAGoodFit", activeLanguage)
+            : translate("workCenterWaitingCustomerDecision", activeLanguage),
         service: baseRequest.service,
         location: baseRequest.location,
         requestId: baseRequest.requestId,
@@ -5173,21 +5019,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
   ];
 
   const quoteStatusLabels = {
-    all: activeLanguage === "es" ? "Todas" : "All",
-    draft: activeLanguage === "es" ? "Borrador" : "Draft",
-    drafts: activeLanguage === "es" ? "Borradores" : "Drafts",
-    pending: activeLanguage === "es" ? "Pendientes" : "Pending",
-    sent: activeLanguage === "es" ? "Enviada" : "Sent",
-    viewed: activeLanguage === "es" ? "Vista" : "Viewed",
-    accepted: activeLanguage === "es" ? "Aceptada" : "Accepted",
-    revision_requested: activeLanguage === "es" ? "Revisión" : "Revision",
-    waiting_approval: activeLanguage === "es" ? "Esperando aprobación" : "Waiting Approval",
-    approved: activeLanguage === "es" ? "Aprobada" : "Approved",
-    paid: activeLanguage === "es" ? "Pagada" : "Paid",
-    declined: activeLanguage === "es" ? "Rechazada" : "Declined",
-    expired: activeLanguage === "es" ? "Expirada" : "Expired",
-    converted_to_job: activeLanguage === "es" ? "Trabajo Activo" : "Active Job",
-    completed: activeLanguage === "es" ? "Completada" : "Completed",
+    all: translate("jobsHiringCategoryAll", activeLanguage),
+    draft: translate("quoteDraft", activeLanguage),
+    drafts: translate("workCenterDrafts", activeLanguage),
+    pending: translate("teamMemberStatusPending", activeLanguage),
+    sent: translate("documentStatusSent", activeLanguage),
+    viewed: translate("workCenterViewed", activeLanguage),
+    accepted: translate("workCenterAccepted", activeLanguage),
+    revision_requested: translate("workCenterRevision", activeLanguage),
+    waiting_approval: translate("workCenterWaitingApproval", activeLanguage),
+    approved: translate("documentStatusApproved", activeLanguage),
+    paid: translate("documentStatusPaid", activeLanguage),
+    declined: translate("documentStatusDeclined", activeLanguage),
+    expired: translate("workCenterExpired", activeLanguage),
+    converted_to_job: translate("activeJob", activeLanguage),
+    completed: translate("completed", activeLanguage),
   };
 
   function getQuoteDisplayGroup(quote = {}) {
@@ -5215,15 +5061,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     const prefix =
       status === "draft"
-        ? activeLanguage === "es"
-          ? "Actualizado"
-          : "Updated"
-        : activeLanguage === "es"
-        ? "Enviado"
-        : "Sent";
+        ? translate("workCenterUpdated", activeLanguage)
+        : translate("documentStatusSent", activeLanguage);
 
     if (!dateValue) {
-      return activeLanguage === "es" ? `${prefix} pendiente` : `${prefix} pending`;
+      return translate("workCenterDocumentPending", activeLanguage, { prefix });
     }
 
     const date = new Date(dateValue);
@@ -5233,24 +5075,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     const daysAgo = Math.floor((Date.now() - date.getTime()) / 86400000);
     if (daysAgo <= 0) {
-      return activeLanguage === "es" ? `${prefix} hoy` : `${prefix} today`;
+      return translate("workCenterDocumentToday", activeLanguage, { prefix });
     }
 
     if (daysAgo === 1) {
-      return activeLanguage === "es" ? `${prefix} ayer` : `${prefix} 1 day ago`;
+      return translate("workCenterDocumentYesterday", activeLanguage, { prefix });
     }
 
     if (daysAgo < 7) {
-      return activeLanguage === "es"
-        ? `${prefix} hace ${daysAgo} días`
-        : `${prefix} ${daysAgo} days ago`;
+      return translate("workCenterDaysAgo", activeLanguage, { prefix, count: daysAgo });
     }
 
-    return `${prefix} ${date.toLocaleDateString(activeLanguage === "es" ? "es-US" : "en-US", {
+    return `${prefix} ${formatLocaleDate(date, {
       month: "short",
       day: "numeric",
       year: "numeric",
-    })}`;
+    }, activeLanguage)}`;
   }
 
   function normalizeQuoteStatus(quote) {
@@ -5293,9 +5133,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (["evaluation_complete", "evaluation_completed"].includes(status)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Evaluación completa" : "Evaluation Complete",
-        nextStep: activeLanguage === "es" ? "Prepara la propuesta del cliente." : "Prepare the customer proposal.",
-        actionLabel: activeLanguage === "es" ? "Preparar propuesta" : "Prepare Proposal",
+        statusLabel: translate("workCenterEvaluationComplete", activeLanguage),
+        nextStep: translate("workCenterPrepareTheCustomerProposal", activeLanguage),
+        actionLabel: translate("assistantProjectBriefNextCreateProposal", activeLanguage),
         onAction: () => openQuoteBuilderForOperationalQuote(quote),
       };
     }
@@ -5303,17 +5143,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (["draft", "drafts"].includes(status)) {
       return {
         statusLabel,
-        nextStep: activeLanguage === "es" ? "Continúa la propuesta antes de enviarla." : "Continue the proposal before sending.",
-        actionLabel: activeLanguage === "es" ? "Continuar propuesta" : "Continue Proposal",
+        nextStep: translate("workCenterContinueTheProposalBeforeSending", activeLanguage),
+        actionLabel: translate("assistantFieldActionContinueProposal", activeLanguage),
         onAction: () => openQuoteBuilderForOperationalQuote(quote),
       };
     }
 
     if (["proposal_ready", "ready", "ready_to_send"].includes(status)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Propuesta lista" : "Proposal Ready",
-        nextStep: activeLanguage === "es" ? "Enviar la propuesta al cliente." : "Send the proposal to the customer.",
-        actionLabel: activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal",
+        statusLabel: translate("workCenterProposalReady", activeLanguage),
+        nextStep: translate("workCenterSendTheProposalToTheCustomer", activeLanguage),
+        actionLabel: translate("assistantProjectBriefNextSendProposal", activeLanguage),
         onAction: makeStatusUpdate("sent", "pending"),
       };
     }
@@ -5323,17 +5163,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
         statusLabel: status === "waiting_approval" || status === "proposal_sent"
           ? quoteStatusLabels.waiting_approval
           : statusLabel,
-        nextStep: activeLanguage === "es" ? "Registrar aprobación cuando el cliente acepte." : "Record approval when the customer accepts.",
-        actionLabel: activeLanguage === "es" ? "Registrar aprobación" : "Record Approval",
+        nextStep: translate("workCenterRecordApprovalWhenTheCustomerAccepts", activeLanguage),
+        actionLabel: translate("workCenterRecordApproval", activeLanguage),
         onAction: makeStatusUpdate("accepted", "accepted"),
       };
     }
 
     if (["accepted", "approved", "quote_approved"].includes(status)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Aprobada" : "Approved",
-        nextStep: activeLanguage === "es" ? "Registrar pago o depósito." : "Record payment or deposit.",
-        actionLabel: activeLanguage === "es" ? "Registrar pago" : "Record Payment",
+        statusLabel: translate("documentStatusApproved", activeLanguage),
+        nextStep: translate("workCenterRecordPaymentOrDeposit", activeLanguage),
+        actionLabel: translate("workCenterRecordPayment", activeLanguage),
         onAction: makeStatusUpdate("paid", "accepted"),
       };
     }
@@ -5341,8 +5181,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (["paid", "payment_received", "deposit_received"].includes(status)) {
       return {
         statusLabel: quoteStatusLabels.paid,
-        nextStep: activeLanguage === "es" ? "Programar la fecha del trabajo." : "Schedule the work date.",
-        actionLabel: activeLanguage === "es" ? "Programar trabajo" : "Schedule Work",
+        nextStep: translate("workCenterScheduleTheWorkDate", activeLanguage),
+        actionLabel: translate("workCenterScheduleWork", activeLanguage),
         onAction: () => startScheduleWorkFromQuote(quote),
       };
     }
@@ -5350,8 +5190,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (status === "revision_requested") {
       return {
         statusLabel,
-        nextStep: activeLanguage === "es" ? "Actualizar y volver a enviar la propuesta." : "Update and resend the proposal.",
-        actionLabel: activeLanguage === "es" ? "Continuar propuesta" : "Continue Proposal",
+        nextStep: translate("workCenterUpdateAndResendTheProposal", activeLanguage),
+        actionLabel: translate("assistantFieldActionContinueProposal", activeLanguage),
         onAction: () => openQuoteBuilderForOperationalQuote(quote),
       };
     }
@@ -5359,8 +5199,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (status === "converted_to_job") {
       return {
         statusLabel,
-        nextStep: activeLanguage === "es" ? "Continuar desde Trabajo activo." : "Continue from Active Work.",
-        actionLabel: activeLanguage === "es" ? "Continuar trabajo activo" : "Continue Active Work",
+        nextStep: translate("workCenterContinueFromActiveWork", activeLanguage),
+        actionLabel: translate("openActiveWorkAction", activeLanguage),
         onAction: () => openWorkTab("active"),
       };
     }
@@ -5368,7 +5208,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return {
       statusLabel,
       nextStep: getQuoteOperationalNextAction(quote),
-      actionLabel: activeLanguage === "es" ? "Revisar detalles" : "Review Details",
+      actionLabel: translate("reviewJob", activeLanguage),
       onAction: () => setQuoteViewTarget(quote),
     };
   }
@@ -5390,42 +5230,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const status = normalizeQuoteStatus(quote);
 
     if (status === "accepted") {
-      return activeLanguage === "es"
-        ? "Programa el trabajo o crea el trabajo activo."
-        : "Schedule work or create the active job.";
+      return translate("workCenterScheduleWorkOrCreateTheActiveJob", activeLanguage);
     }
 
     if (status === "revision_requested") {
-      return activeLanguage === "es"
-        ? "Revisa y envía una cotización actualizada."
-        : "Review and send an updated quote.";
+      return translate("workCenterReviewAndSendAnUpdatedQuote", activeLanguage);
     }
 
     if (status === "declined") {
-      return activeLanguage === "es"
-        ? "No hay acción pendiente."
-        : "No pending action.";
+      return translate("workCenterNoPendingAction", activeLanguage);
     }
 
     if (status === "converted_to_job") {
-      return activeLanguage === "es"
-        ? "Continúa este trabajo desde Trabajo activo."
-        : "Continue this job from Active Work.";
+      return translate("workCenterContinueThisJobFromActiveWork", activeLanguage);
     }
 
     if (status === "completed") {
-      return activeLanguage === "es"
-        ? "Revisa el registro en historial."
-        : "Review the record in history.";
+      return translate("workCenterReviewTheRecordInHistory", activeLanguage);
     }
 
     return isExternalQuote(quote)
-      ? activeLanguage === "es"
-        ? "Marca la respuesta manualmente o invita al cliente."
-        : "Mark the response manually or invite the customer."
-      : activeLanguage === "es"
-      ? "Espera la decisión del cliente."
-      : "Wait for the customer decision.";
+      ? translate("workCenterMarkTheResponseManuallyOrInviteTheCustomer", activeLanguage)
+      : translate("workCenterWaitForTheCustomerDecision", activeLanguage);
   }
 
   function getActiveJobOperationalNextAction(status) {
@@ -5448,14 +5274,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
     }
 
     if (normalized === "completed") {
-      return activeLanguage === "es"
-        ? "Crea recibo o revisa cierre."
-        : "Create receipt or review closure.";
+      return translate("workCenterCreateReceiptOrReviewClosure", activeLanguage);
     }
 
-    return activeLanguage === "es"
-      ? "Revisa detalles para continuar el trabajo."
-      : "Review details to continue the work.";
+    return translate("workCenterReviewDetailsToContinueTheWork", activeLanguage);
   }
 
   function isMeetroLinkedSchedule(item) {
@@ -5473,9 +5295,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function getScheduleSourceLabel(item) {
     if (isMeetroLinkedSchedule(item)) {
-      return activeLanguage === "es"
-        ? "Cita de cliente Meetro"
-        : "Meetro Customer Appointment";
+      return translate("workCenterMeetroCustomerAppointment", activeLanguage);
     }
 
     if (
@@ -5483,20 +5303,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
       item?.customer?.source === "manual_customer_entry" ||
       item?.isMeetroUser === false
     ) {
-      return activeLanguage === "es" ? "Cliente manual" : "Manual Customer";
+      return translate("workCenterManualCustomer", activeLanguage);
     }
 
     if (item?.source === "manual") {
-      return activeLanguage === "es" ? "Manual" : "Manual";
+      return translate("workCenterManual", activeLanguage);
     }
 
     return item?.source || translate("schedule");
   }
 
   const quoteFilterTabs = [
-    { key: "pending", label: activeLanguage === "es" ? "Pendientes" : "Pending" },
-    { key: "accepted", label: activeLanguage === "es" ? "Aceptadas" : "Accepted" },
-    { key: "drafts", label: activeLanguage === "es" ? "Borradores" : "Drafts" },
+    { key: "pending", label: translate("teamMemberStatusPending", activeLanguage) },
+    { key: "accepted", label: translate("workCenterAccepted2", activeLanguage) },
+    { key: "drafts", label: translate("workCenterDrafts", activeLanguage) },
   ];
 
   const quoteFilterCounts = quoteFilterTabs.reduce((counts, tab) => {
@@ -5884,7 +5704,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         request.customerName ||
         request.homeownerName ||
         request.name ||
-        (activeLanguage === "es" ? "Cliente" : "Customer"),
+        (translate("wcCustomer", activeLanguage)),
       status:
         request.workStatus ||
         request.activeWorkStatus ||
@@ -5903,9 +5723,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             status: dispatchStatus,
             eta: dispatchStatus === "completed" ? "0" : "12",
             customer:
-              activeLanguage === "es"
-                ? "Propietario esperando actualización"
-                : "Homeowner waiting for update",
+              translate("workCenterHomeownerWaitingForUpdate", activeLanguage),
           },
         ]
       : []),
@@ -5931,14 +5749,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
     missionActiveContext.customer ||
     localStorage.getItem("pendingWorkCustomer") ||
     localStorage.getItem("activeWorkCustomer") ||
-    (activeLanguage === "es" ? "Cliente" : "Customer");
+    (translate("wcCustomer", activeLanguage));
   const missionActiveService =
     missionActiveContext.service ||
     missionActiveContext.title ||
     missionActiveContext.projectTitle ||
     localStorage.getItem("pendingWorkService") ||
     localStorage.getItem("activeWorkService") ||
-    (activeLanguage === "es" ? "Visita de servicio" : "Service Visit");
+    (translate("workCenterServiceVisit", activeLanguage));
   const missionHasCurrentWork =
     Boolean(missionActiveContext.id || missionActiveContext.service) &&
     !["completed", "cancelled"].includes(missionActiveStage);
@@ -6136,20 +5954,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const normalized = normalizeWorkflowStage(stage);
 
     const labels = {
-      requested: activeLanguage === "es" ? "Solicitado" : "Requested",
-      review: activeLanguage === "es" ? "En revisión" : "Review",
-      scheduled: activeLanguage === "es" ? "Programado" : "Scheduled",
-      quote_required: activeLanguage === "es" ? "Requiere cotización" : "Quote needed",
-      quote_sent: activeLanguage === "es" ? "Cotización enviada" : "Quote sent",
-      quote_approved: activeLanguage === "es" ? "Cotización aprobada" : "Quote approved",
-      active: activeLanguage === "es" ? "Activo" : "Active",
-      on_the_way: activeLanguage === "es" ? "En camino" : "On the way",
-      arrived: activeLanguage === "es" ? "Llegó" : "Arrived",
-      working: activeLanguage === "es" ? "Trabajando" : "Working",
-      paused_materials: activeLanguage === "es" ? "Pausado por materiales" : "Paused: Materials",
-      waiting_customer: activeLanguage === "es" ? "Esperando cliente" : "Waiting customer",
-      completed: activeLanguage === "es" ? "Completado" : "Completed",
-      cancelled: activeLanguage === "es" ? "Cancelado" : "Cancelled",
+      requested: translate("workflowRequested", activeLanguage),
+      review: translate("homeReview", activeLanguage),
+      scheduled: translate("scheduled", activeLanguage),
+      quote_required: translate("workflowQuoteNeeded", activeLanguage),
+      quote_sent: translate("workflowQuoteSent", activeLanguage),
+      quote_approved: translate("workflowQuoteApproved", activeLanguage),
+      active: translate("homeMyProjectsActive", activeLanguage),
+      on_the_way: translate("workflowOnTheWay", activeLanguage),
+      arrived: translate("arrivedShort", activeLanguage),
+      working: translate("working", activeLanguage),
+      paused_materials: translate("workflowPausedMaterials", activeLanguage),
+      waiting_customer: translate("workflowWaitingCustomer", activeLanguage),
+      completed: translate("completed", activeLanguage),
+      cancelled: translate("workflowCancelled", activeLanguage),
     };
 
     return labels[normalized] || normalized;
@@ -6478,28 +6296,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
     );
     const currentStatus =
       normalized === "active"
-        ? activeLanguage === "es"
-          ? "Trabajo programado"
-          : "Work Scheduled"
+        ? translate("workScheduled", activeLanguage)
         : normalized === "working"
-        ? activeLanguage === "es"
-          ? "En progreso"
-          : "In Progress"
+        ? translate("wcFilterInProgress", activeLanguage)
         : normalized === "completed"
-        ? activeLanguage === "es"
-          ? "Completado"
-          : "Completed"
+        ? translate("completed", activeLanguage)
         : normalized === "receipt_created"
-        ? activeLanguage === "es"
-          ? "Recibo creado"
-          : "Receipt Created"
+        ? translate("workCenterReceiptCreated", activeLanguage)
         : getWorkflowStageLabel(normalized);
 
     if (["scheduled", "active", "quote_approved", "work_scheduled"].includes(normalized)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
-        nextStep: activeLanguage === "es" ? "Marcar en camino cuando salgas." : "Mark on the way when you leave.",
-        actionLabel: activeLanguage === "es" ? "En camino" : "On The Way",
+        statusLabel: translate("workScheduled", activeLanguage),
+        nextStep: translate("workCenterMarkOnTheWayWhenYouLeave", activeLanguage),
+        actionLabel: translate("onTheWay", activeLanguage),
         onAction: () => setOperationalActiveWorkStatus(job, "on_the_way"),
       };
     }
@@ -6508,7 +6318,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       return {
         statusLabel: currentStatus,
         nextStep: translate("nextStepArrive"),
-        actionLabel: activeLanguage === "es" ? "Llegué" : "Arrived",
+        actionLabel: translate("workCenterArrived", activeLanguage),
         onAction: () => setOperationalActiveWorkStatus(job, "arrived"),
       };
     }
@@ -6517,16 +6327,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
       return {
         statusLabel: currentStatus,
         nextStep: translate("nextStepBeginWork"),
-        actionLabel: activeLanguage === "es" ? "Comenzar trabajo" : "Start Work",
+        actionLabel: translate("assistantProjectBriefNextStartWork", activeLanguage),
         onAction: () => setOperationalActiveWorkStatus(job, "working"),
       };
     }
 
     if (["working", "started", "in_progress"].includes(normalized)) {
       return {
-        statusLabel: activeLanguage === "es" ? "En progreso" : "In Progress",
-        nextStep: activeLanguage === "es" ? "Registra la finalización cuando esté listo." : "Record completion when ready.",
-        actionLabel: activeLanguage === "es" ? "Registrar finalización" : "Record Completion",
+        statusLabel: translate("wcFilterInProgress", activeLanguage),
+        nextStep: translate("workCenterRecordCompletionWhenReady", activeLanguage),
+        actionLabel: translate("workCenterRecordCompletion", activeLanguage),
         onAction: () => {
           saveActiveJobContext(job);
           localStorage.setItem("completionService", job.service || job.title || translate("scheduledWork"));
@@ -6539,18 +6349,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (["completed", "ready_for_completion"].includes(normalized)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Completado" : "Completed",
-        nextStep: activeLanguage === "es" ? "Crear factura o recibo." : "Create invoice or receipt.",
-        actionLabel: activeLanguage === "es" ? "Crear recibo" : "Create Receipt",
+        statusLabel: translate("completed", activeLanguage),
+        nextStep: translate("workCenterCreateInvoiceOrReceipt", activeLanguage),
+        actionLabel: translate("workCenterCreateReceipt", activeLanguage),
         onAction: () => openReceiptBuilderForOperationalActiveWork(job),
       };
     }
 
     if (["receipt_created", "invoice_created"].includes(normalized)) {
       return {
-        statusLabel: activeLanguage === "es" ? "Recibo creado" : "Receipt Created",
-        nextStep: activeLanguage === "es" ? "Revisar el cierre antes de moverlo al historial." : "Review closure before moving this to history.",
-        actionLabel: activeLanguage === "es" ? "Revisar cierre" : "Review Closure",
+        statusLabel: translate("workCenterReceiptCreated", activeLanguage),
+        nextStep: translate("workCenterReviewClosureBeforeMovingThisToHistory", activeLanguage),
+        actionLabel: translate("openClosureCenterAction", activeLanguage),
         onAction: () => {
           setOperationalActiveWorkStatus(job, "closed");
           openWorkTab("completed");
@@ -6561,7 +6371,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return {
       statusLabel: currentStatus,
       nextStep: getActiveJobOperationalNextAction(normalized),
-      actionLabel: activeLanguage === "es" ? "Revisar detalles" : "Review Details",
+      actionLabel: translate("reviewJob", activeLanguage),
       onAction: () => openActiveWorkProject(job),
     };
   }
@@ -6832,7 +6642,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     pendingProjectRequests[0] ||
     (hasPendingRequest
       ? {
-          customer: activeLanguage === "es" ? "Cliente de emergencia" : "Emergency customer",
+          customer: translate("workCenterEmergencyCustomer", activeLanguage),
           title: selectedService,
         }
       : null);
@@ -6867,7 +6677,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       record.homeownerEmail ||
       customerValue ||
       record.username ||
-      (activeLanguage === "es" ? "Cliente" : "Customer")
+      (translate("wcCustomer", activeLanguage))
     );
   };
 
@@ -6882,7 +6692,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       record.location ||
       record.customerAddress ||
       customerAddress ||
-      (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+      (translate("workCenterAddressPending", activeLanguage))
     );
   };
 
@@ -6966,7 +6776,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           ? getWorkCenterJobTitle(record)
           : existing.title || getWorkCenterJobTitle(record),
       address:
-        existing.address === (activeLanguage === "es" ? "Dirección pendiente" : "Address pending")
+        existing.address === (translate("workCenterAddressPending", activeLanguage))
           ? getWorkCenterJobAddress(record)
           : existing.address || getWorkCenterJobAddress(record),
       conversationId:
@@ -7058,220 +6868,184 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const getSarahJobStateDefinitions = () => ({
     lead: {
-      statusLabel: activeLanguage === "es" ? "Nuevo trabajo" : "New Lead",
-      nextStep: activeLanguage === "es" ? "Programar la primera visita." : "Schedule the first visit.",
+      statusLabel: translate("workCenterNewLead", activeLanguage),
+      nextStep: translate("workCenterScheduleTheFirstVisit", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("schedule_visit", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El profesional está listo para programar una visita."
-          : "The professional is ready to schedule a visit.",
-      timelineEntry: activeLanguage === "es" ? "Primer contacto" : "First contact",
-      toast: activeLanguage === "es" ? "Primer contacto guardado." : "First contact saved.",
+        translate("workCenterTheProfessionalIsReadyToScheduleAVisit", activeLanguage),
+      timelineEntry: translate("workCenterFirstContact", activeLanguage),
+      toast: translate("workCenterFirstContactSaved", activeLanguage),
       storageStage: "new_request",
       primaryActionType: "schedule_visit",
       tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "var(--meetro-color-charcoal, #172317)", border: "rgba(31,77,52,0.18)" },
     },
     visit_scheduled: {
-      statusLabel: activeLanguage === "es" ? "Visita confirmada" : "Visit Confirmed",
-      nextStep: activeLanguage === "es" ? "Registrar notas de evaluación." : "Record Evaluation Notes.",
+      statusLabel: translate("workCenterVisitConfirmed", activeLanguage),
+      nextStep: translate("workCenterRecordEvaluationNotes", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("start_evaluation", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La visita fue programada."
-          : "The visit has been scheduled.",
-      timelineEntry: activeLanguage === "es" ? "Visita programada" : "Visit scheduled",
-      toast: activeLanguage === "es" ? "Visita programada." : "Visit scheduled.",
+        translate("workCenterTheVisitHasBeenScheduled", activeLanguage),
+      timelineEntry: translate("workCenterVisitScheduled2", activeLanguage),
+      toast: translate("workCenterVisitScheduled3", activeLanguage),
       storageStage: "visit_scheduled",
       primaryActionType: "start_evaluation",
       tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "var(--meetro-color-charcoal, #172317)", border: "rgba(31,77,52,0.18)" },
     },
     evaluation_complete: {
-      statusLabel: activeLanguage === "es" ? "Evaluación completada" : "Evaluation Complete",
-      nextStep: activeLanguage === "es" ? "Crear una propuesta para el cliente." : "Create the customer proposal.",
+      statusLabel: translate("workCenterEvaluationComplete2", activeLanguage),
+      nextStep: translate("workCenterCreateTheCustomerProposal", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("create_proposal", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La evaluación fue completada. La propuesta será preparada."
-          : "The evaluation is complete. The proposal will be prepared.",
-      timelineEntry: activeLanguage === "es" ? "Evaluación completada" : "Evaluation complete",
-      toast: activeLanguage === "es" ? "Evaluación guardada." : "Evaluation saved.",
+        translate("workCenterTheEvaluationIsCompleteTheProposalWillBePrepared", activeLanguage),
+      timelineEntry: translate("workCenterEvaluationComplete3", activeLanguage),
+      toast: translate("workCenterEvaluationSaved", activeLanguage),
       storageStage: "evaluation_completed",
       primaryActionType: "create_proposal",
       tone: { background: "#faf5ff", color: "#7e22ce", border: "#e9d5ff" },
     },
     quote_created: {
-      statusLabel: activeLanguage === "es" ? "Propuesta creada" : "Proposal Created",
-      nextStep: activeLanguage === "es" ? "Enviar la propuesta al cliente." : "Send the proposal to the customer.",
+      statusLabel: translate("workCenterProposalCreated", activeLanguage),
+      nextStep: translate("workCenterSendTheProposalToTheCustomer", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("send_proposal", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La propuesta está lista para revisión."
-          : "The proposal is ready for review.",
-      timelineEntry: activeLanguage === "es" ? "Propuesta creada" : "Proposal created",
-      toast: activeLanguage === "es" ? "Propuesta creada." : "Proposal created.",
+        translate("workCenterTheProposalIsReadyForReview", activeLanguage),
+      timelineEntry: translate("workCenterProposalCreated2", activeLanguage),
+      toast: translate("workCenterProposalCreated3", activeLanguage),
       storageStage: "proposal_created",
       primaryActionType: "send_proposal",
       tone: { background: "#faf5ff", color: "#7e22ce", border: "#e9d5ff" },
     },
     proposal_sent: {
       statusLabel:
-        activeLanguage === "es"
-          ? "Esperando aprobación del cliente"
-          : "Waiting for customer approval",
+        translate("workCenterWaitingForCustomerApproval", activeLanguage),
       nextStep:
-        activeLanguage === "es"
-          ? "El cliente revisa y aprueba la propuesta."
-          : "Customer reviews and approves the proposal.",
+        translate("workCenterCustomerReviewsAndApprovesTheProposal", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("open_conversation", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La propuesta fue enviada para revisión."
-          : "The proposal has been sent for review.",
-      timelineEntry: activeLanguage === "es" ? "Propuesta enviada" : "Proposal sent",
-      toast: activeLanguage === "es" ? "Propuesta enviada." : "Proposal sent.",
+        translate("workCenterTheProposalHasBeenSentForReview", activeLanguage),
+      timelineEntry: translate("workCenterProposalSent2", activeLanguage),
+      toast: translate("workCenterProposalSent3", activeLanguage),
       storageStage: "proposal_sent",
       primaryActionType: "open_conversation",
       tone: { background: "#f5f3ff", color: "var(--meetro-color-charcoal, #172317)", border: "#ddd6fe" },
     },
     approved: {
-      statusLabel: activeLanguage === "es" ? "Aprobado" : "Approved",
-      nextStep: activeLanguage === "es" ? "Registrar pago o depósito." : "Record payment or deposit.",
+      statusLabel: translate("documentStatusApproved", activeLanguage),
+      nextStep: translate("workCenterRecordPaymentOrDeposit", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("record_payment", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La propuesta fue aprobada."
-          : "The proposal has been approved.",
-      timelineEntry: activeLanguage === "es" ? "Aprobado" : "Approved",
-      toast: activeLanguage === "es" ? "Aprobación guardada." : "Approval saved.",
+        translate("workCenterTheProposalHasBeenApproved", activeLanguage),
+      timelineEntry: translate("documentStatusApproved", activeLanguage),
+      toast: translate("workCenterApprovalSaved", activeLanguage),
       storageStage: "approved",
       primaryActionType: "record_payment",
       tone: { background: "#ecfdf5", color: "#047857", border: "#bbf7d0" },
     },
     payment_received: {
-      statusLabel: activeLanguage === "es" ? "Pago recibido" : "Payment Received",
-      nextStep: activeLanguage === "es" ? "Programar la fecha del trabajo." : "Schedule the work date.",
+      statusLabel: translate("paymentReceived", activeLanguage),
+      nextStep: translate("workCenterScheduleTheWorkDate", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("schedule_work", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El pago fue recibido. El trabajo puede programarse."
-          : "Payment has been received. Work can be scheduled.",
-      timelineEntry: activeLanguage === "es" ? "Pago recibido" : "Payment received",
-      toast: activeLanguage === "es" ? "Pago guardado." : "Payment saved.",
+        translate("workCenterPaymentHasBeenReceivedWorkCanBeScheduled", activeLanguage),
+      timelineEntry: translate("workCenterPaymentReceived", activeLanguage),
+      toast: translate("workCenterPaymentSaved", activeLanguage),
       storageStage: "payment_received",
       primaryActionType: "schedule_work",
       tone: { background: "#f0fdfa", color: "#0f766e", border: "#99f6e4" },
     },
     work_scheduled: {
-      statusLabel: activeLanguage === "es" ? "Trabajo programado" : "Work Scheduled",
-      nextStep: activeLanguage === "es" ? "Ir en camino cuando sea hora." : "Go on the way when it is time.",
+      statusLabel: translate("workScheduled", activeLanguage),
+      nextStep: translate("workCenterGoOnTheWayWhenItIsTime", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("mark_en_route", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El trabajo fue programado."
-          : "The work has been scheduled.",
-      timelineEntry: activeLanguage === "es" ? "Trabajo programado" : "Work scheduled",
-      toast: activeLanguage === "es" ? "Trabajo programado." : "Work scheduled.",
+        translate("workCenterTheWorkHasBeenScheduled", activeLanguage),
+      timelineEntry: translate("workCenterWorkScheduled", activeLanguage),
+      toast: translate("workCenterWorkScheduled2", activeLanguage),
       storageStage: "work_scheduled",
       primaryActionType: "mark_en_route",
       tone: { background: "#f5f3ff", color: "var(--meetro-color-charcoal, #172317)", border: "#ddd6fe" },
     },
     en_route: {
-      statusLabel: activeLanguage === "es" ? "En camino" : "On The Way",
-      nextStep: activeLanguage === "es" ? "Marcar llegada al sitio." : "Mark arrived at the site.",
+      statusLabel: translate("onTheWay", activeLanguage),
+      nextStep: translate("workCenterMarkArrivedAtTheSite", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("mark_arrived", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El profesional está en camino."
-          : "Professional is on the way.",
-      timelineEntry: activeLanguage === "es" ? "En camino" : "On the way",
-      toast: activeLanguage === "es" ? "En camino guardado." : "On the way saved.",
+        translate("workCenterProfessionalIsOnTheWay", activeLanguage),
+      timelineEntry: translate("workflowOnTheWay", activeLanguage),
+      toast: translate("workCenterOnTheWaySaved", activeLanguage),
       storageStage: "on_the_way",
       primaryActionType: "mark_arrived",
       tone: { background: "var(--meetro-surface-sage, #eef4ea)", color: "#2563eb", border: "#bfdbfe" },
     },
     arrived: {
-      statusLabel: activeLanguage === "es" ? "Llegó" : "Arrived",
-      nextStep: activeLanguage === "es" ? "Comenzar el trabajo." : "Start work.",
+      statusLabel: translate("arrivedShort", activeLanguage),
+      nextStep: translate("workCenterStartWork", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("start_work", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El profesional llegó y comenzará pronto."
-          : "Professional has arrived and will begin shortly.",
-      timelineEntry: activeLanguage === "es" ? "Llegó" : "Arrived",
-      toast: activeLanguage === "es" ? "Llegada guardada." : "Arrived saved.",
+        translate("workCenterProfessionalHasArrivedAndWillBeginShortly", activeLanguage),
+      timelineEntry: translate("arrivedShort", activeLanguage),
+      toast: translate("workCenterArrivedSaved", activeLanguage),
       storageStage: "arrived",
       primaryActionType: "start_work",
       tone: { background: "#ecfdf5", color: "#047857", border: "#bbf7d0" },
     },
     working: {
-      statusLabel: activeLanguage === "es" ? "Trabajando" : "Working",
-      nextStep: activeLanguage === "es" ? "Finalizar el trabajo cuando esté listo." : "Finish the job when ready.",
+      statusLabel: translate("working", activeLanguage),
+      nextStep: translate("workCenterFinishTheJobWhenReady", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("complete_work", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El trabajo está en progreso."
-          : "Work is now in progress.",
-      timelineEntry: activeLanguage === "es" ? "Trabajo iniciado" : "Work started",
-      toast: activeLanguage === "es" ? "Trabajo iniciado." : "Work started.",
+        translate("workCenterWorkIsNowInProgress", activeLanguage),
+      timelineEntry: translate("workCenterWorkStarted", activeLanguage),
+      toast: translate("workCenterWorkStarted2", activeLanguage),
       storageStage: "working",
       primaryActionType: "complete_work",
       tone: { background: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
     },
     completed: {
-      statusLabel: activeLanguage === "es" ? "Completado" : "Completed",
-      nextStep: activeLanguage === "es" ? "Crear factura o recibo." : "Create invoice or receipt.",
+      statusLabel: translate("completed", activeLanguage),
+      nextStep: translate("workCenterCreateInvoiceOrReceipt", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("create_receipt", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El trabajo se completó. La factura o recibo se enviará pronto."
-          : "Work has been completed. Invoice/receipt will be sent shortly.",
-      timelineEntry: activeLanguage === "es" ? "Trabajo completado" : "Work completed",
-      toast: activeLanguage === "es" ? "Trabajo completado." : "Work completed.",
+        translate("workCenterWorkHasBeenCompletedInvoiceReceiptWillBeSentShortly", activeLanguage),
+      timelineEntry: translate("workCenterWorkCompleted", activeLanguage),
+      toast: translate("workCenterWorkCompleted2", activeLanguage),
       storageStage: "completed",
       primaryActionType: "create_receipt",
       tone: { background: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
     },
     receipt_created: {
-      statusLabel: activeLanguage === "es" ? "Recibo listo" : "Receipt Ready",
-      nextStep: activeLanguage === "es" ? "Enviar factura o recibo." : "Send invoice or receipt.",
+      statusLabel: translate("workCenterReceiptReady", activeLanguage),
+      nextStep: translate("workCenterSendInvoiceOrReceipt", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("send_receipt", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La factura o recibo está listo para enviarse."
-          : "Invoice/receipt is ready to send.",
-      timelineEntry: activeLanguage === "es" ? "Recibo creado" : "Receipt created",
-      toast: activeLanguage === "es" ? "Recibo creado." : "Receipt created.",
+        translate("workCenterInvoiceReceiptIsReadyToSend", activeLanguage),
+      timelineEntry: translate("workCenterReceiptCreated2", activeLanguage),
+      toast: translate("workCenterReceiptCreated3", activeLanguage),
       storageStage: "invoice_created",
       primaryActionType: "send_receipt",
       tone: { background: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
     },
     receipt_sent: {
-      statusLabel: activeLanguage === "es" ? "Recibo enviado" : "Invoice / Receipt Sent",
-      nextStep: activeLanguage === "es" ? "Revisar el cierre." : "Review closure.",
+      statusLabel: translate("workCenterInvoiceReceiptSent", activeLanguage),
+      nextStep: translate("workCenterReviewClosure", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("close_job", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "La factura o recibo fue enviado."
-          : "Invoice/receipt has been sent.",
-      timelineEntry: activeLanguage === "es" ? "Recibo enviado" : "Receipt sent",
-      toast: activeLanguage === "es" ? "Recibo enviado." : "Receipt sent.",
+        translate("workCenterInvoiceReceiptHasBeenSent", activeLanguage),
+      timelineEntry: translate("workCenterReceiptSent", activeLanguage),
+      toast: translate("workCenterReceiptSent2", activeLanguage),
       storageStage: "invoice_sent",
       primaryActionType: "close_job",
       tone: { background: "#f0fdfa", color: "#0f766e", border: "#99f6e4" },
     },
     closed: {
-      statusLabel: activeLanguage === "es" ? "Cerrado" : "Closed",
-      nextStep: activeLanguage === "es" ? "Revisar historial del trabajo." : "View the job history.",
+      statusLabel: translate("stateClosed", activeLanguage),
+      nextStep: translate("workCenterViewTheJobHistory", activeLanguage),
       primaryButton: getWorkCenterPrimaryCtaLabel("view_history", activeLanguage),
       customerNotification:
-        activeLanguage === "es"
-          ? "El trabajo se completó y cerró. La documentación final está disponible."
-          : "Job has been completed and closed. Final documentation is available.",
-      timelineEntry: activeLanguage === "es" ? "Trabajo cerrado" : "Job closed",
+        translate("workCenterJobHasBeenCompletedAndClosedFinalDocumentationIsAvailable", activeLanguage),
+      timelineEntry: translate("workCenterJobClosed", activeLanguage),
       toast:
-        activeLanguage === "es"
-          ? "Trabajo cerrado y movido al historial."
-          : "Job closed and moved to Work History.",
+        translate("workCenterJobClosedAndMovedToWorkHistory", activeLanguage),
       storageStage: "closed",
       primaryActionType: "view_history",
       tone: { background: "#f1f5f9", color: "#475569", border: "#cbd5e1" },
@@ -7331,32 +7105,29 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (["visit_scheduled", "work_scheduled", "en_route", "arrived"].includes(stateKey)) {
       supportingSummary.push({
-        label: activeLanguage === "es" ? "Cita" : "Appointment",
+        label: translate("journeyAppointment", activeLanguage),
         value: appointmentSummary,
       });
     }
 
     if (["approved", "payment_received", "completed", "receipt_created", "receipt_sent", "closed"].includes(stateKey)) {
       supportingSummary.push({
-        label: activeLanguage === "es" ? "Pago" : "Payment",
+        label: translate("workCenterPayment", activeLanguage),
         value: paymentSummary,
       });
     }
 
     if (services) {
       supportingSummary.push({
-        label: activeLanguage === "es" ? "Servicio" : "Service",
+        label: translate("service", activeLanguage),
         value: services,
       });
     }
 
     if (photoCount > 0 && ["evaluation_complete", "quote_created", "proposal_sent", "approved", "payment_received", "closed"].includes(stateKey)) {
       supportingSummary.push({
-        label: activeLanguage === "es" ? "Fotos" : "Photos",
-        value:
-          activeLanguage === "es"
-            ? `${photoCount} guardadas`
-            : `${photoCount} saved`,
+        label: translate("photos", activeLanguage),
+        value: translate("workCenterPhotosSavedCount", activeLanguage, { count: photoCount }),
       });
     }
 
@@ -7364,31 +7135,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
       stateKey,
       statusLabel:
         isWorkDateAwaitingCustomer
-          ? activeLanguage === "es"
-            ? "Esperando confirmación de fecha de trabajo"
-            : "Waiting For Work Date Confirmation"
+          ? translate("workCenterWaitingForWorkDateConfirmation", activeLanguage)
           : isVisitAwaitingCustomer
-          ? activeLanguage === "es"
-            ? "Esperando confirmación del cliente"
-            : "Waiting For Customer Confirmation"
+          ? translate("workCenterWaitingForCustomerConfirmation", activeLanguage)
           : stateKey === "payment_received" && paymentType === "deposit"
-            ? activeLanguage === "es"
-              ? "Depósito recibido"
-              : "Deposit Received"
+            ? translate("workCenterDepositReceived", activeLanguage)
           : stateKey === "payment_received" && paymentType === "full"
-            ? activeLanguage === "es"
-              ? "Pagado completo"
-              : "Paid In Full"
+            ? translate("workCenterPaidInFull", activeLanguage)
           : state.statusLabel,
       nextActionLabel:
         isVisitAwaitingCustomer || isWorkDateAwaitingCustomer
           ? externalCustomer
-            ? activeLanguage === "es"
-              ? "Registra la respuesta externa del cliente."
-              : "Record the external customer response."
-            : activeLanguage === "es"
-              ? "El cliente puede confirmar o pedir otro horario en Meetro."
-              : "Customer can confirm or request a different time in Meetro."
+            ? translate("workCenterRecordTheExternalCustomerResponse", activeLanguage)
+            : translate("workCenterCustomerCanConfirmOrRequestADifferentTimeInMeetro", activeLanguage)
           : state.nextStep,
       primaryButtonLabel: state.primaryButton,
       primaryActionType: state.primaryActionType,
@@ -7431,10 +7190,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const hasWork = Boolean(job.active) || hasAny("work", "active", "completed", "closed");
 
     return [
-      { label: activeLanguage === "es" ? "Visita" : "Visit", done: hasSchedule },
-      { label: activeLanguage === "es" ? "Evaluación" : "Evaluation", done: hasEvaluation },
-      { label: activeLanguage === "es" ? "Propuesta" : "Proposal", done: hasQuote },
-      { label: activeLanguage === "es" ? "Trabajo" : "Work", done: hasWork },
+      { label: translate("workCenterVisit", activeLanguage), done: hasSchedule },
+      { label: translate("assistantFieldStage_evaluation", activeLanguage), done: hasEvaluation },
+      { label: translate("companionContextQuoteTitle", activeLanguage), done: hasQuote },
+      { label: translate("journeyWork", activeLanguage), done: hasWork },
     ];
   };
 
@@ -7479,25 +7238,25 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     if (stateKey === "visit_scheduled" && schedulePending) {
       return [
-        { type: "visit_confirmed", label: activeLanguage === "es" ? "Marcar visita confirmada" : "Mark Visit Confirmed" },
-        { type: "reschedule_visit", label: activeLanguage === "es" ? "Reprogramar visita" : "Reschedule Visit" },
-        { type: "visit_waiting", label: activeLanguage === "es" ? "Esperando al cliente" : "Waiting For Customer" },
+        { type: "visit_confirmed", label: translate("workCenterMarkVisitConfirmed", activeLanguage) },
+        { type: "reschedule_visit", label: translate("workCenterRescheduleVisit", activeLanguage) },
+        { type: "visit_waiting", label: translate("workCenterWaitingForCustomer", activeLanguage) },
       ];
     }
 
     if (stateKey === "proposal_sent") {
       return [
-        { type: "proposal_approved", label: activeLanguage === "es" ? "Marcar aprobado" : "Mark Approved" },
-        { type: "proposal_changes_requested", label: activeLanguage === "es" ? "Pidió cambios" : "Requested Changes" },
-        { type: "proposal_waiting", label: activeLanguage === "es" ? "Sigue esperando" : "Still Waiting" },
+        { type: "proposal_approved", label: translate("workCenterMarkApproved", activeLanguage) },
+        { type: "proposal_changes_requested", label: translate("workCenterRequestedChanges", activeLanguage) },
+        { type: "proposal_waiting", label: translate("workCenterStillWaiting", activeLanguage) },
       ];
     }
 
     if (stateKey === "work_scheduled" && schedulePending) {
       return [
-        { type: "work_date_confirmed", label: activeLanguage === "es" ? "Confirmar fecha de trabajo" : "Mark Work Date Confirmed" },
-        { type: "reschedule_work", label: activeLanguage === "es" ? "Reprogramar trabajo" : "Reschedule Work" },
-        { type: "work_waiting", label: activeLanguage === "es" ? "Sigue esperando" : "Still Waiting" },
+        { type: "work_date_confirmed", label: translate("workCenterMarkWorkDateConfirmed", activeLanguage) },
+        { type: "reschedule_work", label: translate("workCenterRescheduleWork", activeLanguage) },
+        { type: "work_waiting", label: translate("workCenterStillWaiting", activeLanguage) },
       ];
     }
 
@@ -7506,7 +7265,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       job.schedule?.receiptDeliveryStatus === "external_send_prepared"
     ) {
       return [
-        { type: "mark_receipt_sent", label: activeLanguage === "es" ? "Marcar recibo enviado externamente" : "Mark Receipt Sent Externally" },
+        { type: "mark_receipt_sent", label: translate("workCenterMarkReceiptSentExternally", activeLanguage) },
       ];
     }
 
@@ -7523,56 +7282,56 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const stateKey = workflowState.stateKey || getSarahJobStateKey(job);
     const links = [
       {
-        label: activeLanguage === "es" ? "Conversación" : "Conversation",
+        label: translate("messagesConversationFallback", activeLanguage),
         view: "conversation",
       },
     ];
 
     if (getWorkCenterJobPhotos(job).length > 0) {
       links.push({
-        label: activeLanguage === "es" ? "Fotos" : "Photos",
+        label: translate("photos", activeLanguage),
         view: "photos",
       });
     }
 
     if (job.schedule || hasCustomerJobReachedState(stateKey, "visit_scheduled")) {
       links.push({
-        label: activeLanguage === "es" ? "Cita" : "Schedule",
+        label: translate("workCenterScheduleTitle", activeLanguage),
         view: "schedule",
       });
     }
 
     if (hasCustomerJobReachedState(stateKey, "evaluation_complete")) {
       links.push({
-        label: activeLanguage === "es" ? "Evaluación" : "Evaluation Notes",
+        label: translate("guideEvaluationNotesTitle", activeLanguage),
         view: "evaluation",
       });
     }
 
     if (job.quote || hasCustomerJobReachedState(stateKey, "quote_created")) {
       links.push({
-        label: activeLanguage === "es" ? "Propuesta" : "Proposal",
+        label: translate("companionContextQuoteTitle", activeLanguage),
         view: "quote",
       });
     }
 
     if (hasCustomerJobReachedState(stateKey, "approved")) {
       links.push({
-        label: activeLanguage === "es" ? "Pago" : "Payment",
+        label: translate("workCenterPayment", activeLanguage),
         view: "payments",
       });
     }
 
     if (hasCustomerJobReachedState(stateKey, "receipt_created")) {
       links.push({
-        label: activeLanguage === "es" ? "Recibo" : "Receipt",
+        label: translate("documentReceipt", activeLanguage),
         view: "quote",
       });
     }
 
     if (stateKey === "closed" || job.history) {
       links.push({
-        label: activeLanguage === "es" ? "Historial" : "History",
+        label: translate("homeMyProjectsHistory", activeLanguage),
         view: "history",
       });
     }
@@ -7600,12 +7359,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
         )
     );
     const paymentLabel = paymentReceived
-      ? activeLanguage === "es"
-        ? "Pagado"
-        : "Paid"
-      : activeLanguage === "es"
-        ? "Pendiente"
-        : "Pending";
+      ? translate("documentStatusPaid", activeLanguage)
+      : translate("teamMemberStatusPending", activeLanguage);
 
     return total > 0 ? `${paymentLabel} • $${total.toFixed(2)}` : paymentLabel;
   };
@@ -7614,22 +7369,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const schedule = job.schedule || job.history?.schedule || job.history?.visitSchedule || {};
     const date = schedule.date || schedule.workDate || "";
     const time = schedule.time || schedule.workTime || "";
-    if (!date && !time) return activeLanguage === "es" ? "No programado" : "Not scheduled";
+    if (!date && !time) return translate("workCenterNotScheduled", activeLanguage);
     return `${date || ""}${date && time ? " • " : ""}${time ? formatScheduleTime(time) : ""}`;
   };
 
   const getWorkflowActionMeta = (nextStage = "") => {
     const customerSent =
-      activeLanguage === "es" ? "Actualización enviada al cliente." : "Customer update sent.";
+      translate("workCenterCustomerUpdateSent", activeLanguage);
     const customerPrepared =
-      activeLanguage === "es" ? "Actualización preparada para el cliente." : "Customer update prepared.";
+      translate("workCenterCustomerUpdatePrepared", activeLanguage);
 
     const state = getSarahJobStateDefinition(nextStage);
     return {
       label: state.timelineEntry || state.statusLabel,
       toast:
         state.toast ||
-        (activeLanguage === "es" ? "Estado guardado." : "Status saved."),
+        (translate("workCenterStatusSaved", activeLanguage)),
       customerSent,
       customerPrepared,
     };
@@ -7718,9 +7473,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const formatJobTimelineEventTime = (timestamp) => {
-    if (!timestamp) return activeLanguage === "es" ? "Guardado" : "Saved";
+    if (!timestamp) return translate("stateSaved", activeLanguage);
     const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return activeLanguage === "es" ? "Guardado" : "Saved";
+    if (Number.isNaN(date.getTime())) return translate("stateSaved", activeLanguage);
     return formatDateTimeDisplay(timestamp);
   };
 
@@ -7922,7 +7677,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         dialogTitle: title,
       });
       setHistoryActionNotice(
-        activeLanguage === "es" ? "Documento listo para compartir." : "Document ready to share."
+        translate("workCenterDocumentReadyToShare", activeLanguage)
       );
       return;
     } catch {
@@ -7933,7 +7688,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       if (navigator.share) {
         await navigator.share({ title, text });
         setHistoryActionNotice(
-          activeLanguage === "es" ? "Documento listo para compartir." : "Document ready to share."
+          translate("workCenterDocumentReadyToShare", activeLanguage)
         );
         return;
       }
@@ -7943,9 +7698,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
     await copyHistoryDocumentText(
       text,
-      activeLanguage === "es"
-        ? "Resumen copiado."
-        : "Summary copied."
+      translate("workCenterSummaryCopied", activeLanguage)
     );
   };
 
@@ -7956,9 +7709,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (!printWindow) {
       copyHistoryDocumentText(
         text,
-        activeLanguage === "es"
-          ? "Resumen copiado para imprimir."
-          : "Summary copied for printing."
+        translate("workCenterSummaryCopiedForPrinting", activeLanguage)
       );
       return;
     }
@@ -7999,14 +7750,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const getJobDetailViewLabel = (view) => {
     const labels = {
-      conversation: activeLanguage === "es" ? "Conversación" : "Conversation",
-      photos: activeLanguage === "es" ? "Fotos" : "Photos",
-      evaluation: activeLanguage === "es" ? "Notas de evaluación" : "Evaluation Notes",
-      quote: activeLanguage === "es" ? "Cotización" : "Quote",
-      payments: activeLanguage === "es" ? "Pagos" : "Payments",
-      materials: activeLanguage === "es" ? "Materiales" : "Materials",
-      schedule: activeLanguage === "es" ? "Agenda" : "Schedule",
-      history: activeLanguage === "es" ? "Historial" : "History",
+      conversation: translate("messagesConversationFallback", activeLanguage),
+      photos: translate("photos", activeLanguage),
+      evaluation: translate("guideEvaluationNotesTitle", activeLanguage),
+      quote: translate("journeyQuote", activeLanguage),
+      payments: translate("workCenterPayments", activeLanguage),
+      materials: translate("workTabMaterials", activeLanguage),
+      schedule: translate("workCenterScheduleTitle", activeLanguage),
+      history: translate("homeMyProjectsHistory", activeLanguage),
     };
     return labels[view] || "";
   };
@@ -8237,9 +7988,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       closureNotes:
         schedule.closureNotes ||
         previousHistory.closureNotes ||
-        (activeLanguage === "es"
-          ? "Trabajo cerrado y guardado en historial."
-          : "Job closed and saved to history."),
+        (translate("workCenterJobClosedAndSavedToHistory", activeLanguage)),
       closureRecord,
       closureObligations:
         schedule.closureObligations ||
@@ -8286,9 +8035,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       closedAt: closedRecord.closedAt,
       closeDate: closedRecord.closeDate,
       lastMessage:
-        activeLanguage === "es"
-          ? "Trabajo cerrado y guardado en historial."
-          : "Job closed and saved to history.",
+        translate("workCenterJobClosedAndSavedToHistory", activeLanguage),
     });
 
     if (job.schedule?.id || job.schedule?.scheduleId) {
@@ -8390,15 +8137,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "opportunities",
       icon: "opportunities",
-      title: activeLanguage === "es" ? "Oportunidades" : "Opportunities",
+      title: translate("workCenterOpportunitiesTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Solicitudes nuevas que necesitan una decisión."
-          : "New requests that need a decision.",
-      meta:
-        activeLanguage === "es"
-          ? `${opportunitiesCount} nuevas`
-          : `${opportunitiesCount} new`,
+        translate("workCenterNewRequestsThatNeedADecision", activeLanguage),
+      meta: translate("workCenterNewCount", activeLanguage, { count: opportunitiesCount }),
       actionLabel:
         translate("viewOpportunities"),
       tone: "#fff7ed",
@@ -8409,16 +8151,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "current",
       icon: "currentJobs",
-      title: activeLanguage === "es" ? "Trabajos actuales" : "Current Jobs",
+      title: translate("workCenterCurrentJobsTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Trabajo aceptado que aún requiere acción."
-          : "Accepted work that still needs action.",
-      meta:
-        activeLanguage === "es"
-          ? `${workCenterActiveJobs.length} activos`
-          : `${workCenterActiveJobs.length} active`,
-      actionLabel: activeLanguage === "es" ? "Continuar trabajo" : "Continue Work",
+        translate("workCenterAcceptedWorkThatStillNeedsAction", activeLanguage),
+      meta: translate("workCenterActiveCount", activeLanguage, { count: workCenterActiveJobs.length }),
+      actionLabel: translate("continueWork", activeLanguage),
       tone: "#f8fafc",
       accent: "#334155",
       onClick: () => openWorkCenterJobsPage("current"),
@@ -8426,16 +8163,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "schedule",
       icon: "schedule",
-      title: activeLanguage === "es" ? "Agenda" : "Schedule",
+      title: translate("workCenterScheduleTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Visitas y citas próximas."
-          : "Upcoming visits and appointments.",
-      meta:
-        activeLanguage === "es"
-          ? `${upcomingScheduleCount} próximas`
-          : `${upcomingScheduleCount} upcoming`,
-      actionLabel: activeLanguage === "es" ? "Revisar agenda" : "Review Schedule",
+        translate("workCenterUpcomingVisitsAndAppointments", activeLanguage),
+      meta: translate("workCenterUpcomingCount", activeLanguage, { count: upcomingScheduleCount }),
+      actionLabel: translate("assistantActionOpenSchedule", activeLanguage),
       tone: "#eff6ff",
       accent: "#2563eb",
       onClick: () => openWorkTab("schedule"),
@@ -8443,16 +8175,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "quotes",
       icon: "quote",
-      title: activeLanguage === "es" ? "Cotizaciones / Propuestas" : "Quotes / Proposals",
+      title: translate("workCenterQuotesTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Propuestas que necesitan revisión o respuesta."
-          : "Proposals that need review or response.",
-      meta:
-        activeLanguage === "es"
-          ? `${quoteHistory.length} registros`
-          : `${quoteHistory.length} records`,
-      actionLabel: activeLanguage === "es" ? "Revisar propuestas" : "Review Proposals",
+        translate("workCenterProposalsThatNeedReviewOrResponse", activeLanguage),
+      meta: translate("workCenterRecordsCount", activeLanguage, { count: quoteHistory.length }),
+      actionLabel: translate("openQuotesAction", activeLanguage),
       tone: "#f5f3ff",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkTab("quotes"),
@@ -8460,16 +8187,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "activeWork",
       icon: "activeWork",
-      title: activeLanguage === "es" ? "Trabajo activo" : "Active Work",
+      title: translate("workCenterActiveWorkTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Trabajo en sitio que necesita actualización."
-          : "On-site work that needs an update.",
-      meta:
-        activeLanguage === "es"
-          ? `${activeJobs.length} activos`
-          : `${activeJobs.length} active`,
-      actionLabel: activeLanguage === "es" ? "Continuar trabajo activo" : "Continue Active Work",
+        translate("workCenterOnSiteWorkThatNeedsAnUpdate", activeLanguage),
+      meta: translate("workCenterActiveCount", activeLanguage, { count: activeJobs.length }),
+      actionLabel: translate("openActiveWorkAction", activeLanguage),
       tone: "#ecfdf5",
       accent: "#16a34a",
       onClick: () => openWorkTab("active"),
@@ -8477,16 +8199,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "history",
       icon: "jobHistory",
-      title: activeLanguage === "es" ? "Historial" : "Job History",
+      title: translate("workCenterHistoryTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Trabajos cerrados y registros guardados."
-          : "Closed jobs and saved records.",
-      meta:
-        activeLanguage === "es"
-          ? `${workCenterHistoryJobs.length} cerrados`
-          : `${workCenterHistoryJobs.length} closed`,
-      actionLabel: activeLanguage === "es" ? "Revisar historial" : "Review History",
+        translate("workCenterClosedJobsAndSavedRecords", activeLanguage),
+      meta: translate("workCenterClosedCount", activeLanguage, { count: workCenterHistoryJobs.length }),
+      actionLabel: translate("openHistoryAction", activeLanguage),
       tone: "var(--meetro-surface-sage, #eef4ea)",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkCenterJobsPage("history"),
@@ -8494,18 +8211,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
     {
       key: "revenue",
       icon: "revenue",
-      title: activeLanguage === "es" ? "Ingresos" : "Revenue",
+      title: translate("workCenterRevenueTitle", activeLanguage),
       purpose:
-        activeLanguage === "es"
-          ? "Pagos, saldos y trabajos cerrados."
-          : "Payments, balances, and closed jobs.",
+        translate("workCenterPaymentsBalancesAndClosedJobs", activeLanguage),
       meta:
         totalJobRevenue > 0
-          ? `$${Number(totalJobRevenue).toLocaleString()}`
-          : activeLanguage === "es"
-          ? "Listo para revisar"
-          : "Ready to review",
-      actionLabel: activeLanguage === "es" ? "Revisar ingresos" : "Review Revenue",
+          ? `$${formatLocaleNumber(totalJobRevenue, {}, activeLanguage)}`
+          : translate("workCenterReadyToReview", activeLanguage),
+      actionLabel: translate("workCenterReviewRevenue", activeLanguage),
       tone: "#ecfdf5",
       accent: "#059669",
       onClick: () => openWorkTab("revenue"),
@@ -8516,29 +8229,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
     ? {
         type: "emergency",
         eyebrow:
-          activeLanguage === "es"
-            ? "Acción urgente"
-            : "Urgent action",
+          translate("workCenterUrgentAction", activeLanguage),
         title:
-          activeLanguage === "es"
-            ? "Emergencia requiere atención"
-            : "Emergency Action Needed",
+          translate("workCenterEmergencyActionNeeded", activeLanguage),
         message:
-          activeLanguage === "es"
-            ? "Una emergencia de cliente está activa. Continúa el trabajo de emergencia para actualizar el despacho."
-            : "A customer emergency is active. Continue the emergency job to update dispatch.",
+          translate("workCenterACustomerEmergencyIsActiveContinueTheEmergencyJobToUpdateDispatch", activeLanguage),
         meta:
           selectedService ||
-          (activeLanguage === "es" ? "Servicio de emergencia" : "Emergency Service"),
+          (translate("messagesEmergencyService", activeLanguage)),
         status: getStatusLabel(),
         primaryLabel:
-          activeLanguage === "es"
-            ? "Continuar emergencia"
-            : "Continue Emergency",
+          translate("workCenterContinueEmergency", activeLanguage),
         secondaryLabel:
-          activeLanguage === "es"
-            ? "Continuar conversación"
-            : "Continue Conversation",
+          translate("assistantActionOpenConversation", activeLanguage),
         onPrimary: () => {
           setActiveAccountMode("business");
           localStorage.setItem("dispatchReturnPage", "contractorDashboard");
@@ -8625,7 +8328,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       source: "job_page_v1",
       workflowSource: "job_page",
       appointmentType: "evaluation",
-      appointmentLabel: activeLanguage === "es" ? "Visita de evaluación" : "Evaluation Visit",
+      appointmentLabel: translate("workCenterEvaluationVisit", activeLanguage),
       title: job.title || translate("scheduledVisit"),
       requestTitle: job.title || translate("scheduledVisit"),
       customerName: job.customer || "",
@@ -8693,8 +8396,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       source: "job_page_v1",
       workflowSource: "job_page_work_appointment",
       appointmentType: "work",
-      appointmentLabel: activeLanguage === "es" ? "Cita de trabajo" : "Work Appointment",
-      purpose: activeLanguage === "es" ? "Realizar trabajo aprobado" : "Perform approved work",
+      appointmentLabel: translate("workCenterWorkAppointment", activeLanguage),
+      purpose: translate("workCenterPerformApprovedWork", activeLanguage),
       title: job.title || translate("scheduledVisit"),
       requestTitle: job.title || translate("scheduledVisit"),
       customerName: job.customer || "",
@@ -8830,12 +8533,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
             "payment_received",
             label ||
               (paymentStatus === "paid"
-                ? activeLanguage === "es"
-                  ? "Pago completo registrado manualmente"
-                  : "Full payment recorded manually"
-                : activeLanguage === "es"
-                  ? "Depósito registrado manualmente"
-                  : "Deposit recorded manually")
+                ? translate("workCenterFullPaymentRecordedManually", activeLanguage)
+                : translate("workCenterDepositRecordedManually", activeLanguage))
           ),
           paymentStatus,
           paymentReceivedAt: now,
@@ -8853,12 +8552,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       message:
         label ||
         (paymentStatus === "paid"
-          ? activeLanguage === "es"
-            ? "Pago completo registrado."
-            : "Full payment recorded."
-          : activeLanguage === "es"
-            ? "Depósito registrado."
-            : "Deposit recorded."),
+          ? translate("workCenterFullPaymentRecorded", activeLanguage)
+          : translate("workCenterDepositRecorded", activeLanguage)),
     });
     return updatedQuote;
   };
@@ -8870,9 +8565,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const updatedRecord = appendManualCustomerResponseHistoryNote(
         job,
         "visit_confirmed",
-        activeLanguage === "es"
-          ? "Visita confirmada manualmente por el profesional."
-          : "Visit confirmed manually by professional.",
+        translate("workCenterVisitConfirmedManuallyByProfessional", activeLanguage),
         {
           status: "visit_scheduled",
           workStatus: "visit_scheduled",
@@ -8888,9 +8581,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         setJobActionToast({
           type: "success",
           message:
-            activeLanguage === "es"
-              ? "Visita confirmada."
-              : "Visit confirmed.",
+            translate("workCenterVisitConfirmed2", activeLanguage),
         });
       }
       return;
@@ -8900,9 +8591,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       appendManualCustomerResponseHistoryNote(
         job,
         "visit_reschedule_requested",
-        activeLanguage === "es"
-          ? "Reprogramación de visita registrada"
-          : "Visit reschedule recorded",
+        translate("workCenterVisitRescheduleRecorded", activeLanguage),
         {
           customerConfirmationStatus: "reschedule_requested",
           confirmationStatus: "reschedule_requested",
@@ -8917,9 +8606,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       appendManualCustomerResponseHistoryNote(
         job,
         "visit_waiting",
-        activeLanguage === "es"
-          ? "Esperando confirmación del cliente"
-          : "Waiting for customer confirmation",
+        translate("workCenterWaitingForCustomerConfirmation2", activeLanguage),
         {
           customerConfirmationStatus: "pending_customer_confirmation",
           confirmationStatus: "pending_customer_confirmation",
@@ -8935,9 +8622,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         appendManualCustomerResponseHistoryNote(
           { ...job, quote: updatedQuote },
           "proposal_approved",
-          activeLanguage === "es"
-            ? "Propuesta aprobada por cliente externo."
-            : "Proposal approved by external customer.",
+          translate("workCenterProposalApprovedByExternalCustomer", activeLanguage),
           {
             proposalCustomerResponseStatus: "approved",
             customerProposalResponseStatus: "approved",
@@ -8956,9 +8641,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const updatedSchedule = appendManualCustomerResponseHistoryNote(
         job,
         "proposal_changes_requested",
-        activeLanguage === "es"
-          ? "Cliente externo pidió cambios a la propuesta."
-          : "External customer requested proposal changes.",
+        translate("workCenterExternalCustomerRequestedProposalChanges", activeLanguage),
         {
           proposalCustomerResponseStatus: "changes_requested",
           customerProposalResponseStatus: "changes_requested",
@@ -8969,9 +8652,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         setJobActionToast({
           type: "success",
           message:
-            activeLanguage === "es"
-              ? "Solicitud de cambios registrada."
-              : "Change request recorded.",
+            translate("workCenterChangeRequestRecorded", activeLanguage),
         });
       }
       return;
@@ -8981,9 +8662,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       appendManualCustomerResponseHistoryNote(
         job,
         "proposal_waiting",
-        activeLanguage === "es"
-          ? "Propuesta sigue esperando respuesta"
-          : "Proposal still waiting for response",
+        translate("workCenterProposalStillWaitingForResponse", activeLanguage),
         {
           proposalCustomerResponseStatus: "waiting",
           customerProposalResponseStatus: "waiting",
@@ -8996,9 +8675,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       recordSarahPayment(
         job,
         "deposit_received",
-        activeLanguage === "es"
-          ? "Depósito registrado manualmente"
-          : "Deposit recorded manually"
+        translate("workCenterDepositRecordedManually", activeLanguage)
       );
       return;
     }
@@ -9007,9 +8684,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       recordSarahPayment(
         job,
         "paid",
-        activeLanguage === "es"
-          ? "Pago completo registrado manualmente"
-          : "Full payment recorded manually"
+        translate("workCenterFullPaymentRecordedManually", activeLanguage)
       );
       return;
     }
@@ -9018,9 +8693,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       saveManualJobNote(
         job,
         "payment_pending",
-        activeLanguage === "es"
-          ? "Pago pendiente registrado"
-          : "Payment pending recorded"
+        translate("workCenterPaymentPendingRecorded", activeLanguage)
       );
       return;
     }
@@ -9029,9 +8702,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const updatedRecord = appendManualCustomerResponseHistoryNote(
         job,
         "work_date_confirmed",
-        activeLanguage === "es"
-          ? "Fecha de trabajo confirmada por cliente externo."
-          : "Work date confirmed by external customer.",
+        translate("workCenterWorkDateConfirmedByExternalCustomer", activeLanguage),
         {
           status: "work_scheduled",
           workStatus: "work_scheduled",
@@ -9047,9 +8718,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         setJobActionToast({
           type: "success",
           message:
-            activeLanguage === "es"
-              ? "Fecha de trabajo confirmada."
-              : "Work date confirmed.",
+            translate("workCenterWorkDateConfirmed", activeLanguage),
         });
       }
       return;
@@ -9060,9 +8729,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       appendManualCustomerResponseHistoryNote(
         job,
         "work_reschedule_requested",
-        activeLanguage === "es"
-          ? "Reprogramación de trabajo registrada"
-          : "Work reschedule recorded",
+        translate("workCenterWorkRescheduleRecorded", activeLanguage),
         {
           customerConfirmationStatus: "reschedule_requested",
           confirmationStatus: "reschedule_requested",
@@ -9076,9 +8743,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       appendManualCustomerResponseHistoryNote(
         job,
         "work_waiting",
-        activeLanguage === "es"
-          ? "Fecha de trabajo sigue esperando confirmación"
-          : "Work date still waiting for confirmation",
+        translate("workCenterWorkDateStillWaitingForConfirmation", activeLanguage),
         {
           customerConfirmationStatus: "pending_customer_confirmation",
           confirmationStatus: "pending_customer_confirmation",
@@ -9093,9 +8758,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const updatedRecord = appendManualCustomerResponseHistoryNote(
         job,
         "receipt_sent_externally",
-        activeLanguage === "es"
-          ? "Recibo enviado externamente."
-          : "Receipt sent externally.",
+        translate("workCenterReceiptSentExternally", activeLanguage),
         {
           invoiceStatus: "sent",
           receiptStatus: "sent",
@@ -9300,21 +8963,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
       customerConfirmationStatus: "pending_customer_confirmation",
       confirmationStatus: "pending_customer_confirmation",
       title: isWorkAppointment
-        ? activeLanguage === "es"
-          ? "Trabajo programado"
-          : "Work Scheduled"
-        : activeLanguage === "es"
-          ? "Cita programada"
-          : "Appointment Scheduled",
+        ? translate("workScheduled", activeLanguage)
+        : translate("appointmentScheduled", activeLanguage),
       subtitle: `${visit.date || ""} • ${formattedTime} • ${translate("appointmentPendingConfirmation")}`,
-      text:
-        isWorkAppointment
-          ? activeLanguage === "es"
-            ? `Trabajo programado para ${visit.date} a las ${formattedTime}. Servicios: ${serviceLines.join(", ")}. Dirección: ${visit.location || job.address || ""}.`
-            : `Work scheduled for ${visit.date} at ${formattedTime}. Services: ${serviceLines.join(", ")}. Address: ${visit.location || job.address || ""}.`
-          : activeLanguage === "es"
-            ? ` Visita de evaluación programada para ${visit.date} a las ${formattedTime}.`
-            : ` Evaluation visit scheduled for ${visit.date} at ${formattedTime}.`,
+      text: isWorkAppointment
+        ? translate("workCenterScheduledWorkDetail", activeLanguage, {
+            date: visit.date,
+            time: formattedTime,
+            services: serviceLines.join(", "),
+            address: visit.location || job.address || "",
+          })
+        : translate("workCenterEvaluationVisitScheduledDetail", activeLanguage, {
+            date: visit.date,
+            time: formattedTime,
+          }),
       services: serviceLines,
       schedule: visit,
       customerName: job.customer || visit.customerName || "",
@@ -9378,7 +9040,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const event = {
       id: `manual-job-event-${stage || "note"}-${Date.now()}`,
       stage,
-      label: label || (activeLanguage === "es" ? "Nota guardada" : "Note saved"),
+      label: label || (translate("workCenterNoteSaved", activeLanguage)),
       savedAt: timestamp,
       timestamp,
       status: "saved",
@@ -9458,9 +9120,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setJobActionToast({
       type: "error",
       message:
-        activeLanguage === "es"
-          ? "No se pudo guardar el estado. Inténtalo de nuevo."
-          : "Could not save status. Try again.",
+        translate("workCenterCouldNotSaveStatusTryAgain", activeLanguage),
     });
   };
 
@@ -9589,9 +9249,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Crea la propuesta antes de enviarla."
-            : "Create the proposal before sending it.",
+          translate("workCenterCreateTheProposalBeforeSendingIt", activeLanguage),
       });
       return null;
     }
@@ -9633,9 +9291,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Confirma que el cliente aprobó la propuesta."
-            : "Confirm that the customer approved the proposal.",
+          translate("workCenterConfirmThatTheCustomerApprovedTheProposal", activeLanguage),
       });
       return null;
     }
@@ -9661,9 +9317,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Agrega un monto válido antes de guardar el pago."
-            : "Add a valid amount before saving the payment.",
+          translate("workCenterAddAValidAmountBeforeSavingThePayment", activeLanguage),
       });
       return null;
     }
@@ -9786,9 +9440,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const updatedRecord = appendManualCustomerResponseHistoryNote(
         job,
         "receipt_external_send_prepared",
-        activeLanguage === "es"
-          ? "Recibo preparado para envío externo."
-          : "Receipt prepared for external sending.",
+        translate("workCenterReceiptPreparedForExternalSending", activeLanguage),
         {
           receiptDeliveryStatus: "external_send_prepared",
           receiptSendMethod: "external_share",
@@ -9804,9 +9456,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "success",
         message:
-          activeLanguage === "es"
-            ? "Listo para marcar el recibo enviado externamente."
-            : "Ready to mark the receipt sent externally.",
+          translate("workCenterReadyToMarkTheReceiptSentExternally", activeLanguage),
       });
       return updatedRecord;
     }
@@ -9857,9 +9507,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Cierre bloqueado. Las obligaciones pendientes deben satisfacerse antes de cerrar este trabajo."
-            : "Closure blocked. Outstanding obligations must be satisfied before closing this job.",
+          translate("workCenterClosureBlockedOutstandingObligationsMustBeSatisfiedBeforeClosingThisJob", activeLanguage),
       });
       return null;
     }
@@ -9868,9 +9516,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Confirma mover este trabajo al historial."
-            : "Confirm moving this job to history.",
+          translate("workCenterConfirmMovingThisJobToHistory", activeLanguage),
       });
       return null;
     }
@@ -9923,9 +9569,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         setJobActionToast({
           type: "error",
           message:
-            activeLanguage === "es"
-              ? "Registra la confirmación del cliente antes de iniciar la evaluación."
-              : "Record the customer confirmation before starting evaluation.",
+            translate("workCenterRecordTheCustomerConfirmationBeforeStartingEvaluation", activeLanguage),
         });
         return;
       }
@@ -9968,9 +9612,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         setJobActionToast({
           type: "error",
           message:
-            activeLanguage === "es"
-              ? "Registra la confirmación de fecha antes de marcar en camino."
-              : "Record the work date confirmation before marking on the way.",
+            translate("workCenterRecordTheWorkDateConfirmationBeforeMarkingOnTheWay", activeLanguage),
         });
         return;
       }
@@ -10068,9 +9710,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setJobActionToast({
         type: "error",
         message:
-          activeLanguage === "es"
-            ? "Selecciona tipo de servicio y contexto antes de guardar notas de evaluación."
-            : "Select Service Type and Context before saving Evaluation Notes.",
+          translate("workCenterSelectServiceTypeAndContextBeforeSavingEvaluationNotes", activeLanguage),
       });
       return null;
     }
@@ -10207,26 +9847,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterOpportunitiesTitle"),
       customer: dashboardCustomerLabel(
         firstOpportunity,
-        activeLanguage === "es" ? "Nuevo cliente" : "New customer"
+        translate("workCenterNewCustomer", activeLanguage)
       ),
       status:
         opportunitiesCount > 0
-          ? activeLanguage === "es"
-            ? "Solicitud nueva"
-            : "New request"
-          : activeLanguage === "es"
-          ? "Sin solicitudes nuevas"
-          : "No new requests",
+          ? translate("workCenterNewRequest", activeLanguage)
+          : translate("workCenterNoNewRequests", activeLanguage),
       nextStep:
         opportunitiesCount > 0
-          ? activeLanguage === "es"
-            ? "Contactar o programar visita"
-            : "Contact or schedule visit"
-          : activeLanguage === "es"
-          ? "Esperar nueva solicitud"
-          : "Wait for a new request",
+          ? translate("workCenterContactOrScheduleVisit", activeLanguage)
+          : translate("workCenterWaitForANewRequest", activeLanguage),
       primaryAction:
-        activeLanguage === "es" ? "Revisar oportunidades" : "Review Opportunities",
+        translate("viewOpportunities", activeLanguage),
       badge: compactCountBadge(
         opportunitiesCount,
         "workCenterBadgeNew"
@@ -10240,45 +9872,27 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterScheduleTitle"),
       customer: dashboardCustomerLabel(
         firstScheduleItem,
-        activeLanguage === "es" ? "Cliente programado" : "Scheduled customer"
+        translate("workCenterScheduledCustomer", activeLanguage)
       ),
       status:
         scheduleResponseNotifications.length > 0
-          ? activeLanguage === "es"
-            ? "Cliente respondió"
-            : "Customer responded"
+          ? translate("workCenterCustomerResponded", activeLanguage)
           : upcomingScheduleCount > 0
-          ? activeLanguage === "es"
-            ? "Visita programada"
-            : "Visit scheduled"
-          : activeLanguage === "es"
-          ? "Sin visitas próximas"
-          : "No upcoming visits",
+          ? translate("workCenterVisitScheduled2", activeLanguage)
+          : translate("workCenterNoUpcomingVisits", activeLanguage),
       nextStep:
         scheduleResponseNotifications.length > 0
-          ? activeLanguage === "es"
-            ? "Revisar respuesta"
-            : "Review response"
+          ? translate("workCenterReviewResponse", activeLanguage)
           : upcomingScheduleCount > 0
-          ? activeLanguage === "es"
-            ? "Realizar visita"
-            : "Perform visit"
-          : activeLanguage === "es"
-          ? "Agregar visita"
-          : "Add visit",
+          ? translate("workCenterPerformVisit", activeLanguage)
+          : translate("workCenterAddVisit", activeLanguage),
       primaryAction:
         upcomingScheduleCount > 0 || scheduleResponseNotifications.length > 0
-          ? activeLanguage === "es"
-            ? "Revisar agenda"
-            : "Review Schedule"
-          : activeLanguage === "es"
-          ? "Agregar Visita"
-          : "Add Visit",
+          ? translate("assistantActionOpenSchedule", activeLanguage)
+          : translate("workCenterAddVisit2", activeLanguage),
       badge:
         scheduleResponseNotifications.length > 0
-          ? activeLanguage === "es"
-            ? `${scheduleResponseNotifications.length} respuesta`
-            : `${scheduleResponseNotifications.length} response`
+          ? translate("workCenterResponseCount", activeLanguage, { count: scheduleResponseNotifications.length })
           : compactCountBadge(
               upcomingScheduleCount,
               "workCenterBadgeUpcoming"
@@ -10293,45 +9907,27 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterQuotesTitle"),
       customer: dashboardCustomerLabel(
         firstAcceptedQuoteReady || quoteHistory[0],
-        activeLanguage === "es" ? "Cliente con propuesta" : "Proposal customer"
+        translate("workCenterProposalCustomer", activeLanguage)
       ),
       status:
         acceptedQuoteReadyItems.length > 0
-          ? activeLanguage === "es"
-            ? "Propuesta aprobada"
-            : "Proposal approved"
+          ? translate("workCenterProposalApproved", activeLanguage)
           : quoteAttentionCount > 0
-          ? activeLanguage === "es"
-            ? "Propuesta enviada"
-            : "Proposal sent"
-          : activeLanguage === "es"
-          ? "Sin propuestas pendientes"
-          : "No pending proposals",
+          ? translate("workCenterProposalSent2", activeLanguage)
+          : translate("workCenterNoPendingProposals", activeLanguage),
       nextStep:
         acceptedQuoteReadyItems.length > 0
-          ? activeLanguage === "es"
-            ? "Mover a trabajo activo"
-            : "Move to Active Work"
+          ? translate("workCenterMoveToActiveWork", activeLanguage)
           : quoteAttentionCount > 0
-          ? activeLanguage === "es"
-            ? "Esperar aprobación"
-            : "Await approval"
-          : activeLanguage === "es"
-          ? "Crear propuesta cuando haya evaluación"
-          : "Create proposal after visit notes",
+          ? translate("workCenterAwaitApproval", activeLanguage)
+          : translate("workCenterCreateProposalAfterVisitNotes", activeLanguage),
       primaryAction:
         acceptedQuoteReadyItems.length > 0
-          ? activeLanguage === "es"
-            ? "Mover a Trabajo Activo"
-            : "Move to Active Work"
-          : activeLanguage === "es"
-          ? "Revisar propuestas"
-          : "Review Proposals",
+          ? translate("workCenterMoveToActiveWork2", activeLanguage)
+          : translate("openQuotesAction", activeLanguage),
       badge:
         acceptedQuoteReadyItems.length > 0
-          ? activeLanguage === "es"
-            ? `${acceptedQuoteReadyItems.length} cotización aceptada lista`
-            : `${acceptedQuoteReadyItems.length} accepted quote ready`
+          ? translate("workCenterAcceptedQuoteReadyCount", activeLanguage, { count: acceptedQuoteReadyItems.length })
           : compactCountBadge(
               quoteAttentionCount,
               "workCenterBadgeAttention"
@@ -10346,26 +9942,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterActiveWorkTitle"),
       customer: dashboardCustomerLabel(
         firstActiveWorkItem,
-        activeLanguage === "es" ? "Cliente activo" : "Active customer"
+        translate("workCenterActiveCustomer", activeLanguage)
       ),
       status:
         activeWorkCount > 0
-          ? activeLanguage === "es"
-            ? "Trabajo activo"
-            : "Active work"
-          : activeLanguage === "es"
-          ? "Sin trabajos activos"
-          : "No active work",
+          ? translate("assistantFieldStage_activeWork", activeLanguage)
+          : translate("workCenterNoActiveWork", activeLanguage),
       nextStep:
         activeWorkCount > 0
-          ? activeLanguage === "es"
-            ? "Completar el trabajo"
-            : "Complete the work"
-          : activeLanguage === "es"
-          ? "Esperar aprobación"
-          : "Wait for approval",
+          ? translate("workCenterCompleteTheWork", activeLanguage)
+          : translate("workCenterWaitForApproval", activeLanguage),
       primaryAction:
-        activeLanguage === "es" ? "Continuar trabajo" : "Continue Job",
+        translate("workCenterContinueJob", activeLanguage),
       badge: compactCountBadge(
         activeWorkCount,
         "workCenterBadgeActive"
@@ -10379,26 +9967,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterClosureTitle"),
       customer: dashboardCustomerLabel(
         firstClosureReview?.project,
-        activeLanguage === "es" ? "Cliente pendiente" : "Pending customer"
+        translate("workCenterPendingCustomer", activeLanguage)
       ),
       status:
         closureReadyCount > 0
-          ? activeLanguage === "es"
-            ? "Listo para cierre"
-            : "Ready for closure"
-          : activeLanguage === "es"
-          ? "Sin cierres listos"
-          : "No closure ready",
+          ? translate("workCenterReadyForClosure", activeLanguage)
+          : translate("workCenterNoClosureReady", activeLanguage),
       nextStep:
         closureReadyCount > 0
-          ? activeLanguage === "es"
-            ? "Verificar obligaciones"
-            : "Verify obligations"
-          : activeLanguage === "es"
-          ? "Completar trabajo primero"
-          : "Complete work first",
+          ? translate("workCenterVerifyObligations", activeLanguage)
+          : translate("workCenterCompleteWorkFirst", activeLanguage),
       primaryAction:
-        activeLanguage === "es" ? "Revisar cierre" : "Review Closure",
+        translate("openClosureCenterAction", activeLanguage),
       openedTitle: translate("closureCenterTitle"),
       openedDescription: translate("closureCenterPurpose"),
       openedNextStep: translate("closureCenterNextStep"),
@@ -10415,26 +9995,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterHistoryTitle"),
       customer: dashboardCustomerLabel(
         firstHistoryRecord,
-        activeLanguage === "es" ? "Memoria del cliente" : "Relationship memory"
+        translate("workCenterRelationshipMemory", activeLanguage)
       ),
       status:
         historyRecordCount > 0
-          ? activeLanguage === "es"
-            ? "Registro guardado"
-            : "Record saved"
-          : activeLanguage === "es"
-          ? "Sin historial todavía"
-          : "No history yet",
+          ? translate("workCenterRecordSaved", activeLanguage)
+          : translate("workCenterNoHistoryYet", activeLanguage),
       nextStep:
         historyRecordCount > 0
-          ? activeLanguage === "es"
-            ? "Usar para servicio futuro"
-            : "Use for future service"
-          : activeLanguage === "es"
-          ? "Cerrar trabajos terminados"
-          : "Close completed work",
+          ? translate("workCenterUseForFutureService", activeLanguage)
+          : translate("workCenterCloseCompletedWork", activeLanguage),
       primaryAction:
-        activeLanguage === "es" ? "Revisar historial" : "Review History",
+        translate("openHistoryAction", activeLanguage),
       badge: compactCountBadge(
         historyRecordCount,
         "workCenterBadgeRecords"
@@ -10446,21 +10018,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "revenue",
       icon: "revenue",
       title: translate("workCenterRevenueTitle"),
-      customer: activeLanguage === "es" ? "Negocio" : "Business",
+      customer: translate("business", activeLanguage),
       status:
         totalJobRevenue > 0
-          ? activeLanguage === "es"
-            ? "Ingresos registrados"
-            : "Revenue recorded"
-          : activeLanguage === "es"
-          ? "Listo para revisar"
-          : "Ready to review",
+          ? translate("workCenterRevenueRecorded", activeLanguage)
+          : translate("workCenterReadyToReview", activeLanguage),
       nextStep:
-        activeLanguage === "es"
-          ? "Revisar métricas"
-          : "Review revenue metrics",
+        translate("workCenterReviewRevenueMetrics", activeLanguage),
       primaryAction:
-        activeLanguage === "es" ? "Revisar ingresos" : "Review Revenue",
+        translate("workCenterReviewRevenue", activeLanguage),
       badge:
         totalJobRevenue > 0
           ? `$${Number(totalJobRevenue).toLocaleString()}`
@@ -10612,9 +10178,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           >
             {availableNow
               ? translate("activeNow")
-              : activeLanguage === "es"
-              ? "Desconectado"
-              : "Offline"}
+              : translate("workCenterOffline", activeLanguage)}
           </div>
         </div>
       )}
@@ -10694,7 +10258,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
             )}
 
             {!selectedWorkCenterJob && (
-            <div style={workCenterPrimaryNavGrid} aria-label="Work Center areas">
+            <div
+              style={workCenterPrimaryNavGrid}
+              aria-label={translate("workCenterAreasAccessibility", activeLanguage)}
+            >
               {workCenterPrimaryNavigationCards.map((card) => (
                 <button
                   key={card.key}
@@ -10774,23 +10341,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 : externalManualActions;
               const jobStatusTone = workflowState.tone;
               const jobDisplayStatus = isJobHistoryMode
-                ? activeLanguage === "es"
-                  ? "Cerrado"
-                  : "Closed"
+                ? translate("stateClosed", activeLanguage)
                 : workflowState.statusLabel;
               const jobDisplayNextStep = isJobHistoryMode
-                ? activeLanguage === "es"
-                  ? "Revisar el historial completo del trabajo."
-                  : "Review the full job history."
+                ? translate("workCenterReviewTheFullJobHistory", activeLanguage)
                 : workflowState.nextActionLabel;
               const persistentContextCustomer =
                 selectedWorkCenterJob.customer ||
                 scopedJob.customer ||
-                (activeLanguage === "es" ? "Cliente" : "Customer");
+                (translate("wcCustomer", activeLanguage));
               const persistentContextService =
                 selectedWorkCenterJob.title ||
                 scopedJob.title ||
-                (activeLanguage === "es" ? "Trabajo actual" : "Current work");
+                (translate("relationshipCurrentStage", activeLanguage));
               const persistentContextAddress =
                 selectedWorkCenterJob.address || scopedJob.address || "";
               const currentStateDefinition = getSarahJobStateDefinition(scopedJob);
@@ -10857,12 +10420,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 >
                   <span aria-hidden="true">‹</span>
                   {isJobHistoryMode
-                    ? activeLanguage === "es"
-                      ? "Volver al historial"
-                      : "Back to History"
-                    : activeLanguage === "es"
-                      ? "Volver a trabajos"
-                      : "Back to Jobs"}
+                    ? translate("workCenterBackToHistory", activeLanguage)
+                    : translate("workCenterBackToJobs", activeLanguage)}
                 </button>
 
                 <div style={jobWorkflowFirstHero}>
@@ -10870,20 +10429,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     className="meetro-job-persistent-context"
                     style={jobPersistentContextRegion}
                     aria-label={
-                      activeLanguage === "es"
-                        ? "Contexto persistente del trabajo"
-                        : "Persistent work context"
+                      translate("workCenterPersistentWorkContext", activeLanguage)
                     }
                   >
                     <div style={jobPersistentContextIdentity}>
                       <span style={jobWorkspaceEyebrow}>
                         {isJobHistoryMode
-                          ? activeLanguage === "es"
-                            ? "Historial"
-                            : "History"
-                          : activeLanguage === "es"
-                            ? "Trabajo actual"
-                            : "Current Job"}
+                          ? translate("homeMyProjectsHistory", activeLanguage)
+                          : translate("workCenterCurrentJob", activeLanguage)}
                       </span>
                       <h2 style={jobPersistentContextCustomer}>
                         {persistentContextCustomer}
@@ -10906,9 +10459,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       </span>
                       <div style={jobPersistentContextNext}>
                         <span style={jobPersistentContextNextLabel}>
-                          {activeLanguage === "es"
-                            ? "Siguiente responsabilidad"
-                            : "Next Responsibility"}
+                          {translate("workCenterNextResponsibility", activeLanguage)}
                         </span>
                         <strong style={jobPersistentContextNextText}>
                           {jobDisplayNextStep}
@@ -10926,7 +10477,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             setPage("conversationThread");
                           }}
                         >
-                          {activeLanguage === "es" ? "Mensaje" : "Message"}
+                          {translate("relationshipMessage", activeLanguage)}
                         </button>
                       )}
                     </div>
@@ -10941,7 +10492,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     }}
                   >
                     <span style={{ ...jobWorkflowStepLabel, color: jobStatusTone.color }}>
-                      {activeLanguage === "es" ? "Estado actual" : "Current Status"}
+                      {translate("wcCurrentStatus", activeLanguage)}
                     </span>
                     <strong style={jobWorkflowStepStatus}>{jobDisplayStatus}</strong>
 
@@ -10957,7 +10508,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     )}
 
                     <span style={jobWorkflowStepLabel}>
-                      {activeLanguage === "es" ? "Siguiente acción" : "Next Action"}
+                      {translate("homeNextAction", activeLanguage)}
                     </span>
                     <strong style={jobWorkflowNextAction}>{jobDisplayNextStep}</strong>
                     {!isJobHistoryMode &&
@@ -10965,9 +10516,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       !hasOpenWorkflowForm && (
                         <div style={jobWorkflowManualActions}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es"
-                              ? "Respuesta externa"
-                              : "External Customer Response"}
+                            {translate("workCenterExternalCustomerResponse", activeLanguage)}
                           </span>
                           <div style={jobWorkflowManualActionGrid}>
                             {visibleExternalManualActions.map((action) => (
@@ -10991,9 +10540,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       visibleExternalManualActions.length === 0 && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es"
-                              ? "Respuesta del cliente"
-                              : "Customer Response"}
+                            {translate("workCenterCustomerResponse", activeLanguage)}
                           </span>
                           <p style={jobWorkspaceDisclosureText}>
                             {workflowState.nextActionLabel}
@@ -11010,7 +10557,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 setPage("conversationThread");
                               }}
                             >
-                              {activeLanguage === "es" ? "Continuar conversación" : "Continue Conversation"}
+                              {translate("assistantActionOpenConversation", activeLanguage)}
                             </button>
                           )}
                         </div>
@@ -11033,9 +10580,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             style={jobWorkflowSecondaryButton}
                             onClick={openApprovalConfirmationForWorkCenterJob}
                           >
-                            {activeLanguage === "es"
-                              ? "Registrar aprobación manualmente"
-                              : "Record Approval Manually"}
+                            {translate("workCenterRecordApprovalManually", activeLanguage)}
                           </button>
                         )}
                       </div>
@@ -11045,10 +10590,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showProposalSendFlow && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal"}
+                            {translate("assistantProjectBriefNextSendProposal", activeLanguage)}
                           </span>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Método" : "Method"}
+                            {translate("workCenterMethod", activeLanguage)}
                             <select
                               style={input}
                               value={sendFlowDraft.method}
@@ -11060,22 +10605,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               }
                             >
                               <option value="meetro_chat">
-                                {activeLanguage === "es" ? "Chat de Meetro" : "Meetro Chat"}
+                                {translate("relationshipMeetroChat", activeLanguage)}
                               </option>
                               <option value="external_share">
-                                {activeLanguage === "es" ? "Compartir externamente" : "External Share"}
+                                {translate("workCenterExternalShare", activeLanguage)}
                               </option>
                             </select>
                           </label>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            {translate("workCenterOptionalNote", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={sendFlowDraft.note}
                               placeholder={
-                                activeLanguage === "es"
-                                  ? "Mensaje para acompañar la propuesta."
-                                  : "Message to include with the proposal."
+                                translate("workCenterMessageToIncludeWithTheProposal", activeLanguage)
                               }
                               onChange={(event) =>
                                 setSendFlowDraft((current) => ({
@@ -11091,14 +10634,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => confirmProposalSendForWorkCenterJob(scopedJob)}
                             >
-                              {activeLanguage === "es" ? "Enviar propuesta" : "Send Proposal"}
+                              {translate("assistantProjectBriefNextSendProposal", activeLanguage)}
                             </button>
                             <button
                               type="button"
                               style={miniInlineButton}
                               onClick={() => setShowProposalSendFlow(false)}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11108,24 +10651,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showApprovalConfirmFlow && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es"
-                              ? "Confirmar aprobación"
-                              : "Confirm Approval"}
+                            {translate("workCenterConfirmApproval", activeLanguage)}
                           </span>
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es"
-                              ? "Guarda la aprobación solo después de recibir confirmación del cliente."
-                              : "Save approval only after the customer has confirmed the proposal."}
+                            {translate("workCenterSaveApprovalOnlyAfterTheCustomerHasConfirmedTheProposal", activeLanguage)}
                           </p>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            {translate("workCenterOptionalNote", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={approvalDraft.note}
                               placeholder={
-                                activeLanguage === "es"
-                                  ? "Ej. Aprobado por mensaje de texto."
-                                  : "Example: Approved by text message."
+                                translate("workCenterExampleApprovedByTextMessage", activeLanguage)
                               }
                               onChange={(event) =>
                                 setApprovalDraft((current) => ({
@@ -11146,9 +10683,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 }))
                               }
                             />
-                            {activeLanguage === "es"
-                              ? "Confirmo que el cliente aprobó la propuesta"
-                              : "I confirm the customer approved the proposal"}
+                            {translate("workCenterIConfirmTheCustomerApprovedTheProposal", activeLanguage)}
                           </label>
                           <div style={jobWorkflowFormActions}>
                             <button
@@ -11156,9 +10691,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => confirmApprovalForWorkCenterJob(scopedJob)}
                             >
-                              {activeLanguage === "es"
-                                ? "Guardar aprobación"
-                                : "Save Approval"}
+                              {translate("workCenterSaveApproval", activeLanguage)}
                             </button>
                             <button
                               type="button"
@@ -11168,7 +10701,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 setApprovalDraft(createDefaultApprovalDraft());
                               }}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11178,11 +10711,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showPaymentForm && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es" ? "Pago" : "Payment"}
+                            {translate("workCenterPayment", activeLanguage)}
                           </span>
                           <div style={jobWorkflowFormGrid}>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Monto" : "Amount"}
+                              {translate("homeAmount", activeLanguage)}
                               <input
                                 type="number"
                                 min="0"
@@ -11198,7 +10731,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               />
                             </label>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Tipo" : "Type"}
+                              {translate("relationshipType", activeLanguage)}
                               <select
                                 style={input}
                                 value={paymentDraft.paymentType}
@@ -11210,15 +10743,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 }
                               >
                                 <option value="deposit">
-                                  {activeLanguage === "es" ? "Depósito" : "Deposit"}
+                                  {translate("deposit", activeLanguage)}
                                 </option>
                                 <option value="full">
-                                  {activeLanguage === "es" ? "Pago completo" : "Full Payment"}
+                                  {translate("workCenterFullPayment", activeLanguage)}
                                 </option>
                               </select>
                             </label>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Método" : "Method"}
+                              {translate("workCenterMethod", activeLanguage)}
                               <select
                                 style={input}
                                 value={paymentDraft.method}
@@ -11229,17 +10762,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   }))
                                 }
                               >
-                                <option value="card">{activeLanguage === "es" ? "Tarjeta" : "Card"}</option>
-                                <option value="cash">{activeLanguage === "es" ? "Efectivo" : "Cash"}</option>
-                                <option value="check">{activeLanguage === "es" ? "Cheque" : "Check"}</option>
+                                <option value="card">{translate("cardPayment", activeLanguage)}</option>
+                                <option value="cash">{translate("cash", activeLanguage)}</option>
+                                <option value="check">{translate("workCenterCheck", activeLanguage)}</option>
                                 <option value="bank_transfer">
-                                  {activeLanguage === "es" ? "Transferencia" : "Bank Transfer"}
+                                  {translate("workCenterBankTransfer", activeLanguage)}
                                 </option>
-                                <option value="other">{activeLanguage === "es" ? "Otro" : "Other"}</option>
+                                <option value="other">{translate("communityInterestOther", activeLanguage)}</option>
                               </select>
                             </label>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Fecha" : "Date"}
+                              {translate("date", activeLanguage)}
                               <input
                                 type="date"
                                 style={input}
@@ -11254,7 +10787,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             </label>
                           </div>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Nota" : "Note"}
+                            {translate("note", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={paymentDraft.note}
@@ -11272,14 +10805,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => savePaymentForWorkCenterJob(scopedJob)}
                             >
-                              {activeLanguage === "es" ? "Guardar pago" : "Save Payment"}
+                              {translate("workCenterSavePayment", activeLanguage)}
                             </button>
                             <button
                               type="button"
                               style={miniInlineButton}
                               onClick={() => setShowPaymentForm(false)}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11289,11 +10822,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showWorkAppointmentForm && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es" ? "Cita de trabajo" : "Work Appointment"}
+                            {translate("workCenterWorkAppointment", activeLanguage)}
                           </span>
                           <div style={jobWorkflowFormGrid}>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Fecha" : "Date"}
+                              {translate("date", activeLanguage)}
                               <input
                                 type="date"
                                 style={input}
@@ -11307,7 +10840,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               />
                             </label>
                             <label style={jobWorkflowFieldLabel}>
-                              {activeLanguage === "es" ? "Hora" : "Time"}
+                              {translate("myRequestsTime", activeLanguage)}
                               <input
                                 type="time"
                                 style={input}
@@ -11322,14 +10855,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             </label>
                           </div>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Notas opcionales" : "Optional Notes"}
+                            {translate("workCenterOptionalNotes", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={workAppointmentDraft.notes}
                               placeholder={
-                                activeLanguage === "es"
-                                  ? "Detalles para recordar antes del trabajo."
-                                  : "Details to remember before the work."
+                                translate("workCenterDetailsToRememberBeforeTheWork", activeLanguage)
                               }
                               onChange={(event) =>
                                 setWorkAppointmentDraft((current) => ({
@@ -11350,9 +10881,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 }))
                               }
                             />
-                            {activeLanguage === "es"
-                              ? "Compartir con el cliente"
-                              : "Share With Customer"}
+                            {translate("workCenterShareWithCustomer", activeLanguage)}
                           </label>
                           <div style={jobWorkflowFormActions}>
                             <button
@@ -11360,16 +10889,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => createSarahPageWorkAppointmentRecord(scopedJob)}
                             >
-                              {activeLanguage === "es"
-                                ? "Crear cita de trabajo"
-                                : "Create Work Appointment"}
+                              {translate("workCenterCreateWorkAppointment", activeLanguage)}
                             </button>
                             <button
                               type="button"
                               style={miniInlineButton}
                               onClick={() => setShowWorkAppointmentForm(false)}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11379,10 +10906,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showReceiptSendFlow && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es" ? "Enviar recibo" : "Send Receipt"}
+                            {translate("workCenterSendReceipt", activeLanguage)}
                           </span>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Método" : "Method"}
+                            {translate("workCenterMethod", activeLanguage)}
                             <select
                               style={input}
                               value={sendFlowDraft.method}
@@ -11394,22 +10921,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               }
                             >
                               <option value="meetro_chat">
-                                {activeLanguage === "es" ? "Chat de Meetro" : "Meetro Chat"}
+                                {translate("relationshipMeetroChat", activeLanguage)}
                               </option>
                               <option value="external_share">
-                                {activeLanguage === "es" ? "Compartir externamente" : "External Share"}
+                                {translate("workCenterExternalShare", activeLanguage)}
                               </option>
                             </select>
                           </label>
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Nota opcional" : "Optional Note"}
+                            {translate("workCenterOptionalNote", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={sendFlowDraft.note}
                               placeholder={
-                                activeLanguage === "es"
-                                  ? "Mensaje para acompañar el recibo."
-                                  : "Message to include with the receipt."
+                                translate("workCenterMessageToIncludeWithTheReceipt", activeLanguage)
                               }
                               onChange={(event) =>
                                 setSendFlowDraft((current) => ({
@@ -11425,14 +10950,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => confirmReceiptSendForWorkCenterJob(scopedJob)}
                             >
-                              {activeLanguage === "es" ? "Enviar recibo" : "Send Receipt"}
+                              {translate("workCenterSendReceipt", activeLanguage)}
                             </button>
                             <button
                               type="button"
                               style={miniInlineButton}
                               onClick={() => setShowReceiptSendFlow(false)}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11442,7 +10967,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       showCloseJobForm && (
                         <div style={jobWorkflowInlineForm}>
                           <span style={jobWorkflowStepLabel}>
-                            {activeLanguage === "es" ? "Revisión de cierre" : "Closure Review"}
+                            {translate("companionContextCompletionTitle", activeLanguage)}
                           </span>
                           {(() => {
                             const closureReadiness =
@@ -11450,31 +10975,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             return (
                               <div style={closureGateCard}>
                                 <strong>
-                                  {activeLanguage === "es"
-                                    ? "Estado de cierre"
-                                    : "Closure Status"}
+                                  {translate("workCenterClosureStatus", activeLanguage)}
                                   :{" "}
                                   {closureReadiness.closureReady
-                                    ? activeLanguage === "es"
-                                      ? "Elegible"
-                                      : "Eligible"
-                                    : activeLanguage === "es"
-                                      ? "Bloqueado"
-                                      : "Blocked"}
+                                    ? translate("workCenterEligible", activeLanguage)
+                                    : translate("assistantWorkflowStatusBlocked", activeLanguage)}
                                 </strong>
                                 {!closureReadiness.closureReady && (
                                   <p style={jobWorkspaceDisclosureText}>
-                                    {activeLanguage === "es"
-                                      ? "Cierre bloqueado. Las obligaciones pendientes deben satisfacerse antes de cerrar este trabajo."
-                                      : "Closure blocked. Outstanding obligations must be satisfied before closing this job."}
+                                    {translate("workCenterClosureBlockedOutstandingObligationsMustBeSatisfiedBeforeClosingThisJob", activeLanguage)}
                                   </p>
                                 )}
                                 <div style={closureGateGrid}>
                                   <div>
                                     <span style={jobWorkflowStepLabel}>
-                                      {activeLanguage === "es"
-                                        ? "Obligaciones pendientes"
-                                        : "Outstanding Obligations"}
+                                      {translate("workCenterOutstandingObligations", activeLanguage)}
                                     </span>
                                     <ul style={closureGateList}>
                                       {closureReadiness.outstandingObligations.length > 0
@@ -11485,18 +11000,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                           ))
                                         : (
                                             <li>
-                                              {activeLanguage === "es"
-                                                ? "Ninguna"
-                                                : "None"}
+                                              {translate("workCenterNone", activeLanguage)}
                                             </li>
                                           )}
                                     </ul>
                                   </div>
                                   <div>
                                     <span style={jobWorkflowStepLabel}>
-                                      {activeLanguage === "es"
-                                        ? "Obligaciones satisfechas"
-                                        : "Satisfied Obligations"}
+                                      {translate("workCenterSatisfiedObligations", activeLanguage)}
                                     </span>
                                     <ul style={closureGateList}>
                                       {closureReadiness.satisfiedObligations.map((obligation) => (
@@ -11511,7 +11022,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             );
                           })()}
                           <label style={jobWorkflowFieldLabel}>
-                            {activeLanguage === "es" ? "Notas de cierre opcionales" : "Optional Closure Notes"}
+                            {translate("workCenterOptionalClosureNotes", activeLanguage)}
                             <textarea
                               style={jobWorkflowNotesInput}
                               value={closureDraft.notes}
@@ -11534,9 +11045,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 }))
                               }
                             />
-                            {activeLanguage === "es"
-                              ? "Confirmar mover al historial"
-                              : "Confirm Move To History"}
+                            {translate("workCenterConfirmMoveToHistory", activeLanguage)}
                           </label>
                           <div style={jobWorkflowFormActions}>
                             <button
@@ -11560,14 +11069,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 );
                               }}
                             >
-                              {activeLanguage === "es" ? "Guardar en historial" : "Save to History"}
+                              {translate("workCenterSaveToHistory", activeLanguage)}
                             </button>
                             <button
                               type="button"
                               style={miniInlineButton}
                               onClick={() => setShowCloseJobForm(false)}
                             >
-                              {activeLanguage === "es" ? "Cancelar" : "Cancel"}
+                              {translate("cancel", activeLanguage)}
                             </button>
                           </div>
                         </div>
@@ -11576,9 +11085,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                   {!isJobHistoryMode && (
                     <p style={jobWorkflowGpsHint}>
-                      {activeLanguage === "es"
-                        ? "Meetro muestra solo el paso actual. Los registros quedan guardados detrás de este trabajo."
-                        : "Meetro shows only the current step. Records stay saved behind this job."}
+                      {translate("workCenterMeetroShowsOnlyTheCurrentStepRecordsStaySavedBehindThisJob", activeLanguage)}
                     </p>
                   )}
                 </div>
@@ -11587,12 +11094,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                  <div style={jobHistoryReadOnlyPanel}>
 		                    <div style={jobScopedDetailHeader}>
 		                      <strong>
-		                        {activeLanguage === "es"
-		                          ? "Historial del trabajo"
-		                          : "Job History"}
+		                        {translate("workCenterHistoryTitle", activeLanguage)}
 	                      </strong>
 	                      <span style={jobWorkspaceStatusPill}>
-		                        {activeLanguage === "es" ? "Solo lectura" : "Read-only"}
+		                        {translate("readOnlyStatus", activeLanguage)}
 		                      </span>
 		                    </div>
 		                    <div style={jobHistoryDocumentActions}>
@@ -11601,26 +11106,26 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        style={jobHistoryDocumentButton}
 		                        onClick={() => setJobReportTarget(scopedJob)}
 		                      >
-		                        {activeLanguage === "es" ? "Revisar reporte" : "Review Job Report"}
+		                        {translate("workCenterReviewJobReport", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
 		                        style={jobHistoryDocumentButton}
 		                        onClick={() => printJobHistoryReport(scopedJob)}
 		                      >
-		                        {activeLanguage === "es" ? "Imprimir reporte" : "Print Job Report"}
+		                        {translate("workCenterPrintJobReport", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
 		                        style={jobHistoryDocumentButton}
 		                        onClick={() =>
 		                          shareHistoryDocumentText({
-		                            title: activeLanguage === "es" ? "Reporte del trabajo" : "Job Report",
+		                            title: translate("workCenterJobReport", activeLanguage),
 		                            text: buildJobHistoryReportText(scopedJob),
 		                          })
 		                        }
 		                      >
-		                        {activeLanguage === "es" ? "Compartir reporte" : "Share Job Report"}
+		                        {translate("workCenterShareJobReport", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
@@ -11628,13 +11133,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        onClick={() =>
 		                          copyHistoryDocumentText(
 		                            buildJobHistoryReportText(scopedJob),
-		                            activeLanguage === "es"
-		                              ? "Resumen copiado."
-		                              : "Summary copied."
+		                            translate("workCenterSummaryCopied", activeLanguage)
 		                          )
 		                        }
 		                      >
-		                        {activeLanguage === "es" ? "Copiar resumen" : "Copy Summary"}
+		                        {translate("workCenterCopySummary", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
@@ -11642,9 +11145,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        onClick={() => {
 		                          if (!primaryScopedQuote) {
 		                            setHistoryActionNotice(
-		                              activeLanguage === "es"
-		                                ? "No hay cotización guardada para este trabajo."
-		                                : "No quote saved for this job."
+		                              translate("workCenterNoQuoteSavedForThisJob", activeLanguage)
 		                            );
 		                            return;
 		                          }
@@ -11652,13 +11153,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                            ...primaryScopedQuote,
 		                            readOnlyHistory: true,
 		                            documentLabel:
-		                              activeLanguage === "es"
-		                                ? "Propuesta"
-		                                : "Quote / Proposal",
+		                              translate("myRequestsQuoteProposal", activeLanguage),
 		                          });
 		                        }}
 		                      >
-		                        {activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal"}
+		                        {translate("assistantActionViewQuote", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
@@ -11666,27 +11165,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        onClick={() => {
 		                          if (!primaryScopedQuote) {
 		                            setHistoryActionNotice(
-		                              activeLanguage === "es"
-		                                ? "No hay cotización guardada para este trabajo."
-		                                : "No quote saved for this job."
+		                              translate("workCenterNoQuoteSavedForThisJob", activeLanguage)
 		                            );
 		                            return;
 		                          }
 		                          shareHistoryDocumentText({
 		                            title:
-		                              activeLanguage === "es"
-		                                ? "Propuesta"
-		                                : "Quote / Proposal",
+		                              translate("myRequestsQuoteProposal", activeLanguage),
 		                            text: buildQuoteDocumentText(
 		                              primaryScopedQuote,
-		                              activeLanguage === "es"
-		                                ? "Propuesta"
-		                                : "Quote / Proposal"
+		                              translate("myRequestsQuoteProposal", activeLanguage)
 		                            ),
 		                          });
 		                        }}
 		                      >
-		                        {activeLanguage === "es" ? "Compartir propuesta" : "Share Quote / Proposal"}
+		                        {translate("workCenterShareQuoteProposal", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
@@ -11694,9 +11187,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        onClick={() => {
 		                          if (!primaryScopedQuote || !hasHistoryReceipt) {
 		                            setHistoryActionNotice(
-		                              activeLanguage === "es"
-		                                ? "No hay factura guardada para este trabajo."
-		                                : "No invoice saved for this job."
+		                              translate("workCenterNoInvoiceSavedForThisJob", activeLanguage)
 		                            );
 		                            return;
 		                          }
@@ -11704,13 +11195,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                            ...primaryScopedQuote,
 		                            readOnlyHistory: true,
 		                            documentLabel:
-		                              activeLanguage === "es"
-		                                ? "Factura / Recibo"
-		                                : "Invoice / Receipt",
+		                              translate("guideInvoiceReceiptTitle", activeLanguage),
 		                          });
 		                        }}
 		                      >
-		                        {activeLanguage === "es" ? "Revisar factura" : "Review Invoice / Receipt"}
+		                        {translate("workCenterReviewInvoiceReceipt", activeLanguage)}
 		                      </button>
 		                      <button
 		                        type="button"
@@ -11718,27 +11207,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        onClick={() => {
 		                          if (!primaryScopedQuote || !hasHistoryReceipt) {
 		                            setHistoryActionNotice(
-		                              activeLanguage === "es"
-		                                ? "No hay factura guardada para este trabajo."
-		                                : "No invoice saved for this job."
+		                              translate("workCenterNoInvoiceSavedForThisJob", activeLanguage)
 		                            );
 		                            return;
 		                          }
 		                          shareHistoryDocumentText({
 		                            title:
-		                              activeLanguage === "es"
-		                                ? "Factura / Recibo"
-		                                : "Invoice / Receipt",
+		                              translate("guideInvoiceReceiptTitle", activeLanguage),
 		                            text: buildQuoteDocumentText(
 		                              primaryScopedQuote,
-		                              activeLanguage === "es"
-		                                ? "Factura / Recibo"
-		                                : "Invoice / Receipt"
+		                              translate("guideInvoiceReceiptTitle", activeLanguage)
 		                            ),
 		                          });
 		                        }}
 		                      >
-		                        {activeLanguage === "es" ? "Compartir factura" : "Share Invoice / Receipt"}
+		                        {translate("workCenterShareInvoiceReceipt", activeLanguage)}
 		                      </button>
 		                    </div>
 		                    {historyActionNotice && (
@@ -11747,22 +11230,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                    <div style={jobHistoryReasoningTrail}>
 		                      <div style={jobHistoryReasoningHeader}>
 		                        <strong>
-		                          {activeLanguage === "es"
-		                            ? "Resumen de evaluación"
-		                            : "Evaluation Summary"}
+		                          {translate("workCenterEvaluationSummary", activeLanguage)}
 		                        </strong>
 		                        <span>
-		                          {activeLanguage === "es"
-		                            ? "Solicitud -> evaluación -> hallazgos -> servicios recomendados"
-		                            : "Request -> Evaluation -> Findings -> Recommended Services"}
+		                          {translate("workCenterRequestEvaluationFindingsRecommendedServices", activeLanguage)}
 		                        </span>
 		                      </div>
 		                      <div style={jobHistoryReadOnlyGrid}>
 		                        <div style={jobHistoryReadOnlySection}>
 		                          <strong>
-		                            {activeLanguage === "es"
-		                              ? "Tipo de servicio"
-		                              : "Service Type"}
+		                            {translate("serviceType", activeLanguage)}
 		                          </strong>
 		                          <span>
 		                            {historyEvaluation.serviceType ||
@@ -11780,17 +11257,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                        </div>
 		                        <div style={jobHistoryReadOnlySection}>
 		                          <strong>
-		                            {activeLanguage === "es"
-		                              ? "Notas de evaluación"
-		                              : "Evaluation Notes"}
+		                            {translate("guideEvaluationNotesTitle", activeLanguage)}
 		                          </strong>
 		                          <span>{getHistoryEvaluationNotes(scopedJob) || "—"}</span>
 		                        </div>
 		                        <div style={jobHistoryReadOnlySection}>
 		                          <strong>
-		                            {activeLanguage === "es"
-		                              ? "Requisitos esperados"
-		                              : "Template Requirements"}
+		                            {translate("workCenterTemplateRequirements", activeLanguage)}
 		                          </strong>
 		                          <span>
 		                            {formatHistoryList(
@@ -11801,7 +11274,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                      </div>
 		                      <div style={jobHistoryRecordSection}>
 		                        <strong>
-		                          {activeLanguage === "es" ? "Hallazgos" : "Findings"}
+		                          {translate("assistantProjectBriefFindingsSection", activeLanguage)}
 		                        </strong>
 		                        {historyFindings.length > 0 ? (
 		                          <ul style={jobHistoryRecordList}>
@@ -11824,9 +11297,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                      </div>
 		                      <div style={jobHistoryRecordSection}>
 		                        <strong>
-		                          {activeLanguage === "es"
-		                            ? "Servicios recomendados"
-		                            : "Recommended Services"}
+		                          {translate("workCenterRecommendedServices", activeLanguage)}
 		                        </strong>
 		                        {historyServiceRecommendations.length > 0 ? (
 		                          <ul style={jobHistoryRecordList}>
@@ -11850,15 +11321,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
 		                    </div>
 		                    <div style={jobHistoryReadOnlyGrid}>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Cliente" : "Customer"}</strong>
+	                        <strong>{translate("wcCustomer", activeLanguage)}</strong>
 	                        <span>{selectedWorkCenterJob.customer}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Trabajo" : "Job"}</strong>
+	                        <strong>{translate("workCenterJob", activeLanguage)}</strong>
 	                        <span>{selectedWorkCenterJob.title}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Fecha" : "Date"}</strong>
+	                        <strong>{translate("date", activeLanguage)}</strong>
 	                        <span>
 	                          {primaryScopedHistory?.closeDate ||
 	                          primaryScopedHistory?.closedAt ||
@@ -11868,11 +11339,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                        </span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Estado" : "Status"}</strong>
-	                        <span>{activeLanguage === "es" ? "Cerrado" : "Closed"}</span>
+	                        <strong>{translate("homeStatus", activeLanguage)}</strong>
+	                        <span>{translate("stateClosed", activeLanguage)}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Propuesta" : "Proposal / Quote"}</strong>
+	                        <strong>{translate("workCenterProposalQuote", activeLanguage)}</strong>
 	                        <span>
 	                          {primaryScopedQuote
 	                            ? `$${getQuoteTotalAmount(primaryScopedQuote).toFixed(2)}`
@@ -11880,31 +11351,29 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                        </span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Fotos" : "Photos"}</strong>
+	                        <strong>{translate("photos", activeLanguage)}</strong>
 	                        <span>{getWorkCenterJobPhotos(scopedJob).length}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Pago" : "Payment"}</strong>
+	                        <strong>{translate("workCenterPayment", activeLanguage)}</strong>
 	                        <span>{getWorkCenterPaymentSummary(scopedJob)}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Recibo" : "Receipt"}</strong>
+	                        <strong>{translate("documentReceipt", activeLanguage)}</strong>
 	                        <span>{getHistoryReceiptSummary(scopedJob) || "—"}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
 	                        <strong>
-	                          {activeLanguage === "es"
-	                            ? "Notas de finalización"
-	                            : "Completion Notes"}
+	                          {translate("workCenterCompletionNotes", activeLanguage)}
 	                        </strong>
 	                        <span>{getHistoryCompletionNotes(scopedJob) || "—"}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Cierre" : "Closure Notes"}</strong>
+	                        <strong>{translate("workCenterClosureNotes", activeLanguage)}</strong>
 	                        <span>{getHistoryClosureNotes(scopedJob) || "—"}</span>
 	                      </div>
 	                      <div style={jobHistoryReadOnlySection}>
-	                        <strong>{activeLanguage === "es" ? "Historial del proyecto" : "Project History"}</strong>
+	                        <strong>{translate("assistantRelationshipMemoryProjectHistorySection", activeLanguage)}</strong>
 	                        <span>
 	                          {getWorkCenterJobSavedTimelineEvents(scopedJob).length > 0
 	                            ? getWorkCenterJobSavedTimelineEvents(scopedJob)
@@ -11939,10 +11408,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     defaultOpen={supportingRecordsDefaultOpen}
                   >
 	                  <summary style={jobSupportingSlimSummary}>
-                      <span>{activeLanguage === "es" ? "Registros de apoyo" : "Supporting records"}</span>
+                      <span>{translate("workCenterSupportingRecords", activeLanguage)}</span>
                       <span style={jobSupportingReadOnlyHint}>
                         {supportingLinks.length} ·{" "}
-                        {activeLanguage === "es" ? "Solo lectura" : "Read-only"}
+                        {translate("readOnlyStatus", activeLanguage)}
                       </span>
 	                  </summary>
                   <div style={jobSupportingSlimBody}>
@@ -11971,7 +11440,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     {getWorkCenterJobSavedTimelineEvents(scopedJob).length > 0 && (
                       <details style={jobSupportingMoreDisclosure}>
                         <summary style={jobSupportingMoreSummary}>
-                          {activeLanguage === "es" ? "Línea de tiempo guardada" : "Saved timeline"}
+                          {translate("workCenterSavedTimeline", activeLanguage)}
                         </summary>
                         <div style={jobSavedTimelineList}>
                           {getWorkCenterJobSavedTimelineEvents(scopedJob).map((event) => (
@@ -11979,7 +11448,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               <span>{event.label || event.stage || currentStateDefinition.timelineEntry}</span>
                               <small>
                                 {formatJobTimelineEventTime(event.savedAt || event.timestamp)} ·{" "}
-                                {activeLanguage === "es" ? "Guardado" : "Saved"}
+                                {translate("stateSaved", activeLanguage)}
                               </small>
                             </div>
                           ))}
@@ -12022,7 +11491,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setSelectedJobDetailView("");
                         }}
                       >
-                        {activeLanguage === "es" ? "Cerrar" : "Close"}
+                        {translate("close", activeLanguage)}
                       </button>
                     </div>
 
@@ -12030,12 +11499,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={jobScopedDetailBody}>
                         <p style={jobWorkspaceDisclosureText}>
                           {selectedWorkCenterJob.conversationId
-                            ? activeLanguage === "es"
-                              ? "Continúa solo la conversación de este trabajo."
-                              : "Continue this job's conversation only."
-                            : activeLanguage === "es"
-                              ? "Este trabajo aún no tiene conversación vinculada."
-                              : "This job does not have a linked conversation yet."}
+                            ? translate("workCenterContinueThisJobsConversationOnly", activeLanguage)
+                            : translate("workCenterThisJobDoesNotHaveALinkedConversationYet", activeLanguage)}
                         </p>
                         {selectedWorkCenterJob.conversationId && (
                           <button
@@ -12049,7 +11514,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               setPage("conversationThread");
                             }}
                           >
-                            {activeLanguage === "es" ? "Continuar conversación" : "Continue Conversation"}
+                            {translate("assistantActionOpenConversation", activeLanguage)}
                           </button>
                         )}
                       </div>
@@ -12060,7 +11525,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         {primaryScopedQuote ? (
                           <>
                             <p style={jobWorkspaceDisclosureText}>
-                              {activeLanguage === "es" ? "Total" : "Total"}:{" "}
+                              {translate("documentTotal", activeLanguage)}:{" "}
                               <strong>${getQuoteTotalAmount(primaryScopedQuote).toFixed(2)}</strong>
                             </p>
                             <button
@@ -12068,12 +11533,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={supportingRecordActionStyle}
                               onClick={() => setQuoteViewTarget(primaryScopedQuote)}
                             >
-                              {activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal"}
+                              {translate("assistantActionViewQuote", activeLanguage)}
                             </button>
                           </>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es" ? "No hay cotización para este trabajo." : "No quote for this job yet."}
+                            {translate("workCenterNoQuoteForThisJobYet", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12099,13 +11564,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   setIsJobHistoryMode(false);
                                 }}
                               >
-                                {activeLanguage === "es" ? "Revisar agenda" : "Review Schedule"}
+                                {translate("assistantActionOpenSchedule", activeLanguage)}
                               </button>
                             )}
                           </>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es" ? "No hay agenda para este trabajo." : "No schedule for this job yet."}
+                            {translate("workCenterNoScheduleForThisJobYet", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12134,7 +11599,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </div>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es" ? "No hay fotos para este trabajo." : "No photos for this job yet."}
+                            {translate("workCenterNoPhotosForThisJobYet", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12146,12 +11611,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           {primaryScopedQuote?.paymentReceivedAt ||
                           primaryScopedQuote?.depositPaidAt ||
                           primaryScopedQuote?.paidAt
-                            ? activeLanguage === "es"
-                              ? "Pago registrado para este trabajo."
-                              : "Payment recorded for this job."
-                            : activeLanguage === "es"
-                              ? "No hay pagos registrados para este trabajo."
-                              : "No payments recorded for this job yet."}
+                            ? translate("workCenterPaymentRecordedForThisJob", activeLanguage)
+                            : translate("workCenterNoPaymentsRecordedForThisJobYet", activeLanguage)}
                         </p>
                       </div>
                     )}
@@ -12164,11 +11625,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               <div key={material.id || index} style={jobScopedListItem}>
                                 <strong>{material.name || material.title || translate("material")}</strong>
                                 <span>
-                                  {activeLanguage === "es" ? "Cantidad" : "Qty"}: {material.quantity || "—"}
+                                  {translate("workCenterQty", activeLanguage)}: {material.quantity || "—"}
                                 </span>
                                 {getMaterialLineTotal(material) !== null && (
                                   <span>
-                                    {activeLanguage === "es" ? "Total" : "Line Total"}: ${getMaterialLineTotal(material).toFixed(2)}
+                                    {translate("workCenterLineTotal", activeLanguage)}: ${getMaterialLineTotal(material).toFixed(2)}
                                   </span>
                                 )}
                               </div>
@@ -12176,7 +11637,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </div>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es" ? "No hay materiales para este trabajo." : "No materials for this job yet."}
+                            {translate("workCenterNoMaterialsForThisJobYet", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12190,45 +11651,39 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               <div style={jobScopedList}>
                                 <div style={jobScopedListItem}>
                                   <strong>
-                                    {activeLanguage === "es"
-                                      ? "Resumen de evaluación"
-                                      : "Evaluation Summary"}
+                                    {translate("workCenterEvaluationSummary", activeLanguage)}
                                   </strong>
                                   <span>
                                     {primaryScopedSchedule.evaluation?.visitNotes ||
                                       primaryScopedSchedule.evaluationNotes ||
                                       primaryScopedSchedule.evaluation?.notes ||
-                                      (activeLanguage === "es"
-                                        ? "Notas de evaluación guardadas."
-                                        : "Evaluation notes saved.")}
+                                      (translate("workCenterEvaluationNotesSaved2", activeLanguage))}
                                   </span>
                                 </div>
 
                                 <div style={jobScopedListItem}>
                                   <strong>
-                                    {activeLanguage === "es"
-                                      ? "Tipo de servicio y contexto"
-                                      : "Service Type and Context"}
+                                    {translate("workCenterServiceTypeAndContext", activeLanguage)}
                                   </strong>
                                   <span>
-                                    {activeLanguage === "es" ? "Servicio" : "Service"}:{" "}
+                                    {translate("service", activeLanguage)}:{" "}
                                     {primaryScopedSchedule.evaluation?.serviceType ||
                                       primaryScopedSchedule.serviceType ||
                                       primaryScopedSchedule.evaluationServiceType ||
                                       "—"}
                                   </span>
                                   <span>
-                                    {activeLanguage === "es" ? "Contexto" : "Context"}:{" "}
+                                    {translate("workCenterContext", activeLanguage)}:{" "}
                                     {primaryScopedSchedule.evaluation?.context ||
                                       primaryScopedSchedule.context ||
                                       primaryScopedSchedule.evaluationContext ||
                                       "—"}
                                   </span>
                                   <span>
-                                    {activeLanguage === "es" ? "Plantilla" : "Template"}:{" "}
+                                    {translate("workCenterTemplate", activeLanguage)}:{" "}
                                     {primaryScopedSchedule.evaluation?.evaluationTemplate ||
                                       primaryScopedSchedule.evaluationTemplate ||
-                                      (activeLanguage === "es" ? "Sin coincidencia" : "No match")}
+                                      (translate("workCenterNoMatch", activeLanguage))}
                                   </span>
                                 </div>
 
@@ -12237,9 +11692,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   []).length > 0 && (
                                   <div style={jobScopedListItem}>
                                     <strong>
-                                      {activeLanguage === "es"
-                                        ? "Documentación esperada"
-                                        : "Expected Documentation"}
+                                      {translate("workCenterExpectedDocumentation", activeLanguage)}
                                     </strong>
                                     <span>
                                       {(primaryScopedSchedule.evaluation?.templateRequirements ||
@@ -12253,7 +11706,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   primaryScopedSchedule.evaluationFindings) && (
                                   <div style={jobScopedListItem}>
                                     <strong>
-                                      {activeLanguage === "es" ? "Hallazgos" : "Findings"}
+                                      {translate("assistantProjectBriefFindingsSection", activeLanguage)}
                                     </strong>
                                     <span>
                                       {primaryScopedSchedule.evaluation?.findingsNotes ||
@@ -12267,9 +11720,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   []).length > 0 && (
                                   <div style={jobScopedListItem}>
                                     <strong>
-                                      {activeLanguage === "es"
-                                        ? "Servicios recomendados"
-                                        : "Recommended Services"}
+                                      {translate("workCenterRecommendedServices", activeLanguage)}
                                     </strong>
                                     <span>
                                       {(primaryScopedSchedule.evaluation?.serviceRecommendations ||
@@ -12291,25 +11742,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                                 <div style={jobScopedListItem}>
                                   <strong>
-                                    {activeLanguage === "es"
-                                      ? "Materiales, fotos y trabajo documentado"
-                                      : "Materials, Photos, and Documented Work"}
+                                    {translate("workCenterMaterialsPhotosAndDocumentedWork", activeLanguage)}
                                   </strong>
                                   <span>
-                                    {activeLanguage === "es" ? "Materiales" : "Materials"}:{" "}
+                                    {translate("workTabMaterials", activeLanguage)}:{" "}
                                     {primaryScopedSchedule.evaluation?.materialsNeeded ||
                                       primaryScopedSchedule.evaluationMaterialsNeeded ||
-                                      (activeLanguage === "es" ? "No indicado" : "Not listed")}
+                                      (translate("workCenterNotListed", activeLanguage))}
                                   </span>
                                   <span>
-                                    {activeLanguage === "es" ? "Elementos" : "Work items"}:{" "}
+                                    {translate("workCenterWorkItems", activeLanguage)}:{" "}
                                     {(primaryScopedSchedule.evaluation?.workItems ||
                                       primaryScopedSchedule.evaluationItems ||
                                       primaryScopedSchedule.workItems ||
                                       []).length}
                                   </span>
                                   <span>
-                                    {activeLanguage === "es" ? "Fotos" : "Photos"}:{" "}
+                                    {translate("photos", activeLanguage)}:{" "}
                                     {(primaryScopedSchedule.evaluation?.photos ||
                                       primaryScopedSchedule.evaluationPhotos ||
                                       []).length}
@@ -12318,9 +11767,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               </div>
 
                               <p style={jobWorkspaceDisclosureText}>
-                                {activeLanguage === "es"
-                                  ? "La evaluación ya fue guardada y ahora funciona como documentación de apoyo para la propuesta y el trabajo."
-                                  : "This evaluation is saved and now serves as supporting documentation for the proposal and work."}
+                                {translate("workCenterThisEvaluationIsSavedAndNowServesAsSupportingDocumentationForThe", activeLanguage)}
                               </p>
 
                               {evaluationPanelMode.canEdit && (
@@ -12329,9 +11776,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   style={miniInlineButton}
                                   onClick={() => setIsEditingCompletedEvaluation(true)}
                                 >
-                                  {activeLanguage === "es"
-                                    ? "Editar evaluación"
-                                    : "Edit Evaluation"}
+                                  {translate("workCenterEditEvaluation", activeLanguage)}
                                 </button>
                               )}
                             </>
@@ -12340,23 +11785,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             {buildEvaluationSelectionFields()}
                             {!hasEvaluationSelection() && (
                               <p style={jobWorkspaceDisclosureText}>
-                                {activeLanguage === "es"
-                                  ? "Selecciona el tipo de servicio y contexto para abrir las notas de evaluación."
-                                  : "Select Service Type and Context to open Evaluation Notes."}
+                                {translate("workCenterSelectServiceTypeAndContextToOpenEvaluationNotes", activeLanguage)}
                               </p>
                             )}
                             {hasEvaluationSelection() && (
                               <>
                             <label style={evaluationFieldLabel}>
-                              {activeLanguage === "es" ? "Notas de evaluación" : "Evaluation Notes"}
+                              {translate("guideEvaluationNotesTitle", activeLanguage)}
                             </label>
                             <textarea
                               value={evaluationForm.notes}
                               style={evaluationTextarea}
                               placeholder={
-                                activeLanguage === "es"
-                                  ? "Documenta lo que viste, lo que necesita el cliente y lo que sigue."
-                                  : "Document what you saw, what the customer needs, and what happens next."
+                                translate("workCenterDocumentWhatYouSawWhatTheCustomerNeedsAndWhatHappensNext", activeLanguage)
                               }
                               onInput={autoResizeTextarea}
                               onChange={(event) =>
@@ -12372,18 +11813,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 <div style={evaluationVisitSectionHeader}>
                                   <div>
                                     <h4 style={evaluationVisitSectionTitle}>
-                                      {activeLanguage === "es" ? "Trabajo documentado" : "Documented Work"}
+                                      {translate("workCenterDocumentedWork", activeLanguage)}
                                     </h4>
                                     <p style={evaluationVisitSectionText}>
-                                      {activeLanguage === "es"
-                                        ? "Fotos, medidas y materiales permanecen ligados a Sarah."
-                                        : "Photos, measurements, and materials stay attached to Sarah."}
+                                      {translate("workCenterPhotosMeasurementsAndMaterialsStayAttachedToSarah", activeLanguage)}
                                     </p>
                                   </div>
                                 </div>
 
                                 <label style={evaluationFieldLabel}>
-                                  {activeLanguage === "es" ? "Servicio / tarea" : "Service / task"}
+                                  {translate("workCenterServiceTask", activeLanguage)}
                                 </label>
                                 <input
                                   style={input}
@@ -12397,7 +11836,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 />
 
                                 <label style={evaluationFieldLabel}>
-                                  {activeLanguage === "es" ? "Fotos" : "Photos"}
+                                  {translate("photos", activeLanguage)}
                                 </label>
                                 <button
                                   type="button"
@@ -12414,9 +11853,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 >
                                   {mediaUploadDeferred
                                     ? mediaDeferredCopy.title
-                                    : activeLanguage === "es"
-                                      ? "+ Agregar fotos"
-                                      : "+ Add Photos"}
+                                    : translate("workCenterAddPhotos", activeLanguage)}
                                 </button>
                                 {(workItem.photos || []).length > 0 ? (
                                   <div style={evaluationPhotoGrid}>
@@ -12448,20 +11885,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   </div>
                                 ) : (
                                   <div style={evaluationPhotoEmpty}>
-                                    {activeLanguage === "es"
-                                      ? "Aún no hay fotos."
-                                      : "No photos added yet."}
+                                    {translate("workCenterNoPhotosAddedYet", activeLanguage)}
                                   </div>
                                 )}
 
                                 <div style={evaluationInlineSectionHeader}>
-                                  <strong>{activeLanguage === "es" ? "Medidas" : "Measurements"}</strong>
+                                  <strong>{translate("workCenterMeasurements", activeLanguage)}</strong>
                                   <button
                                     type="button"
                                     style={miniInlineButton}
                                     onClick={() => addEvaluationWorkItemMeasurement(itemIndex)}
                                   >
-                                    {activeLanguage === "es" ? "+ Medida" : "+ Measurement"}
+                                    {translate("workCenterMeasurement", activeLanguage)}
                                   </button>
                                 </div>
                                 {(workItem.measurements || []).map((measurement, measurementIndex) => (
@@ -12469,7 +11904,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     <input
                                       style={input}
                                       value={measurement.label}
-                                      placeholder={activeLanguage === "es" ? "Qué estás midiendo" : "What are you measuring?"}
+                                      placeholder={translate("workCenterWhatAreYouMeasuring", activeLanguage)}
                                       onChange={(event) =>
                                         updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
                                           label: event.target.value,
@@ -12499,7 +11934,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                         <input
                                           style={input}
                                           value={measurement.feet}
-                                          placeholder={activeLanguage === "es" ? "Pies" : "Feet"}
+                                          placeholder={translate("workCenterFeet", activeLanguage)}
                                           onChange={(event) =>
                                             updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
                                               feet: event.target.value,
@@ -12509,7 +11944,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                         <input
                                           style={input}
                                           value={measurement.inches}
-                                          placeholder={activeLanguage === "es" ? "Pulgadas" : "Inches"}
+                                          placeholder={translate("workCenterInches", activeLanguage)}
                                           onChange={(event) =>
                                             updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
                                               inches: event.target.value,
@@ -12521,7 +11956,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                       <input
                                         style={input}
                                         value={measurement.value}
-                                        placeholder={activeLanguage === "es" ? "Valor" : "Value"}
+                                        placeholder={translate("workCenterValue", activeLanguage)}
                                         onChange={(event) =>
                                           updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
                                             value: event.target.value,
@@ -12532,7 +11967,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     <input
                                       style={input}
                                       value={measurement.quantity}
-                                      placeholder={activeLanguage === "es" ? "Cantidad opcional" : "Quantity optional"}
+                                      placeholder={translate("workCenterQuantityOptional", activeLanguage)}
                                       onChange={(event) =>
                                         updateEvaluationWorkItemMeasurement(itemIndex, measurementIndex, {
                                           quantity: event.target.value,
@@ -12552,13 +11987,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 ))}
 
                                 <div style={evaluationInlineSectionHeader}>
-                                  <strong>{activeLanguage === "es" ? "Materiales" : "Materials"}</strong>
+                                  <strong>{translate("workTabMaterials", activeLanguage)}</strong>
                                   <button
                                     type="button"
                                     style={miniInlineButton}
                                     onClick={() => addEvaluationWorkItemMaterial(itemIndex)}
                                   >
-                                    {activeLanguage === "es" ? "+ Material" : "+ Material"}
+                                    {translate("workCenterMaterial", activeLanguage)}
                                   </button>
                                 </div>
                                 {(workItem.materials || []).map((material, materialIndex) => (
@@ -12566,7 +12001,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     <input
                                       style={input}
                                       value={material.name}
-                                      placeholder={activeLanguage === "es" ? "Nombre del material" : "Material name"}
+                                      placeholder={translate("workCenterMaterialName", activeLanguage)}
                                       onChange={(event) =>
                                         updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
                                           name: event.target.value,
@@ -12576,7 +12011,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     <input
                                       style={input}
                                       value={material.quantity}
-                                      placeholder={activeLanguage === "es" ? "Cantidad" : "Quantity"}
+                                      placeholder={translate("quantity", activeLanguage)}
                                       onChange={(event) =>
                                         updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
                                           quantity: event.target.value,
@@ -12586,7 +12021,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     <input
                                       style={input}
                                       value={material.unitPrice}
-                                      placeholder={activeLanguage === "es" ? "Precio unitario" : "Unit Price"}
+                                      placeholder={translate("workCenterUnitPrice", activeLanguage)}
                                       onChange={(event) =>
                                         updateEvaluationWorkItemMaterial(itemIndex, materialIndex, {
                                           unitPrice: event.target.value,
@@ -12594,11 +12029,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                       }
                                     />
                                     <span>
-                                      {activeLanguage === "es" ? "Total" : "Line Total"}:{" "}
+                                      {translate("workCenterLineTotal", activeLanguage)}:{" "}
                                       {getMaterialLineTotal(material) === null
-                                        ? activeLanguage === "es"
-                                          ? "Revisar"
-                                          : "Needs review"
+                                        ? translate("workCenterNeedsReview", activeLanguage)
                                         : `$${getMaterialLineTotal(material).toFixed(2)}`}
                                     </span>
                                     <button
@@ -12620,7 +12053,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               style={startScheduleBtn}
                               onClick={() => saveSarahPageEvaluationNotes(scopedJob)}
                             >
-                              {activeLanguage === "es" ? "Guardar notas" : "Save Evaluation Notes"}
+                              {translate("workCenterSaveEvaluationNotes", activeLanguage)}
                             </button>
                               </>
                             )}
@@ -12629,16 +12062,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         ) : (
                           <>
                             <p style={jobWorkspaceDisclosureText}>
-                              {activeLanguage === "es"
-                                ? "Programa una visita antes de guardar notas de evaluación."
-                                : "Schedule a visit before saving Evaluation Notes."}
+                              {translate("workCenterScheduleAVisitBeforeSavingEvaluationNotes", activeLanguage)}
                             </p>
                             <button
                               type="button"
                               style={startScheduleBtn}
                               onClick={() => createSarahPageVisitRecord(scopedJob)}
                             >
-                              {activeLanguage === "es" ? "Programar visita" : "Schedule Visit"}
+                              {translate("companionContextScheduleTitle", activeLanguage)}
                             </button>
                           </>
                         )}
@@ -12660,7 +12091,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     selectedWorkCenterJob.title}
                                 </strong>
                                 <span>
-                                  {activeLanguage === "es" ? "Estado" : "Status"}:{" "}
+                                  {translate("homeStatus", activeLanguage)}:{" "}
                                   {activeRecord.status || getWorkCenterJobStatus(scopedJob)}
                                 </span>
                               </div>
@@ -12668,9 +12099,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </div>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es"
-                              ? "No hay trabajo activo para este cliente todavía."
-                              : "No active work for this job yet."}
+                            {translate("workCenterNoActiveWorkForThisJobYet", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12682,12 +12111,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           {["completed", "work_completed"].includes(
                             String(primaryScopedSchedule?.status || primaryScopedSchedule?.workStatus || "").toLowerCase()
                           )
-                            ? activeLanguage === "es"
-                              ? "Este trabajo está marcado como completado."
-                              : "This job is marked completed."
-                            : activeLanguage === "es"
-                              ? "La finalización de este trabajo aún está pendiente."
-                              : "Completion for this job is still pending."}
+                            ? translate("workCenterThisJobIsMarkedCompleted", activeLanguage)
+                            : translate("workCenterCompletionForThisJobIsStillPending", activeLanguage)}
                         </p>
                       </div>
                     )}
@@ -12705,9 +12130,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </div>
                         ) : (
                           <p style={jobWorkspaceDisclosureText}>
-                            {activeLanguage === "es"
-                              ? "No hay alertas para este trabajo."
-                              : "No alerts for this job."}
+                            {translate("workCenterNoAlertsForThisJob", activeLanguage)}
                           </p>
                         )}
                       </div>
@@ -12717,12 +12140,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={jobScopedDetailBody}>
                         <p style={jobWorkspaceDisclosureText}>
                           {primaryScopedSchedule?.closedAt || primaryScopedHistory?.closedAt
-                            ? activeLanguage === "es"
-                              ? "Este trabajo está cerrado."
-                              : "This job is closed."
-                            : activeLanguage === "es"
-                              ? "El cierre de este trabajo aún está pendiente."
-                              : "Closure for this job is still pending."}
+                            ? translate("workCenterThisJobIsClosed", activeLanguage)
+                            : translate("workCenterClosureForThisJobIsStillPending", activeLanguage)}
                         </p>
                       </div>
                     )}
@@ -12731,12 +12150,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={jobScopedDetailBody}>
                         <p style={jobWorkspaceDisclosureText}>
                           {primaryScopedHistory
-                            ? activeLanguage === "es"
-                              ? "Historial guardado para este trabajo."
-                              : "History saved for this job."
-                            : activeLanguage === "es"
-                              ? "El historial de este trabajo aparecerá después del cierre."
-                              : "This job's history appears after closure."}
+                            ? translate("workCenterHistorySavedForThisJob", activeLanguage)
+                            : translate("workCenterThisJobsHistoryAppearsAfterClosure", activeLanguage)}
                         </p>
                       </div>
                     )}
@@ -12772,12 +12187,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <div style={jobListHeader}>
                   <div>
                     <h3 style={jobListTitle}>
-                      {activeLanguage === "es" ? "Trabajos actuales" : "Current Jobs"}
+                      {translate("workCenterCurrentJobsTitle", activeLanguage)}
                     </h3>
                     <p style={jobListSubtitle}>
-                      {activeLanguage === "es"
-                        ? "Abre un trabajo activo para continuar el flujo del cliente."
-                        : "Continue an active job to move the customer workflow forward."}
+                      {translate("workCenterContinueAnActiveJobToMoveTheCustomerWorkflowForward", activeLanguage)}
                     </p>
                   </div>
                   <span style={jobCountPill}>{workCenterActiveJobs.length}</span>
@@ -12801,14 +12214,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <span style={jobListMeta}>{job.address}</span>
                             <span style={jobListMeta}>{job.title}</span>
                             <span style={jobListStatus}>
-                              {activeLanguage === "es" ? "Estado" : "Status"}:{" "}
+                              {translate("homeStatus", activeLanguage)}:{" "}
                               {jobListPresentation.statusLabel}
                             </span>
                             <span style={jobListNextStep}>
-                              {activeLanguage === "es" ? "Siguiente paso" : "Next Step"}:{" "}
+                              {translate("myRequestsNextStep", activeLanguage)}:{" "}
                               {jobListPresentation.nextStepLabel}
                             </span>
-                            <span style={jobProgressChecklist} aria-label={activeLanguage === "es" ? "Progreso del trabajo" : "Job progress"}>
+                            <span style={jobProgressChecklist} aria-label={translate("workCenterJobProgress", activeLanguage)}>
                               {getWorkCenterJobProgressItems(job).map((item) => (
                                 <span
                                   key={item.label}
@@ -12824,16 +12237,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             </span>
                           </span>
                           <span style={jobListAction}>
-                            {activeLanguage === "es" ? "Detalles del trabajo" : "Job Details"}
+                            {translate("workCenterJobDetails", activeLanguage)}
                           </span>
                         </button>
                       );
                     })
                   ) : (
                     <div className="meetro-visual-empty-state" style={jobListEmpty}>
-                      {activeLanguage === "es"
-                        ? "Los trabajos actuales aparecerán aquí."
-                        : "Current jobs will appear here."}
+                      {translate("workCenterCurrentJobsWillAppearHere", activeLanguage)}
                     </div>
                   )}
                 </div>
@@ -12873,18 +12284,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          <span style={jobListMeta}>{job.title}</span>
 	                          <span style={jobListMeta}>{job.address}</span>
 	                          {job.history?.sourceType === "emergency" && (
-	                            <span style={jobHistorySourceLabel}>Emergency</span>
+	                            <span style={jobHistorySourceLabel}>
+	                              {translate("emergency", activeLanguage)}
+	                            </span>
 	                          )}
 	                          <span style={jobListStatus}>
-	                            {activeLanguage === "es" ? "Estado final" : "Final status"}:{" "}
-	                            {activeLanguage === "es" ? "Cerrado" : "Closed"}
+	                            {translate("workCenterFinalStatus", activeLanguage)}:{" "}
+	                            {translate("stateClosed", activeLanguage)}
 	                          </span>
 	                          <span style={jobListNextStep}>
-	                            {activeLanguage === "es" ? "Total final" : "Final total"}:{" "}
+	                            {translate("workCenterFinalTotal", activeLanguage)}:{" "}
 	                            ${getWorkCenterJobFinalTotal(job).toFixed(2)}
 	                          </span>
 	                          <span style={jobListMeta}>
-	                            {activeLanguage === "es" ? "Fecha de cierre" : "Close date"}:{" "}
+	                            {translate("workCenterCloseDate", activeLanguage)}:{" "}
 	                            {job.history?.closeDate || job.history?.closedAt || job.schedule?.closedAt
 	                              ? new Date(
 	                                  job.history?.closeDate ||
@@ -12895,15 +12308,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </span>
 	                        </span>
                         <span style={jobListAction}>
-                          {activeLanguage === "es" ? "Revisar historial" : "Review Job History"}
+                          {translate("workCenterReviewJobHistory", activeLanguage)}
                         </span>
                       </button>
                     ))
                   ) : (
                     <div className="meetro-visual-empty-state" style={jobListEmpty}>
-                      {activeLanguage === "es"
-                        ? "Los trabajos cerrados aparecerán aquí."
-                        : "Closed jobs will appear here."}
+                      {translate("workCenterClosedJobsWillAppearHere", activeLanguage)}
                     </div>
                   )}
                 </div>
@@ -13055,20 +12466,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
             <div>
               <span style={activeProjectContextLabel}>
                 {activeTab === "records"
-                  ? activeLanguage === "es"
-                    ? "Contexto de la relación"
-                    : "Relationship Context"
+                  ? translate("momentDetailRelationshipContext", activeLanguage)
                   : activeTab === "quotes"
-                  ? activeLanguage === "es"
-                    ? "Contexto de cotización"
-                    : "Quote Context"
+                  ? translate("workCenterQuoteContext", activeLanguage)
                   : activeTab === "pending"
-                  ? activeLanguage === "es"
-                    ? "Contexto de solicitud"
-                    : "Request Context"
-                  : activeLanguage === "es"
-                  ? "Contexto de trabajo activo"
-                  : "Active Work Context"}
+                  ? translate("workCenterRequestContext", activeLanguage)
+                  : translate("workCenterActiveWorkContext", activeLanguage)}
               </span>
 
               <h3 style={activeProjectContextTitle}>
@@ -13078,9 +12481,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               <p style={activeProjectContextMeta}>
                 {activeContext.location ||
-                  (activeLanguage === "es"
-                    ? "Ubicación no asignada"
-                    : "No location assigned")}
+                  (translate("workCenterNoLocationAssigned", activeLanguage))}
               </p>
             </div>
 
@@ -13099,9 +12500,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 {translate("workSchedule")}
               </h2>
               <p style={scheduleCompactPurpose}>
-                {activeLanguage === "es"
-                  ? "Agrega y administra visitas de clientes."
-                  : "Add and manage customer visits."}
+                {translate("workCenterAddAndManageCustomerVisits", activeLanguage)}
               </p>
             </div>
 
@@ -13119,9 +12518,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             >
               {showScheduleForm
                 ? translate("closeForm")
-                : activeLanguage === "es"
-                ? "+ Agregar visita"
-                : "+ Add Visit"}
+                : translate("workCenterAddVisit3", activeLanguage)}
             </button>
           </div>
 
@@ -13130,9 +12527,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <div>
                 <strong>
                   {appointmentReminderNotice.title ||
-                    (activeLanguage === "es"
-                      ? "Notificaciones necesarias"
-                      : "Notifications Needed")}
+                    (translate("conversationNotificationsNeeded", activeLanguage))}
                 </strong>
                 <p>{appointmentReminderNotice.message}</p>
               </div>
@@ -13144,16 +12539,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     style={appointmentReminderSettingsButton}
                     onClick={openNotificationSettings}
                   >
-                    {activeLanguage === "es" ? "Abrir Configuración" : "Open Settings"}
+                    {translate("conversationOpenSettings", activeLanguage)}
                   </button>
                   <button
                     type="button"
                     style={appointmentReminderContinueButton}
                     onClick={() => setAppointmentReminderNotice(null)}
                   >
-                    {activeLanguage === "es"
-                      ? "Continuar sin recordatorios"
-                      : "Continue Without Reminders"}
+                    {translate("conversationContinueWithoutReminders", activeLanguage)}
                   </button>
                 </div>
               )}
@@ -13165,17 +12558,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <div>
                 <strong>
                   {pendingScheduleDelivery.isScheduleUpdate
-                    ? activeLanguage === "es"
-                      ? "Cita actualizada"
-                      : "Appointment Updated"
-                    : activeLanguage === "es"
-                      ? "Visita guardada"
-                      : "Visit Saved"}
+                    ? translate("workCenterAppointmentUpdated", activeLanguage)
+                    : translate("workCenterVisitSaved", activeLanguage)}
                 </strong>
                 <p style={scheduleDeliveryChoiceText}>
-                  {activeLanguage === "es"
-                    ? "Este cliente todavía no está vinculado en Meetro. Comparte la cita por Mensajes cuando estés listo."
-                    : "This customer is not linked in Meetro yet. Share the appointment by text when you are ready."}
+                  {translate("workCenterThisCustomerIsNotLinkedInMeetroYetShareTheAppointmentBy", activeLanguage)}
                 </p>
               </div>
 
@@ -13193,9 +12580,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   style={scheduleDeliveryPrimaryButton}
                   onClick={() => handleScheduleDeliveryChoice("share")}
                 >
-                  {activeLanguage === "es"
-                    ? "Compartir por Mensajes"
-                    : "Share by Text / iOS Message"}
+                  {translate("workCenterShareByTextIOSMessage", activeLanguage)}
                 </button>
               </div>
             </div>
@@ -13235,14 +12620,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 onClick={() => setEvaluationTarget(null)}
               >
                 <span aria-hidden="true">‹</span>
-                {activeLanguage === "es" ? "Volver a Agenda" : "Back to Schedule"}
+                {translate("workCenterBackToSchedule", activeLanguage)}
               </button>
 
               <div style={jobWorkspaceHero}>
                 <div style={jobWorkspaceHeaderRow}>
                   <div>
                     <span style={jobWorkspaceEyebrow}>
-                      {activeLanguage === "es" ? "Espacio de trabajo" : "Job Workspace"}
+                      {translate("workCenterJobWorkspace", activeLanguage)}
                     </span>
                     <h2 style={visitDetailTitle}>
                       {getJobWorkspaceCustomer(evaluationTarget)}
@@ -13257,7 +12642,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 </div>
 
                 <div style={jobWorkspaceNextStepCard}>
-                  <span>{activeLanguage === "es" ? "Siguiente paso" : "Next Step"}</span>
+                  <span>{translate("myRequestsNextStep", activeLanguage)}</span>
                   <strong>{getJobWorkspaceNextStep(evaluationTarget)}</strong>
                   <button
                     type="button"
@@ -13270,11 +12655,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                 <div style={jobWorkspaceSummaryGrid}>
                   <div style={visitDetailMetaCell}>
-                    <span>{activeLanguage === "es" ? "Servicio" : "Services Summary"}</span>
+                    <span>{translate("workCenterServicesSummary", activeLanguage)}</span>
                     <strong>{getJobWorkspaceService(evaluationTarget)}</strong>
                   </div>
                   <div style={visitDetailMetaCell}>
-                    <span>{activeLanguage === "es" ? "Fecha y hora" : "Date & time"}</span>
+                    <span>{translate("workCenterDateTime", activeLanguage)}</span>
                     <strong>
                       {evaluationTarget.date || translate("today")} ·{" "}
                       {formatScheduleTime(evaluationTarget.time)}
@@ -13298,7 +12683,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         setPage("conversationThread");
                       }}
                     >
-                      {activeLanguage === "es" ? "Enviar al cliente" : "Send to Customer"}
+                      {translate("sendToCustomer", activeLanguage)}
                     </button>
                   )}
                   {linkedJobQuote && (
@@ -13307,7 +12692,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       style={secondaryScheduleBtn}
                       onClick={() => setQuoteViewTarget(linkedJobQuote)}
                     >
-                      {activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal"}
+                      {translate("assistantActionViewQuote", activeLanguage)}
                     </button>
                   )}
                 </div>
@@ -13329,104 +12714,89 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <div style={jobWorkspaceDisclosureStack}>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Fotos" : "Photos"}</span>
+                    <span>{translate("photos", activeLanguage)}</span>
                     <small>{jobPhotosCount}</small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
                     {jobPhotosCount > 0
-                      ? activeLanguage === "es"
-                        ? `${jobPhotosCount} foto(s) documentadas en la visita.`
-                        : `${jobPhotosCount} photo(s) documented from the visit.`
-                      : activeLanguage === "es"
-                        ? "No hay fotos documentadas todavía."
-                        : "No photos documented yet."}
+                      ? translate("workCenterPhotosDocumentedCount", activeLanguage, { count: jobPhotosCount })
+                      : translate("workCenterNoPhotosDocumentedYet", activeLanguage)}
                   </p>
                 </details>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Propuesta" : "Proposal"}</span>
+                    <span>{translate("companionContextQuoteTitle", activeLanguage)}</span>
                     <small>
                       {linkedJobQuote
                         ? getJobWorkspaceStatus(evaluationTarget)
-                        : activeLanguage === "es"
-                          ? "Pendiente"
-                          : "Pending"}
+                        : translate("teamMemberStatusPending", activeLanguage)}
                     </small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
                     {linkedJobQuote
-                      ? activeLanguage === "es"
-                        ? "La propuesta está vinculada a esta visita."
-                        : "The proposal is linked to this visit."
-                      : activeLanguage === "es"
-                        ? "Crea una propuesta cuando las notas estén listas."
-                        : "Create a proposal when the visit notes are ready."}
+                      ? translate("workCenterTheProposalIsLinkedToThisVisit", activeLanguage)
+                      : translate("workCenterCreateAProposalWhenTheVisitNotesAreReady", activeLanguage)}
                   </p>
                 </details>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Materiales" : "Materials"}</span>
+                    <span>{translate("workTabMaterials", activeLanguage)}</span>
                     <small>{jobMaterialsCount}</small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
-                    {activeLanguage === "es"
-                      ? `Total de materiales: $${getEvaluationMaterialsTotal(jobWorkItems).toFixed(2)}`
-                      : `Materials total: $${getEvaluationMaterialsTotal(jobWorkItems).toFixed(2)}`}
+                    {translate("workCenterMaterialsTotal", activeLanguage, {
+                      amount: formatLocaleCurrency(
+                        getEvaluationMaterialsTotal(jobWorkItems),
+                        "USD",
+                        {},
+                        activeLanguage
+                      ),
+                    })}
                   </p>
                 </details>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Medidas" : "Measurements"}</span>
+                    <span>{translate("workCenterMeasurements", activeLanguage)}</span>
                     <small>{jobMeasurementsCount}</small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
                     {jobMeasurementsCount > 0
-                      ? activeLanguage === "es"
-                        ? "Las medidas están guardadas en las notas de la visita."
-                        : "Measurements are saved in the visit notes."
-                      : activeLanguage === "es"
-                        ? "No hay medidas guardadas todavía."
-                        : "No measurements saved yet."}
+                      ? translate("workCenterMeasurementsAreSavedInTheVisitNotes", activeLanguage)
+                      : translate("workCenterNoMeasurementsSavedYet", activeLanguage)}
                   </p>
                 </details>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Historial de pagos" : "Payment History"}</span>
-                    <small>{activeLanguage === "es" ? "Sin cambios" : "None"}</small>
+                    <span>{translate("workCenterPaymentHistory", activeLanguage)}</span>
+                    <small>{translate("workCenterNone2", activeLanguage)}</small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
-                    {activeLanguage === "es"
-                      ? "Los pagos aparecerán aquí cuando estén registrados."
-                      : "Payments will appear here when they are recorded."}
+                    {translate("workCenterPaymentsWillAppearHereWhenTheyAreRecorded", activeLanguage)}
                   </p>
                 </details>
                 <details style={jobWorkspaceDisclosure}>
                   <summary style={jobWorkspaceSummary}>
-                    <span>{activeLanguage === "es" ? "Historial del trabajo" : "Job History"}</span>
-                    <small>{activeLanguage === "es" ? "Local" : "Local"}</small>
+                    <span>{translate("workCenterHistoryTitle", activeLanguage)}</span>
+                    <small>{translate("workCenterLocal", activeLanguage)}</small>
                   </summary>
                   <p style={jobWorkspaceDisclosureText}>
-                    {activeLanguage === "es"
-                      ? "Las notas, propuestas y cambios guardados forman el historial del trabajo."
-                      : "Saved notes, proposals, and updates become the job history."}
+                    {translate("workCenterSavedNotesProposalsAndUpdatesBecomeTheJobHistory", activeLanguage)}
                   </p>
                 </details>
               </div>
 
               <details id="job-evaluation-notes" style={jobWorkspaceDisclosure}>
                 <summary style={jobWorkspaceSummary}>
-                  <span>{activeLanguage === "es" ? "Notas de la visita" : "Evaluation Notes"}</span>
-                  <small>{activeLanguage === "es" ? "Editar" : "Edit"}</small>
+                  <span>{translate("guideEvaluationNotesTitle", activeLanguage)}</span>
+                  <small>{translate("edit", activeLanguage)}</small>
                 </summary>
                 <div style={visitEvaluationHeader}>
                   <div>
                     <h3 style={visitEvaluationTitle}>
-                      {activeLanguage === "es" ? "Notas de la visita" : "Evaluation Notes"}
+                      {translate("guideEvaluationNotesTitle", activeLanguage)}
                     </h3>
                     <p style={visitEvaluationHelp}>
-                      {activeLanguage === "es"
-                        ? "Registra observaciones, hallazgos, medidas, fotos y servicios recomendados de esta visita."
-                        : "Record observations, findings, measurements, photos, and recommended services from this visit."}
+                      {translate("workCenterRecordObservationsFindingsMeasurementsPhotosAndRecommendedServicesFromThisVisit", activeLanguage)}
                     </p>
                   </div>
                   <button
@@ -13434,16 +12804,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     style={secondaryScheduleBtn}
                     onClick={addEvaluationWorkItem}
                   >
-                    + {activeLanguage === "es" ? "Elemento" : "Work Item"}
+                    + {translate("workCenterWorkItem2", activeLanguage)}
                   </button>
                 </div>
 
                 {buildEvaluationSelectionFields()}
                 {!hasEvaluationSelection() && (
                   <p style={jobWorkspaceDisclosureText}>
-                    {activeLanguage === "es"
-                      ? "Selecciona el tipo de servicio y contexto para abrir las notas de evaluación."
-                      : "Select Service Type and Context to open Evaluation Notes."}
+                    {translate("workCenterSelectServiceTypeAndContextToOpenEvaluationNotes", activeLanguage)}
                   </p>
                 )}
                 {hasEvaluationSelection() && (
@@ -13453,7 +12821,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <div key={workItem.id || itemIndex} style={visitWorkItemCard}>
                     <div style={visitWorkItemHeader}>
                       <strong>
-                        {activeLanguage === "es" ? "Elemento de trabajo" : "Work Item"}{" "}
+                        {translate("workCenterWorkItem", activeLanguage)}{" "}
                         {itemIndex + 1}
                       </strong>
                       {(evaluationForm.workItems || []).length > 1 && (
@@ -13461,9 +12829,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           type="button"
                           style={inlineCircleDeleteButton}
                           aria-label={
-                            activeLanguage === "es"
-                              ? "Eliminar elemento"
-                              : "Delete work item"
+                            translate("workCenterDeleteWorkItem", activeLanguage)
                           }
                           onClick={() => removeEvaluationWorkItem(itemIndex)}
                         >
@@ -13479,16 +12845,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         updateEvaluationWorkItem(itemIndex, { title: event.target.value })
                       }
                       placeholder={
-                        activeLanguage === "es"
-                          ? "Título del elemento"
-                          : "Item title"
+                        translate("workCenterItemTitle", activeLanguage)
                       }
                     />
 
                     <div style={evaluationVisitSection}>
                       <div style={evaluationVisitSectionHeader}>
                         <h4 style={evaluationVisitSectionTitle}>
-                          {activeLanguage === "es" ? "Fotos" : "Photos"}
+                          {translate("photos", activeLanguage)}
                         </h4>
                         <button
                           type="button"
@@ -13505,7 +12869,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         >
                           {mediaUploadDeferred
                             ? mediaDeferredCopy.title
-                            : `+ ${activeLanguage === "es" ? "Agregar foto" : "Add Photo"}`}
+                            : `+ ${translate("workCenterAddPhoto", activeLanguage)}`}
                         </button>
                       </div>
                       {workItem.photos?.length > 0 ? (
@@ -13536,7 +12900,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         </div>
                       ) : (
                         <div style={evaluationPhotoEmpty}>
-                          {activeLanguage === "es" ? "No hay fotos todavía." : "No photos yet."}
+                          {translate("workCenterNoPhotosYet", activeLanguage)}
                         </div>
                       )}
                     </div>
@@ -13551,21 +12915,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         updateEvaluationWorkItem(itemIndex, { notes: event.target.value });
                       }}
                       placeholder={
-                        activeLanguage === "es"
-                          ? "Notas del elemento..."
-                          : "Work item notes..."
+                        translate("workCenterWorkItemNotes", activeLanguage)
                       }
                     />
 
                     <div style={visitNestedSection}>
                       <div style={visitNestedHeader}>
-                        <strong>{activeLanguage === "es" ? "Medidas" : "Measurements"}</strong>
+                        <strong>{translate("workCenterMeasurements", activeLanguage)}</strong>
                         <button
                           type="button"
                           style={miniInlineButton}
                           onClick={() => addEvaluationWorkItemMeasurement(itemIndex)}
                         >
-                          + {activeLanguage === "es" ? "Medida" : "Measurement"}
+                          + {translate("workCenterMeasurement2", activeLanguage)}
                         </button>
                       </div>
                       {(workItem.measurements || []).map((measurement, measurementIndex) => (
@@ -13582,9 +12944,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               })
                             }
                             placeholder={
-                              activeLanguage === "es"
-                                ? "¿Qué estás midiendo?"
-                                : "What are you measuring?"
+                              translate("workCenterWhatAreYouMeasuring2", activeLanguage)
                             }
                           />
                           <select
@@ -13618,9 +12978,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             }
                           >
                             <option value="">
-                              {activeLanguage === "es"
-                                ? "Tipo de medida"
-                                : "Measurement type"}
+                              {translate("workCenterMeasurementType", activeLanguage)}
                             </option>
                             {evaluationMeasurementUnits.map((unitOption) => (
                               <option key={unitOption.value} value={unitOption.value}>
@@ -13639,7 +12997,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     value: "",
                                   })
                                 }
-                                placeholder={activeLanguage === "es" ? "Pies" : "Feet"}
+                                placeholder={translate("workCenterFeet", activeLanguage)}
                               />
                               <input
                                 style={scheduleInput}
@@ -13650,7 +13008,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     value: "",
                                   })
                                 }
-                                placeholder={activeLanguage === "es" ? "Pulgadas" : "Inches"}
+                                placeholder={translate("workCenterInches", activeLanguage)}
                               />
                             </>
                           ) : isDimensionMeasurementUnit(measurement.unit) ? (
@@ -13664,7 +13022,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     value: "",
                                   })
                                 }
-                                placeholder={activeLanguage === "es" ? "Ancho" : "Width"}
+                                placeholder={translate("workCenterWidth", activeLanguage)}
                               />
                               <input
                                 style={scheduleInput}
@@ -13675,7 +13033,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                     value: "",
                                   })
                                 }
-                                placeholder={activeLanguage === "es" ? "Alto" : "Height"}
+                                placeholder={translate("workCenterHeight", activeLanguage)}
                               />
                               <input
                                 style={scheduleInput}
@@ -13687,9 +13045,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   })
                                 }
                                 placeholder={
-                                  activeLanguage === "es"
-                                    ? "Profundidad opcional"
-                                    : "Depth optional"
+                                  translate("workCenterDepthOptional", activeLanguage)
                                 }
                               />
                             </>
@@ -13707,7 +13063,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   depth: "",
                                 })
                               }
-                              placeholder={activeLanguage === "es" ? "Valor" : "Value"}
+                              placeholder={translate("workCenterValue", activeLanguage)}
                             />
                           )}
                           <input
@@ -13719,9 +13075,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               })
                             }
                             placeholder={
-                              activeLanguage === "es"
-                                ? "Cantidad opcional"
-                                : "Quantity optional"
+                              translate("workCenterQuantityOptional", activeLanguage)
                             }
                           />
                           <input
@@ -13732,15 +13086,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 notes: event.target.value,
                               })
                             }
-                            placeholder={activeLanguage === "es" ? "Notas" : "Notes"}
+                            placeholder={translate("jobsHiringApplicantNotes", activeLanguage)}
                           />
                           <button
                             type="button"
                             style={inlineCircleDeleteButton}
                             aria-label={
-                              activeLanguage === "es"
-                                ? "Eliminar medida"
-                                : "Delete measurement"
+                              translate("workCenterDeleteMeasurement", activeLanguage)
                             }
                             onClick={() =>
                               removeEvaluationWorkItemMeasurement(itemIndex, measurementIndex)
@@ -13754,13 +13106,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                     <div style={visitNestedSection}>
                       <div style={visitNestedHeader}>
-                        <strong>{activeLanguage === "es" ? "Materiales" : "Materials"}</strong>
+                        <strong>{translate("workTabMaterials", activeLanguage)}</strong>
                         <button
                           type="button"
                           style={miniInlineButton}
                           onClick={() => addEvaluationWorkItemMaterial(itemIndex)}
                         >
-                          + {activeLanguage === "es" ? "Material" : "Material"}
+                          + {translate("material", activeLanguage)}
                         </button>
                       </div>
                       {(workItem.materials || []).map((material, materialIndex) => (
@@ -13773,7 +13125,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 name: event.target.value,
                               })
                             }
-                            placeholder={activeLanguage === "es" ? "Material" : "Material"}
+                            placeholder={translate("material", activeLanguage)}
                           />
                           <input
                             style={scheduleInput}
@@ -13783,7 +13135,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 quantity: event.target.value,
                               })
                             }
-                            placeholder={activeLanguage === "es" ? "Cantidad" : "Qty"}
+                            placeholder={translate("workCenterQty", activeLanguage)}
                           />
                           <input
                             style={scheduleInput}
@@ -13794,7 +13146,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 unitPrice: event.target.value,
                               })
                             }
-                            placeholder={activeLanguage === "es" ? "Precio unitario" : "Unit Price"}
+                            placeholder={translate("workCenterUnitPrice", activeLanguage)}
                           />
                           <input
                             style={scheduleInput}
@@ -13804,10 +13156,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 provider: event.target.value,
                               })
                             }
-                            placeholder={activeLanguage === "es" ? "Proveedor" : "Provider"}
+                            placeholder={translate("workCenterProvider", activeLanguage)}
                           />
                           <div style={materialLineTotalPill}>
-                            {activeLanguage === "es" ? "Total" : "Line Total"}:{" "}
+                            {translate("workCenterLineTotal", activeLanguage)}:{" "}
                             {getMaterialLineTotal(material) === null
                               ? translate("needsReview")
                               : `$${getMaterialLineTotal(material).toFixed(2)}`}
@@ -13816,9 +13168,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             type="button"
                             style={inlineCircleDeleteButton}
                             aria-label={
-                              activeLanguage === "es"
-                                ? "Eliminar material"
-                                : "Delete material"
+                              translate("workCenterDeleteMaterial", activeLanguage)
                             }
                             onClick={() =>
                               removeEvaluationWorkItemMaterial(itemIndex, materialIndex)
@@ -13830,7 +13180,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       ))}
                       {(workItem.materials || []).length > 0 && (
                         <div style={materialsTotalSummary}>
-                          {activeLanguage === "es" ? "Total de materiales" : "Materials Total"}:{" "}
+                          {translate("workCenterMaterialsTotal", activeLanguage)}:{" "}
                           <strong>
                             ${getEvaluationMaterialsTotal([workItem]).toFixed(2)}
                           </strong>
@@ -13850,9 +13200,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         });
                       }}
                       placeholder={
-                        activeLanguage === "es"
-                          ? "Notas de seguridad opcionales..."
-                          : "Optional safety notes..."
+                        translate("workCenterOptionalSafetyNotes", activeLanguage)
                       }
                     />
                   </div>
@@ -13868,13 +13216,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   style={secondaryScheduleBtn}
                   onClick={() => saveEvaluationRecord(evaluationTarget, { keepOpen: true })}
                 >
-                  {activeLanguage === "es" ? "Guardar evaluación" : "Save Evaluation"}
+                  {translate("workCenterSaveEvaluation", activeLanguage)}
                 </button>
                 {!hasEvaluationForAppointment(evaluationTarget) && (
                   <p style={{ ...jobWorkspaceDisclosureText, gridColumn: "1 / -1" }}>
-                    {activeLanguage === "es"
-                      ? "Registra notas de evaluación antes de preparar una propuesta."
-                      : "Record Evaluation Notes before preparing a proposal."}
+                    {translate("workCenterRecordEvaluationNotesBeforePreparingAProposal", activeLanguage)}
                   </p>
                 )}
                 {hasEvaluationForAppointment(evaluationTarget) && (
@@ -13886,9 +13232,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     }}
                     onClick={() => continueEvaluationToQuote(evaluationTarget)}
                   >
-                    {activeLanguage === "es"
-                      ? "Preparar propuesta"
-                      : "Prepare Proposal"}
+                    {translate("assistantProjectBriefNextCreateProposal", activeLanguage)}
                   </button>
                 )}
               </div>
@@ -13918,9 +13262,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <input
                 style={scheduleInput}
                 placeholder={
-                  activeLanguage === "es"
-                    ? "¿Para qué es esta visita?"
-                    : "What is this visit for?"
+                  translate("workCenterWhatIsThisVisitFor", activeLanguage)
                 }
                 value={scheduleForm.title}
                 onChange={(e) =>
@@ -13931,23 +13273,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <div style={manualCustomerFieldsCard}>
                 <div>
                   <strong>
-                    {activeLanguage === "es"
-                      ? "Cliente existente o externo"
-                      : "Existing or outside customer"}
+                    {translate("workCenterExistingOrOutsideCustomer", activeLanguage)}
                   </strong>
                   <p style={manualScheduleNoticeText}>
-                    {activeLanguage === "es"
-                      ? "Programa una visita aunque el cliente todavía no tenga cuenta de Meetro."
-                      : "Schedule a visit even if the customer does not have a Meetro account yet."}
+                    {translate("workCenterScheduleAVisitEvenIfTheCustomerDoesNotHaveAMeetro", activeLanguage)}
                   </p>
                 </div>
 
                 <input
                   style={scheduleInput}
                   placeholder={
-                    activeLanguage === "es"
-                      ? "Nombre del cliente"
-                      : "Customer name"
+                    translate("workCenterCustomerName", activeLanguage)
                   }
                   value={scheduleForm.manualCustomerName || ""}
                   onChange={(e) =>
@@ -13962,9 +13298,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <input
                     style={scheduleInput}
                     placeholder={
-                      activeLanguage === "es"
-                        ? "Teléfono"
-                        : "Phone number"
+                      translate("workCenterPhoneNumber", activeLanguage)
                     }
                     value={scheduleForm.manualCustomerPhone || ""}
                     onChange={(e) =>
@@ -13978,9 +13312,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <input
                     style={scheduleInput}
                     placeholder={
-                      activeLanguage === "es"
-                        ? "Email opcional"
-                        : "Email optional"
+                      translate("workCenterEmailOptional", activeLanguage)
                     }
                     value={scheduleForm.manualCustomerEmail || ""}
                     onChange={(e) =>
@@ -13995,9 +13327,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <input
                   style={scheduleInput}
                   placeholder={
-                    activeLanguage === "es"
-                      ? "Dirección o ubicación"
-                      : "Address or location"
+                    translate("workCenterAddressOrLocation", activeLanguage)
                   }
                   value={scheduleForm.manualCustomerAddress || ""}
                   onChange={(e) =>
@@ -14009,9 +13339,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 />
 
                 <div style={manualCustomerInviteNotice}>
-                  {activeLanguage === "es"
-                    ? "Invitación de cliente próximamente. Puedes guardar la visita ahora."
-                    : "Customer invite coming soon. You can save the visit now."}
+                  {translate("workCenterCustomerInviteComingSoonYouCanSaveTheVisitNow", activeLanguage)}
                 </div>
               </div>
 
@@ -14038,9 +13366,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <input
                 style={scheduleInput}
                 placeholder={
-                  activeLanguage === "es"
-                    ? "Ubicación diferente para esta visita (opcional)"
-                    : "Different visit location (optional)"
+                  translate("workCenterDifferentVisitLocationOptional", activeLanguage)
                 }
                 value={scheduleForm.location}
                 onChange={(e) =>
@@ -14051,9 +13377,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <textarea
                 style={scheduleTextarea}
                 placeholder={
-                  activeLanguage === "es"
-                    ? "Agrega algo para recordar antes de la visita."
-                    : "Add anything to remember before the visit."
+                  translate("workCenterAddAnythingToRememberBeforeTheVisit", activeLanguage)
                 }
                 value={scheduleForm.notes}
                 onChange={(e) =>
@@ -14069,15 +13393,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               <div style={manualScheduleNotice}>
                 <strong>
-                  {activeLanguage === "es"
-                    ? "Entrada manual de calendario"
-                    : translate("manualScheduleEntry")}
+                  {translate("manualScheduleEntry", activeLanguage)}
                 </strong>
 
                 <p style={manualScheduleNoticeText}>
-                  {activeLanguage === "es"
-                    ? translate("manualScheduleNotice")
-                    : translate("manualScheduleNotice")}
+                  {translate("manualScheduleNotice", activeLanguage)}
                 </p>
               </div>
             </div>
@@ -14120,52 +13440,36 @@ function ContractorDashboard({ setPage, language = "en" }) {
             const scheduleGroups = [
               {
                 key: "upcoming",
-                title: activeLanguage === "es" ? "Próximas visitas" : "Upcoming Visits",
+                title: translate("workCenterUpcomingVisits", activeLanguage),
                 empty:
-                  activeLanguage === "es"
-                    ? "No hay visitas próximas."
-                    : "No upcoming visits.",
+                  translate("workCenterNoUpcomingVisits2", activeLanguage),
                 items: upcomingVisits,
               },
               {
                 key: "evaluation",
-                title: activeLanguage === "es" ? "Visitas confirmadas" : "Confirmed Visits",
+                title: translate("workCenterConfirmedVisits", activeLanguage),
                 empty:
-                  activeLanguage === "es"
-                    ? "Las visitas confirmadas o pasadas aparecerán aquí."
-                    : "Confirmed or past visits will appear here.",
+                  translate("workCenterConfirmedOrPastVisitsWillAppearHere", activeLanguage),
                 items: evaluationNeededItems,
               },
               {
                 key: "quote",
-                title: activeLanguage === "es" ? "Seguimiento de visita" : "Visit Follow-Up",
+                title: translate("workCenterVisitFollowUp", activeLanguage),
                 empty:
-                  activeLanguage === "es"
-                    ? "Las visitas listas para el siguiente paso aparecerán aquí."
-                    : "Visits ready for the next step will appear here.",
+                  translate("workCenterVisitsReadyForTheNextStepWillAppearHere", activeLanguage),
                 items: quoteNeededItems,
               },
             ];
             const scheduleNextStepText =
               scheduleItems.length === 0
-                ? activeLanguage === "es"
-                  ? "Agrega una visita para empezar a programar el trabajo."
-                  : "Add a visit to start scheduling work."
+                ? translate("workCenterAddAVisitToStartSchedulingWork", activeLanguage)
                 : upcomingVisits.length > 0
-                ? activeLanguage === "es"
-                  ? "Asiste a la visita programada."
-                  : "Attend the scheduled visit."
+                ? translate("workCenterAttendTheScheduledVisit", activeLanguage)
                 : evaluationNeededItems.length > 0
-                ? activeLanguage === "es"
-                  ? "Captura las notas de evaluación de la visita."
-                  : "Capture evaluation notes from the visit."
+                ? translate("workCenterCaptureEvaluationNotesFromTheVisit", activeLanguage)
                 : quoteNeededItems.length > 0
-                ? activeLanguage === "es"
-                  ? "Crea una cotización desde las notas de la visita."
-                  : "Create a quote from the visit notes."
-                : activeLanguage === "es"
-                ? "Revisa las visitas guardadas o agrega una nueva visita."
-                : "Review saved visits or add a new visit.";
+                ? translate("workCenterCreateAQuoteFromTheVisitNotes", activeLanguage)
+                : translate("workCenterReviewSavedVisitsOrAddANewVisit", activeLanguage);
             const renderScheduleCard = (item, groupKey) => (
               (() => {
                 const linkedQuote = getQuoteForAppointment(item);
@@ -14185,7 +13489,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   (typeof item.customer === "string"
                     ? item.customer
                     : item.customer?.customerName || item.customer?.name) ||
-                  (activeLanguage === "es" ? "Cliente" : "Customer");
+                  (translate("wcCustomer", activeLanguage));
 
                 return (
               <div key={`${groupKey}-${item.id}`} style={jobCard}>
@@ -14203,9 +13507,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     {isWorkSchedule && (
                       <p style={jobMeta}>
                         <strong>
-                          {activeLanguage === "es" ? "Siguiente paso" : "Next Step"}:
+                          {translate("myRequestsNextStep", activeLanguage)}:
                         </strong>{" "}
-                        {activeLanguage === "es" ? "Realiza el trabajo." : "Perform Work"}
+                        {translate("workCenterPerformWork", activeLanguage)}
                       </p>
                     )}
                     <p style={jobMeta}>
@@ -14252,9 +13556,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     {!isMeetroLinkedSchedule(item) && (
                       <div style={manualScheduleCardNotice}>
                         <div>
-                           {activeLanguage === "es"
-                            ? "Cliente manual: no tiene chat, registros automáticos, seguimiento de Meetro ni flujo completo hasta convertirlo en proyecto Meetro."
-                            : translate("manualCustomerWarning")}
+                           {translate("manualCustomerWarning", activeLanguage)}
                         </div>
 
                         <button
@@ -14266,9 +13568,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             );
 
                             alert(
-                              activeLanguage === "es"
-                                ? translate("manualCustomerConnectSteps")
-                                : translate("manualCustomerConnectSteps")
+                              translate("manualCustomerConnectSteps", activeLanguage)
                             );
                           }}
                         >
@@ -14298,9 +13598,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                   {getScheduleConfirmationState(item) === "pending" && (
                     <span style={waitingConfirmationPill}>
-                      {activeLanguage === "es"
-                        ? "Esperando confirmación"
-                        : "Waiting for confirmation"}
+                      {translate("workCenterWaitingForConfirmation", activeLanguage)}
                     </span>
                   )}
 
@@ -14315,12 +13613,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       }
                     >
                       {isWorkSchedule
-                        ? activeLanguage === "es"
-                          ? "Abrir trabajo activo"
-                          : "Continue Active Work"
-                        : activeLanguage === "es"
-                          ? "Revisar visita"
-                          : "Review Visit"}
+                        ? translate("openActiveWorkAction", activeLanguage)
+                        : translate("viewVisit", activeLanguage)}
                     </button>
                   )}
 
@@ -14329,7 +13623,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       style={secondaryScheduleBtn}
                       onClick={() => setQuoteViewTarget(linkedQuote)}
                     >
-                      {activeLanguage === "es" ? "Revisar propuesta" : "Review Proposal"}
+                      {translate("assistantActionViewQuote", activeLanguage)}
                     </button>
                   )}
 
@@ -14337,7 +13631,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     style={secondaryScheduleBtn}
                     onClick={() => startEditScheduleVisit(item)}
                   >
-                    {activeLanguage === "es" ? "Editar visita" : "Edit Visit"}
+                    {translate("workCenterEditVisit", activeLanguage)}
                   </button>
 
                   <button
@@ -14356,15 +13650,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <>
               {isTodayFilter && rawScheduleItems.length > 0 && (
                 <div style={scheduleFilterNotice}>
-                  {activeLanguage === "es"
-                    ? "Citas programadas de hoy"
-                    : "Today's scheduled jobs"}
+                  {translate("workCenterTodaysScheduledJobs", activeLanguage)}
                 </div>
               )}
 
               <div style={scheduleNextStepNotice}>
                 <strong>
-                  {activeLanguage === "es" ? "Siguiente paso" : "Next step"}:
+                  {translate("requestGuidanceNextStepLabel", activeLanguage)}:
                 </strong>{" "}
                 {scheduleNextStepText}
               </div>
@@ -14376,26 +13668,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <div style={scheduleTimeBlock}>
                       <strong></strong>
                       <span>
-                        {activeLanguage === "es"
-                          ? "Listo"
-                          : "Ready"}
+                        {translate("ready", activeLanguage)}
                       </span>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong>
-                        {activeLanguage === "es"
-                          ? "Listo para programar"
-                          : "Ready to Schedule"}
+                        {translate("workCenterReadyToSchedule", activeLanguage)}
                       </strong>
 
                       <p style={jobMeta}>
                         {selectedWorkCenterRequest.title ||
                           selectedWorkCenterRequest.service ||
                           selectedWorkCenterRequest.projectTitle ||
-                          (activeLanguage === "es"
-                            ? "Solicitud del cliente"
-                            : "Customer request")}
+                          (translate("workCenterCustomerRequest", activeLanguage))}
                       </p>
 
                       <p style={jobMeta}>
@@ -14410,22 +13696,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={scheduleSourceRow}>
                         <span style={sourcePill}>
                           {leadWorkflowIntent === "schedule_before_quote"
-                            ? activeLanguage === "es"
-                              ? "Antes de cotización"
-                              : "Before Quote"
-                            : activeLanguage === "es"
-                            ? "Flujo de cliente"
-                            : "Customer Flow"}
+                            ? translate("workCenterBeforeQuote", activeLanguage)
+                            : translate("workCenterCustomerFlow", activeLanguage)}
                         </span>
 
                         <span style={statusPill}>
                           {leadWorkflowStage === "customer_contact"
-                            ? activeLanguage === "es"
-                              ? "Contacto iniciado"
-                              : "Customer Contact"
-                            : activeLanguage === "es"
-                            ? "Pendiente"
-                            : "Pending"}
+                            ? translate("workCenterCustomerContact", activeLanguage)
+                            : translate("teamMemberStatusPending", activeLanguage)}
                         </span>
                       </div>
                     </div>
@@ -14474,9 +13752,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         setShowScheduleForm(true);
                       }}
                     >
-                      {activeLanguage === "es"
-                        ? "Agregar visita"
-                        : "Add Visit"}
+                      {translate("addVisit", activeLanguage)}
                     </button>
 
                     <button
@@ -14505,9 +13781,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       style={secondaryScheduleBtn}
                       onClick={() => setPage("businessLeads")}
                     >
-                      {activeLanguage === "es"
-                        ? "Volver a leads"
-                        : "Back to Leads"}
+                      {translate("workCenterBackToLeads", activeLanguage)}
                     </button>
                   </div>
                 </div>
@@ -14516,15 +13790,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <div style={emptyIcon}>CAL</div>
 
                   <strong>
-                    {activeLanguage === "es"
-                      ? translate("noScheduledVisits")
-                      : translate("noScheduledVisits")}
+                    {translate("noScheduledVisits", activeLanguage)}
                   </strong>
 
                   <p style={emptyText}>
-                    {activeLanguage === "es"
-                      ? translate("scheduledVisitsFromChat")
-                      : translate("scheduledVisitsFromChat")}
+                    {translate("scheduledVisitsFromChat", activeLanguage)}
                   </p>
                 </div>
               )
@@ -14555,9 +13825,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <div style={scheduleWorkflowSection}>
                     <div style={scheduleWorkflowHeader}>
                       <h3 style={scheduleWorkflowTitle}>
-                        {activeLanguage === "es"
-                          ? "Visitas registradas"
-                          : "Scheduled Visit Records"}
+                        {translate("workCenterScheduledVisitRecords", activeLanguage)}
                       </h3>
                       <span style={scheduleWorkflowCount}>
                         {scheduledFollowUpItems.length}
@@ -14607,35 +13875,35 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     style={visitOutcomeButton}
                     onClick={() => applyVisitOutcome("need_materials")}
                   >
-                     {activeLanguage === "es" ? "Necesita materiales" : "Need Materials"}
+                     {translate("workCenterNeedMaterials", activeLanguage)}
                   </button>
 
                   <button
                     style={visitOutcomeButton}
                     onClick={() => applyVisitOutcome("waiting_customer_decision")}
                   >
-                     {activeLanguage === "es" ? "Esperando al cliente" : "Waiting Customer Decision"}
+                     {translate("workCenterWaitingCustomerDecision2", activeLanguage)}
                   </button>
 
                   <button
                     style={visitOutcomeButton}
                     onClick={() => applyVisitOutcome("follow_up_required")}
                   >
-                     {activeLanguage === "es" ? "Requiere seguimiento" : "Follow Up Required"}
+                     {translate("workCenterFollowUpRequired2", activeLanguage)}
                   </button>
 
                   <button
                     style={visitOutcomeButton}
                     onClick={() => applyVisitOutcome("emergency_dispatch")}
                   >
-                     {activeLanguage === "es" ? "Despacho de emergencia" : "Emergency Dispatch"}
+                     {translate("emergencyDispatch", activeLanguage)}
                   </button>
 
                   <button
                     style={visitOutcomeDangerButton}
                     onClick={() => applyVisitOutcome("not_good_fit")}
                   >
-                     {activeLanguage === "es" ? "No es buen ajuste" : "Not A Good Fit"}
+                     {translate("workCenterNotAGoodFit2", activeLanguage)}
                   </button>
                 </div>
 
@@ -14659,9 +13927,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 </h3>
 
                 <p>
-                  {activeLanguage === "es"
-                    ? "Esta acción quitará la visita de tu agenda."
-                    : "This will remove the visit from your schedule."}
+                  {translate("workCenterThisWillRemoveTheVisitFromYourSchedule", activeLanguage)}
                 </p>
 
                 <div style={confirmActions}>
@@ -14725,13 +13991,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                 <div>
                   <strong style={pendingReviewTitle}>
-                    {activeLanguage === "es"
-                      ? "Revisión operativa pendiente"
-                      : "Pending operational review"}
+                    {translate("pendingOperationalReview", activeLanguage)}
                   </strong>
 
                   <p style={pendingReviewMeta}>
-                    {pendingWorkService || (activeLanguage === "es" ? "Trabajo programado" : "Scheduled job")}
+                    {pendingWorkService || (translate("workCenterScheduledJob", activeLanguage))}
                   </p>
 
                   {pendingWorkLocation && (
@@ -14756,7 +14020,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       setPage("conversationThread");
                     }}
                   >
-                     {activeLanguage === "es" ? "Continuar conversación" : "Continue Conversation"}
+                     {translate("assistantActionOpenConversation", activeLanguage)}
                   </button>
                 )}
 
@@ -14832,15 +14096,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
             <div style={emptyIcon}>LEAD</div>
 
             <strong>
-              {activeLanguage === "es"
-                ? "No hay solicitudes pendientes."
-                : "No pending requests right now."}
+              {translate("workCenterNoPendingRequestsRightNow", activeLanguage)}
             </strong>
 
             <p style={emptyText}>
-              {activeLanguage === "es"
-                ? "Mientras esperas, revisa tus herramientas rápidas o mantén tu negocio listo para nuevos trabajos."
-                : "While you wait, keep your business ready for the next job."}
+              {translate("workCenterWhileYouWaitKeepYourBusinessReadyForTheNextJob", activeLanguage)}
             </p>
 
             <div style={emptyActionGrid}>
@@ -14848,14 +14108,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 style={emptyActionButton}
                 onClick={() => setPage("businessLeads")}
               >
-                 {activeLanguage === "es" ? "Ver oportunidades" : "View leads"}
+                 {translate("workCenterViewLeads", activeLanguage)}
               </button>
 
               <button
                 style={emptyActionButton}
                 onClick={() => setPage("emergencyBusinessSettings")}
               >
-                 {activeLanguage === "es" ? "Configurar emergencia" : "Emergency settings"}
+                 {translate("workCenterEmergencySettings", activeLanguage)}
               </button>
             </div>
           </div>
@@ -14867,14 +14127,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 request.title ||
                 request.projectTitle ||
                 request.category ||
-                (activeLanguage === "es" ? "Solicitud de servicio" : "Service Request");
+                (translate("homeServiceRequest", activeLanguage));
               const details =
                 request.description ||
                 request.details ||
                 request.notes ||
-                (activeLanguage === "es"
-                  ? "Revisa los detalles antes de responder."
-                  : "Review the details before responding.");
+                (translate("workCenterReviewTheDetailsBeforeResponding", activeLanguage));
 
               return (
                 <div
@@ -14892,7 +14150,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         {request.location ||
                           request.fullAddress ||
                           request.city ||
-                          (activeLanguage === "es" ? "Área local" : "Local Area")}
+                          (translate("workCenterLocalArea", activeLanguage))}
                       </p>
 
                       <div style={requestMeta}>
@@ -14903,7 +14161,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         <span style={requestServiceMeta}>
                           {request.category ||
                             request.requestCategory ||
-                            (activeLanguage === "es" ? "Servicio" : "Service")}
+                            (translate("service", activeLanguage))}
                         </span>
                       </div>
 
@@ -14925,7 +14183,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
             {hasPendingRequest && (
               <div style={requestCard}>
-                <div style={liveBadge}> LIVE EMERGENCY REQUEST</div>
+                <div style={liveBadge}>
+                  {translate("workCenterLiveEmergencyRequest", activeLanguage)}
+                </div>
 
                 <div style={requestTop}>
                   <div style={emergencyBadge}></div>
@@ -14941,9 +14201,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     </div>
 
                     <div style={requestTimer}>
-                       {activeLanguage === "es"
-                        ? "Respuesta recomendada: menos de 2 min"
-                        : "Recommended response: under 2 min"}
+                       {translate("workCenterRecommendedResponseUnder2Min", activeLanguage)}
                     </div>
                   </div>
                 </div>
@@ -15180,9 +14438,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={changeOrderAlertTop}>
                         <div>
                           <span style={changeOrderBadge}>
-                             {activeLanguage === "es"
-                              ? "Cambio solicitado"
-                              : "Change Order Requested"}
+                             {translate("workCenterChangeOrderRequested", activeLanguage)}
                           </span>
 
                           <h3 style={changeOrderTitle}>
@@ -15191,9 +14447,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                           <p style={changeOrderCustomer}>
                             {order.project?.homeownerName ||
-                              (activeLanguage === "es"
-                                ? "Cliente"
-                                : "Customer")}
+                              (translate("wcCustomer", activeLanguage))}
                           </p>
                         </div>
 
@@ -15205,12 +14459,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           }
                         >
                           {order.urgency === "urgent"
-                            ? activeLanguage === "es"
-                              ? "Urgente"
-                              : "Urgent"
-                            : activeLanguage === "es"
-                            ? "Normal"
-                            : "Normal"}
+                            ? translate("homeUrgent", activeLanguage)
+                            : translate("messagesPriorityNormal", activeLanguage)}
                         </div>
                       </div>
 
@@ -15219,9 +14469,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       </div>
 
                       <div style={changeOrderNotice}>
-                         {activeLanguage === "es"
-                          ? "El proyecto puede requerir precio y cronograma actualizado."
-                          : "Project may require revised pricing and timeline."}
+                         {translate("workCenterProjectMayRequireRevisedPricingAndTimeline", activeLanguage)}
                       </div>
 
                       <div style={changeOrderActions}>
@@ -15236,9 +14484,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             setPage("quoteBuilder");
                           }}
                         >
-                           {activeLanguage === "es"
-                            ? "Revisar cambio"
-                            : "Review Change"}
+                           {translate("workCenterReviewChange", activeLanguage)}
                         </button>
 
                         <button
@@ -15276,9 +14522,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             setPage("conversationThread");
                           }}
                         >
-                           {activeLanguage === "es"
-                            ? "Mensaje"
-                            : "Message"}
+                           {translate("relationshipMessage", activeLanguage)}
                         </button>
                       </div>
                     </div>
@@ -15303,9 +14547,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             : activeJobBadge
                         }
                       >
-                        {activeLanguage === "es"
-                          ? "Trabajo programado"
-                          : translate("scheduledWork")}
+                        {translate("scheduledWork", activeLanguage)}
                       </span>
 
                       <h3 style={activeJobTitle}>
@@ -15314,9 +14556,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                       <p style={activeJobSub}>
                         {universalActiveWork.location ||
-                          (activeLanguage === "es"
-                            ? "Ubicación pendiente"
-                            : translate("locationPending"))}
+                          translate("locationPending", activeLanguage)}
                       </p>
 
                       <div style={jobActivityNote}>
@@ -15326,9 +14566,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                     <div style={activeEtaBox}>
                       <strong>
-                        {activeLanguage === "es"
-                          ? "Activo"
-                          : "Active"}
+                        {translate("homeMyProjectsActive", activeLanguage)}
                       </strong>
 
                       <span>
@@ -15500,9 +14738,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setPage("conversationThread");
                         }}
                       >
-                         {activeLanguage === "es"
-                          ? "Abrir chat"
-                          : translate("openChat")}
+                         {translate("openChat", activeLanguage)}
                       </button>
                     )}
 
@@ -15734,15 +14970,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           <strong style={closureProjectTitle}>
                             {project.title ||
                               project.service ||
-                              (activeLanguage === "es"
-                                ? "Trabajo completado"
-                                : "Completed work")}
+                              (translate("homeHistoryEyebrow", activeLanguage))}
                           </strong>
                           <span style={closureProjectMeta}>
                             {project.customer ||
                               project.homeownerName ||
                               project.username ||
-                              (activeLanguage === "es" ? "Cliente" : "Customer")}
+                              (translate("wcCustomer", activeLanguage))}
                             {completedDate
                               ? ` · ${completedDate.toLocaleDateString()}`
                               : ""}
@@ -15992,15 +15226,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   {normalizeQuoteStatus(quote) === "accepted" && (
                     <div style={acceptedQuoteAlertCard}>
                       <strong>
-                         {activeLanguage === "es"
-                          ? "Cotización aceptada"
-                          : "Quote Accepted"}
+                         {translate("myRequestsQuoteAccepted", activeLanguage)}
                       </strong>
 
                       <p>
-                        {activeLanguage === "es"
-                          ? "Elige el próximo paso para continuar este trabajo."
-                          : "Choose the next step to continue this job."}
+                        {translate("workCenterChooseTheNextStepToContinueThisJob", activeLanguage)}
                       </p>
 
                       <div style={acceptedQuoteNextStepGrid}>
@@ -16008,15 +15238,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           style={acceptedQuoteSecondaryButton}
                           onClick={() => startScheduleWorkFromQuote(quote)}
                         >
-                           {activeLanguage === "es" ? "Programar" : "Schedule"}
+                           {translate("workCenterScheduleTitle", activeLanguage)}
                         </button>
 
                         <button
                           style={acceptedQuoteSecondaryButton}
                           onClick={() => {
-                            const inviteText = activeLanguage === "es"
-                              ? "Te invito a continuar este proyecto en Meetro para mensajes, programación y seguimiento del trabajo."
-                              : "I’m inviting you to continue this project in Meetro for messages, scheduling, and job progress.";
+                            const inviteText = translate("workCenterImInvitingYouToContinueThisProjectInMeetroForMessagesScheduling", activeLanguage);
 
                             if (navigator.share) {
                               navigator.share({
@@ -16025,11 +15253,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               });
                             } else {
                               navigator.clipboard?.writeText(inviteText);
-                              alert(activeLanguage === "es" ? "Invitación copiada." : "Invitation copied.");
+                              alert(translate("workCenterInvitationCopied", activeLanguage));
                             }
                           }}
                         >
-                           {activeLanguage === "es" ? "Invitar" : "Invite"}
+                           {translate("workCenterInvite", activeLanguage)}
                         </button>
                       </div>
 
@@ -16172,7 +15400,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setRefreshKey((prev) => prev + 1);
                         }}
                       >
-                         {activeLanguage === "es" ? "Crear Trabajo Activo" : "Create Active Job"}
+                         {translate("workCenterCreateActiveJob", activeLanguage)}
                       </button>
                     </div>
                   )}
@@ -16180,18 +15408,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   {quote.status === "revision_requested" && quote.revisionNote && (
                     <div style={revisionRequestCard}>
                       <strong>
-                        {activeLanguage === "es"
-                          ? "Cambio solicitado por el cliente"
-                          : "Customer requested changes"}
+                        {translate("workCenterCustomerRequestedChanges", activeLanguage)}
                       </strong>
 
                       <p>{quote.revisionNote}</p>
 
                       {quote.revisionRequestedAt && (
                         <small>
-                          {new Date(quote.revisionRequestedAt).toLocaleDateString(
-                            activeLanguage === "es" ? "es-US" : "en-US",
-                            { month: "short", day: "numeric", year: "numeric" }
+                          {formatLocaleDate(
+                            quote.revisionRequestedAt,
+                            { month: "short", day: "numeric", year: "numeric" },
+                            activeLanguage
                           )}
                         </small>
                       )}
@@ -16221,16 +15448,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setPage("quoteBuilder");
                         }}
                       >
-                        {activeLanguage === "es"
-                          ? "Revisar cotización"
-                          : "Revise Quote"}
+                        {translate("reviseQuoteAction", activeLanguage)}
                       </button>
                     </div>
                   )}
 
                   {isExternalQuote(quote) && normalizeQuoteStatus(quote) === "sent" && (
                     <span style={externalQuoteChip}>
-                      {activeLanguage === "es" ? "Cliente externo" : "External Customer"}
+                      {translate("workCenterExternalCustomer", activeLanguage)}
                     </span>
                   )}
 
@@ -16261,7 +15486,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           }, 180);
                         }}
                       >
-                         {activeLanguage === "es" ? "Cliente aceptó" : "Customer Accepted"}
+                         {translate("workCenterCustomerAccepted", activeLanguage)}
                       </button>
 
                       <button
@@ -16272,7 +15497,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           updateQuoteLifecycleStatus(quote.quoteId, "revision_requested");
                         }}
                       >
-                         {activeLanguage === "es" ? "Necesita revisión" : "Needs Revision"}
+                         {translate("workCenterNeedsRevision", activeLanguage)}
                       </button>
 
                       <button
@@ -16283,16 +15508,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           updateQuoteLifecycleStatus(quote.quoteId, "declined");
                         }}
                       >
-                        ✕ {activeLanguage === "es" ? "Cliente rechazó" : "Customer Declined"}
+                        ✕ {translate("workCenterCustomerDeclined", activeLanguage)}
                       </button>
 
                       <button
                         type="button"
                         style={externalInviteButton}
                         onClick={() => {
-                          const inviteText = activeLanguage === "es"
-                            ? "Te invito a continuar este proyecto en Meetro para revisar la cotización, mensajes y seguimiento del trabajo."
-                            : "I’m inviting you to continue this project in Meetro so you can review the quote, messages, and job progress.";
+                          const inviteText = translate("workCenterImInvitingYouToContinueThisProjectInMeetroSoYouCan", activeLanguage);
 
                           if (navigator.share) {
                             navigator.share({
@@ -16301,11 +15524,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             });
                           } else {
                             navigator.clipboard?.writeText(inviteText);
-                            alert(activeLanguage === "es" ? "Invitación copiada." : "Invitation copied.");
+                            alert(translate("workCenterInvitationCopied", activeLanguage));
                           }
                         }}
                       >
-                         {activeLanguage === "es" ? "Invitar a Meetro" : "Invite to Meetro"}
+                         {translate("messagesInviteToMeetro", activeLanguage)}
                       </button>
                     </div>
                   )}
@@ -16319,7 +15542,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           updateQuoteLifecycleStatus(quote.quoteId, "converted_to_job")
                         }
                       >
-                         {activeLanguage === "es" ? "Crear Trabajo" : "Create Job"}
+                         {translate("workCenterCreateJob", activeLanguage)}
                       </button>
                     </div>
                   )}
@@ -16343,7 +15566,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             }}
           >
             <span aria-hidden="true">+</span>
-            {activeLanguage === "es" ? "Nueva cotización" : "New Quote"}
+            {translate("workCenterNewQuote", activeLanguage)}
           </button>
         </div>
       )}
@@ -16356,7 +15579,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	              <div>
 	                <p style={quoteViewEyebrow}>
 	                  {quoteViewTarget.documentLabel ||
-	                    (activeLanguage === "es" ? "Vista de cotización" : "Quote Preview")}
+	                    (translate("workCenterQuotePreview", activeLanguage))}
 	                </p>
                 <h2 style={quoteViewTitle}>
                   {quoteViewTarget.quoteNumber ||
@@ -16378,23 +15601,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
             <div style={quoteViewHero}>
               <strong>
                 {quoteViewTarget.projectTitle ||
-                  (activeLanguage === "es" ? "Proyecto" : "Project")}
+                  (translate("project", activeLanguage))}
               </strong>
               <span>
                 {quoteViewTarget.homeownerName ||
                   quoteViewTarget.customer ||
-                  (activeLanguage === "es" ? "Cliente" : "Customer")}
+                  (translate("wcCustomer", activeLanguage))}
               </span>
             </div>
 
             <div style={quoteViewSection}>
               <div style={quoteViewRow}>
-                <span>{activeLanguage === "es" ? "Mano de obra" : "Labor"}</span>
+                <span>{translate("workCenterLabor", activeLanguage)}</span>
                 <strong>${getQuoteLaborAmount(quoteViewTarget).toFixed(2)}</strong>
               </div>
 
               <div style={quoteViewRow}>
-                <span>{activeLanguage === "es" ? "Materiales" : "Materials"}</span>
+                <span>{translate("workTabMaterials", activeLanguage)}</span>
                 <strong>${getQuoteMaterialsAmount(quoteViewTarget).toFixed(2)}</strong>
               </div>
 
@@ -16405,12 +15628,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
             </div>
 
             <div style={quoteViewInfoBlock}>
-              <strong>{activeLanguage === "es" ? "Tiempo estimado" : "Estimated Timeline"}</strong>
+              <strong>{translate("estimatedTimeline", activeLanguage)}</strong>
               <p>{quoteViewTarget.timeline || "—"}</p>
             </div>
 
             <div style={quoteViewInfoBlock}>
-              <strong>{activeLanguage === "es" ? "Notas" : "Notes"}</strong>
+              <strong>{translate("jobsHiringApplicantNotes", activeLanguage)}</strong>
               <p>{quoteViewTarget.notes || "—"}</p>
             </div>
 
@@ -16427,7 +15650,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                    setPage("quoteBuilder");
 	                  }}
 	                >
-	                   {activeLanguage === "es" ? "Editar" : "Edit"}
+	                   {translate("edit", activeLanguage)}
 	                </button>
 	              </div>
 	            )}
@@ -16441,7 +15664,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	            <div style={quoteViewHeader}>
 	              <div>
 	                <p style={quoteViewEyebrow}>
-	                  {activeLanguage === "es" ? "Reporte del trabajo" : "Job Report"}
+	                  {translate("workCenterJobReport", activeLanguage)}
 	                </p>
 	                <h2 style={quoteViewTitle}>
 	                  {jobReportTarget.title || getWorkCenterJobTitle(jobReportTarget)}
@@ -16464,19 +15687,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                style={jobHistoryDocumentButton}
 	                onClick={() => printJobHistoryReport(jobReportTarget)}
 	              >
-	                {activeLanguage === "es" ? "Imprimir" : "Print"}
+	                {translate("documentPrint", activeLanguage)}
 	              </button>
 	              <button
 	                type="button"
 	                style={jobHistoryDocumentButton}
 	                onClick={() =>
 	                  shareHistoryDocumentText({
-	                    title: activeLanguage === "es" ? "Reporte del trabajo" : "Job Report",
+	                    title: translate("workCenterJobReport", activeLanguage),
 	                    text: buildJobHistoryReportText(jobReportTarget),
 	                  })
 	                }
 	              >
-	                {activeLanguage === "es" ? "Compartir" : "Share"}
+	                {translate("documentShare", activeLanguage)}
 	              </button>
 	              <button
 	                type="button"
@@ -16484,13 +15707,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                onClick={() =>
 	                  copyHistoryDocumentText(
 	                    buildJobHistoryReportText(jobReportTarget),
-	                    activeLanguage === "es"
-	                      ? "Resumen copiado."
-	                      : "Summary copied."
+	                    translate("workCenterSummaryCopied", activeLanguage)
 	                  )
 	                }
 	              >
-	                {activeLanguage === "es" ? "Copiar resumen" : "Copy Summary"}
+	                {translate("workCenterCopySummary", activeLanguage)}
 	              </button>
 	            </div>
 	          </div>
@@ -16505,14 +15726,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
               {translate("materialsCenter")}
             </h2>
             <p style={materialsHeroText}>
-              {activeLanguage === "es"
-                ? "Organiza materiales para trabajo activo. Envía listas por Meetro Chat o compártelas fuera de Meetro cuando ayude a preparar el trabajo."
-                : "Organize materials for active work. Send lists through Meetro Chat or share them outside Meetro when it helps prepare the job."}
+              {translate("workCenterOrganizeMaterialsForActiveWorkSendListsThroughMeetroChatOrShare", activeLanguage)}
             </p>
           </div>
           <div style={materialsAssistantCard}>
             <div style={materialsSectionEyebrow}>
-              {activeLanguage === "es" ? "Agregar materiales" : "Add Materials"}
+              {translate("workCenterAddMaterials", activeLanguage)}
             </div>
 
             <div style={materialsVoiceHeader}>
@@ -16526,9 +15745,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 }}
                 onClick={toggleMaterialsMic}
                 title={
-                  activeLanguage === "es"
-                    ? "Dictar materiales"
-                    : "Dictate materials"
+                  translate("workCenterDictateMaterials", activeLanguage)
                 }
               >
                 {isListeningMaterials ? "" : ""}
@@ -16536,15 +15753,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               <div>
                 <h3 style={materialsVoiceTitle}>
-                  {activeLanguage === "es"
-                    ? "Dicta, escribe o agrega manualmente"
-                    : "Speak, type, or add manually"}
+                  {translate("workCenterSpeakTypeOrAddManually", activeLanguage)}
                 </h3>
 
                 <p style={materialsModeHint}>
-                  {activeLanguage === "es"
-                    ? "Elige el método que funcione mejor. Si el micrófono está bloqueado, escribir sigue funcionando."
-                    : "Choose the method that works best. If microphone access is blocked, typing still works."}
+                  {translate("workCenterChooseTheMethodThatWorksBestIfMicrophoneAccessIsBlockedTyping", activeLanguage)}
                 </p>
               </div>
             </div>
@@ -16559,7 +15772,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 }
                 onClick={toggleMaterialsMic}
               >
-                 {activeLanguage === "es" ? "Dictar" : "Speak Materials"}
+                 {translate("workCenterSpeakMaterials", activeLanguage)}
               </button>
 
               <button
@@ -16577,7 +15790,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   setMaterialsInputMode("type");
                 }}
               >
-                 {activeLanguage === "es" ? "Escribir" : "Type Materials"}
+                 {translate("workCenterTypeMaterials", activeLanguage)}
               </button>
 
               <button
@@ -16596,15 +15809,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
             {materialsMicError && (
               <div style={materialsMicErrorBox}>
                 <strong>
-                  {activeLanguage === "es"
-                    ? "Se necesita acceso al micrófono"
-                    : "Microphone Access Needed"}
+                  {translate("workCenterMicrophoneAccessNeeded", activeLanguage)}
                 </strong>
 
                 <p>
-                  {activeLanguage === "es"
-                    ? "Meetro puede usar voz para crear rápidamente listas de materiales, notas y futuras actualizaciones de trabajo."
-                    : "Meetro can use voice to quickly create materials lists, notes, and future job updates."}
+                  {translate("workCenterMeetroCanUseVoiceToQuicklyCreateMaterialsListsNotesAndFuture", activeLanguage)}
                 </p>
 
                 <p>{materialsMicError}</p>
@@ -16612,14 +15821,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 {showMaterialsMicSettingsHelp && (
                   <div style={permissionInstructionsBox}>
                     <strong>
-                      {activeLanguage === "es"
-                        ? "Para activarlo en iPhone:"
-                        : "To enable it on iPhone:"}
+                      {translate("workCenterToEnableItOnIPhone", activeLanguage)}
                     </strong>
                     <span>
-                      {activeLanguage === "es"
-                        ? "Ajustes → Meetro → Micrófono → Permitir"
-                        : "Settings → Meetro → Microphone → Allow"}
+                      {translate("workCenterSettingsMeetroMicrophoneAllow", activeLanguage)}
                     </span>
                   </div>
                 )}
@@ -16630,7 +15835,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     style={materialsMicRetryButton}
                     onClick={openMaterialsMicrophoneSettings}
                   >
-                    {activeLanguage === "es" ? "Abrir ajustes" : "Open Settings"}
+                    {translate("workCenterOpenSettings", activeLanguage)}
                   </button>
 
                   <button
@@ -16646,7 +15851,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       setShowMaterialsMicSettingsHelp(false);
                     }}
                   >
-                    {activeLanguage === "es" ? "Escribir" : "Type Instead"}
+                    {translate("workCenterTypeInstead", activeLanguage)}
                   </button>
                 </div>
               </div>
@@ -16660,9 +15865,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               }}
               style={materialsDraftTextarea}
               placeholder={
-                activeLanguage === "es"
-                  ? "Ejemplo: tubo PVC, silicona, llave de paso..."
-                  : "Example: PVC pipe, silicone, shutoff valve..."
+                translate("workCenterExamplePVCPipeSiliconeShutoffValve", activeLanguage)
               }
             />
 
@@ -16682,9 +15885,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         })
                       }
                       placeholder={
-                        activeLanguage === "es"
-                          ? "Ejemplo: gabinete base"
-                          : "Example: base cabinet"
+                        translate("workCenterExampleBaseCabinet", activeLanguage)
                       }
                     />
                   </label>
@@ -16722,11 +15923,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       }
                     >
                       <option value="customer">
-                        {activeLanguage === "es" ? "Cliente" : "Customer"}
+                        {translate("wcCustomer", activeLanguage)}
                       </option>
 
                       <option value="business">
-                        {activeLanguage === "es" ? "Negocio" : "Business"}
+                        {translate("business", activeLanguage)}
                       </option>
 
                       <option value="approval">
@@ -16749,15 +15950,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       }
                     >
                       <option value="needed">
-                        {activeLanguage === "es" ? "Necesario" : "Needed"}
+                        {translate("needed", activeLanguage)}
                       </option>
 
                       <option value="requested">
-                        {activeLanguage === "es" ? "Solicitado" : "Requested"}
+                        {translate("workflowRequested", activeLanguage)}
                       </option>
 
                       <option value="received">
-                        {activeLanguage === "es" ? "Recibido" : "Received"}
+                        {translate("received", activeLanguage)}
                       </option>
                     </select>
                   </label>
@@ -16814,9 +16015,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             {materialsAiSuggestion && (
               <div style={aiBox}>
                 <strong>
-                  {activeLanguage === "es"
-                    ? "Sugerencia de Meetro"
-                    : "Meetro Suggested Materials"}
+                  {translate("workCenterMeetroSuggestedMaterials", activeLanguage)}
                 </strong>
 
                 <pre style={materialsPreview}>
@@ -16828,9 +16027,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
             {materialsCatalogMatches.length > 0 && (
               <div style={catalogMatchesWrap}>
                 <strong style={catalogMatchesTitle}>
-                  {activeLanguage === "es"
-                    ? "Coincidencias del catálogo"
-                    : "Catalog Matches"}
+                  {translate("workCenterCatalogMatches", activeLanguage)}
                 </strong>
 
                 <div style={catalogMatchesGrid}>
@@ -16847,16 +16044,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                       <p style={catalogMatchSupplier}>
                         {material.supplier ||
-                          (activeLanguage === "es"
-                            ? "Proveedor no confirmado"
-                            : "Supplier not confirmed")}
+                          (translate("workCenterSupplierNotConfirmed", activeLanguage))}
                       </p>
 
                       <button
                         style={catalogAddButton}
                         onClick={() => addCatalogMaterialToProject(material)}
                       >
-                         {activeLanguage === "es" ? "Agregar" : "Add"}
+                         {translate("workCenterAdd", activeLanguage)}
                       </button>
                     </div>
                   ))}
@@ -16899,16 +16094,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <div style={materialsListHeader}>
                     <div>
                       <strong>
-                        {activeLanguage === "es"
-                          ? `${translate("materialsList")} (${materials.length})`
-                          : `${translate("materialsList")} (${materials.length})`}
+                        {`${translate("materialsList", activeLanguage)} (${materials.length})`}
                       </strong>
 
                       <p style={jobMeta}>
                         {receivedCount}{" "}
-                        {activeLanguage === "es" ? "recibidos" : "received"} •{" "}
+                        {translate("workCenterReceived", activeLanguage)} •{" "}
                         {neededCount}{" "}
-                        {activeLanguage === "es" ? "pendientes" : "pending"}
+                        {translate("emergencyStatusPending", activeLanguage)}
                       </p>
                     </div>
 
@@ -16925,14 +16118,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   {materials.length === 0 ? (
                     <div style={materialsEmptyBox}>
                       <strong>
-                        {activeLanguage === "es"
-                          ? "Aún no se agregaron materiales"
-                          : "No materials added yet"}
+                        {translate("workCenterNoMaterialsAddedYet", activeLanguage)}
                       </strong>
                       <span>
-                        {activeLanguage === "es"
-                          ? "Agrega materiales arriba o genera una lista."
-                          : "Add materials above or generate a list."}
+                        {translate("workCenterAddMaterialsAboveOrGenerateAList", activeLanguage)}
                       </span>
                     </div>
                   ) : (
@@ -16953,16 +16142,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                         const providerLabel =
                           item.provider === "customer"
-                            ? activeLanguage === "es"
-                              ? "Cliente"
-                              : "Customer"
+                            ? translate("wcCustomer", activeLanguage)
                             : item.provider === "business"
-                            ? activeLanguage === "es"
-                              ? "Negocio"
-                              : "Business"
-                            : activeLanguage === "es"
-                            ? "Aprobación"
-                            : "Approval";
+                            ? translate("business", activeLanguage)
+                            : translate("momentDetailJourney_approval", activeLanguage);
 
                         return (
                           <div key={item.id} style={materialCompactCard}>
@@ -17057,9 +16240,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                   </button>
                                 ) : (
                                   <button style={receivedDisabledButton}>
-                                    ✓ {activeLanguage === "es"
-                                      ? "Recibido"
-                                      : "Received"}
+                                    ✓ {translate("received", activeLanguage)}
                                   </button>
                                 )}
 
@@ -17078,7 +16259,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       })}
 
                       <button style={addMaterialInlineButton}>
-                        + {activeLanguage === "es" ? "Agregar material" : "Add Material"}
+                        + {translate("workCenterAddMaterial", activeLanguage)}
                       </button>
                     </div>
                   )}
@@ -17086,7 +16267,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   {materials.length > 0 && (
                     <div style={materialsSummaryPanel}>
                       <div>
-                        <strong>{activeLanguage === "es" ? "Resumen" : "Materials Summary"}</strong>
+                        <strong>{translate("workCenterMaterialsSummary", activeLanguage)}</strong>
 
                         <div style={materialsSummaryGrid}>
                           <div style={summaryCountBox}>
@@ -17098,19 +16279,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <strong>
                               {materials.filter((item) => item.status === "needed").length}
                             </strong>
-                            <span>{activeLanguage === "es" ? "Necesarios" : "Needed"}</span>
+                            <span>{translate("workCenterNeeded", activeLanguage)}</span>
                           </div>
 
                           <div style={summaryCountBox}>
                             <strong>
                               {materials.filter((item) => item.status === "requested").length}
                             </strong>
-                            <span>{activeLanguage === "es" ? "Solicitados" : "Requested"}</span>
+                            <span>{translate("workCenterRequested", activeLanguage)}</span>
                           </div>
 
                           <div style={summaryCountBox}>
                             <strong>{receivedCount}</strong>
-                            <span>{activeLanguage === "es" ? "Recibidos" : "Received"}</span>
+                            <span>{translate("workCenterReceived2", activeLanguage)}</span>
                           </div>
                         </div>
                       </div>
@@ -17118,9 +16299,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       <div style={summaryReadyBox}>
                         <strong>
                           {receivedCount} of {materials.length}{" "}
-                          {activeLanguage === "es"
-                            ? "materiales recibidos"
-                            : "materials received"}
+                          {translate("materialsReceived", activeLanguage)}
                         </strong>
 
                         <div style={progressBarOuter}>
@@ -17162,12 +16341,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         }}
                       >
                         {neededCount === 0
-                          ? activeLanguage === "es"
-                            ? " Materiales listos — reanudar"
-                            : " All Materials Ready — Resume Job"
-                          : activeLanguage === "es"
-                          ? ` Esperando ${neededCount} materiales`
-                          : ` Waiting on ${neededCount} materials`}
+                          ? translate("workCenterAllMaterialsReadyResumeJob", activeLanguage)
+                          : translate("workCenterWaitingMaterialsCount", activeLanguage, { count: neededCount })}
                       </button>
                     </div>
                   )}
@@ -17175,18 +16350,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <div style={materialsSharePanel}>
                   <div>
                     <strong>
-                      {activeLanguage === "es"
-                        ? "Compartir lista de materiales"
-                        : "Share Materials List"}
+                      {translate("workCenterShareMaterialsList", activeLanguage)}
                     </strong>
                     <p style={materialsShareHelp}>
                       {materials.length === 0
-                        ? activeLanguage === "es"
-                          ? "Agrega materiales antes de compartir."
-                          : "Add materials before sharing."
-                        : activeLanguage === "es"
-                        ? "Envía dentro de Meetro o comparte fuera de Meetro para preparar el trabajo. Esto no pide aprobación ni cambia el estado del trabajo."
-                        : "Send inside Meetro or share outside Meetro for job preparation. This does not request approval or change job status."}
+                        ? translate("workCenterAddMaterialsBeforeSharing", activeLanguage)
+                        : translate("workCenterSendInsideMeetroOrShareOutsideMeetroForJobPreparationThisDoes", activeLanguage)}
                     </p>
                   </div>
 
@@ -17201,7 +16370,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       disabled={materials.length === 0}
                       onClick={() => sendMaterialsThroughMeetroChat(materials)}
                     >
-                       {activeLanguage === "es" ? "Enviar por Meetro Chat" : "Send Through Meetro Chat"}
+                       {translate("workCenterSendThroughMeetroChat", activeLanguage)}
                     </button>
 
                     <button
@@ -17210,29 +16379,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       disabled={materials.length === 0}
                       onClick={() => shareMaterialsOutsideMeetro(materials)}
                     >
-                       {activeLanguage === "es" ? "Compartir fuera de Meetro" : "Share Outside Meetro"}
+                       {translate("workCenterShareOutsideMeetro", activeLanguage)}
                     </button>
                   </div>
 
                   <p style={materialsShareHelp}>
-                    {activeLanguage === "es"
-                      ? "Usa Mensajes, Mail, Notas, AirDrop o cualquier app para enviar la lista a clientes, trabajadores o proveedores."
-                      : "Use Messages, Mail, Notes, AirDrop, or any app to send the list to customers, workers, or suppliers."}
+                    {translate("workCenterUseMessagesMailNotesAirDropOrAnyAppToSendTheList", activeLanguage)}
                   </p>
                 </div>
 
                 <div style={materialsActivityPanel}>
                   <strong>
-                    {activeLanguage === "es"
-                      ? "Actividad reciente de materiales"
-                      : "Recent Materials Activity"}
+                    {translate("workCenterRecentMaterialsActivity", activeLanguage)}
                   </strong>
 
                   {materialsActivity.length === 0 ? (
                     <p style={materialsShareHelp}>
-                      {activeLanguage === "es"
-                        ? "La actividad de materiales compartidos aparecerá aquí."
-                        : "Shared materials activity will appear here."}
+                      {translate("workCenterSharedMaterialsActivityWillAppearHere", activeLanguage)}
                     </p>
                   ) : (
                     <div style={materialsActivityList}>
@@ -17282,10 +16445,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   title:
                     latest.jobService ||
                     latest.title ||
-                    (activeLanguage === "es" ? "Proyecto" : "Project"),
+                    (translate("project", activeLanguage)),
                   customer:
                     latest.customer ||
-                    (activeLanguage === "es" ? "Cliente" : "Customer"),
+                    (translate("wcCustomer", activeLanguage)),
                   lastUpdate:
                     latest.savedAt ||
                     latest.createdAt ||
@@ -17329,7 +16492,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <div style={projectRecordStats}>
                       <span>
                          {group.count}{" "}
-                        {activeLanguage === "es" ? "registros" : "records"}
+                        {translate("workCenterBadgeRecords", activeLanguage)}
                       </span>
 
                       {group.lastUpdate && (
@@ -17343,9 +16506,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     {group.latest?.title && (
                       <div style={latestRecordBox}>
                         <strong>
-                          {activeLanguage === "es"
-                            ? "Último evento"
-                            : "Latest event"}
+                          {translate("workCenterLatestEvent", activeLanguage)}
                         </strong>
 
                         <p>{group.latest.title}</p>
@@ -17412,9 +16573,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setPage("conversationThread");
                         }}
                       >
-                         {activeLanguage === "es"
-                          ? "Revisar registro"
-                          : "Review Record"}
+                         {translate("homeViewRecord", activeLanguage)}
                       </button>
 
                       <button
@@ -17453,9 +16612,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setPage("conversationThread");
                         }}
                       >
-                         {activeLanguage === "es"
-                          ? "Chat"
-                          : "Chat"}
+                         {translate("chat", activeLanguage)}
                       </button>
                     </div>
                   </div>
@@ -17470,7 +16627,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         <div style={section}>
           <div style={sectionHeaderRow}>
             <h2 style={sectionTitle}>
-              {activeLanguage === "es" ? "Línea de tiempo" : "Workflow Timeline"}
+              {translate("workCenterWorkflowTimeline", activeLanguage)}
             </h2>
           </div>
 
@@ -17501,15 +16658,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <div style={emptyIcon}>TIME</div>
 
                 <strong>
-                  {activeLanguage === "es"
-                    ? "No hay eventos todavía"
-                    : "No timeline events yet"}
+                  {translate("workCenterNoTimelineEventsYet", activeLanguage)}
                 </strong>
 
                 <p style={emptyText}>
-                  {activeLanguage === "es"
-                    ? "Las citas, visitas, cotizaciones, materiales y trabajos aparecerán aquí."
-                    : "Appointments, visits, quotes, materials, and work updates will appear here."}
+                  {translate("workCenterAppointmentsVisitsQuotesMaterialsAndWorkUpdatesWillAppearHere", activeLanguage)}
                 </p>
               </div>
             ) : (
@@ -17537,9 +16690,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <div style={workflowTimelineContent}>
                       <strong>
                         {item.title ||
-                          (activeLanguage === "es"
-                            ? "Evento de trabajo"
-                            : "Workflow Event")}
+                          (translate("workCenterWorkflowEvent", activeLanguage))}
                       </strong>
 
                       {(item.service || item.location) && (
@@ -17550,15 +16701,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                       {item.createdAt && (
                         <small style={workflowTimelineDate}>
-                          {new Date(item.createdAt).toLocaleString(
-                            activeLanguage === "es" ? "es-US" : "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            }
-                          )}
+                          {formatDateTimeDisplay(item.createdAt, "", {
+                            language: activeLanguage,
+                          })}
                         </small>
                       )}
                     </div>
@@ -17661,15 +16806,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
         <div style={confirmOverlay}>
           <div style={confirmCard}>
             <h3>
-              {activeLanguage === "es"
-                ? "¿Eliminar material?"
-                : "Delete material?"}
+              {translate("deleteMaterial", activeLanguage)}
             </h3>
 
             <p>
-              {activeLanguage === "es"
-                ? `Esto eliminará "${materialDeleteTarget.title}" de la lista.`
-                : `This will remove "${materialDeleteTarget.title}" from the list.`}
+              {translate("workCenterRemoveMaterialFromList", activeLanguage, {
+                material: materialDeleteTarget.title,
+              })}
             </p>
 
             <div style={confirmActions}>

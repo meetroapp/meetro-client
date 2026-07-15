@@ -1,4 +1,10 @@
 import { DEFERRED_TRANSLATION_KEYS } from "./deferredTranslationKeys.js";
+import { CORE_WORKFLOW_KEYS as ROUTE_PARITY_KEYS } from "./coreRouteParityLanguage.js";
+import { DAILY_WORKFLOW_KEYS } from "./dailyWorkflowLanguage.js";
+
+export const CORE_WORKFLOW_KEYS = Object.freeze([
+  ...new Set([...ROUTE_PARITY_KEYS, ...DAILY_WORKFLOW_KEYS]),
+]);
 
 export const CANONICAL_LANGUAGE_CODES = Object.freeze(["en", "es", "fr", "pt-BR"]);
 

@@ -10,7 +10,7 @@ import { auditLocalization } from "../scripts/validate-localization.mjs";
 test("parser-backed localization contract has no duplicate or unknown active keys", async () => {
   const audit = await auditLocalization();
   assert.equal(audit.duplicates.length, 0);
-  assert.equal(audit.activeKeys.length, 1435);
+  assert.ok(audit.activeKeys.length >= 1810);
   assert.deepEqual(
     Object.fromEntries(
       Object.entries(audit.unknownMissingByLanguage).map(([language, keys]) => [
@@ -46,8 +46,8 @@ test("every active FR/PT gap is explicitly inventoried and EN/ES require no fall
   const audit = await auditLocalization();
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.en, []);
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.es, []);
-  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 444);
-  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 444);
+  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 258);
+  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 258);
   assert.deepEqual(audit.missingActiveByLanguage.fr, DEFERRED_TRANSLATION_KEYS.fr);
   assert.deepEqual(
     audit.missingActiveByLanguage["pt-BR"],

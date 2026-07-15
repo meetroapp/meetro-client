@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
+import { formatLocaleDate } from "../utils/localeFormat";
 import {
   getMeetroMomentHashRoute,
   getMeetroMomentRouteId,
@@ -20,11 +23,11 @@ function readJson(key, fallback) {
   }
 }
 
-function formatDate(value, options = { month: "long", year: "numeric" }) {
+function formatDate(value, language, options = { month: "long", year: "numeric" }) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString("en-US", options);
+  return formatLocaleDate(date, options, language);
 }
 
 function getPhotoUrl(photo) {
@@ -69,23 +72,30 @@ function getActiveAccountContext() {
   };
 }
 
-function describeValue(value, fallback = "") {
+function describeValue(value, language, fallback = "") {
   if (!value) return fallback;
   if (typeof value === "string" || typeof value === "number") return String(value);
   if (value.label) return value.label;
   if (value.summary) return value.summary;
-  if (value.url) return "Saved";
+  if (value.url) return t("stateSaved", language);
   return fallback;
 }
 
-function unavailableCopy(reason = "") {
+function unavailableCopy(reason = "", language) {
   if (reason === "unverified-source") {
-    return "This accomplishment is not ready to appear as a verified Meetro Moment.";
+    return t("momentDetailUnavailableUnverified", language);
   }
   if (reason === "not-visible-to-viewer") {
-    return "This Meetro Moment is protected until the right people can see it.";
+    return t("momentDetailUnavailableProtected", language);
   }
-  return "This Meetro Moment could not be found.";
+  return t("momentDetailUnavailableMissing", language);
+}
+
+function getPrivacyCopy(privacy, language) {
+  const suffix = ["published", "pending", "private", "hidden"].includes(privacy?.key)
+    ? privacy.key
+    : "unavailable";
+  return t(`momentsPrivacyMessage_${suffix}`, language);
 }
 
 function DetailCard({ icon, label, value }) {
@@ -105,6 +115,7 @@ function DetailCard({ icon, label, value }) {
 }
 
 function MeetroMomentDetails({ setPage }) {
+  const language = useLanguage();
   const account = getActiveAccountContext();
   const [selectedMomentId, setSelectedMomentId] = useState(getSelectedMomentId);
   const moments = useMemo(() => readTimelineMoments(localStorage), []);
@@ -157,15 +168,15 @@ function MeetroMomentDetails({ setPage }) {
     return (
       <div className="app-page meetro-readable-page" style={page}>
         <button type="button" style={backButton} onClick={goBack}>
-          Back to Meetro Moments
+          {t("momentDetailBack", language)}
         </button>
 
         <section style={unavailablePanel}>
           <div style={unavailableIcon}>
             <MeetroIcon name="verified" size={28} decorative />
           </div>
-          <h1 style={unavailableTitle}>Meetro Moment unavailable</h1>
-          <p style={unavailableText}>{unavailableCopy(model.reason)}</p>
+          <h1 style={unavailableTitle}>{t("momentDetailUnavailableTitle", language)}</h1>
+          <p style={unavailableText}>{unavailableCopy(model.reason, language)}</p>
         </section>
 
         <BottomNav setPage={setPage} currentPage="meetroMoments" />
@@ -173,8 +184,8 @@ function MeetroMomentDetails({ setPage }) {
     );
   }
 
-  const completionDate = formatDate(model.completionDate);
-  const exactCompletionDate = formatDate(model.completionDate, {
+  const completionDate = formatDate(model.completionDate, language);
+  const exactCompletionDate = formatDate(model.completionDate, language, {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -185,62 +196,62 @@ function MeetroMomentDetails({ setPage }) {
   const afterPhoto = getPhotoUrl(model.visual.afterPhotos?.[0]);
   const relatedMoments = model.relatedMoments || [];
   const detailItems = [
-    { icon: "tools", label: "Project type", value: model.details.projectType },
-    { icon: "schedule", label: "Completed", value: exactCompletionDate || completionDate },
-    { icon: "clockAlert", label: "Duration", value: model.details.duration },
-    { icon: "shield", label: "Warranty", value: describeValue(model.details.warranty) },
-    { icon: "invoiceDoc", label: "Receipt", value: describeValue(model.details.receipt) },
-    { icon: "docSearch", label: "Permit", value: model.details.permit },
-    { icon: "creditCard", label: "Investment", value: model.details.investment },
-    { icon: "location", label: "Project location", value: model.details.address },
+    { icon: "tools", label: t("momentDetailProjectType", language), value: model.details.projectType },
+    { icon: "schedule", label: t("stateCompleted", language), value: exactCompletionDate || completionDate },
+    { icon: "clockAlert", label: t("momentDetailDuration", language), value: model.details.duration },
+    { icon: "shield", label: t("momentDetailWarranty", language), value: describeValue(model.details.warranty, language) },
+    { icon: "invoiceDoc", label: t("momentDetailReceipt", language), value: describeValue(model.details.receipt, language) },
+    { icon: "docSearch", label: t("momentDetailPermit", language), value: model.details.permit },
+    { icon: "creditCard", label: t("momentDetailInvestment", language), value: model.details.investment },
+    { icon: "location", label: t("momentDetailLocation", language), value: model.details.address },
   ].filter((item) => item.value);
 
   return (
     <div className="app-page meetro-readable-page" style={page}>
       <button type="button" style={backButton} onClick={goBack}>
-        Back to Meetro Moments
+        {t("momentDetailBack", language)}
       </button>
 
       <header style={header}>
-        <span style={verifiedBadge}>Verified Meetro Moment</span>
+        <span style={verifiedBadge}>{t("momentDetailVerified", language)}</span>
         <h1 style={title}>{model.title}</h1>
         <div style={headerMeta}>
           <span>{model.category}</span>
-          {completionDate && <span>{`Completed ${completionDate}`}</span>}
+          {completionDate && <span>{t("momentsCompletedDate", language, { date: completionDate })}</span>}
         </div>
-        <p style={privacyMessage}>{model.privacy.message}</p>
+        <p style={privacyMessage}>{getPrivacyCopy(model.privacy, language)}</p>
       </header>
 
-      <section style={heroVisual} aria-label="Main visual">
+      <section style={heroVisual} aria-label={t("momentDetailMainVisualAria", language)}>
         {heroPhoto ? (
           <img src={heroPhoto} alt="" style={heroImage} />
         ) : (
           <div style={heroFallback}>
             <MeetroIcon name="verified" size={44} decorative />
-            <span>Project history preserved</span>
+            <span>{t("momentDetailHistoryPreserved", language)}</span>
           </div>
         )}
         <div style={heroOverlay}>
-          <span style={heroKicker}>Why this moment matters</span>
+          <span style={heroKicker}>{t("momentDetailWhyItMatters", language)}</span>
           <p style={heroStory}>{model.story.whyItMattered}</p>
         </div>
         {model.visual.photoCount > 1 && (
-          <span style={photoCount}>{`${model.visual.photoCount} photos`}</span>
+          <span style={photoCount}>{t("momentDetailPhotoCount", language, { count: model.visual.photoCount })}</span>
         )}
       </section>
 
       {(beforePhoto || afterPhoto) && (
-        <section style={beforeAfterGrid} aria-label="Before and after preview">
+        <section style={beforeAfterGrid} aria-label={t("momentsBeforeAfterPreviewAria", language)}>
           {beforePhoto && (
             <figure style={beforeAfterFrame}>
               <img src={beforePhoto} alt="" style={beforeAfterImage} />
-              <figcaption style={beforeAfterCaption}>Before</figcaption>
+              <figcaption style={beforeAfterCaption}>{t("momentsBefore", language)}</figcaption>
             </figure>
           )}
           {afterPhoto && (
             <figure style={beforeAfterFrame}>
               <img src={afterPhoto} alt="" style={beforeAfterImage} />
-              <figcaption style={beforeAfterCaption}>After</figcaption>
+              <figcaption style={beforeAfterCaption}>{t("momentsAfter", language)}</figcaption>
             </figure>
           )}
         </section>
@@ -249,8 +260,8 @@ function MeetroMomentDetails({ setPage }) {
       <main style={contentGrid}>
         <section style={primaryColumn}>
           <section style={sectionCard}>
-            <span style={sectionKicker}>Story</span>
-            <h2 style={sectionTitle}>Why this moment matters</h2>
+            <span style={sectionKicker}>{t("momentDetailStory", language)}</span>
+            <h2 style={sectionTitle}>{t("momentDetailWhyItMatters", language)}</h2>
             <p style={bodyText}>{model.story.summary}</p>
             {model.story.thankYouMessage && (
               <p style={thankYou}>{model.story.thankYouMessage}</p>
@@ -258,21 +269,21 @@ function MeetroMomentDetails({ setPage }) {
           </section>
 
           <section style={sectionCard}>
-            <span style={sectionKicker}>Project Journey</span>
-            <h2 style={sectionTitle}>From first conversation to closure</h2>
+            <span style={sectionKicker}>{t("momentDetailJourney", language)}</span>
+            <h2 style={sectionTitle}>{t("momentDetailJourneySubtitle", language)}</h2>
             <ol style={journeyList}>
               {model.journey.map((step, index) => (
                 <li key={step} style={journeyItem}>
                   <span style={journeyDot}>{index + 1}</span>
-                  <span>{step}</span>
+                  <span>{t(`momentDetailJourney_${step.toLowerCase().replace(/[^a-z]+/g, "_")}`, language)}</span>
                 </li>
               ))}
             </ol>
           </section>
 
           <section style={sectionCard}>
-            <span style={sectionKicker}>Related Moments</span>
-            <h2 style={sectionTitle}>Relationship History</h2>
+            <span style={sectionKicker}>{t("momentDetailRelated", language)}</span>
+            <h2 style={sectionTitle}>{t("momentDetailRelationshipHistory", language)}</h2>
             {relatedMoments.length > 0 ? (
               <div style={relatedGrid}>
                 {relatedMoments.map((relatedMoment) => (
@@ -283,20 +294,20 @@ function MeetroMomentDetails({ setPage }) {
                     onClick={() => openRelatedMoment(relatedMoment)}
                   >
                     <span style={relatedDate}>
-                      {formatDate(relatedMoment.completionDate || relatedMoment.closureDate)}
+                      {formatDate(relatedMoment.completionDate || relatedMoment.closureDate, language)}
                     </span>
                     <strong style={relatedTitle}>
-                      {relatedMoment.projectTitle || "Completed Project"}
+                      {relatedMoment.projectTitle || t("momentsCompletedProject", language)}
                     </strong>
                     <span style={relatedCategory}>
-                      {relatedMoment.projectCategory || "Verified work"}
+                      {relatedMoment.projectCategory || t("momentDetailVerifiedWork", language)}
                     </span>
                   </button>
                 ))}
               </div>
             ) : (
               <p style={emptyText}>
-                Related Moments will appear as more verified work becomes part of this history.
+                {t("momentDetailRelatedEmpty", language)}
               </p>
             )}
           </section>
@@ -304,8 +315,8 @@ function MeetroMomentDetails({ setPage }) {
 
         <aside style={sideColumn}>
           <section style={sectionCard}>
-            <span style={sectionKicker}>Relationship Context</span>
-            <h2 style={sectionTitle}>People connected to this work</h2>
+            <span style={sectionKicker}>{t("momentDetailRelationshipContext", language)}</span>
+            <h2 style={sectionTitle}>{t("momentDetailPeopleConnected", language)}</h2>
             <div style={relationshipStack}>
               {model.relationshipContext.customerName && (
                 <div style={relationshipRow}>
@@ -328,14 +339,14 @@ function MeetroMomentDetails({ setPage }) {
             </div>
             {model.relationshipContext.relationshipId && (
               <button type="button" style={secondaryButton} onClick={openRelationshipHistory}>
-                Open Relationship History
+                {t("momentDetailOpenRelationshipHistory", language)}
               </button>
             )}
           </section>
 
           <section style={sectionCard}>
-            <span style={sectionKicker}>Moment Details</span>
-            <h2 style={sectionTitle}>Project proof</h2>
+            <span style={sectionKicker}>{t("momentDetailDetails", language)}</span>
+            <h2 style={sectionTitle}>{t("momentDetailProjectProof", language)}</h2>
             {detailItems.length > 0 ? (
               <div style={detailsGrid}>
                 {detailItems.map((item) => (
@@ -344,12 +355,12 @@ function MeetroMomentDetails({ setPage }) {
               </div>
             ) : (
               <p style={emptyText}>
-                More proof will appear here when it is confirmed and safe to show.
+                {t("momentDetailProofEmpty", language)}
               </p>
             )}
             {model.details.reviewRating && (
               <div style={reviewCard}>
-                <span style={reviewStars}>{`${model.details.reviewRating}/5 confirmed rating`}</span>
+                <span style={reviewStars}>{t("momentDetailConfirmedRating", language, { rating: model.details.reviewRating })}</span>
                 {model.details.reviewText && <p style={reviewText}>{model.details.reviewText}</p>}
               </div>
             )}

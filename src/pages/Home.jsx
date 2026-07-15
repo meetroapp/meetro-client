@@ -10,6 +10,7 @@ import {
   readAllBusinessPortfolioItems,
 } from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
+import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import { isProfessionalSession, setActiveAccountMode } from "../utils/session";
@@ -1893,9 +1894,10 @@ function ActiveRequestDetailsSheet({
 }) {
   const lifecycle = getHomeownerWorkflowPresentation(request, language);
   const createdDate = request.createdAt
-    ? new Date(request.createdAt).toLocaleDateString(
-        language === "es" ? "es-US" : "en-US",
-        { month: "short", day: "numeric", year: "numeric" }
+    ? formatLocaleDate(
+        request.createdAt,
+        { month: "short", day: "numeric", year: "numeric" },
+        language
       )
     : t("homeDatePending", language);
   const quotesCount = Array.isArray(request.quotesReceived)
@@ -2051,13 +2053,12 @@ function ServiceHistoryDetailsSheet({
   const completedDateValue = completedDateSource ? new Date(completedDateSource) : null;
   const completedDate =
     completedDateValue && !Number.isNaN(completedDateValue.getTime())
-      ? completedDateValue.toLocaleDateString(
-        language === "es" ? "es-US" : "en-US",
-        { month: "short", day: "numeric", year: "numeric" }
-      )
-    : language === "es"
-    ? "Fecha pendiente"
-    : "Date pending";
+      ? formatLocaleDate(
+          completedDateValue,
+          { month: "short", day: "numeric", year: "numeric" },
+          language
+        )
+      : t("homeDatePending", language);
   const photosCount = [
     ...(Array.isArray(request.photos) ? request.photos : []),
     ...(Array.isArray(request.completionPhotos) ? request.completionPhotos : []),
@@ -2067,7 +2068,7 @@ function ServiceHistoryDetailsSheet({
   const finalAmount = rawFinalAmount
     ? String(rawFinalAmount).startsWith("$")
       ? String(rawFinalAmount)
-      : `$${rawFinalAmount}`
+      : formatLocaleCurrency(rawFinalAmount, "USD", {}, language)
     : "";
   const review = request.review || null;
   const receiptUrl = getHistoryReceiptUrl(request);
@@ -2194,13 +2195,12 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
   const lifecycle = getHomeownerLifecycleStage(request, language);
   const isClosed = request.status === "closed" || lifecycle.key === "history";
   const completedDate = request.completedAt
-    ? new Date(request.completedAt).toLocaleDateString(
-        language === "es" ? "es-US" : "en-US",
-        { month: "short", day: "numeric", year: "numeric" }
+    ? formatLocaleDate(
+        request.completedAt,
+        { month: "short", day: "numeric", year: "numeric" },
+        language
       )
-    : language === "es"
-    ? "Fecha pendiente"
-    : "Date pending";
+    : t("homeDatePending", language);
   const amountValue =
     request.finalAmount ||
     request.revenue ||
@@ -2210,7 +2210,7 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
   const displayAmount = amountValue
     ? String(amountValue).startsWith("$")
       ? String(amountValue)
-      : `$${amountValue}`
+      : formatLocaleCurrency(amountValue, "USD", {}, language)
     : "";
   const paymentStatus = String(request.paymentStatus || "").replace(/_/g, " ");
   const receiptUrl = getHistoryReceiptUrl(request);

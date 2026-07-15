@@ -73,10 +73,10 @@ test("audited workflow screens use action-first labels for major project actions
     activeWorkflowSource,
     /Open Conversation|Open Chat|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project|View Details/
   );
-  assert.match(activeWorkflowSource, /Continue Conversation/);
-  assert.match(activeWorkflowSource, /Review Proposal/);
-  assert.match(activeWorkflowSource, /Continue Work/);
-  assert.match(activeWorkflowSource, /Review Details/);
+  assert.match(activeWorkflowSource, /assistantActionOpenConversation/);
+  assert.match(activeWorkflowSource, /assistantCompanionOpenWorkCenter/);
+  assert.match(activeWorkflowSource, /assistantActionOpenSchedule/);
+  assert.match(activeWorkflowSource, /assistantProjectBriefNextStartWork/);
 });
 
 test("workflow language keys are translated for every supported language", () => {

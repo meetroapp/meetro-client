@@ -14,7 +14,10 @@ const contractorDashboardSource = fs.readFileSync(
 test("chat schedule handoff is role-safe and does not send homeowners to business scheduling", () => {
   assert.match(conversationThreadSource, /const openChatScheduleModal = \(\) => \{/);
   assert.match(conversationThreadSource, /if \(currentViewerRole !== "business"\) \{/);
-  assert.match(conversationThreadSource, /Scheduling is managed by the professional/);
+  assert.match(
+    conversationThreadSource,
+    /conversationSchedulingIsManagedByTheProfessionalYouCanMessageThemAboutThe/
+  );
   assert.match(conversationThreadSource, /textareaRef\.current\?\.focus\?\.\(\)/);
   assert.match(conversationThreadSource, /handOffChatScheduleToWorkCenter\(\)/);
   assert.doesNotMatch(
@@ -44,7 +47,7 @@ test("Work Center Add Visit consumes chat prefill and saves one linked visit", (
   assert.match(contractorDashboardSource, /businessId:\s*prefill\.businessId/);
   assert.match(contractorDashboardSource, /businessName:\s*prefill\.businessName/);
   assert.match(contractorDashboardSource, /scheduleDedupeKey/);
-  assert.match(contractorDashboardSource, /This visit is already saved for this customer/);
+  assert.match(contractorDashboardSource, /workCenterThisVisitIsAlreadySavedForThisCustomer/);
   assert.match(contractorDashboardSource, /relationshipId,/);
   assert.match(contractorDashboardSource, /customerAccountId,/);
   assert.match(contractorDashboardSource, /externalContactId,/);
@@ -61,7 +64,7 @@ test("saved linked visits auto-send schedule cards and external visits use share
   assert.match(contractorDashboardSource, /relationshipId: visit\.relationshipId \|\| ""/);
   assert.match(contractorDashboardSource, /customerAccountId: visit\.customerAccountId \|\| ""/);
   assert.match(contractorDashboardSource, /externalContactId: visit\.externalContactId \|\| ""/);
-  assert.match(contractorDashboardSource, /Share by Text \/ iOS Message/);
+  assert.match(contractorDashboardSource, /workCenterShareByTextIOSMessage/);
   assert.match(contractorDashboardSource, /async function shareExternalScheduleVisit/);
   assert.match(contractorDashboardSource, /Share\.share/);
   assert.match(contractorDashboardSource, /sms:\$\{encodeURIComponent\(phone\)\}/);

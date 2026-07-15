@@ -48,8 +48,7 @@ test("missing backend message prerequisites never simulate delivery", () => {
 
 test("failed delivery remains visible and has a truthful status label", () => {
   assert.match(deliveryBlock, /mergeConversationMessages\(prev, \[messageWithRole\]\)/);
-  assert.match(conversationThreadSource, /if \(status === "failed"\) return "Failed"/);
-  assert.match(conversationThreadSource, /if \(status === "failed"\) return "Falló"/);
+  assert.match(conversationThreadSource, /failed: t\("stateFailed", language\)/);
   assert.match(
     conversationThreadSource,
     /mine && !msg\.unsent && <span>\{getStatusLabel\(msg\.status\)\}<\/span>/

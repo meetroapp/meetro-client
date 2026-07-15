@@ -49,11 +49,11 @@ test("Communication Center uses approved warm visual tokens instead of legacy co
 test("Communication Center rows and workspace context express relationship-first understanding", () => {
   assert.match(messagesSource, /getCommunicationIntent\(conversation\)\.trim\(\)/);
   assert.match(messagesSource, /getCommunicationIntent\(primaryConversation, relationship\)\.trim\(\)/);
-  assert.match(messagesSource, /Relationship and project context/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Relationship<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Communication<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Related work<\/p>/);
-  assert.match(messagesSource, /<p style=\{workspaceContextEyebrow\}>Memory<\/p>/);
+  assert.match(messagesSource, /messagesContextAria/);
+  assert.match(messagesSource, /messagesRelationship/);
+  assert.match(messagesSource, /messagesCommunication/);
+  assert.match(messagesSource, /messagesRelatedWork/);
+  assert.match(messagesSource, /messagesMemory/);
 });
 
 test("Communication Center preserves live conversation routing and does not introduce role switching", () => {

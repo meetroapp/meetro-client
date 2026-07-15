@@ -25,7 +25,7 @@ test("schedule form uses customer address as default visit location", () => {
 });
 
 test("schedule form does not mirror customer address into duplicate location field", () => {
-  assert.match(contractorDashboardSource, /placeholder=\{\s*activeLanguage === "es"[\s\S]*Different visit location \(optional\)/);
+  assert.match(contractorDashboardSource, /workCenterDifferentVisitLocationOptional/);
   assert.doesNotMatch(
     contractorDashboardSource,
     /manualCustomerAddress: e\.target\.value,\s*location: e\.target\.value/

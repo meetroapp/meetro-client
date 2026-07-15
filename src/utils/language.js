@@ -1,4 +1,9 @@
 import { isDeferredTranslationKey } from "./localizationContract.js";
+import { coreWorkflowLanguage } from "./coreWorkflowLanguage.js";
+import { messagesWorkflowLanguage } from "./messagesWorkflowLanguage.js";
+import { conversationWorkflowLanguage } from "./conversationWorkflowLanguage.js";
+import { coreRouteParityLanguage } from "./coreRouteParityLanguage.js";
+import { dailyWorkflowLanguage } from "./dailyWorkflowLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -12764,6 +12769,26 @@ Object.entries(localizationFoundationLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(sharedInterfaceLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(coreWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(messagesWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(conversationWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(coreRouteParityLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(dailyWorkflowLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 

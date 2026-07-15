@@ -340,19 +340,19 @@ function normalizeRelationshipId(value = "") {
 }
 
 const RELATIONSHIP_VIEW_OPTIONS = [
-  ["all", "All Relationships"],
-  ["customer", "Customers"],
-  ["professional", "Professionals / Vendors"],
-  ["employee", "Employees"],
-  ["tenant", "Tenants"],
-  ["propertyManager", "Property Managers"],
+  ["all", "messagesViewAllRelationships"],
+  ["customer", "messagesViewCustomers"],
+  ["professional", "messagesViewProfessionals"],
+  ["employee", "messagesViewEmployees"],
+  ["tenant", "messagesViewTenants"],
+  ["propertyManager", "messagesViewPropertyManagers"],
 ];
 
-const CONTACT_SECTION_OPTION = ["contacts", "Contacts"];
+const CONTACT_SECTION_OPTION = ["contacts", "messagesSectionContacts"];
 const COMMUNICATION_SECTION_OPTIONS = [
-  ["conversations", "Conversations"],
-  ["hiring", "Hiring"],
-  ["emergency", "Emergency"],
+  ["conversations", "messagesSectionConversations"],
+  ["hiring", "messagesSectionHiring"],
+  ["emergency", "messagesSectionEmergency"],
 ];
 const MESSAGE_SECTION_OPTIONS = [
   CONTACT_SECTION_OPTION,
@@ -378,27 +378,27 @@ function normalizeMessageSection(value) {
 }
 
 const CONVERSATION_SECTION_ACTIONS = [
-  ["chat", "New Conversation"],
-  ["group", "New Group Conversation"],
+  ["chat", "messagesNewConversation"],
+  ["group", "messagesNewGroup"],
 ];
-const SAVED_HISTORY_ACTION = ["savedHistory", "Saved Conversation History"];
+const SAVED_HISTORY_ACTION = ["savedHistory", "messagesSavedHistoryTitle"];
 
 const CONTACTS_SECTION_ACTIONS = [
-  ["customer", "Add Customer"],
-  ["professional", "Add Professional / Vendor"],
-  ["employee", "Add Employee"],
-  ["tenant", "Add Tenant"],
-  ["propertyManager", "Add Property Manager"],
-  ["import", "Import Contacts"],
-  ["invite", "Invite to Meetro"],
+  ["customer", "messagesAddCustomer"],
+  ["professional", "messagesAddProfessional"],
+  ["employee", "messagesAddEmployee"],
+  ["tenant", "messagesAddTenant"],
+  ["propertyManager", "messagesAddPropertyManager"],
+  ["import", "messagesImportContacts"],
+  ["invite", "messagesInviteToMeetro"],
 ];
 
 const HIRING_SECTION_ACTIONS = [
-  ["hiringCenter", "Open Hiring Center"],
+  ["hiringCenter", "messagesOpenHiringCenter"],
 ];
 
 const EMERGENCY_SECTION_ACTIONS = [
-  ["emergencyCenter", "Open Emergency Request"],
+  ["emergencyCenter", "messagesOpenEmergency"],
 ];
 
 const RELATIONSHIP_FIELD_BY_TYPE = {
@@ -580,7 +580,6 @@ function MessagesInbox({ setPage, currentPage }) {
     };
   }, [focusedMessagesFlowOpen]);
 
-  const isSpanish = language === "es";
 
   function readActiveEmergencyRecord() {
     if (!canReadLegacyWorkflowStorage()) return {};
@@ -654,7 +653,7 @@ function MessagesInbox({ setPage, currentPage }) {
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
     localStorage.getItem("selectedEmergencyService") ||
-    (isSpanish ? "Emergencia" : "Emergency Request");
+    t("messagesEmergencyRequest", language);
   const emergencyBusinessName =
     activeEmergencyRecord.businessName ||
     activeEmergencyRecord.business_name ||
@@ -691,20 +690,18 @@ function MessagesInbox({ setPage, currentPage }) {
       latestMessageText ||
       activeEmergencyRecord.issue ||
       activeEmergencyRecord.project_description ||
-      (isSpanish
-        ? "Conversación de emergencia activa guardada."
-        : "Saved active emergency conversation."),
+      t("messagesSavedEmergencyConversation", language),
     homeowner_email:
       activeEmergencyRecord.customerName ||
       activeEmergencyRecord.customer ||
-      (isSpanish ? "Cliente de Emergencia" : "Emergency Client"),
+      t("messagesEmergencyClient", language),
     location:
       activeEmergencyRecord.location ||
       localStorage.getItem("emergencyLocation") ||
-      "Emergency Service Location",
+      t("messagesEmergencyLocation", language),
     status:
       emergencyStatus ||
-      (isSpanish ? "emergencia" : "emergency"),
+      t("emergency", language),
     unread:
       isConversationUnreadForRole(emergencyConversationId, undefined, false),
     conversation_type: "emergency",
@@ -829,9 +826,7 @@ function MessagesInbox({ setPage, currentPage }) {
         localStorage.getItem(`meetro_conversation_saved_${item.id}`) === "true",
       status:
         isConversationUserSavedToHistory(item)
-          ? isSpanish
-            ? "Historial guardado"
-            : t("savedHistory")
+          ? t("savedHistory", language)
           : item.status,
     }));
   }
@@ -965,11 +960,7 @@ function MessagesInbox({ setPage, currentPage }) {
   function deleteConversation(e, quoteId) {
     e.stopPropagation();
 
-    const confirmed = window.confirm(
-      language === "es"
-        ? "¿Eliminar esta conversación?"
-        : "Delete this conversation?"
-    );
+    const confirmed = window.confirm(t("messagesDeleteConversationConfirm", language));
 
     if (!confirmed) return;
 
@@ -1169,10 +1160,10 @@ function MessagesInbox({ setPage, currentPage }) {
   function getWorkflowStatusLabel(quote) {
     if (quote.saved_to_history) return t("savedHistory");
     if (isHiringConversation(quote)) {
-      return quote.status || (isSpanish ? "Nueva consulta" : "New inquiry");
+      return quote.status || t("messagesNewInquiry", language);
     }
     if (quote.conversation_type === "emergency") {
-      return isSpanish ? "Emergencia activa" : "Active emergency";
+      return t("messagesActiveEmergency", language);
     }
 
     const rawStatus = String(quote.status || quote.workflow_status || "").toLowerCase();
@@ -1188,24 +1179,24 @@ function MessagesInbox({ setPage, currentPage }) {
       description.includes("appointment") ||
       description.includes("scheduled")
     ) {
-      return isSpanish ? "Cita programada" : "Appointment Scheduled";
+      return t("messagesAppointmentScheduled", language);
     }
 
     if (rawStatus.includes("quote") || description.includes("quote")) {
-      return isSpanish ? "Cotización en revisión" : "Quote in Review";
+      return t("messagesQuoteInReview", language);
     }
 
     if (rawStatus.includes("completion") || rawStatus.includes("completed")) {
-      return isSpanish ? "Revisión de finalización" : "Completion Review";
+      return t("messagesCompletionReview", language);
     }
 
     if (rawStatus.includes("closure") || rawStatus.includes("closed")) {
-      return isSpanish ? "Cierre pendiente" : "Closure Pending";
+      return t("messagesClosurePending", language);
     }
 
     if (quote.unread) return t("messageNeedsAttention");
 
-    return isSpanish ? "Comunicación activa" : "Active Communication";
+    return t("messagesActiveCommunication", language);
   }
 
   function getConversationWorkflowLabel(quote) {
@@ -1397,9 +1388,7 @@ function MessagesInbox({ setPage, currentPage }) {
   function getConversationNextStep(quote) {
     if (quote.saved_to_history) return t("messageNextStepSaved");
     if (isHiringConversation(quote)) {
-      return isSpanish
-        ? "Responder sobre la posición"
-        : "Reply about this position";
+      return t("messagesReplyPosition", language);
     }
     if (quote.conversation_type === "emergency") return t("messageNextStepEmergency");
     if (quote.unread) return t("messageNextStepReply");
@@ -1493,22 +1482,16 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (isEmergencyConversationType(conversation)) {
       if (isFinalConversationState(conversation)) {
-        return isSpanish
-          ? "Servicio de emergencia completado"
-          : "Completed emergency service";
+        return t("messagesCompletedEmergencyService", language);
       }
 
       if (userSaved) {
-        return isSpanish
-          ? "Conversación de emergencia guardada"
-          : "Emergency conversation saved";
+        return t("messagesEmergencyConversationSaved", language);
       }
     }
 
     if (userSaved && isFinalConversationState(conversation)) {
-      return isSpanish
-        ? "Conversación completada guardada"
-        : "Completed conversation saved";
+      return t("messagesCompletedConversationSaved", language);
     }
 
     return (
@@ -1516,10 +1499,8 @@ function MessagesInbox({ setPage, currentPage }) {
       conversation.project_description ||
       conversation.status ||
       (userSaved
-        ? isSpanish
-          ? "Conversación guardada"
-          : "Saved conversation"
-        : "Conversation")
+        ? t("messagesSavedConversation", language)
+        : t("messagesConversationFallback", language))
     );
   }
 
@@ -1586,29 +1567,29 @@ function MessagesInbox({ setPage, currentPage }) {
   function getEmptyMessageCopy() {
     if (messageSection === "conversations") {
       return {
-        title: "No conversations yet",
-        text: "Start a conversation when communication is ready. Active conversations will stay here.",
+        title: t("messagesNoConversations", language),
+        text: t("messagesNoConversationsText", language),
       };
     }
 
     if (messageSection === "contacts") {
       return {
-        title: "No contacts yet",
-        text: "Saved contacts will appear here before a Meetro conversation begins.",
+        title: t("messagesNoContacts", language),
+        text: t("messagesNoContactsText", language),
       };
     }
 
     if (messageSection === "hiring") {
       return {
-        title: "No hiring conversations yet",
-        text: "Applicants will appear here after they contact you or you start a conversation from Hiring Center.",
+        title: t("messagesNoHiringConversations", language),
+        text: t("messagesNoHiringConversationsText", language),
       };
     }
 
     if (messageSection === "emergency") {
       return {
-        title: "No emergency conversations",
-        text: "Urgent service and dispatch conversations will stay separated here.",
+        title: t("messagesNoEmergencyConversations", language),
+        text: t("messagesNoEmergencyConversationsText", language),
       };
     }
 
@@ -1692,12 +1673,11 @@ function MessagesInbox({ setPage, currentPage }) {
         getConversationSearchText(quote).includes(normalizedSearchQuery)
       )
     : prioritizedVisibleQuotes;
-  const activeMessageSectionLabel =
+  const activeMessageSectionLabel = t(
     MESSAGE_SECTION_OPTIONS.find(([key]) => key === messageSection)?.[1] ||
-    "Conversations";
-  const activeRelationshipViewLabel =
-    RELATIONSHIP_VIEW_OPTIONS.find(([key]) => key === relationshipView)?.[1] ||
-    "All";
+      "messagesSectionConversations",
+    language
+  );
   const emptyCopy = getEmptyMessageCopy();
   const activeSplitConversation = searchedVisibleQuotes.find(
     (quote) => String(quote.id) === String(activeSplitConversationId)
@@ -1836,10 +1816,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (explicitIntent) return explicitIntent;
     if (isEmergencyConversationType(conversation)) {
-      return isSpanish ? "Servicio de emergencia" : "Emergency Service";
+      return t("messagesEmergencyService", language);
     }
     if (isHiringConversation(conversation)) {
-      return isSpanish ? "Contratación" : "Hiring";
+      return t("hiring", language);
     }
 
     const projectTitle = getWorkspaceContextValue(
@@ -1866,21 +1846,21 @@ function MessagesInbox({ setPage, currentPage }) {
     if (projectTitle && !isGenericConversationLabel(projectTitle)) {
       return projectTitle;
     }
-    if (/permit/.test(combined)) return isSpanish ? "Seguimiento de permiso" : "Permit Follow-up";
+    if (/permit/.test(combined)) return t("messagesPermitFollowUp", language);
     if (/maintenance|repair|ticket|issue/.test(combined)) {
-      return isSpanish ? "Mantenimiento" : "Maintenance";
+      return t("messagesMaintenance", language);
     }
     if (/quote|proposal|estimate|cotiz/.test(combined)) {
-      return isSpanish ? "Conversación de estimado" : "Estimate Discussion";
+      return t("messagesEstimateDiscussion", language);
     }
     if (/invoice|payment|receipt|pago/.test(combined)) {
-      return isSpanish ? "Conversación de pago" : "Payment Discussion";
+      return t("messagesPaymentDiscussion", language);
     }
     if (/schedule|appointment|visit|cita/.test(combined)) {
-      return isSpanish ? "Visita programada" : "Scheduled Visit";
+      return t("messagesScheduledVisit", language);
     }
 
-    return isSpanish ? "Comunicación general" : "General Communication";
+    return t("messagesGeneralCommunication", language);
   }
 
   function getConversationOwnerLabel(conversation = {}, relationship = null) {
@@ -1896,18 +1876,18 @@ function MessagesInbox({ setPage, currentPage }) {
     );
 
     if (explicitOwner) return explicitOwner;
-    if (conversation.unread) return isSpanish ? "Tú" : "You";
+    if (conversation.unread) return t("messagesOwnerYou", language);
 
     const state = getResolvedConversationState(conversation);
 
     if (/customer|homeowner|client|tenant|approval|approve|confirm|change_requested/.test(state)) {
-      return isSpanish ? "Cliente" : "Customer";
+      return t("messagesOwnerCustomer", language);
     }
     if (/professional|business|contractor|provider|technician|in_progress|scheduled|evaluation/.test(state)) {
-      return isSpanish ? "Profesional" : "Professional";
+      return t("messagesOwnerProfessional", language);
     }
 
-    return isSpanish ? "Compartido" : "Shared";
+    return t("messagesOwnerShared", language);
   }
 
   function getConversationAuthorityFacts(conversation = {}, relationship = null) {
@@ -1915,16 +1895,16 @@ function MessagesInbox({ setPage, currentPage }) {
 
     return [
       {
-        label: "Intent",
+        label: t("messagesFactIntent", language),
         value: getCommunicationIntent(conversation, relationship),
       },
-      statusLabel && { label: "Current status", value: statusLabel },
+      statusLabel && { label: t("messagesFactCurrentStatus", language), value: statusLabel },
       {
-        label: "Current owner",
+        label: t("messagesFactCurrentOwner", language),
         value: getConversationOwnerLabel(conversation, relationship),
       },
       {
-        label: "Next decision",
+        label: t("messagesFactNextDecision", language),
         value: getConversationNextStep(conversation),
       },
     ].filter(Boolean);
@@ -1975,13 +1955,13 @@ function MessagesInbox({ setPage, currentPage }) {
       "";
 
     return [
-      projectTitle && { label: "Related work", value: projectTitle },
-      currentWork && { label: "Current work", value: currentWork },
+      projectTitle && { label: t("messagesFactRelatedWork", language), value: projectTitle },
+      currentWork && { label: t("messagesFactCurrentWork", language), value: currentWork },
       (scheduleDate || scheduleTime) && {
-        label: "Schedule",
+        label: t("messagesFactSchedule", language),
         value: [scheduleDate, scheduleTime].filter(Boolean).join(" · "),
       },
-      quoteStatus && { label: "Quote status", value: quoteStatus },
+      quoteStatus && { label: t("messagesFactQuoteStatus", language), value: quoteStatus },
     ].filter(Boolean);
   }
 
@@ -2002,19 +1982,19 @@ function MessagesInbox({ setPage, currentPage }) {
         : getConversationDisplayTime(conversation);
 
     return [
-      relationshipSince && { label: "Relationship since", value: relationshipSince },
-      latestActivity && { label: "Recent activity", value: latestActivity },
+      relationshipSince && { label: t("messagesRelationshipSince", language), value: relationshipSince },
+      latestActivity && { label: t("messagesRecentActivity", language), value: latestActivity },
       (counts.currentWork || 0) > 0 && {
-        label: "Active work",
+        label: t("messagesActiveWork", language),
         value: `${counts.currentWork}`,
       },
       (counts.jobHistory || 0) > 0 && {
-        label: "Completed work",
+        label: t("messagesCompletedWork", language),
         value: `${counts.jobHistory}`,
       },
-      (counts.invoices || 0) > 0 && { label: "Invoices", value: `${counts.invoices}` },
+      (counts.invoices || 0) > 0 && { label: t("messagesInvoices", language), value: `${counts.invoices}` },
       ((counts.documents || 0) > 0 || (counts.photos || 0) > 0) && {
-        label: "Documents",
+        label: t("messagesDocuments", language),
         value: `${(counts.documents || 0) + (counts.photos || 0)}`,
       },
     ]
@@ -2181,27 +2161,27 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function getHeaderActionLabel() {
-    if (messageSection === "conversations") return "New Conversation";
-    if (messageSection === "contacts") return "Add / Import";
-    if (messageSection === "hiring") return "Open Hiring Center";
-    if (messageSection === "emergency") return "Open Emergency";
+    if (messageSection === "conversations") return t("messagesNewConversation", language);
+    if (messageSection === "contacts") return t("messagesAddImport", language);
+    if (messageSection === "hiring") return t("messagesOpenHiringCenter", language);
+    if (messageSection === "emergency") return t("messagesOpenEmergency", language);
 
-    return `${activeMessageSectionLabel} actions`;
+    return t("messagesSectionActions", language, { section: activeMessageSectionLabel });
   }
 
   function getHeaderActionMenuLabel() {
-    if (messageSection === "conversations") return "New Conversation";
-    if (messageSection === "contacts") return "Contacts actions";
+    if (messageSection === "conversations") return t("messagesNewConversation", language);
+    if (messageSection === "contacts") return t("messagesContactsActions", language);
 
-    return `${activeMessageSectionLabel} actions`;
+    return t("messagesSectionActions", language, { section: activeMessageSectionLabel });
   }
 
   function getMessageSearchPlaceholder() {
-    if (messageSection === "contacts") return "Search Contacts";
-    if (messageSection === "hiring") return "Search Applicants";
-    if (messageSection === "emergency") return "Search Emergency";
+    if (messageSection === "contacts") return t("messagesSearchContacts", language);
+    if (messageSection === "hiring") return t("messagesSearchApplicants", language);
+    if (messageSection === "emergency") return t("messagesSearchEmergency", language);
 
-    return "Search Conversations";
+    return t("messagesSearchConversations", language);
   }
 
   function getMessageSectionCount(section) {
@@ -2294,14 +2274,16 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function getContactTypeLabel(relationship = {}) {
     const record = getRelationshipContactRecord(relationship);
+    const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
+      (option) =>
+        option.id === record.contactImportType ||
+        option.relationshipType === relationship.type
+    );
 
     return (
-      record.contactImportLabel ||
-      CONTACT_IMPORT_TYPE_OPTIONS.find(
-        (option) => option.relationshipType === relationship.type
-      )?.label ||
+      (typeOption ? t(`messagesContactType_${typeOption.id}`, language) : "") ||
       relationship.typeLabel ||
-      "Contact"
+      t("messagesContact", language)
     );
   }
 
@@ -2310,9 +2292,9 @@ function MessagesInbox({ setPage, currentPage }) {
     const linked = record.meetroAccountLinked === true || relationship.meetroAccountLinked === true;
     const inviteStatus = record.inviteStatus || relationship.inviteStatus || "not_invited";
 
-    if (linked) return "Linked";
-    if (inviteStatus === "sent") return "Invited";
-    return "Not invited yet";
+    if (linked) return t("messagesLinked", language);
+    if (inviteStatus === "sent") return t("messagesInvited", language);
+    return t("messagesNotInvited", language);
   }
 
   function getContactLocationFact(relationship = {}) {
@@ -2328,7 +2310,11 @@ function MessagesInbox({ setPage, currentPage }) {
     );
 
     if (address) {
-      return { label: "Address", value: address || "Not added yet", span: "wide" };
+      return {
+        label: t("messagesAddress", language),
+        value: address || t("messagesNotAdded", language),
+        span: "wide",
+      };
     }
 
     const serviceArea = firstText(
@@ -2344,7 +2330,11 @@ function MessagesInbox({ setPage, currentPage }) {
       contact.address
     );
 
-    return { label: "Service Area", value: serviceArea || "Not added yet", span: "wide" };
+    return {
+      label: t("messagesServiceArea", language),
+      value: serviceArea || t("messagesNotAdded", language),
+      span: "wide",
+    };
   }
 
   function getContactImportTypeId(relationship = {}) {
@@ -2780,7 +2770,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function getRelationshipPreviewText(relationship = {}) {
     if (isImportedInactiveRelationship(relationship)) {
-      return "Saved contact · Invite to Meetro";
+      return t("messagesSavedContactInvite", language);
     }
 
     const conversation = relationship.primaryConversation || {};
@@ -2791,13 +2781,13 @@ function MessagesInbox({ setPage, currentPage }) {
       conversation.project_description ||
       conversation.status ||
       relationship.currentWorkStatus ||
-      "Conversation"
+      t("messagesConversationFallback", language)
     );
   }
 
   function getRelationshipDisplayTime(relationship = {}) {
     if (isImportedInactiveRelationship(relationship)) {
-      return "Saved";
+      return t("stateSaved", language);
     }
 
     return getConversationDisplayTime(relationship.primaryConversation || {});
@@ -2813,21 +2803,21 @@ function MessagesInbox({ setPage, currentPage }) {
         (item) => item.conversation?.conversation_type === "emergency"
       )
     ) {
-      return "Emergency";
+      return t("emergency", language);
     }
 
-    if ((counts.openTickets || 0) > 0) return "Open Ticket";
-    if ((counts.currentWork || 0) > 0) return "Active Work";
-    if ((counts.unread || 0) > 0) return "Unread";
+    if ((counts.openTickets || 0) > 0) return t("messagesOpenTicket", language);
+    if ((counts.currentWork || 0) > 0) return t("messagesActiveWork", language);
+    if ((counts.unread || 0) > 0) return t("unread", language);
 
     return "";
   }
 
   function getConversationRowStatusChip(quote = {}) {
-    if (isEmergencyConversationType(quote)) return "Emergency";
-    if (isHiringConversation(quote)) return "Hiring";
-    if (quote.unread) return "Unread";
-    if (isSavedChatHistoryConversation(quote)) return "Saved";
+    if (isEmergencyConversationType(quote)) return t("emergency", language);
+    if (isHiringConversation(quote)) return t("hiring", language);
+    if (quote.unread) return t("unread", language);
+    if (isSavedChatHistoryConversation(quote)) return t("stateSaved", language);
     return "";
   }
 
@@ -2843,12 +2833,12 @@ function MessagesInbox({ setPage, currentPage }) {
       typeLabel:
         options.typeLabel ||
         (isEmergencyConversationType(conversation)
-          ? "Emergency"
+          ? t("emergency", language)
           : isHiringConversation(conversation)
-          ? "Hiring"
-          : "Relationship"),
+          ? t("hiring", language)
+          : t("messagesRelationship", language)),
     });
-    const isEmergencyRow = statusChip === "Emergency";
+    const isEmergencyRow = isEmergencyConversationType(conversation);
 
     return (
       <button
@@ -2921,7 +2911,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={{
                   ...conversationStatusChip,
                   ...(isEmergencyRow ? emergencyStatusBadge : {}),
-                  ...(statusChip === "Unread" ? unreadStatusBadge : {}),
+                  ...(conversation.unread ? unreadStatusBadge : {}),
                 }}
               >
                 {statusChip}
@@ -2941,14 +2931,14 @@ function MessagesInbox({ setPage, currentPage }) {
       return (
         <aside
           style={workspaceContextPane}
-          aria-label="Relationship and project context"
+          aria-label={t("messagesContextAria", language)}
           className="meetro-visual-surface"
         >
           <div style={workspaceContextEmpty}>
-            <div style={workspaceContextIcon}>CTX</div>
-            <h2 style={workspaceContextTitle}>Relationship context</h2>
+            <div style={workspaceContextIcon} aria-hidden="true">CTX</div>
+            <h2 style={workspaceContextTitle}>{t("messagesRelationshipContext", language)}</h2>
             <p style={workspaceContextText}>
-              Context will appear here as this relationship develops.
+              {t("messagesContextEmpty", language)}
             </p>
           </div>
         </aside>
@@ -2991,11 +2981,11 @@ function MessagesInbox({ setPage, currentPage }) {
     return (
       <aside
         style={workspaceContextPane}
-        aria-label="Relationship and project context"
+        aria-label={t("messagesContextAria", language)}
         className="meetro-visual-surface"
       >
         <section style={workspaceContextSection}>
-          <p style={workspaceContextEyebrow}>Relationship</p>
+          <p style={workspaceContextEyebrow}>{t("messagesRelationship", language)}</p>
           <div style={workspaceIdentityRow}>
             <div style={workspaceContextAvatar}>
               {contextIdentity.avatar ? (
@@ -3017,23 +3007,23 @@ function MessagesInbox({ setPage, currentPage }) {
 
         {hasContactInfo && (
           <section style={workspaceContextSection}>
-            <p style={workspaceContextEyebrow}>Contact</p>
+            <p style={workspaceContextEyebrow}>{t("messagesContact", language)}</p>
             <div style={workspaceFactList}>
               {contact.phone && (
                 <div style={workspaceFactRow}>
-                  <span style={workspaceFactLabel}>Phone</span>
+                  <span style={workspaceFactLabel}>{t("messagesPhone", language)}</span>
                   <strong style={workspaceFactValue}>{contact.phone}</strong>
                 </div>
               )}
               {contact.email && (
                 <div style={workspaceFactRow}>
-                  <span style={workspaceFactLabel}>Email</span>
+                  <span style={workspaceFactLabel}>{t("messagesEmail", language)}</span>
                   <strong style={workspaceFactValue}>{contact.email}</strong>
                 </div>
               )}
               {contact.address && (
                 <div style={workspaceFactRow}>
-                  <span style={workspaceFactLabel}>Address</span>
+                  <span style={workspaceFactLabel}>{t("messagesAddress", language)}</span>
                   <strong style={workspaceFactValue}>{contact.address}</strong>
                 </div>
               )}
@@ -3042,7 +3032,7 @@ function MessagesInbox({ setPage, currentPage }) {
         )}
 
         <section style={workspaceContextSection}>
-          <p style={workspaceContextEyebrow}>Communication</p>
+          <p style={workspaceContextEyebrow}>{t("messagesCommunication", language)}</p>
           <div style={workspaceFactList}>
             {authorityFacts.map((fact) => (
               <div key={fact.label} style={workspaceFactRow}>
@@ -3054,7 +3044,7 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
 
         <section style={workspaceContextSection}>
-          <p style={workspaceContextEyebrow}>Related work</p>
+          <p style={workspaceContextEyebrow}>{t("messagesRelatedWork", language)}</p>
           {hasContextFacts ? (
             <div style={workspaceFactList}>
               {contextFacts.map((fact) => (
@@ -3066,7 +3056,7 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           ) : (
             <p style={workspaceContextText}>
-              Context will appear here as this relationship develops.
+              {t("messagesContextEmpty", language)}
             </p>
           )}
 
@@ -3084,7 +3074,7 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
 
         <section style={workspaceContextSection}>
-          <p style={workspaceContextEyebrow}>Memory</p>
+          <p style={workspaceContextEyebrow}>{t("messagesMemory", language)}</p>
           {hasMemoryFacts ? (
             <div style={workspaceFactList}>
               {memoryFacts.map((fact) => (
@@ -3096,7 +3086,7 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           ) : (
             <p style={workspaceContextText}>
-              Relationship memory will grow as work, decisions, and history accumulate.
+              {t("messagesMemoryEmpty", language)}
             </p>
           )}
         </section>
@@ -3873,7 +3863,7 @@ function MessagesInbox({ setPage, currentPage }) {
       relationship.type || record.relationshipType || record.contactImportType
     );
     const contactTypeLabel = isProfessionalBusinessContact
-      ? "Professional / Business"
+      ? t("messagesProfessionalBusiness", language)
       : getContactTypeLabel(relationship);
     const resolvedIdentity = resolveRelationshipIdentity({
       relationship,
@@ -3882,43 +3872,43 @@ function MessagesInbox({ setPage, currentPage }) {
       isLinked,
       typeLabel: contactTypeLabel,
       status: isLinked
-        ? "Connected in Meetro."
-        : "Invite when you are ready to continue this relationship in Meetro.",
+        ? t("messagesConnectedInMeetro", language)
+        : t("messagesInviteWhenReady", language),
     });
     const locationContactRow = getContactLocationFact(relationship);
     const contactRows = [
-      { label: "Type", value: contactTypeLabel },
-      { label: "Phone", value: contact.phone || "Not added yet" },
-      { label: "Email", value: contact.email || "Not added yet", span: "wide" },
+      { label: t("messagesType", language), value: contactTypeLabel },
+      { label: t("messagesPhone", language), value: contact.phone || t("messagesNotAdded", language) },
+      { label: t("messagesEmail", language), value: contact.email || t("messagesNotAdded", language), span: "wide" },
       locationContactRow,
-      { label: "Invite status", value: getContactInviteStatus(relationship) },
-      { label: "Meetro account", value: isLinked ? "Linked" : "Not linked yet" },
+      { label: t("messagesInviteStatus", language), value: getContactInviteStatus(relationship) },
+      { label: t("messagesMeetroAccount", language), value: isLinked ? t("messagesLinked", language) : t("messagesNotLinked", language) },
     ];
     const contactHistoryRows = [
       {
-        title: "Work History",
-        empty: "No work history yet.",
+        title: t("messagesWorkHistory", language),
+        empty: t("messagesNoWorkHistory", language),
         items: [],
         span: "wide",
         onClick: () => openRelationshipHistory(relationship, "work"),
       },
       {
-        title: "Invoice History",
-        empty: "No invoices yet.",
+        title: t("messagesInvoiceHistory", language),
+        empty: t("messagesNoInvoices", language),
         items: [],
         span: "wide",
         onClick: () => openRelationshipHistory(relationship, "invoice"),
       },
-      { title: "Documents / Photos", empty: "No documents yet.", items: [], span: "wide" },
+      { title: t("messagesDocumentsPhotos", language), empty: t("messagesNoDocuments", language), items: [], span: "wide" },
       {
-        title: "Notes",
-        empty: "No notes yet.",
+        title: t("messagesNotes", language),
+        empty: t("messagesNoNotes", language),
         items: [],
         span: "wide",
       },
       {
-        title: "Relationship Memory",
-        empty: "Relationship memory will appear here later.",
+        title: t("messagesRelationshipMemory", language),
+        empty: t("messagesRelationshipMemoryLater", language),
         items: [],
         span: "wide",
       },
@@ -3927,62 +3917,62 @@ function MessagesInbox({ setPage, currentPage }) {
     const actions = isLinked
       ? [
           {
-            label: "Meetro Chat",
+            label: t("messagesMeetroChat", language),
             primary: true,
             onClick: () => openLinkedRelationshipChat(relationship),
           },
-          { label: "Text", onClick: () => textRelationship(relationship) },
-          { label: "Call", onClick: () => callRelationship(relationship) },
-          { label: "Email", onClick: () => emailRelationship(relationship) },
-          { label: "Edit / More", onClick: () => openEditContact(relationship) },
+          { label: t("messagesTextAction", language), onClick: () => textRelationship(relationship) },
+          { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
+          { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
+          { label: t("messagesEditMore", language), onClick: () => openEditContact(relationship) },
         ]
       : [
           {
-            label: "Invite to Meetro",
+            label: t("messagesInviteToMeetro", language),
             primary: true,
             onClick: () =>
               setContactInviteOptionsId((current) =>
                 current === relationship.id ? "" : relationship.id
               ),
           },
-          { label: "Text", onClick: () => textRelationship(relationship) },
-          { label: "Call", onClick: () => callRelationship(relationship) },
-          { label: "Email", onClick: () => emailRelationship(relationship) },
-          { label: "Edit Contact", onClick: () => openEditContact(relationship) },
+          { label: t("messagesTextAction", language), onClick: () => textRelationship(relationship) },
+          { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
+          { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
+          { label: t("messagesEditContact", language), onClick: () => openEditContact(relationship) },
         ];
     const relationshipPanels = (
       <>
         {contactInviteOptionsId === relationship.id && (
           <div style={contactCardSubpanel}>
-            <p style={contactCardSectionTitle}>Invite options</p>
+            <p style={contactCardSectionTitle}>{t("messagesInviteOptions", language)}</p>
             <div style={contactCardActionRow}>
               <button
                 type="button"
                 style={relationshipSecondaryAction}
                 onClick={() => textRelationship(relationship, true)}
               >
-                Send via Messages/SMS
+                {t("messagesSendViaSms", language)}
               </button>
               <button
                 type="button"
                 style={relationshipSecondaryAction}
                 onClick={() => emailRelationship(relationship, true)}
               >
-                Email
+                {t("messagesEmail", language)}
               </button>
               <button
                 type="button"
                 style={relationshipSecondaryAction}
                 onClick={() => copyContactInviteLink(relationship)}
               >
-                Copy invite link
+                {t("messagesCopyInviteLink", language)}
               </button>
               <button
                 type="button"
                 style={relationshipSecondaryAction}
                 onClick={() => shareContactInvite(relationship)}
               >
-                More share options
+                {t("messagesMoreShareOptions", language)}
               </button>
             </div>
           </div>
@@ -3990,10 +3980,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
         {contactEditDraft?.relationshipId === relationship.id && (
           <form style={contactCardSubpanel} onSubmit={saveContactEdit}>
-            <p style={contactCardSectionTitle}>Edit contact</p>
+            <p style={contactCardSectionTitle}>{t("messagesEditContact", language)}</p>
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
-                <span>Name</span>
+                <span>{t("messagesName", language)}</span>
                 <input
                   value={contactEditDraft.name}
                   onChange={(event) => updateContactEditDraft("name", event.target.value)}
@@ -4001,7 +3991,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 />
               </label>
               <label style={relationshipField}>
-                <span>Type</span>
+                <span>{t("messagesType", language)}</span>
                 <select
                   value={contactEditDraft.type}
                   onChange={(event) => updateContactEditDraft("type", event.target.value)}
@@ -4009,7 +3999,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 >
                   {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.label}
+                      {t(`messagesContactType_${option.id}`, language)}
                     </option>
                   ))}
                 </select>
@@ -4017,7 +4007,7 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
-                <span>Phone</span>
+                <span>{t("messagesPhone", language)}</span>
                 <input
                   value={contactEditDraft.phone}
                   onChange={(event) => updateContactEditDraft("phone", event.target.value)}
@@ -4025,7 +4015,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 />
               </label>
               <label style={relationshipField}>
-                <span>Email</span>
+                <span>{t("messagesEmail", language)}</span>
                 <input
                   value={contactEditDraft.email}
                   onChange={(event) => updateContactEditDraft("email", event.target.value)}
@@ -4043,14 +4033,14 @@ function MessagesInbox({ setPage, currentPage }) {
             </label>
             <div style={contactCardActionRow}>
               <button type="submit" style={relationshipPrimaryAction}>
-                Save Contact
+                {t("messagesSaveContact", language)}
               </button>
               <button
                 type="button"
                 style={relationshipSecondaryAction}
                 onClick={() => setContactEditDraft(null)}
               >
-                Cancel
+                {t("actionCancel", language)}
               </button>
             </div>
           </form>
@@ -4096,16 +4086,16 @@ function MessagesInbox({ setPage, currentPage }) {
 
         <section
           style={accountRecoveryCard}
-          aria-label="Communication Center account recovery"
+          aria-label={t("messagesAccountRecoveryAria", language)}
           className="meetro-visual-surface meetro-visual-empty-state"
         >
-          <p style={filterEyebrow}>Communication Center</p>
+          <p style={filterEyebrow}>{t("communicationCenterTitle", language)}</p>
           <h1 style={accountRecoveryTitle}>
-            {accountConnectionState.title || "Account connection needs attention"}
+            {accountConnectionState.title || t("messagesAccountNeedsAttention", language)}
           </h1>
           <p style={accountRecoveryText}>
             {accountConnectionState.message ||
-              "Reconnect your Meetro account before opening or sending messages."}
+              t("messagesReconnectBeforeMessaging", language)}
           </p>
           <div style={accountRecoveryActions}>
             <button
@@ -4113,7 +4103,7 @@ function MessagesInbox({ setPage, currentPage }) {
               style={relationshipPrimaryAction}
               onClick={reconnectMessagesAccount}
             >
-              Reconnect Account
+              {t("messagesReconnectAccount", language)}
             </button>
             {!accountConnectionState.requiresLogin && (
               <button
@@ -4121,7 +4111,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={relationshipSecondaryAction}
                 onClick={retryMessagesConnection}
               >
-                Try Again
+                {t("actionTryAgain", language)}
               </button>
             )}
           </div>
@@ -4175,7 +4165,7 @@ function MessagesInbox({ setPage, currentPage }) {
       {(relationshipViewMenuOpen || relationshipActionMenuOpen) && (
         <button
           type="button"
-          aria-label="Close relationship menu"
+          aria-label={t("messagesCloseRelationshipMenu", language)}
           style={relationshipMenuBackdrop}
           onClick={() => {
             setRelationshipViewMenuOpen(false);
@@ -4187,7 +4177,9 @@ function MessagesInbox({ setPage, currentPage }) {
       {!focusedConversationFlowOpen && (
         <>
           <div className="messages-hub-header" style={messagesHubHeader}>
-            <h1 className="messages-hub-title" style={messagesHubTitle}>Communication Center</h1>
+            <h1 className="messages-hub-title" style={messagesHubTitle}>
+              {t("communicationCenterTitle", language)}
+            </h1>
             <div className="messages-header-action-wrap" style={relationshipMenuWrap}>
               <button
                 type="button"
@@ -4222,9 +4214,9 @@ function MessagesInbox({ setPage, currentPage }) {
                       key={`${type}-${label}`}
                       type="button"
                       style={relationshipDropdownItem}
-                      onClick={() => openRelationshipAction(type, label)}
+                      onClick={() => openRelationshipAction(type, t(label, language))}
                     >
-                      <span style={relationshipDropdownItemLabel}>{label}</span>
+                      <span style={relationshipDropdownItemLabel}>{t(label, language)}</span>
                     </button>
                   ))}
                 </div>
@@ -4235,7 +4227,7 @@ function MessagesInbox({ setPage, currentPage }) {
           <div
             className="messages-section-navigation"
             style={messageSectionNavigation}
-            aria-label="Communication Center navigation"
+            aria-label={t("messagesNavigationAria", language)}
           >
             {(() => {
               const [key, label] = CONTACT_SECTION_OPTION;
@@ -4244,7 +4236,7 @@ function MessagesInbox({ setPage, currentPage }) {
               return (
                 <button
                   type="button"
-                  aria-label="Open Contacts"
+                  aria-label={t("messagesOpenContactsAria", language)}
                   style={{
                     ...messageSectionTab,
                     ...contactsDirectoryTab,
@@ -4252,13 +4244,13 @@ function MessagesInbox({ setPage, currentPage }) {
                   }}
                   onClick={() => setMessageSection(key)}
                 >
-                  <span style={messageSectionTabLabel}>{label}</span>
+                  <span style={messageSectionTabLabel}>{t(label, language)}</span>
                   {count > 0 && <strong style={messageSectionTabCount}>{count}</strong>}
                 </button>
               );
             })()}
 
-            <div style={communicationSectionTabs} aria-label="Communication contexts">
+            <div style={communicationSectionTabs} aria-label={t("messagesContextsAria", language)}>
               {COMMUNICATION_SECTION_OPTIONS.map(([key, label]) => {
               const count = getMessageSectionCount(key);
 
@@ -4272,7 +4264,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   }}
                   onClick={() => setMessageSection(key)}
                 >
-                  <span style={messageSectionTabLabel}>{label}</span>
+                  <span style={messageSectionTabLabel}>{t(label, language)}</span>
                   {count > 0 && <strong style={messageSectionTabCount}>{count}</strong>}
                 </button>
               );
@@ -4312,7 +4304,7 @@ function MessagesInbox({ setPage, currentPage }) {
               aria-controls="communication-inline-context"
               onClick={() => setCompactContextOpen((open) => !open)}
             >
-              <span>Relationship context</span>
+              <span>{t("messagesRelationshipContext", language)}</span>
               <span aria-hidden="true">{compactContextOpen ? "−" : "+"}</span>
             </button>
           )}
@@ -4329,22 +4321,22 @@ function MessagesInbox({ setPage, currentPage }) {
           className="meetro-visual-surface"
           aria-label={
             conversationStarter.mode === "group"
-              ? "New Group Conversation"
-              : "Choose Contacts"
+              ? t("messagesNewGroup", language)
+              : t("messagesChooseContacts", language)
           }
         >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>Conversations</p>
+              <p style={filterEyebrow}>{t("messagesConversations", language)}</p>
               <h2 style={relationshipPanelTitle}>
                 {conversationStarter.mode === "group"
-                  ? "New Group Conversation"
-                  : "Choose Contacts"}
+                  ? t("messagesNewGroup", language)
+                  : t("messagesChooseContacts", language)}
               </h2>
               <p style={relationshipSubtitle}>
                 {conversationStarter.mode === "group"
-                  ? "Choose people first. Name the group only if it helps."
-                  : "Start from a person or business. Add a contact only if they are not here yet."}
+                  ? t("messagesNewGroupHelp", language)
+                  : t("messagesChooseContactsHelp", language)}
               </p>
             </div>
             <button
@@ -4352,7 +4344,7 @@ function MessagesInbox({ setPage, currentPage }) {
               style={relationshipCloseButton}
               onClick={closeConversationStarter}
             >
-              Cancel
+              {t("actionCancel", language)}
             </button>
           </div>
 
@@ -4364,7 +4356,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   <input
                     value={conversationStarter.search}
                     onChange={(event) => updateConversationStarter("search", event.target.value)}
-                    placeholder="Search contacts"
+                    placeholder={t("messagesSearchContacts", language)}
                     style={conversationStarterSearchInput}
                   />
                 </label>
@@ -4373,12 +4365,12 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={conversationStarterAddContact}
                   onClick={startContactFromConversationPicker}
                 >
-                  Add Contact
+                  {t("messagesAddContact", language)}
                 </button>
               </div>
 
               <div style={conversationStarterSelectedRow}>
-                <span style={conversationStarterToLabel}>To:</span>
+                <span style={conversationStarterToLabel}>{t("messagesToLabel", language)}</span>
                 {selectedConversationStarterRelationships.length > 0
                   ? selectedConversationStarterRelationships.map((relationship) => (
                       <span key={relationship.id} style={conversationStarterSelectedChip}>
@@ -4388,19 +4380,19 @@ function MessagesInbox({ setPage, currentPage }) {
                   : (
                     <span style={conversationStarterHint}>
                       {conversationStarter.mode === "group"
-                        ? "Choose at least two contacts."
-                        : "Choose one contact."}
+                        ? t("messagesChooseTwoContacts", language)
+                        : t("messagesChooseOneContact", language)}
                     </span>
                   )}
               </div>
 
               {conversationStarter.mode === "group" && (
                 <label style={conversationStarterGroupNameField}>
-                  <span>Group name optional</span>
+                  <span>{t("messagesGroupNameOptional", language)}</span>
                   <input
                     value={conversationStarter.groupName}
                     onChange={(event) => updateConversationStarter("groupName", event.target.value)}
-                    placeholder="Project - 1225 Wales Dr"
+                    placeholder={t("messagesGroupNamePlaceholder", language)}
                     style={relationshipInput}
                   />
                 </label>
@@ -4412,7 +4404,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
               {conversationStarterCandidates.length === 0 ? (
                 <div style={conversationStarterEmpty}>
-                  No contacts match this source. Add a contact, then return here to start the conversation.
+                  {t("messagesNoContactMatches", language)}
                 </div>
               ) : (
                 <div style={conversationStarterList}>
@@ -4457,15 +4449,15 @@ function MessagesInbox({ setPage, currentPage }) {
                         >
                           {conversationStarter.mode === "group"
                             ? selected
-                              ? "Selected"
+                              ? t("messagesSelected", language)
                               : readyToMessage
-                              ? "Select"
-                              : "Invite first"
+                              ? t("messagesSelect", language)
+                              : t("messagesInviteFirst", language)
                             : selected
-                            ? "Selected"
+                            ? t("messagesSelected", language)
                             : readyToMessage
-                            ? "Select"
-                            : "Invite first"}
+                            ? t("messagesSelect", language)
+                            : t("messagesInviteFirst", language)}
                         </span>
                       </button>
                     );
@@ -4479,7 +4471,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={relationshipSecondaryAction}
                   onClick={closeConversationStarter}
                 >
-                  Cancel
+                  {t("actionCancel", language)}
                 </button>
                 {conversationStarter.mode === "single" && (
                   <button
@@ -4491,7 +4483,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     }}
                     onClick={startSelectedConversation}
                   >
-                    Message
+                    {t("messagesMessageAction", language)}
                   </button>
                 )}
                 {conversationStarter.mode === "group" && (
@@ -4504,7 +4496,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     }}
                     onClick={startSelectedGroupConversation}
                   >
-                    Create Group
+                    {t("messagesCreateGroup", language)}
                   </button>
                 )}
               </div>
@@ -4514,13 +4506,13 @@ function MessagesInbox({ setPage, currentPage }) {
       )}
 
       {contactImport && (
-        <section style={relationshipPanel} aria-label="Import Contacts" className="meetro-visual-surface">
+        <section style={relationshipPanel} aria-label={t("messagesImportContacts", language)} className="meetro-visual-surface">
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>Relationships</p>
-              <h2 style={relationshipPanelTitle}>Import Contacts</h2>
+              <p style={filterEyebrow}>{t("messagesRelationships", language)}</p>
+              <h2 style={relationshipPanelTitle}>{t("messagesImportContacts", language)}</h2>
               <p style={relationshipSubtitle}>
-                Import creates a relationship placeholder. Invite activates their Meetro participation later.
+                {t("messagesImportDescription", language)}
               </p>
             </div>
             <button
@@ -4528,7 +4520,7 @@ function MessagesInbox({ setPage, currentPage }) {
               style={relationshipCloseButton}
               onClick={() => setContactImport(null)}
             >
-              Cancel
+              {t("actionCancel", language)}
             </button>
           </div>
 
@@ -4551,24 +4543,24 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={contactImportSourceButton}
                 onClick={importPhoneContacts}
               >
-                <strong>Import from phone contacts</strong>
-                <span>Choose contacts already saved on this device.</span>
+                <strong>{t("messagesImportPhone", language)}</strong>
+                <span>{t("messagesImportPhoneHelp", language)}</span>
               </button>
               <button
                 type="button"
                 style={contactImportSourceButton}
                 onClick={openContactImportFilePicker}
               >
-                <strong>Import from computer file</strong>
-                <span>Upload CSV, text, or vCard contacts.</span>
+                <strong>{t("messagesImportFile", language)}</strong>
+                <span>{t("messagesImportFileHelp", language)}</span>
               </button>
               <button
                 type="button"
                 style={contactImportSourceButton}
                 onClick={startManualContactImport}
               >
-                <strong>Select contacts manually</strong>
-                <span>Add names, phone numbers, emails, and context yourself.</span>
+                <strong>{t("messagesImportManual", language)}</strong>
+                <span>{t("messagesImportManualHelp", language)}</span>
               </button>
             </div>
           )}
@@ -4576,7 +4568,7 @@ function MessagesInbox({ setPage, currentPage }) {
           {contactImport.step === "select" && (
             <div style={contactImportFlow}>
               <label style={relationshipField}>
-                <span>Default relationship type</span>
+                <span>{t("messagesDefaultRelationshipType", language)}</span>
                 <select
                   value={contactImport.defaultType}
                   onChange={(event) =>
@@ -4586,56 +4578,56 @@ function MessagesInbox({ setPage, currentPage }) {
                 >
                   {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.label}
+                      {t(`messagesContactType_${option.id}`, language)}
                     </option>
                   ))}
                 </select>
               </label>
 
               <div style={contactImportManualCard}>
-                <p style={contactImportSectionTitle}>Add a contact manually</p>
+                <p style={contactImportSectionTitle}>{t("messagesAddContactManually", language)}</p>
                 <div style={relationshipFieldGrid}>
                   <label style={relationshipField}>
-                    <span>Name</span>
+                    <span>{t("messagesName", language)}</span>
                     <input
                       value={contactImport.manual.name}
                       onChange={(event) =>
                         updateManualImportContact("name", event.target.value)
                       }
-                      placeholder="Name"
+                      placeholder={t("messagesName", language)}
                       style={relationshipInput}
                     />
                   </label>
                   <label style={relationshipField}>
-                    <span>Phone</span>
+                    <span>{t("messagesPhone", language)}</span>
                     <input
                       value={contactImport.manual.phone}
                       onChange={(event) =>
                         updateManualImportContact("phone", event.target.value)
                       }
-                      placeholder="Phone"
+                      placeholder={t("messagesPhone", language)}
                       style={relationshipInput}
                     />
                   </label>
                   <label style={relationshipField}>
-                    <span>Email</span>
+                    <span>{t("messagesEmail", language)}</span>
                     <input
                       value={contactImport.manual.email}
                       onChange={(event) =>
                         updateManualImportContact("email", event.target.value)
                       }
-                      placeholder="Email"
+                      placeholder={t("messagesEmail", language)}
                       style={relationshipInput}
                     />
                   </label>
                   <label style={relationshipField}>
-                    <span>Address</span>
+                    <span>{t("messagesAddress", language)}</span>
                     <input
                       value={contactImport.manual.address}
                       onChange={(event) =>
                         updateManualImportContact("address", event.target.value)
                       }
-                      placeholder="Address or service area"
+                      placeholder={t("messagesAddressPlaceholder", language)}
                       style={relationshipInput}
                     />
                   </label>
@@ -4645,7 +4637,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={relationshipSecondaryAction}
                   onClick={addManualImportContact}
                 >
-                  Add Contact
+                  {t("messagesAddContact", language)}
                 </button>
               </div>
 
@@ -4657,14 +4649,14 @@ function MessagesInbox({ setPage, currentPage }) {
                       style={relationshipSecondaryAction}
                       onClick={selectAllImportedContacts}
                     >
-                      Select all contacts
+                      {t("messagesSelectAllContacts", language)}
                     </button>
                     <button
                       type="button"
                       style={relationshipPrimaryAction}
                       onClick={moveContactImportToReview}
                     >
-                      Review Import
+                      {t("messagesReviewImport", language)}
                     </button>
                   </div>
 
@@ -4695,7 +4687,7 @@ function MessagesInbox({ setPage, currentPage }) {
                         >
                           {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                             <option key={option.id} value={option.id}>
-                              {option.label}
+                              {t(`messagesContactType_${option.id}`, language)}
                             </option>
                           ))}
                         </select>
@@ -4710,17 +4702,20 @@ function MessagesInbox({ setPage, currentPage }) {
           {contactImport.step === "review" && (
             <div style={contactImportFlow}>
               <p style={contactImportSectionTitle}>
-                Review before importing
+                {t("messagesReviewBeforeImport", language)}
               </p>
               <p style={relationshipSubtitle}>
-                These contacts will appear as relationship rows. They do not need Meetro accounts yet.
+                {t("messagesReviewImportHelp", language)}
               </p>
 
               <div style={contactImportList}>
                 {selectedImportContacts.map((contact) => {
-                  const typeLabel =
-                    CONTACT_IMPORT_TYPE_OPTIONS.find((option) => option.id === contact.type)
-                      ?.label || "Relationship";
+                  const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
+                    (option) => option.id === contact.type
+                  );
+                  const typeLabel = typeOption
+                    ? t(`messagesContactType_${typeOption.id}`, language)
+                    : t("messagesRelationship", language);
 
                   return (
                     <div key={contact.id} style={contactImportReviewRow}>
@@ -4748,14 +4743,14 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={relationshipSecondaryAction}
                   onClick={() => updateContactImport({ step: "select", notice: "" })}
                 >
-                  Back
+                  {t("actionBack", language)}
                 </button>
                 <button
                   type="button"
                   style={relationshipPrimaryAction}
                   onClick={saveContactImport}
                 >
-                  Import Contacts
+                  {t("messagesImportContacts", language)}
                 </button>
               </div>
             </div>
@@ -4773,13 +4768,15 @@ function MessagesInbox({ setPage, currentPage }) {
             <div style={relationshipPanelHeader}>
               <div style={relationshipPanelHeaderText}>
                 <p style={filterEyebrow}>
-                  {relationshipComposer.section === "contacts" ? "Contact" : activeMessageSectionLabel}
+                  {relationshipComposer.section === "contacts"
+                    ? t("messagesContact", language)
+                    : activeMessageSectionLabel}
                 </p>
                 <h2 style={relationshipPanelTitle}>{relationshipComposer.label}</h2>
                 <p style={relationshipSubtitle}>
                   {relationshipComposer.section === "contacts"
-                    ? "Save the person or business first. Conversation can begin when they are ready."
-                    : "Start the conversation here. Work can follow later without recreating the contact."}
+                    ? t("messagesSaveContactFirst", language)
+                    : t("messagesStartConversationHelp", language)}
                 </p>
               </div>
               <button
@@ -4787,7 +4784,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={relationshipCloseButton}
                 onClick={() => setRelationshipComposer(null)}
               >
-                Cancel
+                {t("actionCancel", language)}
               </button>
             </div>
 
@@ -4795,13 +4792,13 @@ function MessagesInbox({ setPage, currentPage }) {
               <>
                 <div style={relationshipFieldGrid}>
                   <label style={relationshipField}>
-                    <span>Tenant</span>
+                    <span>{t("messagesContactType_tenant", language)}</span>
                     <select
                       value={relationshipComposer.tenantRelationshipId}
                       onChange={(event) => updateRelationshipComposer("tenantRelationshipId", event.target.value)}
                       style={relationshipInput}
                     >
-                      <option value="">Choose tenant</option>
+                      <option value="">{t("messagesChooseTenant", language)}</option>
                       {tenantRelationshipOptions.map((relationship) => (
                         <option key={relationship.id} value={relationship.id}>
                           {relationship.name}
@@ -4810,13 +4807,13 @@ function MessagesInbox({ setPage, currentPage }) {
                     </select>
                   </label>
                   <label style={relationshipField}>
-                    <span>Professional / Vendor</span>
+                    <span>{t("messagesProfessionalVendor", language)}</span>
                     <select
                       value={relationshipComposer.vendorRelationshipId}
                       onChange={(event) => updateRelationshipComposer("vendorRelationshipId", event.target.value)}
                       style={relationshipInput}
                     >
-                      <option value="">Choose professional/vendor</option>
+                      <option value="">{t("messagesChooseProfessionalVendor", language)}</option>
                       {vendorRelationshipOptions.map((relationship) => (
                         <option key={relationship.id} value={relationship.id}>
                           {relationship.name}
@@ -4827,44 +4824,44 @@ function MessagesInbox({ setPage, currentPage }) {
                 </div>
                 <div style={relationshipFieldGrid}>
                   <label style={relationshipField}>
-                    <span>Tenant name if not saved yet</span>
+                    <span>{t("messagesTenantUnsaved", language)}</span>
                     <input
                       value={relationshipComposer.name}
                       onChange={(event) => updateRelationshipComposer("name", event.target.value)}
-                      placeholder="Tenant"
+                      placeholder={t("messagesContactType_tenant", language)}
                       style={relationshipInput}
                     />
                   </label>
                   <label style={relationshipField}>
-                    <span>Professional/vendor if not saved yet</span>
+                    <span>{t("messagesProfessionalVendorUnsaved", language)}</span>
                     <input
                       value={relationshipComposer.note}
                       onChange={(event) => updateRelationshipComposer("note", event.target.value)}
-                      placeholder="Professional or vendor"
+                      placeholder={t("messagesProfessionalVendor", language)}
                       style={relationshipInput}
                     />
                   </label>
                 </div>
                 <label style={relationshipField}>
-                  <span>Group name</span>
+                  <span>{t("messagesGroupName", language)}</span>
                   <input
                     value={relationshipComposer.groupName}
                     onChange={(event) => updateRelationshipComposer("groupName", event.target.value)}
-                    placeholder="Unit 204 AC issue"
+                    placeholder={t("messagesGroupIssuePlaceholder", language)}
                     style={relationshipInput}
                   />
                 </label>
                 <label style={relationshipField}>
-                  <span>Property / unit</span>
+                  <span>{t("messagesPropertyUnit", language)}</span>
                   <input
                     value={relationshipComposer.propertyUnit}
                     onChange={(event) => updateRelationshipComposer("propertyUnit", event.target.value)}
-                    placeholder="Property or unit"
+                    placeholder={t("messagesPropertyUnitPlaceholder", language)}
                     style={relationshipInput}
                   />
                 </label>
                 <label style={relationshipField}>
-                  <span>Forward existing ticket</span>
+                  <span>{t("messagesForwardTicket", language)}</span>
                   <select
                     value={relationshipComposer.forwardedTicketConversationId}
                     onChange={(event) =>
@@ -4872,7 +4869,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     }
                     style={relationshipInput}
                   >
-                    <option value="">No ticket yet</option>
+                    <option value="">{t("messagesNoTicket", language)}</option>
                     {openTicketOptions.map((ticket) => (
                       <option key={ticket.id} value={ticket.id}>
                         {ticket.title} · {ticket.relationship.name}
@@ -4881,18 +4878,18 @@ function MessagesInbox({ setPage, currentPage }) {
                   </select>
                 </label>
                 <label style={relationshipField}>
-                  <span>Purpose</span>
+                  <span>{t("messagesPurpose", language)}</span>
                   <textarea
                     value={relationshipComposer.purpose}
                     onChange={(event) => updateRelationshipComposer("purpose", event.target.value)}
-                    placeholder="What should this group conversation coordinate?"
+                    placeholder={t("messagesPurposePlaceholder", language)}
                     style={relationshipTextarea}
                   />
                 </label>
               </>
             ) : relationshipComposer.type === "invite" ? (
               <label style={relationshipField}>
-                <span>Email</span>
+                <span>{t("messagesEmail", language)}</span>
                 <input
                   value={relationshipComposer.email}
                   onChange={(event) => updateRelationshipComposer("email", event.target.value)}
@@ -4903,49 +4900,49 @@ function MessagesInbox({ setPage, currentPage }) {
             ) : (
               <>
                 <label style={relationshipField}>
-                  <span>Name</span>
+                  <span>{t("messagesName", language)}</span>
                   <input
                     value={relationshipComposer.name}
                     onChange={(event) => updateRelationshipComposer("name", event.target.value)}
-                    placeholder="Name"
+                    placeholder={t("messagesName", language)}
                     style={relationshipInput}
                   />
                 </label>
                 <div style={relationshipFieldGrid}>
                   <label style={relationshipField}>
-                    <span>Phone</span>
+                    <span>{t("messagesPhone", language)}</span>
                     <input
                       value={relationshipComposer.phone}
                       onChange={(event) => updateRelationshipComposer("phone", event.target.value)}
-                      placeholder="Phone"
+                      placeholder={t("messagesPhone", language)}
                       style={relationshipInput}
                     />
                   </label>
                   <label style={relationshipField}>
-                    <span>Email</span>
+                    <span>{t("messagesEmail", language)}</span>
                     <input
                       value={relationshipComposer.email}
                       onChange={(event) => updateRelationshipComposer("email", event.target.value)}
-                      placeholder="Email"
+                      placeholder={t("messagesEmail", language)}
                       style={relationshipInput}
                     />
                   </label>
                 </div>
                 <label style={relationshipField}>
-                  <span>Address</span>
+                  <span>{t("messagesAddress", language)}</span>
                   <input
                     value={relationshipComposer.address}
                     onChange={(event) => updateRelationshipComposer("address", event.target.value)}
-                    placeholder="Address or service area"
+                    placeholder={t("messagesAddressPlaceholder", language)}
                     style={relationshipInput}
                   />
                 </label>
                 <label style={relationshipField}>
-                  <span>Note</span>
+                  <span>{t("messagesNote", language)}</span>
                   <textarea
                     value={relationshipComposer.note}
                     onChange={(event) => updateRelationshipComposer("note", event.target.value)}
-                    placeholder="What should Meetro remember about this relationship?"
+                    placeholder={t("messagesNotePlaceholder", language)}
                     style={relationshipTextarea}
                   />
                 </label>
@@ -4954,12 +4951,12 @@ function MessagesInbox({ setPage, currentPage }) {
 
             <button type="submit" style={relationshipPrimaryAction}>
               {relationshipComposer.type === "invite"
-                ? "Start Invite"
+                ? t("messagesStartInvite", language)
                 : relationshipComposer.type === "space"
-                ? "Start Conversation"
+                ? t("messagesStartConversation", language)
                 : relationshipComposer.section === "contacts"
-                ? "Save Contact"
-                : "Start Conversation"}
+                ? t("messagesSaveContact", language)
+                : t("messagesStartConversation", language)}
             </button>
           </form>
         </section>
@@ -4968,16 +4965,16 @@ function MessagesInbox({ setPage, currentPage }) {
       {ticketComposer && activeRelationship && (
         <section
           style={relationshipPanel}
-          aria-label="Create maintenance ticket"
+          aria-label={t("messagesCreateMaintenanceTicket", language)}
           className="meetro-visual-surface"
         >
           <form onSubmit={saveMaintenanceTicket} style={relationshipComposerForm}>
             <div style={relationshipPanelHeader}>
               <div style={relationshipPanelHeaderText}>
-                <p style={filterEyebrow}>Maintenance ticket</p>
-                <h2 style={relationshipPanelTitle}>Send to property manager</h2>
+                <p style={filterEyebrow}>{t("messagesMaintenanceTicket", language)}</p>
+                <h2 style={relationshipPanelTitle}>{t("messagesSendPropertyManager", language)}</h2>
                 <p style={relationshipSubtitle}>
-                  The ticket stays inside the relationship. Assignment creates work without recreating the ticket.
+                  {t("messagesMaintenanceTicketHelp", language)}
                 </p>
               </div>
               <button
@@ -4985,70 +4982,70 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={relationshipCloseButton}
                 onClick={() => setTicketComposer(null)}
               >
-                Cancel
+                {t("actionCancel", language)}
               </button>
             </div>
 
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
-                <span>Tenant</span>
+                <span>{t("messagesContactType_tenant", language)}</span>
                 <input
                   value={ticketComposer.tenant}
                   onChange={(event) => updateTicketComposer("tenant", event.target.value)}
-                  placeholder="Tenant"
+                  placeholder={t("messagesContactType_tenant", language)}
                   style={relationshipInput}
                 />
               </label>
               <label style={relationshipField}>
-                <span>Property / unit</span>
+                <span>{t("messagesPropertyUnit", language)}</span>
                 <input
                   value={ticketComposer.propertyUnit}
                   onChange={(event) => updateTicketComposer("propertyUnit", event.target.value)}
-                  placeholder="Property or unit"
+                  placeholder={t("messagesPropertyUnitPlaceholder", language)}
                   style={relationshipInput}
                 />
               </label>
             </div>
 
             <label style={relationshipField}>
-              <span>Description</span>
+              <span>{t("messagesDescription", language)}</span>
               <textarea
                 value={ticketComposer.description}
                 onChange={(event) => updateTicketComposer("description", event.target.value)}
-                placeholder="Describe the maintenance issue"
+                placeholder={t("messagesMaintenanceDescriptionPlaceholder", language)}
                 style={relationshipTextarea}
               />
             </label>
 
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
-                <span>Priority</span>
+                <span>{t("messagesPriority", language)}</span>
                 <select
                   value={ticketComposer.priority}
                   onChange={(event) => updateTicketComposer("priority", event.target.value)}
                   style={relationshipInput}
                 >
-                  <option>Low</option>
-                  <option>Normal</option>
-                  <option>High</option>
-                  <option>Emergency</option>
+                  <option value="Low">{t("messagesPriorityLow", language)}</option>
+                  <option value="Normal">{t("messagesPriorityNormal", language)}</option>
+                  <option value="High">{t("messagesPriorityHigh", language)}</option>
+                  <option value="Emergency">{t("emergency", language)}</option>
                 </select>
               </label>
               <label style={relationshipField}>
-                <span>Assign professional/vendor</span>
+                <span>{t("messagesAssignProfessional", language)}</span>
                 <input
                   value={ticketComposer.assignedProfessional}
                   onChange={(event) => updateTicketComposer("assignedProfessional", event.target.value)}
-                  placeholder="Optional"
+                  placeholder={t("messagesOptional", language)}
                   style={relationshipInput}
                 />
               </label>
             </div>
 
-            <div style={photoPlaceholderBox}>Photo placeholder</div>
+            <div style={photoPlaceholderBox}>{t("messagesPhotoPlaceholder", language)}</div>
 
             <button type="submit" style={relationshipPrimaryAction}>
-              Send to Property Manager
+              {t("messagesSendPropertyManager", language)}
             </button>
           </form>
         </section>
@@ -5057,15 +5054,15 @@ function MessagesInbox({ setPage, currentPage }) {
       {savedHistoryOpen && (
         <section
           style={relationshipPanel}
-          aria-label="Saved Conversation History"
+          aria-label={t("messagesSavedHistoryTitle", language)}
           className="meetro-visual-surface"
         >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>Communication Center</p>
-              <h2 style={relationshipPanelTitle}>Saved Conversation History</h2>
+              <p style={filterEyebrow}>{t("communicationCenterTitle", language)}</p>
+              <h2 style={relationshipPanelTitle}>{t("messagesSavedHistoryTitle", language)}</h2>
               <p style={relationshipSubtitle}>
-                Conversations you save manually stay here for future reference.
+                {t("messagesSavedHistoryDescription", language)}
               </p>
             </div>
             <button
@@ -5076,15 +5073,15 @@ function MessagesInbox({ setPage, currentPage }) {
                 setSavedHistoryOpen(false);
               }}
             >
-              Back
+              {t("actionBack", language)}
             </button>
           </div>
 
           {savedHistoryQuotes.length === 0 ? (
             <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
-              <div style={emptyIcon}>HIS</div>
-              <h2 style={emptyTitle}>No saved conversation history yet</h2>
-              <p style={emptyText}>Conversations you save from the conversation menu will appear here.</p>
+              <div style={emptyIcon} aria-hidden="true">HIS</div>
+              <h2 style={emptyTitle}>{t("messagesSavedHistoryEmpty", language)}</h2>
+              <p style={emptyText}>{t("messagesSavedHistoryEmptyText", language)}</p>
             </div>
           ) : (
             <div style={conversationList}>
@@ -5092,12 +5089,14 @@ function MessagesInbox({ setPage, currentPage }) {
                 renderConversationRow(quote, {
                   key: `saved-${quote.id}`,
                   returnToSavedHistory: true,
-                  statusChip: isEmergencyConversationType(quote) ? "Emergency" : "Saved",
+                  statusChip: isEmergencyConversationType(quote)
+                    ? t("emergency", language)
+                    : t("stateSaved", language),
                   typeLabel: isEmergencyConversationType(quote)
-                    ? "Emergency"
+                    ? t("emergency", language)
                     : isHiringConversation(quote)
-                    ? "Hiring"
-                    : "Relationship",
+                    ? t("hiring", language)
+                    : t("messagesRelationship", language),
                 })
               )}
             </div>
@@ -5120,7 +5119,7 @@ function MessagesInbox({ setPage, currentPage }) {
         <div style={isSplitPane ? splitListPane : undefined}>
           {(messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
             <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
-              <div style={emptyIcon}>MSG</div>
+              <div style={emptyIcon} aria-hidden="true">MSG</div>
 
               <h2 style={emptyTitle}>
                 {normalizedSearchQuery ? t("messagesNoSearchResults") : emptyCopy.title}
@@ -5136,7 +5135,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={{ ...relationshipSecondaryAction, marginTop: "14px" }}
                   onClick={() => setPage("hiringCenter")}
                 >
-                  Open Hiring Center
+                  {t("messagesOpenHiringCenter", language)}
                 </button>
               )}
             </div>
@@ -5149,6 +5148,9 @@ function MessagesInbox({ setPage, currentPage }) {
               const primaryConversation = relationship.primaryConversation || {};
               const counts = getRelationshipCounts(relationship);
               const statusChip = getRelationshipStatusChip(relationship);
+              const hasEmergencyConversation = getRelationshipConversations(relationship).some(
+                (item) => item.conversation?.conversation_type === "emergency"
+              );
               const inactiveImportedContact = isImportedInactiveRelationship(relationship);
               const rowIdentity = resolveRelationshipIdentity({
                 relationship,
@@ -5177,7 +5179,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={{
                   ...conversationRow,
                   ...((counts.unread || 0) > 0 ? unreadConversationRow : {}),
-                  ...(statusChip === "Emergency" ? emergencyConversationRow : {}),
+                  ...(hasEmergencyConversation ? emergencyConversationRow : {}),
                   ...(isSplitPane &&
                   String(activeSplitConversationId) === String(primaryConversation.id)
                     ? activeConversationRow
@@ -5194,7 +5196,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     ...conversationRowAvatar,
                     ...(isSplitPane ? splitAvatarCircle : {}),
                     ...((counts.unread || 0) > 0 ? unreadAvatar : {}),
-                    ...(statusChip === "Emergency"
+                    ...(hasEmergencyConversation
                       ? emergencyAvatar
                       : {}),
                   }}
@@ -5245,8 +5247,8 @@ function MessagesInbox({ setPage, currentPage }) {
                       <span
                         style={{
                           ...conversationStatusChip,
-                          ...(statusChip === "Emergency" ? emergencyStatusBadge : {}),
-                          ...(statusChip === "Unread" ? unreadStatusBadge : {}),
+                          ...(hasEmergencyConversation ? emergencyStatusBadge : {}),
+                          ...((counts.unread || 0) > 0 ? unreadStatusBadge : {}),
                         }}
                       >
                         {statusChip}
@@ -5259,18 +5261,23 @@ function MessagesInbox({ setPage, currentPage }) {
 	            })}
 	          </div>
 
-	          <div style={messagesSecondaryActions} aria-label="Communication Center secondary actions">
+          <div style={messagesSecondaryActions} aria-label={t("messagesSecondaryActionsAria", language)}>
 	            <button
 	              type="button"
 	              style={savedHistorySecondaryButton}
                 className="meetro-visual-surface"
-	              onClick={() => openRelationshipAction(...SAVED_HISTORY_ACTION)}
+	              onClick={() =>
+                    openRelationshipAction(
+                      SAVED_HISTORY_ACTION[0],
+                      t(SAVED_HISTORY_ACTION[1], language)
+                    )
+                  }
 	            >
-	              <span style={savedHistorySecondaryTitle}>Saved Conversation History</span>
+              <span style={savedHistorySecondaryTitle}>{t("messagesSavedHistoryTitle", language)}</span>
 	              <span style={savedHistorySecondaryMeta}>
 	                {savedHistoryQuotes.length > 0
-	                  ? `${savedHistoryQuotes.length} saved`
-	                  : "Conversations you save manually"}
+                  ? t("messagesSavedCount", language, { count: savedHistoryQuotes.length })
+                  : t("messagesSavedManually", language)}
 	              </span>
 	            </button>
 	          </div>
@@ -5292,12 +5299,10 @@ function MessagesInbox({ setPage, currentPage }) {
               />
             ) : (
               <div style={splitPlaceholder} className="meetro-visual-empty-state meetro-visual-surface">
-                <div style={splitPlaceholderIcon}>MSG</div>
+                <div style={splitPlaceholderIcon} aria-hidden="true">MSG</div>
                 <h2 style={splitPlaceholderTitle}>{t("communicationCenterTitle")}</h2>
                 <p style={splitPlaceholderText}>
-                  {isSpanish
-                    ? "Selecciona una conversación para ver mensajes, tarjetas de flujo y próximos pasos."
-                    : "Select a conversation to view messages, workflow cards, and next steps."}
+                  {t("messagesSelectConversation", language)}
                 </p>
               </div>
             )}

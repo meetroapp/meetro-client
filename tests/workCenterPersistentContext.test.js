@@ -14,8 +14,8 @@ const indexCssSource = readFileSync(
 test("Work Center job workspace includes a persistent context region above dynamic focus", () => {
   assert.match(contractorDashboardSource, /jobPersistentContextRegion/);
   assert.match(contractorDashboardSource, /meetro-job-persistent-context/);
-  assert.match(contractorDashboardSource, /Persistent work context/);
-  assert.match(contractorDashboardSource, /Next Responsibility/);
+  assert.match(contractorDashboardSource, /workCenterPersistentWorkContext/);
+  assert.match(contractorDashboardSource, /workCenterNextResponsibility/);
   assert.match(contractorDashboardSource, /jobDynamicFocusArea/);
   assert.match(
     contractorDashboardSource,
@@ -30,7 +30,7 @@ test("persistent context preserves current job identity and message action witho
   assert.match(contractorDashboardSource, /conversationReturnSection", "job"/);
   assert.doesNotMatch(
     contractorDashboardSource,
-    /Persistent work context[\s\S]{0,1000}setPage\("contractorDashboard"\)/
+    /workCenterPersistentWorkContext[\s\S]{0,1000}setPage\("contractorDashboard"\)/
   );
 });
 

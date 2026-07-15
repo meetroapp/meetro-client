@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import useLanguage from "../hooks/useLanguage";
 import { getMeetroMomentHashRoute } from "../utils/meetroMomentRoutes";
-import { getLanguage, t } from "../utils/language";
+import { t } from "../utils/language";
+import { formatLocaleDate } from "../utils/localeFormat";
 import {
   getMeetroMomentsExperience,
   getTimelineMomentPrivacyLabel,
@@ -66,11 +68,31 @@ function readJson(key, fallback) {
   }
 }
 
-function formatDate(value) {
+function formatDate(value, language) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return formatLocaleDate(date, { month: "long", year: "numeric" }, language);
+}
+
+function getExperienceCopy(audience, language) {
+  const suffix = audience === "business" || audience === "employee" || audience === "community"
+    ? audience
+    : "homeowner";
+  return {
+    title: t(`momentsExperienceTitle_${suffix}`, language),
+    subtitle: t(`momentsExperienceSubtitle_${suffix}`, language),
+  };
+}
+
+function getPrivacyCopy(privacy, language) {
+  const suffix = ["published", "pending", "private", "hidden"].includes(privacy?.key)
+    ? privacy.key
+    : "unavailable";
+  return {
+    label: t(`momentsPrivacyLabel_${suffix}`, language),
+    message: t(`momentsPrivacyMessage_${suffix}`, language),
+  };
 }
 
 function getPhotoUrl(photo) {
@@ -148,7 +170,7 @@ function getVisibleMoments(account) {
 }
 
 function MeetroMoments({ setPage }) {
-  const language = getLanguage();
+  const language = useLanguage();
   const account = getActiveAccountContext();
   const experience = getMeetroMomentsExperience({
     role: account.employee ? "employee" : account.activeMode,
@@ -156,6 +178,7 @@ function MeetroMoments({ setPage }) {
     accountType: account.accountType,
     hasBusinessProfile: account.hasBusinessProfile,
   });
+  const experienceCopy = getExperienceCopy(experience.audience, language);
   const moments = useMemo(() => getVisibleMoments(account), [
     account.activeMode,
     account.accountType,
@@ -200,8 +223,8 @@ function MeetroMoments({ setPage }) {
         <div style={welcomeHeroShade} />
         <div style={welcomeCopy}>
           <span style={eyebrow}>{t("momentsEyebrow", language)}</span>
-          <h1 style={title}>{experience.title}</h1>
-          <p style={subtitle}>{experience.subtitle}</p>
+          <h1 style={title}>{experienceCopy.title}</h1>
+          <p style={subtitle}>{experienceCopy.subtitle}</p>
           <p style={welcomeText}>
             {t("momentsWelcomeText", language)}
           </p>
@@ -303,9 +326,10 @@ function MeetroMoments({ setPage }) {
         ) : (
           moments.map((moment) => {
             const privacy = getTimelineMomentPrivacyLabel(moment);
+            const privacyCopy = getPrivacyCopy(privacy, language);
             const verified = isVerifiedTimelineMoment(moment);
             const relationshipContext = getRelationshipContext(moment, experience.audience);
-            const completionDate = formatDate(moment.completionDate || moment.closureDate);
+            const completionDate = formatDate(moment.completionDate || moment.closureDate, language);
             const confirmed = privacy.publicVisible === true || moment.customerConfirmed === true;
             const beforePhoto = confirmed ? getPhotoUrl(moment.beforePhotos?.[0]) : "";
             const afterPhoto = confirmed ? getPhotoUrl(moment.afterPhotos?.[0]) : "";
@@ -327,7 +351,9 @@ function MeetroMoments({ setPage }) {
                 type="button"
                 style={{ ...momentCard, ...momentCardButton }}
                 onClick={() => openMomentDetails(moment)}
-                aria-label={`Open ${moment.projectTitle || "Meetro Moment"}`}
+                aria-label={t("momentsOpenMomentAria", language, {
+                  title: moment.projectTitle || t("momentsMomentFallback", language),
+                })}
               >
                 <div style={momentIcon}>
                   <MeetroIcon name={getMomentIconName(moment)} size={24} decorative />
@@ -336,25 +362,33 @@ function MeetroMoments({ setPage }) {
                 <div style={momentBody}>
                   <div style={momentTopline}>
                     <span style={momentMeta}>
-                      {completionDate ? `Completed ${completionDate}` : "Completed Project"}
+                      {completionDate
+                        ? t("momentsCompletedDate", language, { date: completionDate })
+                        : t("momentsCompletedProject", language)}
                     </span>
-                    <span style={privacyStyle}>{privacy.label}</span>
+                    <span style={privacyStyle}>{privacyCopy.label}</span>
                   </div>
 
-                  <h2 style={momentTitle}>{moment.projectTitle || "Completed Project"}</h2>
+                  <h2 style={momentTitle}>
+                    {moment.projectTitle || t("momentsCompletedProject", language)}
+                  </h2>
 
                   {relationshipContext && (
                     <p style={momentDetails}>{relationshipContext}</p>
                   )}
 
-                  <p style={privacyText}>{privacy.message}</p>
+                  <p style={privacyText}>{privacyCopy.message}</p>
 
                   {(confirmed && moment.reviewRating) || moment.warranty || moment.receipt ? (
                     <div style={momentPills}>
                       {confirmed && moment.reviewRating && (
-                        <span style={momentPill}>{`${moment.reviewRating}/5 Review`}</span>
+                        <span style={momentPill}>
+                          {t("momentsReviewRating", language, { rating: moment.reviewRating })}
+                        </span>
                       )}
-                      {moment.warranty && <span style={momentPill}>Warranty Included</span>}
+                      {moment.warranty && (
+                        <span style={momentPill}>{t("momentsWarrantyIncluded", language)}</span>
+                      )}
                       {moment.receipt && (
                         <span style={momentPill}>{t("momentsReceiptSaved", language)}</span>
                       )}
@@ -366,13 +400,13 @@ function MeetroMoments({ setPage }) {
                       {beforePhoto && (
                         <figure style={photoFrame}>
                           <img src={beforePhoto} alt="" style={photoImage} />
-                          <figcaption style={photoCaption}>Before</figcaption>
+                          <figcaption style={photoCaption}>{t("momentsBefore", language)}</figcaption>
                         </figure>
                       )}
                       {afterPhoto && (
                         <figure style={photoFrame}>
                           <img src={afterPhoto} alt="" style={photoImage} />
-                          <figcaption style={photoCaption}>After</figcaption>
+                          <figcaption style={photoCaption}>{t("momentsAfter", language)}</figcaption>
                         </figure>
                       )}
                     </div>

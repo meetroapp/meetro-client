@@ -955,12 +955,12 @@ function Discover({ setPage }) {
         style={communityBackButton}
         onClick={() => openCommunitySection("communityHub")}
       >
-        ← Community
+        ← {t("communityTitle", language)}
       </button>
 
       <header style={compactHeader}>
         <p style={headerEyebrow}>{t("discoverMarketplaceEyebrow", language)}</p>
-        <h1 style={compactTitle}>Businesses</h1>
+        <h1 style={compactTitle}>{t("communityBusinessesTitle", language)}</h1>
         <p style={compactSubtitle}>{t("discoverMarketplaceSubtitle", language)}</p>
       </header>
 

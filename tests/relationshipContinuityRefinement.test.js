@@ -46,8 +46,8 @@ test("homeowner chat surfaces do not expose the professional schedule action", (
   assert.match(overflowScheduleBlock, /openChatScheduleModal\(\)/);
   assert.match(overflowScheduleBlock, /Schedule/);
   assert.match(attachScheduleBlock, /openChatScheduleModal/);
-  assert.match(attachScheduleBlock, /Review Schedule/);
-  assert.match(conversationThreadSource, /Scheduling is managed by the professional/);
+  assert.match(attachScheduleBlock, /assistantActionOpenSchedule/);
+  assert.match(conversationThreadSource, /conversationSchedulingIsManagedByTheProfessional/);
 });
 
 test("schedule handoff keeps Schedule as the visit owner and labels the return action safely", () => {
@@ -59,7 +59,7 @@ test("schedule handoff keeps Schedule as the visit owner and labels the return a
 
   assert.match(scheduleReturnBlock, /localStorage\.setItem\("conversationReturnSection", "schedule"\)/);
   assert.match(scheduleReturnBlock, /setPage\("conversationThread"\)/);
-  assert.match(scheduleReturnBlock, /Send to Customer/);
+  assert.match(scheduleReturnBlock, /sendToCustomer/);
   assert.doesNotMatch(scheduleReturnBlock, /Continue Conversation/);
   assert.match(contractorDashboardSource, /async function shareExternalScheduleVisit/);
   assert.match(contractorDashboardSource, /Share\.share/);
@@ -173,7 +173,7 @@ test("linked Meetro visit save auto-sends while external visits keep delivery ch
   assert.match(deliveryChoiceBlock, /if \(method === "chat"\)/);
   assert.match(deliveryChoiceBlock, /sendScheduleVisitToMeetroChat\(visit\)/);
   assert.match(deliveryChoiceBlock, /shareExternalScheduleVisit\(visit\)/);
-  assert.match(contractorDashboardSource, /Share by Text \/ iOS Message/);
+  assert.match(contractorDashboardSource, /workCenterShareByTextIOSMessage/);
 });
 
 test("schedule edit handoff preserves relationship and conversation linkage", () => {

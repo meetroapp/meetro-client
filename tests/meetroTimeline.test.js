@@ -669,12 +669,12 @@ test("Meetro Moments is reachable from Profile and does not expose a public comp
   assert.match(utilitySource, /This Moment is saved privately\./);
   assert.match(momentsSource, /t\("momentsReceiptSaved", language\)/);
   assert.match(momentsSource, /t\("momentsBeforeAfterPreviewAria", language\)/);
-  assert.match(momentDetailsSource, /Back to Meetro Moments/);
-  assert.match(momentDetailsSource, /Verified Meetro Moment/);
-  assert.match(momentDetailsSource, /Why this moment matters/);
-  assert.match(momentDetailsSource, /Project Journey/);
-  assert.match(momentDetailsSource, /Related Moments/);
-  assert.match(momentDetailsSource, /Relationship History/);
+  assert.match(momentDetailsSource, /momentDetailBack/);
+  assert.match(momentDetailsSource, /momentDetailVerified/);
+  assert.match(momentDetailsSource, /momentDetailWhyItMatters/);
+  assert.match(momentDetailsSource, /momentDetailJourney/);
+  assert.match(momentDetailsSource, /momentDetailRelated/);
+  assert.match(momentDetailsSource, /momentDetailRelationshipHistory/);
 
   for (const source of [momentsSource, momentDetailsSource, completedJobSource]) {
     assert.doesNotMatch(source, /What do you want to post/i);
@@ -720,7 +720,8 @@ test("Meetro Moments first impression copy is covered by language.js", () => {
     "momentsVerifiedLabel",
   ];
 
-  assert.match(momentsSource, /import \{ getLanguage, t \} from "\.\.\/utils\/language"/);
+  assert.match(momentsSource, /import \{ t \} from "\.\.\/utils\/language"/);
+  assert.match(momentsSource, /import useLanguage from "\.\.\/hooks\/useLanguage"/);
   for (const key of keys) {
     assert.match(momentsSource, new RegExp(`t\\("${key}", language\\)`));
     for (const language of ["en", "es", "fr", "pt-BR"]) {
