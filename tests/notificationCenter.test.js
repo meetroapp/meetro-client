@@ -6,7 +6,11 @@ import {
   groupNotificationsByAge,
   sortNotificationsByAttention,
 } from "../src/utils/notificationCenter.js";
-import { upsertNotification } from "../src/utils/meetroNotifications.js";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  upsertNotification,
+} from "../src/utils/meetroNotifications.js";
 
 function createStorage() {
   const values = new Map();
@@ -81,12 +85,16 @@ test("notifications sort unread first and group by age", () => {
   );
 });
 
-test("hiring interview notification upsert replaces repeated event without customer metadata", () => {
+test("browser-local notification records and writes remain dormant", () => {
   const previousStorage = globalThis.localStorage;
   const previousWindow = globalThis.window;
   globalThis.localStorage = createStorage();
   globalThis.window = { dispatchEvent() {} };
   try {
+    localStorage.setItem(
+      "meetro_notifications",
+      JSON.stringify([{ id: "stale", type: "hiring_interview_rescheduled", read: false }])
+    );
     const base = {
       type: "hiring_interview_rescheduled",
       role: "applicant",
@@ -98,11 +106,11 @@ test("hiring interview notification upsert replaces repeated event without custo
     upsertNotification({ ...base, message: "First time" });
     upsertNotification({ ...base, message: "Updated time" });
     const records = JSON.parse(localStorage.getItem("meetro_notifications"));
-    assert.equal(records.length, 1);
-    assert.equal(records[0].message, "Updated time");
-    assert.equal(records[0].role, "applicant");
-    assert.equal(records[0].requestId, "");
-    assert.equal(records[0].appointmentId, "");
+    assert.deepEqual(records, [
+      { id: "stale", type: "hiring_interview_rescheduled", read: false },
+    ]);
+    assert.deepEqual(getNotifications(), []);
+    assert.equal(getUnreadNotificationCount(), 0);
   } finally {
     globalThis.localStorage = previousStorage;
     globalThis.window = previousWindow;

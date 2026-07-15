@@ -8369,6 +8369,10 @@ const notificationCenterLabels = {
     notifications: "Notifications",
     notificationsActivityCenter: "Activity center",
     notificationsSubtitle: "Recent activity and updates.",
+    notificationsUnavailableSubtitle: "Verified activity and updates.",
+    notificationsUnavailable: "Notifications are not available yet.",
+    notificationsUnavailableText:
+      "Notifications will appear here after Meetro can confirm secure recipient delivery. Device-local notification records are not shown.",
     notificationsCategories: "Notification categories",
     notificationsMarkAllRead: "Mark all read",
     notificationsToday: "Today’s notifications",
@@ -8390,6 +8394,10 @@ const notificationCenterLabels = {
     notifications: "Notificaciones",
     notificationsActivityCenter: "Centro de actividad",
     notificationsSubtitle: "Actividad reciente y actualizaciones.",
+    notificationsUnavailableSubtitle: "Actividad y actualizaciones verificadas.",
+    notificationsUnavailable: "Las notificaciones aún no están disponibles.",
+    notificationsUnavailableText:
+      "Las notificaciones aparecerán aquí cuando Meetro pueda confirmar una entrega segura al destinatario. Los registros de notificaciones guardados solo en este dispositivo no se muestran.",
     notificationsCategories: "Categorías de notificaciones",
     notificationsMarkAllRead: "Marcar todo como leído",
     notificationsToday: "Notificaciones de hoy",
@@ -8411,6 +8419,10 @@ const notificationCenterLabels = {
     notifications: "Notifications",
     notificationsActivityCenter: "Centre d’activité",
     notificationsSubtitle: "Activité récente et mises à jour.",
+    notificationsUnavailableSubtitle: "Activité et mises à jour vérifiées.",
+    notificationsUnavailable: "Les notifications ne sont pas encore disponibles.",
+    notificationsUnavailableText:
+      "Les notifications apparaîtront ici lorsque Meetro pourra confirmer une livraison sécurisée au destinataire. Les notifications enregistrées uniquement sur cet appareil ne sont pas affichées.",
     notificationsCategories: "Catégories de notifications",
     notificationsMarkAllRead: "Tout marquer comme lu",
     notificationsToday: "Notifications d’aujourd’hui",
@@ -8432,6 +8444,10 @@ const notificationCenterLabels = {
     notifications: "Notificações",
     notificationsActivityCenter: "Centro de atividade",
     notificationsSubtitle: "Atividade recente e atualizações.",
+    notificationsUnavailableSubtitle: "Atividade e atualizações verificadas.",
+    notificationsUnavailable: "As notificações ainda não estão disponíveis.",
+    notificationsUnavailableText:
+      "As notificações aparecerão aqui quando a Meetro puder confirmar a entrega segura ao destinatário. Registros de notificações salvos apenas neste dispositivo não são exibidos.",
     notificationsCategories: "Categorias de notificações",
     notificationsMarkAllRead: "Marcar tudo como lido",
     notificationsToday: "Notificações de hoje",

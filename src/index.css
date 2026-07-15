@@ -3068,7 +3068,8 @@ button {
   }
 }
 
-.hiring-truth-page {
+.hiring-truth-page,
+.notification-truth-page {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -3082,14 +3083,16 @@ button {
   background: #f8fafc;
 }
 
-.hiring-truth-workspace {
+.hiring-truth-workspace,
+.notification-truth-workspace {
   width: 100%;
   max-width: 760px;
   min-width: 0;
   margin: 24px auto 0;
 }
 
-.hiring-truth-card {
+.hiring-truth-card,
+.notification-truth-card {
   width: 100%;
   min-width: 0;
   padding: clamp(24px, 5vw, 40px);
@@ -3101,7 +3104,8 @@ button {
   text-align: center;
 }
 
-.hiring-truth-icon {
+.hiring-truth-icon,
+.notification-truth-icon {
   display: inline-flex;
   width: 52px;
   height: 52px;
@@ -3112,14 +3116,16 @@ button {
   color: #1f4d34;
 }
 
-.hiring-truth-card h2 {
+.hiring-truth-card h2,
+.notification-truth-card h2 {
   margin: 16px 0 0;
   color: #14351f;
   font-size: clamp(22px, 4vw, 30px);
   line-height: 1.25;
 }
 
-.hiring-truth-card p {
+.hiring-truth-card p,
+.notification-truth-card p {
   max-width: 600px;
   margin: 14px auto 0;
   color: #5f6f62;
@@ -3131,6 +3137,36 @@ button {
   min-width: min(240px, 100%);
   min-height: 48px;
   margin-top: 24px;
+}
+
+.notification-truth-header {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.notification-truth-header p {
+  margin: 0 0 6px;
+  color: #55705b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.notification-truth-header h1 {
+  margin: 0;
+  color: #14351f;
+  font-size: clamp(30px, 6vw, 42px);
+  line-height: 1.1;
+}
+
+.notification-truth-header span {
+  display: block;
+  margin-top: 8px;
+  color: #5f6f62;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .hiring-truth-public-header {
