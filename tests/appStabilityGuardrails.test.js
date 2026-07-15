@@ -111,10 +111,10 @@ test("update available notice is build-based and preserves session data", () => 
   const viteSource = fs.readFileSync("vite.config.js", "utf8");
 
   assert.match(appSource, /function AppUpdateNotice/);
-  assert.match(appSource, /Update available/);
-  assert.match(appSource, /A newer version of Meetro Community is ready/);
-  assert.match(appSource, /Update now/);
-  assert.match(appSource, /Later/);
+  assert.match(appSource, /t\("appUpdateAvailable", language\)/);
+  assert.match(appSource, /t\("appUpdateAvailableBody", language\)/);
+  assert.match(appSource, /t\("appUpdateNow", language\)/);
+  assert.match(appSource, /t\("appUpdateLater", language\)/);
   assert.match(appSource, /detectAvailableAppUpdate/);
   assert.match(appSource, /applyAppUpdateNow/);
   assert.match(appSource, /dismissAppUpdateNotice/);
@@ -123,8 +123,8 @@ test("update available notice is build-based and preserves session data", () => 
   assert.match(startupSource, /APP_BUILD_DISMISSED_KEY/);
   assert.match(startupSource, /reloadCurrentBuild/);
   assert.match(appSource, /capacitor: Capacitor/);
-  assert.match(appSource, /Updating…/);
-  assert.match(appSource, /The update could not be completed\. Please try again\./);
+  assert.match(appSource, /t\("appUpdating", language\)/);
+  assert.match(appSource, /t\("appUpdateFailed", language\)/);
   assert.doesNotMatch(startupSource, /removeItem\("token"\)|clear\(\)/);
   assert.match(viteSource, /globalThis\.__MEETRO_BUILD_ID__/);
   assert.match(viteSource, /VITE_APP_BUILD_ID/);

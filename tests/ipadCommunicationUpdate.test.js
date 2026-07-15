@@ -184,10 +184,10 @@ test("duplicate update taps share one operation and failed reload remains retrya
 test("update notice exposes progress failure and temporary Later behavior", () => {
   assert.match(appSource, /disabled=\{updating\}/);
   assert.match(appSource, /aria-busy=\{updating\}/);
-  assert.match(appSource, /Updating…/);
+  assert.match(appSource, /t\("appUpdating", language\)/);
   assert.match(appSource, /if \(updateActionState\.status === "updating"\) return/);
   assert.match(appSource, /await new Promise\(\(resolve\) => window\.requestAnimationFrame\(resolve\)\)/);
-  assert.match(appSource, /The update could not be completed\. Please try again\./);
+  assert.match(appSource, /t\("appUpdateFailed", language\)/);
   assert.match(appSource, /dismissAppUpdateNotice/);
   assert.doesNotMatch(appSource, /localStorage\.clear|removeItem\("token"\)/);
 });

@@ -1,11 +1,17 @@
-function LoadingScreen({ text = "Loading..." }) {
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
+
+function LoadingScreen({ text }) {
+  const language = useLanguage();
   return (
     <div style={wrapper}>
       <div style={logoCircle}>M</div>
 
       <h2 style={title}>Meetro</h2>
 
-      <p style={subtitle}>{text}</p>
+      <p style={subtitle} role="status" aria-live="polite">
+        {text || t("stateLoading", language)}
+      </p>
 
       <div style={dots}>
         <span style={dot}></span>

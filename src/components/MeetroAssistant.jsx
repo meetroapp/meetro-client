@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { getLanguage, t } from "../utils/language";
+import { t } from "../utils/language";
+import useLanguage from "../hooks/useLanguage";
 import { getHomeownerLifecycleStage } from "../utils/homeownerLifecycle";
 import { getAccountModeForPage } from "../utils/session";
 import {
@@ -52,6 +53,7 @@ import {
   COMPANION_PREFERRED_GUIDANCE_HEIGHT,
 } from "../utils/companionPanelPlacement";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
+import { getFormattingLocale } from "../utils/localeFormat";
 import {
   canReadLegacyWorkflowStorage,
   isLegacyWorkflowStorageKey,
@@ -695,13 +697,14 @@ function getScreenGuide(currentPage, language) {
 }
 
 function getRoleLabel(currentPage, language) {
-  const copy = assistantCopy[language] || assistantCopy.en;
   const mode = getAccountModeForPage(
     currentPage,
     localStorage.getItem("activeAccountMode") || "personal"
   );
 
-  return mode === "business" ? copy.roleProfessional : copy.roleHomeowner;
+  return mode === "business"
+    ? t("accountRoleProfessional", language)
+    : t("accountRoleHomeowner", language);
 }
 
 function safeJson(key, fallback) {
@@ -2193,9 +2196,9 @@ function getNaturalAssistantVoice(language) {
     if (!window.speechSynthesis?.getVoices) return null;
 
     const voices = window.speechSynthesis.getVoices() || [];
-    const languageKey = language === "es" ? "es" : "en";
-    const preferredPrefix = languageKey;
-    const preferredLocale = language === "es" ? "es-US" : "en-US";
+    const preferredLocale = getFormattingLocale(language);
+    const preferredPrefix = preferredLocale.split("-")[0].toLowerCase();
+    const languageKey = VOICE_QUALITY_ORDER[preferredPrefix] ? preferredPrefix : "en";
     const savedPreference =
       localStorage.getItem(VOICE_PREFERENCE_KEY) || "auto";
 
@@ -2252,7 +2255,7 @@ function stopAssistantSpeech() {
   } catch {}
 }
 
-function formatDateForAssistantSpeech(value) {
+function formatDateForAssistantSpeech(value, language) {
   const [year, month, day] = String(value || "").split("-").map(Number);
   const date = new Date(year, month - 1, day);
 
@@ -2268,7 +2271,7 @@ function formatDateForAssistantSpeech(value) {
     return value;
   }
 
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(getFormattingLocale(language), {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -2308,7 +2311,7 @@ function numberWordForAssistantSpeech(value) {
     : value;
 }
 
-function normalizeAssistantSpeechText(text) {
+function normalizeAssistantSpeechText(text, language) {
   return String(text || "")
     .replace(/\bAssistant Response\b:?/gi, "")
     .replace(/\bMeetro says\b:?/gi, "")
@@ -2320,7 +2323,9 @@ function normalizeAssistantSpeechText(text) {
     .replace(/\bnotification\(s\)/gi, "notifications")
     .replace(/\bconversation\(s\)/gi, "conversations")
     .replace(/\b(\d+)\s+(appointments|quotes|messages|jobs|requests|notifications|conversations)\b/gi, (_match, count, noun) => `${numberWordForAssistantSpeech(count)} ${noun}`)
-    .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (_match, date) => formatDateForAssistantSpeech(date))
+    .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (_match, date) =>
+      formatDateForAssistantSpeech(date, language)
+    )
     .replace(/\b(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)(?=\s|$|[,.!?])/gi, (match) =>
       formatTimeForAssistantSpeech(match)
     )
@@ -2354,9 +2359,9 @@ function speakAssistantText(text, language, handlers = {}) {
     stopAssistantSpeech();
 
     const utterance = new SpeechSynthesisUtterance(
-      normalizeAssistantSpeechText(text)
+      normalizeAssistantSpeechText(text, language)
     );
-    utterance.lang = language === "es" ? "es-US" : "en-US";
+    utterance.lang = getFormattingLocale(language);
     utterance.rate = 0.9;
     utterance.pitch = 1;
     utterance.volume = 1;
@@ -2487,7 +2492,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const nativeSpeechTimeoutRef = useRef(null);
   const assistantSheetRef = useRef(null);
   const voiceAnswerRef = useRef(null);
-  const language = getLanguage();
+  const language = useLanguage();
   const copy = assistantCopy[language] || assistantCopy.en;
   const workCenterSectionForAssistant =
     localStorage.getItem("meetroWorkCenterTab") ||
@@ -2552,7 +2557,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const voiceStatusLabel = assistantSpeaking
     ? t("assistantResponding", language)
     : voiceListening
-    ? copy.voiceListening
+    ? t("companionListening", language)
     : voiceThinking
     ? t("assistantThinking")
     : voiceAnswer
@@ -3180,7 +3185,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       if (!hasGrantedSpeechPermission(currentPermissions)) {
         if (hasDeniedSpeechPermission(currentPermissions)) {
           setVoiceListening(false);
-          setVoiceError(copy.voiceUnsupported);
+          setVoiceError(t("companionVoiceUnavailable", language));
           setVoiceAnswer("");
           setVoiceActions([]);
           setVoiceStatusChip(null);
@@ -3193,7 +3198,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
         if (!hasGrantedSpeechPermission(requestedPermissions)) {
           setVoiceListening(false);
-          setVoiceError(copy.voiceUnsupported);
+          setVoiceError(t("companionVoiceUnavailable", language));
           setVoiceAnswer("");
           setVoiceActions([]);
           setVoiceStatusChip(null);
@@ -3233,7 +3238,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       }, 7000);
 
       const result = await NativeSpeechRecognition.start({
-        language: language === "es" ? "es-US" : "en-US",
+        language: getFormattingLocale(language),
         maxResults: 1,
         partialResults: true,
         popup: false,
@@ -3268,7 +3273,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       if (isNativeSpeechUnavailable(error)) return false;
 
       setVoiceListening(false);
-      setVoiceError(copy.voiceUnsupported);
+      setVoiceError(t("companionVoiceUnavailable", language));
       setVoiceAnswer("");
       setVoiceActions([]);
       setVoiceStatusChip(null);
@@ -3314,7 +3319,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
     if (!SpeechRecognition) {
       setVoiceListening(false);
-      setVoiceError(copy.voiceUnsupported);
+      setVoiceError(t("companionVoiceUnavailable", language));
       setVoiceAnswer("");
       setVoiceActions([]);
       setVoiceStatusChip(null);
@@ -3337,7 +3342,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     try {
       const recognition = new SpeechRecognition();
       browserSpeechRecognitionRef.current = recognition;
-      recognition.lang = language === "es" ? "es-US" : "en-US";
+      recognition.lang = getFormattingLocale(language);
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
@@ -3360,7 +3365,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       recognition.onerror = (event) => {
         setVoiceError(
           event?.error === "not-allowed" || event?.error === "service-not-allowed"
-            ? copy.voiceUnsupported
+            ? t("companionVoiceUnavailable", language)
             : language === "es"
             ? "No pude escuchar claramente. Intenta de nuevo."
             : "I could not hear that clearly. Try again."
@@ -3387,7 +3392,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       recognition.start();
     } catch (error) {
       setVoiceListening(false);
-      setVoiceError(copy.voiceUnsupported);
+      setVoiceError(t("companionVoiceUnavailable", language));
     }
   }
 
@@ -3744,7 +3749,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         className="meetro-assistant-launcher"
         data-position-mode="draggable"
         type="button"
-        aria-label={copy.assistantName || copy.buttonLabel}
+        aria-label={t("companionLauncherLabel", language)}
         onPointerDown={handleLauncherPointerDown}
         onPointerMove={handleLauncherPointerMove}
         onPointerUp={handleLauncherPointerUp}
@@ -3855,8 +3860,13 @@ function MeetroAssistant({ currentPage = "", setPage }) {
               </div>
 
               <div style={assistantHeaderActions}>
-                <button type="button" style={assistantCloseButton} onClick={closeAssistant}>
-                  {copy.close}
+                <button
+                  type="button"
+                  style={assistantCloseButton}
+                  onClick={closeAssistant}
+                  aria-label={t("actionClose", language)}
+                >
+                  {t("actionClose", language)}
                 </button>
               </div>
             </div>
@@ -3916,9 +3926,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                   }}
                   onClick={startVoiceInput}
                   disabled={voiceListening}
-                  aria-label={copy.voiceButton}
+                  aria-label={t("companionAskByVoice", language)}
                 >
-                  {voiceListening ? "..." : "Mic"}
+                  {voiceListening ? "..." : t("companionMicrophone", language)}
                 </button>
 
                 <div style={voiceHeroText}>
@@ -4038,7 +4048,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
               {voiceTranscript && (
                 <div style={voiceResultBox}>
-                  <span style={assistantLabel}>{copy.transcriptLabel}</span>
+                  <span style={assistantLabel}>{t("companionYouAsked", language)}</span>
                   <p style={voiceTranscriptText}>{voiceTranscript}</p>
                 </div>
               )}
@@ -4075,13 +4085,13 @@ function MeetroAssistant({ currentPage = "", setPage }) {
             {false && showAdvancedHelp && (
               <div style={advancedPanel}>
                 <div style={assistantInfoCard}>
-                  <span style={assistantLabel}>{copy.screenLabel}</span>
+                  <span style={assistantLabel}>{t("companionCurrentScreen", language)}</span>
                   <strong style={assistantScreenName}>{guide.name}</strong>
                 </div>
 
                 <div style={assistantStack}>
                   <section style={assistantSection}>
-                    <span style={assistantLabel}>{copy.nextStepLabel}</span>
+                    <span style={assistantLabel}>{t("companionSuggestedNextStep", language)}</span>
                     <p style={assistantText}>{guide.next}</p>
                   </section>
                 </div>
@@ -4092,24 +4102,26 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                     checked={readAloud}
                     onChange={(event) => setReadAloud(event.target.checked)}
                   />
-                  {copy.readAloudLabel}
+                  {t("companionReadAloud", language)}
                 </label>
 
                 <span style={assistantNotificationPill}>
-                  {copy.notificationCount}: {unreadNotificationCount}
+                  {t("companionUnreadNotifications", language)}: {unreadNotificationCount}
                 </span>
 
                 {isEmergencyContext && (
                   <section style={emergencyTipsCard}>
                     <div style={emergencyTipsHeader}>
-                      <span style={emergencyTipsTitle}>{copy.emergencyTipsTitle}</span>
+                      <span style={emergencyTipsTitle}>{t("companionEmergencyTips", language)}</span>
                       {emergencyTips.length > 3 && (
                         <button
                           type="button"
                           style={emergencyTipsToggle}
                           onClick={() => setShowAllEmergencyTips((current) => !current)}
                         >
-                          {showAllEmergencyTips ? copy.showLessTips : copy.showMoreTips}
+                          {showAllEmergencyTips
+                            ? t("companionShowLess", language)
+                            : t("companionShowMore", language)}
                         </button>
                       )}
                     </div>
@@ -4135,12 +4147,12 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                       setFeedbackCategory(copy.feedbackCategories[0]);
                     }}
                   >
-                    {copy.feedbackButton}
+                    {t("companionFeedbackButton", language)}
                   </button>
                 ) : (
                   <div style={feedbackFormCard}>
                     <label style={feedbackFormLabel}>
-                      {copy.feedbackCategoryLabel}
+                      {t("companionFeedbackCategory", language)}
                       <select
                         value={feedbackCategory}
                         onChange={(event) => setFeedbackCategory(event.target.value)}
@@ -4155,18 +4167,18 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                     </label>
 
                     <label style={feedbackFormLabel}>
-                      {copy.feedbackNoteLabel}
+                      {t("companionFeedbackNote", language)}
                       <textarea
                         value={feedbackNote}
                         onChange={(event) => setFeedbackNote(event.target.value)}
-                        placeholder={copy.feedbackNotePlaceholder}
+                        placeholder={t("companionFeedbackPlaceholder", language)}
                         style={feedbackTextarea}
                       />
                     </label>
 
                     <div style={feedbackFormActions}>
                       <button type="button" style={feedbackSubmitButton} onClick={saveFeedback}>
-                        {copy.feedbackSubmit}
+                        {t("companionFeedbackSubmit", language)}
                       </button>
 
                       <button
@@ -4178,25 +4190,29 @@ function MeetroAssistant({ currentPage = "", setPage }) {
                           setFeedbackNote("");
                         }}
                       >
-                        {copy.feedbackCancel}
+                        {t("actionCancel", language)}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {feedbackSaved && <p style={feedbackSavedText}>{copy.feedbackSaved}</p>}
+                {feedbackSaved && (
+                  <p style={feedbackSavedText}>{t("companionFeedbackSaved", language)}</p>
+                )}
 
                 <div style={feedbackReviewRow}>
                   <span>
-                    {copy.feedbackCount}: {feedbackCount}
+                    {t("companionFeedbackCount", language)}: {feedbackCount}
                   </span>
 
                   <button type="button" style={feedbackCopyButton} onClick={copyFeedbackSummary}>
-                    {copy.copyFeedbackSummary}
+                    {t("companionFeedbackCopy", language)}
                   </button>
                 </div>
 
-                {feedbackCopied && <p style={feedbackCopiedText}>{copy.copiedFeedbackSummary}</p>}
+                {feedbackCopied && (
+                  <p style={feedbackCopiedText}>{t("companionFeedbackCopied", language)}</p>
+                )}
               </div>
             )}
           </div>

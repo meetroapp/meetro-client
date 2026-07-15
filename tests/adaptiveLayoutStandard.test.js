@@ -76,5 +76,8 @@ test("adaptive layout standard explicitly protects mobile behavior", () => {
   assert.match(standardSource, /Mobile safe-area handling/);
   assert.match(indexCssSource, /@media \(max-width: 1099px\)/);
   assert.match(bottomNavSource, /className="bottom-nav-dock"/);
-  assert.match(bottomNavSource, /aria-label="Primary mobile navigation"/);
+  assert.match(
+    bottomNavSource,
+    /aria-label={t\("navigationPrimaryMobile", language\)}/
+  );
 });

@@ -1,4 +1,6 @@
 import { Component } from "react";
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
 
 function getStorageValue(key, fallback = "") {
   try {
@@ -75,32 +77,33 @@ class RouteErrorBoundary extends Component {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <main style={fallbackPage}>
-        <section style={fallbackCard} role="alert" aria-live="assertive">
-          <h1 style={fallbackTitle}>Something went wrong.</h1>
-          <p style={fallbackText}>
-            Meetro kept the app open. Return home and continue from there.
-          </p>
-          <div style={fallbackActions}>
-            <button
-              type="button"
-              style={primaryButton}
-              onClick={() => returnHome(this.props.setPage, this.props.currentPage)}
-            >
-              Return Home
-            </button>
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={() => this.setState({ hasError: false })}
-            >
-              Try Again
-            </button>
-          </div>
-        </section>
-      </main>
+      <RouteErrorFallback
+        onReturnHome={() => returnHome(this.props.setPage, this.props.currentPage)}
+        onRetry={() => this.setState({ hasError: false })}
+      />
     );
   }
+}
+
+function RouteErrorFallback({ onReturnHome, onRetry }) {
+  const language = useLanguage();
+
+  return (
+    <main style={fallbackPage}>
+      <section style={fallbackCard} role="alert" aria-live="assertive">
+        <h1 style={fallbackTitle}>{t("errorBoundaryTitle", language)}</h1>
+        <p style={fallbackText}>{t("errorBoundaryBody", language)}</p>
+        <div style={fallbackActions}>
+          <button type="button" style={primaryButton} onClick={onReturnHome}>
+            {t("errorBoundaryReturnHome", language)}
+          </button>
+          <button type="button" style={secondaryButton} onClick={onRetry}>
+            {t("actionTryAgain", language)}
+          </button>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 const fallbackPage = {

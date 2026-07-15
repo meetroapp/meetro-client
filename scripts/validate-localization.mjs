@@ -110,13 +110,20 @@ export async function auditLocalization() {
     `${pathToFileURL(path.join(ROOT, "src/utils/localizationContract.js")).href}?audit=${Date.now()}`
   );
   const { translations } = languageModule;
-  const { CANONICAL_LANGUAGE_CODES, FOUNDATION_CRITICAL_KEYS, getDeferredTranslationKeys } =
+  const {
+    CANONICAL_LANGUAGE_CODES,
+    FOUNDATION_CRITICAL_KEYS,
+    SHARED_INTERFACE_KEYS,
+    getDeferredTranslationKeys,
+  } =
     contractModule;
   const activeKeys = findActiveKeys();
   const duplicates = findDuplicateProperties();
   const missingActiveByLanguage = {};
   const unknownMissingByLanguage = {};
   const foundationMissingByLanguage = {};
+  const sharedMissingByLanguage = {};
+  const sharedDeferredByLanguage = {};
 
   for (const language of CANONICAL_LANGUAGE_CODES) {
     const dictionary = translations[language] || {};
@@ -126,6 +133,12 @@ export async function auditLocalization() {
     unknownMissingByLanguage[language] = missing.filter((key) => !deferred.has(key));
     foundationMissingByLanguage[language] = FOUNDATION_CRITICAL_KEYS.filter(
       (key) => !String(dictionary[key] || "").trim()
+    );
+    sharedMissingByLanguage[language] = SHARED_INTERFACE_KEYS.filter(
+      (key) => !String(dictionary[key] || "").trim()
+    );
+    sharedDeferredByLanguage[language] = SHARED_INTERFACE_KEYS.filter((key) =>
+      deferred.has(key)
     );
   }
 
@@ -152,6 +165,8 @@ export async function auditLocalization() {
     missingActiveByLanguage,
     unknownMissingByLanguage,
     foundationMissingByLanguage,
+    sharedMissingByLanguage,
+    sharedDeferredByLanguage,
     interpolationMismatches,
   };
 }
@@ -170,6 +185,12 @@ if (path.resolve(process.argv[1] || "") === fileURLToPath(import.meta.url)) {
     foundationMissingCount: Object.fromEntries(
       Object.entries(result.foundationMissingByLanguage).map(([language, keys]) => [language, keys.length])
     ),
+    sharedMissingCount: Object.fromEntries(
+      Object.entries(result.sharedMissingByLanguage).map(([language, keys]) => [language, keys.length])
+    ),
+    sharedDeferredCount: Object.fromEntries(
+      Object.entries(result.sharedDeferredByLanguage).map(([language, keys]) => [language, keys.length])
+    ),
     interpolationMismatchCount: result.interpolationMismatches.length,
   };
   console.log(JSON.stringify(summary, null, 2));
@@ -179,6 +200,8 @@ if (path.resolve(process.argv[1] || "") === fileURLToPath(import.meta.url)) {
     summary.duplicateCount > 0 ||
     summary.interpolationMismatchCount > 0 ||
     Object.values(summary.unknownMissingCount).some(Boolean) ||
-    Object.values(summary.foundationMissingCount).some(Boolean);
+    Object.values(summary.foundationMissingCount).some(Boolean) ||
+    Object.values(summary.sharedMissingCount).some(Boolean) ||
+    Object.values(summary.sharedDeferredCount).some(Boolean);
   if (failed) process.exitCode = 1;
 }

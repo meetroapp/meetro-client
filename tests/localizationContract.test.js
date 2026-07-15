@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFERRED_TRANSLATION_KEYS } from "../src/utils/deferredTranslationKeys.js";
-import { FOUNDATION_CRITICAL_KEYS } from "../src/utils/localizationContract.js";
+import {
+  FOUNDATION_CRITICAL_KEYS,
+  SHARED_INTERFACE_KEYS,
+} from "../src/utils/localizationContract.js";
 import { auditLocalization } from "../scripts/validate-localization.mjs";
 
 test("parser-backed localization contract has no duplicate or unknown active keys", async () => {
   const audit = await auditLocalization();
   assert.equal(audit.duplicates.length, 0);
-  assert.equal(audit.activeKeys.length, 1375);
+  assert.equal(audit.activeKeys.length, 1435);
   assert.deepEqual(
     Object.fromEntries(
       Object.entries(audit.unknownMissingByLanguage).map(([language, keys]) => [
@@ -17,6 +20,17 @@ test("parser-backed localization contract has no duplicate or unknown active key
     ),
     { en: 0, es: 0, fr: 0, "pt-BR": 0 }
   );
+});
+
+test("certified shared-interface keys have complete non-deferred parity", async () => {
+  const audit = await auditLocalization();
+  assert.equal(SHARED_INTERFACE_KEYS.length, 84);
+  for (const missing of Object.values(audit.sharedMissingByLanguage)) {
+    assert.deepEqual(missing, []);
+  }
+  for (const deferred of Object.values(audit.sharedDeferredByLanguage)) {
+    assert.deepEqual(deferred, []);
+  }
 });
 
 test("foundation keys and interpolation placeholders have complete parity", async () => {

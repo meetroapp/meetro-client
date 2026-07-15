@@ -8,7 +8,8 @@ import {
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
 import { recoverStoredRequestRelationships } from "./utils/requestRelationshipRecovery";
-import { getLanguage } from "./utils/language";
+import { getLanguage, t } from "./utils/language";
+import useLanguage from "./hooks/useLanguage";
 import {
   getMeetroMomentRouteId,
   getMeetroMomentRoutePage,
@@ -94,27 +95,29 @@ import MeetroJourney from "./pages/MeetroJourney";
 import MeetroStory from "./pages/MeetroStory";
 import PasswordResetWorkspace from "./components/PasswordResetWorkspace";
 
-const PageLoader = () => (
-  <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-    Loading Meetro...
-  </div>
-);
+const PageLoader = () => {
+  const language = useLanguage();
+  return (
+    <div style={{ padding: 24, fontFamily: "Arial, sans-serif" }} role="status">
+      {t("appLoadingMeetro", language)}
+    </div>
+  );
+};
 
-const SessionRestoringScreen = () => (
-  <LoadingScreen text="Restoring your Meetro session..." />
-);
+const SessionRestoringScreen = () => {
+  const language = useLanguage();
+  return <LoadingScreen text={t("appRestoringSession", language)} />;
+};
 
 function AppUpdateNotice({ onUpdateNow, onLater, status = "idle", error = "" }) {
+  const language = useLanguage();
   const updating = status === "updating";
   return (
     <div style={updateNoticeWrap} role="status" aria-live="polite">
       <div style={updateNoticeCard}>
         <div>
-          <h2 style={updateNoticeTitle}>Update available</h2>
-          <p style={updateNoticeCopy}>
-            A newer version of Meetro Community is ready. Update to continue
-            with the latest improvements.
-          </p>
+          <h2 style={updateNoticeTitle}>{t("appUpdateAvailable", language)}</h2>
+          <p style={updateNoticeCopy}>{t("appUpdateAvailableBody", language)}</p>
           {error && <p style={updateNoticeError}>{error}</p>}
         </div>
         <div style={updateNoticeActions}>
@@ -126,7 +129,9 @@ function AppUpdateNotice({ onUpdateNow, onLater, status = "idle", error = "" }) 
             disabled={updating}
             aria-busy={updating}
           >
-            {updating ? "Updating…" : "Update now"}
+            {updating
+              ? t("appUpdating", language)
+              : t("appUpdateNow", language)}
           </button>
           <button
             type="button"
@@ -134,7 +139,7 @@ function AppUpdateNotice({ onUpdateNow, onLater, status = "idle", error = "" }) 
             onClick={onLater}
             disabled={updating}
           >
-            Later
+            {t("appUpdateLater", language)}
           </button>
         </div>
       </div>
@@ -266,6 +271,8 @@ function withGuideLayer(component, currentPage, setPage) {
 }
 
 function App() {
+  const language = useLanguage();
+
   useEffect(() => {
     const root = document.getElementById("root");
     return startAppLayoutCoordinator({ root, capacitor: Capacitor });
@@ -816,7 +823,7 @@ function App() {
     } catch {
       setUpdateActionState({
         status: "idle",
-        error: "The update could not be completed. Please try again.",
+        error: t("appUpdateFailed", language),
       });
     }
   };

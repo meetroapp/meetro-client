@@ -137,8 +137,14 @@ test("Community remains desktop/sidebar only and is not added to mobile bottom n
   assert.doesNotMatch(personalMobileBlock, /page: "discover"/);
   assert.doesNotMatch(businessMobileBlock, /page: "discover"/);
   assert.match(businessDesktopBlock, /page: "discover"/);
-  assert.match(businessDesktopBlock, /label: "Community"/);
-  assert.match(businessDesktopBlock, /sub: "Discover"/);
+  assert.match(
+    businessDesktopBlock,
+    /label: t\("navigationCommunity", language\)/
+  );
+  assert.match(
+    businessDesktopBlock,
+    /sub: t\("navigationDiscover", language\)/
+  );
 });
 
 test("Visual Constitution documents the Community ecosystem adoption pass", () => {

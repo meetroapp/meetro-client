@@ -1,9 +1,14 @@
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
+
 function SafeBackBar({
   setPage,
   fallback = "home",
-  label = "← Back",
+  label,
   compact = false,
 }) {
+  const language = useLanguage();
+  const resolvedLabel = label || `← ${t("actionBack", language)}`;
   return (
     <div
       style={{
@@ -32,7 +37,7 @@ function SafeBackBar({
           cursor: "pointer",
         }}
       >
-        {label}
+        {resolvedLabel}
       </button>
     </div>
   );

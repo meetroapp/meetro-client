@@ -1,6 +1,11 @@
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
+
 function FloatingBackButton({ onClick, label }) {
+  const language = useLanguage();
+  const accessibleLabel = label || t("actionBack", language);
   return (
-    <button style={backButton} onClick={onClick}>
+    <button style={backButton} onClick={onClick} aria-label={accessibleLabel}>
       <span style={arrow}>←</span>
       {label && <span style={text}>{label}</span>}
     </button>
@@ -41,5 +46,4 @@ const text = {
 };
 
 export default FloatingBackButton;
-
 

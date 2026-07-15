@@ -429,11 +429,11 @@ test("desktop navigation keeps Community label readable and role-aware", () => {
     bottomNavSource.indexOf("const personalDesktopNavItems = [")
   );
 
-  assert.match(bottomNavSource, /label: "Community"/);
-  assert.match(bottomNavSource, /sub: "Discover"/);
+  assert.match(bottomNavSource, /label: t\("navigationCommunity", language\)/);
+  assert.match(bottomNavSource, /sub: t\("navigationDiscover", language\)/);
   assert.match(bottomNavSource, /whiteSpace: "normal"[\s\S]*textOverflow: "clip"/);
   assert.doesNotMatch(personalMobileBlock, /page: "discover"/);
-  assert.doesNotMatch(personalMobileBlock, /label: "Community"/);
+  assert.doesNotMatch(personalMobileBlock, /navigationCommunity/);
   assert.doesNotMatch(businessMobileBlock, /page: "discover"/);
-  assert.doesNotMatch(businessMobileBlock, /label: "Community"/);
+  assert.doesNotMatch(businessMobileBlock, /navigationCommunity/);
 });

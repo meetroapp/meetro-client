@@ -263,15 +263,15 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "home",
       aliases: ["home"],
       icon: "home",
-      label: t("home"),
+      label: t("navigationHome", language),
       sub: t("dashboard"),
     },
     {
       page: "myRequests",
       aliases: ["myRequests", "projectDetails", "completedJobDetails"],
       icon: "workCenter",
-      label: "Work",
-      sub: "Center",
+      label: t("navigationWorkCenter", language),
+      sub: t("navigationCurrentWork", language),
     },
     {
       page: "messagesInbox",
@@ -284,21 +284,21 @@ function BottomNav({ setPage, currentPage = "" }) {
         "thread",
       ],
       icon: "messages",
-      label: "Chat",
-      sub: "Center",
+      label: t("navigationChat", language),
+      sub: t("navigationCommunication", language),
     },
     {
       page: "meetroMoments",
       aliases: ["meetroMoments"],
       icon: "history",
-      label: "Moments",
-      sub: "History",
+      label: t("navigationMoments", language),
+      sub: t("navigationHistory", language),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
-      label: t("profile"),
+      label: t("navigationProfile", language),
       sub: t("account"),
     },
   ];
@@ -308,7 +308,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "businessDashboard",
       aliases: ["businessDashboard", "dashboard", "businessHome"],
       icon: "businessDashboard",
-      label: t("home"),
+      label: t("navigationHome", language),
       sub: t("business"),
     },
     {
@@ -321,8 +321,8 @@ function BottomNav({ setPage, currentPage = "" }) {
         "activeJobs",
       ],
       icon: "workCenter",
-      label: "Work",
-      sub: "Center",
+      label: t("navigationWorkCenter", language),
+      sub: t("navigationOperations", language),
       center: true,
     },
     {
@@ -336,21 +336,21 @@ function BottomNav({ setPage, currentPage = "" }) {
         "thread",
       ],
       icon: "messages",
-      label: "Chat",
-      sub: "Center",
+      label: t("navigationChat", language),
+      sub: t("navigationCommunication", language),
     },
     {
       page: "meetroMoments",
       aliases: ["meetroMoments"],
       icon: "history",
-      label: "Moments",
-      sub: "Legacy",
+      label: t("navigationMoments", language),
+      sub: t("navigationHistory", language),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
-      label: t("profile"),
+      label: t("navigationProfile", language),
       sub: t("account"),
     },
   ];
@@ -360,15 +360,15 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "home",
       aliases: ["home"],
       icon: "home",
-      label: t("home"),
+      label: t("navigationHome", language),
       sub: t("dashboard"),
     },
     {
       page: "myRequests",
       aliases: ["myRequests", "projectDetails", "completedJobDetails"],
       icon: "workCenter",
-      label: "Work Center",
-      sub: "Current Work",
+      label: t("navigationWorkCenter", language),
+      sub: t("navigationCurrentWork", language),
     },
     {
       page: "messagesInbox",
@@ -381,28 +381,28 @@ function BottomNav({ setPage, currentPage = "" }) {
         "thread",
       ],
       icon: "messages",
-      label: "Communication",
-      sub: "Chat",
+      label: t("navigationCommunication", language),
+      sub: t("navigationChat", language),
     },
     {
       page: "meetroMoments",
       aliases: ["meetroMoments"],
       icon: "history",
       label: "Meetro Moments",
-      sub: "Home Story",
+      sub: t("navigationHomeStory", language),
     },
     {
       page: "discover",
       aliases: ["discover", "contractors", "contractorDetails"],
       icon: "discover",
-      label: "Community",
-      sub: "Discover",
+      label: t("navigationCommunity", language),
+      sub: t("navigationDiscover", language),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
-      label: "Profile / Account",
+      label: t("navigationProfileAccount", language),
       sub: t("account"),
     },
   ];
@@ -412,7 +412,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "businessDashboard",
       aliases: ["businessDashboard", "dashboard", "businessHome"],
       icon: "businessDashboard",
-      label: t("home"),
+      label: t("navigationHome", language),
       sub: t("business"),
     },
     {
@@ -425,7 +425,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         "activeJobs",
       ],
       icon: "workCenter",
-      label: "Work Center",
+      label: t("navigationWorkCenter", language),
       sub: t("operations"),
       center: true,
     },
@@ -440,7 +440,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         "thread",
       ],
       icon: "messages",
-      label: "Communication",
+      label: t("navigationCommunication", language),
       sub: t("customers"),
     },
     {
@@ -448,34 +448,34 @@ function BottomNav({ setPage, currentPage = "" }) {
       aliases: ["meetroMoments"],
       icon: "history",
       label: "Meetro Moments",
-      sub: "Business Legacy",
+      sub: t("navigationBusinessHistory", language),
     },
     {
       page: "assetCenter",
       aliases: ["assetCenter"],
       icon: "assetHome",
-      label: "Properties",
-      sub: "Records",
+      label: t("navigationProperties", language),
+      sub: t("navigationRecords", language),
     },
     {
       page: "customerRelationshipsCenter",
       aliases: ["customerRelationshipsCenter"],
       icon: "people",
-      label: "Relationships",
-      sub: "Customers",
+      label: t("navigationRelationships", language),
+      sub: t("navigationCustomers", language),
     },
     {
       page: "discover",
       aliases: ["discover", "contractors", "contractorDetails"],
       icon: "discover",
-      label: "Community",
-      sub: "Discover",
+      label: t("navigationCommunity", language),
+      sub: t("navigationDiscover", language),
     },
     {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
-      label: "Profile / Account",
+      label: t("navigationProfileAccount", language),
       sub: t("account"),
     },
   ];
@@ -616,6 +616,8 @@ function BottomNav({ setPage, currentPage = "" }) {
           aria-current={active ? "page" : undefined}
           aria-haspopup={item.page === "profile" ? "dialog" : undefined}
           aria-expanded={item.page === "profile" ? profileContextCardOpen : undefined}
+          aria-label={`${item.label}. ${item.sub}`}
+          title={`${item.label} — ${item.sub}`}
           onClick={(event) => handleNavPress(item, "sidebar", event)}
           style={{
             ...sidebarNavButton,
@@ -658,6 +660,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         type="button"
         className={`bottom-nav-item${active ? " active" : ""}`}
         aria-current={active ? "page" : undefined}
+        aria-label={`${item.label}. ${item.sub}`}
         onPointerDown={(event) => {
           navTouchStartRef.current = {
             x: event.clientX || 0,
@@ -752,14 +755,16 @@ function BottomNav({ setPage, currentPage = "" }) {
         className="desktop-sidebar"
         data-language={language}
         style={desktopSidebar}
-        aria-label="Primary desktop navigation"
+        aria-label={t("navigationPrimaryDesktop", language)}
       >
         <div style={sidebarBrand}>
           <div style={sidebarBrandMark} aria-hidden="true">M</div>
           <div style={sidebarBrandCopy}>
             <strong style={sidebarBrandTitle}>Meetro</strong>
             <span style={sidebarBrandSubtitle}>
-              {activeMode === "business" ? t("business") : "Community"}
+              {activeMode === "business"
+                ? t("business", language)
+                : t("navigationCommunity", language)}
             </span>
           </div>
         </div>
@@ -782,7 +787,7 @@ function BottomNav({ setPage, currentPage = "" }) {
           data-language={language}
           style={navDock}
           role="navigation"
-          aria-label="Primary mobile navigation"
+          aria-label={t("navigationPrimaryMobile", language)}
         >
           <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
             <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
@@ -796,6 +801,7 @@ function BottomNav({ setPage, currentPage = "" }) {
 }
 
 function DesktopProfileCard({ currentPage, onClose, position, setPage }) {
+  const language = useLanguage();
   const openFromProfileCard = (pageName) => {
     onClose();
     setPage(pageName);
@@ -805,7 +811,7 @@ function DesktopProfileCard({ currentPage, onClose, position, setPage }) {
     <>
       <button
         type="button"
-        aria-label="Close profile menu"
+        aria-label={t("navigationCloseProfileMenu", language)}
         className="desktop-profile-context-backdrop"
         style={profileContextBackdrop}
         onClick={onClose}

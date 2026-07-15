@@ -49,9 +49,9 @@ const sessionSource = readFileSync(
 
 test("adaptive navigation keeps BottomNav for compact layouts and Sidebar for desktop", () => {
   assert.match(bottomNavSource, /className="bottom-nav-dock"/);
-  assert.match(bottomNavSource, /aria-label="Primary mobile navigation"/);
+  assert.match(bottomNavSource, /aria-label=\{t\("navigationPrimaryMobile", language\)\}/);
   assert.match(bottomNavSource, /className="desktop-sidebar"/);
-  assert.match(bottomNavSource, /aria-label="Primary desktop navigation"/);
+  assert.match(bottomNavSource, /aria-label=\{t\("navigationPrimaryDesktop", language\)\}/);
   assert.match(bottomNavSource, /\.desktop-sidebar \{\n\s+display: none;/);
   assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.desktop-sidebar \{/);
   assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.bottom-nav-dock \{/);
@@ -84,9 +84,9 @@ test("adaptive desktop navigation reuses the existing role-based destinations", 
     assert.match(businessDesktopBlock, new RegExp(`page: "${page}"`));
   }
 
-  assert.match(personalDesktopBlock, /label: "Communication"/);
+  assert.match(personalDesktopBlock, /label: t\("navigationCommunication", language\)/);
   assert.match(personalDesktopBlock, /label: "Meetro Moments"/);
-  assert.match(businessDesktopBlock, /label: "Communication"/);
+  assert.match(businessDesktopBlock, /label: t\("navigationCommunication", language\)/);
   assert.match(businessDesktopBlock, /label: "Meetro Moments"/);
   assert.doesNotMatch(businessDesktopBlock, /page: "businessLeads"/);
   assert.doesNotMatch(businessDesktopBlock, /page: "upload"/);
@@ -105,8 +105,8 @@ test("Community Discover is a shared destination and not an implicit role switch
   );
 
   assert.match(businessDesktopBlock, /page: "discover"/);
-  assert.match(businessDesktopBlock, /label: "Community"/);
-  assert.match(businessDesktopBlock, /sub: "Discover"/);
+  assert.match(businessDesktopBlock, /label: t\("navigationCommunity", language\)/);
+  assert.match(businessDesktopBlock, /sub: t\("navigationDiscover", language\)/);
   assert.doesNotMatch(personalModeBlock, /"discover"/);
 });
 
@@ -124,7 +124,13 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
     assert.match(personalMobileBlock, new RegExp(`page: "${page}"`));
   }
 
-  for (const label of ['label: t\\("home"\\)', 'label: "Work"', 'label: "Chat"', 'label: "Moments"', 'label: t\\("profile"\\)']) {
+  for (const label of [
+    'label: t\\("navigationHome", language\\)',
+    'label: t\\("navigationWorkCenter", language\\)',
+    'label: t\\("navigationChat", language\\)',
+    'label: t\\("navigationMoments", language\\)',
+    'label: t\\("navigationProfile", language\\)',
+  ]) {
     assert.match(personalMobileBlock, new RegExp(label));
   }
 
@@ -177,11 +183,11 @@ test("desktop Property and Relationships actions report their own active page st
 
   assert.match(
     businessDesktopBlock,
-    /page: "assetCenter"[\s\S]*aliases: \["assetCenter"\][\s\S]*label: "Properties"/
+    /page: "assetCenter"[\s\S]*aliases: \["assetCenter"\][\s\S]*label: t\("navigationProperties", language\)/
   );
   assert.match(
     businessDesktopBlock,
-    /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: "Relationships"/
+    /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: t\("navigationRelationships", language\)/
   );
   assert.match(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="assetCenter" \/>/);
   assert.match(
@@ -217,9 +223,9 @@ test("desktop layout removes BottomNav reservation without changing mobile safe 
 test("desktop navigation width supports full workspace labels", () => {
   assert.match(indexCssSource, /--meetro-layout-sidebar-width: 284px/);
   assert.match(bottomNavSource, /width: "calc\(var\(--meetro-sidebar-width, 284px\) - 36px\)"/);
-  assert.match(bottomNavSource, /label: "Communication"/);
+  assert.match(bottomNavSource, /label: t\("navigationCommunication", language\)/);
   assert.match(bottomNavSource, /label: "Meetro Moments"/);
-  assert.match(bottomNavSource, /label: "Profile \/ Account"/);
+  assert.match(bottomNavSource, /label: t\("navigationProfileAccount", language\)/);
   assert.match(bottomNavSource, /whiteSpace: "normal"[\s\S]*textOverflow: "clip"/);
 });
 

@@ -496,7 +496,10 @@ test("assistant glass orb uses Meetro mark instead of visible AI text", () => {
 });
 
 test("assistant launcher accessible label uses Meetro-first language", () => {
-  assert.match(assistantSource, /aria-label=\{copy\.assistantName \|\| copy\.buttonLabel\}/);
+  assert.match(
+    assistantSource,
+    /aria-label=\{t\("companionLauncherLabel", language\)\}/
+  );
 });
 
 test("assistant wake idle auto-dismiss is approximately eight seconds", () => {

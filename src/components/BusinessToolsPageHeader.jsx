@@ -1,4 +1,5 @@
-import { getLanguage, t } from "../utils/language";
+import { t } from "../utils/language";
+import useLanguage from "../hooks/useLanguage";
 
 function BusinessToolsPageHeader({
   title,
@@ -7,7 +8,7 @@ function BusinessToolsPageHeader({
   categoryLabel,
   backLabel,
 }) {
-  const language = getLanguage();
+  const language = useLanguage();
 
   return (
     <header className="business-tools-page-header meetro-visual-hero" style={header}>
