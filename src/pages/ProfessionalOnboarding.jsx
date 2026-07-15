@@ -142,7 +142,7 @@ function ProfessionalOnboarding({ setPage }) {
       getBusinessProfileCapabilityOptionsFromTaxonomy({
         translate: (key, fallback) => {
           const translated = t(key);
-          return translated === key ? fallback : translated;
+          return translated || fallback;
         },
       }),
     [language]

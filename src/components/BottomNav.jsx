@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Keyboard } from "@capacitor/keyboard";
-import { getLanguage, t } from "../utils/language";
+import { t } from "../utils/language";
+import useLanguage from "../hooks/useLanguage";
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -150,7 +151,7 @@ function getActiveEmergencyAlertCount() {
 }
 
 function BottomNav({ setPage, currentPage = "" }) {
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [activeMode, setActiveMode] = useState(
     getAccountModeForPage(
       currentPage,
@@ -168,7 +169,6 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   useEffect(() => {
     const syncNav = () => {
-      updateLanguage(getLanguage());
       setActiveMode(
         getAccountModeForPage(
           currentPage,
@@ -521,7 +521,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       : 0;
 
   void notificationTick;
-
   const isLandscapeCompact =
     typeof window !== "undefined" &&
     window.matchMedia?.("(orientation: landscape) and (max-height: 500px)")?.matches;
@@ -751,6 +750,7 @@ function BottomNav({ setPage, currentPage = "" }) {
 
       <nav
         className="desktop-sidebar"
+        data-language={language}
         style={desktopSidebar}
         aria-label="Primary desktop navigation"
       >
@@ -779,6 +779,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       {!keyboardOpen && (
         <div
           className="bottom-nav-dock"
+          data-language={language}
           style={navDock}
           role="navigation"
           aria-label="Primary mobile navigation"

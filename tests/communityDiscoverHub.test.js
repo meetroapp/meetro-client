@@ -199,10 +199,13 @@ test("Community Discovery Bar renders search, interests, and first-visit prompt"
     t("communityDiscoverySearchPlaceholder", "en"),
     "Search professionals, businesses, specialties, or services..."
   );
-  assert.equal(t("communityDiscoveryContextExploring", "en"), "Exploring {interest}");
+  assert.equal(
+    t("communityDiscoveryContextExploring", "en", { interest: "Marketing" }),
+    "Exploring Marketing"
+  );
   assert.match(
-    t("communityDiscoveryContextSingleCopy", "en"),
-    /related to \{interest\}/
+    t("communityDiscoveryContextSingleCopy", "en", { interest: "Marketing" }),
+    /related to marketing/i
   );
   assert.equal(t("communityInterestPromptTitle", "en"), "What interests you most?");
   assert.equal(t("communityInterestSkip", "en"), "Skip for now");
@@ -249,7 +252,7 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /setSearchQuery\(nextQuery\)/);
   assert.match(discoverSource, /setSelectedDiscoveryInterests\(validInterestIds\)/);
   assert.match(discoverSource, /selectedDiscoveryInterests\[0\] === taxonomyMatch\.ecosystemId/);
-  assert.match(discoverSource, /copy: t\(copyKey, language\)/);
+  assert.match(discoverSource, /copy: t\(copyKey, language, \{/);
   assert.match(discoverSource, /discoverMode === "businessDirectory" && renderBusinessesSection\(\)/);
   assert.match(discoverSource, /discoverMode === "spotlight" && renderSpotlightSection\(\)/);
   assert.match(discoverSource, /discoverMode === "communityHub"/);

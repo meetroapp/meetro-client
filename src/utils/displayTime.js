@@ -1,3 +1,5 @@
+import { getFormattingLocale } from "./localeFormat.js";
+
 const TIME_24_HOUR_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/;
 const TIME_12_HOUR_PATTERN = /\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(AM|PM|A\.M\.|P\.M\.|a\.m\.|p\.m\.)\b/;
 
@@ -14,12 +16,13 @@ function normalizeDateInput(value) {
 
 function formatDateTime(date, options = {}) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const { language, ...formatOptions } = options;
 
-  return date.toLocaleTimeString("en-US", {
+  return date.toLocaleTimeString(getFormattingLocale(language), {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    ...options,
+    ...formatOptions,
   });
 }
 
@@ -70,7 +73,7 @@ export function formatDateTimeDisplay(dateValue, timeValue = "", options = {}) {
   if (!date && dateRaw) date = normalizeDateInput(dateRaw);
 
   const formattedDate = date
-    ? date.toLocaleDateString("en-US", {
+    ? date.toLocaleDateString(getFormattingLocale(options.language), {
         month: "short",
         day: "numeric",
         year: options.includeYear === false ? undefined : "numeric",

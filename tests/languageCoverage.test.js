@@ -5,6 +5,7 @@ import {
   getLanguage,
   getLanguageLabel,
   normalizeLanguage,
+  resolveTranslation,
   setLanguage,
   t,
   translations,
@@ -223,9 +224,13 @@ test("public request discovery language avoids feed and post terminology", () =>
   }
 });
 
-test("new language helpers normalize labels and fall back to English safely", () => {
+test("language helpers normalize aliases and expose only inventoried fallback", () => {
   assert.equal(normalizeLanguage("fr"), "fr");
   assert.equal(normalizeLanguage("pt-BR"), "pt-BR");
+  assert.equal(normalizeLanguage("EN_us"), "en");
+  assert.equal(normalizeLanguage("es-MX"), "es");
+  assert.equal(normalizeLanguage("fr-CA"), "fr");
+  assert.equal(normalizeLanguage("pt-PT"), "pt-BR");
   assert.equal(normalizeLanguage("de"), "en");
   assert.equal(getLanguageLabel("fr"), "Français");
   assert.equal(getLanguageLabel("pt-BR"), "Português");
@@ -234,7 +239,13 @@ test("new language helpers normalize labels and fall back to English safely", ()
   assert.equal(t("home", "pt-BR"), "Início");
   assert.equal(t("professionalOnboardingWelcomeTitle", "fr"), "Welcome to Meetro");
   assert.equal(t("professionalOnboardingWelcomeTitle", "pt-BR"), "Welcome to Meetro");
-  assert.equal(t("definitelyMissingKey", "fr"), "definitelyMissingKey");
+  assert.equal(
+    resolveTranslation("professionalOnboardingWelcomeTitle", "fr").source,
+    "deferred-english"
+  );
+  assert.equal(t("welcomeBack", "fr"), "");
+  assert.equal(resolveTranslation("welcomeBack", "fr").source, "missing");
+  assert.equal(t("definitelyMissingKey", "fr"), "");
   assert.equal(t("home", "unsupported-code"), "Home");
   assert.doesNotThrow(() => t(undefined, "pt-BR"));
 });

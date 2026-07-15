@@ -292,6 +292,6 @@ export function getAssistantIntentDisplayLabel(intent = "", language = "en") {
   if (!normalized) return "";
   const key = `assistantIntent_${normalized}`;
   const translated = t(key, language);
-  if (translated !== key) return translated;
+  if (translated) return translated;
   return normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

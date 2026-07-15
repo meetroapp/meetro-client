@@ -1490,10 +1490,9 @@ useEffect(() => {
     if (isHiringThread) return labelFor("employee");
     return currentViewerRole === "business" ? labelFor("customer") : labelFor("professional");
   })();
-  const relationshipIdentityActionLabel = t("viewRelationshipIdentity", language).replace(
-    "{type}",
-    relationshipIdentityType
-  );
+  const relationshipIdentityActionLabel = t("viewRelationshipIdentity", language, {
+    type: relationshipIdentityType,
+  });
 
   const relationshipDetailSource = {
     ...conversationRegistryItem,

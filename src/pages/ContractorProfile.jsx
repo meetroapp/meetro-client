@@ -111,7 +111,7 @@ function ContractorProfile({ setPage, currentPage }) {
     ...getBusinessProfileCategoryOptionsFromTaxonomy({
       translate: (key, fallback) => {
         const translated = t(key);
-        return translated === key ? fallback : translated;
+        return translated || fallback;
       },
     }),
   ];
@@ -1789,7 +1789,7 @@ function ServicesOfferedSection({
   const primaryCategoryOptions = getBusinessProfileCapabilityOptionsFromTaxonomy({
     translate: (key, fallback) => {
       const translated = t(key);
-      return translated === key ? fallback : translated;
+      return translated || fallback;
     },
   });
   const selectedPrimaryCategory =

@@ -1,3 +1,5 @@
+import { isDeferredTranslationKey } from "./localizationContract.js";
+
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
   { code: "es", label: "Español" },
@@ -5,17 +7,37 @@ export const SUPPORTED_LANGUAGES = [
   { code: "pt-BR", label: "Português" },
 ];
 
+export const DEFAULT_LANGUAGE = "en";
+export const LANGUAGE_STORAGE_KEY = "meetroLanguage";
+
+const LANGUAGE_ALIASES = Object.freeze({
+  en: "en",
+  es: "es",
+  fr: "fr",
+  pt: "pt-BR",
+});
+
+const languageSubscribers = new Set();
+
 export function normalizeLanguage(language) {
-  return SUPPORTED_LANGUAGES.some((item) => item.code === language)
-    ? language
-    : "en";
+  if (typeof language !== "string") return DEFAULT_LANGUAGE;
+  const normalized = language.trim().replaceAll("_", "-");
+  if (!normalized) return DEFAULT_LANGUAGE;
+
+  const exact = SUPPORTED_LANGUAGES.find(
+    (item) => item.code.toLowerCase() === normalized.toLowerCase()
+  );
+  if (exact) return exact.code;
+
+  const base = normalized.split("-")[0].toLowerCase();
+  return LANGUAGE_ALIASES[base] || DEFAULT_LANGUAGE;
 }
 
 export function getLanguage() {
   try {
-    return normalizeLanguage(localStorage.getItem("meetroLanguage") || "en");
+    return normalizeLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY) || DEFAULT_LANGUAGE);
   } catch {
-    return "en";
+    return DEFAULT_LANGUAGE;
   }
 }
 
@@ -23,14 +45,35 @@ export function setLanguage(language) {
   const nextLanguage = normalizeLanguage(language);
 
   try {
-    localStorage.setItem("meetroLanguage", nextLanguage);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
   } catch {
     // Language changes should never crash the app shell.
   }
 
   if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("meetro-language-change"));
     window.dispatchEvent(new Event("languageChanged"));
   }
+
+  languageSubscribers.forEach((listener) => listener());
+}
+
+export function subscribeLanguage(listener) {
+  if (typeof listener !== "function") return () => {};
+  languageSubscribers.add(listener);
+  const handleStorage = (event) => {
+    if (!event?.key || event.key === LANGUAGE_STORAGE_KEY) listener();
+  };
+  if (typeof window !== "undefined") window.addEventListener("storage", handleStorage);
+
+  return () => {
+    languageSubscribers.delete(listener);
+    if (typeof window !== "undefined") window.removeEventListener("storage", handleStorage);
+  };
+}
+
+export function getLanguageSnapshot() {
+  return getLanguage();
 }
 
 export function getLanguageLabel(language = getLanguage()) {
@@ -226,7 +269,6 @@ export const translations = {
 
     viewDetails: "Review Details",
     messageQuote: "Message / Quote",
-    today: "Today",
     localArea: "Local area",
     openRequest: "Continue Request",
 
@@ -270,7 +312,6 @@ export const translations = {
     dashboard: "Dashboard",
     businessDashboard: "Business Dashboard",
     businessTools: "Business Tools",
-    messages: "Communication",
     customers: "Customers",
     portfolio: "Portfolio",
     account: "Account",
@@ -280,8 +321,6 @@ export const translations = {
     availableToday: "Available Today",
 
     quoteRequests: "Quote Requests",
-    projectGallery: "Business Portfolio",
-    viewPortfolioWork: "View Work",
 
     manageEmergencyJobs: "Manage emergency jobs",
     reviewIncomingRequests: "Review incoming quote requests",
@@ -455,7 +494,6 @@ failedAddProject:
   "Failed to add project",
 yourBusiness: "Your Business",
 
-emergencyPlumbing: "Emergency Plumbing",
 completedJobNote: "This emergency job has been completed.",
 cancelledJobNote: "This emergency request was cancelled.",
 acceptedShort: "Accept",
@@ -466,7 +504,6 @@ completeShort: "Done",
 
 
 service: "Service",
-activeNow: "Active Now",
 
 statusPending: "Pending — looking for a professional",
 statusAccepted: "Professional accepted your request",
@@ -574,7 +611,6 @@ legalAgreePrefix: "I agree to the",
 legalAgreeAnd: "and",
 
 notifications: "Notifications",
-comingSoon: "Coming Soon",
 
 meetroPro: "Meetro Pro",
 growWithMeetro: "Grow with Meetro",
@@ -589,7 +625,6 @@ messageFailed: "Message failed. Please try again.",
 remove: "Remove",
 preview: "Preview",
 messageUpload: "Message upload",
-activeNow: "Active now",
 
 quickReplyEstimateShort: "Estimate",
 quickReplyEstimate:
@@ -689,11 +724,8 @@ phoneNotSet: "Phone not set",
 aboutBusiness: "About Business",
 noBusinessDescription: "No business description added yet.",
 call: "Call",
-fastResponse: "Fast Response",
 portfolioReady: "Portfolio Ready",
 editProfile: "Edit Profile",
-saveChanges: "Save Changes",
-cancel: "Cancel",
 createBusinessProfileFirst: "Create a business profile first to unlock Business Mode.",
 services: "Services",
 request: "Request",
@@ -711,13 +743,6 @@ leads: "Leads",
 gallery: "Gallery",
 photos: "Photos",
 
-uploadTipTitle: "Share clear service details",
-uploadTipText:
-  "A clear description, location, and helpful photos make it easier for the right professional to respond.",
-projectTitlePlaceholder: "Example: Help with a service at my home",
-projectDescriptionPlaceholder:
-  "Describe what you need, preferred timing, and any important details.",
-photoHelpsPros: "Photos help professionals understand your request faster.",
 backToHome: "Back to Home",
 
 requestHelp: "Need Help With a Service?",
@@ -907,12 +932,9 @@ faceIdComingSoon:
   "Face ID and Touch ID support coming soon.",
 
 back: "Back",
-verified: "Verified",
 verificationSuccess: "Verification successful",
 
 
-findContractorsText:
-  "Browse trusted local professionals near you.",
 
 uploadProject: "Request Service",
 uploadProjectText:
@@ -957,19 +979,16 @@ projectReplies:
   "Request replies and business conversations",
 
 myProjects: "My Requests",
-projectTracking: "Request Tracking",
 myProjectsSubtitle:
   "Track responses, quotes, messages, photos, and progress for each request.",
 noProjectsYet: "No requests yet",
 editProject: "Edit Request",
 cancelProject: "Cancel Request",
 saveChanges: "Save Changes",
-cancelEdit: "Cancel Edit",
 projectCancelled: "Project Cancelled",
 selected: "Selected",
 posted: "Shared",
 views: "Views",
-quotes: "Quotes",
 messages: "Messages",
 workflowStarted: "Workflow started",
 projectPhotos: "Request Photos",
@@ -1131,7 +1150,6 @@ arrivingSoon: "Arriving soon",
 jobStarted: "Job started",
 workProgress: "Work Progress",
 
-startJob: "Start Job",
 trackWork: "Track Work",
 completeService: "Complete Service",
 
@@ -1161,7 +1179,6 @@ localServicesSpotlight: "Today's Spotlight",
 saveInvoice: "Save Invoice",
 printInvoice: "Print Invoice",
 downloadSavePdf: "Download / Save PDF",
-contractorDetailsLoading: "Loading business...",
 fastResponse: "Fast Response",
 verified: "Verified",  
 // Universal business wording overrides
@@ -1232,7 +1249,6 @@ sendToCustomer: "Send to Customer",
 noMaterialsSaved: "No materials saved yet.",
 jobMaterial: "Job material",
 needed: "Needed",
-requested: "Requested",
 received: "Received",
 markReceived: "Mark Received",
 deleteMaterial: "Delete material?",
@@ -1246,8 +1262,6 @@ workSchedule: "Evaluation Schedule",
 addVisit: "Add Visit",
 closeForm: "Close Form",
 visitTitle: "Visit title",
-date: "Date",
-time: "Time",
 customerLocation: "Customer location",
 scheduleNotes: "Notes",
 saveVisit: "Save Visit",
@@ -1284,8 +1298,6 @@ projectReviewWorkCenterNote: "Review the request, contact the customer, then sch
 reviewContact: "Review / Contact",
 quoteAfterReview: "Quote Later",
 requested: "Requested",
-done: "Done",
-contactCustomer: "Contact Customer",
 contactCustomerArrangeVisit: "Contact Customer / Arrange Visit",
 contactCustomerArrangeVisitHelper:
   "Message or call the customer first. Once a time is confirmed, create the schedule and send confirmation in chat.",
@@ -1294,10 +1306,6 @@ projectReviewContact: "Review / Contact",
 quoteLater: "Quote Later",
 projectScope: "Description / Scope",
 customer: "Customer",
-openProjectConversation: "Continue Project Conversation",
-scheduleVisitCall: "Schedule Visit / Call",
-activateProject: "Activate Project",
-createQuote: "Create Quote",
 noScheduledVisits: "No scheduled visits yet.",
 scheduledVisitsFromChat: "Visits saved from conversations will appear here.",
 manualScheduleEntry: "Manual calendar entry",
@@ -1747,15 +1755,12 @@ afterApprovalWorkStarts: "After approval work starts",
 
     viewDetails: "Revisar detalles",
     messageQuote: "Mensaje / Cotización",
-    today: "Hoy",
     localArea: "Área local",
     openRequest: "Solicitud Abierta",
 
     allProjects: "Todos los Proyectos",
     handyman: "Handyman",
-    contractor: "Profesional",
-    generalContractor: "Servicio General",
-    painting: "Pintura",
+            painting: "Pintura",
     plumbing: "Plomería",
     electrical: "Electricidad",
     flooring: "Pisos",
@@ -1793,7 +1798,6 @@ afterApprovalWorkStarts: "After approval work starts",
     dashboard: "Inicio",
     businessDashboard: "Panel de Negocio",
     businessTools: "Herramientas del Negocio",
-    messages: "Comunicación",
     customers: "Clientes",
     portfolio: "Portafolio",
     account: "Cuenta",
@@ -1803,8 +1807,6 @@ afterApprovalWorkStarts: "After approval work starts",
     availableToday: "Disponible Hoy",
 
     quoteRequests: "Solicitudes de Cotización",
-    projectGallery: "Portafolio del Negocio",
-    viewPortfolioWork: "Ver trabajo",
 
     manageEmergencyJobs: "Administrar trabajos de emergencia",
     reviewIncomingRequests: "Revisar solicitudes entrantes",
@@ -1982,7 +1984,6 @@ failedAddProject:
 
 yourBusiness: "Tu Negocio",
 
-emergencyPlumbing: "Plomería de Emergencia",
 completedJobNote: "Este trabajo de emergencia fue completado.",
 cancelledJobNote: "Esta solicitud de emergencia fue cancelada.",
 acceptedShort: "Aceptar",
@@ -1993,7 +1994,6 @@ completeShort: "Final",
 
 
 service: "Servicio",
-activeNow: "Activo Ahora",
 
 statusPending: "Pendiente — buscando profesional",
 statusAccepted: "Profesional aceptó tu solicitud",
@@ -2102,7 +2102,6 @@ legalAgreePrefix: "Acepto los",
 legalAgreeAnd: "y la",
 
 notifications: "Notificaciones",
-comingSoon: "Próximamente",
 
 meetroPro: "Meetro Pro",
 growWithMeetro: "Crece con Meetro",
@@ -2110,7 +2109,6 @@ meetroProSettingsText:
   "Desbloquea visibilidad premium, clientes ilimitados, prioridad de emergencia, herramientas de IA para negocios y funciones avanzadas para negocios.",
 conversation: "Conversación",
 loadingConversation: "Cargando conversación...",
-localContractor: "Negocio Local",
 startConversation: "Comienza la conversación enviando un mensaje o foto.",
 typeMessage: "Escribe un mensaje...",
 send: "Enviar",
@@ -2120,7 +2118,6 @@ messageFailed: "El mensaje falló. Inténtalo de nuevo.",
 remove: "Eliminar",
 preview: "Vista previa",
 messageUpload: "Imagen del mensaje",
-activeNow: "Activo ahora",
 
 quickReplyEstimateShort: "Estimado",
 quickReplyEstimate:
@@ -2223,11 +2220,8 @@ phoneNotSet: "Teléfono no establecido",
 aboutBusiness: "Acerca del Negocio",
 noBusinessDescription: "Aún no se ha agregado descripción del negocio.",
 call: "Llamar",
-fastResponse: "Respuesta Rápida",
 portfolioReady: "Portafolio Listo",
 editProfile: "Editar Perfil",
-saveChanges: "Guardar Cambios",
-cancel: "Cancelar",
 createBusinessProfileFirst: "Crea primero un perfil de negocio para activar el Modo Negocio.",
 services: "Servicios",
 request: "Solicitud",
@@ -2244,23 +2238,11 @@ manage: "Administrar",
 leads: "Clientes",
 gallery: "Galería",
 photos: "Fotos",
-projectPostedSuccess:
-"¡Solicitud enviada! Los negocios ahora pueden ver tu solicitud.",
 
-uploadTipTitle:
-  "Comparte detalles claros del servicio",
 
-uploadTipText:
-  "Una descripción clara, la ubicación y fotos útiles facilitan que responda el profesional adecuado.",
 
-projectTitlePlaceholder:
-  "Ejemplo: Ayuda con un servicio en mi hogar",
 
-projectDescriptionPlaceholder:
-  "Describe lo que necesitas, el horario preferido y cualquier detalle importante.",
 
-photoHelpsPros:
-  "Las fotos ayudan a los profesionales a entender tu solicitud más rápido.",
 
 backToHome: "Volver al Inicio",
 
@@ -2454,12 +2436,8 @@ faceIdComingSoon:
   "Face ID y Touch ID estarán disponibles pronto.",
 
 back: "Volver",
-verified: "Verificado",
 verificationSuccess: "Verificación exitosa",
 
-findContractors: "Buscar Negocios",
-findContractorsText:
-  "Explora profesionales locales confiables cerca de ti.",
 
 uploadProject: "Solicitar Servicio",
 uploadProjectText:
@@ -2501,19 +2479,16 @@ there: "amigo",
 postAProject: "Solicitar Ayuda",
 
 myProjects: "Mis Solicitudes",
-projectTracking: "Seguimiento de Solicitudes",
 myProjectsSubtitle:
   "Rastrea respuestas, cotizaciones, mensajes, fotos y progreso de cada solicitud.",
 noProjectsYet: "No hay solicitudes todavía",
 editProject: "Editar Solicitud",
 cancelProject: "Cancelar Solicitud",
 saveChanges: "Guardar Cambios",
-cancelEdit: "Cancelar Edición",
 projectCancelled: "Proyecto Cancelado",
 selected: "Seleccionado",
 posted: "Publicado",
 views: "Vistas",
-quotes: "Cotizaciones",
 messages: "Comunicación",
 workflowStarted: "Flujo iniciado",
 projectPhotos: "Fotos de la Solicitud",
@@ -2528,8 +2503,6 @@ addPhotosHelp:
 confirmCancelProject:
   "¿Seguro que quieres cancelar esta solicitud?",
 
-projectReplies:
-  "Respuestas de la solicitud y conversaciones con negocios",
 
 loadingProject: "Cargando solicitud...",
 postNotFound: "Solicitud no encontrada",
@@ -2678,7 +2651,6 @@ arrivingSoon: "Llegando pronto",
 jobStarted: "Trabajo comenzado",
 workProgress: "Progreso del Trabajo",
 
-startJob: "Comenzar Trabajo",
 trackWork: "Seguir Trabajo",
 completeService: "Completar Servicio",
 
@@ -2689,8 +2661,6 @@ callButton: "Llamar",
 
 requestQuote: "Solicitar cotización",
 cancelQuoteRequest: "Cancelar solicitud",
-messageContractor:
-"Enviar mensaje al negocio",
 
 leaveReview: "Dejar reseña",
 writeReview: "Escribir reseña...",
@@ -2711,8 +2681,6 @@ localServicesSpotlight: "El destacado de hoy",
 saveInvoice: "Guardar factura",
 printInvoice: "Imprimir factura",
 downloadSavePdf: "Descargar / guardar PDF",
-contractorDetailsLoading:
-"Cargando negocio...",
 fastResponse: "Respuesta rápida",
 verified: "Verificado",
 // Texto universal de negocio
@@ -2787,7 +2755,6 @@ sendToCustomer: "Enviar al cliente",
 noMaterialsSaved: "Aún no has guardado materiales.",
 jobMaterial: "Material del trabajo",
 needed: "Necesario",
-requested: "Solicitado",
 received: "Recibido",
 markReceived: "Marcar recibido",
 deleteMaterial: "¿Eliminar material?",
@@ -2801,8 +2768,6 @@ workSchedule: "Agenda de evaluaciones",
 addVisit: "Agregar visita",
 closeForm: "Cerrar formulario",
 visitTitle: "Título de la visita",
-date: "Fecha",
-time: "Hora",
 customerLocation: "Ubicación del cliente",
 scheduleNotes: "Notas",
 saveVisit: "Guardar visita",
@@ -2839,7 +2804,6 @@ projectReviewWorkCenterNote: "Revisa la solicitud, contacta al cliente y luego p
 reviewContact: "Revisar / Contactar",
 quoteAfterReview: "Cotizar después",
 requested: "Solicitado",
-done: "Finalizado",
 contactCustomer: "Contactar cliente",
 contactCustomerArrangeVisit: "Contactar cliente / coordinar visita",
 contactCustomerArrangeVisitHelper:
@@ -3145,12 +3109,9 @@ const frenchTranslations = {
   businessProfile: "Profil professionnel",
   availability: "Disponibilité",
   portfolio: "Portfolio",
-  pricingLibrary: "Bibliothèque de prix",
-  quickQuote: "Devis rapide",
+    quickQuote: "Devis rapide",
   quickInvoice: "Facture rapide",
-  contractTemplates: "Modèles de contrat",
-  reportsCenter: "Centre de rapports",
-  permitCenter: "Centre des permis",
+      permitCenter: "Centre des permis",
   complianceCenter: "Centre de conformité",
   businessIntelligence: "Intelligence d'affaires",
   businessKnowledge: "Connaissances professionnelles",
@@ -3251,12 +3212,9 @@ const portugueseTranslations = {
   businessProfile: "Perfil do negócio",
   availability: "Disponibilidade",
   portfolio: "Portfólio",
-  pricingLibrary: "Biblioteca de preços",
-  quickQuote: "Orçamento rápido",
+    quickQuote: "Orçamento rápido",
   quickInvoice: "Fatura rápida",
-  contractTemplates: "Modelos de contrato",
-  reportsCenter: "Central de relatórios",
-  permitCenter: "Central de permissões",
+      permitCenter: "Central de permissões",
   complianceCenter: "Central de conformidade",
   businessIntelligence: "Inteligência de negócios",
   businessKnowledge: "Conhecimento do negócio",
@@ -12212,6 +12170,228 @@ const completedHistoryTruthLanguage = {
   },
 };
 
+const localizationFoundationLanguage = {
+  en: {
+    back: "Back",
+    by: "By",
+    businessDashboard: "Business Dashboard",
+    continue: "Continue",
+    contractorsHeroSubtitle: "Find trusted local professionals ready to help.",
+    contractorsHeroTitle: "Local professionals",
+    contractorsLoading: "Loading professionals...",
+    createAccount: "Create account",
+    describeProject: "Describe the project",
+    emailAddress: "Email address",
+    emergency: "Emergency",
+    emergencyHelp: "Emergency help",
+    enterCustomService: "Enter a custom service",
+    enterPostTitle: "Enter a request title",
+    enterProjectTitle: "Enter a project title",
+    failed: "Failed",
+    featured: "Featured",
+    hiring: "Hiring",
+    hiringCenter: "Hiring Center",
+    history: "History",
+    jobHistory: "Job History",
+    loading: "Loading...",
+    login: "Login",
+    logout: "Log out",
+    messages: "Messages",
+    meetroUser: "Meetro member",
+    noReviewText: "No review was provided.",
+    password: "Password",
+    pleaseWait: "Please wait...",
+    postCreateFailed: "The request could not be created.",
+    professional: "Professional",
+    project: "Project",
+    projectLocation: "Project location",
+    projectPhotoAdded: "Project photo added",
+    projectScheduled: "Project scheduled",
+    quoteFailed: "The quote could not be submitted.",
+    quoteSubmitted: "Quote submitted",
+    returnHome: "Return Home",
+    retry: "Retry",
+    reviewFailed: "The review could not be submitted.",
+    serverError: "Meetro could not complete that request. Please try again.",
+    serviceProvider: "Service provider",
+    signIn: "Sign in",
+    somethingWentWrong: "Something went wrong.",
+    submitQuoteRequest: "Submit quote request",
+    submitting: "Submitting...",
+    tryAgain: "Try Again",
+    uploadError: "The image could not be uploaded.",
+    uploadFailed: "Upload failed",
+    uploadingImage: "Uploading image...",
+    viewProfile: "View profile",
+    work: "Work",
+  },
+  es: {
+    back: "Volver",
+    by: "Por",
+    businessDashboard: "Panel del Negocio",
+    continue: "Continuar",
+    contractorsHeroSubtitle: "Encuentra profesionales locales de confianza listos para ayudar.",
+    contractorsHeroTitle: "Profesionales locales",
+    contractorsLoading: "Cargando profesionales...",
+    createAccount: "Crear cuenta",
+    describeProject: "Describe el proyecto",
+    emailAddress: "Correo electrónico",
+    emergency: "Emergencia",
+    emergencyHelp: "Ayuda de emergencia",
+    enterCustomService: "Escribe un servicio personalizado",
+    enterPostTitle: "Escribe un título para la solicitud",
+    enterProjectTitle: "Escribe un título para el proyecto",
+    failed: "Falló",
+    featured: "Destacado",
+    hiring: "Contratación",
+    hiringCenter: "Centro de Contratación",
+    history: "Historial",
+    jobHistory: "Historial de trabajos",
+    loading: "Cargando...",
+    login: "Iniciar sesión",
+    logout: "Cerrar sesión",
+    messages: "Mensajes",
+    meetroUser: "Miembro de Meetro",
+    noReviewText: "No se proporcionó una reseña.",
+    password: "Contraseña",
+    pleaseWait: "Espera un momento...",
+    postCreateFailed: "No se pudo crear la solicitud.",
+    professional: "Profesional",
+    project: "Proyecto",
+    projectLocation: "Ubicación del proyecto",
+    projectPhotoAdded: "Foto del proyecto agregada",
+    projectScheduled: "Proyecto programado",
+    quoteFailed: "No se pudo enviar la cotización.",
+    quoteSubmitted: "Cotización enviada",
+    returnHome: "Volver al inicio",
+    retry: "Reintentar",
+    reviewFailed: "No se pudo enviar la reseña.",
+    serverError: "Meetro no pudo completar esa solicitud. Inténtalo de nuevo.",
+    serviceProvider: "Proveedor de servicios",
+    signIn: "Iniciar sesión",
+    somethingWentWrong: "Algo salió mal.",
+    submitQuoteRequest: "Enviar solicitud de cotización",
+    submitting: "Enviando...",
+    tryAgain: "Intentar de nuevo",
+    uploadError: "No se pudo subir la imagen.",
+    uploadFailed: "La carga falló",
+    uploadingImage: "Subiendo imagen...",
+    viewProfile: "Ver perfil",
+    work: "Trabajo",
+  },
+  fr: {
+    back: "Retour",
+    businessLeadsSubtitle: "Nouvelles demandes de service correspondant à {businessName}.",
+    by: "Par",
+    businessDashboard: "Tableau de bord professionnel",
+    continue: "Continuer",
+    contractorsHeroSubtitle: "Trouvez des professionnels locaux de confiance prêts à vous aider.",
+    contractorsHeroTitle: "Professionnels locaux",
+    contractorsLoading: "Chargement des professionnels...",
+    createAccount: "Créer un compte",
+    describeProject: "Décrivez le projet",
+    emailAddress: "Adresse courriel",
+    emergency: "Urgence",
+    emergencyHelp: "Aide d’urgence",
+    enterCustomService: "Saisissez un service personnalisé",
+    enterPostTitle: "Saisissez un titre pour la demande",
+    enterProjectTitle: "Saisissez un titre pour le projet",
+    failed: "Échec",
+    featured: "À la une",
+    hiring: "Recrutement",
+    hiringCenter: "Centre de recrutement",
+    history: "Historique",
+    jobHistory: "Historique des interventions",
+    loading: "Chargement...",
+    login: "Connexion",
+    logout: "Se déconnecter",
+    messages: "Messages",
+    meetroUser: "Membre Meetro",
+    noReviewText: "Aucun avis n’a été fourni.",
+    password: "Mot de passe",
+    pleaseWait: "Veuillez patienter...",
+    postCreateFailed: "La demande n’a pas pu être créée.",
+    professional: "Professionnel",
+    project: "Projet",
+    projectLocation: "Lieu du projet",
+    projectPhotoAdded: "Photo du projet ajoutée",
+    projectScheduled: "Projet planifié",
+    quoteFailed: "Le devis n’a pas pu être envoyé.",
+    quoteSubmitted: "Devis envoyé",
+    returnHome: "Retour à l’accueil",
+    retry: "Réessayer",
+    reviewFailed: "L’avis n’a pas pu être envoyé.",
+    serverError: "Meetro n’a pas pu traiter cette demande. Veuillez réessayer.",
+    serviceProvider: "Prestataire de services",
+    signIn: "Se connecter",
+    somethingWentWrong: "Une erreur est survenue.",
+    submitQuoteRequest: "Envoyer la demande de devis",
+    submitting: "Envoi en cours...",
+    tryAgain: "Réessayer",
+    uploadError: "L’image n’a pas pu être téléversée.",
+    uploadFailed: "Échec du téléversement",
+    uploadingImage: "Téléversement de l’image...",
+    viewProfile: "Voir le profil",
+    work: "Travail",
+  },
+  "pt-BR": {
+    back: "Voltar",
+    businessLeadsSubtitle: "Novas solicitações de serviço compatíveis com {businessName}.",
+    by: "Por",
+    businessDashboard: "Painel do Negócio",
+    continue: "Continuar",
+    contractorsHeroSubtitle: "Encontre profissionais locais de confiança prontos para ajudar.",
+    contractorsHeroTitle: "Profissionais locais",
+    contractorsLoading: "Carregando profissionais...",
+    createAccount: "Criar conta",
+    describeProject: "Descreva o projeto",
+    emailAddress: "Endereço de e-mail",
+    emergency: "Emergência",
+    emergencyHelp: "Ajuda de emergência",
+    enterCustomService: "Digite um serviço personalizado",
+    enterPostTitle: "Digite um título para a solicitação",
+    enterProjectTitle: "Digite um título para o projeto",
+    failed: "Falhou",
+    featured: "Destaque",
+    hiring: "Contratação",
+    hiringCenter: "Central de Contratação",
+    history: "Histórico",
+    jobHistory: "Histórico de trabalhos",
+    loading: "Carregando...",
+    login: "Entrar",
+    logout: "Sair",
+    messages: "Mensagens",
+    myRequestsTitle: "Central de Trabalho",
+    meetroUser: "Membro Meetro",
+    noReviewText: "Nenhuma avaliação foi fornecida.",
+    password: "Senha",
+    pleaseWait: "Aguarde...",
+    postCreateFailed: "Não foi possível criar a solicitação.",
+    professional: "Profissional",
+    project: "Projeto",
+    projectLocation: "Local do projeto",
+    projectPhotoAdded: "Foto do projeto adicionada",
+    projectScheduled: "Projeto agendado",
+    quoteFailed: "Não foi possível enviar o orçamento.",
+    quoteSubmitted: "Orçamento enviado",
+    returnHome: "Voltar ao início",
+    retry: "Tentar novamente",
+    reviewFailed: "Não foi possível enviar a avaliação.",
+    serverError: "O Meetro não conseguiu concluir essa solicitação. Tente novamente.",
+    serviceProvider: "Prestador de serviços",
+    signIn: "Entrar",
+    somethingWentWrong: "Algo deu errado.",
+    submitQuoteRequest: "Enviar solicitação de orçamento",
+    submitting: "Enviando...",
+    tryAgain: "Tentar novamente",
+    uploadError: "Não foi possível enviar a imagem.",
+    uploadFailed: "Falha no envio",
+    uploadingImage: "Enviando imagem...",
+    viewProfile: "Ver perfil",
+    work: "Trabalho",
+  },
+};
+
 Object.entries(professionalLeadTruthLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
@@ -12224,14 +12404,65 @@ Object.entries(completedHistoryTruthLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
+Object.entries(localizationFoundationLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
 Object.entries(hiringPositionLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
-export function t(key, languageOverride) {
-  const language = normalizeLanguage(languageOverride || getLanguage());
-  const selectedTranslations = translations[language] || translations.en || {};
-  const englishTranslations = translations.en || {};
+const INTERPOLATION_PATTERN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g;
 
-  return selectedTranslations[key] || englishTranslations[key] || key;
+function interpolateTranslation(value, variables = {}) {
+  const missingVariables = [];
+  const text = String(value || "").replace(
+    INTERPOLATION_PATTERN,
+    (_placeholder, variableName) => {
+      const replacement = variables?.[variableName];
+      if (replacement === undefined || replacement === null) {
+        missingVariables.push(variableName);
+        return "";
+      }
+      return String(replacement);
+    }
+  );
+
+  return { value: text, missingVariables: [...new Set(missingVariables)] };
+}
+
+export function resolveTranslation(key, languageOverride, variables = {}) {
+  const language = normalizeLanguage(languageOverride ?? getLanguage());
+  const normalizedKey = typeof key === "string" ? key.trim() : "";
+  const selectedValue = normalizedKey ? translations[language]?.[normalizedKey] : "";
+  const englishValue = normalizedKey ? translations.en?.[normalizedKey] : "";
+
+  let source = "missing";
+  let template = "";
+
+  if (typeof selectedValue === "string" && selectedValue.trim()) {
+    source = "selected";
+    template = selectedValue;
+  } else if (
+    language !== DEFAULT_LANGUAGE &&
+    isDeferredTranslationKey(normalizedKey, language) &&
+    typeof englishValue === "string" &&
+    englishValue.trim()
+  ) {
+    source = "deferred-english";
+    template = englishValue;
+  }
+
+  const interpolated = interpolateTranslation(template, variables);
+  return Object.freeze({
+    key: normalizedKey,
+    language,
+    source,
+    value: interpolated.value,
+    missingVariables: Object.freeze(interpolated.missingVariables),
+  });
+}
+
+export function t(key, languageOverride, variables) {
+  return resolveTranslation(key, languageOverride, variables).value;
 }

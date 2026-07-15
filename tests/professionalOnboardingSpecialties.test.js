@@ -453,7 +453,7 @@ test("category-first selector is wired to onboarding and Business Profile only",
   assert.match(selectorSource, /filteredCategories/);
   assert.match(selectorSource, /activeCategoryId/);
   assert.match(onboardingSource, /getBusinessProfileCapabilityOptionsFromTaxonomy/);
-  assert.match(onboardingSource, /translated === key \? fallback : translated/);
+  assert.match(onboardingSource, /return translated \|\| fallback/);
   assert.match(onboardingSource, /professionalCapabilityPrimaryCategory/);
   assert.match(onboardingSource, /primaryServiceCategory/);
   assert.match(onboardingSource, /categories=\{primaryCategoryOptions\}/);

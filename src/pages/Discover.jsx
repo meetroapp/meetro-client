@@ -83,7 +83,7 @@ function Discover({ setPage }) {
   const discoveryInterests = getCommunityDiscoveryInterestsFromTaxonomy({
     translate: (key, fallback) => {
       const translated = t(key, language);
-      return translated === key ? fallback : translated;
+      return translated || fallback;
     },
   });
 
@@ -251,13 +251,13 @@ function Discover({ setPage }) {
         : "communityDiscoveryContextMultiCopy";
 
     return {
-      title: t("communityDiscoveryContextExploring", language).replace(
-        "{interest}",
-        selectedLabelText
-      ),
-      copy: t(copyKey, language)
-        .replace("{interest}", selectedLabelText)
-        .replace("{interests}", selectedLabelText),
+      title: t("communityDiscoveryContextExploring", language, {
+        interest: selectedLabelText,
+      }),
+      copy: t(copyKey, language, {
+        interest: selectedLabelText,
+        interests: selectedLabelText,
+      }),
     };
   }
 
@@ -1012,10 +1012,9 @@ function Discover({ setPage }) {
       <section style={sectionHeader}>
         <h2 style={sectionTitle}>{t("discoverLocalServices", language)}</h2>
         <p style={sectionSubtitle}>
-          {t("discoverResultsCount", language).replace(
-            "{count}",
-            marketplaceBusinesses.length
-          )}
+          {t("discoverResultsCount", language, {
+            count: marketplaceBusinesses.length,
+          })}
         </p>
       </section>
 

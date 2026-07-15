@@ -357,7 +357,7 @@ function Login({ setPage }) {
   const professionalCategories = getProfessionalSignupCategoriesFromTaxonomy({
     translate: (key, fallback) => {
       const translated = t(key, normalizedLanguage);
-      return translated === key ? fallback : translated;
+      return translated || fallback;
     },
   });
 

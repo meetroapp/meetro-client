@@ -949,7 +949,7 @@ function getHomeActiveEmergencyInfo(language = "en") {
     : t("activeEmergency", language);
   const statusLabel = getHomeEmergencyStatusLabel(normalizedStatus, language);
   const activeText = translatedService
-    ? t("homeEmergencyServiceActive", language).replace("{service}", translatedService)
+    ? t("homeEmergencyServiceActive", language, { service: translatedService })
     : t("homeEmergencyRequestActive", language);
   const text = isCompletedReview
     ? t("homeEmergencyCompletionNeedsReview", language)
@@ -1626,9 +1626,10 @@ function SpotlightCard({ business, language, onViewProfile }) {
     business.market ||
     "";
   const servingLine = servingSince
-    ? t("homeServingLocalAreaSince", language)
-        .replace("{area}", servingArea || t("homeLocalArea", language))
-        .replace("{year}", servingSince)
+    ? t("homeServingLocalAreaSince", language, {
+        area: servingArea || t("homeLocalArea", language),
+        year: servingSince,
+      })
     : "";
   const logoUrl = identity.imageUrl || getSpotlightAvatarUrl(business);
   const mediaUrls = featuredProjectMediaUrls.length
@@ -1637,7 +1638,7 @@ function SpotlightCard({ business, language, onViewProfile }) {
   const photoCountLabel =
     mediaUrls.length === 1
       ? t("homeOnePhoto", language)
-      : t("homePhotoCount", language).replace("{count}", mediaUrls.length);
+      : t("homePhotoCount", language, { count: mediaUrls.length });
   const relationshipLine =
     portfolioProof.reviewCount > 0
       ? t("homeSpotlightReviewTrust", language)
