@@ -512,26 +512,31 @@ function Upload({ setPage, currentPage }) {
   }
 
   return (
-    <div className="app-page meetro-form-page meetro-visual-page" style={pageWrapper}>
-      <button onClick={handleCancelRequest} style={backButton}>
-        ←
-      </button>
+    <div
+      className="app-page request-help-page upload-page meetro-form-page meetro-visual-page"
+      style={pageWrapper}
+    >
+      <style>{requestHelpLayoutStyles}</style>
+      <div className="request-help-content-lane" style={contentLane}>
+        <button onClick={handleCancelRequest} style={backButton}>
+          ←
+        </button>
 
-      {assistantDraftMetadata && (
-        <div style={preparedRequestBanner}>
-          <span style={preparedRequestOrb} aria-hidden="true">
-            M
-          </span>
-          <strong style={preparedRequestBannerTitle}>
-            {t("requestReviewIntroTitle")}
-          </strong>
-          <p style={preparedRequestBannerText}>
-            {t("requestReviewIntroText")}
-          </p>
-        </div>
-      )}
+        {assistantDraftMetadata && (
+          <div style={preparedRequestBanner}>
+            <span style={preparedRequestOrb} aria-hidden="true">
+              M
+            </span>
+            <strong style={preparedRequestBannerTitle}>
+              {t("requestReviewIntroTitle")}
+            </strong>
+            <p style={preparedRequestBannerText}>
+              {t("requestReviewIntroText")}
+            </p>
+          </div>
+        )}
 
-      <div className="meetro-visual-surface" style={cardStyle}>
+        <div className="meetro-visual-surface" style={cardStyle}>
         <label style={fieldLabel}>{t("requestIntelligencePrompt")}</label>
         <input
           placeholder={t("requestIntelligencePlaceholder")}
@@ -756,6 +761,7 @@ function Upload({ setPage, currentPage }) {
           </button>
         </div>
       </div>
+      </div>
 
       <ServiceSelectorSheet
         open={serviceSelectorOpen}
@@ -788,6 +794,57 @@ const pageWrapper = {
   overflowWrap: "anywhere",
   wordBreak: "break-word",
 };
+
+const contentLane = {
+  width: "100%",
+  maxWidth: "var(--meetro-layout-form-max, 860px)",
+  minWidth: 0,
+  margin: "0 auto",
+  boxSizing: "border-box",
+};
+
+const requestHelpLayoutStyles = `
+  .request-help-page {
+    isolation: isolate;
+  }
+
+  .request-help-content-lane {
+    width: 100%;
+    max-width: var(--meetro-layout-form-max, 860px);
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1099px) {
+    .request-help-page {
+      padding-left: max(18px, env(safe-area-inset-left, 0px)) !important;
+      padding-right: max(18px, env(safe-area-inset-right, 0px)) !important;
+      padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    #root[data-app-layout="desktop"] .app-page.request-help-page.meetro-form-page {
+      contain: none !important;
+      width: calc(100vw - var(--meetro-sidebar-width)) !important;
+      max-width: calc(100vw - var(--meetro-sidebar-width)) !important;
+      margin-left: var(--meetro-sidebar-width) !important;
+      margin-right: 0 !important;
+      padding-top: clamp(24px, 2.8vw, 40px) !important;
+      padding-left: clamp(24px, 3vw, 48px) !important;
+      padding-right: clamp(24px, 3vw, 48px) !important;
+      padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    #root[data-app-layout="desktop"] .request-help-content-lane {
+      max-width: min(var(--meetro-layout-form-max, 860px), 100%) !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+  }
+`;
 
 const backButton = {
   width: "44px",
