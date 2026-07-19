@@ -359,7 +359,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "relationshipHistoryEmpty",
   "relationshipHistoryEmptyDescription",
   "relationshipHistoryTitle",
-  "removeImage",
   "requestDifferentTime",
   "requestQuote",
   "requestService",

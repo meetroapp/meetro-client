@@ -36,8 +36,11 @@ import {
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
   getMediaDeferredCopy,
-  isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
+import {
+  isBusinessLogoUploadEnabled,
+  uploadBusinessProfileLogo,
+} from "../utils/businessProfileLogo";
 
 const profileRestoreText = {
   en: {
@@ -70,7 +73,8 @@ function ContractorProfile({ setPage, currentPage }) {
   const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [language, updateLanguage] = useState(getLanguage());
-  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const businessLogoUploadEnabled = isBusinessLogoUploadEnabled();
+  const mediaUploadDeferred = !businessLogoUploadEnabled;
 
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState("");
@@ -95,7 +99,7 @@ function ContractorProfile({ setPage, currentPage }) {
   const [licenseExpiration, setLicenseExpiration] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
-  const [uploading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [availableNow, setAvailableNow] = useState(false);
   const [dispatchReady, setDispatchReady] = useState(false);
   const profileReviews = getProfessionalReviews({
@@ -409,9 +413,37 @@ function ContractorProfile({ setPage, currentPage }) {
     setPage("professionalOnboarding");
   }
 
-  function handleImageUpload(event) {
+  async function handleImageUpload(event) {
+    const file = event.target.files?.[0] || null;
     event.target.value = "";
-    alert(getMediaDeferredCopy(language).detail);
+
+    if (mediaUploadDeferred) {
+      alert(getMediaDeferredCopy(language).detail);
+      return;
+    }
+
+    setUploading(true);
+    const result = await uploadBusinessProfileLogo({
+      file,
+      setPage,
+    });
+    setUploading(false);
+
+    if (!result.ok) {
+      const errorCopy = {
+        BUSINESS_LOGO_FORMAT_INVALID: t("invalidProfileImageFormat", language),
+        BUSINESS_LOGO_TOO_LARGE: t("profileImageTooLarge", language),
+        BUSINESS_LOGO_UPLOAD_FAILED: t("profileImageUploadFailed", language),
+        BUSINESS_LOGO_SAVE_FAILED: t("profileImageSaveFailed", language),
+      };
+      alert(errorCopy[result.code] || t("profileImageUploadFailed", language));
+      return;
+    }
+
+    setProfile(result.profile);
+    fillForm(result.profile);
+    projectConfirmedBusinessProfile(result.profile);
+    alert(t("profilePhotoUpdated", language));
   }
 
   async function handleCreateProfile() {
@@ -917,7 +949,6 @@ function ContractorProfile({ setPage, currentPage }) {
           licenseExpiration={licenseExpiration}
           setLicenseExpiration={setLicenseExpiration}
           imageUrl={imageUrl}
-          setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
           onAvailabilityChange={setAvailableNow}
@@ -1323,7 +1354,6 @@ function ContractorProfile({ setPage, currentPage }) {
           licenseExpiration={licenseExpiration}
           setLicenseExpiration={setLicenseExpiration}
           imageUrl={imageUrl}
-          setImageUrl={setImageUrl}
           uploading={uploading}
           availableNow={availableNow}
           onAvailabilityChange={setAvailableNow}
@@ -1385,7 +1415,6 @@ function ProfileForm({
   licenseExpiration,
   setLicenseExpiration,
   imageUrl,
-  setImageUrl,
   uploading,
   availableNow,
   onAvailabilityChange,
@@ -1424,7 +1453,7 @@ function ProfileForm({
           <input
             id={inputId}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             style={{ display: "none" }}
             disabled={mediaUploadDeferred}
             onChange={handleImageUpload}
@@ -1449,12 +1478,6 @@ function ProfileForm({
               ? t("changeLogo")
               : t("uploadLogo")}
           </button>
-
-          {imageUrl && (
-            <button type="button" onClick={() => setImageUrl("")} style={removeButton}>
-              {t("removeImage")}
-            </button>
-          )}
 
           {uploading && <p style={uploadingText}>{t("uploadingImage")}</p>}
         </div>
@@ -2488,17 +2511,6 @@ const disabledUploadButton = {
   color: "#64748b",
   cursor: "not-allowed",
   boxShadow: "none",
-};
-
-const removeButton = {
-  border: "none",
-  borderRadius: "999px",
-  background: "#eeeeee",
-  color: "#333",
-  padding: "11px 15px",
-  marginLeft: "8px",
-  fontWeight: "900",
-  cursor: "pointer",
 };
 
 const uploadingText = {

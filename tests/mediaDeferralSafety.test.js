@@ -83,12 +83,17 @@ test("protected media upload surfaces render a deferred state for real-user buil
 
   for (const surface of protectedSurfaces) {
     const contents = read(surface);
+    const isGovernedBusinessLogoSurface = surface === "src/pages/ContractorProfile.jsx";
 
-    assert.match(
-      contents,
-      /isFriendsAndFamilyMediaDeferred/,
-      `${surface} should detect Friends & Family media deferral`
-    );
+    if (isGovernedBusinessLogoSurface) {
+      assert.match(contents, /isBusinessLogoUploadEnabled/);
+    } else {
+      assert.match(
+        contents,
+        /isFriendsAndFamilyMediaDeferred/,
+        `${surface} should detect Friends & Family media deferral`
+      );
+    }
     assert.match(
       contents,
       /guardFriendsAndFamilyMediaUpload|getMediaDeferredNotice|getMediaDeferredCopy/,
@@ -134,7 +139,13 @@ test("live unsafe media writers are guarded before Friends and Family release", 
       contents.includes("/media/upload-signature") &&
       contents.includes("/auth/profile-photo");
 
-    if (!isGuarded && !isGovernedPersonalProfileUpload) {
+    const isGovernedBusinessLogoUpload =
+      relative(repoRoot, absolutePath) === "src/utils/businessProfileLogo.js" &&
+      contents.includes("/media/upload-signature") &&
+      contents.includes("/contractor-profile/logo") &&
+      contents.includes("business-logo");
+
+    if (!isGuarded && !isGovernedPersonalProfileUpload && !isGovernedBusinessLogoUpload) {
       unguarded.push(relative(repoRoot, absolutePath));
     }
   }

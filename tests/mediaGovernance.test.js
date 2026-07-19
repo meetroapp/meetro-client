@@ -38,3 +38,13 @@ test("governed Personal Profile media path remains intact", () => {
   assert.match(profileMedia, /\/auth\/profile-photo/);
   assert.match(profileMedia, /VITE_ENABLE_PERSONAL_PROFILE_MEDIA/);
 });
+
+test("governed Business Logo media path remains logo-only", () => {
+  const logoMedia = read("src/utils/businessProfileLogo.js");
+
+  assert.match(logoMedia, /\/media\/upload-signature/);
+  assert.match(logoMedia, /\/contractor-profile\/logo/);
+  assert.match(logoMedia, /business-logo/);
+  assert.match(logoMedia, /VITE_ENABLE_BUSINESS_LOGO_MEDIA/);
+  assert.doesNotMatch(logoMedia, /business-cover|portfolio|message|moment/i);
+});
