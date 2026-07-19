@@ -6,13 +6,47 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+const PROFILE_MEDIA_FIELDS = Object.freeze([
+  "profile_photo_url",
+  "profilePhotoUrl",
+  "profilePhoto",
+  "profile_photo",
+  "avatar",
+  "avatarUrl",
+  "image_url",
+  "imageUrl",
+]);
+
+export function getStorageSafeAuthenticatedUser(user) {
+  if (!isRecord(user)) return {};
+  const storedUser = { ...user };
+  PROFILE_MEDIA_FIELDS.forEach((field) => delete storedUser[field]);
+  return storedUser;
+}
+
+export function purgeLegacyPersonalProfilePhotoStorage(
+  storage = globalThis.localStorage
+) {
+  if (!storage?.removeItem || !Number.isInteger(storage.length)) return;
+  const keys = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key?.(index);
+    if (String(key || "").startsWith("meetroPersonalProfilePhoto:")) keys.push(key);
+  }
+  keys.forEach((key) => storage.removeItem(key));
+}
+
 export function reconcileAuthenticatedUser(user, storage = globalThis.localStorage) {
   if (!isRecord(user) || !user.id || !String(user.username || "").trim()) {
     return { ok: false, user: null };
   }
 
   const canonicalUser = { ...user, username: String(user.username).trim() };
-  storage?.setItem?.("user", JSON.stringify(canonicalUser));
+  purgeLegacyPersonalProfilePhotoStorage(storage);
+  storage?.setItem?.(
+    "user",
+    JSON.stringify(getStorageSafeAuthenticatedUser(canonicalUser))
+  );
   storage?.setItem?.("userId", String(canonicalUser.id));
   storage?.setItem?.("userName", canonicalUser.username);
   if (canonicalUser.email) {

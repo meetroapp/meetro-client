@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import PersonalAddressManager from "../components/PersonalAddressManager";
@@ -23,8 +23,6 @@ import {
 } from "../utils/profilePhotoScoping";
 import {
   getMediaDeferredCopy,
-  guardFriendsAndFamilyMediaUpload,
-  isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import {
   areRelationshipInsightsEnabled,
@@ -46,6 +44,11 @@ import {
   updatePersonalProfile,
 } from "../utils/personalProfile";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  createTemporaryProfilePhotoPreview,
+  uploadPersonalProfilePhoto,
+  validatePersonalProfileImageFile,
+} from "../utils/personalProfilePhoto";
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -78,6 +81,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
     areRelationshipInsightsEnabled({ role: localStorage.getItem("activeAccountMode") || "personal" })
   );
   const [profileNotice, setProfileNotice] = useState("");
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
+  const previewPhotoRef = useRef(null);
   const [testFeedbackOpen, setTestFeedbackOpen] = useState(false);
   const [testFeedbackSaved, setTestFeedbackSaved] = useState(false);
   const [testFeedback, setTestFeedback] = useState({
@@ -92,12 +97,21 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [profilePhoto, setProfilePhoto] = useState(
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
   );
-  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const mediaUploadDeferred = activeMode === "business";
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
-    setProfilePhoto(getScopedProfilePhoto(activeMode, businessProfile));
-  }, [activeMode, businessProfile]);
+    if (activeMode === "business") {
+      setProfilePhoto(getScopedProfilePhoto(activeMode, businessProfile));
+      return;
+    }
+    setProfilePhoto(user?.profile_photo_url || "");
+  }, [activeMode, businessProfile, user]);
+
+  useEffect(() => () => {
+    previewPhotoRef.current?.revoke();
+    previewPhotoRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (activeMode !== "business") return;
@@ -184,11 +198,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
             nextUser.avatar ||
             "";
 
-          if (savedPhoto) {
-            localStorage.setItem(getScopedProfilePhotoKey("personal"), savedPhoto);
-            if (activeMode !== "business") {
-              setProfilePhoto(savedPhoto);
-            }
+          if (activeMode !== "business") {
+            setProfilePhoto(savedPhoto);
           }
         }
       } catch (error) {
@@ -199,131 +210,54 @@ function Profile({ setPage, currentPage, embedded = false }) {
     fetchUser();
   }, [activeMode, language, setPage]);
 
-  function handleProfilePhotoUpload(event) {
-    if (
-      !guardFriendsAndFamilyMediaUpload({
-        event,
-        language,
-        onDeferred: setProfileNotice,
-      })
-    ) {
+  async function handleProfilePhotoUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+    if (activeMode === "business") {
+      setProfileNotice(mediaDeferredCopy.detail);
       return;
     }
 
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const imageResult = reader.result;
-
-      setProfilePhoto(imageResult);
-
-      const photoKey =
-        getScopedProfilePhotoKey(activeMode, businessProfile);
-
-      localStorage.setItem(photoKey, imageResult);
-
-      if (activeMode !== "business") {
-        localStorage.setItem(getScopedProfilePhotoKey("personal"), imageResult);
-      }
-
-      if (activeMode === "business") {
-        if (!businessProfile?.id) {
-          console.warn("No business profile found for logo update");
-        } else {
-          authFetch(
-            `/contractor-profiles/${businessProfile.id}`,
-            {
-              method: "PUT",
-              body: JSON.stringify({
-                business_name:
-                  businessProfile.business_name || businessName || "",
-                category:
-                  businessProfile.category || businessCategory || "",
-                phone: businessProfile.phone || "",
-                location: businessProfile.location || "",
-                bio: businessProfile.bio || "",
-                image_url: imageResult,
-              }),
-            },
-            setPage
-          )
-            .then((result) => {
-              const savedProfile =
-                result?.profile || result?.data?.profile || null;
-              const savedUrl =
-                savedProfile?.image_url || imageResult;
-
-              setBusinessProfile(savedProfile || businessProfile);
-              localStorage.setItem(
-                getScopedProfilePhotoKey("business", savedProfile || businessProfile),
-                savedUrl
-              );
-              localStorage.setItem("businessImageUrl", savedUrl);
-              setProfilePhoto(savedUrl);
-            })
-            .catch((error) => {
-              console.error("Failed to save business logo", error);
-            });
-        }
-      }
-
-      if (activeMode !== "business") {
-        authFetch(
-          "/auth/profile-photo",
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              profile_photo_url: imageResult,
-            }),
-          },
-          setPage
-        )
-          .then((result) => {
-            const savedUrl =
-              result?.user?.profile_photo_url || imageResult;
-            const savedUser = result?.user || {};
-
-            localStorage.setItem(getScopedProfilePhotoKey("personal"), savedUrl);
-            try {
-              const cachedUser = JSON.parse(localStorage.getItem("user") || "{}") || {};
-              const nextUser = {
-                ...cachedUser,
-                ...savedUser,
-                profile_photo_url: savedUrl,
-                profilePhotoUrl: savedUrl,
-                profilePhoto: savedUrl,
-              };
-
-              localStorage.setItem("user", JSON.stringify(nextUser));
-              setUser(nextUser);
-            } catch {
-              localStorage.setItem(
-                "user",
-                JSON.stringify({
-                  ...savedUser,
-                  profile_photo_url: savedUrl,
-                  profilePhotoUrl: savedUrl,
-                  profilePhoto: savedUrl,
-                })
-              );
-            }
-            setProfilePhoto(savedUrl);
-          })
-          .catch((error) => {
-            console.error("Failed to save profile photo", error);
-          });
-      }
-
-      window.dispatchEvent(
-        new Event("meetro-profile-photo-updated")
+    const validation = validatePersonalProfileImageFile(file);
+    if (!validation.ok) {
+      setProfileNotice(
+        validation.code === "PROFILE_IMAGE_TOO_LARGE"
+          ? t("profileImageTooLarge")
+          : t("invalidProfileImageFormat")
       );
-    };
+      return;
+    }
 
-    reader.readAsDataURL(file);
+    const previousPhoto = user?.profile_photo_url || profilePhoto || "";
+    previewPhotoRef.current?.revoke();
+    const preview = createTemporaryProfilePhotoPreview(file);
+    previewPhotoRef.current = preview;
+    if (preview.url) setProfilePhoto(preview.url);
+    setProfilePhotoUploading(true);
+    setProfileNotice(t("uploadingProfilePhoto"));
+
+    const result = await uploadPersonalProfilePhoto({ file, setPage });
+    preview.revoke();
+    if (previewPhotoRef.current === preview) previewPhotoRef.current = null;
+    setProfilePhotoUploading(false);
+
+    if (!result.ok) {
+      setProfilePhoto(previousPhoto);
+      setProfileNotice(
+        result.code === "PROFILE_IMAGE_SAVE_FAILED"
+          ? t("profileImageSaveFailed")
+          : t("profileImageUploadFailed")
+      );
+      return;
+    }
+
+    const reconciled = reconcileAuthenticatedUser(result.user);
+    const canonicalUser = reconciled.ok ? reconciled.user : result.user;
+    setUser(canonicalUser);
+    setProfilePhoto(canonicalUser.profile_photo_url);
+    setProfileNotice(t("profilePhotoUpdated"));
+    window.dispatchEvent(new Event("meetro-profile-photo-updated"));
   }
 
   function handleLogout() {
@@ -840,9 +774,10 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               style={{ display: "none" }}
-              disabled={mediaUploadDeferred}
+              disabled={mediaUploadDeferred || profilePhotoUploading}
+              aria-label={t(profilePhoto ? "changeProfilePhoto" : "chooseProfilePhoto")}
               onChange={handleProfilePhotoUpload}
             />
           </label>
@@ -1338,9 +1273,10 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             style={{ display: "none" }}
-            disabled={mediaUploadDeferred}
+            disabled={mediaUploadDeferred || profilePhotoUploading}
+            aria-label={t(profilePhoto ? "changeProfilePhoto" : "chooseProfilePhoto")}
             onChange={handleProfilePhotoUpload}
           />
         </label>

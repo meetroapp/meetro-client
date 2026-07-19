@@ -12397,6 +12397,49 @@ const localizationFoundationLanguage = {
   },
 };
 
+const personalProfileMediaLanguage = {
+  en: {
+    changeProfilePhoto: "Change profile photo",
+    chooseProfilePhoto: "Choose profile photo",
+    uploadingProfilePhoto: "Uploading profile photo...",
+    profilePhotoUpdated: "Profile photo updated.",
+    invalidProfileImageFormat: "Choose a JPEG, PNG, or WebP image.",
+    profileImageTooLarge: "Choose an image smaller than 10 MB.",
+    profileImageUploadFailed: "The profile photo could not be uploaded.",
+    profileImageSaveFailed: "The uploaded photo could not be saved to your profile.",
+  },
+  es: {
+    changeProfilePhoto: "Cambiar foto de perfil",
+    chooseProfilePhoto: "Elegir foto de perfil",
+    uploadingProfilePhoto: "Subiendo foto de perfil...",
+    profilePhotoUpdated: "Foto de perfil actualizada.",
+    invalidProfileImageFormat: "Elige una imagen JPEG, PNG o WebP.",
+    profileImageTooLarge: "Elige una imagen de menos de 10 MB.",
+    profileImageUploadFailed: "No se pudo subir la foto de perfil.",
+    profileImageSaveFailed: "No se pudo guardar la foto subida en tu perfil.",
+  },
+  fr: {
+    changeProfilePhoto: "Modifier la photo de profil",
+    chooseProfilePhoto: "Choisir une photo de profil",
+    uploadingProfilePhoto: "Téléversement de la photo de profil...",
+    profilePhotoUpdated: "Photo de profil mise à jour.",
+    invalidProfileImageFormat: "Choisissez une image JPEG, PNG ou WebP.",
+    profileImageTooLarge: "Choisissez une image de moins de 10 Mo.",
+    profileImageUploadFailed: "La photo de profil n’a pas pu être téléversée.",
+    profileImageSaveFailed: "La photo téléversée n’a pas pu être enregistrée dans votre profil.",
+  },
+  "pt-BR": {
+    changeProfilePhoto: "Alterar foto do perfil",
+    chooseProfilePhoto: "Escolher foto do perfil",
+    uploadingProfilePhoto: "Enviando foto do perfil...",
+    profilePhotoUpdated: "Foto do perfil atualizada.",
+    invalidProfileImageFormat: "Escolha uma imagem JPEG, PNG ou WebP.",
+    profileImageTooLarge: "Escolha uma imagem menor que 10 MB.",
+    profileImageUploadFailed: "Não foi possível enviar a foto do perfil.",
+    profileImageSaveFailed: "Não foi possível salvar a foto enviada no seu perfil.",
+  },
+};
+
 const sharedInterfaceLanguage = {
   en: {
     navigationHome: "Home",
@@ -12765,6 +12808,10 @@ Object.entries(completedHistoryTruthLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(localizationFoundationLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(personalProfileMediaLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 

@@ -73,7 +73,6 @@ test("protected media upload surfaces render a deferred state for real-user buil
     "src/pages/MyRequests.jsx",
     "src/pages/ContractorProfile.jsx",
     "src/pages/ProjectGallery.jsx",
-    "src/pages/Profile.jsx",
     "src/pages/ConversationThread.jsx",
     "src/pages/CompletionSheet.jsx",
     "src/pages/ContractorDashboard.jsx",
@@ -101,6 +100,15 @@ test("protected media upload surfaces render a deferred state for real-user buil
   }
 });
 
+test("Profile authorizes only governed personal uploads and keeps business media deferred", () => {
+  const contents = read("src/pages/Profile.jsx");
+  assert.match(contents, /uploadPersonalProfilePhoto/);
+  assert.match(contents, /mediaUploadDeferred = activeMode === "business"/);
+  assert.match(contents, /disabled=\{mediaUploadDeferred \|\| profilePhotoUploading\}/);
+  assert.match(contents, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.doesNotMatch(contents, /readAsDataURL|new FileReader/);
+});
+
 test("live unsafe media writers are guarded before Friends and Family release", () => {
   const dangerousMediaPatterns =
     /api\.cloudinary\.com|upload_preset|URL\.createObjectURL\(file\)|readAsDataURL\(/;
@@ -115,7 +123,12 @@ test("live unsafe media writers are guarded before Friends and Family release", 
       contents.includes("guardFriendsAndFamilyMediaUpload") ||
       contents.includes("isFriendsAndFamilyMediaDeferred");
 
-    if (!isGuarded) {
+    const isGovernedPersonalProfileUpload =
+      relative(repoRoot, absolutePath) === "src/utils/personalProfilePhoto.js" &&
+      contents.includes("/media/upload-signature") &&
+      contents.includes("/auth/profile-photo");
+
+    if (!isGuarded && !isGovernedPersonalProfileUpload) {
       unguarded.push(relative(repoRoot, absolutePath));
     }
   }

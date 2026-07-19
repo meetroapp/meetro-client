@@ -2,6 +2,10 @@ import {
   clearAccountWorkflowData,
   getAccountStorageIdentity,
 } from "./accountStorage.js";
+import {
+  getStorageSafeAuthenticatedUser,
+  purgeLegacyPersonalProfilePhotoStorage,
+} from "./personalProfile.js";
 
 export const professionalRoles = [
   "professional",
@@ -205,7 +209,11 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
     : "homeowner";
 
   localStorage.setItem("token", data.token || "");
-  localStorage.setItem("user", JSON.stringify(user));
+  purgeLegacyPersonalProfilePhotoStorage(localStorage);
+  localStorage.setItem(
+    "user",
+    JSON.stringify(getStorageSafeAuthenticatedUser(user))
+  );
   localStorage.setItem("userId", user.id || "");
   localStorage.setItem("userName", user.username || user.name || "");
   localStorage.setItem("userEmail", user.email || fallbackEmail || "");
