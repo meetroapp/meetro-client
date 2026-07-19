@@ -4,6 +4,8 @@ import MeetroDetailsButton from "../components/MeetroDetailsButton";
 import MeetroIcon from "../components/MeetroIcon";
 import SpotlightSlideshow from "../components/SpotlightSlideshow";
 import API_URL from "../api";
+import { authFetch } from "../utils/authFetch";
+import { normalizeAuthenticatedHomeownerPosts } from "../utils/backendHomeownerRequests";
 import {
   getBusinessPortfolioProjectImages,
 } from "../utils/businessPortfolioStorage";
@@ -155,6 +157,7 @@ function Home({ setPage }) {
   const [detailsRequest, setDetailsRequest] = useState(null);
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
   const [spotlightPortfolioRefresh, setSpotlightPortfolioRefresh] = useState(0);
+  const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
 
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -170,7 +173,12 @@ function Home({ setPage }) {
 
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
-  const allHomeownerRequests = getStoredHomeownerRequests().filter((request) => request);
+  const legacyWorkflowStorageEnabled = canReadLegacyWorkflowStorage();
+  const allHomeownerRequests = (
+    legacyWorkflowStorageEnabled
+      ? getStoredHomeownerRequests()
+      : backendHomeownerRequests
+  ).filter((request) => request);
 
   const closurePendingRequests = allHomeownerRequests.filter(
     (request) => request.status === "completed"
@@ -214,7 +222,31 @@ function Home({ setPage }) {
     };
   }, []);
 
-  const liveHomeownerRequests = getStoredHomeownerRequests();
+  useEffect(() => {
+    if (legacyWorkflowStorageEnabled) return undefined;
+
+    let active = true;
+    async function loadAuthenticatedHomeownerRequests() {
+      let result;
+      try {
+        result = await authFetch("/posts", { cache: "no-store" }, setPage);
+      } catch {
+        return;
+      }
+      if (!active || !result?.response?.ok) return;
+
+      const payload = result.data || {};
+      const posts = Array.isArray(payload) ? payload : payload.posts || [];
+      setBackendHomeownerRequests(normalizeAuthenticatedHomeownerPosts(posts));
+    }
+
+    loadAuthenticatedHomeownerRequests();
+    return () => {
+      active = false;
+    };
+  }, [legacyWorkflowStorageEnabled, setPage]);
+
+  const liveHomeownerRequests = allHomeownerRequests;
 
   const professionalMetrics = getProfessionalWorkMetrics({
     homeownerRequests: liveHomeownerRequests,

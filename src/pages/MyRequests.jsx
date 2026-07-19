@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
+import { normalizeAuthenticatedHomeownerPosts } from "../utils/backendHomeownerRequests";
 import {
   getMediaDeferredCopy,
   isFriendsAndFamilyMediaDeferred,
@@ -16,7 +17,6 @@ import {
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { isRequestOwnedByAuthenticatedUser } from "../utils/authenticatedRequestOwnership";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -577,37 +577,7 @@ function MyRequests({ setPage }) {
         const data = result.data || {};
         const posts = Array.isArray(data) ? data : data.posts || [];
 
-        const currentUserId = localStorage.getItem("userId");
-        const currentUserEmail = localStorage.getItem("userEmail");
-
-        const recoveredRequests = posts
-          .filter((post) =>
-            isRequestOwnedByAuthenticatedUser(post, {
-              id: currentUserId,
-              email: currentUserEmail,
-            })
-          )
-          .map((post) => ({
-            id: post.id,
-            requestId: post.id,
-            source: "backend-post-recovery",
-            title: post.title || post.project_title || "Service Request",
-            description: post.description || post.project_description || "",
-            category: post.category || "handyman",
-            location: post.location || "Local Area",
-            request_photos: Array.isArray(post.request_photos) ? post.request_photos : [],
-            photos: Array.isArray(post.request_photos)
-              ? post.request_photos.map((photo) => photo?.secure_url).filter(Boolean)
-              : Array.isArray(post.photos)
-              ? post.photos
-              : [],
-            image_url: post.image_url || "",
-            status: post.status || "open",
-            createdAt: post.created_at || post.createdAt || new Date().toISOString(),
-            viewedByBusinesses: [],
-            quotesReceived: [],
-            messagesCount: 0,
-          }));
+        const recoveredRequests = normalizeAuthenticatedHomeownerPosts(posts);
 
         if (recoveredRequests.length === 0) return;
 
