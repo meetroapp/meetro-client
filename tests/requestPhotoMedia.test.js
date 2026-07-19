@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   REQUEST_PHOTO_MAX_COUNT,
   isRequestPhotoUploadEnabled,
+  reorderRequestPhotos,
   uploadRequestPhotos,
   validateRequestPhotoFiles,
 } from "../src/utils/requestPhotoMedia.js";
@@ -100,6 +101,16 @@ test("request-photo validation rejects unsupported, oversized, and excess files"
     }).code,
     "REQUEST_PHOTO_COUNT_EXCEEDED"
   );
+});
+
+test("request-photo reordering is deterministic and does not mutate caller input", () => {
+  const photos = [{ id: "first" }, { id: "second" }, { id: "third" }];
+  const reordered = reorderRequestPhotos(photos, 2, 0);
+
+  assert.deepEqual(reordered.map((photo) => photo.id), ["third", "first", "second"]);
+  assert.deepEqual(photos.map((photo) => photo.id), ["first", "second", "third"]);
+  assert.notEqual(reordered, photos);
+  assert.deepEqual(reorderRequestPhotos(photos, 0, -1), photos);
 });
 
 test("request-photo uploads request signatures and returns safe Cloudinary metadata", async () => {

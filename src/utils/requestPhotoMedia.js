@@ -12,6 +12,25 @@ import { BUSINESS_LOGO_PRODUCTION_API_ORIGIN } from "./businessProfileLogo.js";
 export const REQUEST_PHOTO_PURPOSE = "request-photo";
 export const REQUEST_PHOTO_MAX_COUNT = 5;
 
+export function reorderRequestPhotos(photos = [], fromIndex, toIndex) {
+  const reordered = Array.from(photos || []);
+  if (
+    !Number.isInteger(fromIndex) ||
+    !Number.isInteger(toIndex) ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= reordered.length ||
+    toIndex >= reordered.length ||
+    fromIndex === toIndex
+  ) {
+    return reordered;
+  }
+
+  const [photo] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, photo);
+  return reordered;
+}
+
 function apiOrigin(apiUrl) {
   try {
     return new URL(apiUrl).origin;

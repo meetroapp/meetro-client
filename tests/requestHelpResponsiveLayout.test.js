@@ -91,3 +91,12 @@ test("Request Help reads selected files before clearing the file input", () => {
   assert.notEqual(inputClear, -1);
   assert.ok(filesRead < inputClear);
 });
+
+test("Request Help exposes bounded photo reorder controls", () => {
+  assert.match(uploadSource, /reorderRequestPhotos/);
+  assert.match(uploadSource, /moveSelectedRequestPhoto\(index, -1\)/);
+  assert.match(uploadSource, /moveSelectedRequestPhoto\(index, 1\)/);
+  assert.match(uploadSource, /disabled=\{index === 0\}/);
+  assert.match(uploadSource, /disabled=\{index === projectPhotos\.length - 1\}/);
+  assert.match(uploadSource, /height: "44px"/);
+});

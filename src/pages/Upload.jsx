@@ -30,6 +30,7 @@ import {
   cleanupRequestPhoto,
   createTemporaryRequestPhotoPreview,
   isRequestPhotoUploadEnabled,
+  reorderRequestPhotos,
   uploadRequestPhotos,
   validateRequestPhotoFiles,
 } from "../utils/requestPhotoMedia";
@@ -333,6 +334,39 @@ function Upload({ setPage, currentPage }) {
       setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
       return updated;
     });
+  }
+
+  function moveSelectedRequestPhoto(index, direction) {
+    setSelectedRequestPhotos((current) => {
+      const updated = reorderRequestPhotos(current, index, index + direction);
+      selectedRequestPhotosRef.current = updated;
+      setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
+      return updated;
+    });
+  }
+
+  function getPhotoOrderLabel(direction, index) {
+    const position = index + 1;
+    const labels = {
+      es:
+        direction < 0
+          ? `Mover foto ${position} a la izquierda`
+          : `Mover foto ${position} a la derecha`,
+      fr:
+        direction < 0
+          ? `Deplacer la photo ${position} vers la gauche`
+          : `Deplacer la photo ${position} vers la droite`,
+      pt:
+        direction < 0
+          ? `Mover foto ${position} para a esquerda`
+          : `Mover foto ${position} para a direita`,
+    };
+    return (
+      labels[language] ||
+      (direction < 0
+        ? `Move photo ${position} left`
+        : `Move photo ${position} right`)
+    );
   }
 
   function handleImageUpload(event) {
@@ -832,6 +866,37 @@ function Upload({ setPage, currentPage }) {
                   >
                     ×
                   </button>
+
+                  <div style={photoOrderControls}>
+                    <button
+                      type="button"
+                      onClick={() => moveSelectedRequestPhoto(index, -1)}
+                      disabled={index === 0}
+                      aria-label={getPhotoOrderLabel(-1, index)}
+                      title={getPhotoOrderLabel(-1, index)}
+                      style={{
+                        ...photoOrderButton,
+                        ...(index === 0 ? disabledPhotoOrderButton : {}),
+                      }}
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSelectedRequestPhoto(index, 1)}
+                      disabled={index === projectPhotos.length - 1}
+                      aria-label={getPhotoOrderLabel(1, index)}
+                      title={getPhotoOrderLabel(1, index)}
+                      style={{
+                        ...photoOrderButton,
+                        ...(index === projectPhotos.length - 1
+                          ? disabledPhotoOrderButton
+                          : {}),
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1416,6 +1481,9 @@ const photoPreviewStrip = {
 const photoPreviewItem = {
   position: "relative",
   flexShrink: 0,
+  display: "grid",
+  gap: "8px",
+  width: "120px",
 };
 
 const previewImage = {
@@ -1464,6 +1532,30 @@ const removePhotoButton = {
   fontSize: "20px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const photoOrderControls = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "8px",
+};
+
+const photoOrderButton = {
+  width: "100%",
+  minWidth: 0,
+  height: "44px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "12px",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  fontSize: "20px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const disabledPhotoOrderButton = {
+  opacity: 0.4,
+  cursor: "not-allowed",
 };
 
 const photoCountText = {
