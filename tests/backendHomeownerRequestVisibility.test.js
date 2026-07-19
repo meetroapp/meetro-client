@@ -48,4 +48,8 @@ test("Home and My Requests share authenticated backend post truth", () => {
   assert.match(homeSource, /legacyWorkflowStorageEnabled[\s\S]*backendHomeownerRequests/);
   assert.match(myRequestsSource, /normalizeAuthenticatedHomeownerPosts\(posts\)/);
   assert.doesNotMatch(myRequestsSource, /isRequestOwnedByAuthenticatedUser\(post/);
+  assert.match(
+    myRequestsSource,
+    /const isSelected = String\(requestId\) === String\(selectedId\)/
+  );
 });

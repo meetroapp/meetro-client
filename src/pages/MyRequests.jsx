@@ -644,8 +644,8 @@ function MyRequests({ setPage }) {
     minutesSinceAccepted > freeCancelWindowMinutes;
 
   const sortedRequests = [...requests].sort((a, b) => {
-    const aSelected = (a.requestId || a.id) === selectedId ? 1 : 0;
-    const bSelected = (b.requestId || b.id) === selectedId ? 1 : 0;
+    const aSelected = String(a.requestId || a.id) === String(selectedId) ? 1 : 0;
+    const bSelected = String(b.requestId || b.id) === String(selectedId) ? 1 : 0;
     return bSelected - aSelected;
   });
 
@@ -1034,7 +1034,7 @@ function MyRequests({ setPage }) {
         <div className="meetro-responsive-grid meetro-grid-2" style={list}>
           {sortedRequests.map((request) => {
             const requestId = request.requestId || request.id;
-            const isSelected = requestId === selectedId;
+            const isSelected = String(requestId) === String(selectedId);
             const truthfulRequest = getTruthfulWorkflowRequest(request);
             const unsupportedWorkflow = truthfulRequest !== request;
             const unavailableCopy = getApprovalSchedulingUnavailableCopy(language);
