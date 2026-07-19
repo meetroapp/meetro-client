@@ -7,12 +7,9 @@ import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import {
   getBusinessPortfolioProjectImages,
-  persistBusinessPortfolioProjects,
 } from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
-import { persistBusinessProfileShareRecord } from "../utils/profileShare";
-import { applyBusinessIdentityFields, getBusinessIdentityProjection } from "../utils/businessIdentity";
-import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
   CAMERA_PERMISSION_MESSAGE,
@@ -22,7 +19,6 @@ import {
 import {
   getMediaDeferredCopy,
   getMediaDeferredNotice,
-  guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 
@@ -39,7 +35,7 @@ function ProjectGallery({ setPage, currentPage }) {
   const projectImageInputRef = useRef(null);
   const editPortfolioImageInputRef = useRef(null);
 
-  const [uploading, setUploading] = useState(false);
+  const [uploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -114,12 +110,7 @@ function ProjectGallery({ setPage, currentPage }) {
           await projectsResponse.json();
 
         const fetchedProjects = projectsData.projects || [];
-        const normalizedProjects = persistPortfolioForSpotlight(
-          profileData.profile,
-          fetchedProjects
-        );
-
-        setProjects(normalizedProjects.length > 0 ? normalizedProjects : fetchedProjects);
+        setProjects(fetchedProjects);
       }
     } catch (error) {
       console.error(error);
@@ -128,67 +119,9 @@ function ProjectGallery({ setPage, currentPage }) {
     }
   }
 
-  async function handleImageUpload(event) {
-    try {
-      if (
-        !guardFriendsAndFamilyMediaUpload({
-          event,
-          language,
-          onDeferred: setPhotoError,
-        })
-      ) {
-        return;
-      }
-
-      const selectedFiles = Array.from(event.target.files || []);
-
-      if (selectedFiles.length === 0) return;
-
-      setPhotoError("");
-      setUploading(true);
-
-      const uploadedUrls = [];
-
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-
-        formData.append("file", file);
-
-        formData.append(
-          "upload_preset",
-          "meetro_uploads"
-        );
-
-        const response = await fetch(
-          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.secure_url) {
-          uploadedUrls.push(data.secure_url);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        setImages((currentImages) => [
-          ...currentImages,
-          ...uploadedUrls,
-        ]);
-      } else {
-        alert(t("uploadFailed"));
-      }
-    } catch (error) {
-      console.error(error);
-      alert(t("uploadError"));
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
+  function handleImageUpload(event) {
+    event.target.value = "";
+    setPhotoError(getMediaDeferredNotice(language));
   }
 
   async function openProjectPhotoPicker() {
@@ -255,61 +188,9 @@ function ProjectGallery({ setPage, currentPage }) {
     }
   }
 
-  async function handleEditImageUpload(event) {
-    try {
-      if (
-        !guardFriendsAndFamilyMediaUpload({
-          event,
-          language,
-          onDeferred: setPhotoError,
-        })
-      ) {
-        return;
-      }
-
-      const selectedFiles = Array.from(event.target.files || []);
-
-      if (selectedFiles.length === 0) return;
-
-      setPhotoError("");
-      setUploading(true);
-
-      const uploadedUrls = [];
-
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-
-        formData.append("file", file);
-        formData.append("upload_preset", "meetro_uploads");
-
-        const response = await fetch(
-          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.secure_url) {
-          uploadedUrls.push(data.secure_url);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        setEditImages((currentImages) => [
-          ...currentImages,
-          ...uploadedUrls,
-        ]);
-      }
-    } catch (error) {
-      console.error(error);
-      alert(t("uploadError"));
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
+  function handleEditImageUpload(event) {
+    event.target.value = "";
+    setPhotoError(getMediaDeferredNotice(language));
   }
 
   async function openEditProjectPhotoPicker() {
@@ -366,8 +247,6 @@ function ProjectGallery({ setPage, currentPage }) {
       );
 
       setProjects(updatedProjects);
-      persistPortfolioForSpotlight(profile, updatedProjects);
-
       setEditingProject(null);
       setEditTitle("");
       setEditDescription("");
@@ -386,164 +265,12 @@ function ProjectGallery({ setPage, currentPage }) {
     return getBusinessPortfolioProjectImages(project);
   }
 
-  function persistPortfolioForSpotlight(contractorProfile, profileProjects = []) {
-    if (!contractorProfile || !Array.isArray(profileProjects)) return [];
-    const businessName =
-      contractorProfile.business_name ||
-      contractorProfile.name ||
-      localStorage.getItem("businessName") ||
-      "";
-    const normalizedProjects = persistBusinessPortfolioProjects(
-      contractorProfile,
-      profileProjects,
-      { fallbackBusinessName: businessName }
-    );
-
-    const businessId = contractorProfile.id || contractorProfile.contractor_id || "";
-
-    try {
-      const businesses = JSON.parse(localStorage.getItem("meetroBusinesses") || "[]");
-      const existingBusinesses = Array.isArray(businesses) ? businesses : [];
-      const existingBusiness = existingBusinesses.find((business) => {
-        const existingId = String(business.id || business.businessId || "");
-        const existingName = String(
-          business.name || business.business_name || ""
-        ).toLowerCase();
-
-        return (
-          (businessId && existingId === String(businessId)) ||
-          (businessName && existingName === String(businessName).toLowerCase())
-        );
-      });
-      const businessRecord = {
-        ...(existingBusiness || {}),
-        id: existingBusiness?.id || businessId || businessName,
-        name: existingBusiness?.name || businessName,
-        business_name: existingBusiness?.business_name || businessName,
-        category:
-          existingBusiness?.category ||
-          contractorProfile.category ||
-          contractorProfile.business_category ||
-          localStorage.getItem("businessCategory") ||
-          "",
-        business_category:
-          existingBusiness?.business_category ||
-          contractorProfile.business_category ||
-          contractorProfile.category ||
-          localStorage.getItem("businessCategory") ||
-          "",
-        serviceDomain:
-          existingBusiness?.serviceDomain ||
-          contractorProfile.serviceDomain ||
-          contractorProfile.service_domain ||
-          localStorage.getItem("businessServiceDomain") ||
-          "",
-        businessServiceDomain:
-          existingBusiness?.businessServiceDomain ||
-          contractorProfile.businessServiceDomain ||
-          contractorProfile.business_service_domain ||
-          localStorage.getItem("businessServiceDomain") ||
-          "",
-        serviceSpecialties:
-          existingBusiness?.serviceSpecialties ||
-          contractorProfile.serviceSpecialties ||
-          contractorProfile.businessServiceSpecialties ||
-          [],
-        businessServiceSpecialties:
-          existingBusiness?.businessServiceSpecialties ||
-          contractorProfile.businessServiceSpecialties ||
-          contractorProfile.serviceSpecialties ||
-          [],
-        serviceCategories:
-          existingBusiness?.serviceCategories ||
-          contractorProfile.serviceCategories ||
-          contractorProfile.businessServiceCategories ||
-          [],
-        businessServiceCategories:
-          existingBusiness?.businessServiceCategories ||
-          contractorProfile.businessServiceCategories ||
-          contractorProfile.serviceCategories ||
-          [],
-        serviceCapabilities:
-          existingBusiness?.serviceCapabilities ||
-          contractorProfile.serviceCapabilities ||
-          contractorProfile.businessServiceCapabilities ||
-          [],
-        businessServiceCapabilities:
-          existingBusiness?.businessServiceCapabilities ||
-          contractorProfile.businessServiceCapabilities ||
-          contractorProfile.serviceCapabilities ||
-          [],
-        serviceZipCodes:
-          existingBusiness?.serviceZipCodes ||
-          contractorProfile.serviceZipCodes ||
-          localStorage.getItem("businessZipCodes") ||
-          "",
-        businessPortfolio: normalizedProjects,
-        localProfileOwner: true,
-        localDemoSafe:
-          existingBusiness?.localDemoSafe ||
-          contractorProfile.localDemoSafe ||
-          localStorage.getItem("businessLocalDemoSafe") === "true" ||
-          undefined,
-      };
-      const services = getBusinessServicesProjection(businessRecord, {
-        translate: t,
-      });
-      const publicBusinessRecord = applyBusinessIdentityFields({
-        ...businessRecord,
-        serviceSpecialties: services.serviceIds,
-        businessServiceSpecialties: services.serviceIds,
-        serviceCategories: services.categories,
-        businessServiceCategories: services.categories,
-        serviceCapabilities: services.capabilities,
-        businessServiceCapabilities: services.capabilities,
-      });
-      const filteredBusinesses = existingBusinesses.filter((business) => {
-        const existingId = String(business.id || business.businessId || "");
-        const existingName = String(
-          business.name || business.business_name || ""
-        ).toLowerCase();
-
-        return !(
-          (businessRecord.id && existingId === String(businessRecord.id)) ||
-          (businessRecord.name &&
-            existingName === String(businessRecord.name).toLowerCase())
-        );
-      });
-
-      localStorage.setItem(
-        "meetroBusinesses",
-        JSON.stringify([publicBusinessRecord, ...filteredBusinesses])
-      );
-    } catch {}
-
-    return normalizedProjects;
-  }
-
-  function toggleProjectSpotlight(projectId) {
-    const updatedProjects = projects.map((project) => ({
-      ...project,
-      spotlightFeatured:
-        project.id === projectId ? !project.spotlightFeatured : Boolean(project.spotlightFeatured),
-    }));
-
-    setProjects(updatedProjects);
-    persistPortfolioForSpotlight(profile, updatedProjects);
+  function toggleProjectSpotlight() {
+    setPhotoError(getMediaDeferredNotice(language));
   }
 
   function viewPublicPortfolio() {
-    if (!profile) return;
-
-    persistBusinessProfileShareRecord(
-      applyBusinessIdentityFields({
-        ...profile,
-        businessPortfolio: projects,
-        projectGallery: projects,
-      })
-    );
-    localStorage.setItem("contractorDetailsReturnPage", "projectGallery");
-    setPage("contractorDetails");
+    setPhotoError(getMediaDeferredNotice(language));
   }
 
   function openCreateProjectEditor() {

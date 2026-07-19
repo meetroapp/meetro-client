@@ -6,8 +6,6 @@ import SpotlightSlideshow from "../components/SpotlightSlideshow";
 import API_URL from "../api";
 import {
   getBusinessPortfolioProjectImages,
-  persistBusinessPortfolioProjects,
-  readAllBusinessPortfolioItems,
 } from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
 import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat";
@@ -46,7 +44,6 @@ import {
 } from "../utils/dashboardMetrics";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import {
-  attachSpotlightPortfolioMedia,
   buildSpotlightProfessionalProfile,
   getEligibleSpotlightBusinesses,
   getSpotlightAvatarUrl,
@@ -969,160 +966,7 @@ function getHomeActiveEmergencyInfo(language = "en") {
 }
 
 function getLocalSpotlightBusinesses() {
-  let savedBusinesses = [];
-
-  try {
-    savedBusinesses = JSON.parse(localStorage.getItem("meetroBusinesses") || "[]");
-  } catch {
-    savedBusinesses = [];
-  }
-
-  let contractorProfile = null;
-
-  try {
-    contractorProfile = JSON.parse(localStorage.getItem("contractorProfile") || "null");
-  } catch {
-    contractorProfile = null;
-  }
-
-  const localBusinessName = localStorage.getItem("businessName") || "";
-  const localBusinessCategory = localStorage.getItem("businessCategory") || "";
-  const localBusinessServiceDomain =
-    localStorage.getItem("businessServiceDomain") ||
-    localStorage.getItem("businessDomain") ||
-    "";
-  const localBusinessServiceCategories = readLocalJsonArray(
-    "businessServiceCategories"
-  );
-  const localBusinessServiceSpecialties = readLocalJsonArray(
-    "businessServiceSpecialties"
-  );
-  const localBusinessZipCodes = localStorage.getItem("businessZipCodes") || "";
-  const localBusinessPrimaryCity =
-    localStorage.getItem("businessPrimaryCity") || "";
-  const localBusinessServiceRadius =
-    localStorage.getItem("businessServiceRadius") || "";
-  const localBusinessDemoSafe =
-    localStorage.getItem("businessLocalDemoSafe") === "true" ||
-    localStorage.getItem("localDemoSafe") === "true";
-
-  if (!contractorProfile && localBusinessName) {
-    contractorProfile = {
-      id: localBusinessName,
-      name: localBusinessName,
-      business_name: localBusinessName,
-      category: localBusinessCategory,
-      business_category: localBusinessCategory,
-      imageUrl: localStorage.getItem("businessImageUrl") || "",
-      image_url: localStorage.getItem("businessImageUrl") || "",
-      location: localStorage.getItem("businessLocation") || "",
-      city: localBusinessPrimaryCity,
-      primaryCity: localBusinessPrimaryCity,
-      serviceZipCodes: localBusinessZipCodes,
-      businessZipCodes: localBusinessZipCodes,
-      serviceRadiusMiles: localBusinessServiceRadius,
-      serviceDomain: localBusinessServiceDomain,
-      businessServiceDomain: localBusinessServiceDomain,
-      serviceCategories: localBusinessServiceCategories,
-      businessServiceCategories: localBusinessServiceCategories,
-      serviceSpecialties: localBusinessServiceSpecialties,
-      businessServiceSpecialties: localBusinessServiceSpecialties,
-      localDemoSafe: localBusinessDemoSafe || undefined,
-      rating: localStorage.getItem("businessRating") || "",
-      status: "active",
-      localProfileOwner: true,
-      __spotlightSource: "localStorage",
-    };
-  }
-
-  const portfolioItems = getLocalSpotlightPortfolioItems();
-  const businesses = savedBusinesses.map((business) => ({
-    ...business,
-    __spotlightSource: business.__spotlightSource || "meetroBusinesses",
-  }));
-
-  if (contractorProfile) {
-    businesses.unshift({
-      ...contractorProfile,
-      id:
-        contractorProfile.id ||
-        contractorProfile.name ||
-        contractorProfile.business_name,
-      name:
-        contractorProfile.name ||
-        contractorProfile.business_name ||
-        localBusinessName,
-      business_name:
-        contractorProfile.business_name ||
-        contractorProfile.name ||
-        localBusinessName,
-      category:
-        contractorProfile.category ||
-        contractorProfile.business_category ||
-        localBusinessCategory,
-      business_category:
-        contractorProfile.business_category ||
-        contractorProfile.category ||
-        localBusinessCategory,
-      serviceDomain:
-        contractorProfile.serviceDomain ||
-        contractorProfile.service_domain ||
-        localBusinessServiceDomain,
-      businessServiceDomain:
-        contractorProfile.businessServiceDomain ||
-        contractorProfile.business_service_domain ||
-        localBusinessServiceDomain,
-      serviceCategories:
-        contractorProfile.serviceCategories ||
-        contractorProfile.service_categories ||
-        localBusinessServiceCategories,
-      businessServiceCategories:
-        contractorProfile.businessServiceCategories ||
-        contractorProfile.business_service_categories ||
-        localBusinessServiceCategories,
-      serviceSpecialties:
-        contractorProfile.serviceSpecialties ||
-        contractorProfile.service_specialties ||
-        localBusinessServiceSpecialties,
-      businessServiceSpecialties:
-        contractorProfile.businessServiceSpecialties ||
-        contractorProfile.business_service_specialties ||
-        localBusinessServiceSpecialties,
-      city:
-        contractorProfile.city ||
-        contractorProfile.primaryCity ||
-        localBusinessPrimaryCity,
-      primaryCity:
-        contractorProfile.primaryCity ||
-        contractorProfile.city ||
-        localBusinessPrimaryCity,
-      serviceZipCodes:
-        contractorProfile.serviceZipCodes ||
-        contractorProfile.service_zip_codes ||
-        contractorProfile.businessZipCodes ||
-        localBusinessZipCodes,
-      businessZipCodes:
-        contractorProfile.businessZipCodes ||
-        contractorProfile.business_zip_codes ||
-        contractorProfile.serviceZipCodes ||
-        localBusinessZipCodes,
-      serviceRadiusMiles:
-        contractorProfile.serviceRadiusMiles ||
-        contractorProfile.service_radius_miles ||
-        localBusinessServiceRadius,
-      localDemoSafe:
-        contractorProfile.localDemoSafe ||
-        contractorProfile.demoSafe ||
-        localBusinessDemoSafe ||
-        undefined,
-      localProfileOwner: true,
-      __spotlightSource: contractorProfile.__spotlightSource || "contractorProfile",
-    });
-  }
-
-  const uniqueBusinesses = mergeLocalSpotlightBusinessRecords(businesses);
-
-  return attachSpotlightPortfolioMedia(uniqueBusinesses, portfolioItems);
+  return [];
 }
 
 function getSpotlightContractorId(business = {}) {
@@ -1205,25 +1049,7 @@ async function hydrateSpotlightPortfolioProjects(
         const projects = Array.isArray(data?.projects) ? data.projects : [];
         if (projects.length === 0) return;
 
-        const normalizedProjects = persistBusinessPortfolioProjects(
-          {
-            ...business,
-            id: contractorId,
-            contractor_id: contractorId,
-            business_name:
-              business.business_name || business.name || business.businessName || "",
-            name: business.name || business.business_name || "",
-          },
-          projects,
-          {
-            fallbackBusinessName:
-              business.name || business.business_name || business.businessName || "",
-          }
-        );
-
-        if (normalizedProjects.length > 0) {
-          onPortfolioHydrated();
-        }
+        if (projects.length > 0) onPortfolioHydrated();
       } catch (error) {
         if (localStorage.getItem("meetroSpotlightDebug") === "true") {
           console.warn("[Meetro Spotlight Portfolio Fetch]", error);
@@ -1231,87 +1057,6 @@ async function hydrateSpotlightPortfolioProjects(
       }
     })
   );
-}
-
-function getLocalSpotlightBusinessKey(business = {}) {
-  return String(
-    business?.id ||
-      business?.businessId ||
-      business?.business_id ||
-      business?.contractorId ||
-      business?.contractor_id ||
-      business?.name ||
-      business?.business_name ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
-}
-
-function mergeArrayField(primaryValue, nextValue) {
-  return [
-    ...(Array.isArray(primaryValue) ? primaryValue : []),
-    ...(Array.isArray(nextValue) ? nextValue : []),
-  ];
-}
-
-function mergeLocalSpotlightBusinessRecords(businesses = []) {
-  const byKey = new Map();
-
-  businesses.forEach((business) => {
-    const key = getLocalSpotlightBusinessKey(business);
-    if (!business || !key || business.status === "closed") return;
-
-    const existing = byKey.get(key);
-    if (!existing) {
-      byKey.set(key, business);
-      return;
-    }
-
-    byKey.set(key, {
-      ...business,
-      ...existing,
-      businessPortfolio: mergeArrayField(
-        existing.businessPortfolio,
-        business.businessPortfolio
-      ),
-      business_portfolio: mergeArrayField(
-        existing.business_portfolio,
-        business.business_portfolio
-      ),
-      projects: mergeArrayField(existing.projects, business.projects),
-      projectGallery: mergeArrayField(
-        existing.projectGallery,
-        business.projectGallery
-      ),
-      project_gallery: mergeArrayField(
-        existing.project_gallery,
-        business.project_gallery
-      ),
-      portfolio: mergeArrayField(existing.portfolio, business.portfolio),
-      gallery: mergeArrayField(existing.gallery, business.gallery),
-      photos: mergeArrayField(existing.photos, business.photos),
-      portfolioImages: mergeArrayField(
-        existing.portfolioImages,
-        business.portfolioImages
-      ),
-      portfolio_images: mergeArrayField(
-        existing.portfolio_images,
-        business.portfolio_images
-      ),
-      __spotlightFeaturedProject:
-        existing.__spotlightFeaturedProject ||
-        business.__spotlightFeaturedProject,
-      __spotlightSource: [
-        existing.__spotlightSource,
-        business.__spotlightSource,
-      ]
-        .filter(Boolean)
-        .join(" + "),
-    });
-  });
-
-  return Array.from(byKey.values());
 }
 
 function buildLocalServicesSpotlightDebugSummary(
@@ -1501,19 +1246,6 @@ function shouldShowLocalServicesSpotlightDebug() {
   if (typeof window === "undefined") return false;
 
   return localStorage.getItem("meetroSpotlightDebug") === "true";
-}
-
-function getLocalSpotlightPortfolioItems() {
-  return readAllBusinessPortfolioItems();
-}
-
-function readLocalJsonArray(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function getSpotlightStoryKey({ primaryValues = [], fallbackValues = [] } = {}) {

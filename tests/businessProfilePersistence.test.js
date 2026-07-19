@@ -37,6 +37,7 @@ test("business profile payload projects every supported editor field without mut
   assert.deepEqual(fields, before);
   assert.equal(payload.business_name, "Trusted Home Services");
   assert.equal(payload.location, "Greater Orlando");
+  assert.equal(payload.image_url, "");
   assert.deepEqual(payload.service_specialties, ["door_repair_replacement"]);
   assert.equal(payload.available_now, true);
 });
@@ -58,6 +59,7 @@ test("dashboard availability updates preserve the complete canonical profile pay
   assert.deepEqual(payload.service_specialties, ["door_repair_replacement"]);
   assert.equal(payload.available_now, true);
   assert.equal(payload.dispatch_ready, true);
+  assert.equal(payload.image_url, "");
 });
 
 test("legacy canonical location is preserved as service area during reconciliation", () => {

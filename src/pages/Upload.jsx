@@ -21,7 +21,6 @@ import {
 import {
   getMediaDeferredCopy,
   getMediaDeferredNotice,
-  guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
@@ -86,7 +85,7 @@ function Upload({ setPage, currentPage }) {
   const [imageUrl, setImageUrl] = useState("");
   const [projectPhotos, setProjectPhotos] = useState([]);
   const [photoRecords, setPhotoRecords] = useState([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
   const [assistantDraftMetadata, setAssistantDraftMetadata] = useState(null);
@@ -268,74 +267,9 @@ function Upload({ setPage, currentPage }) {
     }
   }
 
-  async function handleImageUpload(event) {
-    if (
-      !guardFriendsAndFamilyMediaUpload({
-        event,
-        language,
-        onDeferred: setPhotoError,
-      })
-    ) {
-      return;
-    }
-
-    try {
-      const files = Array.from(event.target.files || []);
-
-      if (files.length === 0) return;
-
-      setPhotoError("");
-      setUploading(true);
-
-      const uploadedUrls = [];
-
-      for (const file of files) {
-        const formData = new FormData();
-
-        formData.append("file", file);
-        formData.append("upload_preset", "meetro_uploads");
-
-        const response = await fetch(
-          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.secure_url) {
-          uploadedUrls.push(data.secure_url);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        setProjectPhotos((current) => {
-          const updated = [...current, ...uploadedUrls];
-          setImageUrl(updated[0] || "");
-          return updated;
-        });
-
-        setPhotoRecords((current) => [
-          ...current,
-          ...uploadedUrls.map((url) => ({
-            url,
-            tag: "progress",
-            caption: "",
-            createdAt: new Date().toISOString(),
-          })),
-        ]);
-      } else {
-        alert(t("uploadFailed"));
-      }
-    } catch (error) {
-      console.error(error);
-      alert(t("uploadError"));
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
+  function handleImageUpload(event) {
+    event.target.value = "";
+    setPhotoError(getMediaDeferredNotice(language));
   }
 
   async function openRequestPhotoPicker() {

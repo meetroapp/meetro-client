@@ -273,7 +273,6 @@ test("public service surfaces use the shared services projection helper", () => 
   const files = [
     "src/pages/Discover.jsx",
     "src/pages/ContractorDetails.jsx",
-    "src/pages/ProjectGallery.jsx",
     "src/utils/localSpotlightVisibility.js",
     "src/utils/businessIdentity.js",
   ];
@@ -401,7 +400,8 @@ test("Business Profile readiness and improvement guidance use existing truth wit
 
   assert.match(source, /businessReadinessItems/);
   assert.match(source, /getBusinessPortfolioProofProjection/);
-  assert.match(source, /readBusinessPortfolioStorage/);
+  assert.doesNotMatch(source, /readBusinessPortfolioStorage/);
+  assert.match(source, /const profilePortfolioProjects = \[\];/);
   assert.match(source, /profileImprovementGuidance/);
   assert.match(source, /visibleProfileGuidance/);
   assert.match(source, /t\("publicPresenceGuidance"\)/);

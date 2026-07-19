@@ -1,3 +1,5 @@
+/* global process */
+
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -89,7 +91,7 @@ test("protected media upload surfaces render a deferred state for real-user buil
     );
     assert.match(
       contents,
-      /guardFriendsAndFamilyMediaUpload|getMediaDeferredNotice/,
+      /guardFriendsAndFamilyMediaUpload|getMediaDeferredNotice|getMediaDeferredCopy/,
       `${surface} should block or report deferred media before persistence`
     );
     assert.match(
@@ -138,6 +140,18 @@ test("live unsafe media writers are guarded before Friends and Family release", 
   }
 
   assert.deepEqual(unguarded, []);
+});
+
+test("legacy unsigned Cloudinary handlers are removed from client source", () => {
+  const sourceFiles = listSourceFiles(join(repoRoot, "src"));
+  const unsignedWriters = sourceFiles
+    .filter((absolutePath) => {
+      const contents = readFileSync(absolutePath, "utf8");
+      return contents.includes("upload_preset") || contents.includes("djcw4tk28");
+    })
+    .map((absolutePath) => relative(repoRoot, absolutePath));
+
+  assert.deepEqual(unsignedWriters, []);
 });
 
 test("native and fallback photo picker refuses media in real-user builds", () => {

@@ -34,10 +34,8 @@ import {
   getConfirmedBusinessProfile,
 } from "../utils/businessProfilePersistence";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
-import { readBusinessPortfolioStorage } from "../utils/businessPortfolioStorage";
 import {
   getMediaDeferredCopy,
-  guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 
@@ -97,7 +95,7 @@ function ContractorProfile({ setPage, currentPage }) {
   const [licenseExpiration, setLicenseExpiration] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
-  const [uploading, setUploading] = useState(false);
+  const [uploading] = useState(false);
   const [availableNow, setAvailableNow] = useState(false);
   const [dispatchReady, setDispatchReady] = useState(false);
   const profileReviews = getProfessionalReviews({
@@ -411,49 +409,9 @@ function ContractorProfile({ setPage, currentPage }) {
     setPage("professionalOnboarding");
   }
 
-  async function handleImageUpload(event) {
-    if (
-      !guardFriendsAndFamilyMediaUpload({
-        event,
-        language,
-        onDeferred: (message) => alert(message),
-      })
-    ) {
-      return;
-    }
-
-    try {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      setUploading(true);
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", "meetro_uploads");
-
-      const response = await fetch(
-        "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.secure_url) {
-        setImageUrl(data.secure_url);
-      } else {
-        alert(t("uploadFailed"));
-      }
-    } catch (error) {
-      console.error(error);
-      alert(t("uploadError"));
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
+  function handleImageUpload(event) {
+    event.target.value = "";
+    alert(getMediaDeferredCopy(language).detail);
   }
 
   async function handleCreateProfile() {
@@ -609,9 +567,7 @@ function ContractorProfile({ setPage, currentPage }) {
       "",
   };
   const profileLicenseSummary = formatLicenseSummary(profileLicenseFields);
-  const profilePortfolioProjects = readBusinessPortfolioStorage().filter((project) =>
-    portfolioProjectBelongsToBusiness(project, profile || {}, businessIdentity.businessName)
-  );
+  const profilePortfolioProjects = [];
   const businessPortfolioProof = getBusinessPortfolioProofProjection(
     {
       ...profile,
@@ -1928,33 +1884,6 @@ function BusinessNameTitle({ name, variant = "hero" }) {
       )}
     </Tag>
   );
-}
-
-function portfolioProjectBelongsToBusiness(project = {}, profile = {}, businessName = "") {
-  const normalize = (value) => String(value || "").trim().toLowerCase();
-  const profileId = normalize(profile.id || profile.contractor_id || profile.businessId);
-  const projectBusinessId = normalize(
-    project.businessId || project.business_id || project.contractorId || project.contractor_id
-  );
-  const profileName = normalize(
-    businessName || profile.business_name || profile.businessName || profile.name
-  );
-  const projectBusinessName = normalize(
-    project.businessName ||
-      project.business_name ||
-      project.contractorName ||
-      project.contractor_name
-  );
-
-  if (profileId && projectBusinessId) {
-    return profileId === projectBusinessId;
-  }
-
-  if (profileName && projectBusinessName) {
-    return profileName === projectBusinessName;
-  }
-
-  return false;
 }
 
 const pageWrapper = {

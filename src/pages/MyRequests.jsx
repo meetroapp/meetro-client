@@ -5,7 +5,6 @@ import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
 import {
   getMediaDeferredCopy,
-  guardFriendsAndFamilyMediaUpload,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import {
@@ -637,7 +636,7 @@ function MyRequests({ setPage }) {
     location: "",
     photos: [],
   });
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadingPhotos] = useState(false);
 
   const pendingCancelRequest = pendingCancelId
     ? requests.find(
@@ -904,65 +903,10 @@ function MyRequests({ setPage }) {
     setEditingId(null);
   }
 
-  async function handleEditPhotoUpload(event) {
-    if (
-      !guardFriendsAndFamilyMediaUpload({
-        event,
-        language,
-        onDeferred: (message) =>
-          addNotification({
-            title: getMediaDeferredCopy(language).title,
-            message,
-            type: "media",
-          }),
-      })
-    ) {
-      return;
-    }
-
-    try {
-      const files = Array.from(event.target.files || []);
-
-      if (files.length === 0) return;
-
-      setUploadingPhotos(true);
-
-      const uploadedUrls = [];
-
-      for (const file of files) {
-        const formData = new FormData();
-
-        formData.append("file", file);
-        formData.append("upload_preset", "meetro_uploads");
-
-        const response = await fetch(
-          "https://api.cloudinary.com/v1_1/djcw4tk28/image/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.secure_url) {
-          uploadedUrls.push(data.secure_url);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        setEditForm((current) => ({
-          ...current,
-          photos: [...new Set([...current.photos, ...uploadedUrls])],
-        }));
-      }
-    } catch (error) {
-      console.error(error);
-      alert(language === "es" ? "Error al subir fotos." : "Photo upload error.");
-    } finally {
-      setUploadingPhotos(false);
-      event.target.value = "";
-    }
+  function handleEditPhotoUpload(event) {
+    event.target.value = "";
+    const copy = getMediaDeferredCopy(language);
+    addNotification({ title: copy.title, message: copy.detail, type: "media" });
   }
 
   function removeEditPhoto(indexToRemove) {
