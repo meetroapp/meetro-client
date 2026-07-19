@@ -118,6 +118,9 @@ function getApprovalSchedulingUnavailableCopy(language) {
 
 function PhotoStrip({ request, onPreview, language }) {
   const photos = [
+    ...(Array.isArray(request.request_photos)
+      ? request.request_photos.map((photo) => photo?.secure_url)
+      : []),
     ...(Array.isArray(request.photos) ? request.photos : []),
     ...(request.image_url ? [request.image_url] : []),
   ].filter(Boolean);
@@ -592,7 +595,12 @@ function MyRequests({ setPage }) {
             description: post.description || post.project_description || "",
             category: post.category || "handyman",
             location: post.location || "Local Area",
-            photos: Array.isArray(post.photos) ? post.photos : [],
+            request_photos: Array.isArray(post.request_photos) ? post.request_photos : [],
+            photos: Array.isArray(post.request_photos)
+              ? post.request_photos.map((photo) => photo?.secure_url).filter(Boolean)
+              : Array.isArray(post.photos)
+              ? post.photos
+              : [],
             image_url: post.image_url || "",
             status: post.status || "open",
             createdAt: post.created_at || post.createdAt || new Date().toISOString(),

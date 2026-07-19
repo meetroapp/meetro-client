@@ -48,3 +48,19 @@ test("governed Business Logo media path remains logo-only", () => {
   assert.match(logoMedia, /VITE_ENABLE_BUSINESS_LOGO_MEDIA/);
   assert.doesNotMatch(logoMedia, /business-cover|portfolio|message|moment/i);
 });
+
+test("governed Request Help media path uses request-photo only", () => {
+  const requestMedia = read("src/utils/requestPhotoMedia.js");
+  const upload = read("src/pages/Upload.jsx");
+
+  assert.match(requestMedia, /REQUEST_PHOTO_PURPOSE = "request-photo"/);
+  assert.match(requestMedia, /VITE_ENABLE_REQUEST_PHOTO_MEDIA/);
+  assert.match(requestMedia, /\/media\/upload-signature/);
+  assert.match(requestMedia, /\/media\/request-photo\/cleanup/);
+  assert.match(upload, /uploadRequestPhotos/);
+  assert.match(upload, /request_photos: requestPhotoPayload/);
+  assert.match(upload, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.doesNotMatch(upload, /image_url: projectPhotos|image_url: imageUrl/);
+  assert.doesNotMatch(upload, /readAsDataURL|new FileReader/);
+  assert.doesNotMatch(requestMedia, /business-cover|portfolio|message|moment|spotlight/i);
+});

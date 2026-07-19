@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
-import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 import {
@@ -25,6 +24,15 @@ import {
 } from "../utils/mediaDeferral";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { resolveWorkflowAddress } from "../utils/personalAddresses";
+import {
+  REQUEST_PHOTO_MAX_COUNT,
+  REQUEST_PHOTO_PURPOSE,
+  cleanupRequestPhoto,
+  createTemporaryRequestPhotoPreview,
+  isRequestPhotoUploadEnabled,
+  uploadRequestPhotos,
+  validateRequestPhotoFiles,
+} from "../utils/requestPhotoMedia";
 
 function readStoredRecord(key) {
   try {
@@ -71,7 +79,9 @@ function Upload({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
-  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
+  const mediaUploadDeferred =
+    isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   const [title, setTitle] = useState("");
@@ -82,10 +92,10 @@ function Upload({ setPage, currentPage }) {
   const [location, setLocation] = useState(getInitialRequestLocation);
   const [unitNumber, setUnitNumber] = useState("");
   const [accessNotes, setAccessNotes] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [projectPhotos, setProjectPhotos] = useState([]);
-  const [photoRecords, setPhotoRecords] = useState([]);
-  const [uploading] = useState(false);
+  const [selectedRequestPhotos, setSelectedRequestPhotos] = useState([]);
+  const selectedRequestPhotosRef = useRef([]);
+  const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
   const [assistantDraftMetadata, setAssistantDraftMetadata] = useState(null);
@@ -103,6 +113,16 @@ function Upload({ setPage, currentPage }) {
 
     return () => {
       window.removeEventListener("languageChanged", handleLanguageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    selectedRequestPhotosRef.current = selectedRequestPhotos;
+  }, [selectedRequestPhotos]);
+
+  useEffect(() => {
+    return () => {
+      selectedRequestPhotosRef.current.forEach((photo) => photo.revoke?.());
     };
   }, []);
 
@@ -267,9 +287,78 @@ function Upload({ setPage, currentPage }) {
     }
   }
 
+  function getRequestPhotoErrorMessage(code) {
+    if (code === "REQUEST_PHOTO_FORMAT_INVALID") {
+      return t("invalidProfileImageFormat");
+    }
+    if (code === "REQUEST_PHOTO_TOO_LARGE") {
+      return t("profileImageTooLarge");
+    }
+    if (code === "REQUEST_PHOTO_COUNT_EXCEEDED") {
+      return language === "es"
+        ? `Agrega hasta ${REQUEST_PHOTO_MAX_COUNT} fotos por solicitud.`
+        : `Add up to ${REQUEST_PHOTO_MAX_COUNT} photos per request.`;
+    }
+    if (code === "REQUEST_PHOTO_UPLOAD_FAILED") {
+      return t("uploadError");
+    }
+    return t("uploadFailed");
+  }
+
+  function clearSelectedRequestPhotos() {
+    selectedRequestPhotosRef.current.forEach((photo) => photo.revoke?.());
+    selectedRequestPhotosRef.current = [];
+    setSelectedRequestPhotos([]);
+    setProjectPhotos([]);
+  }
+
+  async function cleanupUploadedRequestPhotos(mediaItems = []) {
+    await Promise.all(
+      mediaItems.map((media) =>
+        cleanupRequestPhoto({
+          media,
+          authFetchImpl: authFetch,
+          setPage,
+        })
+      )
+    );
+  }
+
+  function removeSelectedRequestPhoto(indexToRemove) {
+    setSelectedRequestPhotos((current) => {
+      const removed = current[indexToRemove];
+      removed?.revoke?.();
+      const updated = current.filter((_, index) => index !== indexToRemove);
+      selectedRequestPhotosRef.current = updated;
+      setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
+      return updated;
+    });
+  }
+
   function handleImageUpload(event) {
     event.target.value = "";
-    setPhotoError(getMediaDeferredNotice(language));
+    if (mediaUploadDeferred) {
+      setPhotoError(getMediaDeferredNotice(language));
+      return;
+    }
+
+    const files = Array.from(event.target.files || []);
+    const validation = validateRequestPhotoFiles(files, {
+      existingCount: selectedRequestPhotos.length,
+    });
+    if (!validation.ok) {
+      setPhotoError(getRequestPhotoErrorMessage(validation.code));
+      return;
+    }
+
+    const additions = validation.files.map((file) =>
+      createTemporaryRequestPhotoPreview(file)
+    );
+    const updated = [...selectedRequestPhotos, ...additions];
+    selectedRequestPhotosRef.current = updated;
+    setSelectedRequestPhotos(updated);
+    setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
+    setPhotoError("");
   }
 
   async function openRequestPhotoPicker() {
@@ -291,6 +380,7 @@ function Upload({ setPage, currentPage }) {
   }
 
   async function handleCreatePost() {
+    let uploadedMediaForCleanup = [];
     try {
       if (!title.trim()) {
         alert(t("enterPostTitle"));
@@ -303,6 +393,7 @@ function Upload({ setPage, currentPage }) {
       }
 
       setCreating(true);
+      setUploading(selectedRequestPhotos.length > 0);
 
       const isDirectRequest = localStorage.getItem("directRequestMode") === "true";
       const directProfessionalName = localStorage.getItem("directRequestProfessionalName") || "";
@@ -320,6 +411,28 @@ function Upload({ setPage, currentPage }) {
         location: location.trim(),
       });
 
+      const uploadedRequestPhotos = selectedRequestPhotos.length > 0
+        ? await uploadRequestPhotos({
+            files: selectedRequestPhotos.map((photo) => photo.file),
+            authFetchImpl: authFetch,
+            setPage,
+          })
+        : { ok: true, photos: [] };
+
+      setUploading(false);
+
+      if (!uploadedRequestPhotos.ok) {
+        setPhotoError(getRequestPhotoErrorMessage(uploadedRequestPhotos.code));
+        return;
+      }
+
+      const requestPhotoPayload = uploadedRequestPhotos.photos.map((media, index) => ({
+        purpose: REQUEST_PHOTO_PURPOSE,
+        media,
+        display_order: index,
+      }));
+      uploadedMediaForCleanup = uploadedRequestPhotos.photos;
+
       const result = await authFetch(
         "/posts",
         {
@@ -334,7 +447,7 @@ function Upload({ setPage, currentPage }) {
           location: location.trim(),
           unit_number: unitNumber.trim(),
           access_notes: accessNotes.trim(),
-          image_url: projectPhotos[0] || imageUrl,
+          request_photos: requestPhotoPayload,
           post_type: isDirectRequest ? "direct_request" : "quote_request",
           status: isDirectRequest ? "direct_pending" : "open",
           direct_request: isDirectRequest,
@@ -349,6 +462,13 @@ function Upload({ setPage, currentPage }) {
       const data = result.data || {};
 
       if (data.post) {
+        uploadedMediaForCleanup = [];
+        const canonicalRequestPhotos = Array.isArray(data.post.request_photos)
+          ? data.post.request_photos
+          : [];
+        const canonicalPhotoUrls = canonicalRequestPhotos
+          .map((photo) => photo.secure_url)
+          .filter(Boolean);
         const existingRequests = canReadLegacyWorkflowStorage()
           ? JSON.parse(localStorage.getItem("homeownerRequests") || "[]")
           : [];
@@ -377,16 +497,16 @@ function Upload({ setPage, currentPage }) {
           unitNumber: unitNumber.trim(),
           accessNotes: accessNotes.trim(),
 
-          photos: projectPhotos.length > 0 ? projectPhotos : imageUrl ? [imageUrl] : [],
-          photoRecords: photoRecords.length > 0
-            ? photoRecords
-            : (projectPhotos.length > 0 ? projectPhotos : imageUrl ? [imageUrl] : []).map((url) => ({
-                url,
-                tag: "progress",
-                caption: "",
-                createdAt: new Date().toISOString(),
-              })),
-          image_url: projectPhotos[0] || imageUrl,
+          request_photos: canonicalRequestPhotos,
+          photos: canonicalPhotoUrls,
+          photoRecords: canonicalRequestPhotos.map((photo) => ({
+            url: photo.secure_url,
+            public_id: photo.public_id,
+            tag: "progress",
+            caption: "",
+            createdAt: photo.uploaded_at || new Date().toISOString(),
+          })),
+          image_url: data.post.image_url || canonicalPhotoUrls[0] || "",
 
           status: isDirectRequest ? "direct_pending" : "open",
           localDemoSafe: true,
@@ -458,21 +578,23 @@ function Upload({ setPage, currentPage }) {
         setLocation("");
         setUnitNumber("");
         setAccessNotes("");
-        setImageUrl("");
-        setProjectPhotos([]);
-        setPhotoRecords([]);
+        clearSelectedRequestPhotos();
         setAssistantDraftMetadata(null);
         setTitleEdited(false);
         setDescriptionEdited(false);
 
         setPage("home");
       } else {
+        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+        uploadedMediaForCleanup = [];
         alert(data.error || t("postCreateFailed"));
       }
     } catch (error) {
+      await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
       console.error(error);
       alert(t("serverError"));
     } finally {
+      setUploading(false);
       setCreating(false);
     }
   }
@@ -484,7 +606,6 @@ function Upload({ setPage, currentPage }) {
       location ||
       unitNumber ||
       accessNotes ||
-      imageUrl ||
       projectPhotos.length > 0;
 
     if (hasChanges) {
@@ -500,9 +621,7 @@ function Upload({ setPage, currentPage }) {
     setLocation("");
     setUnitNumber("");
     setAccessNotes("");
-    setImageUrl("");
-    setProjectPhotos([]);
-    setPhotoRecords([]);
+    clearSelectedRequestPhotos();
     setAssistantDraftMetadata(null);
     setTitleEdited(false);
     setDescriptionEdited(false);
@@ -662,10 +781,10 @@ function Upload({ setPage, currentPage }) {
             onClick={openRequestPhotoPicker}
             style={{
               ...plusUploadButton,
-              ...(mediaUploadDeferred ? disabledUploadButton : {}),
+              ...(mediaUploadDeferred || uploading || creating ? disabledUploadButton : {}),
             }}
             type="button"
-            disabled={mediaUploadDeferred}
+            disabled={mediaUploadDeferred || uploading || creating}
           >
             +
           </button>
@@ -673,7 +792,7 @@ function Upload({ setPage, currentPage }) {
           <p style={uploadText}>
             {mediaUploadDeferred
               ? mediaDeferredCopy.title
-              : imageUrl
+              : projectPhotos.length > 0
               ? t("projectPhotoAdded")
               : t("addProjectPhoto")}
           </p>
@@ -686,9 +805,9 @@ function Upload({ setPage, currentPage }) {
             ref={photoInputRef}
             id="postImageInput"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             multiple
-            disabled={mediaUploadDeferred}
+            disabled={mediaUploadDeferred || uploading || creating}
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
@@ -705,14 +824,7 @@ function Upload({ setPage, currentPage }) {
                   <img src={photo} alt={t("preview")} style={previewImage} />
 
                   <button
-                    onClick={() => {
-                      const updated = projectPhotos.filter((_, i) => i !== index);
-                      setProjectPhotos(updated);
-                      setPhotoRecords((current) =>
-                        current.filter((record) => record.url !== photo)
-                      );
-                      setImageUrl(updated[0] || "");
-                    }}
+                    onClick={() => removeSelectedRequestPhoto(index)}
                     style={removePhotoButton}
                     type="button"
                   >

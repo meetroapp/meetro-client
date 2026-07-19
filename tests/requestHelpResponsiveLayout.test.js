@@ -64,10 +64,12 @@ test("Request Help preserves mobile padding and bottom navigation clearance", ()
   assert.match(uploadSource, /<BottomNav setPage=\{setPage\} currentPage="upload" \/>/);
 });
 
-test("Request Help layout repair does not enable media or workflow changes", () => {
+test("Request Help layout keeps governed media behind the request-photo policy", () => {
   assert.match(uploadSource, /isFriendsAndFamilyMediaDeferred\(\)/);
-  assert.match(uploadSource, /disabled=\{mediaUploadDeferred\}/);
-  assert.doesNotMatch(uploadSource, /\/media\/upload-signature/);
+  assert.match(uploadSource, /isRequestPhotoUploadEnabled\(\)/);
+  assert.match(uploadSource, /disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}/);
+  assert.match(uploadSource, /uploadRequestPhotos/);
+  assert.match(uploadSource, /request_photos: requestPhotoPayload/);
   assert.doesNotMatch(uploadSource, /upload_preset/);
   assert.doesNotMatch(uploadSource, /api\.cloudinary\.com/);
 });

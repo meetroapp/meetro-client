@@ -84,9 +84,12 @@ test("protected media upload surfaces render a deferred state for real-user buil
   for (const surface of protectedSurfaces) {
     const contents = read(surface);
     const isGovernedBusinessLogoSurface = surface === "src/pages/ContractorProfile.jsx";
+    const isGovernedRequestPhotoSurface = surface === "src/pages/Upload.jsx";
 
     if (isGovernedBusinessLogoSurface) {
       assert.match(contents, /isBusinessLogoUploadEnabled/);
+    } else if (isGovernedRequestPhotoSurface) {
+      assert.match(contents, /isRequestPhotoUploadEnabled/);
     } else {
       assert.match(
         contents,
@@ -101,7 +104,7 @@ test("protected media upload surfaces render a deferred state for real-user buil
     );
     assert.match(
       contents,
-      /disabled=\{mediaUploadDeferred\}|disabled=\{uploading \|\| mediaUploadDeferred\}/,
+      /disabled=\{mediaUploadDeferred\}|disabled=\{uploading \|\| mediaUploadDeferred\}|disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}/,
       `${surface} should disable real-user upload controls`
     );
   }
