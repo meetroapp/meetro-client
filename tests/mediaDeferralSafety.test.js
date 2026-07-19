@@ -43,6 +43,16 @@ test("Friends and Family media deferral is enabled outside local development", (
   assert.equal(spanish.title, "Fotos próximamente");
 });
 
+test("job photo picker preserves deferral unless a governed upload is enabled", () => {
+  const pickerContents = read("src/utils/cameraPhotoPicker.js");
+
+  assert.match(pickerContents, /governedUploadEnabled = false/);
+  assert.match(
+    pickerContents,
+    /!governedUploadEnabled && isFriendsAndFamilyMediaDeferred\(\)/
+  );
+});
+
 test("media deferral guard clears selected files and reports deferred state", () => {
   const event = {
     target: {

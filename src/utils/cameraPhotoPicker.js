@@ -105,8 +105,9 @@ export async function openJobPhotoPicker({
   fileNamePrefix,
   quality,
   language,
+  governedUploadEnabled = false,
 } = {}) {
-  if (isFriendsAndFamilyMediaDeferred()) {
+  if (!governedUploadEnabled && isFriendsAndFamilyMediaDeferred()) {
     onError?.(getMediaDeferredNotice(language));
     return { deferred: true };
   }

@@ -70,6 +70,10 @@ test("Request Help layout keeps governed media behind the request-photo policy",
   assert.match(uploadSource, /disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}/);
   assert.match(uploadSource, /uploadRequestPhotos/);
   assert.match(uploadSource, /request_photos: requestPhotoPayload/);
+  assert.match(
+    uploadSource,
+    /governedUploadEnabled: requestPhotoUploadEnabled/
+  );
   assert.doesNotMatch(uploadSource, /upload_preset/);
   assert.doesNotMatch(uploadSource, /api\.cloudinary\.com/);
 });

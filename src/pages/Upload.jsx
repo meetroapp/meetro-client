@@ -374,6 +374,7 @@ function Upload({ setPage, currentPage }) {
       inputRef: photoInputRef,
       language,
       fileNamePrefix: "request-photo",
+      governedUploadEnabled: requestPhotoUploadEnabled,
       onPhotos: (photos) =>
         handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
