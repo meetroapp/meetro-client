@@ -5,7 +5,9 @@ import test from "node:test";
 import { t } from "../src/utils/language.js";
 import {
   PERSONAL_PROFILE_IMAGE_MAX_BYTES,
+  STAGING_MEDIA_API_ORIGIN,
   createTemporaryProfilePhotoPreview,
+  isPersonalProfilePhotoUploadEnabled,
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
 } from "../src/utils/personalProfilePhoto.js";
@@ -13,6 +15,37 @@ import {
   getStorageSafeAuthenticatedUser,
   reconcileAuthenticatedUser,
 } from "../src/utils/personalProfile.js";
+
+test("profile photo rollout enables staging and fails closed for production", () => {
+  assert.equal(
+    isPersonalProfilePhotoUploadEnabled({
+      apiUrl: STAGING_MEDIA_API_ORIGIN,
+      env: {},
+    }),
+    true
+  );
+  assert.equal(
+    isPersonalProfilePhotoUploadEnabled({
+      apiUrl: "https://athletic-rebirth-production-0a28.up.railway.app",
+      env: {},
+    }),
+    false
+  );
+  assert.equal(
+    isPersonalProfilePhotoUploadEnabled({
+      apiUrl: "https://athletic-rebirth-production-0a28.up.railway.app",
+      env: { VITE_ENABLE_PERSONAL_PROFILE_MEDIA: "true" },
+    }),
+    true
+  );
+  assert.equal(
+    isPersonalProfilePhotoUploadEnabled({
+      apiUrl: STAGING_MEDIA_API_ORIGIN,
+      env: { VITE_ENABLE_PERSONAL_PROFILE_MEDIA: "false" },
+    }),
+    false
+  );
+});
 
 function imageFile({
   name = "portrait.jpg",
@@ -187,6 +220,11 @@ test("profile photo UI uses governed formats and no FileReader or personal photo
   assert.match(source, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.doesNotMatch(source, /new FileReader|readAsDataURL/);
   assert.doesNotMatch(source, /setItem\(getScopedProfilePhotoKey\("personal"/);
+  assert.match(source, /isPersonalProfilePhotoUploadEnabled/);
+  assert.match(
+    source,
+    /activeMode === "business" \|\| !personalProfilePhotoEnabled/
+  );
 });
 
 test("profile image states are localized in all supported public languages", () => {

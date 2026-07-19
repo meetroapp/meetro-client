@@ -1,4 +1,5 @@
 import { authFetch } from "./authFetch.js";
+import API_URL from "../api.js";
 
 export const PERSONAL_PROFILE_IMAGE_TYPES = Object.freeze([
   "image/jpeg",
@@ -6,6 +7,25 @@ export const PERSONAL_PROFILE_IMAGE_TYPES = Object.freeze([
   "image/webp",
 ]);
 export const PERSONAL_PROFILE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const STAGING_MEDIA_API_ORIGIN =
+  "https://athletic-rebirth-staging.up.railway.app";
+
+export function isPersonalProfilePhotoUploadEnabled({
+  apiUrl = API_URL,
+  env = import.meta.env,
+} = {}) {
+  const explicit = String(
+    env?.VITE_ENABLE_PERSONAL_PROFILE_MEDIA || ""
+  ).trim().toLowerCase();
+  if (explicit === "true") return true;
+  if (explicit === "false") return false;
+
+  try {
+    return new URL(apiUrl).origin === STAGING_MEDIA_API_ORIGIN;
+  } catch {
+    return false;
+  }
+}
 
 function failure(code) {
   return { ok: false, code };

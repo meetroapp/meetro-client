@@ -103,7 +103,11 @@ test("protected media upload surfaces render a deferred state for real-user buil
 test("Profile authorizes only governed personal uploads and keeps business media deferred", () => {
   const contents = read("src/pages/Profile.jsx");
   assert.match(contents, /uploadPersonalProfilePhoto/);
-  assert.match(contents, /mediaUploadDeferred = activeMode === "business"/);
+  assert.match(contents, /isPersonalProfilePhotoUploadEnabled/);
+  assert.match(
+    contents,
+    /activeMode === "business" \|\| !personalProfilePhotoEnabled/
+  );
   assert.match(contents, /disabled=\{mediaUploadDeferred \|\| profilePhotoUploading\}/);
   assert.match(contents, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.doesNotMatch(contents, /readAsDataURL|new FileReader/);

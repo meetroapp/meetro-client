@@ -46,6 +46,7 @@ import {
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import {
   createTemporaryProfilePhotoPreview,
+  isPersonalProfilePhotoUploadEnabled,
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
 } from "../utils/personalProfilePhoto";
@@ -97,7 +98,9 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [profilePhoto, setProfilePhoto] = useState(
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
   );
-  const mediaUploadDeferred = activeMode === "business";
+  const personalProfilePhotoEnabled = isPersonalProfilePhotoUploadEnabled();
+  const mediaUploadDeferred =
+    activeMode === "business" || !personalProfilePhotoEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
