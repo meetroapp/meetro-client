@@ -336,13 +336,14 @@ function Upload({ setPage, currentPage }) {
   }
 
   function handleImageUpload(event) {
-    event.target.value = "";
     if (mediaUploadDeferred) {
+      event.target.value = "";
       setPhotoError(getMediaDeferredNotice(language));
       return;
     }
 
     const files = Array.from(event.target.files || []);
+    event.target.value = "";
     const validation = validateRequestPhotoFiles(files, {
       existingCount: selectedRequestPhotos.length,
     });

@@ -73,3 +73,17 @@ test("Request Help layout keeps governed media behind the request-photo policy",
   assert.doesNotMatch(uploadSource, /upload_preset/);
   assert.doesNotMatch(uploadSource, /api\.cloudinary\.com/);
 });
+
+test("Request Help reads selected files before clearing the file input", () => {
+  const handlerStart = uploadSource.indexOf("function handleImageUpload(event)");
+  const filesRead = uploadSource.indexOf(
+    "const files = Array.from(event.target.files || []);",
+    handlerStart
+  );
+  const inputClear = uploadSource.indexOf("event.target.value = \"\";", filesRead);
+
+  assert.notEqual(handlerStart, -1);
+  assert.notEqual(filesRead, -1);
+  assert.notEqual(inputClear, -1);
+  assert.ok(filesRead < inputClear);
+});
