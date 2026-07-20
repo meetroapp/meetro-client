@@ -8,6 +8,7 @@ import {
   STAGING_MEDIA_API_ORIGIN,
   createTemporaryProfilePhotoPreview,
   isPersonalProfilePhotoUploadEnabled,
+  reportProfileMediaDiagnostic,
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
 } from "../src/utils/personalProfilePhoto.js";
@@ -168,6 +169,7 @@ test("signed upload persists only validated Cloudinary metadata and refreshes ca
 
 test("signature or Cloudinary failure stops persistence and retains existing canonical state", async () => {
   const endpoints = [];
+  const diagnostics = [];
   const signatureFailure = await uploadPersonalProfilePhoto({
     file: imageFile(),
     authFetchImpl: async (endpoint) => {
@@ -175,21 +177,62 @@ test("signature or Cloudinary failure stops persistence and retains existing can
       return { response: { ok: false }, data: {} };
     },
     fetchImpl: async () => { throw new Error("must not upload"); },
+    onDiagnostic: (detail) => diagnostics.push(detail),
   });
   assert.equal(signatureFailure.ok, false);
   assert.deepEqual(endpoints, ["/media/upload-signature"]);
+  assert.deepEqual(diagnostics, [{
+    purpose: "personal_profile",
+    stage: "signature",
+    endpoint: "/media/upload-signature",
+    status: 0,
+    code: "MEDIA_SIGNATURE_REJECTED",
+  }]);
 
   const uploadFailureEndpoints = [];
+  const uploadDiagnostics = [];
   const uploadFailure = await uploadPersonalProfilePhoto({
     file: imageFile(),
     authFetchImpl: async (endpoint) => {
       uploadFailureEndpoints.push(endpoint);
       return signatureResponse();
     },
-    fetchImpl: async () => ({ ok: false, async json() { return {}; } }),
+    fetchImpl: async () => ({ ok: false, status: 400, async json() { return {}; } }),
+    onDiagnostic: (detail) => uploadDiagnostics.push(detail),
   });
   assert.equal(uploadFailure.ok, false);
   assert.deepEqual(uploadFailureEndpoints, ["/media/upload-signature"]);
+  assert.deepEqual(uploadDiagnostics, [{
+    purpose: "personal_profile",
+    stage: "provider-upload",
+    endpoint: "cloudinary-image-upload",
+    status: 400,
+    code: "MEDIA_PROVIDER_REQUEST_REJECTED",
+  }]);
+});
+
+test("profile media diagnostics expose only normalized transaction evidence", () => {
+  const originalWarn = console.warn;
+  const calls = [];
+  console.warn = (...args) => calls.push(args);
+  try {
+    reportProfileMediaDiagnostic({
+      purpose: "personal_profile",
+      stage: "signature",
+      endpoint: "/media/upload-signature",
+      status: 400,
+      code: "MEDIA_PURPOSE_INVALID",
+      signature: "must-not-appear",
+      token: "must-not-appear",
+      secure_url: "https://private.example.test/media.jpg",
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(calls.length, 1);
+  const serialized = JSON.stringify(calls[0]);
+  assert.match(serialized, /personal_profile|signature|MEDIA_PURPOSE_INVALID/);
+  assert.doesNotMatch(serialized, /must-not-appear|private\.example|secure_url|token/);
 });
 
 test("authenticated user cache excludes profile image authority and base64 values", () => {

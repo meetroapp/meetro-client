@@ -156,16 +156,56 @@ test("business logo upload persists only after backend confirmation and refresh"
 
 test("business logo failures stop before backend profile mutation when upload fails", async () => {
   const endpoints = [];
+  const diagnostics = [];
   const result = await uploadBusinessProfileLogo({
     file: imageFile(),
     authFetchImpl: async (endpoint) => {
       endpoints.push(endpoint);
       return signatureResponse();
     },
-    fetchImpl: async () => ({ ok: false, async json() { return {}; } }),
+    fetchImpl: async () => ({ ok: false, status: 503, async json() { return {}; } }),
+    onDiagnostic: (detail) => diagnostics.push(detail),
   });
   assert.equal(result.ok, false);
   assert.deepEqual(endpoints, ["/media/upload-signature"]);
+  assert.deepEqual(diagnostics, [{
+    purpose: "business-logo",
+    stage: "provider-upload",
+    endpoint: "cloudinary-image-upload",
+    status: 503,
+    code: "MEDIA_PROVIDER_UNAVAILABLE",
+  }]);
+});
+
+test("business logo persistence rejection reports a safe canonical stage", async () => {
+  const diagnostics = [];
+  const result = await uploadBusinessProfileLogo({
+    file: imageFile(),
+    authFetchImpl: async (endpoint) => {
+      if (endpoint === "/media/upload-signature") return signatureResponse();
+      if (endpoint === "/contractor-profile/logo") {
+        return {
+          response: { ok: false, status: 400 },
+          data: { success: false, code: "MEDIA_ASSET_OWNERSHIP_INVALID" },
+        };
+      }
+      throw new Error("refresh must not run");
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      async json() { return cloudinaryResponse(); },
+    }),
+    onDiagnostic: (detail) => diagnostics.push(detail),
+  });
+  assert.equal(result.ok, false);
+  assert.deepEqual(diagnostics, [{
+    purpose: "business-logo",
+    stage: "canonical-persistence",
+    endpoint: "/contractor-profile/logo",
+    status: 400,
+    code: "MEDIA_ASSET_OWNERSHIP_INVALID",
+  }]);
 });
 
 test("Business Profile logo UI uses governed upload and no local media authority", () => {

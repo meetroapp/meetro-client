@@ -31,6 +31,21 @@ function failure(code) {
   return { ok: false, code };
 }
 
+export function reportProfileMediaDiagnostic(detail = {}) {
+  const safe = {
+    purpose: String(detail.purpose || "unknown"),
+    stage: String(detail.stage || "unknown"),
+    endpoint: String(detail.endpoint || "unknown"),
+    status: Number.isInteger(detail.status) ? detail.status : 0,
+    code: String(detail.code || "MEDIA_TRANSACTION_FAILED"),
+  };
+  console.warn("Meetro governed media transaction failed", safe);
+}
+
+function reportFailure(onDiagnostic, detail) {
+  if (typeof onDiagnostic === "function") onDiagnostic(detail);
+}
+
 export function validatePersonalProfileImageFile(file) {
   if (!file || typeof file !== "object") return failure("PROFILE_IMAGE_REQUIRED");
   if (!PERSONAL_PROFILE_IMAGE_TYPES.includes(String(file.type || "").toLowerCase())) {
@@ -79,21 +94,44 @@ export async function requestPersonalProfileUploadSignature({
   file,
   authFetchImpl = authFetch,
   setPage,
+  purpose = "personal_profile",
+  onDiagnostic,
 } = {}) {
-  const result = await authFetchImpl(
-    "/media/upload-signature",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        purpose: "personal_profile",
-        fileName: file.name,
-        contentType: file.type,
-        fileSizeBytes: file.size,
-      }),
-    },
-    setPage
-  );
+  let result;
+  try {
+    result = await authFetchImpl(
+      "/media/upload-signature",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          purpose,
+          fileName: file.name,
+          contentType: file.type,
+          fileSizeBytes: file.size,
+        }),
+      },
+      setPage
+    );
+  } catch {
+    reportFailure(onDiagnostic, {
+      purpose,
+      stage: "signature",
+      endpoint: "/media/upload-signature",
+      status: 0,
+      code: "MEDIA_SIGNATURE_NETWORK_FAILED",
+    });
+    return null;
+  }
   const data = getSuccessfulData(result, "MEDIA_UPLOAD_SIGNATURE_CREATED");
+  if (!data?.upload) {
+    reportFailure(onDiagnostic, {
+      purpose,
+      stage: "signature",
+      endpoint: "/media/upload-signature",
+      status: Number(result?.response?.status || 0),
+      code: result?.data?.code || "MEDIA_SIGNATURE_REJECTED",
+    });
+  }
   return data?.upload || null;
 }
 
@@ -138,8 +176,17 @@ export async function uploadPersonalProfileImageToCloudinary({
   file,
   signature,
   fetchImpl = globalThis.fetch,
+  purpose = "personal_profile",
+  onDiagnostic,
 } = {}) {
   if (!signature?.cloudName || !signature?.apiKey || !signature?.signature) {
+    reportFailure(onDiagnostic, {
+      purpose,
+      stage: "provider-upload",
+      endpoint: "cloudinary-image-upload",
+      status: 0,
+      code: "MEDIA_SIGNATURE_INCOMPLETE",
+    });
     return null;
   }
   const signed = signature.allowedParameters?.signed || {};
@@ -152,31 +199,85 @@ export async function uploadPersonalProfileImageToCloudinary({
   if (signed.allowed_formats) {
     body.append("allowed_formats", signed.allowed_formats);
   }
-  const response = await fetchImpl(
-    `https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`,
-    { method: "POST", body }
-  );
-  if (!response.ok) return null;
-  return normalizeCloudinaryUploadResponse(await response.json());
+  try {
+    const response = await fetchImpl(
+      `https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`,
+      { method: "POST", body }
+    );
+    if (!response.ok) {
+      reportFailure(onDiagnostic, {
+        purpose,
+        stage: "provider-upload",
+        endpoint: "cloudinary-image-upload",
+        status: Number(response.status || 0),
+        code: response.status === 400
+          ? "MEDIA_PROVIDER_REQUEST_REJECTED"
+          : "MEDIA_PROVIDER_UNAVAILABLE",
+      });
+      return null;
+    }
+    const media = normalizeCloudinaryUploadResponse(await response.json());
+    if (!media) {
+      reportFailure(onDiagnostic, {
+        purpose,
+        stage: "provider-upload",
+        endpoint: "cloudinary-image-upload",
+        status: Number(response.status || 0),
+        code: "MEDIA_PROVIDER_RESPONSE_INVALID",
+      });
+    }
+    return media;
+  } catch {
+    reportFailure(onDiagnostic, {
+      purpose,
+      stage: "provider-upload",
+      endpoint: "cloudinary-image-upload",
+      status: 0,
+      code: "MEDIA_PROVIDER_NETWORK_FAILED",
+    });
+    return null;
+  }
 }
 
 export async function persistPersonalProfileImage({
   media,
   authFetchImpl = authFetch,
   setPage,
+  onDiagnostic,
 } = {}) {
-  const result = await authFetchImpl(
-    "/auth/profile-photo",
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        purpose: "personal_profile",
-        media,
-      }),
-    },
-    setPage
-  );
+  let result;
+  try {
+    result = await authFetchImpl(
+      "/auth/profile-photo",
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          purpose: "personal_profile",
+          media,
+        }),
+      },
+      setPage
+    );
+  } catch {
+    reportFailure(onDiagnostic, {
+      purpose: "personal_profile",
+      stage: "canonical-persistence",
+      endpoint: "/auth/profile-photo",
+      status: 0,
+      code: "PROFILE_IMAGE_PERSISTENCE_NETWORK_FAILED",
+    });
+    return null;
+  }
   const data = getSuccessfulData(result, "PROFILE_IMAGE_UPDATED");
+  if (!data?.user) {
+    reportFailure(onDiagnostic, {
+      purpose: "personal_profile",
+      stage: "canonical-persistence",
+      endpoint: "/auth/profile-photo",
+      status: Number(result?.response?.status || 0),
+      code: result?.data?.code || "PROFILE_IMAGE_PERSISTENCE_REJECTED",
+    });
+  }
   return data?.user || null;
 }
 
@@ -185,6 +286,7 @@ export async function uploadPersonalProfilePhoto({
   authFetchImpl = authFetch,
   fetchImpl = globalThis.fetch,
   setPage,
+  onDiagnostic = reportProfileMediaDiagnostic,
 } = {}) {
   const validation = validatePersonalProfileImageFile(file);
   if (!validation.ok) return validation;
@@ -194,6 +296,7 @@ export async function uploadPersonalProfilePhoto({
       file,
       authFetchImpl,
       setPage,
+      onDiagnostic,
     });
     if (!signature) return failure("PROFILE_IMAGE_UPLOAD_FAILED");
 
@@ -201,6 +304,7 @@ export async function uploadPersonalProfilePhoto({
       file,
       signature,
       fetchImpl,
+      onDiagnostic,
     });
     if (!media) return failure("PROFILE_IMAGE_UPLOAD_FAILED");
 
@@ -208,6 +312,7 @@ export async function uploadPersonalProfilePhoto({
       media,
       authFetchImpl,
       setPage,
+      onDiagnostic,
     });
     if (!user?.profile_photo_url) return failure("PROFILE_IMAGE_SAVE_FAILED");
 
