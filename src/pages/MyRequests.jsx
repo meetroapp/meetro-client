@@ -3,7 +3,11 @@ import BottomNav from "../components/BottomNav";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
-import { normalizeAuthenticatedHomeownerPosts } from "../utils/backendHomeownerRequests";
+import {
+  REQUEST_COLLECTION_STATUS,
+  replaceCanonicalRequest,
+  resolveHomeownerRequestCollection,
+} from "../utils/requestLifecycleState";
 import {
   getMediaDeferredCopy,
   isFriendsAndFamilyMediaDeferred,
@@ -532,6 +536,12 @@ function MyRequests({ setPage }) {
 
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [backendRequests, setBackendRequests] = useState([]);
+  const [backendRequestStatus, setBackendRequestStatus] = useState(
+    REQUEST_COLLECTION_STATUS.LOADING
+  );
+  const [requestReloadKey, setRequestReloadKey] = useState(0);
+  const [requestMutationStatus, setRequestMutationStatus] = useState("idle");
+  const [requestMutationError, setRequestMutationError] = useState("");
 
   function readRequestArray(key) {
     try {
@@ -567,37 +577,26 @@ function MyRequests({ setPage }) {
 
   useEffect(() => {
     async function recoverHomeownerRequests() {
-      if (requests.length > 0) return;
+      if (canReadLegacyWorkflowStorage()) return;
+
+      setBackendRequestStatus(REQUEST_COLLECTION_STATUS.LOADING);
 
       try {
-        const result = await authFetch("/posts", {}, setPage);
+        const result = await authFetch("/posts", { cache: "no-store" }, setPage);
+        const collection = resolveHomeownerRequestCollection(result);
+        setBackendRequestStatus(collection.status);
+        const recoveredRequests = collection.records;
 
-        if (!result?.response?.ok) return;
-
-        const data = result.data || {};
-        const posts = Array.isArray(data) ? data : data.posts || [];
-
-        const recoveredRequests = normalizeAuthenticatedHomeownerPosts(posts);
-
-        if (recoveredRequests.length === 0) return;
-
-        if (canReadLegacyWorkflowStorage()) {
-          localStorage.setItem("homeownerRequests", JSON.stringify(recoveredRequests));
-          localStorage.setItem(
-            "meetroHomeownerRequestsBackup",
-            JSON.stringify(recoveredRequests)
-          );
-          setRecoveryTick((tick) => tick + 1);
-        } else {
-          setBackendRequests(recoveredRequests);
-        }
+        setBackendRequests(recoveredRequests);
       } catch (error) {
         console.error("Failed to recover homeowner requests", error);
+        setBackendRequests([]);
+        setBackendRequestStatus(REQUEST_COLLECTION_STATUS.UNAVAILABLE);
       }
     }
 
     recoverHomeownerRequests();
-  }, [requests.length, setPage]);
+  }, [requestReloadKey, setPage]);
 
   void recoveryTick;
 
@@ -844,41 +843,35 @@ function MyRequests({ setPage }) {
     return () => window.clearTimeout(timeoutId);
   }, [requests, selectedId]);
 
-  function saveEdit(requestId) {
-    const updatedRequests = requests.map((request) => {
-      const currentId = request.requestId || request.id;
-
-      if (String(currentId) !== String(requestId)) return request;
-
-      const updatedPhotos = [...new Set(editForm.photos)];
-
-      return {
-        ...request,
-        title: editForm.title.trim() || request.title,
-        description: editForm.description.trim(),
-        location: editForm.location.trim(),
-        photos: updatedPhotos,
-        photoRecords: updatedPhotos.map((photo) => {
-          const existingRecord = Array.isArray(request.photoRecords)
-            ? request.photoRecords.find((record) => record.url === photo)
-            : null;
-
-          return (
-            existingRecord || {
-              url: photo,
-              tag: "progress",
-              caption: "",
-              createdAt: new Date().toISOString(),
-            }
-          );
-        }),
-        image_url: updatedPhotos[0] || "",
-        updatedAt: new Date().toISOString(),
-      };
-    });
-
-    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: pendingCancelId })) return;
-    setEditingId(null);
+  async function saveEdit(requestId) {
+    if (canReadLegacyWorkflowStorage()) return;
+    setRequestMutationStatus("pending");
+    setRequestMutationError("");
+    try {
+      const result = await authFetch(
+        `/posts/${encodeURIComponent(requestId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            title: editForm.title.trim(),
+            description: editForm.description.trim(),
+            location: editForm.location.trim(),
+          }),
+        },
+        setPage
+      );
+      if (!result?.response?.ok || !result.data?.post) {
+        setRequestMutationStatus("failed");
+        setRequestMutationError(result?.data?.message || "The request could not be updated.");
+        return;
+      }
+      setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
+      setRequestMutationStatus("confirmed");
+      setEditingId(null);
+    } catch {
+      setRequestMutationStatus("failed");
+      setRequestMutationError("The request could not be updated. Try again.");
+    }
   }
 
   function handleEditPhotoUpload(event) {
@@ -899,45 +892,31 @@ function MyRequests({ setPage }) {
     setPendingCancelId(requestId);
   }
 
-  function confirmCancelProject() {
+  async function confirmCancelProject() {
     if (!pendingCancelId) return;
-
-    const updatedRequests = requests.map((request) => {
-      const currentId = request.requestId || request.id;
-
-      if (String(currentId) !== String(pendingCancelId)) return request;
-
-      return {
-        ...request,
-        status: "cancelled",
-        cancelledAt: new Date().toISOString(),
-        cancellationFeeApplies,
-        cancellationPolicyNote: cancellationFeeApplies
-          ? "Cancellation fee may apply because the free cancellation window passed."
-          : isAcceptedCancellation
-          ? "Cancelled within free cancellation window."
-          : "Cancelled before quote acceptance.",
-        projectTimeline: [
-          {
-            type: "cancelled",
-            label: cancellationFeeApplies
-              ? "Request cancelled - cancellation fee may apply"
-              : "Request cancelled",
-            createdAt: new Date().toISOString(),
-            cancellationFeeApplies,
-            freeCancelWindowMinutes,
-          },
-          ...(Array.isArray(request.projectTimeline)
-            ? request.projectTimeline
-            : []),
-        ],
-      };
-    });
-
-    if (!saveHomeownerRequests(updatedRequests, { selectedRequestId: pendingCancelId })) return;
-    setEditingId(null);
-    setPendingCancelId(null);
-    setCancellationCheckAt(null);
+    if (canReadLegacyWorkflowStorage()) return;
+    setRequestMutationStatus("pending");
+    setRequestMutationError("");
+    try {
+      const result = await authFetch(
+        `/posts/${encodeURIComponent(pendingCancelId)}/cancel`,
+        { method: "POST", body: JSON.stringify({}) },
+        setPage
+      );
+      if (!result?.response?.ok || !result.data?.post) {
+        setRequestMutationStatus("failed");
+        setRequestMutationError(result?.data?.message || "The request could not be cancelled.");
+        return;
+      }
+      setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
+      setRequestMutationStatus("confirmed");
+      setEditingId(null);
+      setPendingCancelId(null);
+      setCancellationCheckAt(null);
+    } catch {
+      setRequestMutationStatus("failed");
+      setRequestMutationError("The request could not be cancelled. Try again.");
+    }
   }
 
   function restoreProject(requestId) {
@@ -1016,7 +995,41 @@ function MyRequests({ setPage }) {
         </p>
       </section>
 
-      {sortedRequests.length === 0 ? (
+      {requestMutationStatus === "pending" && (
+        <div className="meetro-visual-surface" style={emptyCard} role="status">
+          Saving request…
+        </div>
+      )}
+      {requestMutationStatus === "failed" && (
+        <div className="meetro-visual-surface" style={emptyCard} role="alert">
+          <strong>Request not changed</strong>
+          <p>{requestMutationError}</p>
+        </div>
+      )}
+      {requestMutationStatus === "confirmed" && (
+        <div className="meetro-visual-surface" style={emptyCard} role="status">
+          Request saved.
+        </div>
+      )}
+
+      {!canReadLegacyWorkflowStorage() && backendRequestStatus === REQUEST_COLLECTION_STATUS.LOADING ? (
+        <div className="meetro-visual-empty-state" style={emptyCard} role="status">
+          <h2>Loading requests…</h2>
+        </div>
+      ) : !canReadLegacyWorkflowStorage() && backendRequestStatus === REQUEST_COLLECTION_STATUS.UNAVAILABLE ? (
+        <div className="meetro-visual-empty-state" style={emptyCard} role="alert">
+          <div style={emptyIcon}>REQ</div>
+          <h2>Requests unavailable</h2>
+          <p>Meetro could not load your requests. Try again.</p>
+          <button
+            className="meetro-visual-primary-button"
+            style={primaryButton}
+            onClick={() => setRequestReloadKey((value) => value + 1)}
+          >
+            Try Again
+          </button>
+        </div>
+      ) : sortedRequests.length === 0 ? (
         <div className="meetro-visual-empty-state" style={emptyCard}>
           <div style={emptyIcon}>REQ</div>
 
@@ -1677,6 +1690,7 @@ function MyRequests({ setPage }) {
                     <button
                       style={primaryButton}
                       onClick={() => saveEdit(requestId)}
+                      disabled={requestMutationStatus === "pending"}
                     >
                       {t("myRequestsSaveChanges", language)}
                     </button>
@@ -1864,6 +1878,7 @@ function MyRequests({ setPage }) {
               <button
                 style={confirmCancelButton}
                 onClick={confirmCancelProject}
+                disabled={requestMutationStatus === "pending"}
               >
                 {t("myRequestsYesCancel", language)}
               </button>

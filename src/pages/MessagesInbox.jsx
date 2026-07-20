@@ -14,6 +14,10 @@ import {
   getAccountConnectionStateFromAuthResult,
   getStoredAccountConnectionState,
 } from "../utils/accountConnection";
+import {
+  getRequestCommunicationEndpoint,
+  normalizeRequestConversations,
+} from "../utils/requestCommunication";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
 import {
@@ -320,6 +324,7 @@ function shouldBlockMessagesForConnection(state = {}) {
     "account_inactive",
     "account_disconnected",
     "account_access_blocked",
+    "messages_unavailable",
   ].includes(String(state.reason || ""));
 }
 
@@ -807,7 +812,7 @@ function MessagesInbox({ setPage, currentPage }) {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  }, [activeAccountMode, language]);
 
   useEffect(() => {
     writeUnreadConversationCount(quotes);
@@ -877,18 +882,6 @@ function MessagesInbox({ setPage, currentPage }) {
       });
   }
 
-  function getLocalConversationListFallback() {
-    return filterDeletedConversations(
-      dedupeConversations(
-        mergeEmergencyConversation([
-          ...getRegistryConversationsForList(),
-          ...getScopedContactConversationsForList(),
-          ...getLocalBusinessConversationsForList(),
-        ])
-      )
-    );
-  }
-
   async function fetchConversations() {
     try {
       const storedConnectionState = getStoredAccountConnectionState();
@@ -900,11 +893,8 @@ function MessagesInbox({ setPage, currentPage }) {
         return;
       }
 
-      const readConversationIds = JSON.parse(
-        localStorage.getItem("readConversationIds") || "[]"
-      );
-
-      const result = await authFetch("/contractor-quote-requests", {}, setPage);
+      const endpoint = getRequestCommunicationEndpoint(activeAccountMode);
+      const result = await authFetch(endpoint, { cache: "no-store" }, setPage);
       const resultConnectionState = getAccountConnectionStateFromAuthResult(result);
 
       if (shouldBlockMessagesForConnection(resultConnectionState)) {
@@ -914,44 +904,50 @@ function MessagesInbox({ setPage, currentPage }) {
       }
 
       if (result?.response && !result.response.ok) {
-        setAccountConnectionState({ connected: true, reason: "local_messages" });
+        setAccountConnectionState(
+          getAccountConnectionStateFromAuthResult(result)
+        );
+        setQuotes([]);
+        return;
       } else {
         setAccountConnectionState({ connected: true, reason: "connected" });
       }
 
-      let nextQuotes = [];
-
-      if (result?.response?.ok) {
-        const incomingQuotes = result.data.quotes || [];
-
-        if (incomingQuotes.length > 0) {
-          nextQuotes = incomingQuotes.map((quote, index) => ({
-            ...quote,
-            relationshipScope: quote.relationshipScope || quote.relationship_scope || "business",
-            accountMode: quote.accountMode || quote.account_mode || "business",
-            conversation_type: quote.conversation_type || "standard",
-            unread:
-              index < 2 && !readConversationIds.includes(String(quote.id)),
-          }));
-        }
+      const nextQuotes = normalizeRequestConversations(
+        result.data || {},
+        activeAccountMode
+      );
+      if (!nextQuotes) {
+        setAccountConnectionState({
+          connected: false,
+          reason: "messages_unavailable",
+          title: "Messages unavailable",
+          message: "Meetro received an invalid request response. Try again.",
+          requiresLogin: false,
+        });
+        setQuotes([]);
+        return;
       }
 
-      setQuotes(
-        filterDeletedConversations(
-          dedupeConversations(
-            mergeEmergencyConversation([
-              ...getRegistryConversationsForList(),
-              ...getScopedContactConversationsForList(),
-              ...nextQuotes,
-              ...getLocalBusinessConversationsForList(),
-            ])
-          )
-        )
-      );
+      const visibleConversations = canReadLegacyWorkflowStorage()
+        ? mergeEmergencyConversation([
+            ...getRegistryConversationsForList(),
+            ...getScopedContactConversationsForList(),
+            ...nextQuotes,
+            ...getLocalBusinessConversationsForList(),
+          ])
+        : nextQuotes;
+      setQuotes(filterDeletedConversations(dedupeConversations(visibleConversations)));
     } catch (error) {
       console.error(error);
-      setAccountConnectionState({ connected: true, reason: "local_messages" });
-      setQuotes(getLocalConversationListFallback());
+      setAccountConnectionState({
+        connected: false,
+        reason: "messages_unavailable",
+        title: "Messages unavailable",
+        message: "Meetro could not load conversations. Try again.",
+        requiresLogin: false,
+      });
+      setQuotes([]);
     } finally {
       setLoading(false);
     }

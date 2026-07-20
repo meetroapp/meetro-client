@@ -5,7 +5,10 @@ import MeetroIcon from "../components/MeetroIcon";
 import SpotlightSlideshow from "../components/SpotlightSlideshow";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
-import { normalizeAuthenticatedHomeownerPosts } from "../utils/backendHomeownerRequests";
+import {
+  REQUEST_COLLECTION_STATUS,
+  resolveHomeownerRequestCollection,
+} from "../utils/requestLifecycleState";
 import {
   getBusinessPortfolioProjectImages,
 } from "../utils/businessPortfolioStorage";
@@ -158,6 +161,10 @@ function Home({ setPage }) {
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
   const [spotlightPortfolioRefresh, setSpotlightPortfolioRefresh] = useState(0);
   const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
+  const [backendRequestStatus, setBackendRequestStatus] = useState(
+    REQUEST_COLLECTION_STATUS.LOADING
+  );
+  const [requestReloadKey, setRequestReloadKey] = useState(0);
 
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -227,24 +234,43 @@ function Home({ setPage }) {
 
     let active = true;
     async function loadAuthenticatedHomeownerRequests() {
-      let result;
+      setBackendRequestStatus(REQUEST_COLLECTION_STATUS.LOADING);
       try {
-        result = await authFetch("/posts", { cache: "no-store" }, setPage);
+        const result = await authFetch("/posts", { cache: "no-store" }, setPage);
+        if (!active) return;
+        const collection = resolveHomeownerRequestCollection(result);
+        setBackendHomeownerRequests(collection.records);
+        setBackendRequestStatus(collection.status);
       } catch {
-        return;
+        if (active) {
+          setBackendHomeownerRequests([]);
+          setBackendRequestStatus(REQUEST_COLLECTION_STATUS.UNAVAILABLE);
+        }
       }
-      if (!active || !result?.response?.ok) return;
-
-      const payload = result.data || {};
-      const posts = Array.isArray(payload) ? payload : payload.posts || [];
-      setBackendHomeownerRequests(normalizeAuthenticatedHomeownerPosts(posts));
     }
 
     loadAuthenticatedHomeownerRequests();
     return () => {
       active = false;
     };
-  }, [legacyWorkflowStorageEnabled, setPage]);
+  }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
+
+  const homeownerRequestsUnavailable =
+    !legacyWorkflowStorageEnabled &&
+    backendRequestStatus === REQUEST_COLLECTION_STATUS.UNAVAILABLE;
+  const homeownerRequestsLoading =
+    !legacyWorkflowStorageEnabled &&
+    backendRequestStatus === REQUEST_COLLECTION_STATUS.LOADING;
+
+  const requestUnavailableCard = (
+    <div style={compactEmptyCard} role="status">
+      <strong>Requests unavailable</strong>
+      <span>Meetro could not load your requests. Try again.</span>
+      <button type="button" style={secondaryButton} onClick={() => setRequestReloadKey((value) => value + 1)}>
+        Try Again
+      </button>
+    </div>
+  );
 
   const liveHomeownerRequests = allHomeownerRequests;
 
@@ -467,7 +493,9 @@ function Home({ setPage }) {
             </div>
           </div>
 
-          {activeHomeownerRequests.length > 0 ? (
+          {homeownerRequestsUnavailable ? requestUnavailableCard : homeownerRequestsLoading ? (
+            <div style={emptyCard} role="status">Loading requests…</div>
+          ) : activeHomeownerRequests.length > 0 ? (
             <div style={activeProjectsCarousel}>
               {activeHomeownerRequests.map((request) => (
                 <ProjectCard
@@ -623,6 +651,9 @@ function Home({ setPage }) {
 
         <div className="home-my-projects-portrait">
           {myProjectsTab === "active" ? (
+            homeownerRequestsUnavailable ? requestUnavailableCard : homeownerRequestsLoading ? (
+              <div style={compactEmptyCard} role="status">Loading requests…</div>
+            ) :
             activeHomeownerRequests.length > 0 ? (
               <div style={activeProjectsCarousel}>
                 {activeHomeownerRequests.slice(0, 3).map((request) => (
@@ -663,7 +694,9 @@ function Home({ setPage }) {
         <div className="home-my-projects-landscape" style={landscapeProjectsGrid}>
           <div style={landscapeProjectsPanel}>
             <h3 style={landscapeProjectsTitle}>{t("homeMyProjectsActive", language)}</h3>
-            {activeHomeownerRequests.length > 0 ? (
+            {homeownerRequestsUnavailable ? requestUnavailableCard : homeownerRequestsLoading ? (
+              <div style={compactEmptyCard} role="status">Loading requests…</div>
+            ) : activeHomeownerRequests.length > 0 ? (
               <div style={landscapeProjectsList}>
                 {activeHomeownerRequests.slice(0, 2).map((request) => (
                   <ProjectCard

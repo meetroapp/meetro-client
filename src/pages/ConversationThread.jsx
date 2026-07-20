@@ -779,6 +779,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
 
   const isEmergencyThread = conversationType === "emergency";
   const isHiringThread = isHiringConversationType(conversationType);
+  const isRequestOpportunityReadOnly = conversationType === "request_opportunity";
   const sanitizeMessagesForConversation = (items = []) =>
     isHiringThread ? filterHiringConversationMessages(items) : items;
   const conversationSearchQuery = threadSearchTerm.trim().toLowerCase();
@@ -2507,6 +2508,7 @@ useEffect(() => {
       const canFetchBackendMessages =
         selectedQuoteRequestId &&
         !isHiringThread &&
+        !isRequestOpportunityReadOnly &&
         /^\d+$/.test(String(selectedQuoteRequestId));
 
       if (canFetchBackendMessages) {
@@ -2961,6 +2963,7 @@ useEffect(() => {
   };
 
   const sendMessage = (textOverride = null) => {
+    if (isRequestOpportunityReadOnly) return;
     const text = textOverride || messageText.trim();
 
     if (!text && !pendingImage) return;
@@ -6325,6 +6328,11 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
+          {isRequestOpportunityReadOnly ? (
+            <div className="meetro-visual-empty-state" style={composer} role="status">
+              Messaging is not available for this request yet. Review the request details here.
+            </div>
+          ) : (
           <div className="chat-composer message-composer" style={composer}>
             <button
               className="chat-plus-button message-plus-button"
@@ -6409,6 +6417,7 @@ const handleImageUpload = (event) => {
               onChange={handleImageUpload}
             />
           </div>
+          )}
         </div>
 
         {showClearConfirm && (

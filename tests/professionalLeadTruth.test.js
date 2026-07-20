@@ -12,10 +12,11 @@ const leadsSource = readSource("src/pages/BusinessLeads.jsx");
 const dashboardSource = readSource("src/pages/BusinessDashboard.jsx");
 const homeSource = readSource("src/pages/Home.jsx");
 const metricsSource = readSource("src/utils/dashboardMetrics.js");
-test("Business Leads fails closed without a backend-authorized projection", () => {
-  assert.match(leadsSource, /professionalLeadsUnavailable/);
+test("Business Leads uses only the backend-authorized professional projection", () => {
+  assert.match(leadsSource, /authFetch/);
+  assert.match(leadsSource, /professional-request-opportunities/);
+  assert.match(leadsSource, /setStatus\("unavailable"\)/);
   assert.match(leadsSource, /purgeProfessionalLeadCaches/);
-  assert.doesNotMatch(leadsSource, /authFetch/);
   assert.doesNotMatch(leadsSource, /["']\/posts["']/);
   assert.doesNotMatch(leadsSource, /getStoredHomeownerRequests/);
   assert.doesNotMatch(leadsSource, /normalizeLeadCandidate/);

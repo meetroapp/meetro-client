@@ -32,7 +32,7 @@ test("Request Submitted projects render reassuring next-step copy", () => {
   assert.equal(t("requestSubmitted", "en"), "Request Submitted");
   assert.equal(
     t("homeProjectNextStepRequestSubmitted", "en"),
-    "Your request has been received. Continue the conversation while a professional reviews the details."
+    "Your request has been received. Eligible professionals can review the details."
   );
   assert.match(homeSource, /stageKey === "request"/);
   assert.match(homeSource, /homeProjectNextStepRequestSubmitted/);

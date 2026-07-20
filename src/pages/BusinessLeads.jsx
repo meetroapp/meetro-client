@@ -4,9 +4,14 @@ import SafeBackBar from "../components/SafeBackBar";
 import { getLanguage, t } from "../utils/language";
 import { purgeProfessionalLeadCaches } from "../utils/businessLeadSourceTruth";
 import { isProfessionalSession } from "../utils/session";
+import { authFetch } from "../utils/authFetch";
+import { normalizeRequestConversations } from "../utils/requestCommunication";
 
 function BusinessLeads({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
+  const [status, setStatus] = useState("loading");
+  const [opportunities, setOpportunities] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
 
   useEffect(() => {
@@ -17,6 +22,44 @@ function BusinessLeads({ setPage }) {
 
     return () => window.removeEventListener("languageChanged", handleLanguageChange);
   }, []);
+
+  useEffect(() => {
+    if (!isProfessional) return;
+    let active = true;
+    async function loadOpportunities() {
+      setStatus("loading");
+      try {
+        const result = await authFetch(
+          "/professional-request-opportunities",
+          { cache: "no-store" },
+          setPage
+        );
+        if (!active) return;
+        if (!result?.response?.ok) {
+          setOpportunities([]);
+          setStatus("unavailable");
+          return;
+        }
+        const records = normalizeRequestConversations(result.data || {}, "business");
+        if (!records) {
+          setOpportunities([]);
+          setStatus("unavailable");
+          return;
+        }
+        setOpportunities(records);
+        setStatus(records.length > 0 ? "ready" : "empty");
+      } catch {
+        if (active) {
+          setOpportunities([]);
+          setStatus("unavailable");
+        }
+      }
+    }
+    loadOpportunities();
+    return () => {
+      active = false;
+    };
+  }, [isProfessional, reloadKey, setPage]);
 
   if (!isProfessional) {
     return (
@@ -40,16 +83,49 @@ function BusinessLeads({ setPage }) {
     <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <div style={heroCard}>
         <h1 style={heroTitle}>{t("businessLeads", language)}</h1>
-        <p style={heroText}>{t("professionalLeadsUnavailableSummary", language)}</p>
+        <p style={heroText}>
+          {status === "ready"
+            ? "Open requests matched to your services and service area."
+            : t("professionalLeadsUnavailableSummary", language)}
+        </p>
       </div>
 
-      <section style={unavailableCard} aria-labelledby="professional-leads-unavailable">
-        <div style={stateIcon}>LEAD</div>
-        <h2 id="professional-leads-unavailable" style={stateTitle}>
-          {t("professionalLeadsUnavailable", language)}
-        </h2>
-        <p style={stateText}>{t("professionalLeadsUnavailableText", language)}</p>
-      </section>
+      {status === "loading" ? (
+        <section style={unavailableCard} role="status">Loading request opportunities…</section>
+      ) : status === "unavailable" ? (
+        <section style={unavailableCard} aria-labelledby="professional-leads-unavailable">
+          <div style={stateIcon}>LEAD</div>
+          <h2 id="professional-leads-unavailable" style={stateTitle}>Request opportunities unavailable</h2>
+          <p style={stateText}>Meetro could not verify eligible requests. Try again.</p>
+          <button style={primaryButton} onClick={() => setReloadKey((value) => value + 1)}>Try Again</button>
+        </section>
+      ) : status === "empty" ? (
+        <section style={unavailableCard} role="status">
+          <div style={stateIcon}>LEAD</div>
+          <h2 style={stateTitle}>No matching requests</h2>
+          <p style={stateText}>There are no open requests matching your services and service area.</p>
+        </section>
+      ) : (
+        <section style={leadList} aria-label="Eligible request opportunities">
+          {opportunities.map((opportunity) => (
+            <article key={opportunity.id} style={leadCard}>
+              <span style={leadStatus}>Open request</span>
+              <h2 style={stateTitle}>{opportunity.project_title}</h2>
+              <p style={stateText}>{opportunity.project_description}</p>
+              <p style={leadMeta}>{opportunity.service_specialty || opportunity.request_category}</p>
+              <button
+                style={primaryButton}
+                onClick={() => {
+                  localStorage.setItem("activeAccountMode", "business");
+                  setPage("messagesInbox");
+                }}
+              >
+                Open Communication Center
+              </button>
+            </article>
+          ))}
+        </section>
+      )}
 
       <SafeBackBar setPage={setPage} fallback="businessDashboard" />
       <BottomNav setPage={setPage} currentPage="businessLeads" />
@@ -142,6 +218,29 @@ const primaryButton = {
   minHeight: "44px",
   fontWeight: 900,
   cursor: "pointer",
+};
+
+const leadList = {
+  display: "grid",
+  gap: "14px",
+};
+
+const leadCard = {
+  ...unavailableCard,
+  textAlign: "left",
+};
+
+const leadStatus = {
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "12px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+};
+
+const leadMeta = {
+  color: "#4b5563",
+  fontWeight: 800,
+  margin: "12px 0 0",
 };
 
 export default BusinessLeads;

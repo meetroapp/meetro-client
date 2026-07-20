@@ -44,9 +44,9 @@ test("authenticated backend post normalization rejects malformed records", () =>
 
 test("Home and My Requests share authenticated backend post truth", () => {
   assert.match(homeSource, /authFetch\("\/posts", \{ cache: "no-store" \}, setPage\)/);
-  assert.match(homeSource, /normalizeAuthenticatedHomeownerPosts/);
+  assert.match(homeSource, /resolveHomeownerRequestCollection/);
   assert.match(homeSource, /legacyWorkflowStorageEnabled[\s\S]*backendHomeownerRequests/);
-  assert.match(myRequestsSource, /normalizeAuthenticatedHomeownerPosts\(posts\)/);
+  assert.match(myRequestsSource, /resolveHomeownerRequestCollection\(result\)/);
   assert.doesNotMatch(myRequestsSource, /isRequestOwnedByAuthenticatedUser\(post/);
   assert.match(
     myRequestsSource,

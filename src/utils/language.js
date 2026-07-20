@@ -5773,7 +5773,7 @@ const projectJourneyLabels = {
     requestSubmittedSummary:
       "Your request is in Meetro and ready for local professionals to review.",
     homeProjectNextStepRequestSubmitted:
-      "Your request has been received. Continue the conversation while a professional reviews the details.",
+      "Your request has been received. Eligible professionals can review the details.",
     homeProjectNextStepVisitScheduled:
       "Your visit is scheduled. Continue the conversation if anything changes.",
     homeProjectNextStepEvaluationComplete:
@@ -5787,7 +5787,7 @@ const projectJourneyLabels = {
       "This project is complete and ready for history.",
     professionalReviewing: "Professional Reviewing",
     professionalReviewingSummary:
-      "Professionals can review the request and respond when there is a fit.",
+      "Eligible professionals can review the request when there is a service and area match.",
     appointmentScheduled: "Appointment Scheduled",
     appointmentScheduledSummary:
       "Review the appointment details and message the professional if anything changes.",
@@ -5883,7 +5883,7 @@ const projectJourneyLabels = {
     requestSubmittedSummary:
       "Su solicitud está en Meetro y lista para que profesionales locales la revisen.",
     homeProjectNextStepRequestSubmitted:
-      "Su solicitud fue recibida. Continúe la conversación mientras un profesional revisa los detalles.",
+      "Su solicitud fue recibida. Los profesionales elegibles pueden revisar los detalles.",
     homeProjectNextStepVisitScheduled:
       "Su visita está programada. Continúe la conversación si algo cambia.",
     homeProjectNextStepEvaluationComplete:
@@ -5897,7 +5897,7 @@ const projectJourneyLabels = {
       "Este proyecto está completo y listo para el historial.",
     professionalReviewing: "Profesional revisando",
     professionalReviewingSummary:
-      "Los profesionales pueden revisar la solicitud y responder si encaja.",
+      "Los profesionales elegibles pueden revisar la solicitud cuando coinciden el servicio y el área.",
     appointmentScheduled: "Cita programada",
     appointmentScheduledSummary:
       "Revise los detalles de la cita y envíe un mensaje al profesional si algo cambia.",
@@ -5993,7 +5993,7 @@ const projectJourneyLabels = {
     requestSubmittedSummary:
       "Votre demande est dans Meetro et prête à être examinée par des professionnels locaux.",
     homeProjectNextStepRequestSubmitted:
-      "Votre demande a été reçue. Continuez la conversation pendant qu’un professionnel examine les détails.",
+      "Votre demande a été reçue. Les professionnels admissibles peuvent examiner les détails.",
     homeProjectNextStepVisitScheduled:
       "Votre visite est planifiée. Continuez la conversation si quelque chose change.",
     homeProjectNextStepEvaluationComplete:
@@ -6007,7 +6007,7 @@ const projectJourneyLabels = {
       "Ce projet est terminé et prêt pour l’historique.",
     professionalReviewing: "Professionnel en cours d’examen",
     professionalReviewingSummary:
-      "Les professionnels peuvent examiner la demande et répondre lorsqu’elle correspond.",
+      "Les professionnels admissibles peuvent examiner la demande lorsque le service et la zone correspondent.",
     appointmentScheduled: "Rendez-vous planifié",
     appointmentScheduledSummary:
       "Consultez les détails du rendez-vous et envoyez un message au professionnel si quelque chose change.",
@@ -6103,7 +6103,7 @@ const projectJourneyLabels = {
     requestSubmittedSummary:
       "Sua solicitação está no Meetro e pronta para profissionais locais analisarem.",
     homeProjectNextStepRequestSubmitted:
-      "Sua solicitação foi recebida. Continue a conversa enquanto um profissional revisa os detalhes.",
+      "Sua solicitação foi recebida. Profissionais elegíveis podem analisar os detalhes.",
     homeProjectNextStepVisitScheduled:
       "Sua visita está agendada. Continue a conversa se algo mudar.",
     homeProjectNextStepEvaluationComplete:
@@ -6117,7 +6117,7 @@ const projectJourneyLabels = {
       "Este projeto está completo e pronto para o histórico.",
     professionalReviewing: "Profissional analisando",
     professionalReviewingSummary:
-      "Profissionais podem analisar a solicitação e responder quando houver compatibilidade.",
+      "Profissionais elegíveis podem analisar a solicitação quando o serviço e a área forem compatíveis.",
     appointmentScheduled: "Agendamento marcado",
     appointmentScheduledSummary:
       "Revise os detalhes do agendamento e envie uma mensagem ao profissional se algo mudar.",
