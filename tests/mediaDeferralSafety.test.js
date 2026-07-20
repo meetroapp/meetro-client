@@ -120,17 +120,49 @@ test("protected media upload surfaces render a deferred state for real-user buil
   }
 });
 
-test("Profile authorizes only governed personal uploads and keeps business media deferred", () => {
+test("Profile authorizes governed personal and business identity uploads only", () => {
   const contents = read("src/pages/Profile.jsx");
   assert.match(contents, /uploadPersonalProfilePhoto/);
   assert.match(contents, /isPersonalProfilePhotoUploadEnabled/);
+  assert.match(contents, /uploadBusinessProfileLogo/);
+  assert.match(contents, /isBusinessLogoUploadEnabled/);
   assert.match(
     contents,
-    /activeMode === "business" \|\| !personalProfilePhotoEnabled/
+    /activeMode === "business"\s*\? businessLogoUploadEnabled\s*:\s*personalProfilePhotoEnabled/
   );
+  assert.match(contents, /const mediaUploadDeferred = !profilePhotoUploadEnabled/);
+  assert.match(contents, /const businessUpload = activeMode === "business"/);
   assert.match(contents, /disabled=\{mediaUploadDeferred \|\| profilePhotoUploading\}/);
   assert.match(contents, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.doesNotMatch(contents, /readAsDataURL|new FileReader/);
+});
+
+test("only Request Help passes the governed bypass to the shared job photo picker", () => {
+  const governedRequestHelp = read("src/pages/Upload.jsx");
+  assert.match(
+    governedRequestHelp,
+    /governedUploadEnabled: requestPhotoUploadEnabled/
+  );
+
+  for (const surface of [
+    "src/pages/ProjectGallery.jsx",
+    "src/pages/ConversationThread.jsx",
+    "src/pages/CompletionSheet.jsx",
+  ]) {
+    const contents = read(surface);
+    assert.match(contents, /openJobPhotoPicker/);
+    assert.doesNotMatch(contents, /governedUploadEnabled:\s*true/);
+    assert.doesNotMatch(contents, /governedUploadEnabled:\s*[A-Za-z_$]/);
+  }
+});
+
+test("Business Portfolio remains truthfully deferred without governed media authority", () => {
+  const contents = read("src/pages/ProjectGallery.jsx");
+  assert.match(contents, /const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred\(\)/);
+  assert.match(contents, /getMediaDeferredNotice/);
+  assert.doesNotMatch(contents, /isBusinessLogoUploadEnabled|isRequestPhotoUploadEnabled/);
+  assert.doesNotMatch(contents, /governedUploadEnabled/);
+  assert.doesNotMatch(contents, /\/media\/upload-signature/);
 });
 
 test("live unsafe media writers are guarded before Friends and Family release", () => {

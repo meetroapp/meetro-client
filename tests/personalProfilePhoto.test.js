@@ -221,10 +221,13 @@ test("profile photo UI uses governed formats and no FileReader or personal photo
   assert.doesNotMatch(source, /new FileReader|readAsDataURL/);
   assert.doesNotMatch(source, /setItem\(getScopedProfilePhotoKey\("personal"/);
   assert.match(source, /isPersonalProfilePhotoUploadEnabled/);
+  assert.match(source, /isBusinessLogoUploadEnabled/);
   assert.match(
     source,
-    /activeMode === "business" \|\| !personalProfilePhotoEnabled/
+    /activeMode === "business"\s*\? businessLogoUploadEnabled\s*:\s*personalProfilePhotoEnabled/
   );
+  assert.match(source, /uploadPersonalProfilePhoto/);
+  assert.match(source, /uploadBusinessProfileLogo/);
 });
 
 test("profile image states are localized in all supported public languages", () => {

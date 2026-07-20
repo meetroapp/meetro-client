@@ -50,6 +50,11 @@ import {
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
 } from "../utils/personalProfilePhoto";
+import {
+  isBusinessLogoUploadEnabled,
+  uploadBusinessProfileLogo,
+  validateBusinessLogoFile,
+} from "../utils/businessProfileLogo";
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -99,8 +104,11 @@ function Profile({ setPage, currentPage, embedded = false }) {
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
   );
   const personalProfilePhotoEnabled = isPersonalProfilePhotoUploadEnabled();
-  const mediaUploadDeferred =
-    activeMode === "business" || !personalProfilePhotoEnabled;
+  const businessLogoUploadEnabled = isBusinessLogoUploadEnabled();
+  const profilePhotoUploadEnabled = activeMode === "business"
+    ? businessLogoUploadEnabled
+    : personalProfilePhotoEnabled;
+  const mediaUploadDeferred = !profilePhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
@@ -217,22 +225,28 @@ function Profile({ setPage, currentPage, embedded = false }) {
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = "";
-    if (activeMode === "business") {
+    if (mediaUploadDeferred) {
       setProfileNotice(mediaDeferredCopy.detail);
       return;
     }
 
-    const validation = validatePersonalProfileImageFile(file);
+    const businessUpload = activeMode === "business";
+    const validation = businessUpload
+      ? validateBusinessLogoFile(file)
+      : validatePersonalProfileImageFile(file);
     if (!validation.ok) {
       setProfileNotice(
-        validation.code === "PROFILE_IMAGE_TOO_LARGE"
+        validation.code === "PROFILE_IMAGE_TOO_LARGE" ||
+          validation.code === "BUSINESS_LOGO_TOO_LARGE"
           ? t("profileImageTooLarge")
           : t("invalidProfileImageFormat")
       );
       return;
     }
 
-    const previousPhoto = user?.profile_photo_url || profilePhoto || "";
+    const previousPhoto = businessUpload
+      ? businessProfile?.image_url || profilePhoto || ""
+      : user?.profile_photo_url || profilePhoto || "";
     previewPhotoRef.current?.revoke();
     const preview = createTemporaryProfilePhotoPreview(file);
     previewPhotoRef.current = preview;
@@ -240,7 +254,9 @@ function Profile({ setPage, currentPage, embedded = false }) {
     setProfilePhotoUploading(true);
     setProfileNotice(t("uploadingProfilePhoto"));
 
-    const result = await uploadPersonalProfilePhoto({ file, setPage });
+    const result = businessUpload
+      ? await uploadBusinessProfileLogo({ file, setPage })
+      : await uploadPersonalProfilePhoto({ file, setPage });
     preview.revoke();
     if (previewPhotoRef.current === preview) previewPhotoRef.current = null;
     setProfilePhotoUploading(false);
@@ -248,10 +264,18 @@ function Profile({ setPage, currentPage, embedded = false }) {
     if (!result.ok) {
       setProfilePhoto(previousPhoto);
       setProfileNotice(
-        result.code === "PROFILE_IMAGE_SAVE_FAILED"
+        result.code === "PROFILE_IMAGE_SAVE_FAILED" ||
+          result.code === "BUSINESS_LOGO_SAVE_FAILED"
           ? t("profileImageSaveFailed")
           : t("profileImageUploadFailed")
       );
+      return;
+    }
+
+    if (businessUpload) {
+      setBusinessProfile(result.profile);
+      setProfilePhoto(result.profile.image_url);
+      setProfileNotice(t("profilePhotoUpdated"));
       return;
     }
 

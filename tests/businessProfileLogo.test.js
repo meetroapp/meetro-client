@@ -176,3 +176,13 @@ test("Business Profile logo UI uses governed upload and no local media authority
   assert.doesNotMatch(source, /readAsDataURL|new FileReader/);
   assert.doesNotMatch(source, /setImageUrl\(""\)/);
 });
+
+test("shared Profile business mode uses the governed Business Logo authority", () => {
+  const source = readFileSync("src/pages/Profile.jsx", "utf8");
+  assert.match(source, /isBusinessLogoUploadEnabled/);
+  assert.match(source, /uploadBusinessProfileLogo/);
+  assert.match(source, /validateBusinessLogoFile/);
+  assert.match(source, /setBusinessProfile\(result\.profile\)/);
+  assert.match(source, /setProfilePhoto\(result\.profile\.image_url\)/);
+  assert.doesNotMatch(source, /readAsDataURL|new FileReader/);
+});
