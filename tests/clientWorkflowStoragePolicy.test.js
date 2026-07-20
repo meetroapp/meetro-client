@@ -100,7 +100,6 @@ test("production modules use the centralized fail-closed storage policy", () => 
     "src/components/workflows/WorkflowQuoteSentCard.jsx",
     "src/pages/MeetroMoments.jsx",
     "src/pages/MyRequests.jsx",
-    "src/pages/Upload.jsx",
     "src/utils/meetroTimeline.js",
     "src/utils/projectLifecycleSync.js",
   ];
@@ -109,4 +108,15 @@ test("production modules use the centralized fail-closed storage policy", () => 
     const source = fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
     assert.match(source, /canReadLegacyWorkflowStorage/);
   });
+});
+
+test("Request Help no longer creates a browser-authoritative request projection", () => {
+  const source = fs.readFileSync(
+    new URL("../src/pages/Upload.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(source, /localStorage\.setItem\(\s*["']homeownerRequests["']/);
+  assert.doesNotMatch(source, /meetroHomeownerRequestsBackup/);
+  assert.match(source, /getCanonicalCreatedRequest\(result\)/);
 });

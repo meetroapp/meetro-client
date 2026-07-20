@@ -22,8 +22,12 @@ import {
   getMediaDeferredNotice,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
-import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { resolveWorkflowAddress } from "../utils/personalAddresses";
+import {
+  getCanonicalCreatedRequest,
+  getSupportedRequestHelpServices,
+  validateRequestHelpSubmission,
+} from "../utils/requestHelpSubmission";
 import {
   REQUEST_PHOTO_MAX_COUNT,
   REQUEST_PHOTO_PURPOSE,
@@ -76,10 +80,89 @@ function buildSuggestedRequestTitle(value = "", fallback = "") {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+function getRequestHelpCopy(language) {
+  const copy = {
+    es: {
+      back: "Volver al inicio",
+      required: "Obligatorio",
+      optional: "Opcional",
+      missing: "Falta",
+      reviewTitle: "Se enviará al confirmar",
+      service: "Servicio",
+      title: "Título",
+      description: "Detalles",
+      location: "Ubicación",
+      photos: "Fotos",
+      addPhoto: "Agregar fotos a la solicitud",
+      removePhoto: (position) => `Eliminar foto ${position}`,
+      locationRequired: "Agrega la ubicación donde se necesita el servicio.",
+      matchRequired: "Elige un servicio compatible de la lista.",
+      offline: "No tienes conexión. Vuelve a intentarlo cuando estés en línea.",
+      failed: "La solicitud no fue creada. Revisa los detalles e inténtalo de nuevo.",
+    },
+    fr: {
+      back: "Retour à l’accueil",
+      required: "Requis",
+      optional: "Facultatif",
+      missing: "Manquant",
+      reviewTitle: "Sera envoyé après confirmation",
+      service: "Service",
+      title: "Titre",
+      description: "Détails",
+      location: "Lieu",
+      photos: "Photos",
+      addPhoto: "Ajouter des photos à la demande",
+      removePhoto: (position) => `Supprimer la photo ${position}`,
+      locationRequired: "Ajoutez le lieu où le service est nécessaire.",
+      matchRequired: "Choisissez un service pris en charge dans la liste.",
+      offline: "Vous êtes hors ligne. Réessayez une fois connecté.",
+      failed: "La demande n’a pas été créée. Vérifiez les détails et réessayez.",
+    },
+    pt: {
+      back: "Voltar ao início",
+      required: "Obrigatório",
+      optional: "Opcional",
+      missing: "Ausente",
+      reviewTitle: "Será enviado após a confirmação",
+      service: "Serviço",
+      title: "Título",
+      description: "Detalhes",
+      location: "Local",
+      photos: "Fotos",
+      addPhoto: "Adicionar fotos à solicitação",
+      removePhoto: (position) => `Remover foto ${position}`,
+      locationRequired: "Adicione o local onde o serviço é necessário.",
+      matchRequired: "Escolha um serviço compatível na lista.",
+      offline: "Você está offline. Tente novamente quando estiver conectado.",
+      failed: "A solicitação não foi criada. Revise os detalhes e tente novamente.",
+    },
+  };
+
+  return copy[language] || {
+    back: "Back to Home",
+    required: "Required",
+    optional: "Optional",
+    missing: "Missing",
+    reviewTitle: "This will be submitted after confirmation",
+    service: "Service",
+    title: "Title",
+    description: "Details",
+    location: "Location",
+    photos: "Photos",
+    addPhoto: "Add photos to the request",
+    removePhoto: (position) => `Remove photo ${position}`,
+    locationRequired: "Add the location where service is needed.",
+    matchRequired: "Choose a supported service from the list.",
+    offline: "You are offline. Try again when you are connected.",
+    failed: "The request was not created. Review the details and try again.",
+  };
+}
+
 function Upload({ setPage, currentPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
+  const submissionAttemptRef = useRef(false);
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
@@ -104,6 +187,8 @@ function Upload({ setPage, currentPage }) {
   const [selectedServiceOptionId, setSelectedServiceOptionId] = useState("");
   const [titleEdited, setTitleEdited] = useState(false);
   const [descriptionEdited, setDescriptionEdited] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submissionError, setSubmissionError] = useState("");
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -196,27 +281,25 @@ function Upload({ setPage, currentPage }) {
     textarea.style.height = `${Math.max(textarea.scrollHeight, assistantDraftMetadata ? 320 : 140)}px`;
   }, [description, assistantDraftMetadata]);
 
-  const serviceSuggestions = searchRequestServices(serviceSearch, {
-    translate: t,
-    limit: 4,
-  });
+  const serviceSuggestions = getSupportedRequestHelpServices(
+    searchRequestServices(serviceSearch, {
+      translate: t,
+      limit: 12,
+    })
+  ).slice(0, 4);
   const serviceSelectorOptions = [
-    ...getRequestIntelligenceServices(t).map((service) => ({
+    ...getSupportedRequestHelpServices(getRequestIntelligenceServices(t)).map((service) => ({
       value: `service:${service.serviceId}`,
       label: service.label,
       groupLabel: service.categoryLabel,
       requestCategory: service.requestCategory,
+      serviceDomain: service.domain,
+      serviceSpecialty: service.serviceId,
       aliases: service.aliases,
-    })),
-    ...categories.map((item) => ({
-      value: `category:${item.value}`,
-      label: item.label,
-      groupLabel: t("categoryExample"),
-      requestCategory: item.value,
     })),
   ];
   const selectedServiceLabel =
-    serviceSearch ||
+    serviceSelectorOptions.find((option) => option.value === selectedServiceOptionId)?.label ||
     serviceSelectorOptions.find((option) => option.requestCategory === category)?.label ||
     categories.find((item) => item.value === category)?.label ||
     "";
@@ -224,14 +307,22 @@ function Upload({ setPage, currentPage }) {
   function handleServiceSearchChange(value) {
     setServiceSearch(value);
 
-    const [bestMatch] = searchRequestServices(value, { translate: t, limit: 1 });
+    const [bestMatch] = getSupportedRequestHelpServices(
+      searchRequestServices(value, { translate: t, limit: 12 })
+    );
     if (bestMatch?.requestCategory) {
       setCategory(bestMatch.requestCategory);
       setCustomCategory("");
       setSelectedServiceOptionId(`service:${bestMatch.serviceId}`);
+      setFieldErrors((current) => ({ ...current, category: undefined }));
+    } else {
+      setCategory("");
+      setCustomCategory("");
+      setSelectedServiceOptionId("");
     }
     if (!titleEdited) {
       setTitle(buildSuggestedRequestTitle(value, bestMatch?.label || ""));
+      setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited) {
       setDescription(value);
@@ -243,8 +334,10 @@ function Upload({ setPage, currentPage }) {
     setCategory(service.requestCategory);
     setCustomCategory("");
     setSelectedServiceOptionId(`service:${service.serviceId}`);
+    setFieldErrors((current) => ({ ...current, category: undefined }));
     if (!titleEdited) {
       setTitle(buildSuggestedRequestTitle(service.label));
+      setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited && !description.trim()) {
       setDescription(service.label);
@@ -256,35 +349,13 @@ function Upload({ setPage, currentPage }) {
     setCategory(option.requestCategory);
     setCustomCategory("");
     setSelectedServiceOptionId(option.value);
+    setFieldErrors((current) => ({ ...current, category: undefined }));
     if (!titleEdited) {
       setTitle(buildSuggestedRequestTitle(option.label));
+      setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited && !description.trim()) {
       setDescription(option.label);
-    }
-  }
-
-  function saveHomeownerRequestList(updatedHomeownerRequests) {
-    try {
-      localStorage.setItem(
-        "homeownerRequests",
-        JSON.stringify(updatedHomeownerRequests)
-      );
-
-      localStorage.setItem(
-        "meetroHomeownerRequestsBackup",
-        JSON.stringify(updatedHomeownerRequests)
-      );
-
-      return true;
-    } catch (error) {
-      console.error("Failed to save homeowner request", error);
-      alert(
-        language === "es"
-          ? "No se pudo guardar la solicitud. Intenta quitar una foto o vuelve a intentarlo."
-          : "We could not save this request. Try removing a photo or try again."
-      );
-      return false;
     }
   }
 
@@ -415,37 +486,58 @@ function Upload({ setPage, currentPage }) {
     });
   }
 
-  async function handleCreatePost() {
+  async function handleCreatePost(event) {
+    event?.preventDefault();
+    if (submissionAttemptRef.current) return;
+
     let uploadedMediaForCleanup = [];
     try {
-      if (!title.trim()) {
-        alert(t("enterPostTitle"));
-        return;
-      }
-
-      if (!category) {
-        alert(t("requestMatchRequired"));
-        return;
-      }
-
-      setCreating(true);
-      setUploading(selectedRequestPhotos.length > 0);
-
       const isDirectRequest = localStorage.getItem("directRequestMode") === "true";
       const directProfessionalName = localStorage.getItem("directRequestProfessionalName") || "";
-      const directProfessionalCategory = localStorage.getItem("directRequestProfessionalCategory") || "";
       const directConversationId = localStorage.getItem("directRequestProfessionalConversationId") || "";
       const directRequestSource = localStorage.getItem("directRequestSource") || "";
-      const directRequestId = localStorage.getItem("directRequestId") || "";
 
       const selectedCategory =
         category === "other" ? customCategory.trim() || "other" : category;
-      const requestMatchingFields = buildRequestMatchingFields({
+      const selectedService = serviceSelectorOptions.find(
+        (option) => option.value === selectedServiceOptionId
+      );
+      const inferredRequestMatchingFields = buildRequestMatchingFields({
         title: title.trim(),
         description: description.trim(),
         category: selectedCategory,
         location: location.trim(),
       });
+
+      const selectedCanonicalServiceId = selectedServiceOptionId.startsWith("service:")
+        ? selectedServiceOptionId.slice("service:".length)
+        : "";
+
+      const selectedCanonicalService = selectedCanonicalServiceId
+        ? getRequestIntelligenceServices(t).find(
+            (service) => service.serviceId === selectedCanonicalServiceId
+          )
+        : null;
+
+      const requestMatchingFields = selectedCanonicalService
+        ? {
+            ...inferredRequestMatchingFields,
+            serviceDomain:
+              selectedCanonicalService.domain ||
+              inferredRequestMatchingFields.serviceDomain,
+            service_domain:
+              selectedCanonicalService.domain ||
+              inferredRequestMatchingFields.service_domain,
+            requestCategory:
+              selectedCanonicalService.requestCategory ||
+              selectedCanonicalService.serviceId,
+            request_category:
+              selectedCanonicalService.requestCategory ||
+              selectedCanonicalService.serviceId,
+            serviceSpecialty: selectedCanonicalService.serviceId,
+            service_specialty: selectedCanonicalService.serviceId,
+          }
+        : inferredRequestMatchingFields;
 
       const uploadedRequestPhotos = selectedRequestPhotos.length > 0
         ? await uploadRequestPhotos({
@@ -496,98 +588,10 @@ function Upload({ setPage, currentPage }) {
       );
 
       const data = result.data || {};
+      const canonicalPost = getCanonicalCreatedRequest(result);
 
-      if (data.post) {
+      if (canonicalPost) {
         uploadedMediaForCleanup = [];
-        const canonicalRequestPhotos = Array.isArray(data.post.request_photos)
-          ? data.post.request_photos
-          : [];
-        const canonicalPhotoUrls = canonicalRequestPhotos
-          .map((photo) => photo.secure_url)
-          .filter(Boolean);
-        const existingRequests = canReadLegacyWorkflowStorage()
-          ? JSON.parse(localStorage.getItem("homeownerRequests") || "[]")
-          : [];
-
-        const requestId = String(data.post.id || Date.now());
-
-        const requestRecord = {
-          requestId,
-          id: requestId,
-          ownerUserId: localStorage.getItem("userId") || "",
-          ownerEmail: localStorage.getItem("userEmail") || "",
-          createdByUserId: localStorage.getItem("userId") || "",
-          createdByEmail: localStorage.getItem("userEmail") || "",
-
-          title: title.trim(),
-          description: description.trim(),
-          assistantDraft: assistantDraftMetadata,
-          assistantSuggestedProjectType: assistantDraftMetadata?.suggestedProjectType || "",
-          assistantOriginalPrompt: assistantDraftMetadata?.originalPrompt || "",
-          assistantRecommendationText: assistantDraftMetadata?.recommendationText || "",
-
-          category: selectedCategory,
-          ...requestMatchingFields,
-          location: location.trim(),
-          fullAddress: location.trim(),
-          unitNumber: unitNumber.trim(),
-          accessNotes: accessNotes.trim(),
-
-          request_photos: canonicalRequestPhotos,
-          photos: canonicalPhotoUrls,
-          photoRecords: canonicalRequestPhotos.map((photo) => ({
-            url: photo.secure_url,
-            public_id: photo.public_id,
-            tag: "progress",
-            caption: "",
-            createdAt: photo.uploaded_at || new Date().toISOString(),
-          })),
-          image_url: data.post.image_url || canonicalPhotoUrls[0] || "",
-
-          status: isDirectRequest ? "direct_pending" : "open",
-          localDemoSafe: true,
-          source: isDirectRequest ? "hire_again_direct_request" : "local_homeowner_request",
-          requestChannel: isDirectRequest ? "direct" : "public",
-          visibility: isDirectRequest ? "direct" : "public",
-          isDirectRequest,
-          directRequest: isDirectRequest,
-          directRequestId: directRequestId || requestId,
-          directRequestSource,
-          selectedProfessional: isDirectRequest ? directProfessionalName : null,
-          assignedProfessionalName: isDirectRequest ? directProfessionalName : "",
-          targetProfessionalName: isDirectRequest ? directProfessionalName : "",
-          targetProfessionalCategory: isDirectRequest ? directProfessionalCategory : "",
-          conversationId: isDirectRequest
-            ? directConversationId || `direct-${requestId}`
-            : "",
-
-          projectTimeline: [
-            {
-              type: "created",
-              label: t("projectRequestCreated"),
-              createdAt: new Date().toISOString(),
-            },
-          ],
-
-          viewedByBusinesses: [],
-          quotesReceived: [],
-          messagesCount: 0,
-
-          invoice: null,
-          completionRecord: null,
-          review: null,
-
-          createdAt: new Date().toISOString(),
-        };
-
-        const updatedHomeownerRequests = [requestRecord, ...existingRequests];
-
-        if (
-          canReadLegacyWorkflowStorage() &&
-          !saveHomeownerRequestList(updatedHomeownerRequests)
-        ) {
-          return;
-        }
 
         if (isDirectRequest) {
           localStorage.removeItem("directRequestMode");
@@ -618,20 +622,24 @@ function Upload({ setPage, currentPage }) {
         setAssistantDraftMetadata(null);
         setTitleEdited(false);
         setDescriptionEdited(false);
+        setFieldErrors({});
+        setSubmissionError("");
 
         setPage("home");
       } else {
         await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
         uploadedMediaForCleanup = [];
-        alert(data.error || t("postCreateFailed"));
+        setSubmissionError(
+          data.message || data.error || getRequestHelpCopy(language).failed
+        );
       }
-    } catch (error) {
+    } catch {
       await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
-      console.error(error);
-      alert(t("serverError"));
+      setSubmissionError(getRequestHelpCopy(language).failed);
     } finally {
       setUploading(false);
       setCreating(false);
+      submissionAttemptRef.current = false;
     }
   }
 
@@ -639,6 +647,9 @@ function Upload({ setPage, currentPage }) {
     const hasChanges =
       title ||
       description ||
+      serviceSearch ||
+      category ||
+      customCategory ||
       location ||
       unitNumber ||
       accessNotes ||
@@ -661,10 +672,33 @@ function Upload({ setPage, currentPage }) {
     setAssistantDraftMetadata(null);
     setTitleEdited(false);
     setDescriptionEdited(false);
+    setFieldErrors({});
+    setSubmissionError("");
     clearAssistantRequestDraft(localStorage);
 
     setPage("home");
   }
+
+  const requestHelpCopy = getRequestHelpCopy(language);
+  const reviewItems = [
+    {
+      label: requestHelpCopy.service,
+      value: selectedServiceOptionId ? selectedServiceLabel : "",
+      required: true,
+    },
+    { label: requestHelpCopy.title, value: title.trim(), required: true },
+    {
+      label: requestHelpCopy.description,
+      value: description.trim(),
+      required: false,
+    },
+    { label: requestHelpCopy.location, value: location.trim(), required: true },
+    {
+      label: requestHelpCopy.photos,
+      value: projectPhotos.length ? String(projectPhotos.length) : "",
+      required: false,
+    },
+  ];
 
   return (
     <div
@@ -673,9 +707,20 @@ function Upload({ setPage, currentPage }) {
     >
       <style>{requestHelpLayoutStyles}</style>
       <div className="request-help-content-lane" style={contentLane}>
-        <button onClick={handleCancelRequest} style={backButton}>
+        <button
+          type="button"
+          onClick={handleCancelRequest}
+          style={backButton}
+          aria-label={requestHelpCopy.back}
+          title={requestHelpCopy.back}
+        >
           ←
         </button>
+
+        <header style={requestHeader}>
+          <h1 style={requestPageTitle}>{t("newProject")}</h1>
+          <p style={requestPageSubtitle}>{t("newProjectSubtitle")}</p>
+        </header>
 
         {assistantDraftMetadata && (
           <div style={preparedRequestBanner}>
@@ -691,14 +736,29 @@ function Upload({ setPage, currentPage }) {
           </div>
         )}
 
-        <div className="meetro-visual-surface" style={cardStyle}>
-        <label style={fieldLabel}>{t("requestIntelligencePrompt")}</label>
+        <form
+          className="meetro-visual-surface"
+          style={cardStyle}
+          onSubmit={handleCreatePost}
+          noValidate
+        >
+        <label htmlFor="request-service-search" style={fieldLabel}>
+          {t("requestIntelligencePrompt")} ({requestHelpCopy.required})
+        </label>
         <input
+          id="request-service-search"
           placeholder={t("requestIntelligencePlaceholder")}
           value={serviceSearch}
           onChange={(event) => handleServiceSearchChange(event.target.value)}
           style={inputStyle}
+          aria-invalid={Boolean(fieldErrors.category)}
+          aria-describedby={fieldErrors.category ? "request-service-error" : undefined}
         />
+        {fieldErrors.category && (
+          <p id="request-service-error" role="alert" style={fieldErrorText}>
+            {requestHelpCopy.matchRequired}
+          </p>
+        )}
 
         {serviceSuggestions.length > 0 && (
           <div style={serviceSuggestionGrid}>
@@ -736,8 +796,11 @@ function Upload({ setPage, currentPage }) {
 
         {category === "other" && (
           <>
-            <label style={fieldLabel}>{t("otherService")}</label>
+            <label htmlFor="request-custom-service" style={fieldLabel}>
+              {t("otherService")}
+            </label>
             <input
+              id="request-custom-service"
               placeholder={t("enterCustomService")}
               value={customCategory}
               onChange={(e) => setCustomCategory(e.target.value)}
@@ -748,26 +811,49 @@ function Upload({ setPage, currentPage }) {
 
         <div style={requestReviewIntroCard}>
           <strong style={requestReviewIntroTitle}>
-            {t("requestReviewIntroTitle")}
+            {requestHelpCopy.reviewTitle}
           </strong>
-          <p style={requestReviewIntroText}>
-            {t("requestReviewIntroText")}
-          </p>
+          <ul style={requestReviewList}>
+            {reviewItems.map((item) => (
+              <li key={item.label} style={requestReviewItem}>
+                <span>{item.label}</span>
+                <strong style={item.value ? requestReviewValue : requestReviewMissing}>
+                  {item.value || (item.required ? requestHelpCopy.missing : requestHelpCopy.optional)}
+                </strong>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <label style={fieldLabel}>{t("projectTitle")}</label>
+        <label htmlFor="request-title" style={fieldLabel}>
+          {t("projectTitle")} ({requestHelpCopy.required})
+        </label>
         <input
+          id="request-title"
           placeholder={t("projectTitlePlaceholder")}
           value={title}
           onChange={(e) => {
             setTitleEdited(true);
             setTitle(e.target.value);
+            setFieldErrors((current) => ({ ...current, title: undefined }));
           }}
           style={inputStyle}
+          required
+          maxLength={160}
+          aria-invalid={Boolean(fieldErrors.title)}
+          aria-describedby={fieldErrors.title ? "request-title-error" : undefined}
         />
+        {fieldErrors.title && (
+          <p id="request-title-error" role="alert" style={fieldErrorText}>
+            {t("enterPostTitle")}
+          </p>
+        )}
 
-        <label style={fieldLabel}>{t("projectDescription")}</label>
+        <label htmlFor="request-description" style={fieldLabel}>
+          {t("projectDescription")} ({requestHelpCopy.optional})
+        </label>
         <textarea
+          id="request-description"
           ref={descriptionInputRef}
           placeholder={t("projectDescriptionPlaceholder")}
           value={description}
@@ -779,22 +865,43 @@ function Upload({ setPage, currentPage }) {
             ...textareaStyle,
             minHeight: assistantDraftMetadata ? "320px" : textareaStyle.minHeight,
           }}
+          maxLength={5000}
         />
 
-        <label style={fieldLabel}>{t("fullServiceAddress")}</label>
+        <label htmlFor="request-location" style={fieldLabel}>
+          {t("fullServiceAddress")} ({requestHelpCopy.required})
+        </label>
         <input
+          id="request-location"
           placeholder={t("locationExample")}
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            setFieldErrors((current) => ({ ...current, location: undefined }));
+          }}
           style={inputStyle}
+          required
+          maxLength={500}
+          autoComplete="street-address"
+          aria-invalid={Boolean(fieldErrors.location)}
+          aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
         />
+        {fieldErrors.location && (
+          <p id="request-location-error" role="alert" style={fieldErrorText}>
+            {requestHelpCopy.locationRequired}
+          </p>
+        )}
 
-        <label style={fieldLabel}>{t("unitNumber")}</label>
+        <label htmlFor="request-unit" style={fieldLabel}>
+          {t("unitNumber")} ({requestHelpCopy.optional})
+        </label>
         <input
+          id="request-unit"
           placeholder={t("unitNumberPlaceholder")}
           value={unitNumber}
           onChange={(e) => setUnitNumber(e.target.value)}
           style={inputStyle}
+          maxLength={100}
         />
 
         {category === "propertyManagement" && (
@@ -802,12 +909,16 @@ function Upload({ setPage, currentPage }) {
             <div style={propertyManagementFoundationNote}>
               {t("propertyManagementIntakeNote")}
             </div>
-            <label style={fieldLabel}>{t("accessNotes")}</label>
+            <label htmlFor="request-access-notes" style={fieldLabel}>
+              {t("accessNotes")} ({requestHelpCopy.optional})
+            </label>
             <textarea
+              id="request-access-notes"
               placeholder={t("accessNotesPlaceholder")}
               value={accessNotes}
               onChange={(e) => setAccessNotes(e.target.value)}
               style={textareaStyle}
+              maxLength={1000}
             />
           </>
         )}
@@ -821,6 +932,8 @@ function Upload({ setPage, currentPage }) {
             }}
             type="button"
             disabled={mediaUploadDeferred || uploading || creating}
+            aria-label={requestHelpCopy.addPhoto}
+            title={requestHelpCopy.addPhoto}
           >
             +
           </button>
@@ -848,8 +961,8 @@ function Upload({ setPage, currentPage }) {
             style={{ display: "none" }}
           />
 
-          {uploading && <p style={uploadingText}>{t("uploadingImage")}</p>}
-          {photoError && <p style={uploadingText}>{photoError}</p>}
+          {uploading && <p role="status" aria-live="polite" style={uploadingText}>{t("uploadingImage")}</p>}
+          {photoError && <p role="alert" style={uploadingText}>{photoError}</p>}
         </div>
 
         {projectPhotos.length > 0 && (
@@ -863,6 +976,8 @@ function Upload({ setPage, currentPage }) {
                     onClick={() => removeSelectedRequestPhoto(index)}
                     style={removePhotoButton}
                     type="button"
+                    aria-label={requestHelpCopy.removePhoto(index + 1)}
+                    title={requestHelpCopy.removePhoto(index + 1)}
                   >
                     ×
                   </button>
@@ -915,9 +1030,16 @@ function Upload({ setPage, currentPage }) {
           </div>
         )}
 
+        {submissionError && (
+          <div role="alert" aria-live="assertive" style={submissionErrorCard}>
+            <strong>{t("postCreateFailed")}</strong>
+            <span>{submissionError}</span>
+          </div>
+        )}
+
         <div style={requestActionBar}>
           <button
-            onClick={handleCreatePost}
+            type="submit"
             disabled={creating || uploading}
             className="meetro-visual-primary-button"
             style={{
@@ -939,7 +1061,7 @@ function Upload({ setPage, currentPage }) {
             {t("cancelRequest")}
           </button>
         </div>
-      </div>
+      </form>
       </div>
 
       <ServiceSelectorSheet
@@ -982,6 +1104,25 @@ const contentLane = {
   boxSizing: "border-box",
 };
 
+const requestHeader = {
+  marginBottom: "14px",
+  maxWidth: "100%",
+};
+
+const requestPageTitle = {
+  margin: "0 0 6px",
+  color: "var(--meetro-color-ink)",
+  fontSize: "clamp(28px, 7vw, 36px)",
+  lineHeight: 1.08,
+};
+
+const requestPageSubtitle = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "15px",
+  lineHeight: 1.5,
+};
+
 const requestHelpLayoutStyles = `
   .request-help-page {
     isolation: isolate;
@@ -994,6 +1135,12 @@ const requestHelpLayoutStyles = `
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
+  }
+
+  .request-help-content-lane > *,
+  .request-help-content-lane form > * {
+    max-inline-size: 100%;
+    min-inline-size: 0;
   }
 
   @media (max-width: 1099px) {
@@ -1194,6 +1341,7 @@ const serviceSuggestionButton = {
   padding: "9px 11px",
   fontSize: "13px",
   fontWeight: "900",
+  minHeight: "44px",
   cursor: "pointer",
   maxWidth: "100%",
   overflowWrap: "anywhere",
@@ -1243,6 +1391,7 @@ const changeServiceButton = {
   padding: "8px 11px",
   fontSize: "13px",
   fontWeight: 950,
+  minHeight: "44px",
   cursor: "pointer",
   whiteSpace: "nowrap",
 };
@@ -1263,12 +1412,55 @@ const requestReviewIntroTitle = {
   fontWeight: 950,
 };
 
-const requestReviewIntroText = {
-  margin: 0,
+const requestReviewList = {
+  listStyle: "none",
+  display: "grid",
+  gap: "7px",
+  margin: "6px 0 0",
+  padding: 0,
+};
+
+const requestReviewItem = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.6fr)",
+  alignItems: "start",
+  gap: "10px",
   color: "var(--meetro-color-muted)",
   fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const requestReviewValue = {
+  color: "var(--meetro-color-ink)",
+  textAlign: "right",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const requestReviewMissing = {
+  color: "#b42318",
+  textAlign: "right",
+};
+
+const fieldErrorText = {
+  margin: "-2px 2px 4px",
+  color: "#b42318",
+  fontSize: "13px",
+  fontWeight: 800,
+  lineHeight: 1.4,
+};
+
+const submissionErrorCard = {
+  display: "grid",
+  gap: "4px",
+  padding: "13px 14px",
+  borderRadius: "16px",
+  border: "1px solid rgba(180, 35, 24, 0.28)",
+  background: "rgba(254, 243, 242, 0.96)",
+  color: "#912018",
+  fontSize: "14px",
   lineHeight: 1.45,
-  fontWeight: 750,
 };
 
 const requestActionBar = {
@@ -1523,8 +1715,8 @@ const removePhotoButton = {
   position: "absolute",
   top: "8px",
   right: "8px",
-  width: "30px",
-  height: "30px",
+  width: "44px",
+  height: "44px",
   borderRadius: "50%",
   border: "none",
   background: "rgba(239,68,68,0.95)",

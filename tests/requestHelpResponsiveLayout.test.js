@@ -100,3 +100,38 @@ test("Request Help exposes bounded photo reorder controls", () => {
   assert.match(uploadSource, /disabled=\{index === projectPhotos\.length - 1\}/);
   assert.match(uploadSource, /height: "44px"/);
 });
+
+test("Request Help exposes semantic labels, status messages, and mobile touch targets", () => {
+  assert.match(uploadSource, /<form[\s\S]*onSubmit=\{handleCreatePost\}/);
+  assert.match(uploadSource, /<h1 style=\{requestPageTitle\}>/);
+  assert.match(uploadSource, /htmlFor="request-service-search"/);
+  assert.match(uploadSource, /htmlFor="request-title"/);
+  assert.match(uploadSource, /htmlFor="request-description"/);
+  assert.match(uploadSource, /htmlFor="request-location"/);
+  assert.match(uploadSource, /aria-invalid=\{Boolean\(fieldErrors\.title\)\}/);
+  assert.match(uploadSource, /role="alert" aria-live="assertive"/);
+  assert.match(uploadSource, /const changeServiceButton = \{[\s\S]*minHeight: "44px"/);
+  assert.match(uploadSource, /const removePhotoButton = \{[\s\S]*width: "44px"[\s\S]*height: "44px"/);
+});
+
+test("Request Help accepts only canonical backend success and blocks duplicate taps", () => {
+  assert.match(uploadSource, /if \(submissionAttemptRef\.current\) return;/);
+  assert.match(uploadSource, /getCanonicalCreatedRequest\(result\)/);
+  assert.match(uploadSource, /if \(canonicalPost\)/);
+  assert.doesNotMatch(uploadSource, /data\.post\.id \|\| Date\.now\(\)/);
+  assert.doesNotMatch(uploadSource, /localStorage\.setItem\(\s*["']homeownerRequests["']/);
+  assert.doesNotMatch(uploadSource, /localDemoSafe/);
+});
+
+test("Request Help validates location and matching metadata before upload", () => {
+  const validationPosition = uploadSource.indexOf("validateRequestHelpSubmission({");
+  const uploadPosition = uploadSource.indexOf("await uploadRequestPhotos({");
+
+  assert.notEqual(validationPosition, -1);
+  assert.notEqual(uploadPosition, -1);
+  assert.ok(validationPosition < uploadPosition);
+  assert.match(uploadSource, /serviceDomain: selectedService\?\.serviceDomain/);
+  assert.match(uploadSource, /serviceSpecialty: selectedService\?\.serviceSpecialty/);
+  assert.match(uploadSource, /id="request-location"/);
+  assert.match(uploadSource, /maxLength=\{500\}/);
+});
