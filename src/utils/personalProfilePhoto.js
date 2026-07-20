@@ -39,7 +39,7 @@ export function reportProfileMediaDiagnostic(detail = {}) {
     status: Number.isInteger(detail.status) ? detail.status : 0,
     code: String(detail.code || "MEDIA_TRANSACTION_FAILED"),
   };
-  console.warn("Meetro governed media transaction failed", safe);
+  console.error("Meetro governed media transaction failed", safe);
 }
 
 function reportFailure(onDiagnostic, detail) {

@@ -212,9 +212,9 @@ test("signature or Cloudinary failure stops persistence and retains existing can
 });
 
 test("profile media diagnostics expose only normalized transaction evidence", () => {
-  const originalWarn = console.warn;
+  const originalError = console.error;
   const calls = [];
-  console.warn = (...args) => calls.push(args);
+  console.error = (...args) => calls.push(args);
   try {
     reportProfileMediaDiagnostic({
       purpose: "personal_profile",
@@ -227,7 +227,7 @@ test("profile media diagnostics expose only normalized transaction evidence", ()
       secure_url: "https://private.example.test/media.jpg",
     });
   } finally {
-    console.warn = originalWarn;
+    console.error = originalError;
   }
   assert.equal(calls.length, 1);
   const serialized = JSON.stringify(calls[0]);
