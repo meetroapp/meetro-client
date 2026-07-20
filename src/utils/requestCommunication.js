@@ -20,6 +20,8 @@ export function normalizeRequestConversations(payload = {}, accountMode = "perso
         ...record,
         id,
         request_id: id,
+        createdAt: record.createdAt || record.created_at || "",
+        updatedAt: record.updatedAt || record.updated_at || "",
         project_title: title,
         project_description: String(record.description || "").trim(),
         relationshipScope: accountMode === "business" ? "business" : "personal",

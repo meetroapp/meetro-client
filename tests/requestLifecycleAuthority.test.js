@@ -82,6 +82,17 @@ test("Communication uses account-correct authoritative request sources", () => {
     normalizeRequestConversations({ opportunities: [post()] }, "business").map((item) => item.id),
     [12]
   );
+  assert.deepEqual(
+    normalizeRequestConversations(
+      { posts: [post({ status: "cancelled" })] },
+      "personal"
+    ).map(({ status, createdAt, updatedAt }) => ({ status, createdAt, updatedAt })),
+    [{
+      status: "cancelled",
+      createdAt: "2026-07-20T10:00:00.000Z",
+      updatedAt: "2026-07-20T10:00:00.000Z",
+    }]
+  );
   assert.equal(normalizeRequestConversations({}, "personal"), null);
 });
 
@@ -93,6 +104,8 @@ test("request surfaces render unavailable states and owner mutations without loc
   assert.match(myRequestsSource, /Request not changed/);
   assert.doesNotMatch(messagesSource, /authFetch\("\/contractor-quote-requests"/);
   assert.match(messagesSource, /getRequestCommunicationEndpoint\(activeAccountMode\)/);
+  assert.match(messagesSource, /rawStatus\.includes\("cancel"\)/);
+  assert.match(messagesSource, /quote\.conversation_type === "request_opportunity"/);
   assert.match(messagesSource, /reason: "messages_unavailable"/);
   assert.match(threadSource, /isRequestOpportunityReadOnly/);
   assert.match(threadSource, /Messaging is not available for this request yet/);

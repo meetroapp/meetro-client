@@ -1165,6 +1165,10 @@ function MessagesInbox({ setPage, currentPage }) {
     const rawStatus = String(quote.status || quote.workflow_status || "").toLowerCase();
     const description = String(quote.project_description || "").toLowerCase();
 
+    if (rawStatus.includes("cancel")) {
+      return t("requestCancelled", language);
+    }
+
     if (rawStatus.includes("confirmed") || description.includes("confirmed")) {
       return t("appointmentConfirmed");
     }
@@ -1390,6 +1394,10 @@ function MessagesInbox({ setPage, currentPage }) {
     if (quote.unread) return t("messageNextStepReply");
 
     const status = getWorkflowStatusLabel(quote).toLowerCase();
+
+    if (status.includes("cancel") || status.includes("anulad")) {
+      return t("requestCancelledSummary", language);
+    }
 
     if (status.includes("appointment") || status.includes("cita")) {
       return t("messageNextStepAppointment");
@@ -2814,6 +2822,9 @@ function MessagesInbox({ setPage, currentPage }) {
     if (isHiringConversation(quote)) return t("hiring", language);
     if (quote.unread) return t("unread", language);
     if (isSavedChatHistoryConversation(quote)) return t("stateSaved", language);
+    if (quote.conversation_type === "request_opportunity") {
+      return getWorkflowStatusLabel(quote);
+    }
     return "";
   }
 
