@@ -102,6 +102,14 @@ test("request surfaces render unavailable states and owner mutations without loc
   assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(requestId\)\}`/);
   assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(pendingCancelId\)\}\/cancel`/);
   assert.match(myRequestsSource, /Request not changed/);
+  assert.match(
+    myRequestsSource,
+    /request\.status === "cancelled" && canReadLegacyWorkflowStorage\(\)/
+  );
+  assert.match(myRequestsSource, /Restore is not available/);
+  assert.match(myRequestsSource, /request\.conversation_available === true/);
+  assert.match(myRequestsSource, /const submittedOnly = workflow\.key === "request"/);
+  assert.match(myRequestsSource, /workflow\.key === "cancelled"[\s\S]*setPage\("upload"\)/);
   assert.doesNotMatch(messagesSource, /authFetch\("\/contractor-quote-requests"/);
   assert.match(messagesSource, /getRequestCommunicationEndpoint\(activeAccountMode\)/);
   assert.match(messagesSource, /rawStatus\.includes\("cancel"\)/);

@@ -4,10 +4,33 @@ import test from "node:test";
 import {
   getHomeownerWorkflowPresentation,
   getHomeownerWorkflowTimeline,
+  getHomeownerLifecycleStage,
+  getAuthoritativeHomeownerRequestCounts,
   isRequestActiveForHomeowner,
   isRequestAvailableAsNewLead,
   isRequestVisibleToHomeowner,
 } from "../src/utils/homeownerLifecycle.js";
+
+test("open owner requests remain truthful without professional projection evidence", () => {
+  const lifecycle = getHomeownerLifecycleStage({ status: "open" });
+  const presentation = getHomeownerWorkflowPresentation({ status: "open" });
+
+  assert.equal(lifecycle.stageLabel, "Request submitted");
+  assert.doesNotMatch(lifecycle.nextStep, /professional|respond/i);
+  assert.equal(presentation.statusLabel, "Request submitted");
+});
+
+test("request metrics render only explicit authoritative count fields", () => {
+  assert.equal(getAuthoritativeHomeownerRequestCounts({ status: "open" }), null);
+  assert.deepEqual(
+    getAuthoritativeHomeownerRequestCounts({
+      professional_view_count: 0,
+      message_count: 2,
+      quote_count: 1,
+    }),
+    { views: 0, messages: 2, quotes: 1 }
+  );
+});
 
 test("homeowner workflow mirrors proposal sent as homeowner approval", () => {
   const presentation = getHomeownerWorkflowPresentation({

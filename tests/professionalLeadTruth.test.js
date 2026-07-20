@@ -12,6 +12,7 @@ const leadsSource = readSource("src/pages/BusinessLeads.jsx");
 const dashboardSource = readSource("src/pages/BusinessDashboard.jsx");
 const homeSource = readSource("src/pages/Home.jsx");
 const metricsSource = readSource("src/utils/dashboardMetrics.js");
+const opportunityStateSource = readSource("src/utils/professionalOpportunityState.js");
 test("Business Leads uses only the backend-authorized professional projection", () => {
   assert.match(leadsSource, /authFetch/);
   assert.match(leadsSource, /professional-request-opportunities/);
@@ -27,7 +28,10 @@ test("professional lead surfaces do not project browser-local homeowner requests
   assert.doesNotMatch(metricsSource, /getEligibleSharedProfessionalLeads/);
   assert.doesNotMatch(dashboardSource, /matchingDashboardLeads/);
   assert.doesNotMatch(dashboardSource, /function LeadCard/);
-  assert.match(dashboardSource, /leadsUnavailable/);
+  assert.match(dashboardSource, /professional-request-opportunities/);
+  assert.match(dashboardSource, /resolveProfessionalOpportunityCollection/);
+  assert.match(opportunityStateSource, /new Map/);
+  assert.doesNotMatch(dashboardSource, /Professional leads are not available yet/);
   assert.doesNotMatch(dashboardSource, /unlimited homeowner leads|unlimited lead access/i);
   assert.match(homeSource, /leadProjectionAvailable/);
 

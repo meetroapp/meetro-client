@@ -5,7 +5,10 @@ import { getLanguage, t } from "../utils/language";
 import { purgeProfessionalLeadCaches } from "../utils/businessLeadSourceTruth";
 import { isProfessionalSession } from "../utils/session";
 import { authFetch } from "../utils/authFetch";
-import { normalizeRequestConversations } from "../utils/requestCommunication";
+import {
+  PROFESSIONAL_OPPORTUNITY_STATUS,
+  resolveProfessionalOpportunityCollection,
+} from "../utils/professionalOpportunityState";
 
 function BusinessLeads({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
@@ -35,19 +38,9 @@ function BusinessLeads({ setPage }) {
           setPage
         );
         if (!active) return;
-        if (!result?.response?.ok) {
-          setOpportunities([]);
-          setStatus("unavailable");
-          return;
-        }
-        const records = normalizeRequestConversations(result.data || {}, "business");
-        if (!records) {
-          setOpportunities([]);
-          setStatus("unavailable");
-          return;
-        }
-        setOpportunities(records);
-        setStatus(records.length > 0 ? "ready" : "empty");
+        const collection = resolveProfessionalOpportunityCollection(result);
+        setOpportunities(collection.records);
+        setStatus(collection.status);
       } catch {
         if (active) {
           setOpportunities([]);
@@ -84,26 +77,28 @@ function BusinessLeads({ setPage }) {
       <div style={heroCard}>
         <h1 style={heroTitle}>{t("businessLeads", language)}</h1>
         <p style={heroText}>
-          {status === "ready"
+          {status === PROFESSIONAL_OPPORTUNITY_STATUS.READY
             ? "Open requests matched to your services and service area."
-            : t("professionalLeadsUnavailableSummary", language)}
+            : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY
+              ? "Authorized request matching is active."
+              : t("professionalLeadsUnavailableSummary", language)}
         </p>
       </div>
 
-      {status === "loading" ? (
+      {status === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
         <section style={unavailableCard} role="status">Loading request opportunities…</section>
-      ) : status === "unavailable" ? (
+      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
         <section style={unavailableCard} aria-labelledby="professional-leads-unavailable">
           <div style={stateIcon}>LEAD</div>
           <h2 id="professional-leads-unavailable" style={stateTitle}>Request opportunities unavailable</h2>
           <p style={stateText}>Meetro could not verify eligible requests. Try again.</p>
           <button style={primaryButton} onClick={() => setReloadKey((value) => value + 1)}>Try Again</button>
         </section>
-      ) : status === "empty" ? (
+      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
         <section style={unavailableCard} role="status">
           <div style={stateIcon}>LEAD</div>
-          <h2 style={stateTitle}>No matching requests</h2>
-          <p style={stateText}>There are no open requests matching your services and service area.</p>
+          <h2 style={stateTitle}>No matching requests are available right now.</h2>
+          <p style={stateText}>Meetro checked open requests against your saved services and service area.</p>
         </section>
       ) : (
         <section style={leadList} aria-label="Eligible request opportunities">
@@ -113,15 +108,7 @@ function BusinessLeads({ setPage }) {
               <h2 style={stateTitle}>{opportunity.project_title}</h2>
               <p style={stateText}>{opportunity.project_description}</p>
               <p style={leadMeta}>{opportunity.service_specialty || opportunity.request_category}</p>
-              <button
-                style={primaryButton}
-                onClick={() => {
-                  localStorage.setItem("activeAccountMode", "business");
-                  setPage("messagesInbox");
-                }}
-              >
-                Open Communication Center
-              </button>
+              <p style={leadReviewNote}>Request review only. Response and messaging are not available yet.</p>
             </article>
           ))}
         </section>
@@ -241,6 +228,13 @@ const leadMeta = {
   color: "#4b5563",
   fontWeight: 800,
   margin: "12px 0 0",
+};
+
+const leadReviewNote = {
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: 700,
+  margin: "14px 0 0",
 };
 
 export default BusinessLeads;

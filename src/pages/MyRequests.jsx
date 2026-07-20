@@ -14,6 +14,7 @@ import {
 } from "../utils/mediaDeferral";
 import {
   getHomeownerLifecycleStage,
+  getAuthoritativeHomeownerRequestCounts,
   getHomeownerWorkflowPresentation,
   getHomeownerWorkflowTimeline,
   isRequestVisibleToHomeowner,
@@ -465,6 +466,14 @@ function HomeownerWorkflowHub({
     },
   ].filter((section) => section.visible);
   const primaryIsConversation = workflow.primaryActionKey === "messageProfessional";
+  const canonicalConversationId =
+    request.conversation_id || request.conversationId || "";
+  const hasAuthoritativeConversation = Boolean(
+    request.conversation_available === true && canonicalConversationId
+  );
+  const submittedOnly = workflow.key === "request";
+  const showPrimaryAction =
+    !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
 
   return (
     <div style={workflowHubCard}>
@@ -509,7 +518,7 @@ function HomeownerWorkflowHub({
       )}
 
       <div style={workflowHubActions}>
-        <button
+        {showPrimaryAction && <button
           type="button"
           style={workflowHubPrimaryButton}
           onClick={() =>
@@ -519,8 +528,8 @@ function HomeownerWorkflowHub({
           }
         >
           {workflow.primaryActionLabel}
-        </button>
-        {!hideCommunicationAction && !primaryIsConversation && (
+        </button>}
+        {!hideCommunicationAction && !primaryIsConversation && hasAuthoritativeConversation && (
           <button type="button" style={workflowHubSecondaryButton} onClick={onOpenConversation}>
             {t("myRequestsMessageProfessional", language)}
           </button>
@@ -647,10 +656,6 @@ function MyRequests({ setPage }) {
     const bSelected = String(b.requestId || b.id) === String(selectedId) ? 1 : 0;
     return bSelected - aSelected;
   });
-
-  function getCount(value) {
-    return Array.isArray(value) ? value.length : value || 0;
-  }
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
     if (!canReadLegacyWorkflowStorage()) return false;
@@ -1057,8 +1062,7 @@ function MyRequests({ setPage }) {
               Array.isArray(truthfulRequest.quotesReceived) &&
               truthfulRequest.quotesReceived.length > 0;
 
-            const viewsCount = getCount(request.viewedByBusinesses);
-            const quotesCount = getCount(truthfulRequest.quotesReceived);
+            const authoritativeCounts = getAuthoritativeHomeownerRequestCounts(request);
 
             return (
               <div
@@ -1156,6 +1160,7 @@ function MyRequests({ setPage }) {
                     </strong>
                   </div>
 
+                  {authoritativeCounts && (
                   <div
                     style={{
                       display: "flex",
@@ -1166,10 +1171,11 @@ function MyRequests({ setPage }) {
                       fontWeight: 800,
                     }}
                   >
-                    <span>{viewsCount} {t("myRequestsViews", language)}</span>
-                    <span>{request.messagesCount || 0} {t("myRequestsMessages", language)}</span>
-                    <span>{quotesCount} {t("myRequestsQuotes", language)}</span>
+                    {authoritativeCounts.views !== null && <span>{authoritativeCounts.views} {t("myRequestsViews", language)}</span>}
+                    {authoritativeCounts.messages !== null && <span>{authoritativeCounts.messages} {t("myRequestsMessages", language)}</span>}
+                    {authoritativeCounts.quotes !== null && <span>{authoritativeCounts.quotes} {t("myRequestsQuotes", language)}</span>}
                   </div>
+                  )}
 
                   <button
                     type="button"
@@ -1212,7 +1218,9 @@ function MyRequests({ setPage }) {
                       linkedAppointment={linkedAppointment}
                       onOpenConversation={() => openRequestConversation(request)}
                       onPrimaryAction={(workflow) =>
-                        openHomeownerWorkflow(truthfulRequest, workflow)
+                        workflow.key === "cancelled"
+                          ? setPage("upload")
+                          : openHomeownerWorkflow(truthfulRequest, workflow)
                       }
                       hideCommunicationAction={hasQuoteReview}
                     />
@@ -1775,7 +1783,7 @@ function MyRequests({ setPage }) {
                         )}
                       </>
                     ) : (
-                      request.status === "cancelled" ? (
+                      request.status === "cancelled" && canReadLegacyWorkflowStorage() ? (
                         <button
                           style={primaryButton}
                           onClick={() => restoreProject(requestId)}
@@ -1784,6 +1792,12 @@ function MyRequests({ setPage }) {
                             ? "Restaurar Solicitud"
                             : "Restore Request"}
                         </button>
+                      ) : request.status === "cancelled" ? (
+                        <p role="status" style={cancelledRequestNotice}>
+                          {language === "es"
+                            ? "Solicitud cancelada. La restauración no está disponible."
+                            : "Request cancelled. Restore is not available."}
+                        </p>
                       ) : (
                         <button
                           style={dangerButton}
@@ -2648,6 +2662,20 @@ const dangerButton = {
   padding: "13px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const cancelledRequestNotice = {
+  width: "100%",
+  margin: 0,
+  padding: "12px 14px",
+  borderRadius: "14px",
+  border: "1px solid rgba(148, 163, 184, 0.28)",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "14px",
+  fontWeight: 800,
+  lineHeight: 1.4,
+  boxSizing: "border-box",
 };
 
 const editPhotoManager = {

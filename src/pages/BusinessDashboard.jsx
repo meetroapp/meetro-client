@@ -23,6 +23,10 @@ import {
   getConfirmedBusinessProfile,
 } from "../utils/businessProfilePersistence";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  PROFESSIONAL_OPPORTUNITY_STATUS,
+  resolveProfessionalOpportunityCollection,
+} from "../utils/professionalOpportunityState";
 
 const profileLoadText = {
   en: {
@@ -57,6 +61,8 @@ function BusinessDashboard({ setPage }) {
   );
 
   const [availableNow, setAvailableNow] = useState(false);
+  const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
+  const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
 
   const businessName =
     profile?.business_name ||
@@ -133,6 +139,36 @@ function BusinessDashboard({ setPage }) {
   useEffect(() => {
     fetchProfile();
   }, [language]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+    let active = true;
+
+    async function fetchAuthoritativeLeads() {
+      setLeadStatus(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
+      try {
+        const result = await authFetch(
+          "/professional-request-opportunities",
+          { cache: "no-store" },
+          setPage
+        );
+        if (!active) return;
+        const collection = resolveProfessionalOpportunityCollection(result);
+        setAuthoritativeLeads(collection.records);
+        setLeadStatus(collection.status);
+      } catch {
+        if (active) {
+          setAuthoritativeLeads([]);
+          setLeadStatus(PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE);
+        }
+      }
+    }
+
+    fetchAuthoritativeLeads();
+    return () => {
+      active = false;
+    };
+  }, [profile?.id, setPage]);
 
   async function fetchProfile() {
     setLoading(true);
@@ -455,11 +491,8 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Work Center",
       workSubtitle: "Active jobs, quotes, and work records.",
       openWorkCenter: "Continue Work",
-      newLeads: "New Leads Near You",
+      newLeads: "Matching Requests",
       viewAllLeads: "Review leads",
-      leadsUnavailable: "Professional leads are not available yet.",
-      leadsUnavailableText:
-        "Meetro will show opportunities here only after requests can be shared through an authorized business projection.",
       upgradeTitle: "Founding professional access",
       upgradeText:
         "Business profile and operational tools remain available while Meetro prepares authorized opportunity sharing.",
@@ -519,11 +552,8 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Centro de Trabajo",
       workSubtitle: "Trabajos activos, cotizaciones e historial.",
       openWorkCenter: "Continuar trabajo",
-      newLeads: "Nuevas Oportunidades Cerca",
+      newLeads: "Solicitudes coincidentes",
       viewAllLeads: "Revisar oportunidades",
-      leadsUnavailable: "Las oportunidades profesionales aún no están disponibles.",
-      leadsUnavailableText:
-        "Meetro mostrará oportunidades aquí solo cuando las solicitudes puedan compartirse mediante una proyección empresarial autorizada.",
       upgradeTitle: "Acceso profesional fundador",
       upgradeText:
         "El perfil y las herramientas operativas permanecen disponibles mientras Meetro prepara el intercambio autorizado de oportunidades.",
@@ -583,11 +613,8 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Centre de travail",
       workSubtitle: "Travaux actifs, devis et dossiers.",
       openWorkCenter: "Continuer le travail",
-      newLeads: "Nouveaux prospects près de vous",
+      newLeads: "Demandes correspondantes",
       viewAllLeads: "Examiner les prospects",
-      leadsUnavailable: "Les opportunités professionnelles ne sont pas encore disponibles.",
-      leadsUnavailableText:
-        "Meetro affichera ici les opportunités uniquement lorsque les demandes pourront être partagées par une projection professionnelle autorisée.",
       upgradeTitle: "Accès professionnel fondateur",
       upgradeText:
         "Le profil et les outils opérationnels restent disponibles pendant que Meetro prépare le partage autorisé des opportunités.",
@@ -647,11 +674,8 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Centro de trabalho",
       workSubtitle: "Trabalhos ativos, orçamentos e registros.",
       openWorkCenter: "Continuar trabalho",
-      newLeads: "Novas oportunidades perto de você",
+      newLeads: "Solicitações correspondentes",
       viewAllLeads: "Revisar oportunidades",
-      leadsUnavailable: "As oportunidades profissionais ainda não estão disponíveis.",
-      leadsUnavailableText:
-        "O Meetro mostrará oportunidades aqui somente quando as solicitações puderem ser compartilhadas por uma projeção empresarial autorizada.",
       upgradeTitle: "Acesso profissional fundador",
       upgradeText:
         "O perfil e as ferramentas operacionais permanecem disponíveis enquanto o Meetro prepara o compartilhamento autorizado de oportunidades.",
@@ -1212,9 +1236,16 @@ function BusinessDashboard({ setPage }) {
                 </button>
               </div>
 
-              <div style={emptyLeadsState}>
-                <strong>{text.leadsUnavailable}</strong>
-                <p>{text.leadsUnavailableText}</p>
+              <div style={emptyLeadsState} role={leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? "alert" : "status"}>
+                {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
+                  <><strong>Loading matching requests…</strong><p>Meetro is checking the authorized opportunity projection.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
+                  <><strong>Request opportunities unavailable</strong><p>Meetro could not verify eligible requests. Try again from Business Leads.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
+                  <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
+                ) : (
+                  <><strong>{authoritativeLeads.length} matching {authoritativeLeads.length === 1 ? "request" : "requests"}</strong><p>Review the authoritative opportunities available to your business.</p></>
+                )}
               </div>
             </section>
           </div>

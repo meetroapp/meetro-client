@@ -113,6 +113,25 @@ function hasTimelineType(request, matcher) {
     : false;
 }
 
+export function getAuthoritativeHomeownerRequestCounts(request = {}) {
+  const fields = {
+    views: "professional_view_count",
+    messages: "message_count",
+    quotes: "quote_count",
+  };
+  const hasAnyAuthoritativeCount = Object.values(fields).some((field) =>
+    Object.hasOwn(request, field)
+  );
+  if (!hasAnyAuthoritativeCount) return null;
+
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, field]) => {
+      const value = Number(request[field]);
+      return [key, Number.isFinite(value) && value >= 0 ? value : null];
+    })
+  );
+}
+
 export function getHomeownerLifecycleStage(request = {}, language = "en") {
   const status = normalizeStatus(request.status);
   const quotesReceived = hasItems(request.quotesReceived);
@@ -140,7 +159,7 @@ export function getHomeownerLifecycleStage(request = {}, language = "en") {
 
   const copy = {
     en: {
-      waiting: ["Waiting for professional response", "No action needed right now. Professionals can respond to your request."],
+      waiting: ["Request submitted", "No action is needed right now. We’ll update this request when the next supported step is available."],
       communication: ["Communication started", "Share details and coordinate an evaluation."],
       scheduled: ["Evaluation scheduled", "Complete the evaluation before quote approval."],
       quote: ["Quote received", "Review the proposal and request changes if needed."],
@@ -149,10 +168,10 @@ export function getHomeownerLifecycleStage(request = {}, language = "en") {
       completion: ["Completion review", "Confirm completion, then review Closure obligations."],
       closure: ["Closure pending", "Resolve payment, documents, confirmations, and obligations."],
       history: ["Saved to relationship history", "Use history for future service."],
-      cancelled: ["Request cancelled", "Restore or create a new request when needed."],
+      cancelled: ["Request cancelled", "Create a new request when you are ready."],
     },
     es: {
-      waiting: ["Esperando respuesta profesional", "No necesita hacer nada por ahora. Los profesionales pueden responder a su solicitud."],
+      waiting: ["Solicitud enviada", "No necesita hacer nada por ahora. Actualizaremos esta solicitud cuando el próximo paso compatible esté disponible."],
       communication: ["Comunicación iniciada", "Comparte detalles y coordina una evaluación."],
       scheduled: ["Evaluación programada", "Completa la evaluación antes de aprobar una cotización."],
       quote: ["Cotización recibida", "Revisa la propuesta y solicita cambios si es necesario."],
@@ -161,7 +180,7 @@ export function getHomeownerLifecycleStage(request = {}, language = "en") {
       completion: ["Revisión de finalización", "Confirma la finalización y luego revisa obligaciones de Cierre."],
       closure: ["Cierre pendiente", "Resuelve pagos, documentos, confirmaciones y obligaciones."],
       history: ["Guardado en historial de relación", "Usa el historial para servicios futuros."],
-      cancelled: ["Solicitud cancelada", "Restaura o crea una nueva solicitud cuando sea necesario."],
+      cancelled: ["Solicitud cancelada", "Cree una nueva solicitud cuando esté listo."],
     },
   };
 
@@ -233,8 +252,8 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
   const copy = {
     en: {
       request: {
-        status: "Waiting for professional response",
-        next: "No action needed right now.",
+        status: "Request submitted",
+        next: "We’ll update this request when the next supported step is available.",
         action: "Continue Request",
         hint: "Request submitted",
       },
@@ -313,8 +332,8 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
     },
     es: {
       request: {
-        status: "Esperando respuesta profesional",
-        next: "No necesita hacer nada por ahora.",
+        status: "Solicitud enviada",
+        next: "Actualizaremos esta solicitud cuando el próximo paso compatible esté disponible.",
         action: "Continuar solicitud",
         hint: "Solicitud enviada",
       },
@@ -393,7 +412,7 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
     },
   };
 
-  let key = lifecycle.key === "history" ? "history" : "request";
+  let key;
 
   if (status === "cancelled") key = "cancelled";
   else if (closed) key = "history";
