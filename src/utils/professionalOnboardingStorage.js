@@ -116,10 +116,10 @@ export function readProfessionalOnboardingState({
     ? profile.service_specialties
     : [];
   const draftSource = {
-    ...(profileSpecialties.length ? { serviceSpecialties: profileSpecialties } : {}),
     primaryCity: text(profile?.city),
     zipCodes: text(profile?.postal_code),
     ...savedDraft,
+    ...(profile ? { serviceSpecialties: profileSpecialties } : {}),
   };
 
   return {

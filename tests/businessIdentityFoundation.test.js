@@ -569,9 +569,12 @@ test("multi-select service selector has a visible finish action", () => {
   assert.match(selectorSource, /gridTemplateRows: "auto auto 1fr auto"/);
   assert.match(onboardingSource, /doneLabel=\{t\("professionalOnboardingContinue"\)\}/);
   assert.match(onboardingSource, /onDone=\{\(\) => setStep\(4\)\}/);
-  assert.match(profileSource, /doneLabel=\{t\("save"\)\}/);
+  assert.match(profileSource, /doneLabel=\{onSave \? `\$\{t\("save"\)\}/);
   assert.match(profileSource, /placement="center"/);
-  assert.match(profileSource, /onDone=\{\(\) => setSelectorOpen\(false\)\}/);
+  assert.match(profileSource, /onDone=\{onSave\}/);
+  assert.match(profileSource, /doneDisabled=\{saving\}/);
+  assert.match(profileSource, /statusMessage=\{saving/);
+  assert.match(selectorSource, /role=\{statusIsError \? "alert" : "status"\}/);
 
   const uploadSelectorBlock = uploadSource.slice(
     uploadSource.indexOf("<ServiceSelectorSheet"),

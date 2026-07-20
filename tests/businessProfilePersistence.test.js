@@ -5,6 +5,7 @@ import {
   buildBusinessProfilePayload,
   buildBusinessProfilePayloadFromCanonical,
   getConfirmedBusinessProfile,
+  saveAuthoritativeBusinessServices,
 } from "../src/utils/businessProfilePersistence.js";
 
 test("business profile payload projects every supported editor field without mutating input", () => {
@@ -126,4 +127,118 @@ test("Business Profile contains no browser-local persistence authority for edita
     /setServiceArea\(existingProfile\.service_area \|\| existingProfile\.location \|\| ""\)/
   );
   assert.match(source, /"\/my-contractor-profile",\s*\{ cache: "no-store" \}/);
+});
+
+test("Services Offered saves one canonical service through the owned profile endpoint", async () => {
+  const calls = [];
+  const profile = {
+    id: "profile-1",
+    business_name: "Trusted Home Services",
+    category: "handyman",
+    city: "Cape Coral",
+    postal_code: "33990",
+    service_specialties: [],
+  };
+  const savedProfile = { ...profile, service_specialties: ["handyman"] };
+
+  const result = await saveAuthoritativeBusinessServices({
+    profile,
+    serviceSpecialties: ["handyman"],
+    authFetchImpl: async (...args) => {
+      calls.push(args);
+      return {
+        response: { ok: true },
+        data: {
+          success: true,
+          code: "BUSINESS_PROFILE_UPDATED",
+          profile: savedProfile,
+        },
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0][0], "/contractor-profiles/profile-1");
+  assert.equal(calls[0][1].method, "PUT");
+  assert.deepEqual(JSON.parse(calls[0][1].body).service_specialties, ["handyman"]);
+  assert.deepEqual(result.profile.service_specialties, ["handyman"]);
+});
+
+test("Services Offered replaces the full selection, removes duplicates, and preserves canonical fields", async () => {
+  const profile = {
+    id: "profile-2",
+    business_name: "Trusted Home Services",
+    category: "handyman",
+    city: "Cape Coral",
+    postal_code: "33990",
+    service_area: "Cape Coral; 33990",
+    service_specialties: ["painting"],
+  };
+  let payload;
+
+  await saveAuthoritativeBusinessServices({
+    profile,
+    serviceSpecialties: ["handyman", "small_repairs", "handyman"],
+    authFetchImpl: async (_path, options) => {
+      payload = JSON.parse(options.body);
+      return {
+        response: { ok: true },
+        data: {
+          success: true,
+          code: "BUSINESS_PROFILE_UPDATED",
+          profile: { ...profile, service_specialties: ["handyman", "small_repairs"] },
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(payload.service_specialties, ["handyman", "small_repairs"]);
+  assert.equal(payload.city, "Cape Coral");
+  assert.equal(payload.postal_code, "33990");
+  assert.equal(payload.service_area, "Cape Coral; 33990");
+});
+
+test("failed Services Offered save remains unconfirmed", async () => {
+  const result = await saveAuthoritativeBusinessServices({
+    profile: { id: "profile-3", business_name: "Business", category: "handyman" },
+    serviceSpecialties: ["handyman"],
+    authFetchImpl: async () => ({
+      response: { ok: false, status: 500 },
+      data: { success: false, code: "BUSINESS_PROFILE_UPDATE_FAILED" },
+    }),
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    code: "BUSINESS_PROFILE_UPDATE_FAILED",
+    message: "",
+    profile: null,
+  });
+});
+
+test("Services Offered never submits noncanonical identifiers", async () => {
+  let payload;
+  const profile = {
+    id: "profile-4",
+    business_name: "Business",
+    category: "handyman",
+  };
+
+  await saveAuthoritativeBusinessServices({
+    profile,
+    serviceSpecialties: ["handyman", "made_up_service", "handyman"],
+    authFetchImpl: async (_path, options) => {
+      payload = JSON.parse(options.body);
+      return {
+        response: { ok: true },
+        data: {
+          success: true,
+          code: "BUSINESS_PROFILE_UPDATED",
+          profile: { ...profile, service_specialties: ["handyman"] },
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(payload.service_specialties, ["handyman"]);
 });

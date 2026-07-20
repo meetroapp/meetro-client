@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
@@ -32,6 +32,7 @@ import { setBusinessAvailability } from "../utils/businessAvailability";
 import {
   buildBusinessProfilePayload,
   getConfirmedBusinessProfile,
+  saveAuthoritativeBusinessServices,
 } from "../utils/businessProfilePersistence";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
@@ -79,6 +80,9 @@ function ContractorProfile({ setPage, currentPage }) {
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState("");
   const [serviceSpecialties, setServiceSpecialties] = useState([]);
+  const [savingServices, setSavingServices] = useState(false);
+  const [serviceSaveError, setServiceSaveError] = useState("");
+  const serviceSaveAttemptRef = useRef(false);
   const [expandedProfileSections, setExpandedProfileSections] = useState({});
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
@@ -342,11 +346,54 @@ function ContractorProfile({ setPage, currentPage }) {
   }
 
   function toggleServiceSpecialty(value) {
+    setServiceSaveError("");
     setServiceSpecialties((current) =>
       current.includes(value)
         ? current.filter((item) => item !== value)
         : [...current, value]
     );
+  }
+
+  async function handleSaveServiceSpecialties() {
+    if (serviceSaveAttemptRef.current) return false;
+    if (!profile?.id) {
+      setServiceSaveError(t("noContractorProfileFound"));
+      return false;
+    }
+
+    serviceSaveAttemptRef.current = true;
+    setSavingServices(true);
+    setServiceSaveError("");
+
+    try {
+      const result = await saveAuthoritativeBusinessServices({
+        profile,
+        serviceSpecialties,
+        authFetchImpl: authFetch,
+        setPage,
+      });
+
+      if (!result.ok) {
+        setServiceSaveError(result.message || t("failedUpdateProfile"));
+        return false;
+      }
+
+      setProfile(result.profile);
+      setServiceSpecialties(
+        Array.isArray(result.profile.service_specialties)
+          ? result.profile.service_specialties
+          : []
+      );
+      projectConfirmedBusinessProfile(result.profile);
+      alert(t("profileUpdated"));
+      return true;
+    } catch {
+      setServiceSaveError(t("failedUpdateProfile"));
+      return false;
+    } finally {
+      serviceSaveAttemptRef.current = false;
+      setSavingServices(false);
+    }
   }
 
   function projectConfirmedBusinessProfile(profileData) {
@@ -1320,6 +1367,9 @@ function ContractorProfile({ setPage, currentPage }) {
           categories={categories}
           serviceSpecialties={serviceSpecialties}
           toggleServiceSpecialty={toggleServiceSpecialty}
+          saveServiceSpecialties={handleSaveServiceSpecialties}
+          savingServices={savingServices}
+          serviceSaveError={serviceSaveError}
           phone={phone}
           setPhone={setPhone}
           location={location}
@@ -1381,6 +1431,9 @@ function ProfileForm({
   categories,
   serviceSpecialties,
   toggleServiceSpecialty,
+  saveServiceSpecialties,
+  savingServices,
+  serviceSaveError,
   country,
   setCountry,
   language,
@@ -1505,6 +1558,9 @@ function ProfileForm({
       <ServicesOfferedSection
         selectedSpecialties={serviceSpecialties}
         onToggle={toggleServiceSpecialty}
+        onSave={saveServiceSpecialties}
+        saving={savingServices}
+        saveError={serviceSaveError}
       />
 
       <input
@@ -1756,6 +1812,9 @@ function ServicesOfferedSection({
   collapsible = false,
   open = true,
   onToggleSection,
+  onSave,
+  saving = false,
+  saveError = "",
 }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const selectedLabels = selectedSpecialties
@@ -1829,10 +1888,13 @@ function ServicesOfferedSection({
             selectedValues={selectedSpecialties}
             multiple
             placement="center"
-            doneLabel={t("save")}
+            doneLabel={onSave ? `${t("save")}${saving ? "…" : ""}` : t("done")}
+            doneDisabled={saving}
+            statusMessage={saving ? `${t("save")}…` : saveError}
+            statusIsError={Boolean(saveError)}
             onSelect={() => {}}
             onToggle={(value) => onToggle?.(value)}
-            onDone={() => setSelectorOpen(false)}
+            onDone={onSave}
             onClose={() => setSelectorOpen(false)}
           />
         </>

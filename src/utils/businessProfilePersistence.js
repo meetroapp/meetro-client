@@ -1,3 +1,5 @@
+import { normalizeSelectedSpecialties } from "./professionalOnboardingSpecialties.js";
+
 export const BUSINESS_PROFILE_SUCCESS_CODES = Object.freeze([
   "BUSINESS_PROFILE_CREATED",
   "BUSINESS_PROFILE_UPDATED",
@@ -88,4 +90,45 @@ export function buildBusinessProfilePayloadFromCanonical(profile = {}, overrides
     dispatch_ready: profile.dispatch_ready === true,
     ...overrides,
   };
+}
+
+export async function saveAuthoritativeBusinessServices({
+  profile,
+  serviceSpecialties = [],
+  authFetchImpl,
+  setPage,
+} = {}) {
+  if (!profile?.id || typeof authFetchImpl !== "function") {
+    return { ok: false, code: "BUSINESS_PROFILE_REQUIRED", profile: null };
+  }
+
+  const canonicalSpecialties = normalizeSelectedSpecialties(
+    (Array.isArray(serviceSpecialties) ? serviceSpecialties : [])
+      .map(clean)
+      .filter(Boolean)
+  );
+  const result = await authFetchImpl(
+    `/contractor-profiles/${profile.id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(
+        buildBusinessProfilePayloadFromCanonical(profile, {
+          service_specialties: canonicalSpecialties,
+        })
+      ),
+    },
+    setPage
+  );
+  const confirmedProfile = getConfirmedBusinessProfile(result);
+
+  if (!confirmedProfile) {
+    return {
+      ok: false,
+      code: result?.data?.code || "BUSINESS_PROFILE_UPDATE_FAILED",
+      message: result?.data?.error || result?.data?.message || "",
+      profile: null,
+    };
+  }
+
+  return { ok: true, code: result.data.code, profile: confirmedProfile };
 }

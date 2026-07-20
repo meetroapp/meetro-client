@@ -134,6 +134,39 @@ test("only a contractor profile owned by the authenticated user can initialize s
   );
 });
 
+test("authoritative profile services override stale onboarding drafts, including explicit empty", () => {
+  const storage = createStorage();
+  installUser(storage, {
+    id: "user-b",
+    email: "owner-b@example.test",
+    business_name: "Business B",
+  });
+  const keys = getProfessionalOnboardingKeys("user-b");
+  storage.setItem(keys.draft, JSON.stringify({
+    serviceSpecialties: ["painting"],
+  }));
+
+  const persisted = readProfessionalOnboardingState({
+    storage,
+    ownedProfile: {
+      id: "profile-b",
+      user_id: "user-b",
+      service_specialties: ["handyman", "small_repairs"],
+    },
+  });
+  const cleared = readProfessionalOnboardingState({
+    storage,
+    ownedProfile: {
+      id: "profile-b",
+      user_id: "user-b",
+      service_specialties: [],
+    },
+  });
+
+  assert.deepEqual(persisted.draft.serviceSpecialties, ["handyman", "small_repairs"]);
+  assert.deepEqual(cleared.draft.serviceSpecialties, []);
+});
+
 test("only a confirmed owned profile can unlock completed professional setup", () => {
   const storage = createStorage();
   installUser(storage, {
@@ -225,6 +258,8 @@ test("Professional Onboarding reconciles only the authenticated owned profile", 
   assert.doesNotMatch(source, /readStorageValue\("businessEmail"\)/);
   assert.doesNotMatch(source, /readJson\(PROFILE_DRAFT_KEY/);
   assert.match(source, /method: ownedProfile\?\.id \? "PUT" : "POST"/);
+  assert.match(source, /serviceSpecialties: specialtyProfile\.serviceSpecialties/);
+  assert.doesNotMatch(source, /serviceSpecialties: selectedServiceLabels/);
   assert.match(source, /getConfirmedBusinessProfile/);
   assert.match(source, /projectConfirmedProfessionalProfile/);
   assert.match(source, /disabled=\{completionSaving\}/);

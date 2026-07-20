@@ -46,6 +46,8 @@ function ServiceSelectorSheet({
   multiple = false,
   doneLabel,
   doneDisabled = false,
+  statusMessage = "",
+  statusIsError = false,
   placement = "bottom",
   onSelect,
   onToggle,
@@ -318,6 +320,19 @@ function ServiceSelectorSheet({
           {cantFindLabel || t("professionalCapabilityCantFind", language)}
         </p>
 
+        {statusMessage && (
+          <p
+            style={{
+              ...sheetStatus,
+              ...(statusIsError ? sheetStatusError : {}),
+            }}
+            role={statusIsError ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {statusMessage}
+          </p>
+        )}
+
         {showMultiSelectFooter && (
           <div style={sheetFooter}>
             <button type="button" style={footerCancelButton} onClick={onClose}>
@@ -330,9 +345,9 @@ function ServiceSelectorSheet({
                 ...(doneDisabled ? footerDoneButtonDisabled : {}),
               }}
               disabled={doneDisabled}
-              onClick={() => {
-                onDone?.();
-                onClose?.();
+              onClick={async () => {
+                const shouldClose = await onDone?.();
+                if (shouldClose !== false) onClose?.();
               }}
             >
               {doneLabel || t("done", language)}
@@ -414,6 +429,17 @@ const sheetSubtitle = {
   fontSize: "13px",
   lineHeight: 1.35,
   fontWeight: 700,
+};
+
+const sheetStatus = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const sheetStatusError = {
+  color: "#8b1e1e",
 };
 
 const closeButton = {
