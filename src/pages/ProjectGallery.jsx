@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
-import API_URL from "../api";
 import LoadingScreen from "../components/LoadingScreen";
 import { authFetch } from "../utils/authFetch";
 import {
@@ -13,14 +12,29 @@ import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import {
   CAMERA_PERMISSION_MESSAGE,
-  createPhotoInputEvent,
   openJobPhotoPicker,
 } from "../utils/cameraPhotoPicker";
 import {
   getMediaDeferredCopy,
   getMediaDeferredNotice,
-  isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
+import {
+  cleanupBusinessPortfolioMedia,
+  createBusinessPortfolioPreview,
+  getBusinessPortfolioEditorMedia,
+  isBusinessPortfolioMediaEnabled,
+  reorderBusinessPortfolioMedia,
+  toBusinessPortfolioPersistenceItem,
+  uploadBusinessPortfolioFiles,
+  validateBusinessPortfolioFiles,
+} from "../utils/businessPortfolioMedia";
+
+const PORTFOLIO_PHOTO_ERROR = Object.freeze({
+  en: "Choose JPG, PNG, or WebP photos under 10 MB.",
+  es: "Elige fotos JPG, PNG o WebP de menos de 10 MB.",
+  fr: "Choisissez des photos JPG, PNG ou WebP de moins de 10 Mo.",
+  pt: "Escolha fotos JPG, PNG ou WebP com menos de 10 MB.",
+});
 
 function ProjectGallery({ setPage, currentPage }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -35,7 +49,7 @@ function ProjectGallery({ setPage, currentPage }) {
   const projectImageInputRef = useRef(null);
   const editPortfolioImageInputRef = useRef(null);
 
-  const [uploading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -46,7 +60,8 @@ function ProjectGallery({ setPage, currentPage }) {
   const [expandedEditImage, setExpandedEditImage] = useState("");
   const portfolioEditorScrollRef = useRef(null);
   const [language, updateLanguage] = useState(getLanguage());
-  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const portfolioMediaEnabled = isBusinessPortfolioMediaEnabled();
+  const mediaUploadDeferred = !portfolioMediaEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
   useEffect(() => {
@@ -102,14 +117,12 @@ function ProjectGallery({ setPage, currentPage }) {
       if (profileData.profile) {
         setProfile(profileData.profile);
 
-        const projectsResponse = await fetch(
-          `${API_URL}/contractor-projects/${profileData.profile.id}`
+        const projectsResult = await authFetch(
+          "/my-contractor-projects",
+          { cache: "no-store" },
+          setPage
         );
-
-        const projectsData =
-          await projectsResponse.json();
-
-        const fetchedProjects = projectsData.projects || [];
+        const fetchedProjects = projectsResult?.data?.projects || [];
         setProjects(fetchedProjects);
       }
     } catch (error) {
@@ -120,8 +133,19 @@ function ProjectGallery({ setPage, currentPage }) {
   }
 
   function handleImageUpload(event) {
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    setPhotoError(getMediaDeferredNotice(language));
+    const validation = validateBusinessPortfolioFiles(files, {
+      existingCount: images.length,
+    });
+    if (!validation.ok) {
+      setPhotoError(PORTFOLIO_PHOTO_ERROR[language] || PORTFOLIO_PHOTO_ERROR.en);
+      return;
+    }
+    setImages((current) => [
+      ...current,
+      ...validation.files.map((file) => createBusinessPortfolioPreview(file)),
+    ]);
   }
 
   async function openProjectPhotoPicker() {
@@ -136,61 +160,110 @@ function ProjectGallery({ setPage, currentPage }) {
       inputRef: projectImageInputRef,
       fileNamePrefix: "portfolio-photo",
       language,
+      governedUploadEnabled: portfolioMediaEnabled,
       onPhotos: (photos) =>
-        handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+        handleImageUpload({
+          target: { files: photos.map((photo) => photo.file), value: "" },
+        }),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
     });
   }
 
-  async function handleCreateProject() {
+  async function persistProject({ items, endpoint, method, expectedCode, fields }) {
+    const pendingFiles = items.filter((item) => item.pending).map((item) => item.file);
+    setUploading(true);
+    setPhotoError("");
+    let uploaded = [];
     try {
-      if (
-        !title ||
-        !description ||
-        images.length === 0
-      ) {
-        alert(t("completeAllFields"));
-        return;
+      if (pendingFiles.length) {
+        const uploadResult = await uploadBusinessPortfolioFiles({
+          files: pendingFiles,
+          setPage,
+        });
+        if (!uploadResult.ok) {
+          setPhotoError(t("serverError"));
+          return null;
+        }
+        uploaded = uploadResult.media;
       }
-
+      let uploadIndex = 0;
+      const portfolioMedia = items.map((item) => {
+        const uploadedMedia = item.pending ? uploaded[uploadIndex++] : null;
+        return toBusinessPortfolioPersistenceItem(item, uploadedMedia);
+      });
+      if (portfolioMedia.some((item) => !item)) {
+        throw new Error("portfolio_media_invalid");
+      }
       const result = await authFetch(
-        "/contractor-projects",
+        endpoint,
         {
-          method: "POST",
-          body: JSON.stringify({
-            contractor_id: profile.id,
-            title,
-            description,
-            image_url: images[0],
-            image_urls: images,
-          }),
+          method,
+          body: JSON.stringify({ ...fields, portfolio_media: portfolioMedia }),
         },
         setPage
       );
-
-      if (!result) return;
-
-      const data = result.data;
-
-      if (data.project) {
-        alert(t("projectAdded"));
-
-        setTitle("");
-        setDescription("");
-        setImages([]);
-        setCreatingProject(false);
-
-        await fetchMyProfileAndProjects();
+      if (
+        !result?.response?.ok ||
+        result?.data?.success !== true ||
+        result?.data?.code !== expectedCode ||
+        !result?.data?.project
+      ) {
+        await Promise.all(uploaded.map((media) => cleanupBusinessPortfolioMedia({
+          media,
+          setPage,
+        })));
+        setPhotoError(t("serverError"));
+        return null;
       }
-    } catch (error) {
-      console.error(error);
-      alert(t("serverError"));
+      items.forEach((item) => item.revoke?.());
+      return result.data.project;
+    } catch {
+      await Promise.all(uploaded.map((media) => cleanupBusinessPortfolioMedia({
+        media,
+        setPage,
+      })));
+      setPhotoError(t("serverError"));
+      return null;
+    } finally {
+      setUploading(false);
     }
   }
 
+  async function handleCreateProject() {
+    if (!title || !description || images.length === 0) {
+      alert(t("completeAllFields"));
+      return;
+    }
+    const project = await persistProject({
+      items: images,
+      endpoint: "/contractor-projects",
+      method: "POST",
+      expectedCode: "BUSINESS_PORTFOLIO_CREATED",
+      fields: { contractor_id: profile.id, title, description },
+    });
+    if (!project) return;
+    alert(t("projectAdded"));
+    setTitle("");
+    setDescription("");
+    setImages([]);
+    setCreatingProject(false);
+    await fetchMyProfileAndProjects();
+  }
+
   function handleEditImageUpload(event) {
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    setPhotoError(getMediaDeferredNotice(language));
+    const validation = validateBusinessPortfolioFiles(files, {
+      existingCount: editImages.length,
+    });
+    if (!validation.ok) {
+      setPhotoError(PORTFOLIO_PHOTO_ERROR[language] || PORTFOLIO_PHOTO_ERROR.en);
+      return;
+    }
+    setEditImages((current) => [
+      ...current,
+      ...validation.files.map((file) => createBusinessPortfolioPreview(file)),
+    ]);
   }
 
   async function openEditProjectPhotoPicker() {
@@ -205,8 +278,11 @@ function ProjectGallery({ setPage, currentPage }) {
       inputRef: editPortfolioImageInputRef,
       fileNamePrefix: "portfolio-edit-photo",
       language,
+      governedUploadEnabled: portfolioMediaEnabled,
       onPhotos: (photos) =>
-        handleEditImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
+        handleEditImageUpload({
+          target: { files: photos.map((photo) => photo.file), value: "" },
+        }),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
     });
   }
@@ -215,32 +291,14 @@ function ProjectGallery({ setPage, currentPage }) {
     if (!editingProject) return;
 
     try {
-      const result = await authFetch(
-        `/contractor-projects/${editingProject.id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            title: editTitle,
-            description: editDescription,
-            image_url: editImages[0] || "",
-            image_urls: editImages,
-          }),
-        },
-        setPage
-      );
-
-      if (!result || !result.response?.ok) {
-        alert(language === "es" ? "No se pudo guardar el portafolio." : "Portfolio changes could not be saved.");
-        return;
-      }
-
-      const updatedProject = result.data?.project || {
-        ...editingProject,
-        title: editTitle,
-        description: editDescription,
-        image_url: editImages[0] || "",
-        image_urls: editImages,
-      };
+      const updatedProject = await persistProject({
+        items: editImages,
+        endpoint: `/contractor-projects/${editingProject.id}`,
+        method: "PUT",
+        expectedCode: "BUSINESS_PORTFOLIO_UPDATED",
+        fields: { title: editTitle, description: editDescription },
+      });
+      if (!updatedProject) return;
 
       const updatedProjects = projects.map((project) =>
         project.id === editingProject.id ? updatedProject : project
@@ -279,6 +337,7 @@ function ProjectGallery({ setPage, currentPage }) {
   }
 
   function closeCreateProjectEditor() {
+    images.forEach((item) => item.revoke?.());
     setCreatingProject(false);
     setTitle("");
     setDescription("");
@@ -291,12 +350,13 @@ function ProjectGallery({ setPage, currentPage }) {
     setEditingProject(project);
     setEditTitle(project.title || "");
     setEditDescription(project.description || "");
-    const projectImages = getProjectImages(project);
+    const projectImages = getBusinessPortfolioEditorMedia(project);
     setEditImages(projectImages);
-    setActiveEditImage(projectImages[0] || "");
+    setActiveEditImage(projectImages[0]?.url || "");
   }
 
   function closePortfolioProjectEditor() {
+    editImages.forEach((item) => item.revoke?.());
     setEditingProject(null);
     setEditTitle("");
     setEditDescription("");
@@ -694,7 +754,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   ref={projectImageInputRef}
                   id="projectImageInput"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   multiple
                   disabled={mediaUploadDeferred}
                   style={{ display: "none" }}
@@ -756,25 +816,48 @@ function ProjectGallery({ setPage, currentPage }) {
 
                 {images.length > 0 && (
                   <div style={previewGrid}>
-                    {images.map((url, index) => (
-                      <div key={url} style={previewTile}>
+                    {images.map((item, index) => (
+                      <div key={item.key} style={previewTile}>
                         <img
-                          src={url}
+                          src={item.url}
                           alt={`Portfolio preview ${index + 1}`}
                           style={previewImage}
                         />
-
-                        <button
-                          type="button"
-                          style={removePreviewBtn}
-                          onClick={() =>
-                            setImages((currentImages) =>
-                              currentImages.filter((image) => image !== url)
-                            )
-                          }
-                        >
-                          ×
-                        </button>
+                        <div style={previewControlRow}>
+                          <button
+                            type="button"
+                            aria-label={`Move photo ${index + 1} left`}
+                            disabled={index === 0}
+                            style={reorderPreviewBtn}
+                            onClick={() => setImages((current) =>
+                              reorderBusinessPortfolioMedia(current, index, index - 1)
+                            )}
+                          >
+                            ←
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move photo ${index + 1} right`}
+                            disabled={index === images.length - 1}
+                            style={reorderPreviewBtn}
+                            onClick={() => setImages((current) =>
+                              reorderBusinessPortfolioMedia(current, index, index + 1)
+                            )}
+                          >
+                            →
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Remove photo ${index + 1}`}
+                            style={removePreviewBtn}
+                            onClick={() => {
+                              item.revoke?.();
+                              setImages((current) => current.filter((image) => image.key !== item.key));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -793,6 +876,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   type="button"
                   style={editorSaveButton}
                   onClick={handleCreateProject}
+                  disabled={uploading}
                 >
                   <MeetroIcon name="publishProject" size={16} decorative />{" "}
                   {t("publishProject")}
@@ -867,7 +951,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   ref={editPortfolioImageInputRef}
                   id="editPortfolioImageInput"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   multiple
                   disabled={mediaUploadDeferred}
                   style={{ display: "none" }}
@@ -879,46 +963,69 @@ function ProjectGallery({ setPage, currentPage }) {
                 {editImages.length > 0 ? (
                   <>
                     <img
-                      src={activeEditImage || editImages[0]}
+                      src={activeEditImage || editImages[0]?.url}
                       alt={editTitle || "Portfolio preview"}
                       style={editMainImage}
                       onClick={() =>
-                        setExpandedEditImage(activeEditImage || editImages[0])
+                        setExpandedEditImage(activeEditImage || editImages[0]?.url)
                       }
                     />
 
                     <div style={editImagesGrid}>
-                      {editImages.map((url, index) => (
-                        <div key={`${editingProject.id}-edit-${index}`} style={editImageTile}>
+                      {editImages.map((item, index) => (
+                        <div key={item.key} style={editImageTile}>
                           <img
-                            src={url}
+                            src={item.url}
                             alt={`Portfolio ${index + 1}`}
                             style={{
                               ...editImage,
-                              ...((activeEditImage || editImages[0]) === url
+                              ...((activeEditImage || editImages[0]?.url) === item.url
                                 ? activeEditThumbnail
                                 : {}),
                             }}
-                            onClick={() => setActiveEditImage(url)}
+                            onClick={() => setActiveEditImage(item.url)}
                           />
-
-                          <button
-                            type="button"
-                            style={deletePhotoBtn}
-                            onClick={() => {
-                              setEditImages((currentImages) => {
-                                const nextImages = currentImages.filter((image) => image !== url);
-
-                                if ((activeEditImage || currentImages[0]) === url) {
-                                  setActiveEditImage(nextImages[0] || "");
-                                }
-
-                                return nextImages;
-                              });
-                            }}
-                          >
-                            ×
-                          </button>
+                          <div style={previewControlRow}>
+                            <button
+                              type="button"
+                              aria-label={`Move portfolio photo ${index + 1} left`}
+                              disabled={index === 0}
+                              style={reorderPreviewBtn}
+                              onClick={() => setEditImages((current) =>
+                                reorderBusinessPortfolioMedia(current, index, index - 1)
+                              )}
+                            >
+                              ←
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Move portfolio photo ${index + 1} right`}
+                              disabled={index === editImages.length - 1}
+                              style={reorderPreviewBtn}
+                              onClick={() => setEditImages((current) =>
+                                reorderBusinessPortfolioMedia(current, index, index + 1)
+                              )}
+                            >
+                              →
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Remove portfolio photo ${index + 1}`}
+                              style={deletePhotoBtn}
+                              onClick={() => {
+                                item.revoke?.();
+                                setEditImages((currentImages) => {
+                                  const nextImages = currentImages.filter((image) => image.key !== item.key);
+                                  if ((activeEditImage || currentImages[0]?.url) === item.url) {
+                                    setActiveEditImage(nextImages[0]?.url || "");
+                                  }
+                                  return nextImages;
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -968,6 +1075,7 @@ function ProjectGallery({ setPage, currentPage }) {
                   type="button"
                   style={editorSaveButton}
                   onClick={handleSaveProjectEdit}
+                  disabled={uploading}
                 >
                   {t("save")}
                 </button>
@@ -1314,15 +1422,33 @@ const previewTile = {
 };
 
 const removePreviewBtn = {
-  position: "absolute",
-  top: "8px",
-  right: "8px",
-  width: "28px",
-  height: "28px",
+  width: "44px",
+  height: "44px",
   borderRadius: "999px",
   border: "none",
   background: "rgba(15,23,42,0.76)",
   color: "white",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const previewControlRow = {
+  position: "absolute",
+  left: "6px",
+  right: "6px",
+  bottom: "6px",
+  display: "flex",
+  justifyContent: "center",
+  gap: "6px",
+};
+
+const reorderPreviewBtn = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "999px",
+  border: "none",
+  background: "rgba(255,255,255,0.92)",
+  color: "#14351f",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -1568,11 +1694,8 @@ const editImageTile = {
 };
 
 const deletePhotoBtn = {
-  position: "absolute",
-  top: "8px",
-  right: "8px",
-  width: "30px",
-  height: "30px",
+  width: "44px",
+  height: "44px",
   borderRadius: "999px",
   border: "none",
   background: "rgba(15,23,42,0.78)",
