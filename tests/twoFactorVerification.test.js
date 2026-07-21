@@ -4,9 +4,11 @@ import test from "node:test";
 
 import {
   TWO_FACTOR_FAILURE,
+  REQUEST_TWO_FACTOR_ENDPOINT,
   VERIFY_TWO_FACTOR_ENDPOINT,
   buildTwoFactorPayload,
   normalizeTwoFactorFailure,
+  requestTwoFactorCode,
   verifyTwoFactorCode,
 } from "../src/utils/twoFactorVerification.js";
 
@@ -68,6 +70,84 @@ test("two-factor verification posts the entered code to the backend endpoint", a
   assert.equal(request.body.code, "246810");
   assert.equal(request.body.email, "homeowner@example.com");
   assert.equal(request.body.verificationSessionId, "session-abc");
+});
+
+test("resend uses only the opaque pending challenge context", async () => {
+  let request;
+  const result = await requestTwoFactorCode({
+    apiUrl: "https://api.example.test",
+    email: "person@example.test",
+    pendingData: {
+      challengeId: "challenge-original",
+      password: "must-not-be-sent",
+      userId: 42,
+    },
+    fetchImpl: async (url, options) => {
+      request = {
+        url,
+        options,
+        body: JSON.parse(options.body),
+      };
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "VERIFICATION_CODE_SENT",
+            challengeId: "challenge-replacement",
+            retryAfterSeconds: 60,
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    request.url,
+    `https://api.example.test${REQUEST_TWO_FACTOR_ENDPOINT}`
+  );
+  assert.deepEqual(request.body, {
+    email: "person@example.test",
+    challengeId: "challenge-original",
+  });
+  assert.equal(result.data.challengeId, "challenge-replacement");
+  assert.equal(result.retryAfterSeconds, 60);
+});
+
+test("resend fails locally without opaque context and normalizes throttling", async () => {
+  let requests = 0;
+  const missing = await requestTwoFactorCode({
+    apiUrl: "https://api.example.test",
+    email: "person@example.test",
+    fetchImpl: async () => {
+      requests += 1;
+    },
+  });
+
+  assert.equal(missing.ok, false);
+  assert.equal(missing.failure, TWO_FACTOR_FAILURE.SESSION_EXPIRED);
+  assert.equal(requests, 0);
+
+  const throttled = await requestTwoFactorCode({
+    apiUrl: "https://api.example.test",
+    email: "person@example.test",
+    pendingData: { challengeId: "challenge-original" },
+    fetchImpl: async () => ({
+      ok: false,
+      status: 429,
+      async json() {
+        return {
+          code: "TOO_MANY_ATTEMPTS",
+          retryAfterSeconds: 37,
+        };
+      },
+    }),
+  });
+
+  assert.equal(throttled.ok, false);
+  assert.equal(throttled.failure, TWO_FACTOR_FAILURE.TOO_MANY_ATTEMPTS);
+  assert.equal(throttled.retryAfterSeconds, 37);
 });
 
 test("two-factor failure mapping reserves Invalid code for explicit incorrect-code responses", () => {
@@ -154,4 +234,13 @@ test("login verification no longer uses the placeholder code or click event as t
   assert.match(source, /verifyTwoFactorCode\(\{/);
   assert.match(source, /onClick=\{\(\) => handleVerifyCode\(\)\}/);
   assert.match(source, /setVerificationError\(getVerificationFailureMessage\(result\.failure\)\)/);
+  assert.match(source, /onClick=\{handleResendCode\}/);
+  assert.match(source, /disabled=\{resendLoading \|\| resendCooldownSeconds > 0\}/);
+  assert.match(source, /if \(resendLoading \|\| resendCooldownSeconds > 0\) return/);
+  assert.match(source, /setResendStatus\(T\.codeSent\)/);
+  assert.match(source, /setVerificationNotice\(/);
+  assert.match(source, /setPassword\(""\)/);
+  assert.match(source, /role="status" aria-live="polite"/);
+  assert.match(source, /readStoredVerificationContext/);
+  assert.match(source, /resendAvailableAt/);
 });

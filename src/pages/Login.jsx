@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import API_URL from "../api";
 import {
   SUPPORTED_LANGUAGES,
@@ -17,6 +17,7 @@ import {
 import {
   TWO_FACTOR_FAILURE,
   buildTwoFactorPayload,
+  requestTwoFactorCode,
   verifyTwoFactorCode,
 } from "../utils/twoFactorVerification";
 import { getAccountConnectionStateFromLoginData } from "../utils/accountConnection";
@@ -28,7 +29,32 @@ import {
 import MeetroIcon from "../components/MeetroIcon";
 import PasswordResetWorkspace from "../components/PasswordResetWorkspace";
 
+function readStoredVerificationContext() {
+  try {
+    const pendingData = JSON.parse(
+      localStorage.getItem("pendingLoginData") || "null"
+    );
+    const session = JSON.parse(
+      localStorage.getItem("pendingTwoFactorSession") || "{}"
+    );
+    const payload = buildTwoFactorPayload({ pendingData, session });
+    const resendAvailableAt = Number(session.resendAvailableAt || 0);
+
+    return {
+      active: Boolean(pendingData && payload.email && payload.challengeId),
+      email: payload.email,
+      cooldownSeconds: Math.max(
+        0,
+        Math.ceil((resendAvailableAt - Date.now()) / 1000)
+      ),
+    };
+  } catch {
+    return { active: false, email: "", cooldownSeconds: 0 };
+  }
+}
+
 function Login({ setPage }) {
+  const [initialVerificationContext] = useState(readStoredVerificationContext);
   const [mode, setMode] = useState(
     localStorage.getItem("meetroLoginMode") || "login"
   );
@@ -38,12 +64,20 @@ function Login({ setPage }) {
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialVerificationContext.email);
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
-  const [twoFactorStep, setTwoFactorStep] = useState(false);
+  const [twoFactorStep, setTwoFactorStep] = useState(
+    initialVerificationContext.active
+  );
   const [verificationError, setVerificationError] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldownSeconds, setResendCooldownSeconds] = useState(
+    initialVerificationContext.cooldownSeconds
+  );
+  const [resendStatus, setResendStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
@@ -93,6 +127,13 @@ function Login({ setPage }) {
       networkProblem: "Network problem. Check your connection and try again.",
       verificationUnavailable:
         "Verification service unavailable. Please try again shortly.",
+      verificationCodeSent: "We sent a verification code to your email.",
+      verificationSessionRestored:
+        "Your verification is still pending. Enter the latest code or request a new one.",
+      resendCode: "Resend code",
+      sendingCode: "Sending…",
+      codeSent: "Code sent",
+      resendAvailableIn: "Resend available in",
       enterSixDigitCode: "Enter the 6-digit code.",
       loginExpired: "Login expired",
       serverError: "Server error",
@@ -156,6 +197,13 @@ function Login({ setPage }) {
       networkProblem: "Problema de red. Revisa tu conexión e inténtalo otra vez.",
       verificationUnavailable:
         "El servicio de verificación no está disponible. Inténtalo de nuevo pronto.",
+      verificationCodeSent: "Enviamos un código de verificación a tu correo electrónico.",
+      verificationSessionRestored:
+        "Tu verificación sigue pendiente. Ingresa el código más reciente o solicita uno nuevo.",
+      resendCode: "Reenviar código",
+      sendingCode: "Enviando…",
+      codeSent: "Código enviado",
+      resendAvailableIn: "Reenvío disponible en",
       enterSixDigitCode: "Ingresa el código de 6 dígitos.",
       loginExpired: "Sesión expirada",
       serverError: "Error del servidor",
@@ -220,6 +268,13 @@ function Login({ setPage }) {
       networkProblem: "Problème de réseau. Vérifiez votre connexion et réessayez.",
       verificationUnavailable:
         "Le service de vérification est indisponible. Réessayez bientôt.",
+      verificationCodeSent: "Nous avons envoyé un code de vérification à votre adresse e-mail.",
+      verificationSessionRestored:
+        "Votre vérification est toujours en attente. Saisissez le dernier code ou demandez-en un nouveau.",
+      resendCode: "Renvoyer le code",
+      sendingCode: "Envoi…",
+      codeSent: "Code envoyé",
+      resendAvailableIn: "Renvoi disponible dans",
       enterSixDigitCode: "Entrez le code à 6 chiffres.",
       loginExpired: "Connexion expirée",
       serverError: "Erreur du serveur",
@@ -283,6 +338,13 @@ function Login({ setPage }) {
       networkProblem: "Problema de rede. Verifique sua conexão e tente novamente.",
       verificationUnavailable:
         "O serviço de verificação está indisponível. Tente novamente em breve.",
+      verificationCodeSent: "Enviamos um código de verificação para seu e-mail.",
+      verificationSessionRestored:
+        "Sua verificação ainda está pendente. Digite o código mais recente ou solicite um novo.",
+      resendCode: "Reenviar código",
+      sendingCode: "Enviando…",
+      codeSent: "Código enviado",
+      resendAvailableIn: "Reenvio disponível em",
       enterSixDigitCode: "Digite o código de 6 dígitos.",
       loginExpired: "Login expirado",
       serverError: "Erro do servidor",
@@ -304,6 +366,19 @@ function Login({ setPage }) {
 
   const normalizedLanguage = normalizeLanguage(language);
   const T = text[normalizedLanguage] || text.en;
+  const visibleVerificationNotice =
+    verificationNotice ||
+    (initialVerificationContext.active ? T.verificationSessionRestored : "");
+
+  useEffect(() => {
+    if (!twoFactorStep || resendCooldownSeconds <= 0) return undefined;
+
+    const timer = window.setInterval(() => {
+      setResendCooldownSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [twoFactorStep, resendCooldownSeconds]);
 
   function getVerificationFailureMessage(failure) {
     const messages = {
@@ -319,7 +394,7 @@ function Login({ setPage }) {
     return messages[failure] || T.verificationUnavailable;
   }
 
-  function createTwoFactorSession(data = {}) {
+  function createTwoFactorSession(data = {}, retryAfterSeconds = 0) {
     const payload = buildTwoFactorPayload({
       email: email.trim(),
       pendingData: data,
@@ -335,6 +410,8 @@ function Login({ setPage }) {
       verificationToken: payload.verificationToken,
       verification_token: payload.verification_token,
       createdAt: new Date().toISOString(),
+      resendAvailableAt:
+        Date.now() + Math.max(0, Number(retryAfterSeconds || 0)) * 1000,
     };
   }
 
@@ -569,13 +646,24 @@ function Login({ setPage }) {
         return;
       }
 
+      const resendRetryAfterSeconds = Math.max(
+        0,
+        Number(
+          data.verification?.retryAfterSeconds ??
+            (data.verificationEmailSent === false ? 0 : 60)
+        ) || 0
+      );
       localStorage.setItem("pendingLoginData", JSON.stringify(data));
       localStorage.setItem(
         "pendingTwoFactorSession",
-        JSON.stringify(createTwoFactorSession(data))
+        JSON.stringify(createTwoFactorSession(data, resendRetryAfterSeconds))
       );
       setVerificationError("");
+      setVerificationNotice(data.message || T.verificationCodeSent);
+      setResendStatus("");
+      setResendCooldownSeconds(resendRetryAfterSeconds);
       setTwoFactorCode("");
+      setPassword("");
 
       if (mode === "signup") {
         localStorage.setItem("firstLogin", "true");
@@ -590,6 +678,78 @@ function Login({ setPage }) {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendCode() {
+    if (resendLoading || resendCooldownSeconds > 0) return;
+
+    const pendingData = readPendingLoginData();
+    const session = readPendingTwoFactorSession();
+
+    if (!pendingData) {
+      setVerificationError(T.sessionExpired);
+      return;
+    }
+
+    try {
+      setResendLoading(true);
+      setVerificationError("");
+      setResendStatus("");
+
+      const result = await requestTwoFactorCode({
+        apiUrl: API_URL,
+        email: email.trim(),
+        pendingData,
+        session,
+      });
+
+      if (!result.ok) {
+        const retryAfterSeconds = Math.max(
+          0,
+          Number(result.retryAfterSeconds || 0)
+        );
+        setResendCooldownSeconds(retryAfterSeconds);
+        if (retryAfterSeconds > 0) {
+          localStorage.setItem(
+            "pendingTwoFactorSession",
+            JSON.stringify({
+              ...session,
+              resendAvailableAt: Date.now() + retryAfterSeconds * 1000,
+            })
+          );
+        }
+        setVerificationError(getVerificationFailureMessage(result.failure));
+        return;
+      }
+
+      const nextPendingData = {
+        ...pendingData,
+        ...(result.data || {}),
+      };
+      localStorage.setItem(
+        "pendingLoginData",
+        JSON.stringify(nextPendingData)
+      );
+      const retryAfterSeconds = Math.max(
+        1,
+        Number(result.retryAfterSeconds || 60)
+      );
+      localStorage.setItem(
+        "pendingTwoFactorSession",
+        JSON.stringify(
+          createTwoFactorSession(nextPendingData, retryAfterSeconds)
+        )
+      );
+      setVerificationNotice(
+        result.data?.message || T.verificationCodeSent
+      );
+      setResendStatus(T.codeSent);
+      setResendCooldownSeconds(retryAfterSeconds);
+    } catch {
+      setVerificationError(T.verificationUnavailable);
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -712,6 +872,12 @@ function Login({ setPage }) {
             <div style={maskedEmailStyle}>{maskedEmail}</div>
           </div>
 
+          {visibleVerificationNotice && (
+            <div style={verificationNoticeBox} role="status" aria-live="polite">
+              {visibleVerificationNotice}
+            </div>
+          )}
+
           <input
             id="twoFactorHiddenInput"
             value={twoFactorCode}
@@ -777,11 +943,34 @@ function Login({ setPage }) {
           </button>
 
           <button
+            type="button"
+            style={guestButton}
+            disabled={resendLoading || resendCooldownSeconds > 0}
+            aria-disabled={resendLoading || resendCooldownSeconds > 0}
+            onClick={handleResendCode}
+          >
+            {resendLoading
+              ? T.sendingCode
+              : resendCooldownSeconds > 0
+              ? `${T.resendAvailableIn} ${resendCooldownSeconds}s`
+              : T.resendCode}
+          </button>
+
+          {resendStatus && (
+            <div role="status" aria-live="polite" style={faceIdText}>
+              {resendStatus}
+            </div>
+          )}
+
+          <button
             style={guestButton}
             onClick={() => {
               setTwoFactorStep(false);
               setTwoFactorCode("");
               setVerificationError("");
+              setVerificationNotice("");
+              setResendStatus("");
+              setResendCooldownSeconds(0);
               localStorage.removeItem("pendingLoginData");
               localStorage.removeItem("pendingTwoFactorSession");
             }}
@@ -1652,6 +1841,19 @@ const verificationErrorBox = {
   background: "#fff1f2",
   border: "1px solid rgba(225,29,72,0.18)",
   color: "#be123c",
+  padding: "12px",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  fontWeight: "800",
+  textAlign: "center",
+};
+
+const verificationNoticeBox = {
+  margin: "0 0 12px",
+  borderRadius: "16px",
+  background: "rgba(238,244,234,0.9)",
+  border: "1px solid rgba(31,77,52,0.2)",
+  color: "var(--meetro-color-forest-deep, #14351f)",
   padding: "12px",
   fontSize: "14px",
   lineHeight: 1.4,
