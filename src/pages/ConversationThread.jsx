@@ -2547,9 +2547,8 @@ useEffect(() => {
             writeLocalConversationValue(JSON.stringify(merged));
             try {
               markConversationRead(conversationId, {}, currentViewerRole);
-              window.dispatchEvent(new Event("meetro-messages-updated"));
             } catch {
-              // Backend hydration should never interrupt the visible thread.
+              // Read-state bookkeeping must never interrupt the visible thread.
             }
             return;
           }
@@ -2560,7 +2559,6 @@ useEffect(() => {
 
       try {
         markConversationRead(conversationId, {}, currentViewerRole);
-        window.dispatchEvent(new Event("meetro-messages-updated"));
       } catch {
         // Read receipts and inbox refreshes must never block the active thread.
       }
@@ -2703,8 +2701,6 @@ useEffect(() => {
       );
 
       writeUnreadConversationCount(updatedRegistry);
-
-      window.dispatchEvent(new Event("meetro-messages-updated"));
     }
   }, [messages, storageKey, conversationId, language]);
 

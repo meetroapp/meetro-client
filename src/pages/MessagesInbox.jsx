@@ -18,6 +18,11 @@ import {
   getRequestCommunicationEndpoint,
   normalizeRequestConversations,
 } from "../utils/requestCommunication";
+import {
+  PROFESSIONAL_OPPORTUNITY_PHASE,
+  requestProfessionalOpportunities,
+  subscribeProfessionalOpportunities,
+} from "../utils/professionalOpportunityCoordinator";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
 import {
@@ -498,6 +503,9 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const conversationFetchInFlightRef = useRef(false);
+  const conversationFetchSequenceRef = useRef(0);
+  const hasLoadedConversationProjectionRef = useRef(false);
   const [accountConnectionState, setAccountConnectionState] = useState(() =>
     getStoredAccountConnectionState()
   );
@@ -780,10 +788,10 @@ function MessagesInbox({ setPage, currentPage }) {
   }, []);
 
   useEffect(() => {
-    fetchConversations();
+    fetchConversations("mount");
 
-    const refreshMessages = () => {
-      fetchConversations();
+    const refreshMessages = (event) => {
+      fetchConversations(event?.type || "event");
     };
 
     window.addEventListener("focus", refreshMessages);
@@ -794,14 +802,7 @@ function MessagesInbox({ setPage, currentPage }) {
       refreshMessages
     );
 
-    const pollingInterval = setInterval(() => {
-      if (!document.hidden) {
-        refreshMessages();
-      }
-    }, 7000);
-
     return () => {
-      clearInterval(pollingInterval);
       window.removeEventListener("focus", refreshMessages);
       window.removeEventListener("storage", refreshMessages);
       window.removeEventListener("meetro-messages-updated", refreshMessages);
@@ -815,9 +816,65 @@ function MessagesInbox({ setPage, currentPage }) {
   }, [activeAccountMode, language]);
 
   useEffect(() => {
+    if (activeAccountMode !== "business") return undefined;
+
+    return subscribeProfessionalOpportunities((snapshot) => {
+      const hasConfirmedData = snapshot.updatedAt > 0;
+
+      if (
+        snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.LOADING &&
+        !hasConfirmedData
+      ) {
+        setLoading(true);
+        return;
+      }
+
+      if (snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.INITIAL_ERROR) {
+        setAccountConnectionState({
+          connected: false,
+          reason: "messages_unavailable",
+          title: "Messages unavailable",
+          message: "Meetro could not load conversations. Try again.",
+          requiresLogin: false,
+        });
+        setQuotes([]);
+        setLoading(false);
+        return;
+      }
+
+      if (!hasConfirmedData) return;
+
+      setAccountConnectionState({ connected: true, reason: "connected" });
+      const visibleConversations = canReadLegacyWorkflowStorage()
+        ? mergeEmergencyConversation([
+            ...getRegistryConversationsForList(),
+            ...getScopedContactConversationsForList(),
+            ...snapshot.records,
+            ...getLocalBusinessConversationsForList(),
+          ])
+        : snapshot.records;
+
+      setQuotes(
+        filterDeletedConversations(dedupeConversations(visibleConversations))
+      );
+      hasLoadedConversationProjectionRef.current = true;
+      setLoading(false);
+    });
+
+    // The coordinator owns request freshness and refresh-error preservation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountMode]);
+
+  useEffect(() => {
     writeUnreadConversationCount(quotes);
 
-    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(
+      new CustomEvent("meetro-unread-conversations-changed", {
+        detail: {
+          unreadCount: quotes.filter((conversation) => conversation.unread).length,
+        },
+      })
+    );
   }, [quotes]);
 
   function getRegistryConversationsForList() {
@@ -882,41 +939,77 @@ function MessagesInbox({ setPage, currentPage }) {
       });
   }
 
-  async function fetchConversations() {
+  async function fetchConversations(trigger = "load") {
+    if (conversationFetchInFlightRef.current) {
+      return;
+    }
+
+    conversationFetchInFlightRef.current = true;
+    const requestSequence = ++conversationFetchSequenceRef.current;
+    const isInitialLoad = !hasLoadedConversationProjectionRef.current;
+
     try {
       const storedConnectionState = getStoredAccountConnectionState();
 
       if (shouldBlockMessagesForConnection(storedConnectionState)) {
+        if (requestSequence !== conversationFetchSequenceRef.current) return;
+
         setAccountConnectionState(storedConnectionState);
         setQuotes([]);
-        setLoading(false);
+        hasLoadedConversationProjectionRef.current = true;
+        return;
+      }
+
+      if (activeAccountMode === "business") {
+        await requestProfessionalOpportunities({
+          caller: "MessagesInbox",
+          trigger,
+          setPage,
+        });
         return;
       }
 
       const endpoint = getRequestCommunicationEndpoint(activeAccountMode);
-      const result = await authFetch(endpoint, { cache: "no-store" }, setPage);
-      const resultConnectionState = getAccountConnectionStateFromAuthResult(result);
+      const result = await authFetch(
+        endpoint,
+        { cache: "no-store" },
+        setPage
+      );
+
+      if (requestSequence !== conversationFetchSequenceRef.current) {
+        return;
+      }
+
+      const resultConnectionState =
+        getAccountConnectionStateFromAuthResult(result);
 
       if (shouldBlockMessagesForConnection(resultConnectionState)) {
         setAccountConnectionState(resultConnectionState);
         setQuotes([]);
+        hasLoadedConversationProjectionRef.current = true;
         return;
       }
 
       if (result?.response && !result.response.ok) {
-        setAccountConnectionState(
-          getAccountConnectionStateFromAuthResult(result)
-        );
-        setQuotes([]);
+        setAccountConnectionState(resultConnectionState);
+
+        if (isInitialLoad) {
+          setQuotes([]);
+        }
+
         return;
-      } else {
-        setAccountConnectionState({ connected: true, reason: "connected" });
       }
+
+      setAccountConnectionState({
+        connected: true,
+        reason: "connected",
+      });
 
       const nextQuotes = normalizeRequestConversations(
         result.data || {},
         activeAccountMode
       );
+
       if (!nextQuotes) {
         setAccountConnectionState({
           connected: false,
@@ -925,7 +1018,11 @@ function MessagesInbox({ setPage, currentPage }) {
           message: "Meetro received an invalid request response. Try again.",
           requiresLogin: false,
         });
-        setQuotes([]);
+
+        if (isInitialLoad) {
+          setQuotes([]);
+        }
+
         return;
       }
 
@@ -937,19 +1034,42 @@ function MessagesInbox({ setPage, currentPage }) {
             ...getLocalBusinessConversationsForList(),
           ])
         : nextQuotes;
-      setQuotes(filterDeletedConversations(dedupeConversations(visibleConversations)));
+
+      setQuotes(
+        filterDeletedConversations(
+          dedupeConversations(visibleConversations)
+        )
+      );
+
+      hasLoadedConversationProjectionRef.current = true;
     } catch (error) {
       console.error(error);
+
+      if (requestSequence !== conversationFetchSequenceRef.current) {
+        return;
+      }
+
       setAccountConnectionState({
         connected: false,
         reason: "messages_unavailable",
         title: "Messages unavailable",
-        message: "Meetro could not load conversations. Try again.",
+        message: "Meetro could not refresh conversations. Try again.",
         requiresLogin: false,
       });
-      setQuotes([]);
+
+      /*
+       * A transient background refresh failure must not erase the
+       * currently visible Communication Center or unmount its thread.
+       */
+      if (isInitialLoad) {
+        setQuotes([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence === conversationFetchSequenceRef.current) {
+        conversationFetchInFlightRef.current = false;
+        hasLoadedConversationProjectionRef.current = true;
+        setLoading(false);
+      }
     }
   }
 

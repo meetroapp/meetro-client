@@ -23,10 +23,12 @@ import {
   getConfirmedBusinessProfile,
 } from "../utils/businessProfilePersistence";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
-  PROFESSIONAL_OPPORTUNITY_STATUS,
-  resolveProfessionalOpportunityCollection,
-} from "../utils/professionalOpportunityState";
+  PROFESSIONAL_OPPORTUNITY_PHASE,
+  requestProfessionalOpportunities,
+  subscribeProfessionalOpportunities,
+} from "../utils/professionalOpportunityCoordinator";
 
 const profileLoadText = {
   en: {
@@ -142,32 +144,27 @@ function BusinessDashboard({ setPage }) {
 
   useEffect(() => {
     if (!profile?.id) return undefined;
-    let active = true;
 
-    async function fetchAuthoritativeLeads() {
-      setLeadStatus(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
-      try {
-        const result = await authFetch(
-          "/professional-request-opportunities",
-          { cache: "no-store" },
-          setPage
-        );
-        if (!active) return;
-        const collection = resolveProfessionalOpportunityCollection(result);
-        setAuthoritativeLeads(collection.records);
-        setLeadStatus(collection.status);
-      } catch {
-        if (active) {
-          setAuthoritativeLeads([]);
-          setLeadStatus(PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE);
-        }
+    const unsubscribe = subscribeProfessionalOpportunities((snapshot) => {
+      if (
+        snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.LOADING &&
+        snapshot.updatedAt === 0
+      ) {
+        setLeadStatus(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
+        return;
       }
-    }
 
-    fetchAuthoritativeLeads();
-    return () => {
-      active = false;
-    };
+      setAuthoritativeLeads(snapshot.records);
+      setLeadStatus(snapshot.status);
+    });
+
+    requestProfessionalOpportunities({
+      caller: "BusinessDashboard",
+      trigger: "profile-ready",
+      setPage,
+    });
+
+    return unsubscribe;
   }, [profile?.id, setPage]);
 
   async function fetchProfile() {

@@ -4,11 +4,12 @@ import SafeBackBar from "../components/SafeBackBar";
 import { getLanguage, t } from "../utils/language";
 import { purgeProfessionalLeadCaches } from "../utils/businessLeadSourceTruth";
 import { isProfessionalSession } from "../utils/session";
-import { authFetch } from "../utils/authFetch";
+import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
-  PROFESSIONAL_OPPORTUNITY_STATUS,
-  resolveProfessionalOpportunityCollection,
-} from "../utils/professionalOpportunityState";
+  PROFESSIONAL_OPPORTUNITY_PHASE,
+  requestProfessionalOpportunities,
+  subscribeProfessionalOpportunities,
+} from "../utils/professionalOpportunityCoordinator";
 
 function BusinessLeads({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
@@ -28,30 +29,28 @@ function BusinessLeads({ setPage }) {
 
   useEffect(() => {
     if (!isProfessional) return;
-    let active = true;
-    async function loadOpportunities() {
-      setStatus("loading");
-      try {
-        const result = await authFetch(
-          "/professional-request-opportunities",
-          { cache: "no-store" },
-          setPage
-        );
-        if (!active) return;
-        const collection = resolveProfessionalOpportunityCollection(result);
-        setOpportunities(collection.records);
-        setStatus(collection.status);
-      } catch {
-        if (active) {
-          setOpportunities([]);
-          setStatus("unavailable");
-        }
+
+    const unsubscribe = subscribeProfessionalOpportunities((snapshot) => {
+      if (
+        snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.LOADING &&
+        snapshot.updatedAt === 0
+      ) {
+        setStatus(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
+        return;
       }
-    }
-    loadOpportunities();
-    return () => {
-      active = false;
-    };
+
+      setOpportunities(snapshot.records);
+      setStatus(snapshot.status);
+    });
+
+    requestProfessionalOpportunities({
+      caller: "BusinessLeads",
+      trigger: reloadKey > 0 ? "manual-retry" : "mount",
+      force: reloadKey > 0,
+      setPage,
+    });
+
+    return unsubscribe;
   }, [isProfessional, reloadKey, setPage]);
 
   if (!isProfessional) {

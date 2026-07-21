@@ -17,6 +17,7 @@ const myRequestsSource = readFileSync(new URL("../src/pages/MyRequests.jsx", imp
 const messagesSource = readFileSync(new URL("../src/pages/MessagesInbox.jsx", import.meta.url), "utf8");
 const threadSource = readFileSync(new URL("../src/pages/ConversationThread.jsx", import.meta.url), "utf8");
 const businessLeadsSource = readFileSync(new URL("../src/pages/BusinessLeads.jsx", import.meta.url), "utf8");
+const opportunityCoordinatorSource = readFileSync(new URL("../src/utils/professionalOpportunityCoordinator.js", import.meta.url), "utf8");
 
 function post(overrides = {}) {
   return {
@@ -117,7 +118,9 @@ test("request surfaces render unavailable states and owner mutations without loc
   assert.match(messagesSource, /reason: "messages_unavailable"/);
   assert.match(threadSource, /isRequestOpportunityReadOnly/);
   assert.match(threadSource, /Messaging is not available for this request yet/);
-  assert.match(businessLeadsSource, /authFetch\([\s\S]*"\/professional-request-opportunities"/);
+  assert.match(businessLeadsSource, /requestProfessionalOpportunities/);
+  assert.doesNotMatch(businessLeadsSource, /authFetch/);
+  assert.match(opportunityCoordinatorSource, /authFetch\([\s\S]*"\/professional-request-opportunities"/);
   assert.match(businessLeadsSource, /Request opportunities unavailable/);
   assert.doesNotMatch(businessLeadsSource, /getEligibleSharedProfessionalLeads/);
 });
