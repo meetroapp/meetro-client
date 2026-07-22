@@ -529,10 +529,10 @@ function Upload({ setPage, currentPage }) {
               selectedCanonicalService.domain ||
               inferredRequestMatchingFields.service_domain,
             requestCategory:
-              selectedCanonicalService.requestCategory ||
+              selectedCanonicalService.canonicalRequestCategory ||
               selectedCanonicalService.serviceId,
             request_category:
-              selectedCanonicalService.requestCategory ||
+              selectedCanonicalService.canonicalRequestCategory ||
               selectedCanonicalService.serviceId,
             serviceSpecialty: selectedCanonicalService.serviceId,
             service_specialty: selectedCanonicalService.serviceId,
