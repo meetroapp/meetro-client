@@ -42,6 +42,10 @@ import {
   getConversationParticipantIdentity,
 } from "../utils/conversationIdentity";
 import {
+  CONVERSATION_THREAD_TYPES,
+  getOpportunityThreadIdentity,
+} from "../utils/canonicalConversationMessaging";
+import {
   createRelationshipLayerModel,
   isInactiveImportedContact,
   isSavedRelationshipContact,
@@ -1122,8 +1126,24 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (!id) return null;
 
-    const conversationType =
+    const projectedConversationType =
       projectedQuote.conversation_type || quote.conversation_type || quote.type || "standard";
+    const isOpportunityThread = [
+      CONVERSATION_THREAD_TYPES.CANONICAL,
+      CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY,
+    ].includes(projectedConversationType);
+    const opportunityIdentity = isOpportunityThread
+      ? getOpportunityThreadIdentity(projectedQuote)
+      : null;
+    const conversationType = opportunityIdentity?.threadType || projectedConversationType;
+    const requestId = String(
+      projectedQuote.request_id || quote.request_id || id
+    ).trim();
+    const activeThreadId = opportunityIdentity?.conversationId
+      ? String(opportunityIdentity.conversationId)
+      : isOpportunityThread
+      ? `request-opportunity-${requestId}`
+      : id;
     const activeName =
       projectedQuote.participantName ||
       projectedQuote.customerName ||
@@ -1134,13 +1154,19 @@ function MessagesInbox({ setPage, currentPage }) {
 
     const threadPayload = {
       ...projectedQuote,
-      id,
-      conversationId: projectedQuote.conversationId || quote.conversationId || id,
-      activeConversationId: id,
+      id: opportunityIdentity?.conversationId
+        ? String(opportunityIdentity.conversationId)
+        : id,
+      requestId,
+      conversationId: isOpportunityThread
+        ? opportunityIdentity.conversationId
+        : projectedQuote.conversationId || quote.conversationId || id,
+      activeConversationId: activeThreadId,
+      threadType: conversationType,
       conversation_type: conversationType,
     };
 
-    safeSetStorage("selectedQuoteRequestId", id);
+    safeSetStorage("selectedQuoteRequestId", requestId);
     safeSetStorage("selectedQuoteRequest", JSON.stringify(threadPayload));
     safeSetStorage("selectedConversation", JSON.stringify(threadPayload));
     safeSetStorage(
@@ -1148,7 +1174,7 @@ function MessagesInbox({ setPage, currentPage }) {
       String(projectedQuote.homeowner_id || quote.homeowner_id || "")
     );
     safeSetStorage("conversationReturnPage", "messagesInbox");
-    safeSetStorage("activeConversationId", id);
+    safeSetStorage("activeConversationId", activeThreadId);
     safeSetStorage("activeConversationName", activeName);
     safeSetStorage("meetroConversationType", conversationType);
 
@@ -2184,10 +2210,38 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function normalizeConversationForOpen(summaryOrRecord = {}) {
     const conversation = summaryOrRecord.conversation || summaryOrRecord;
-    const id = getConversationIdForOpen({
+    const projectedConversationType =
+      conversation.conversation_type ||
+      summaryOrRecord.conversation_type ||
+      conversation.threadType ||
+      summaryOrRecord.threadType ||
+      "standard";
+    const isOpportunityThread = [
+      CONVERSATION_THREAD_TYPES.CANONICAL,
+      CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY,
+    ].includes(projectedConversationType);
+    const opportunityIdentity = isOpportunityThread
+      ? getOpportunityThreadIdentity({
+          ...summaryOrRecord,
+          ...conversation,
+        })
+      : null;
+    const legacyId = getConversationIdForOpen({
       ...summaryOrRecord,
       ...conversation,
     });
+    const requestId = String(
+      conversation.request_id ||
+        summaryOrRecord.request_id ||
+        conversation.requestId ||
+        summaryOrRecord.requestId ||
+        conversation.id ||
+        summaryOrRecord.id ||
+        ""
+    ).trim();
+    const id = isOpportunityThread
+      ? String(opportunityIdentity?.conversationId || requestId).trim()
+      : legacyId;
 
     if (!id) return null;
 
@@ -2195,7 +2249,16 @@ function MessagesInbox({ setPage, currentPage }) {
       ...summaryOrRecord,
       ...conversation,
       id,
-      conversationId: conversation.conversationId || id,
+      requestId: isOpportunityThread ? requestId : conversation.requestId,
+      conversationId: isOpportunityThread
+        ? opportunityIdentity.conversationId
+        : conversation.conversationId || id,
+      threadType: isOpportunityThread
+        ? opportunityIdentity.threadType
+        : conversation.threadType,
+      conversation_type: isOpportunityThread
+        ? opportunityIdentity.threadType
+        : projectedConversationType,
       saved_to_history:
         conversation.saved_to_history ??
         summaryOrRecord.saved_to_history ??
@@ -2205,13 +2268,17 @@ function MessagesInbox({ setPage, currentPage }) {
         ...summaryOrRecord,
         ...conversation,
         id,
-        conversationId: conversation.conversationId || id,
+        conversationId: isOpportunityThread
+          ? opportunityIdentity.conversationId
+          : conversation.conversationId || id,
       }),
       user_saved_to_history: isConversationUserSavedToHistory({
         ...summaryOrRecord,
         ...conversation,
         id,
-        conversationId: conversation.conversationId || id,
+        conversationId: isOpportunityThread
+          ? opportunityIdentity.conversationId
+          : conversation.conversationId || id,
       }),
       unread: conversation.unread ?? summaryOrRecord.unread ?? false,
     };

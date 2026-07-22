@@ -117,7 +117,7 @@ test("request surfaces render unavailable states and owner mutations without loc
   assert.match(messagesSource, /quote\.conversation_type === "request_opportunity"/);
   assert.match(messagesSource, /reason: "messages_unavailable"/);
   assert.match(threadSource, /isRequestOpportunityReadOnly/);
-  assert.match(threadSource, /Messaging is not available for this request yet/);
+  assert.match(threadSource, /conversationOpportunityMessagingUnavailable/);
   assert.match(businessLeadsSource, /requestProfessionalOpportunities/);
   assert.doesNotMatch(businessLeadsSource, /authFetch/);
   assert.match(opportunityCoordinatorSource, /authFetch\([\s\S]*"\/professional-request-opportunities"/);

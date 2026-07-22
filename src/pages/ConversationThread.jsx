@@ -8,6 +8,16 @@ import {
   formatScheduleTime,
 } from "../utils/displayTime";
 import { authFetch } from "../utils/authFetch";
+import {
+  CANONICAL_MESSAGE_MAX_LENGTH,
+  CONVERSATION_THREAD_TYPES,
+  buildCanonicalMessagePayload,
+  normalizeCanonicalConversationDetail,
+  normalizeCanonicalConversationId,
+  normalizeCanonicalMessage,
+  normalizeCanonicalMessageCollection,
+  validateCanonicalMessageText,
+} from "../utils/canonicalConversationMessaging";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
@@ -659,6 +669,16 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [tenantTicketDraft, setTenantTicketDraft] = useState(null);
+  const [canonicalConversationState, setCanonicalConversationState] = useState({
+    phase: "idle",
+    status: "",
+    canSendMessages: false,
+  });
+  const [canonicalConversationDetail, setCanonicalConversationDetail] = useState(null);
+  const [canonicalMessagesPhase, setCanonicalMessagesPhase] = useState("idle");
+  const [canonicalLoadErrorKey, setCanonicalLoadErrorKey] = useState("");
+  const [canonicalSendErrorKey, setCanonicalSendErrorKey] = useState("");
+  const [canonicalSendPending, setCanonicalSendPending] = useState(false);
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -747,9 +767,28 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     }
   }
 
-  const conversationId =
-    localStorage.getItem("activeConversationId") ||
-    (canReadLegacyWorkflowStorage() ? "demo-homeowner-1" : "");
+  const selectedThreadPayload = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("selectedConversation") || "null");
+    } catch {
+      return null;
+    }
+  })();
+
+  const conversationType =
+    localStorage.getItem("meetroConversationType") || "standard";
+  const isCanonicalThread =
+    conversationType === CONVERSATION_THREAD_TYPES.CANONICAL;
+  const canonicalConversationId = isCanonicalThread
+    ? normalizeCanonicalConversationId(
+        selectedThreadPayload?.conversationId ??
+          selectedThreadPayload?.conversation_id
+      )
+    : null;
+  const conversationId = isCanonicalThread
+    ? String(canonicalConversationId || "")
+    : localStorage.getItem("activeConversationId") ||
+      (canReadLegacyWorkflowStorage() ? "demo-homeowner-1" : "");
 
   const storageKey = `meetro_conversation_${conversationId}`;
   const readLocalConversationValue = () =>
@@ -774,12 +813,10 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     selectedBusiness?.name ||
     "";
 
-  const conversationType =
-    localStorage.getItem("meetroConversationType") || "standard";
-
   const isEmergencyThread = conversationType === "emergency";
   const isHiringThread = isHiringConversationType(conversationType);
-  const isRequestOpportunityReadOnly = conversationType === "request_opportunity";
+  const isRequestOpportunityReadOnly =
+    conversationType === CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY;
   const sanitizeMessagesForConversation = (items = []) =>
     isHiringThread ? filterHiringConversationMessages(items) : items;
   const conversationSearchQuery = threadSearchTerm.trim().toLowerCase();
@@ -967,7 +1004,10 @@ useEffect(() => {
       (t("conversationMeetroBusiness", language));
 
   const activeCategory =
-    selectedBusiness?.category || selectedBusiness?.businessCategory || "";
+    canonicalConversationDetail?.participants?.business?.category ||
+    selectedBusiness?.category ||
+    selectedBusiness?.businessCategory ||
+    "";
 
   const activeLocation =
     selectedBusiness?.location || selectedBusiness?.address || "";
@@ -995,13 +1035,7 @@ useEffect(() => {
     }
   })();
 
-  const selectedConversation = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("selectedConversation") || "null");
-    } catch {
-      return null;
-    }
-  })();
+  const selectedConversation = selectedThreadPayload;
 
   const selectedHomeownerRequestId =
     localStorage.getItem("selectedHomeownerRequestId") || "";
@@ -1263,7 +1297,14 @@ useEffect(() => {
   const activeRole =
     localStorage.getItem("activeAccountMode") || "personal";
 
-  const activeHeaderName = isEmergencyThread
+  const canonicalParticipantName =
+    currentViewerRole === "business"
+      ? canonicalConversationDetail?.participants?.homeowner?.displayName
+      : canonicalConversationDetail?.participants?.business?.name;
+
+  const activeHeaderName = isCanonicalThread && canonicalParticipantName
+    ? canonicalParticipantName
+    : isEmergencyThread
     ? currentViewerRole === "business"
       ? emergencyCustomerName
       : emergencyBusinessName
@@ -1275,7 +1316,10 @@ useEffect(() => {
     ? activeCustomerName
     : activeBusinessName;
 
-  const activeHeaderProject = isEmergencyThread
+  const activeHeaderProject =
+    isCanonicalThread && canonicalConversationDetail?.relationship?.title
+      ? canonicalConversationDetail.relationship.title
+      : isEmergencyThread
     ? emergencyServiceName
     : isHiringThread
     ? hiringPositionTitle || (t("position", language))
@@ -1511,7 +1555,9 @@ useEffect(() => {
   );
 
   const resolvedActiveLogo =
-    currentViewerRole === "business"
+    isCanonicalThread && currentViewerRole !== "business"
+      ? canonicalConversationDetail?.participants?.business?.imageUrl || ""
+      : currentViewerRole === "business"
       ? scopedPersonalProfilePhoto || projectedCustomerConversationIdentity.avatar
       : scopedConversationBusinessPhoto ||
         conversationBusinessIdentity.avatar ||
@@ -2502,6 +2548,113 @@ useEffect(() => {
     };
 
     const loadMessages = async () => {
+      if (isCanonicalThread) {
+        if (!canonicalConversationId) {
+          if (!cancelled) {
+            setCanonicalConversationState({
+              phase: "error",
+              status: "",
+              canSendMessages: false,
+            });
+            setCanonicalConversationDetail(null);
+            setCanonicalMessagesPhase("error");
+            setCanonicalLoadErrorKey("conversationCanonicalUnavailable");
+          }
+          return;
+        }
+
+        try {
+          const detailResult = await authFetch(
+            `/conversations/${canonicalConversationId}`,
+            {},
+            setPage
+          );
+          const detail = detailResult?.response?.ok
+            ? normalizeCanonicalConversationDetail(
+                detailResult.data,
+                canonicalConversationId
+              )
+            : null;
+
+          if (!detail) {
+            if (!cancelled) {
+              setCanonicalConversationState({
+                phase: "error",
+                status: "",
+                canSendMessages: false,
+              });
+              setCanonicalConversationDetail(null);
+              setCanonicalMessagesPhase("error");
+              setCanonicalLoadErrorKey("conversationCanonicalUnavailable");
+            }
+            return;
+          }
+
+          if (!cancelled) {
+            setCanonicalConversationDetail(detail);
+            setCanonicalConversationState({
+              phase: "ready",
+              status: detail.status,
+              canSendMessages: detail.canSendMessages,
+            });
+          }
+
+          const messageResult = await authFetch(
+            `/conversations/${canonicalConversationId}/messages`,
+            {},
+            setPage
+          );
+          const canonicalMessages = messageResult?.response?.ok
+            ? normalizeCanonicalMessageCollection(
+                messageResult.data,
+                canonicalConversationId,
+                currentViewerRole
+              )
+            : null;
+
+          if (!canonicalMessages) {
+            if (!cancelled) {
+              setCanonicalMessagesPhase("error");
+              setCanonicalLoadErrorKey(
+                "conversationCanonicalMessagesUnavailable"
+              );
+            }
+            return;
+          }
+
+          if (!cancelled) {
+            setMessages(
+              canonicalMessages.map((message) => ({
+                ...message,
+                time: formatMessageTime(message.createdAt),
+              }))
+            );
+            setCanonicalMessagesPhase("ready");
+            setCanonicalLoadErrorKey("");
+            try {
+              markConversationRead(conversationId, {}, currentViewerRole);
+            } catch {
+              // Read-state bookkeeping must never interrupt the visible thread.
+            }
+          }
+        } catch (error) {
+          console.error("Failed to load canonical conversation", error);
+          if (!cancelled) {
+            setCanonicalConversationState((current) => ({
+              ...current,
+              phase: current.phase === "ready" ? "ready" : "error",
+              canSendMessages:
+                current.phase === "ready" ? current.canSendMessages : false,
+            }));
+            setCanonicalMessagesPhase("error");
+            setCanonicalLoadErrorKey(
+              "conversationCanonicalMessagesUnavailable"
+            );
+          }
+        }
+        return;
+      }
+
       const selectedQuoteRequestId =
         localStorage.getItem("selectedQuoteRequestId") || conversationId;
       const localMessages = loadLocalMessages();
@@ -2564,7 +2717,21 @@ useEffect(() => {
       }
     };
 
-    loadMessages();
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+
+      if (isCanonicalThread) setMessages([]);
+      setCanonicalConversationDetail(null);
+      setCanonicalConversationState({
+        phase: isCanonicalThread ? "loading" : "idle",
+        status: "",
+        canSendMessages: false,
+      });
+      setCanonicalMessagesPhase(isCanonicalThread ? "loading" : "idle");
+      setCanonicalLoadErrorKey("");
+      setCanonicalSendErrorKey("");
+      loadMessages();
+    });
 
     const pollingInterval = setInterval(() => {
       if (!document.hidden) {
@@ -2576,7 +2743,16 @@ useEffect(() => {
       cancelled = true;
       clearInterval(pollingInterval);
     };
-  }, [storageKey, conversationId, starterMessages, currentViewerRole, setPage, isHiringThread]);
+  }, [
+    storageKey,
+    conversationId,
+    starterMessages,
+    currentViewerRole,
+    setPage,
+    isHiringThread,
+    isCanonicalThread,
+    canonicalConversationId,
+  ]);
 
   useEffect(() => {
     const registry = getConversationRegistry();
@@ -2589,6 +2765,8 @@ useEffect(() => {
   }, [conversationId]);
 
   useEffect(() => {
+    if (isCanonicalThread) return;
+
     if (messages.length > 0) {
       const messagesForConversation = sanitizeMessagesForConversation(messages);
 
@@ -2702,7 +2880,7 @@ useEffect(() => {
 
       writeUnreadConversationCount(updatedRegistry);
     }
-  }, [messages, storageKey, conversationId, language]);
+  }, [messages, storageKey, conversationId, language, isCanonicalThread]);
 
   useEffect(() => {
     if (!hasInitialScrolledRef.current && messages.length > 0) {
@@ -2958,7 +3136,107 @@ useEffect(() => {
     sendMessage(reply);
   };
 
+  const sendCanonicalMessage = async (rawText) => {
+    if (canonicalSendPending) return;
+
+    if (
+      !canonicalConversationId ||
+      canonicalConversationState.phase !== "ready" ||
+      canonicalConversationState.canSendMessages !== true
+    ) {
+      setCanonicalSendErrorKey("conversationCanonicalMessagingUnavailable");
+      return;
+    }
+
+    const validation = validateCanonicalMessageText(rawText);
+
+    if (!validation.valid) {
+      setCanonicalSendErrorKey(
+        validation.code === "MESSAGE_TEXT_TOO_LONG"
+          ? "conversationCanonicalMessageTooLong"
+          : "conversationCanonicalMessageRequired"
+      );
+      return;
+    }
+
+    setCanonicalSendPending(true);
+    setCanonicalSendErrorKey("");
+
+    try {
+      const result = await authFetch(
+        `/conversations/${canonicalConversationId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify(
+            buildCanonicalMessagePayload(validation.text)
+          ),
+        },
+        setPage
+      );
+      const confirmedMessage =
+        result?.response?.ok &&
+        result.response.status === 201 &&
+        result?.data?.success === true &&
+        result?.data?.code === "CONVERSATION_MESSAGE_CREATED" &&
+        normalizeCanonicalConversationId(result?.data?.conversationId) ===
+          canonicalConversationId
+          ? normalizeCanonicalMessage(result.data.message, currentViewerRole)
+          : null;
+
+      if (!confirmedMessage) {
+        if (
+          result?.response?.status === 409 ||
+          result?.data?.code === "CONVERSATION_CLOSED"
+        ) {
+          setCanonicalConversationState((current) => ({
+            ...current,
+            status: "closed",
+            canSendMessages: false,
+          }));
+          setCanonicalSendErrorKey("conversationCanonicalClosed");
+        } else if (result?.response?.status === 404) {
+          setCanonicalConversationState({
+            phase: "error",
+            status: "",
+            canSendMessages: false,
+          });
+          setCanonicalSendErrorKey("conversationCanonicalUnavailable");
+        } else {
+          setCanonicalSendErrorKey("conversationCanonicalSendFailed");
+        }
+        return;
+      }
+
+      const visibleMessage = {
+        ...confirmedMessage,
+        time: formatMessageTime(confirmedMessage.createdAt),
+      };
+
+      setMessages((current) =>
+        mergeConversationMessages(current, [visibleMessage])
+      );
+      setMessageText("");
+      setReplyingTo(null);
+      setActiveMessageId(null);
+      resetTextareaHeight();
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      });
+      window.dispatchEvent(new Event("meetro-messages-updated"));
+    } catch (error) {
+      console.error("Failed to send canonical conversation message", error);
+      setCanonicalSendErrorKey("conversationCanonicalSendFailed");
+    } finally {
+      setCanonicalSendPending(false);
+    }
+  };
+
   const sendMessage = (textOverride = null) => {
+    if (isCanonicalThread) {
+      void sendCanonicalMessage(textOverride ?? messageText);
+      return;
+    }
+
     if (isRequestOpportunityReadOnly) return;
     const text = textOverride || messageText.trim();
 
@@ -3859,6 +4137,8 @@ const handleImageUpload = (event) => {
   };
 
   const clearLocalChat = () => {
+    if (isCanonicalThread) return;
+
     localStorage.removeItem(storageKey);
     setMessages(starterMessages);
     setReplyingTo(null);
@@ -4296,6 +4576,22 @@ const handleImageUpload = (event) => {
     setTimeout(() => setSaveNotice(""), 1800);
   };
 
+  const canonicalComposerNoticeKey = !isCanonicalThread
+    ? ""
+    : canonicalConversationState.phase === "loading"
+    ? "conversationCanonicalLoading"
+    : canonicalConversationState.phase === "error"
+    ? "conversationCanonicalUnavailable"
+    : canonicalConversationState.canSendMessages !== true
+    ? canonicalConversationState.status === "closed"
+      ? "conversationCanonicalClosed"
+      : "conversationCanonicalMessagingUnavailable"
+    : "";
+  const composerNoticeKey = isRequestOpportunityReadOnly
+    ? "conversationOpportunityMessagingUnavailable"
+    : canonicalComposerNoticeKey;
+  const canUseMessageComposer = !composerNoticeKey;
+
   if (isHiringThread) {
     return (
       <div className="app-page meetro-responsive-page meetro-visual-page hiring-truth-page">
@@ -4424,8 +4720,19 @@ const handleImageUpload = (event) => {
             )}
 
             <div style={statusRow}>
-              <span style={greenDot}></span>
-              {typing
+              {(!isCanonicalThread ||
+                canonicalConversationState.status === "active") && (
+                <span style={greenDot}></span>
+              )}
+              {isCanonicalThread
+                ? canonicalConversationState.phase === "loading"
+                  ? t("conversationCanonicalLoading", language)
+                  : canonicalConversationState.phase === "error"
+                  ? t("conversationCanonicalUnavailable", language)
+                  : canonicalConversationState.status === "active"
+                  ? t("conversationActiveNow", language)
+                  : t("stateClosed", language)
+                : typing
                 ? t("conversationTyping", language)
                 : t("conversationActiveNow", language)}
 
@@ -4828,6 +5135,7 @@ const handleImageUpload = (event) => {
                 {t("conversationMarkUnread", language)}
               </button>
 
+              {!isCanonicalThread ? (
               <button
                 style={{
                   ...threadMenuBtn,
@@ -4843,6 +5151,7 @@ const handleImageUpload = (event) => {
                   ? t("conversationSavedToHistory", language)
                   : t("conversationSaveToHistory", language)}
               </button>
+              ) : null}
 
               <button
                 style={threadMenuBtn}
@@ -4856,6 +5165,7 @@ const handleImageUpload = (event) => {
                 {t("conversationSearchAction", language)}
               </button>
 
+              {!isCanonicalThread ? (
               <button
                 style={{ ...threadMenuBtn, color: "#ef4444" }}
                 onClick={() => {
@@ -4865,6 +5175,7 @@ const handleImageUpload = (event) => {
               >
                 {t("conversationClearLocalChat", language)}
               </button>
+              ) : null}
             </div>
           </div>
         )}
@@ -5288,7 +5599,25 @@ const handleImageUpload = (event) => {
               </div>
             ) : null}
 
-            {threadMessages.length === 0 && !hasThreadSearch ? (
+            {isCanonicalThread && canonicalMessagesPhase === "loading" ? (
+              <div style={{ ...timelineTopEmpty, textAlign: "center" }} role="status">
+                {t("conversationCanonicalLoading", language)}
+              </div>
+            ) : null}
+
+            {isCanonicalThread && canonicalMessagesPhase === "error" ? (
+              <div style={{ ...timelineTopEmpty, textAlign: "center" }} role="alert">
+                {t(
+                  canonicalLoadErrorKey ||
+                    "conversationCanonicalMessagesUnavailable",
+                  language
+                )}
+              </div>
+            ) : null}
+
+            {threadMessages.length === 0 &&
+            !hasThreadSearch &&
+            (!isCanonicalThread || canonicalMessagesPhase === "ready") ? (
               <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
                 {t("conversationNoMessages", language)}
               </div>
@@ -6028,7 +6357,8 @@ const handleImageUpload = (event) => {
               </button>
             )}
 
-            {(activeMessage.senderRole === currentViewerRole) && (
+            {!isCanonicalThread &&
+              activeMessage.senderRole === currentViewerRole && (
               <button
                 style={{ ...actionBtn, color: "#ef4444" }}
                 onClick={() => unsendMessage(activeMessage.id)}
@@ -6042,7 +6372,10 @@ const handleImageUpload = (event) => {
         </div>
 
         <div className="chat-bottom-stack" style={bottomStack}>
-          {!showAttachMenu && !isLandscape && !isComposerFocused && (
+          {canUseMessageComposer &&
+          !showAttachMenu &&
+          !isLandscape &&
+          !isComposerFocused && (
             <div className="quick-replies chat-quick-replies" style={quickWrap}>
               {quickReplies.slice(0, 4).map((reply) => (
                 <button
@@ -6059,7 +6392,7 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          {replyingTo && (
+          {canUseMessageComposer && replyingTo && (
             <div style={replyComposer}>
               <div style={{ minWidth: 0 }}>
                 <strong>{t("conversationReplying", language)}</strong>
@@ -6075,7 +6408,7 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          {pendingImage && (
+          {!isCanonicalThread && pendingImage && (
             <div style={pendingImageBox}>
               <img src={pendingImage.url} alt="" style={pendingImageThumb} />
 
@@ -6096,7 +6429,7 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          {showAttachMenu && (
+          {!isCanonicalThread && showAttachMenu && (
             <div style={attachMenu}>
               <div style={menuSection}>
                 <div style={menuSectionTitle}>
@@ -6280,7 +6613,7 @@ const handleImageUpload = (event) => {
           )}
 
 
-          {pendingPhotoPurpose === "explain" && (
+          {!isCanonicalThread && pendingPhotoPurpose === "explain" && (
             <div style={photoExplainCard}>
               <div style={photoExplainTitle}>
                 {t("conversationExplainPrompt", language)}
@@ -6324,12 +6657,14 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          {isRequestOpportunityReadOnly ? (
+          {!canUseMessageComposer ? (
             <div className="meetro-visual-empty-state" style={composer} role="status">
-              Messaging is not available for this request yet. Review the request details here.
+              {t(composerNoticeKey, language)}
             </div>
           ) : (
+          <>
           <div className="chat-composer message-composer" style={composer}>
+            {!isCanonicalThread ? (
             <button
               className="chat-plus-button message-plus-button"
               style={{ ...circleBtn, ...(showAttachMenu ? activeCircleBtn : {}) }}
@@ -6342,6 +6677,7 @@ const handleImageUpload = (event) => {
             >
               <IconPlus />
             </button>
+            ) : null}
 
             <div className="chat-input-wrapper message-input-wrapper" style={inputWrap}>
             <textarea
@@ -6350,6 +6686,10 @@ const handleImageUpload = (event) => {
                 style={input}
                 value={messageText}
                 rows={1}
+                maxLength={
+                  isCanonicalThread ? CANONICAL_MESSAGE_MAX_LENGTH : undefined
+                }
+                disabled={canonicalSendPending}
                 onFocus={() => setIsComposerFocused(true)}
                 onBlur={() => setIsComposerFocused(false)}
                 onChange={(e) => {
@@ -6370,6 +6710,7 @@ const handleImageUpload = (event) => {
               />
             </div>
 
+            {!isCanonicalThread ? (
             <button
               className="chat-mic-button message-mic-button"
               style={circleBtn}
@@ -6381,19 +6722,29 @@ const handleImageUpload = (event) => {
             >
               <IconMic />
             </button>
+            ) : null}
 
             <button
               className="chat-send-button message-send-button"
               style={{
                 ...sendBtn,
                 ...(isEmergencyThread ? emergencySendBtn : {}),
-                opacity: messageText.trim() || pendingImage ? 1 : 0.5,
+                opacity:
+                  !canonicalSendPending && (messageText.trim() || pendingImage)
+                    ? 1
+                    : 0.5,
               }}
+              disabled={
+                canonicalSendPending ||
+                (isCanonicalThread && !messageText.trim())
+              }
               onClick={() => sendMessage()}
             >
               <IconSend />
             </button>
 
+            {!isCanonicalThread ? (
+            <>
             <input
               ref={fileInputRef}
               type="file"
@@ -6412,7 +6763,19 @@ const handleImageUpload = (event) => {
               disabled={mediaUploadDeferred}
               onChange={handleImageUpload}
             />
+            </>
+            ) : null}
           </div>
+          {isCanonicalThread && canonicalSendErrorKey ? (
+            <div
+              className="meetro-visual-empty-state"
+              style={{ ...timelineTopEmpty, textAlign: "center" }}
+              role="alert"
+            >
+              {t(canonicalSendErrorKey, language)}
+            </div>
+          ) : null}
+          </>
           )}
         </div>
 
