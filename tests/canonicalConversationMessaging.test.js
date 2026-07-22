@@ -41,6 +41,36 @@ function opportunity(overrides = {}) {
   };
 }
 
+function homeownerConversation(overrides = {}) {
+  return {
+    id: 91,
+    conversation_id: 91,
+    request_id: 71,
+    request_title: "Repair entry door",
+    relationship: {
+      title: "Repair entry door",
+      stage: "conversation",
+    },
+    display: {
+      name: "Door Pro",
+      image_url: "https://example.test/door-pro.jpg",
+      category: "handyman",
+    },
+    status: {
+      value: "active",
+      active: true,
+      archived: false,
+      requires_attention: false,
+    },
+    last_activity: "2026-07-22T12:00:00.000Z",
+    last_message_preview: "I can help with this repair.",
+    unread_count: 1,
+    conversation_available: true,
+    permissions: { canSendMessages: true },
+    ...overrides,
+  };
+}
+
 function detail(overrides = {}) {
   return {
     success: true,
@@ -76,6 +106,117 @@ test("valid opportunity conversation_id projects a canonical thread", () => {
   assert.equal(record.conversationId, 91);
   assert.equal(record.threadType, CONVERSATION_THREAD_TYPES.CANONICAL);
   assert.equal(record.conversation_type, CONVERSATION_THREAD_TYPES.CANONICAL);
+});
+
+test("homeowner canonical list projects one authoritative conversation thread", () => {
+  const [record] = normalizeRequestConversations(
+    { conversations: [homeownerConversation()] },
+    "personal"
+  );
+
+  assert.equal(record.id, 91);
+  assert.equal(record.request_id, 71);
+  assert.equal(record.conversation_id, 91);
+  assert.equal(record.conversationId, 91);
+  assert.equal(record.threadType, CONVERSATION_THREAD_TYPES.CANONICAL);
+  assert.equal(record.conversation_type, CONVERSATION_THREAD_TYPES.CANONICAL);
+  assert.equal(record.businessName, "Door Pro");
+  assert.equal(record.project_title, "Repair entry door");
+  assert.equal(record.unread, true);
+  assert.equal(record.canSendMessages, true);
+});
+
+test("homeowner list preserves multiple conversations per request and across requests", () => {
+  const records = normalizeRequestConversations(
+    {
+      conversations: [
+        homeownerConversation(),
+        homeownerConversation({
+          id: 92,
+          conversation_id: 92,
+          display: { name: "Second Door Pro" },
+        }),
+        homeownerConversation({
+          id: 93,
+          conversation_id: 93,
+          request_id: 72,
+          request_title: "Repair window",
+          display: { name: "Window Pro" },
+        }),
+      ],
+    },
+    "personal"
+  );
+
+  assert.deepEqual(
+    records.map(({ conversationId, request_id }) => ({ conversationId, request_id })),
+    [
+      { conversationId: 91, request_id: 71 },
+      { conversationId: 92, request_id: 71 },
+      { conversationId: 93, request_id: 72 },
+    ]
+  );
+});
+
+test("homeowner request-only records do not fabricate conversation threads", () => {
+  assert.deepEqual(
+    normalizeRequestConversations({ conversations: [] }, "personal"),
+    []
+  );
+  assert.equal(
+    normalizeRequestConversations(
+      { posts: [{ id: 71, title: "Repair entry door" }] },
+      "personal"
+    ),
+    null
+  );
+  assert.deepEqual(
+    normalizeRequestConversations(
+      {
+        conversations: [
+          homeownerConversation({ conversation_id: null }),
+          homeownerConversation({ request_id: null }),
+        ],
+      },
+      "personal"
+    ),
+    []
+  );
+});
+
+test("homeowner normalization drops internal identity fields", () => {
+  const [record] = normalizeRequestConversations(
+    {
+      conversations: [homeownerConversation({
+        relationship_id: 51,
+        contractor_id: 80,
+        participant_id: 9,
+        homeowner_id: 7,
+        relationship: { id: 51, title: "Repair entry door" },
+      })],
+    },
+    "personal"
+  );
+
+  for (const privateField of [
+    "relationship",
+    "relationship_id",
+    "contractor_id",
+    "participant_id",
+    "homeowner_id",
+  ]) {
+    assert.equal(Object.hasOwn(record, privateField), false);
+  }
+});
+
+test("homeowner canonical identity survives authoritative list refresh", () => {
+  const payload = { conversations: [homeownerConversation()] };
+  const first = normalizeRequestConversations(payload, "personal");
+  const refreshed = normalizeRequestConversations(payload, "personal");
+
+  assert.equal(first[0].conversationId, 91);
+  assert.equal(refreshed[0].conversationId, 91);
+  assert.equal(refreshed[0].request_id, 71);
 });
 
 test("missing opportunity conversation_id never falls back to request identity", () => {
@@ -168,6 +309,22 @@ test("canonical message collection preserves backend identity and viewer directi
       { backendId: 202, sender: "them", senderRole: "homeowner", text: "Hi", status: "delivered" },
     ]
   );
+});
+
+test("professional canonical message renders once for the homeowner", () => {
+  const messages = normalizeCanonicalMessageCollection(
+    {
+      success: true,
+      conversationId: 91,
+      messages: [message(202, false, "I can help with this repair.")],
+    },
+    91,
+    "homeowner"
+  );
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].senderRole, "business");
+  assert.equal(messages[0].text, "I can help with this repair.");
 });
 
 test("canonical message collection rejects mismatched or malformed responses", () => {

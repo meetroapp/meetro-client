@@ -37,6 +37,30 @@ function post(overrides = {}) {
   };
 }
 
+function homeownerConversation(overrides = {}) {
+  return {
+    conversation_id: 91,
+    request_id: 12,
+    request_title: "Paint living room",
+    display: {
+      name: "Cape Painting",
+      image_url: "",
+      category: "painting",
+    },
+    status: {
+      value: "active",
+      active: true,
+      archived: false,
+    },
+    last_activity: "2026-07-20T10:00:00.000Z",
+    last_message_preview: null,
+    unread_count: 0,
+    conversation_available: true,
+    permissions: { canSendMessages: true },
+    ...overrides,
+  };
+}
+
 test("failed, malformed, empty, and populated request reads remain distinct", () => {
   assert.deepEqual(resolveHomeownerRequestCollection({
     response: { ok: false, status: 500 },
@@ -69,15 +93,21 @@ test("canonical edit and cancellation responses replace only the matching reques
   assert.notEqual(replaced[1], original[1]);
 });
 
-test("Communication uses account-correct authoritative request sources", () => {
-  assert.equal(getRequestCommunicationEndpoint("personal"), "/posts");
+test("Communication uses account-correct authoritative messaging sources", () => {
+  assert.equal(
+    getRequestCommunicationEndpoint("personal"),
+    "/conversations?perspective=homeowner"
+  );
   assert.equal(
     getRequestCommunicationEndpoint("business"),
     "/professional-request-opportunities"
   );
   assert.deepEqual(
-    normalizeRequestConversations({ posts: [post()] }, "personal").map((item) => item.id),
-    [12]
+    normalizeRequestConversations(
+      { conversations: [homeownerConversation()] },
+      "personal"
+    ).map((item) => item.id),
+    [91]
   );
   assert.deepEqual(
     normalizeRequestConversations({ opportunities: [post()] }, "business").map((item) => item.id),
@@ -85,11 +115,15 @@ test("Communication uses account-correct authoritative request sources", () => {
   );
   assert.deepEqual(
     normalizeRequestConversations(
-      { posts: [post({ status: "cancelled" })] },
+      {
+        conversations: [homeownerConversation({
+          status: { value: "closed", active: false, archived: false },
+        })],
+      },
       "personal"
     ).map(({ status, createdAt, updatedAt }) => ({ status, createdAt, updatedAt })),
     [{
-      status: "cancelled",
+      status: "closed",
       createdAt: "2026-07-20T10:00:00.000Z",
       updatedAt: "2026-07-20T10:00:00.000Z",
     }]
