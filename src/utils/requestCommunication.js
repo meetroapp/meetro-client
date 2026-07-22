@@ -1,3 +1,7 @@
+import {
+  getOpportunityThreadIdentity,
+} from "./canonicalConversationMessaging.js";
+
 export function getRequestCommunicationEndpoint(accountMode = "personal") {
   return accountMode === "business"
     ? "/professional-request-opportunities"
@@ -16,17 +20,20 @@ export function normalizeRequestConversations(payload = {}, accountMode = "perso
       const id = record.request_id ?? record.id;
       const title = String(record.title || "").trim();
       if (!id || !title) return null;
+      const opportunityIdentity = getOpportunityThreadIdentity(record);
       return {
         ...record,
         id,
         request_id: id,
+        conversationId: opportunityIdentity.conversationId,
+        threadType: opportunityIdentity.threadType,
         createdAt: record.createdAt || record.created_at || "",
         updatedAt: record.updatedAt || record.updated_at || "",
         project_title: title,
         project_description: String(record.description || "").trim(),
         relationshipScope: accountMode === "business" ? "business" : "personal",
         accountMode,
-        conversation_type: "request_opportunity",
+        conversation_type: opportunityIdentity.threadType,
         status: record.status || "open",
         unread: false,
       };
