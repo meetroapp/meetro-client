@@ -131,6 +131,52 @@ test("Communication uses account-correct authoritative messaging sources", () =>
   assert.equal(normalizeRequestConversations({}, "personal"), null);
 });
 
+test("Home keeps request and canonical conversation authority separate", () => {
+  assert.match(homeSource, /authFetch\("\/posts", \{ cache: "no-store" \}/);
+  assert.match(
+    homeSource,
+    /getRequestCommunicationEndpoint\("personal"\)/
+  );
+  assert.match(
+    homeSource,
+    /normalizeRequestConversations\([\s\S]*result\.data \|\| \{\},[\s\S]*"personal"/
+  );
+  assert.match(homeSource, /canonicalHomeownerConversations/);
+  assert.match(homeSource, /backendHomeownerRequests/);
+  assert.doesNotMatch(homeSource, /request-\$\{Date\.now/);
+  assert.doesNotMatch(homeSource, /openWorkConversationForRequest/);
+  assert.doesNotMatch(homeSource, /authFetch\(`?\/conversations\/\$\{/);
+  assert.doesNotMatch(homeSource, /authFetch\(`?\/messages\/\$\{/);
+});
+
+test("Home canonical refresh is bounded and preserves last-good data", () => {
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_FRESHNESS_MS/);
+  assert.match(homeSource, /if \(!force && isFresh\)/);
+  assert.match(homeSource, /if \(loadState\.inFlight\) return loadState\.inFlight/);
+  assert.match(homeSource, /loadState\.hasLastGood = true/);
+  assert.match(homeSource, /if \(!loadState\.hasLastGood\)/);
+  assert.match(homeSource, /generation !== loadState\.generation/);
+  assert.match(homeSource, /sequence !== loadState\.sequence/);
+  assert.match(homeSource, /window\.addEventListener\("focus"/);
+  assert.match(homeSource, /document\.addEventListener\("visibilitychange"/);
+  assert.doesNotMatch(homeSource, /setInterval\(/);
+  assert.doesNotMatch(homeSource, /dispatchEvent\(new StorageEvent/);
+});
+
+test("Home cards and details share the canonical conversation decision", () => {
+  assert.match(
+    homeSource,
+    /function getConversationEntryForRequest\(request = \{\}\)/
+  );
+  assert.match(
+    homeSource,
+    /conversationEntry=\{getConversationEntryForRequest\(detailsRequest\)\}/
+  );
+  assert.match(homeSource, /function ActiveRequestDetailsSheet\(/);
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_ENTRY_ACTIONS\.INBOX/);
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_ENTRY_ACTIONS\.CONVERSATION/);
+});
+
 test("request surfaces render unavailable states and owner mutations without local authority", () => {
   assert.match(homeSource, /REQUEST_COLLECTION_STATUS\.UNAVAILABLE/);
   assert.match(homeSource, /Requests unavailable/);

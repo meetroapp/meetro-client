@@ -21,7 +21,7 @@ test("Home renders My Projects with Active and History tabs", () => {
 });
 
 test("active project cards render a visible Next Step message", () => {
-  assert.match(homeSource, /function ProjectCard\(\{ request, language, onClick \}\)/);
+  assert.match(homeSource, /function ProjectCard\(\{ request, language, conversationEntry, onClick \}\)/);
   assert.match(homeSource, /const nextStepCopy = getHomeProjectNextStepCopy\(request, journey, language\)/);
   assert.match(homeSource, /style=\{projectNextStepPanel\}/);
   assert.match(homeSource, /t\("homeProjectNextStepLabel", language\)/);
@@ -55,12 +55,57 @@ test("known active project statuses have homeowner-safe next-step copy", () => {
   }
 });
 
-test("Continue Conversation still routes through the existing chat thread path", () => {
+test("Home project entry uses canonical zero, one, and many routing", () => {
   assert.match(homeSource, /function openHomeownerProject\(request = \{\}\)/);
-  assert.match(homeSource, /openWorkConversationForRequest\(request\)/);
-  assert.match(homeSource, /localStorage\.setItem\("conversationReturnPage", "home"\)/);
+  assert.match(homeSource, /getConversationEntryForRequest\(request\)/);
+  assert.match(homeSource, /stageHomeownerCanonicalConversation\(decision, request\)/);
   assert.match(homeSource, /setPage\("conversationThread"\)/);
+  assert.match(homeSource, /setPage\("messagesInbox"\)/);
+  assert.match(homeSource, /openRequestFromHome\(request\)/);
+  assert.doesNotMatch(homeSource, /openWorkConversationForRequest/);
+  assert.doesNotMatch(homeSource, /`request-\$\{Date\.now\(\)\}`/);
+  assert.doesNotMatch(
+    homeSource,
+    /localStorage\.setItem\("meetroConversationType", "standard"\)/
+  );
   assert.match(homeSource, /return t\("continueConversation", language\)/);
+});
+
+test("portrait and landscape project cards share the canonical entry decision", () => {
+  const projectCardEntries = homeSource.match(
+    /conversationEntry=\{getConversationEntryForRequest\(request\)\}/g
+  );
+
+  assert.ok(projectCardEntries);
+  assert.equal(projectCardEntries.length, 3);
+  assert.match(homeSource, /className="home-my-projects-portrait"/);
+  assert.match(homeSource, /className="home-my-projects-landscape"/);
+});
+
+test("Home conversation activity language is neutral", () => {
+  const activityKeys = [
+    "homeConversationActivityTitle",
+    "homeActiveConversationCount",
+    "homeActiveConversationsCount",
+    "homeConversationActivityText",
+    "homeNoActiveConversations",
+    "homeNoActiveConversationsText",
+    "homeConversationActivityLoading",
+    "homeConversationActivityUnavailable",
+    "homeConversationActivityUnavailableText",
+  ];
+
+  assert.match(homeSource, /homeConversationActivityTitle/);
+  assert.match(homeSource, /homeActiveConversationsCount/);
+  assert.doesNotMatch(homeSource, /homeMessagesNeedAttentionText/);
+  assert.doesNotMatch(homeSource, /homeMessagesAllCaughtUp/);
+  for (const language of ["en", "es", "fr", "pt-BR"]) {
+    activityKeys.forEach((key) => {
+      assert.equal(typeof translations[language][key], "string");
+      assert.ok(translations[language][key].trim());
+    });
+  }
+  assert.equal(t("homeActiveConversationsCount", "en", { count: 3 }), "3 active conversations");
 });
 
 test("History tab still renders completed and history content", () => {
