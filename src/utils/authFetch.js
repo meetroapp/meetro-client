@@ -22,6 +22,7 @@ export function clearMeetroSession() {
     "accountActive",
     "accountConnected",
     "activeAccountMode",
+    "meetroPreferredAccountMode",
     "firstLogin",
     "pendingLoginData",
     "pendingTwoFactorSession",

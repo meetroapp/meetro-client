@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
+  getAccountModeForPage,
+  getDashboardPageForAccountMode,
   getExplicitBusinessProfileOwnership,
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
@@ -387,6 +389,8 @@ function App() {
 
     const hasToken = safeGetStorageItem("token");
     const restoredSession = restoreAuthenticatedSessionFromStorage(targetPage);
+    const resolvedMode = restoredSession.finalMode || "personal";
+    const targetMode = getAccountModeForPage(targetPage, resolvedMode);
 
     if (isProfessionalOnlyPage(targetPage) && !hasToken) {
       return "login";
@@ -398,6 +402,10 @@ function App() {
       !isProfessionalSession()
     ) {
       return "home";
+    }
+
+    if (targetMode !== resolvedMode) {
+      return getDashboardPageForAccountMode(resolvedMode);
     }
 
     return shouldRouteToProfessionalOnboarding(targetPage)
@@ -478,7 +486,8 @@ function App() {
       return "login";
     }
 
-    restoreAuthenticatedSessionFromStorage(routedHash);
+    const restoredSession =
+      restoreAuthenticatedSessionFromStorage(routedHash);
 
     const onboardingComplete =
       safeGetStorageItem("onboardingComplete");
@@ -495,10 +504,10 @@ function App() {
     }
 
     if (routedHash && routedHash !== "tour") {
-      return routedHash;
+      return getGuardedPage(routedHash);
     }
 
-	    if (isProfessionalSession()) {
+	    if (restoredSession.finalMode === "business") {
 	      return shouldRouteToProfessionalOnboarding("businessDashboard")
 	        ? "professionalOnboarding"
 	        : "businessDashboard";
@@ -610,12 +619,6 @@ function App() {
         activeMode === "personal" &&
         isProfessionalOnlyPage(page)
       ) {
-        const restoredSession = restoreAuthenticatedSessionFromStorage(page);
-        if (restoredSession.isProfessional) {
-          syncAccountModeForPage(page);
-          return;
-        }
-
         window.location.hash = "home";
         setPageState("home");
       }

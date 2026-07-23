@@ -349,7 +349,6 @@ function Profile({ setPage, currentPage, embedded = false }) {
     }
 
     setActiveAccountMode(mode);
-    localStorage.setItem("meetroPreferredAccountMode", mode);
     setActiveMode(mode);
     setRelationshipInsightsEnabledState(
       areRelationshipInsightsEnabled({ role: mode })

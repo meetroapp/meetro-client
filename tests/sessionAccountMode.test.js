@@ -11,11 +11,14 @@ import {
   setActiveAccountMode,
   syncAccountModeForPage,
 } from "../src/utils/session.js";
+import {
+  getAccountModePreferenceStorageKey,
+} from "../src/utils/sessionAccountMode.js";
 
 function installStorage() {
   const store = new Map();
 
-  global.localStorage = {
+  globalThis.localStorage = {
     getItem: (key) => (store.has(key) ? store.get(key) : null),
     setItem: (key, value) => store.set(key, String(value)),
     removeItem: (key) => store.delete(key),
@@ -26,10 +29,10 @@ function installStorage() {
     },
   };
 
-  global.window = {
+  globalThis.window = {
     dispatchEvent: () => true,
   };
-  global.CustomEvent = class CustomEvent {
+  globalThis.CustomEvent = class CustomEvent {
     constructor(type, options = {}) {
       this.type = type;
       this.detail = options.detail;
@@ -50,8 +53,8 @@ test("professional can switch to User Account mode without losing professional c
 
   assert.equal(setActiveAccountMode("personal"), true);
   assert.equal(localStorage.getItem("activeAccountMode"), "personal");
-  assert.equal(localStorage.getItem("accountType"), "homeowner");
-  assert.equal(localStorage.getItem("userRole"), "homeowner");
+  assert.equal(localStorage.getItem("accountType"), "professional");
+  assert.equal(localStorage.getItem("userRole"), "handyman");
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), null);
   assert.equal(isProfessionalSession(), true);
 });
@@ -66,8 +69,8 @@ test("professional can switch back to business mode after User Account mode", ()
 
   assert.equal(setActiveAccountMode("business"), true);
   assert.equal(localStorage.getItem("activeAccountMode"), "business");
-  assert.equal(localStorage.getItem("accountType"), "professional");
-  assert.equal(localStorage.getItem("userRole"), "handyman");
+  assert.equal(localStorage.getItem("accountType"), "homeowner");
+  assert.equal(localStorage.getItem("userRole"), "homeowner");
 });
 
 test("dashboard route follows active account mode instead of professional capability", () => {
@@ -101,7 +104,7 @@ test("business profile ownership stays separate from current personal mode", () 
   assert.equal(localStorage.getItem("activeAccountMode"), "business");
 });
 
-test("authenticated professional session repairs business route mode after reload", () => {
+test("authenticated professional session defaults to business without a saved preference", () => {
   installStorage();
   localStorage.setItem("token", "token-123");
   localStorage.setItem(
@@ -138,11 +141,21 @@ test("authenticated professional session repairs business route mode after reloa
   assert.equal(isProfessionalSession(), true);
 });
 
-test("session repair preserves personal mode on personal routes", () => {
+test("session repair preserves a valid same-identity personal preference", () => {
   installStorage();
   localStorage.setItem("token", "token-123");
+  localStorage.setItem(
+    "user",
+    JSON.stringify({ id: "user-1", email: "william@example.com" })
+  );
+  localStorage.setItem("userId", "user-1");
+  localStorage.setItem("userEmail", "william@example.com");
   localStorage.setItem("activeAccountMode", "personal");
   localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem(
+    getAccountModePreferenceStorageKey("id:user-1"),
+    JSON.stringify({ identity: "id:user-1", mode: "personal" })
+  );
   localStorage.setItem(
     "contractorProfile",
     JSON.stringify({
@@ -156,8 +169,9 @@ test("session repair preserves personal mode on personal routes", () => {
 
   assert.equal(restored.authenticated, true);
   assert.equal(restored.isProfessional, true);
+  assert.equal(restored.finalMode, "personal");
   assert.equal(localStorage.getItem("activeAccountMode"), "personal");
-  assert.equal(localStorage.getItem("accountType"), "homeowner");
+  assert.equal(localStorage.getItem("accountType"), "professional");
   assert.equal(localStorage.getItem("isProfessional"), "true");
 });
 

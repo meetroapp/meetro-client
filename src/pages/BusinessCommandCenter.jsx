@@ -1,5 +1,6 @@
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
+import { setActiveAccountMode } from "../utils/session";
 import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import {
@@ -491,8 +492,7 @@ function BusinessCommandCenter({ setPage }) {
 
     if (toolId === "settings") {
       localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
-      localStorage.setItem("activeAccountMode", "business");
-      localStorage.setItem("meetroPreferredAccountMode", "business");
+      setActiveAccountMode("business");
       setPage("profile");
       return;
     }
@@ -507,8 +507,7 @@ function BusinessCommandCenter({ setPage }) {
     if (toolId === "aiHelp") {
       localStorage.setItem("meetroProfileOpenSection", "ai");
       localStorage.setItem("meetroSharedPageReturn", "businessCommandCenter");
-      localStorage.setItem("activeAccountMode", "business");
-      localStorage.setItem("meetroPreferredAccountMode", "business");
+      setActiveAccountMode("business");
       setPage("profile");
       return;
     }
