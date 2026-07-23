@@ -3,6 +3,11 @@ import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
 import { getLanguage, t } from "../utils/language";
 import { purgeProfessionalLeadCaches } from "../utils/businessLeadSourceTruth";
+import {
+  CONVERSATION_THREAD_PAGE,
+  getBusinessLeadConversationContext,
+  stageBusinessLeadConversation,
+} from "../utils/businessLeadConversationEntry";
 import { isProfessionalSession } from "../utils/session";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
@@ -17,6 +22,13 @@ function BusinessLeads({ setPage }) {
   const [opportunities, setOpportunities] = useState([]);
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
+
+  function openOpportunityConversation(opportunity) {
+    const context = stageBusinessLeadConversation(opportunity);
+    if (!context) return;
+
+    setPage(CONVERSATION_THREAD_PAGE);
+  }
 
   useEffect(() => {
     purgeProfessionalLeadCaches();
@@ -101,15 +113,34 @@ function BusinessLeads({ setPage }) {
         </section>
       ) : (
         <section style={leadList} aria-label="Eligible request opportunities">
-          {opportunities.map((opportunity) => (
-            <article key={opportunity.id} style={leadCard}>
-              <span style={leadStatus}>Open request</span>
-              <h2 style={stateTitle}>{opportunity.project_title}</h2>
-              <p style={stateText}>{opportunity.project_description}</p>
-              <p style={leadMeta}>{opportunity.service_specialty || opportunity.request_category}</p>
-              <p style={leadReviewNote}>Request review only. Response and messaging are not available yet.</p>
-            </article>
-          ))}
+          {opportunities.map((opportunity) => {
+            const conversationContext =
+              getBusinessLeadConversationContext(opportunity);
+            const cardKey = conversationContext
+              ? `conversation-${conversationContext.conversationId}`
+              : `request-${opportunity.request_id || opportunity.id}`;
+
+            return (
+              <article key={cardKey} style={leadCard}>
+                <span style={leadStatus}>Open request</span>
+                <h2 style={stateTitle}>{opportunity.project_title}</h2>
+                <p style={stateText}>{opportunity.project_description}</p>
+                <p style={leadMeta}>{opportunity.service_specialty || opportunity.request_category}</p>
+                {conversationContext ? (
+                  <button
+                    type="button"
+                    style={leadActionButton}
+                    aria-label={`${t("openConversation", language)}: ${opportunity.project_title}`}
+                    onClick={() => openOpportunityConversation(opportunity)}
+                  >
+                    {t("openConversation", language)}
+                  </button>
+                ) : (
+                  <p style={leadReviewNote}>Request review only. Response and messaging are not available yet.</p>
+                )}
+              </article>
+            );
+          })}
         </section>
       )}
 
@@ -234,6 +265,13 @@ const leadReviewNote = {
   fontSize: "13px",
   fontWeight: 700,
   margin: "14px 0 0",
+};
+
+const leadActionButton = {
+  ...primaryButton,
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 export default BusinessLeads;
