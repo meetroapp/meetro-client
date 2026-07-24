@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
 import {
+  cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
   saveEmergencySafetyAssessment,
@@ -95,6 +96,30 @@ function clean(value) {
 
 function getRequestId(record = {}) {
   return record.id ?? record.emergencyRequestId ?? record.emergency_request_id;
+}
+
+function getRequestStatus(record = {}) {
+  return clean(record.status || "draft").toLowerCase() || "draft";
+}
+
+function isEditableEmergencyDraft(record = {}) {
+  return getRequestStatus(record) === "draft";
+}
+
+function canCancelEmergencyRequest(record = {}) {
+  return ["draft", "safety_blocked"].includes(
+    getRequestStatus(record)
+  );
+}
+
+function getRecoveredPhase(record = {}) {
+  if (!isEditableEmergencyDraft(record)) {
+    return "lifecycle";
+  }
+
+  return getCanonicalSafetyAssessment(record)
+    ? "complete"
+    : "details";
 }
 
 function buildDraftForm(record = {}, fallback = {}) {
@@ -206,6 +231,8 @@ function EmergencyRequest({ setPage }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [cancelConfirmationOpen, setCancelConfirmationOpen] =
+    useState(false);
 
   const initialEmergencyRoute = useMemo(
     () =>
@@ -314,15 +341,14 @@ function EmergencyRequest({ setPage }) {
       }
 
       const recoveredRequest = result.emergencyRequest;
-      const assessment =
-        getCanonicalSafetyAssessment(recoveredRequest);
 
       setCanonicalRequest(recoveredRequest);
       setForm((current) =>
         buildDraftForm(recoveredRequest, current)
       );
       setSafety(buildSafetyForm(recoveredRequest));
-      setPhase(assessment ? "complete" : "details");
+      setPhase(getRecoveredPhase(recoveredRequest));
+      setCancelConfirmationOpen(false);
       setRecoveryState("loaded");
     }
 
@@ -413,6 +439,28 @@ function EmergencyRequest({ setPage }) {
       completeTitle: "Draft and Safety Review Saved",
       completeBody:
         "Your information is stored as a canonical Emergency draft. Meetro has not distributed it, assigned a professional, opened a chat, or initiated dispatch.",
+      cancelRequest: "Cancel Emergency Request",
+      cancelConfirmTitle: "Cancel this Emergency request?",
+      cancelConfirmBody:
+        "Cancellation is permanent. This request will remain available as a read-only canonical record.",
+      confirmCancellation: "Yes, Cancel Request",
+      keepRequest: "Keep Request",
+      cancelling: "Cancelling…",
+      cancellationFailed:
+        "The Emergency request could not be cancelled. Try again.",
+      cancelledTitle: "Emergency Request Cancelled",
+      cancelledBody:
+        "This canonical Emergency request was cancelled. It is read-only and was not distributed, assigned, dispatched, or connected to a chat.",
+      safetyBlockedTitle: "Emergency Workflow Blocked",
+      safetyBlockedBody:
+        "The safety review indicates that this request cannot continue through Meetro. Contact appropriate emergency services when needed.",
+      preparedTitle: "Emergency Request Prepared",
+      preparedBody:
+        "This request is read-only. Professional distribution is not available in the current Meetro Emergency release.",
+      readOnlyTitle: "Emergency Request Read-Only",
+      readOnlyBody:
+        "This canonical Emergency request can no longer be edited from this screen.",
+      readOnlyStatus: "Canonical lifecycle status",
     },
     es: {
       title: "Borrador de Emergencia",
@@ -488,6 +536,28 @@ function EmergencyRequest({ setPage }) {
       completeTitle: "Borrador y Revisión Guardados",
       completeBody:
         "Tu información está guardada como un borrador canónico de Emergencia. Meetro no lo distribuyó, no asignó un profesional, no abrió un chat ni inició un despacho.",
+      cancelRequest: "Cancelar Solicitud de Emergencia",
+      cancelConfirmTitle: "¿Cancelar esta solicitud de Emergencia?",
+      cancelConfirmBody:
+        "La cancelación es permanente. La solicitud permanecerá disponible como un registro canónico de solo lectura.",
+      confirmCancellation: "Sí, Cancelar Solicitud",
+      keepRequest: "Mantener Solicitud",
+      cancelling: "Cancelando…",
+      cancellationFailed:
+        "No se pudo cancelar la solicitud de Emergencia. Inténtalo nuevamente.",
+      cancelledTitle: "Solicitud de Emergencia Cancelada",
+      cancelledBody:
+        "Esta solicitud canónica de Emergencia fue cancelada. Es de solo lectura y no fue distribuida, asignada, despachada ni conectada a un chat.",
+      safetyBlockedTitle: "Flujo de Emergencia Bloqueado",
+      safetyBlockedBody:
+        "La revisión de seguridad indica que esta solicitud no puede continuar por Meetro. Contacta los servicios de emergencia apropiados cuando sea necesario.",
+      preparedTitle: "Solicitud de Emergencia Preparada",
+      preparedBody:
+        "Esta solicitud es de solo lectura. La distribución a profesionales no está disponible en la versión actual de Emergencia de Meetro.",
+      readOnlyTitle: "Solicitud de Emergencia de Solo Lectura",
+      readOnlyBody:
+        "Esta solicitud canónica de Emergencia ya no puede editarse desde esta pantalla.",
+      readOnlyStatus: "Estado canónico del ciclo de vida",
     },
   };
 
@@ -496,6 +566,11 @@ function EmergencyRequest({ setPage }) {
     SERVICE_OPTIONS.find(
       (option) => option.value === form.service
     ) || SERVICE_OPTIONS[0];
+
+  const canonicalStatus = getRequestStatus(canonicalRequest);
+  const editableDraft = isEditableEmergencyDraft(canonicalRequest);
+  const cancellationAvailable =
+    canCancelEmergencyRequest(canonicalRequest);
 
   function updateForm(field, value) {
     setForm((current) => ({
@@ -521,6 +596,12 @@ function EmergencyRequest({ setPage }) {
 
   async function submitDetails(event) {
     event.preventDefault();
+
+    if (canonicalRequest && !editableDraft) {
+      setErrorMessage(copy.readOnlyBody);
+      setMessage("");
+      return;
+    }
 
     const payload = {
       category: "home_repair",
@@ -587,6 +668,12 @@ function EmergencyRequest({ setPage }) {
   async function submitSafety(event) {
     event.preventDefault();
 
+    if (!editableDraft) {
+      setErrorMessage(copy.readOnlyBody);
+      setMessage("");
+      return;
+    }
+
     const requestId = getRequestId(canonicalRequest);
 
     if (!requestId) {
@@ -624,10 +711,92 @@ function EmergencyRequest({ setPage }) {
   }
 
   function editDetails() {
+    if (!editableDraft) {
+      setErrorMessage(copy.readOnlyBody);
+      return;
+    }
+
     setPhase("details");
     setMessage("");
     setErrorMessage("");
   }
+
+  function requestCancellation() {
+    if (!cancellationAvailable || pending) {
+      return;
+    }
+
+    setCancelConfirmationOpen(true);
+    setMessage("");
+    setErrorMessage("");
+  }
+
+  function keepEmergencyRequest() {
+    if (pending) return;
+
+    setCancelConfirmationOpen(false);
+    setErrorMessage("");
+  }
+
+  async function confirmCancellation() {
+    const requestId = getRequestId(canonicalRequest);
+
+    if (!requestId || !cancellationAvailable || pending) {
+      return;
+    }
+
+    setPending(true);
+    setMessage("");
+    setErrorMessage("");
+
+    const result = await cancelEmergencyRequest(requestId, {
+      setPage,
+    });
+
+    setPending(false);
+
+    if (!result.ok || !result.emergencyRequest) {
+      setErrorMessage(
+        result.message || copy.cancellationFailed
+      );
+      return;
+    }
+
+    setCanonicalRequest(result.emergencyRequest);
+    setPhase("lifecycle");
+    setCancelConfirmationOpen(false);
+    setRecoveryState("loaded");
+  }
+
+  function getLifecycleCopy() {
+    if (canonicalStatus === "cancelled") {
+      return {
+        title: copy.cancelledTitle,
+        body: copy.cancelledBody,
+      };
+    }
+
+    if (canonicalStatus === "safety_blocked") {
+      return {
+        title: copy.safetyBlockedTitle,
+        body: copy.safetyBlockedBody,
+      };
+    }
+
+    if (canonicalStatus === "ready_for_distribution") {
+      return {
+        title: copy.preparedTitle,
+        body: copy.preparedBody,
+      };
+    }
+
+    return {
+      title: copy.readOnlyTitle,
+      body: copy.readOnlyBody,
+    };
+  }
+
+  const lifecycleCopy = getLifecycleCopy();
 
   return (
     <div className="app-page meetro-form-page" style={page}>
@@ -724,6 +893,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          editableDraft &&
           phase === "details" && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
             <FieldLabel
@@ -853,6 +1023,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          editableDraft &&
           phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
             <h2 style={sectionTitle}>{copy.safetyTitle}</h2>
@@ -1001,6 +1172,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          editableDraft &&
           phase === "complete" && (
           <section style={completeCard}>
             <h2 style={sectionTitle}>{copy.completeTitle}</h2>
@@ -1016,6 +1188,105 @@ function EmergencyRequest({ setPage }) {
               onClick={editDetails}
             >
               {copy.editDetails}
+            </button>
+
+            {cancellationAvailable && (
+              <button
+                type="button"
+                style={dangerButton}
+                onClick={requestCancellation}
+                disabled={pending}
+              >
+                {copy.cancelRequest}
+              </button>
+            )}
+          </section>
+        )}
+
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          canonicalRequest &&
+          !editableDraft && (
+            <section style={lifecycleCard}>
+              <h2 style={sectionTitle}>
+                {lifecycleCopy.title}
+              </h2>
+
+              <p style={completeBody}>
+                {lifecycleCopy.body}
+              </p>
+
+              <div style={lifecycleStatus}>
+                <span>{copy.readOnlyStatus}</span>
+                <strong>{canonicalStatus}</strong>
+              </div>
+
+              {cancellationAvailable && (
+                <button
+                  type="button"
+                  style={dangerButton}
+                  onClick={requestCancellation}
+                  disabled={pending}
+                >
+                  {copy.cancelRequest}
+                </button>
+              )}
+            </section>
+          )}
+
+        {canonicalRequest &&
+          editableDraft &&
+          phase !== "complete" &&
+          cancellationAvailable && (
+            <button
+              type="button"
+              style={dangerButton}
+              onClick={requestCancellation}
+              disabled={pending}
+            >
+              {copy.cancelRequest}
+            </button>
+          )}
+
+        {cancelConfirmationOpen && (
+          <section
+            style={confirmationCard}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="emergency-cancel-title"
+          >
+            <h2
+              id="emergency-cancel-title"
+              style={sectionTitle}
+            >
+              {copy.cancelConfirmTitle}
+            </h2>
+
+            <p style={completeBody}>
+              {copy.cancelConfirmBody}
+            </p>
+
+            <button
+              type="button"
+              style={{
+                ...dangerButton,
+                ...(pending ? disabledButton : {}),
+              }}
+              onClick={confirmCancellation}
+              disabled={pending}
+            >
+              {pending
+                ? copy.cancelling
+                : copy.confirmCancellation}
+            </button>
+
+            <button
+              type="button"
+              style={secondaryButton}
+              onClick={keepEmergencyRequest}
+              disabled={pending}
+            >
+              {copy.keepRequest}
             </button>
           </section>
         )}
@@ -1262,6 +1533,14 @@ const disabledButton = {
   cursor: "not-allowed",
 };
 
+const dangerButton = {
+  ...secondaryButton,
+  marginTop: "12px",
+  border: "1px solid #fecaca",
+  background: "#fff7f7",
+  color: "#b91c1c",
+};
+
 const successNotice = {
   marginBottom: "16px",
   padding: "14px 16px",
@@ -1300,6 +1579,31 @@ const completeCard = {
   borderRadius: "22px",
   background: "white",
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const lifecycleCard = {
+  ...completeCard,
+  border: "1px solid #d1d5db",
+};
+
+const confirmationCard = {
+  ...completeCard,
+  marginTop: "16px",
+  border: "2px solid #fecaca",
+  background: "#fffafa",
+};
+
+const lifecycleStatus = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
+  marginTop: "16px",
+  padding: "13px 14px",
+  borderRadius: "14px",
+  background: "#f3f4f6",
+  color: "#374151",
+  fontSize: "14px",
 };
 
 const completeBody = {

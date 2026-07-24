@@ -29,7 +29,7 @@ test("Emergency entry opens canonical drafting without promising response", () =
   assert.doesNotMatch(emergencySource, /localStorage/);
 });
 
-test("Emergency Request uses only canonical draft and safety commands", () => {
+test("Emergency Request uses canonical draft, safety, recovery, and cancellation commands", () => {
   assert.match(
     requestSource,
     /createEmergencyDraft/
@@ -47,7 +47,7 @@ test("Emergency Request uses only canonical draft and safety commands", () => {
     requestSource,
     /prepareEmergencyRequest/
   );
-  assert.doesNotMatch(
+  assert.match(
     requestSource,
     /cancelEmergencyRequest/
   );
@@ -62,6 +62,98 @@ test("Emergency Request uses only canonical draft and safety commands", () => {
   assert.match(
     requestSource,
     /replaceEmergencyRequestRoute/
+  );
+});
+
+test("Emergency cancellation requires explicit confirmation and backend success", () => {
+  assert.match(
+    requestSource,
+    /cancelConfirmationOpen/
+  );
+  assert.match(
+    requestSource,
+    /requestCancellation/
+  );
+  assert.match(
+    requestSource,
+    /confirmCancellation/
+  );
+  assert.match(
+    requestSource,
+    /await cancelEmergencyRequest/
+  );
+  assert.match(
+    requestSource,
+    /Yes, Cancel Request/
+  );
+  assert.match(
+    requestSource,
+    /Keep Request/
+  );
+});
+
+test("Emergency cancellation is limited to governed pre-distribution statuses", () => {
+  assert.match(
+    requestSource,
+    /\["draft", "safety_blocked"\]/
+  );
+  assert.match(
+    requestSource,
+    /canCancelEmergencyRequest/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /\["ready_for_distribution".*"cancel/
+  );
+});
+
+test("non-draft Emergency records render read-only canonical lifecycle state", () => {
+  assert.match(
+    requestSource,
+    /isEditableEmergencyDraft/
+  );
+  assert.match(
+    requestSource,
+    /getRecoveredPhase/
+  );
+  assert.match(
+    requestSource,
+    /phase\("lifecycle"\)|setPhase\("lifecycle"\)/
+  );
+  assert.match(
+    requestSource,
+    /Emergency Request Cancelled/
+  );
+  assert.match(
+    requestSource,
+    /Emergency Workflow Blocked/
+  );
+  assert.match(
+    requestSource,
+    /Emergency Request Prepared/
+  );
+  assert.match(
+    requestSource,
+    /read-only canonical record/
+  );
+});
+
+test("Emergency cancellation preserves disabled downstream workflow", () => {
+  assert.doesNotMatch(
+    requestSource,
+    /prepareEmergencyRequest/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /setPage\("emergencyStatus"\)/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /setPage\("emergencyDispatch"\)/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /setPage\("emergencyChat"\)/
   );
 });
 
