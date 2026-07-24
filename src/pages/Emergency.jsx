@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage } from "../utils/language";
@@ -17,18 +18,28 @@ function Emergency({ setPage }) {
 
     return () => {
       window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
-      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
+      window.removeEventListener(
+        "meetro-language-change",
+        handleLanguageChange
+      );
+      window.removeEventListener(
+        "meetroLanguageChanged",
+        handleLanguageChange
+      );
     };
   }, []);
 
- const text = {
+  const text = {
     en: {
       title: "Emergency Help",
-      subtitle: "Emergency request delivery is not available right now.",
-      available: "Requests unavailable",
-      request: "Unavailable",
-      safety: "If anyone is in immediate danger, contact local emergency services now.",
+      subtitle:
+        "Create a private Emergency draft and complete a safety review.",
+      status: "Drafting available",
+      safety:
+        "If anyone is in immediate danger, call 911 or contact local emergency services now.",
+      limitation:
+        "Meetro does not yet distribute Emergency requests, dispatch professionals, or provide real-time emergency response.",
+      start: "Start Emergency Draft",
       back: "Back Home",
       services: [
         {
@@ -44,7 +55,7 @@ function Emergency({ setPage }) {
         {
           icon: "home",
           name: "Roof Leak Repair",
-          note: "Storm leaks, roof damage",
+          note: "Storm leaks and roof damage",
         },
         {
           icon: "lock",
@@ -53,22 +64,26 @@ function Emergency({ setPage }) {
         },
         {
           icon: "warning",
-          name: "Storm Prep Help",
-          note: "Shutters, sandbags, cleanup prep",
+          name: "Storm Preparation",
+          note: "Shutters, sandbags, damage prevention",
         },
         {
           icon: "emergency",
-          name: "Other Emergency",
-          note: "Describe your issue and connect with available professionals",
+          name: "Other Urgent Property Issue",
+          note: "Describe another urgent service need",
         },
       ],
     },
     es: {
       title: "Ayuda de Emergencia",
-      subtitle: "El envio de solicitudes de emergencia no esta disponible en este momento.",
-      available: "Solicitudes no disponibles",
-      request: "No disponible",
-      safety: "Si alguien esta en peligro inmediato, comunicate ahora con los servicios de emergencia locales.",
+      subtitle:
+        "Crea un borrador privado de Emergencia y completa una revisión de seguridad.",
+      status: "Borradores disponibles",
+      safety:
+        "Si alguien está en peligro inmediato, llama al 911 o comunícate ahora con los servicios de emergencia locales.",
+      limitation:
+        "Meetro todavía no distribuye solicitudes de Emergencia, despacha profesionales ni ofrece respuesta de emergencia en tiempo real.",
+      start: "Comenzar Borrador",
       back: "Regresar al Inicio",
       services: [
         {
@@ -78,58 +93,78 @@ function Emergency({ setPage }) {
         },
         {
           icon: "electrical",
-          name: "Electricista de Emergencia",
-          note: "Problemas eléctricos, enchufes, breakers",
+          name: "Electricidad de Emergencia",
+          note: "Problemas eléctricos, enchufes y breakers",
         },
         {
           icon: "home",
           name: "Reparación de Techo",
-          note: "Goteras, daños por tormenta",
+          note: "Goteras y daños en el techo",
         },
         {
           icon: "lock",
           name: "Cerrajero",
-          note: "Cerraduras, llaves, bloqueos",
+          note: "Cerraduras, llaves y bloqueos",
         },
         {
           icon: "warning",
           name: "Preparación para Tormentas",
-          note: "Shutters, sacos de arena, preparación de limpieza",
+          note: "Shutters, sacos de arena y prevención",
         },
         {
           icon: "emergency",
-          name: "Otra Emergencia",
-          note: "Describe tu problema y conéctate con profesionales disponibles",
+          name: "Otro Problema Urgente",
+          note: "Describe otra necesidad urgente de servicio",
         },
       ],
     },
   };
 
-  const t = text[language] || text.en;
+  const copy = text[language] || text.en;
 
   return (
     <div className="app-page meetro-responsive-page" style={page}>
-      <div style={card}>
+      <main style={card} aria-labelledby="emergency-help-title">
         <div style={topBar}>
-          <button style={backMini} onClick={() => setPage("home")}>
+          <button
+            type="button"
+            style={backMini}
+            onClick={() => setPage("home")}
+            aria-label={copy.back}
+          >
             ←
           </button>
 
           <div style={pill}>
-            <MeetroIcon name="emergency" size={16} decorative /> {t.available}
+            <MeetroIcon name="emergency" size={16} decorative />
+            {copy.status}
           </div>
         </div>
 
-        <h1 style={title}>{t.title}</h1>
-        <p style={subtitle}>{t.subtitle}</p>
-        <p style={safetyNotice} role="status">{t.safety}</p>
+        <h1 id="emergency-help-title" style={title}>
+          {copy.title}
+        </h1>
+
+        <p style={subtitle}>{copy.subtitle}</p>
+
+        <div style={safetyNotice} role="alert">
+          {copy.safety}
+        </div>
+
+        <div style={limitationNotice} role="status">
+          {copy.limitation}
+        </div>
 
         <div style={grid}>
-          {t.services.map((service, index) => (
-            <div key={index} style={serviceCard}>
+          {copy.services.map((service) => (
+            <article key={service.name} style={serviceCard}>
               <div style={serviceTop}>
                 <div style={iconBox}>
-                  <MeetroIcon name={service.icon} size={30} decorative />
+                  <MeetroIcon
+                    name={service.icon}
+                    size={30}
+                    decorative
+                  />
                 </div>
 
                 <div>
@@ -140,20 +175,23 @@ function Emergency({ setPage }) {
 
               <button
                 type="button"
-                style={{ ...primaryButton, ...disabledButton }}
-                disabled
-                aria-disabled="true"
+                style={primaryButton}
+                onClick={() => setPage("emergencyRequest")}
               >
-                {t.request}
+                {copy.start}
               </button>
-            </div>
+            </article>
           ))}
         </div>
 
-        <button style={button} onClick={() => setPage("home")}>
-          {t.back}
+        <button
+          type="button"
+          style={homeButton}
+          onClick={() => setPage("home")}
+        >
+          {copy.back}
         </button>
-      </div>
+      </main>
 
       <BottomNav currentPage="emergency" setPage={setPage} />
     </div>
@@ -169,6 +207,7 @@ const page = {
 };
 
 const card = {
+  width: "100%",
   maxWidth: "430px",
   margin: "0 auto",
 };
@@ -177,15 +216,18 @@ const topBar = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
+  gap: "12px",
   marginBottom: "24px",
 };
 
 const backMini = {
   width: "44px",
   height: "44px",
+  flexShrink: 0,
   borderRadius: "16px",
   border: "none",
   background: "white",
+  color: "#111827",
   fontSize: "22px",
   fontWeight: "800",
   boxShadow: "0 8px 22px rgba(0,0,0,0.06)",
@@ -193,6 +235,9 @@ const backMini = {
 };
 
 const pill = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "7px",
   padding: "10px 14px",
   borderRadius: "999px",
   background: "#ecfdf5",
@@ -202,24 +247,25 @@ const pill = {
 };
 
 const title = {
-  fontSize: "32px",
-  fontWeight: "900",
-  marginBottom: "8px",
+  margin: "0 0 8px",
   color: "#111827",
+  fontSize: "32px",
+  lineHeight: 1.15,
+  fontWeight: "900",
   textAlign: "center",
 };
 
 const subtitle = {
+  margin: "0 0 20px",
   color: "#6b7280",
-  marginBottom: "22px",
-  lineHeight: "1.5",
   fontSize: "16px",
+  lineHeight: 1.55,
   textAlign: "center",
 };
 
 const safetyNotice = {
-  margin: "0 0 22px",
-  padding: "14px 16px",
+  marginBottom: "12px",
+  padding: "15px 16px",
   border: "1px solid #fecaca",
   borderRadius: "14px",
   background: "#fff7f7",
@@ -230,11 +276,16 @@ const safetyNotice = {
   textAlign: "center",
 };
 
-const disabledButton = {
-  background: "#e5e7eb",
-  color: "#6b7280",
-  cursor: "not-allowed",
-  boxShadow: "none",
+const limitationNotice = {
+  marginBottom: "22px",
+  padding: "15px 16px",
+  border: "1px solid #dbeafe",
+  borderRadius: "14px",
+  background: "#eff6ff",
+  color: "#1e3a8a",
+  fontSize: "14px",
+  lineHeight: 1.5,
+  textAlign: "center",
 };
 
 const grid = {
@@ -244,9 +295,10 @@ const grid = {
 };
 
 const serviceCard = {
-  background: "white",
-  borderRadius: "26px",
+  minWidth: 0,
   padding: "20px",
+  borderRadius: "26px",
+  background: "white",
   boxShadow: "0 12px 32px rgba(0,0,0,0.06)",
 };
 
@@ -254,54 +306,49 @@ const serviceTop = {
   display: "flex",
   alignItems: "center",
   gap: "14px",
+  minWidth: 0,
   marginBottom: "18px",
 };
 
 const iconBox = {
   width: "48px",
   height: "48px",
-  borderRadius: "18px",
-  background: "#f1efff",
+  flexShrink: 0,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "24px",
-  flexShrink: 0,
+  borderRadius: "18px",
+  background: "#f1efff",
 };
 
 const serviceName = {
-  fontSize: "16px",
   color: "#111827",
+  fontSize: "16px",
 };
 
 const serviceNote = {
   margin: "5px 0 0",
-  fontSize: "13px",
   color: "#6b7280",
-  lineHeight: "1.35",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const primaryButton = {
   width: "100%",
-  padding: "12px",
+  minHeight: "48px",
+  padding: "12px 16px",
+  border: "none",
   borderRadius: "16px",
-  border: "none",
   background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  fontWeight: "800",
-  cursor: "pointer",
-};
-
-const button = {
-  width: "100%",
-  padding: "16px",
-  borderRadius: "18px",
-  border: "none",
-  background: "#111827",
   color: "white",
   fontSize: "16px",
   fontWeight: "800",
   cursor: "pointer",
+};
+
+const homeButton = {
+  ...primaryButton,
+  background: "#111827",
 };
 
 export default Emergency;
