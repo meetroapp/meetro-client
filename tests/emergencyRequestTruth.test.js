@@ -51,9 +51,45 @@ test("Emergency Request uses only canonical draft and safety commands", () => {
     requestSource,
     /cancelEmergencyRequest/
   );
-  assert.doesNotMatch(
+  assert.match(
     requestSource,
     /getEmergencyRequest/
+  );
+  assert.match(
+    requestSource,
+    /parseEmergencyRequestRoute/
+  );
+  assert.match(
+    requestSource,
+    /replaceEmergencyRequestRoute/
+  );
+});
+
+test("Emergency Request resumes only exact backend-owned route identity", () => {
+  assert.match(
+    requestSource,
+    /initialEmergencyRoute\.requestId/
+  );
+  assert.match(
+    requestSource,
+    /await getEmergencyRequest/
+  );
+  assert.match(
+    requestSource,
+    /buildDraftForm\(recoveredRequest/
+  );
+  assert.match(
+    requestSource,
+    /buildSafetyForm\(recoveredRequest/
+  );
+  assert.match(
+    requestSource,
+    /recoveryState/
+  );
+
+  assert.doesNotMatch(
+    requestSource,
+    /latestEmergency|listEmergency|activeEmergencyRequestId/
   );
 });
 

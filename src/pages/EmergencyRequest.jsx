@@ -3,9 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import {
   createEmergencyDraft,
+  getEmergencyRequest,
   saveEmergencySafetyAssessment,
   updateEmergencyDraft,
 } from "../utils/emergencyApi";
+import {
+  parseEmergencyRequestRoute,
+  replaceEmergencyRequestRoute,
+} from "../utils/emergencyRoutes";
 import { getLanguage } from "../utils/language";
 import {
   formatPersonalAddress,
@@ -120,6 +125,80 @@ function buildDraftForm(record = {}, fallback = {}) {
   };
 }
 
+function getCanonicalSafetyAssessment(record = {}) {
+  const assessment =
+    record.safetyAssessment ||
+    record.safety_assessment ||
+    null;
+
+  return assessment &&
+    typeof assessment === "object" &&
+    !Array.isArray(assessment)
+    ? assessment
+    : null;
+}
+
+function buildSafetyForm(record = {}) {
+  const assessment = getCanonicalSafetyAssessment(record);
+
+  if (!assessment) {
+    return {
+      ...INITIAL_SAFETY,
+    };
+  }
+
+  return {
+    immediateDanger: Boolean(
+      assessment.immediateDanger ??
+        assessment.immediate_danger
+    ),
+    medicalEmergency: Boolean(
+      assessment.medicalEmergency ??
+        assessment.medical_emergency
+    ),
+    fireOrSmoke: Boolean(
+      assessment.fireOrSmoke ??
+        assessment.fire_or_smoke
+    ),
+    gasOdorOrSuspectedLeak: Boolean(
+      assessment.gasOdorOrSuspectedLeak ??
+        assessment.gas_odor_or_suspected_leak
+    ),
+    activeCrimeOrThreat: Boolean(
+      assessment.activeCrimeOrThreat ??
+        assessment.active_crime_or_threat
+    ),
+    electricalImmediateHazard: Boolean(
+      assessment.electricalImmediateHazard ??
+        assessment.electrical_immediate_hazard
+    ),
+    structuralCollapseRisk: Boolean(
+      assessment.structuralCollapseRisk ??
+        assessment.structural_collapse_risk
+    ),
+    floodingOrWaterDamage: Boolean(
+      assessment.floodingOrWaterDamage ??
+        assessment.flooding_or_water_damage
+    ),
+    occupantsUnableToExit: Boolean(
+      assessment.occupantsUnableToExit ??
+        assessment.occupants_unable_to_exit
+    ),
+    emergencyServicesContacted: Boolean(
+      assessment.emergencyServicesContacted ??
+        assessment.emergency_services_contacted
+    ),
+    safeToRemainAtLocation: Boolean(
+      assessment.safeToRemainAtLocation ??
+        assessment.safe_to_remain_at_location
+    ),
+    additionalSafetyContext: clean(
+      assessment.additionalSafetyContext ??
+        assessment.additional_safety_context
+    ),
+  };
+}
+
 function EmergencyRequest({ setPage }) {
   const [language, setLanguage] = useState(getLanguage());
   const [canonicalRequest, setCanonicalRequest] = useState(null);
@@ -127,6 +206,26 @@ function EmergencyRequest({ setPage }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  const initialEmergencyRoute = useMemo(
+    () =>
+      parseEmergencyRequestRoute(
+        typeof window === "undefined"
+          ? ""
+          : window.location.hash
+      ),
+    []
+  );
+
+  const [recoveryState, setRecoveryState] = useState(() =>
+    initialEmergencyRoute.hasRequestId &&
+    (
+      !initialEmergencyRoute.valid ||
+      !initialEmergencyRoute.requestId
+    )
+      ? "failed"
+      : "idle"
+  );
 
   const defaultAddress = useMemo(
     () => formatPersonalAddress(resolveDefaultPersonalAddress() || {}),
@@ -176,6 +275,68 @@ function EmergencyRequest({ setPage }) {
       );
     };
   }, []);
+
+  useEffect(() => {
+    if (!initialEmergencyRoute.hasRequestId) {
+      return undefined;
+    }
+
+    if (
+      !initialEmergencyRoute.valid ||
+      !initialEmergencyRoute.requestId
+    ) {
+      return undefined;
+    }
+
+    let active = true;
+
+    async function recoverCanonicalDraft() {
+      setRecoveryState("loading");
+      setErrorMessage("");
+      setMessage("");
+
+      const result = await getEmergencyRequest(
+        initialEmergencyRoute.requestId,
+        {
+          setPage,
+        }
+      );
+
+      if (!active) return;
+
+      if (!result.ok || !result.emergencyRequest) {
+        setRecoveryState("failed");
+        setErrorMessage(
+          result.message ||
+            "The Emergency draft could not be loaded."
+        );
+        return;
+      }
+
+      const recoveredRequest = result.emergencyRequest;
+      const assessment =
+        getCanonicalSafetyAssessment(recoveredRequest);
+
+      setCanonicalRequest(recoveredRequest);
+      setForm((current) =>
+        buildDraftForm(recoveredRequest, current)
+      );
+      setSafety(buildSafetyForm(recoveredRequest));
+      setPhase(assessment ? "complete" : "details");
+      setRecoveryState("loaded");
+    }
+
+    recoverCanonicalDraft();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    initialEmergencyRoute.hasRequestId,
+    initialEmergencyRoute.requestId,
+    initialEmergencyRoute.valid,
+    setPage,
+  ]);
 
   const text = {
     en: {
@@ -238,6 +399,12 @@ function EmergencyRequest({ setPage }) {
         "Service, title, description, and location are required.",
       requestFailed:
         "The Emergency draft could not be saved. Try again.",
+      recoveryLoading: "Loading your Emergency draft…",
+      recoveryFailed:
+        "This Emergency draft could not be loaded. It may be unavailable or you may not have access.",
+      recovered:
+        "Your canonical Emergency draft was loaded from Meetro.",
+      startNewDraft: "Start a New Emergency Draft",
       safetyFailed:
         "The safety review could not be saved. Try again.",
       canonicalId: "Emergency draft",
@@ -307,6 +474,12 @@ function EmergencyRequest({ setPage }) {
         "El servicio, título, descripción y ubicación son obligatorios.",
       requestFailed:
         "No se pudo guardar el borrador. Inténtalo nuevamente.",
+      recoveryLoading: "Cargando tu borrador de Emergencia…",
+      recoveryFailed:
+        "No se pudo cargar este borrador de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
+      recovered:
+        "Tu borrador canónico de Emergencia fue cargado desde Meetro.",
+      startNewDraft: "Comenzar un Nuevo Borrador",
       safetyFailed:
         "No se pudo guardar la revisión. Inténtalo nuevamente.",
       canonicalId: "Borrador de Emergencia",
@@ -398,6 +571,15 @@ function EmergencyRequest({ setPage }) {
         service: form.service,
       })
     );
+
+    const canonicalRequestId =
+      getRequestId(result.emergencyRequest);
+
+    if (canonicalRequestId) {
+      replaceEmergencyRequestRoute(canonicalRequestId);
+    }
+
+    setRecoveryState("loaded");
     setMessage(requestId ? copy.draftUpdated : copy.draftSaved);
     setPhase("safety");
   }
@@ -504,7 +686,45 @@ function EmergencyRequest({ setPage }) {
           </div>
         )}
 
-        {phase === "details" && (
+        {recoveryState === "loading" && (
+          <section
+            style={formCard}
+            role="status"
+            aria-live="polite"
+          >
+            <p style={recoveryMessage}>
+              {copy.recoveryLoading}
+            </p>
+          </section>
+        )}
+
+        {recoveryState === "failed" && (
+          <section style={formCard}>
+            <p style={recoveryMessage}>
+              {errorMessage || copy.recoveryFailed}
+            </p>
+
+            <button
+              type="button"
+              style={primaryButton}
+              onClick={() => setPage("emergencyRequest")}
+            >
+              {copy.startNewDraft}
+            </button>
+          </section>
+        )}
+
+        {recoveryState === "loaded" &&
+          initialEmergencyRoute.hasRequestId &&
+          !message && (
+            <div style={successNotice} role="status">
+              {copy.recovered}
+            </div>
+          )}
+
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          phase === "details" && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
             <FieldLabel
               htmlFor="emergency-service"
@@ -631,7 +851,9 @@ function EmergencyRequest({ setPage }) {
           </form>
         )}
 
-        {phase === "safety" && (
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
             <h2 style={sectionTitle}>{copy.safetyTitle}</h2>
             <p style={sectionIntro}>{copy.safetyIntro}</p>
@@ -777,7 +999,9 @@ function EmergencyRequest({ setPage }) {
           </form>
         )}
 
-        {phase === "complete" && (
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          phase === "complete" && (
           <section style={completeCard}>
             <h2 style={sectionTitle}>{copy.completeTitle}</h2>
             <p style={completeBody}>{copy.completeBody}</p>
@@ -1060,6 +1284,14 @@ const errorNotice = {
   fontSize: "14px",
   fontWeight: "800",
   lineHeight: 1.5,
+};
+
+const recoveryMessage = {
+  margin: 0,
+  color: "#374151",
+  fontSize: "15px",
+  lineHeight: 1.6,
+  textAlign: "center",
 };
 
 const completeCard = {

@@ -923,9 +923,10 @@ function App() {
 	      ? "professionalOnboarding"
 	      : newPage;
 	
-	    syncAccountModeForPage(finalPage);
+	    const finalRoutePage = getRoutePage(finalPage);
+	    syncAccountModeForPage(finalRoutePage);
 	    window.location.hash = finalPage;
-	    setPageState(finalPage);
+	    setPageState(finalRoutePage);
 	  };
 
 if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "sessionRestoring") {
