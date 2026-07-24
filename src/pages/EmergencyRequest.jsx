@@ -5,6 +5,7 @@ import {
   cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
+  prepareEmergencyRequest,
   saveEmergencySafetyAssessment,
   updateEmergencyDraft,
 } from "../utils/emergencyApi";
@@ -233,6 +234,8 @@ function EmergencyRequest({ setPage }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [cancelConfirmationOpen, setCancelConfirmationOpen] =
     useState(false);
+  const [submissionConfirmationOpen, setSubmissionConfirmationOpen] =
+    useState(false);
 
   const initialEmergencyRoute = useMemo(
     () =>
@@ -349,6 +352,7 @@ function EmergencyRequest({ setPage }) {
       setSafety(buildSafetyForm(recoveredRequest));
       setPhase(getRecoveredPhase(recoveredRequest));
       setCancelConfirmationOpen(false);
+      setSubmissionConfirmationOpen(false);
       setRecoveryState("loaded");
     }
 
@@ -418,6 +422,24 @@ function EmergencyRequest({ setPage }) {
       safetySaving: "Saving Safety Review…",
       safetySaved:
         "Safety review saved. Your draft has not been distributed.",
+      submissionTitle: "Submit Emergency Request",
+      submissionIntro:
+        "Your request and safety review are complete. Review the acknowledgment below before submitting.",
+      submissionAcknowledgment:
+        "I understand that submitting this request changes it to a read-only canonical record that may become eligible for future professional distribution. Meetro is not currently distributing this request, notifying professionals, assigning anyone, opening a chat, or initiating dispatch.",
+      openSubmissionConfirmation: "Submit Emergency Request",
+      submissionConfirmTitle: "Submit this Emergency request?",
+      submissionConfirmBody:
+        "After submission, this request becomes read-only. It will be marked as submitted and awaiting future distribution. No professional will be notified or assigned by this action.",
+      confirmSubmission: "Yes, Submit Request",
+      keepEditing: "Keep Editing",
+      submitting: "Submitting…",
+      submissionFailed:
+        "The Emergency request could not be submitted. Try again.",
+      submittedTitle: "Emergency Request Submitted",
+      submittedBody:
+        "This canonical Emergency request is submitted and awaiting future distribution. No professional has been notified, matched, assigned, or dispatched, and no chat has been opened.",
+      submittedStatus: "Submitted — Awaiting Future Distribution",
       editDetails: "Edit Draft Details",
       back: "Back to Emergency Help",
       home: "Back Home",
@@ -454,9 +476,9 @@ function EmergencyRequest({ setPage }) {
       safetyBlockedTitle: "Emergency Workflow Blocked",
       safetyBlockedBody:
         "The safety review indicates that this request cannot continue through Meetro. Contact appropriate emergency services when needed.",
-      preparedTitle: "Emergency Request Prepared",
+      preparedTitle: "Emergency Request Submitted",
       preparedBody:
-        "This request is read-only. Professional distribution is not available in the current Meetro Emergency release.",
+        "This canonical Emergency request is submitted and awaiting future distribution. No professional has been notified, matched, assigned, or dispatched, and no chat has been opened.",
       readOnlyTitle: "Emergency Request Read-Only",
       readOnlyBody:
         "This canonical Emergency request can no longer be edited from this screen.",
@@ -515,6 +537,24 @@ function EmergencyRequest({ setPage }) {
       safetySaving: "Guardando Revisión…",
       safetySaved:
         "Revisión guardada. El borrador no ha sido distribuido.",
+      submissionTitle: "Enviar Solicitud de Emergencia",
+      submissionIntro:
+        "Tu solicitud y revisión de seguridad están completas. Revisa el reconocimiento antes de enviarla.",
+      submissionAcknowledgment:
+        "Entiendo que enviar esta solicitud la convierte en un registro canónico de solo lectura que podrá ser elegible para distribución profesional futura. Meetro actualmente no distribuirá esta solicitud, no notificará profesionales, no asignará a nadie, no abrirá un chat ni iniciará un despacho.",
+      openSubmissionConfirmation: "Enviar Solicitud de Emergencia",
+      submissionConfirmTitle: "¿Enviar esta solicitud de Emergencia?",
+      submissionConfirmBody:
+        "Después de enviarla, esta solicitud será de solo lectura. Se marcará como enviada y en espera de distribución futura. Esta acción no notificará ni asignará a ningún profesional.",
+      confirmSubmission: "Sí, Enviar Solicitud",
+      keepEditing: "Continuar Editando",
+      submitting: "Enviando…",
+      submissionFailed:
+        "No se pudo enviar la solicitud de Emergencia. Inténtalo nuevamente.",
+      submittedTitle: "Solicitud de Emergencia Enviada",
+      submittedBody:
+        "Esta solicitud canónica de Emergencia fue enviada y está en espera de distribución futura. Ningún profesional ha sido notificado, seleccionado, asignado o despachado, y no se abrió ningún chat.",
+      submittedStatus: "Enviada — En Espera de Distribución Futura",
       editDetails: "Editar Detalles",
       back: "Regresar a Ayuda de Emergencia",
       home: "Regresar al Inicio",
@@ -551,9 +591,9 @@ function EmergencyRequest({ setPage }) {
       safetyBlockedTitle: "Flujo de Emergencia Bloqueado",
       safetyBlockedBody:
         "La revisión de seguridad indica que esta solicitud no puede continuar por Meetro. Contacta los servicios de emergencia apropiados cuando sea necesario.",
-      preparedTitle: "Solicitud de Emergencia Preparada",
+      preparedTitle: "Solicitud de Emergencia Enviada",
       preparedBody:
-        "Esta solicitud es de solo lectura. La distribución a profesionales no está disponible en la versión actual de Emergencia de Meetro.",
+        "Esta solicitud canónica de Emergencia fue enviada y está en espera de distribución futura. Ningún profesional ha sido notificado, seleccionado, asignado o despachado, y no se abrió ningún chat.",
       readOnlyTitle: "Solicitud de Emergencia de Solo Lectura",
       readOnlyBody:
         "Esta solicitud canónica de Emergencia ya no puede editarse desde esta pantalla.",
@@ -721,12 +761,71 @@ function EmergencyRequest({ setPage }) {
     setErrorMessage("");
   }
 
+
+  function requestSubmission() {
+    if (
+      !editableDraft ||
+      phase !== "complete" ||
+      pending ||
+      !getRequestId(canonicalRequest)
+    ) {
+      return;
+    }
+
+    setSubmissionConfirmationOpen(true);
+    setCancelConfirmationOpen(false);
+    setMessage("");
+    setErrorMessage("");
+  }
+
+  function keepEditingEmergencyRequest() {
+    if (pending) return;
+
+    setSubmissionConfirmationOpen(false);
+    setErrorMessage("");
+  }
+
+  async function confirmSubmission() {
+    const requestId = getRequestId(canonicalRequest);
+
+    if (
+      !requestId ||
+      !editableDraft ||
+      phase !== "complete" ||
+      pending
+    ) {
+      return;
+    }
+
+    setPending(true);
+    setMessage("");
+    setErrorMessage("");
+
+    const result = await prepareEmergencyRequest(requestId, {
+      setPage,
+    });
+
+    setPending(false);
+
+    if (!result.ok || !result.emergencyRequest) {
+      setErrorMessage(result.message || copy.submissionFailed);
+      return;
+    }
+
+    setCanonicalRequest(result.emergencyRequest);
+    setPhase("lifecycle");
+    setSubmissionConfirmationOpen(false);
+    setCancelConfirmationOpen(false);
+    setRecoveryState("loaded");
+  }
+
   function requestCancellation() {
     if (!cancellationAvailable || pending) {
       return;
     }
 
     setCancelConfirmationOpen(true);
+    setSubmissionConfirmationOpen(false);
     setMessage("");
     setErrorMessage("");
   }
@@ -1175,8 +1274,12 @@ function EmergencyRequest({ setPage }) {
           editableDraft &&
           phase === "complete" && (
           <section style={completeCard}>
-            <h2 style={sectionTitle}>{copy.completeTitle}</h2>
-            <p style={completeBody}>{copy.completeBody}</p>
+            <h2 style={sectionTitle}>{copy.submissionTitle}</h2>
+            <p style={completeBody}>{copy.submissionIntro}</p>
+
+            <div style={acknowledgmentNotice}>
+              {copy.submissionAcknowledgment}
+            </div>
 
             <div style={distributionPill}>
               {copy.distributionUnavailable}
@@ -1184,8 +1287,21 @@ function EmergencyRequest({ setPage }) {
 
             <button
               type="button"
-              style={primaryButton}
+              style={{
+                ...primaryButton,
+                ...(pending ? disabledButton : {}),
+              }}
+              onClick={requestSubmission}
+              disabled={pending}
+            >
+              {copy.openSubmissionConfirmation}
+            </button>
+
+            <button
+              type="button"
+              style={secondaryButton}
               onClick={editDetails}
+              disabled={pending}
             >
               {copy.editDetails}
             </button>
@@ -1218,7 +1334,11 @@ function EmergencyRequest({ setPage }) {
 
               <div style={lifecycleStatus}>
                 <span>{copy.readOnlyStatus}</span>
-                <strong>{canonicalStatus}</strong>
+                <strong>
+                  {canonicalStatus === "ready_for_distribution"
+                    ? copy.submittedStatus
+                    : canonicalStatus}
+                </strong>
               </div>
 
               {cancellationAvailable && (
@@ -1247,6 +1367,49 @@ function EmergencyRequest({ setPage }) {
               {copy.cancelRequest}
             </button>
           )}
+
+        {submissionConfirmationOpen && (
+          <section
+            style={submissionConfirmationCard}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="emergency-submission-title"
+          >
+            <h2
+              id="emergency-submission-title"
+              style={sectionTitle}
+            >
+              {copy.submissionConfirmTitle}
+            </h2>
+
+            <p style={completeBody}>
+              {copy.submissionConfirmBody}
+            </p>
+
+            <button
+              type="button"
+              style={{
+                ...primaryButton,
+                ...(pending ? disabledButton : {}),
+              }}
+              onClick={confirmSubmission}
+              disabled={pending}
+            >
+              {pending
+                ? copy.submitting
+                : copy.confirmSubmission}
+            </button>
+
+            <button
+              type="button"
+              style={secondaryButton}
+              onClick={keepEditingEmergencyRequest}
+              disabled={pending}
+            >
+              {copy.keepEditing}
+            </button>
+          </section>
+        )}
 
         {cancelConfirmationOpen && (
           <section
@@ -1591,6 +1754,25 @@ const confirmationCard = {
   marginTop: "16px",
   border: "2px solid #fecaca",
   background: "#fffafa",
+};
+
+const submissionConfirmationCard = {
+  ...completeCard,
+  marginTop: "16px",
+  border: "2px solid #bfdbfe",
+  background: "#f8fbff",
+};
+
+const acknowledgmentNotice = {
+  marginBottom: "16px",
+  padding: "16px",
+  border: "1px solid #bfdbfe",
+  borderRadius: "14px",
+  background: "#eff6ff",
+  color: "#1e3a8a",
+  fontSize: "14px",
+  lineHeight: 1.55,
+  fontWeight: "700",
 };
 
 const lifecycleStatus = {

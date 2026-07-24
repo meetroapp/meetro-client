@@ -29,7 +29,7 @@ test("Emergency entry opens canonical drafting without promising response", () =
   assert.doesNotMatch(emergencySource, /localStorage/);
 });
 
-test("Emergency Request uses canonical draft, safety, recovery, and cancellation commands", () => {
+test("Emergency Request uses canonical draft, safety, recovery, submission, and cancellation commands", () => {
   assert.match(
     requestSource,
     /createEmergencyDraft/
@@ -43,7 +43,7 @@ test("Emergency Request uses canonical draft, safety, recovery, and cancellation
     /saveEmergencySafetyAssessment/
   );
 
-  assert.doesNotMatch(
+  assert.match(
     requestSource,
     /prepareEmergencyRequest/
   );
@@ -92,6 +92,57 @@ test("Emergency cancellation requires explicit confirmation and backend success"
   );
 });
 
+test("Emergency submission requires explicit acknowledgment and backend prepare success", () => {
+  assert.match(
+    requestSource,
+    /submissionConfirmationOpen/
+  );
+  assert.match(
+    requestSource,
+    /requestSubmission/
+  );
+  assert.match(
+    requestSource,
+    /confirmSubmission/
+  );
+  assert.match(
+    requestSource,
+    /await prepareEmergencyRequest/
+  );
+  assert.match(
+    requestSource,
+    /I understand that submitting this request/
+  );
+  assert.match(
+    requestSource,
+    /Yes, Submit Request/
+  );
+  assert.match(
+    requestSource,
+    /Keep Editing/
+  );
+});
+
+test("Emergency submission becomes read-only and awaiting future distribution only", () => {
+  assert.match(
+    requestSource,
+    /Submitted — Awaiting Future Distribution/
+  );
+  assert.match(
+    requestSource,
+    /No professional has been notified, matched, assigned, or dispatched/
+  );
+  assert.match(
+    requestSource,
+    /phase !== "complete"/
+  );
+  assert.match(
+    requestSource,
+    /setPhase\("lifecycle"\)/
+  );
+});
+
+
 test("Emergency cancellation is limited to governed pre-distribution statuses", () => {
   assert.match(
     requestSource,
@@ -130,7 +181,7 @@ test("non-draft Emergency records render read-only canonical lifecycle state", (
   );
   assert.match(
     requestSource,
-    /Emergency Request Prepared/
+    /Emergency Request Submitted/
   );
   assert.match(
     requestSource,
@@ -138,8 +189,8 @@ test("non-draft Emergency records render read-only canonical lifecycle state", (
   );
 });
 
-test("Emergency cancellation preserves disabled downstream workflow", () => {
-  assert.doesNotMatch(
+test("Emergency submission and cancellation preserve disabled downstream workflow", () => {
+  assert.match(
     requestSource,
     /prepareEmergencyRequest/
   );
@@ -262,6 +313,10 @@ test("Emergency Request truthfully preserves unavailable downstream workflow", (
   assert.match(
     requestSource,
     /Distribution unavailable/
+  );
+  assert.match(
+    requestSource,
+    /awaiting future distribution/
   );
 });
 
