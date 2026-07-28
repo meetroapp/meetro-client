@@ -5,14 +5,19 @@ import test from "node:test";
 import {
   CANONICAL_MESSAGE_MAX_LENGTH,
   CONVERSATION_THREAD_TYPES,
+  buildCanonicalConversationRoute,
   buildCanonicalMessagePayload,
   getOpportunityThreadIdentity,
   normalizeCanonicalConversationDetail,
   normalizeCanonicalConversationId,
   normalizeCanonicalMessageCollection,
+  parseCanonicalConversationRoute,
   validateCanonicalMessageText,
 } from "../src/utils/canonicalConversationMessaging.js";
-import { normalizeRequestConversations } from "../src/utils/requestCommunication.js";
+import {
+  findCanonicalEmergencyConversation,
+  normalizeRequestConversations,
+} from "../src/utils/requestCommunication.js";
 
 const inboxSource = readFileSync(
   new URL("../src/pages/MessagesInbox.jsx", import.meta.url),
@@ -71,6 +76,77 @@ function homeownerConversation(overrides = {}) {
   };
 }
 
+function professionalConversation(overrides = {}) {
+  return {
+    id: 94,
+    relationship: {
+      id: 24,
+      title: "Repair entry door",
+      stage: "conversation",
+    },
+    display: {
+      name: "Jordan",
+      image_url: "",
+      category: "",
+    },
+    status: {
+      value: "active",
+      active: true,
+      archived: false,
+      requires_attention: false,
+    },
+    last_activity: "2026-07-22T12:00:00.000Z",
+    last_message_preview: "Can you visit tomorrow?",
+    unread_count: 0,
+    conversation_available: true,
+    ...overrides,
+  };
+}
+
+function emergencyConversation(overrides = {}) {
+  return {
+    id: 95,
+    conversation_id: 95,
+    request_id: null,
+    emergency_request_id: 81,
+    request_title: "Electrical Emergency",
+    relationship: {
+      title: "Electrical Emergency",
+      stage: "conversation",
+    },
+    source: {
+      type: "emergency",
+      id: 81,
+      title: "Electrical Emergency",
+      serviceDomain: "home_services",
+      serviceSpecialty: "electrical",
+      isEmergency: true,
+    },
+    display: {
+      name: "Jordan",
+      image_url: "",
+      category: "",
+    },
+    status: {
+      value: "active",
+      active: true,
+      archived: false,
+      requires_attention: false,
+    },
+    workflow: {
+      status: "assigned",
+      allowedActions: ["mark_en_route"],
+    },
+    permissions: {
+      canSendMessages: true,
+      canManageWorkflow: true,
+      canMarkEnRoute: true,
+    },
+    conversation_available: true,
+    ...overrides,
+  };
+}
+
 function detail(overrides = {}) {
   return {
     success: true,
@@ -96,16 +172,17 @@ function message(id, isViewer, text) {
   };
 }
 
-test("valid opportunity conversation_id projects a canonical thread", () => {
+test("professional canonical list keeps standard conversations without a request id", () => {
   const [record] = normalizeRequestConversations(
-    { opportunities: [opportunity({ conversation_id: 91 })] },
+    { conversations: [professionalConversation()] },
     "business"
   );
 
-  assert.equal(record.request_id, 71);
-  assert.equal(record.conversationId, 91);
+  assert.equal(record.request_id, null);
+  assert.equal(record.conversationId, 94);
   assert.equal(record.threadType, CONVERSATION_THREAD_TYPES.CANONICAL);
   assert.equal(record.conversation_type, CONVERSATION_THREAD_TYPES.CANONICAL);
+  assert.equal(record.customerName, "Jordan");
 });
 
 test("homeowner canonical list projects one authoritative conversation thread", () => {
@@ -174,7 +251,7 @@ test("homeowner request-only records do not fabricate conversation threads", () 
     normalizeRequestConversations(
       {
         conversations: [
-          homeownerConversation({ conversation_id: null }),
+          homeownerConversation({ id: null, conversation_id: null }),
           homeownerConversation({ request_id: null }),
         ],
       },
@@ -219,17 +296,59 @@ test("homeowner canonical identity survives authoritative list refresh", () => {
   assert.equal(refreshed[0].request_id, 71);
 });
 
-test("missing opportunity conversation_id never falls back to request identity", () => {
+test("opportunity identity never falls back to request identity", () => {
   const identity = getOpportunityThreadIdentity(opportunity());
-  const [record] = normalizeRequestConversations(
-    { opportunities: [opportunity()] },
-    "business"
-  );
 
   assert.equal(identity.requestId, 71);
   assert.equal(identity.conversationId, null);
-  assert.equal(record.conversationId, null);
-  assert.equal(record.threadType, CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY);
+  assert.equal(
+    identity.threadType,
+    CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY
+  );
+});
+
+test("Emergency list projection preserves canonical identity without private location", () => {
+  const [record] = normalizeRequestConversations(
+    {
+      conversations: [
+        emergencyConversation({
+          location: {
+            locationText: "Must not be projected from a list",
+            accessNotes: "Private",
+          },
+        }),
+      ],
+    },
+    "business"
+  );
+
+  assert.equal(record.conversationId, 95);
+  assert.equal(record.emergencyRequestId, 81);
+  assert.equal(record.sourceType, "emergency");
+  assert.equal(record.conversation_type, "emergency");
+  assert.deepEqual(record.workflow.allowedActions, ["mark_en_route"]);
+  assert.equal(record.permissions.canManageWorkflow, true);
+  assert.equal(Object.hasOwn(record, "location"), false);
+  assert.equal(
+    findCanonicalEmergencyConversation([record], 81),
+    record
+  );
+});
+
+test("canonical Emergency routes survive reload without browser storage identity", () => {
+  const route = buildCanonicalConversationRoute(95, "messagesInbox");
+  const parsed = parseCanonicalConversationRoute(`#${route}`);
+
+  assert.equal(
+    route,
+    "conversationThread?conversationId=95&returnPage=messagesInbox"
+  );
+  assert.deepEqual(parsed, {
+    page: "conversationThread",
+    conversationId: 95,
+    returnPage: "messagesInbox",
+    valid: true,
+  });
 });
 
 test("canonical conversation IDs fail closed unless they are positive safe integers", () => {
@@ -260,6 +379,55 @@ test("canonical detail accepts only matching authoritative identity", () => {
     ),
     null
   );
+});
+
+test("Emergency detail accepts backend workflow and post-selection location", () => {
+  const normalized = normalizeCanonicalConversationDetail(
+    detail({
+      conversation: {
+        id: 91,
+        type: "emergency",
+        status: "active",
+      },
+      relationship: {
+        id: 21,
+        emergencyRequestId: 81,
+        title: "Electrical Emergency",
+      },
+      workflow: {
+        status: "professional_arrived",
+        assignedAt: "2026-07-22T12:00:00.000Z",
+        enRouteAt: "2026-07-22T12:05:00.000Z",
+        arrivedAt: "2026-07-22T12:20:00.000Z",
+        workStartedAt: null,
+        completedAt: null,
+        allowedActions: ["start_work"],
+      },
+      permissions: {
+        canRead: true,
+        canSendMessages: true,
+        canManageWorkflow: true,
+        canStartWork: true,
+      },
+      location: {
+        locationText: "101 Test Ave",
+        unitNumber: "Unit 2",
+        accessNotes: "Call at gate",
+      },
+    }),
+    91
+  );
+
+  assert.equal(normalized.type, "emergency");
+  assert.equal(normalized.emergencyRequestId, 81);
+  assert.equal(normalized.workflow.status, "professional_arrived");
+  assert.deepEqual(normalized.workflow.allowedActions, ["start_work"]);
+  assert.equal(normalized.permissions.canStartWork, true);
+  assert.deepEqual(normalized.location, {
+    locationText: "101 Test Ave",
+    unitNumber: "Unit 2",
+    accessNotes: "Call at gate",
+  });
 });
 
 test("canSendMessages is enabled only by the exact true permission", () => {

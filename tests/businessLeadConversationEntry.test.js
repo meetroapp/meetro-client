@@ -256,7 +256,7 @@ test("read-only cards retain truthful text without an unconditional canonical bl
 test("Business Leads does not authorize, fetch, or send canonical messages", () => {
   assert.doesNotMatch(leadsSource, /authFetch|\/conversations\/|\/messages/);
   assert.match(coordinatorSource, /requestProfessionalOpportunities|professional-request-opportunities/);
-  assert.match(canonicalSource, /permissions\?\.canSendMessages === true/);
+  assert.match(canonicalSource, /permissions\.canSendMessages === true/);
   assert.match(threadSource, /canonicalConversationState\.canSendMessages !== true/);
   assert.match(threadSource, /`\/conversations\/\$\{canonicalConversationId\}`/);
   assert.match(threadSource, /`\/conversations\/\$\{canonicalConversationId\}\/messages`/);

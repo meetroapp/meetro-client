@@ -69,10 +69,14 @@ test("addresses are scoped by authenticated identity and isolated from business 
 
 test("legacy personal address projection is readable, idempotent, and owner scoped", () => {
   const store = storage({ userId: "legacy-user", primaryPropertyAddress: "9 Legacy Rd", userCity: "Miami", userState: "FL", userPostalCode: "33101" });
-  const first = readPersonalAddresses({ storage: store });
-  const second = readPersonalAddresses({ storage: store });
+  const first = readPersonalAddresses({ storage: store, now: "2026-01-01T00:00:00.000Z" });
+  const second = readPersonalAddresses({ storage: store, now: "2099-12-31T23:59:59.999Z" });
   assert.equal(first.length, 1);
   assert.deepEqual(second, first);
+  assert.deepEqual(
+    JSON.parse(store.getItem(getPersonalAddressStorageKey({ storage: store }))),
+    first
+  );
   store.setItem("userId", "another-user");
   assert.deepEqual(readPersonalAddresses({ storage: store }), []);
   assert.equal(store.getItem("primaryPropertyAddress"), "9 Legacy Rd");

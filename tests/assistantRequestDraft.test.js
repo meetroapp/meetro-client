@@ -197,11 +197,15 @@ test("Upload consumes Ask Meetro draft and keeps request form editable before se
   assert.doesNotMatch(uploadSource, /readAssistantRequestDraft[\s\S]{0,260}handleCreatePost\(/);
 });
 
-test("created request preserves assistant draft metadata after user review", () => {
-  assert.match(uploadSource, /assistantDraft: assistantDraftMetadata/);
-  assert.match(uploadSource, /assistantSuggestedProjectType: assistantDraftMetadata\?\.suggestedProjectType/);
-  assert.match(uploadSource, /assistantOriginalPrompt: assistantDraftMetadata\?\.originalPrompt/);
-  assert.match(uploadSource, /assistantRecommendationText: assistantDraftMetadata\?\.recommendationText/);
+test("created request submits reviewed canonical fields without legacy local draft metadata", () => {
+  assert.match(uploadSource, /setAssistantDraftMetadata\(draft\)/);
+  assert.match(uploadSource, /request_category: requestMatchingFields\.requestCategory/);
+  assert.match(uploadSource, /service_domain: requestMatchingFields\.service_domain/);
+  assert.match(uploadSource, /service_specialty: requestMatchingFields\.service_specialty/);
+  assert.doesNotMatch(uploadSource, /assistantDraft: assistantDraftMetadata/);
+  assert.doesNotMatch(uploadSource, /assistantSuggestedProjectType:/);
+  assert.doesNotMatch(uploadSource, /assistantOriginalPrompt:/);
+  assert.doesNotMatch(uploadSource, /assistantRecommendationText:/);
 });
 
 test("request form has mobile containment for generated Meetro draft content", () => {
@@ -317,9 +321,10 @@ test("request form shows an understanding-to-review transition without submissio
   assert.doesNotMatch(uploadSource, /assistantPreparedRequestBannerText/);
 });
 
-test("Request Details page no longer repeats request onboarding copy", () => {
+test("Request Details page uses one page introduction without duplicate onboarding blocks", () => {
   assert.doesNotMatch(uploadSource, /t\("requestHelp"\)/);
-  assert.doesNotMatch(uploadSource, /t\("newProjectSubtitle"\)/);
+  assert.equal(uploadSource.match(/t\("newProject"\)/g)?.length, 1);
+  assert.equal(uploadSource.match(/t\("newProjectSubtitle"\)/g)?.length, 1);
   assert.doesNotMatch(uploadSource, /t\("uploadTipTitle"\)/);
   assert.doesNotMatch(uploadSource, /t\("uploadTipText"\)/);
   assert.doesNotMatch(uploadSource, /t\("requestGuidanceWhatToInclude"\)/);
@@ -327,13 +332,17 @@ test("Request Details page no longer repeats request onboarding copy", () => {
 });
 
 test("Request Details form remains the primary editable surface", () => {
-  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("requestIntelligencePrompt"\)\}<\/label>/);
+  assert.match(uploadSource, /<label htmlFor="request-service-search" style=\{fieldLabel\}>/);
+  assert.match(uploadSource, /\{t\("requestIntelligencePrompt"\)\} \(\{requestHelpCopy\.required\}\)/);
   assert.match(uploadSource, /selectedServiceCard/);
   assert.match(uploadSource, /ServiceSelectorSheet/);
   assert.doesNotMatch(uploadSource, /<select\s*\n\s*value=\{category\}/);
-  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectTitle"\)\}<\/label>/);
-  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("projectDescription"\)\}<\/label>/);
-  assert.match(uploadSource, /<label style=\{fieldLabel\}>\{t\("fullServiceAddress"\)\}<\/label>/);
+  assert.match(uploadSource, /<label htmlFor="request-title" style=\{fieldLabel\}>/);
+  assert.match(uploadSource, /<label htmlFor="request-description" style=\{fieldLabel\}>/);
+  assert.match(uploadSource, /<label htmlFor="request-location" style=\{fieldLabel\}>/);
+  assert.match(uploadSource, /\{t\("projectTitle"\)\} \(\{requestHelpCopy\.required\}\)/);
+  assert.match(uploadSource, /\{t\("projectDescription"\)\} \(\{requestHelpCopy\.optional\}\)/);
+  assert.match(uploadSource, /\{t\("fullServiceAddress"\)\} \(\{requestHelpCopy\.required\}\)/);
   assert.match(uploadSource, /setTitleEdited\(true\);\s*setTitle\(e\.target\.value\);/);
   assert.match(uploadSource, /setDescriptionEdited\(true\);\s*setDescription\(e\.target\.value\);/);
 });
@@ -345,7 +354,9 @@ test("request page keeps matching language problem-first and avoids category-fir
   assert.match(t("requestMatchRequired", "en"), /closest match/);
   assert.match(uploadSource, /t\("requestMatchLabel"\)/);
   assert.match(uploadSource, /t\("chooseClosestMatch"\)/);
-  assert.match(uploadSource, /alert\(t\("requestMatchRequired"\)\)/);
+  assert.match(uploadSource, /fieldErrors\.category/);
+  assert.match(uploadSource, /\{requestHelpCopy\.matchRequired\}/);
+  assert.match(uploadSource, /validateRequestHelpSubmission\(\{/);
   assert.doesNotMatch(uploadSource, /alert\(t\("selectServiceCategory"\)\)/);
 });
 

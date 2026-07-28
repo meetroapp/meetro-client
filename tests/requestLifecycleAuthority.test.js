@@ -100,7 +100,7 @@ test("Communication uses account-correct authoritative messaging sources", () =>
   );
   assert.equal(
     getRequestCommunicationEndpoint("business"),
-    "/professional-request-opportunities"
+    "/conversations?perspective=professional"
   );
   assert.deepEqual(
     normalizeRequestConversations(
@@ -110,8 +110,33 @@ test("Communication uses account-correct authoritative messaging sources", () =>
     [91]
   );
   assert.deepEqual(
-    normalizeRequestConversations({ opportunities: [post()] }, "business").map((item) => item.id),
-    [12]
+    normalizeRequestConversations(
+      {
+        conversations: [
+          {
+            id: 92,
+            relationship: {
+              id: 32,
+              title: "Paint living room",
+              stage: "conversation",
+            },
+            display: {
+              name: "Homeowner",
+              image_url: "",
+              category: "",
+            },
+            status: {
+              value: "active",
+              active: true,
+              archived: false,
+            },
+            conversation_available: true,
+          },
+        ],
+      },
+      "business"
+    ).map((item) => item.id),
+    [92]
   );
   assert.deepEqual(
     normalizeRequestConversations(

@@ -33,12 +33,12 @@ function Emergency({ setPage }) {
     en: {
       title: "Emergency Help",
       subtitle:
-        "Create a private Emergency draft and complete a safety review.",
-      status: "Drafting available",
+        "Create a private request, complete the safety review, and connect with a compatible professional.",
+      status: "Emergency requests available",
       safety:
         "If anyone is in immediate danger, call 911 or contact local emergency services now.",
       limitation:
-        "Meetro does not yet distribute Emergency requests, dispatch professionals, or provide real-time emergency response.",
+        "Meetro connects service requests with professionals. It does not replace 911 or local emergency responders.",
       start: "Start Emergency Draft",
       back: "Back Home",
       services: [
@@ -77,12 +77,12 @@ function Emergency({ setPage }) {
     es: {
       title: "Ayuda de Emergencia",
       subtitle:
-        "Crea un borrador privado de Emergencia y completa una revisión de seguridad.",
-      status: "Borradores disponibles",
+        "Crea una solicitud privada, completa la revisión de seguridad y conéctate con un profesional compatible.",
+      status: "Solicitudes de emergencia disponibles",
       safety:
         "Si alguien está en peligro inmediato, llama al 911 o comunícate ahora con los servicios de emergencia locales.",
       limitation:
-        "Meetro todavía no distribuye solicitudes de Emergencia, despacha profesionales ni ofrece respuesta de emergencia en tiempo real.",
+        "Meetro conecta solicitudes de servicio con profesionales. No reemplaza al 911 ni a los servicios de emergencia locales.",
       start: "Comenzar Borrador",
       back: "Regresar al Inicio",
       services: [

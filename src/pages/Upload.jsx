@@ -539,6 +539,24 @@ function Upload({ setPage, currentPage }) {
           }
         : inferredRequestMatchingFields;
 
+      const requestValidation = validateRequestHelpSubmission({
+        title,
+        category: selectedCategory,
+        location,
+        matchingFields: {
+          serviceDomain: selectedService?.serviceDomain,
+          serviceSpecialty: selectedService?.serviceSpecialty,
+        },
+      });
+
+      if (!requestValidation.ok) {
+        setFieldErrors(requestValidation.errors);
+        return;
+      }
+
+      setFieldErrors({});
+      setSubmissionError("");
+
       const uploadedRequestPhotos = selectedRequestPhotos.length > 0
         ? await uploadRequestPhotos({
             files: selectedRequestPhotos.map((photo) => photo.file),

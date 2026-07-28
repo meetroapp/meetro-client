@@ -15,16 +15,22 @@ const coordinatorSource = readSource(
 
 test("one module owns the professional opportunity endpoint", () => {
   assert.match(coordinatorSource, /"\/professional-request-opportunities"/);
-  for (const consumer of [messagesSource, dashboardSource, leadsSource]) {
+  for (const consumer of [dashboardSource, leadsSource]) {
     assert.doesNotMatch(consumer, /"\/professional-request-opportunities"/);
     assert.match(consumer, /requestProfessionalOpportunities/);
   }
+  assert.doesNotMatch(messagesSource, /requestProfessionalOpportunities/);
+  assert.match(
+    messagesSource,
+    /getRequestCommunicationEndpoint\(activeAccountMode\)/
+  );
 });
 
 test("all professional opportunity consumers subscribe to shared state", () => {
-  for (const consumer of [messagesSource, dashboardSource, leadsSource]) {
+  for (const consumer of [dashboardSource, leadsSource]) {
     assert.match(consumer, /subscribeProfessionalOpportunities/);
   }
+  assert.doesNotMatch(messagesSource, /subscribeProfessionalOpportunities/);
 });
 
 test("Communication Center has no independent opportunity polling loop", () => {
@@ -37,15 +43,14 @@ test("Communication Center has no independent opportunity polling loop", () => {
   assert.match(refreshEffect[1], /removeEventListener\("storage"/);
 });
 
-test("transient refresh errors preserve the confirmed conversation projection", () => {
+test("transient canonical refresh errors preserve the confirmed conversation projection", () => {
   assert.match(
     messagesSource,
-    /snapshot\.phase === PROFESSIONAL_OPPORTUNITY_PHASE\.INITIAL_ERROR/
+    /const isInitialLoad = !hasLoadedConversationProjectionRef\.current/
   );
-  assert.match(messagesSource, /if \(!hasConfirmedData\) return;/);
   assert.match(
-    coordinatorSource,
-    /phase: PROFESSIONAL_OPPORTUNITY_PHASE\.REFRESH_ERROR[\s\S]*error: finalError/
+    messagesSource,
+    /A transient background refresh failure must not erase[\s\S]*if \(isInitialLoad\) \{\s*setQuotes\(\[\]\)/
   );
 });
 

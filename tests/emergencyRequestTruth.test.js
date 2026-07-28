@@ -12,12 +12,12 @@ const requestSource = readFileSync(
   "utf8"
 );
 
-test("Emergency entry opens canonical drafting without promising response", () => {
-  assert.match(emergencySource, /Drafting available/);
+test("Emergency entry opens the canonical request and matching workflow", () => {
+  assert.match(emergencySource, /Emergency requests available/);
   assert.match(emergencySource, /setPage\("emergencyRequest"\)/);
   assert.match(
     emergencySource,
-    /does not yet distribute Emergency requests/
+    /connect with a compatible professional/
   );
   assert.match(emergencySource, /call 911/);
 
@@ -123,14 +123,14 @@ test("Emergency submission requires explicit acknowledgment and backend prepare 
   );
 });
 
-test("Emergency submission becomes read-only and awaiting future distribution only", () => {
+test("Emergency submission becomes read-only and available for compatible responses", () => {
   assert.match(
     requestSource,
-    /Submitted — Awaiting Future Distribution/
+    /Ready for Professional Responses/
   );
   assert.match(
     requestSource,
-    /No professional has been notified, matched, assigned, or dispatched/
+    /available to compatible professionals/
   );
   assert.match(
     requestSource,
@@ -189,7 +189,7 @@ test("non-draft Emergency records render read-only canonical lifecycle state", (
   );
 });
 
-test("Emergency submission and cancellation preserve disabled downstream workflow", () => {
+test("Emergency submission and cancellation avoid legacy downstream routes", () => {
   assert.match(
     requestSource,
     /prepareEmergencyRequest/
@@ -297,26 +297,30 @@ test("Emergency Request creates no browser workflow authority", () => {
   }
 });
 
-test("Emergency Request truthfully preserves unavailable downstream workflow", () => {
+test("Emergency Request exposes canonical distribution, selection, and conversation entry", () => {
   assert.match(
     requestSource,
     /Saving this draft does not dispatch a professional/
   );
   assert.match(
     requestSource,
-    /Your draft has not been distributed/
+    /listHomeownerEmergencyResponses/
   );
   assert.match(
     requestSource,
-    /Meetro has not distributed it/
+    /selectHomeownerEmergencyResponse/
   );
   assert.match(
     requestSource,
-    /Distribution unavailable/
+    /fetchCanonicalConversations/
   );
   assert.match(
     requestSource,
-    /awaiting future distribution/
+    /buildCanonicalConversationRoute/
+  );
+  assert.match(
+    requestSource,
+    /location and access notes remain private until I select a professional/
   );
 });
 

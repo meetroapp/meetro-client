@@ -5,9 +5,63 @@ export const CONVERSATION_THREAD_TYPES = Object.freeze({
 });
 
 export const CANONICAL_MESSAGE_MAX_LENGTH = 5000;
+export const CANONICAL_CONVERSATION_ROUTE_PAGE = "conversationThread";
+export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
+export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
 
 export function normalizeCanonicalConversationId(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function normalizeRouteId(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[1-9]\d*$/.test(normalized)) return null;
+  return normalizeCanonicalConversationId(Number(normalized));
+}
+
+export function parseCanonicalConversationRoute(routeValue = "") {
+  const route = String(routeValue || "").replace(/^#/, "").trim();
+  const queryIndex = route.indexOf("?");
+  const page = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
+  const query = queryIndex >= 0 ? route.slice(queryIndex + 1) : "";
+  const params = new URLSearchParams(query);
+  const conversationId = normalizeRouteId(
+    params.get(CANONICAL_CONVERSATION_ROUTE_PARAM)
+  );
+  const returnPage = String(
+    params.get(CANONICAL_CONVERSATION_RETURN_PARAM) || ""
+  ).trim();
+
+  return {
+    page,
+    conversationId,
+    returnPage,
+    valid:
+      page === CANONICAL_CONVERSATION_ROUTE_PAGE &&
+      Boolean(conversationId),
+  };
+}
+
+export function buildCanonicalConversationRoute(
+  conversationId,
+  returnPage = "messagesInbox"
+) {
+  const normalizedId = normalizeCanonicalConversationId(conversationId);
+  if (!normalizedId) return CANONICAL_CONVERSATION_ROUTE_PAGE;
+
+  const params = new URLSearchParams({
+    [CANONICAL_CONVERSATION_ROUTE_PARAM]: String(normalizedId),
+  });
+  const normalizedReturnPage = String(returnPage || "").trim();
+
+  if (normalizedReturnPage) {
+    params.set(
+      CANONICAL_CONVERSATION_RETURN_PARAM,
+      normalizedReturnPage
+    );
+  }
+
+  return `${CANONICAL_CONVERSATION_ROUTE_PAGE}?${params.toString()}`;
 }
 
 export function getOpportunityThreadIdentity(record = {}) {
@@ -41,18 +95,82 @@ export function normalizeCanonicalConversationDetail(payload = {}, expectedId) {
     return null;
   }
 
+  const conversationType =
+    payload.conversation.type === "emergency"
+      ? "emergency"
+      : "request";
+  const workflow =
+    payload.workflow &&
+    typeof payload.workflow === "object" &&
+    !Array.isArray(payload.workflow)
+      ? payload.workflow
+      : {};
+  const allowedActions = Array.isArray(workflow.allowedActions)
+    ? workflow.allowedActions.filter(
+        (action) => typeof action === "string" && action.trim()
+      )
+    : [];
+  const permissions =
+    payload.permissions &&
+    typeof payload.permissions === "object" &&
+    !Array.isArray(payload.permissions)
+      ? payload.permissions
+      : {};
+  const relationship =
+    payload.relationship &&
+    typeof payload.relationship === "object"
+      ? payload.relationship
+      : {};
+  const location =
+    conversationType === "emergency" &&
+    payload.location &&
+    typeof payload.location === "object" &&
+    !Array.isArray(payload.location)
+      ? {
+          locationText: String(payload.location.locationText || "").trim(),
+          unitNumber: String(payload.location.unitNumber || "").trim(),
+          accessNotes: String(payload.location.accessNotes || "").trim(),
+        }
+      : null;
+
   return {
     conversationId,
+    type: conversationType,
     status: payload.conversation.status,
-    canSendMessages: payload?.permissions?.canSendMessages === true,
+    canSendMessages: permissions.canSendMessages === true,
     participants:
       payload.participants && typeof payload.participants === "object"
         ? payload.participants
         : {},
-    relationship:
-      payload.relationship && typeof payload.relationship === "object"
-        ? payload.relationship
-        : {},
+    relationship,
+    emergencyRequestId:
+      conversationType === "emergency"
+        ? normalizeCanonicalConversationId(
+            relationship.emergencyRequestId
+          )
+        : null,
+    workflow: {
+      status:
+        typeof workflow.status === "string"
+          ? workflow.status
+          : null,
+      assignedAt: workflow.assignedAt || null,
+      enRouteAt: workflow.enRouteAt || null,
+      arrivedAt: workflow.arrivedAt || null,
+      workStartedAt: workflow.workStartedAt || null,
+      completedAt: workflow.completedAt || null,
+      allowedActions,
+    },
+    permissions: {
+      canRead: permissions.canRead === true,
+      canSendMessages: permissions.canSendMessages === true,
+      canManageWorkflow: permissions.canManageWorkflow === true,
+      canMarkEnRoute: permissions.canMarkEnRoute === true,
+      canMarkArrived: permissions.canMarkArrived === true,
+      canStartWork: permissions.canStartWork === true,
+      canCompleteWork: permissions.canCompleteWork === true,
+    },
+    location,
   };
 }
 

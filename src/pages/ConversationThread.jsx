@@ -16,11 +16,16 @@ import {
   normalizeCanonicalConversationId,
   normalizeCanonicalMessage,
   normalizeCanonicalMessageCollection,
+  parseCanonicalConversationRoute,
   validateCanonicalMessageText,
 } from "../utils/canonicalConversationMessaging";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
+import {
+  EMERGENCY_DISPATCH_ACTIONS,
+  transitionEmergencyDispatch,
+} from "../utils/emergencyApi";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
 import HiringUnavailableState from "../components/HiringUnavailableState";
 import CompletionWorkflowPresentation from "../components/workflows/presentations/CompletionWorkflowPresentation";
@@ -679,6 +684,11 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const [canonicalLoadErrorKey, setCanonicalLoadErrorKey] = useState("");
   const [canonicalSendErrorKey, setCanonicalSendErrorKey] = useState("");
   const [canonicalSendPending, setCanonicalSendPending] = useState(false);
+  const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
+  const [canonicalDispatchPending, setCanonicalDispatchPending] =
+    useState(false);
+  const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
+    useState("");
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -767,6 +777,9 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     }
   }
 
+  const canonicalRouteContext = parseCanonicalConversationRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
   const selectedThreadPayload = (() => {
     try {
       return JSON.parse(localStorage.getItem("selectedConversation") || "null");
@@ -775,15 +788,17 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     }
   })();
 
-  const conversationType =
+  const storedConversationType =
     localStorage.getItem("meetroConversationType") || "standard";
+  const conversationType = canonicalRouteContext.valid
+    ? CONVERSATION_THREAD_TYPES.CANONICAL
+    : storedConversationType === CONVERSATION_THREAD_TYPES.CANONICAL
+    ? "standard"
+    : storedConversationType;
   const isCanonicalThread =
     conversationType === CONVERSATION_THREAD_TYPES.CANONICAL;
   const canonicalConversationId = isCanonicalThread
-    ? normalizeCanonicalConversationId(
-        selectedThreadPayload?.conversationId ??
-          selectedThreadPayload?.conversation_id
-      )
+    ? canonicalRouteContext.conversationId
     : null;
   const conversationId = isCanonicalThread
     ? String(canonicalConversationId || "")
@@ -813,7 +828,12 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     selectedBusiness?.name ||
     "";
 
-  const isEmergencyThread = conversationType === "emergency";
+  const isCanonicalEmergencyThread =
+    isCanonicalThread &&
+    canonicalConversationDetail?.type === "emergency";
+  const isEmergencyThread =
+    conversationType === "emergency" ||
+    isCanonicalEmergencyThread;
   const isHiringThread = isHiringConversationType(conversationType);
   const isRequestOpportunityReadOnly =
     conversationType === CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY;
@@ -861,7 +881,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const hasThreadSearch = Boolean(conversationSearchQuery);
 
   const activeEmergencyRecord = (() => {
-    if (!isEmergencyThread) return {};
+    if (!isEmergencyThread || isCanonicalThread) return {};
 
     try {
       return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
@@ -870,14 +890,28 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     }
   })();
 
-  const activeJobSnapshot = getActiveJobSnapshot();
+  const activeJobSnapshot = isCanonicalThread
+    ? null
+    : getActiveJobSnapshot();
+  const canonicalEmergencyWorkflow =
+    isCanonicalEmergencyThread
+      ? canonicalConversationDetail.workflow
+      : null;
+  const canonicalEmergencyAllowedActions =
+    canonicalConversationDetail?.permissions
+      ?.canManageWorkflow === true
+      ? canonicalEmergencyWorkflow?.allowedActions || []
+      : [];
 
   const emergencyDispatchStatus =
+    canonicalEmergencyWorkflow?.status ||
     (isEmergencyThread && activeEmergencyRecord.status) ||
-    localStorage.getItem("emergencyDispatchStatus") ||
-    activeJobSnapshot?.status ||
-    localStorage.getItem("activeJobStatus") ||
-    "";
+    (!isCanonicalThread
+      ? localStorage.getItem("emergencyDispatchStatus") ||
+        activeJobSnapshot?.status ||
+        localStorage.getItem("activeJobStatus") ||
+        ""
+      : "");
 
   const hasActiveEmergencyJob =
     isEmergencyThread &&
@@ -912,7 +946,46 @@ useEffect(() => {
     };
   }, []);
 
-  const advanceEmergencyFromChat = (nextStatus) => {
+  const advanceEmergencyFromChat = async (nextStatusOrAction) => {
+    if (isCanonicalEmergencyThread) {
+      const emergencyRequestId =
+        canonicalConversationDetail.emergencyRequestId;
+
+      if (
+        !emergencyRequestId ||
+        canonicalDispatchPending ||
+        !canonicalEmergencyAllowedActions.includes(
+          nextStatusOrAction
+        )
+      ) {
+        return;
+      }
+
+      setCanonicalDispatchPending(true);
+      setCanonicalDispatchErrorKey("");
+
+      const result = await transitionEmergencyDispatch(
+        emergencyRequestId,
+        nextStatusOrAction,
+        {
+          setPage,
+        }
+      );
+
+      setCanonicalDispatchPending(false);
+
+      if (!result.ok) {
+        setCanonicalDispatchErrorKey(
+          "emergencyDispatchUpdateFailed"
+        );
+        return;
+      }
+
+      setCanonicalReloadKey((value) => value + 1);
+      return;
+    }
+
+    const nextStatus = nextStatusOrAction;
     transitionEmergencyStatus(nextStatus, {
       service: activeJobService || activeName || "Emergency Service",
       businessName: activeBusinessName || "",
@@ -930,35 +1003,60 @@ useEffect(() => {
     accepted:
       t("requestAccepted", language),
 
+    assigned:
+      t("requestAccepted", language),
+
     enroute:
+      t("professionalOnTheWay", language),
+
+    professional_en_route:
       t("professionalOnTheWay", language),
 
     arrived:
       t("statusArrived", language),
 
+    professional_arrived:
+      t("statusArrived", language),
+
     started:
       t("workflowNoteWorking", language),
 
+    work_in_progress:
+      t("workflowNoteWorking", language),
+
     completed:
-      t("conversationConversationArchivedInHistory", language),
+      t("conversationServiceCompleted", language),
   }[emergencyDispatchStatus];
 
   const emergencyStepIndex = {
     pending: 0,
     accepted: 1,
+    assigned: 1,
     enroute: 2,
+    professional_en_route: 2,
     arrived: 3,
+    professional_arrived: 3,
     started: 4,
+    work_in_progress: 4,
     completed: 5,
   }[emergencyDispatchStatus] ?? 1;
 
   const activeAccountMode =
     localStorage.getItem("activeAccountMode") || "personal";
 
-  const currentViewerRole =
-    activeAccountMode === "business"
+  const canonicalViewerRole =
+    canonicalConversationDetail?.participants?.viewer?.role ===
+    "professional"
       ? "business"
-      : "homeowner";
+      : canonicalConversationDetail?.participants?.viewer?.role ===
+        "homeowner"
+      ? "homeowner"
+      : "";
+  const currentViewerRole = isCanonicalThread
+    ? canonicalViewerRole || "homeowner"
+    : activeAccountMode === "business"
+    ? "business"
+    : "homeowner";
 
   useEffect(() => {
     setSavedThreadContactSnapshot(null);
@@ -1010,7 +1108,10 @@ useEffect(() => {
     "";
 
   const activeLocation =
-    selectedBusiness?.location || selectedBusiness?.address || "";
+    canonicalConversationDetail?.location?.locationText ||
+    selectedBusiness?.location ||
+    selectedBusiness?.address ||
+    "";
 
   const activeProjectTitle =
     localStorage.getItem("activeProjectTitle") ||
@@ -1108,48 +1209,60 @@ useEffect(() => {
     avatar: projectedConversationBusinessIdentity.avatar,
   };
 
-  const activeCustomerName =
-    activeEmergencyRecord.customerName || projectedCustomerConversationIdentity.displayName;
+  const activeCustomerName = isCanonicalThread
+    ? canonicalConversationDetail?.participants?.homeowner?.displayName ||
+      t("messagesContactType_customer", language)
+    : activeEmergencyRecord.customerName ||
+      projectedCustomerConversationIdentity.displayName;
 
-  const activeBusinessName =
-    activeEmergencyRecord.businessName ||
-    conversationBusinessIdentity.name ||
-    conversationLinkedQuoteRequest?.businessName ||
-    conversationLinkedQuoteRequest?.business_name ||
-    conversationLinkedQuoteRequest?.contractorName ||
-    conversationLinkedQuoteRequest?.providerName ||
-    localStorage.getItem("businessName") ||
-    localStorage.getItem("companyName") ||
-    activeName;
+  const activeBusinessName = isCanonicalThread
+    ? canonicalConversationDetail?.participants?.business?.name ||
+      t("messagesOwnerProfessional", language)
+    : activeEmergencyRecord.businessName ||
+      conversationBusinessIdentity.name ||
+      conversationLinkedQuoteRequest?.businessName ||
+      conversationLinkedQuoteRequest?.business_name ||
+      conversationLinkedQuoteRequest?.contractorName ||
+      conversationLinkedQuoteRequest?.providerName ||
+      localStorage.getItem("businessName") ||
+      localStorage.getItem("companyName") ||
+      activeName;
 
-  const emergencyServiceName =
-    activeEmergencyRecord.service ||
-    activeEmergencyRecord.title ||
-    activeJobService ||
-    localStorage.getItem("selectedEmergencyService") ||
-    (t("messagesEmergencyService", language));
+  const emergencyServiceName = isCanonicalEmergencyThread
+    ? canonicalConversationDetail?.relationship?.title ||
+      t("messagesEmergencyService", language)
+    : activeEmergencyRecord.service ||
+      activeEmergencyRecord.title ||
+      activeJobService ||
+      localStorage.getItem("selectedEmergencyService") ||
+      t("messagesEmergencyService", language);
 
-  const emergencyCustomerName =
-    activeEmergencyRecord.customerName ||
-    localStorage.getItem("emergencyCustomerName") ||
-    localStorage.getItem("homeownerName") ||
-    localStorage.getItem("userName") ||
-    (t("messagesContactType_customer", language));
+  const emergencyCustomerName = isCanonicalEmergencyThread
+    ? canonicalConversationDetail?.participants?.homeowner?.displayName ||
+      t("messagesContactType_customer", language)
+    : activeEmergencyRecord.customerName ||
+      localStorage.getItem("emergencyCustomerName") ||
+      localStorage.getItem("homeownerName") ||
+      localStorage.getItem("userName") ||
+      t("messagesContactType_customer", language);
 
-  const emergencyBusinessName =
-    activeEmergencyRecord.businessName ||
-    localStorage.getItem("emergencyBusinessName") ||
-    localStorage.getItem("selectedEmergencyBusiness") ||
-    localStorage.getItem("businessName") ||
-    (t("messagesOwnerProfessional", language));
+  const emergencyBusinessName = isCanonicalEmergencyThread
+    ? canonicalConversationDetail?.participants?.business?.name ||
+      t("messagesOwnerProfessional", language)
+    : activeEmergencyRecord.businessName ||
+      localStorage.getItem("emergencyBusinessName") ||
+      localStorage.getItem("selectedEmergencyBusiness") ||
+      localStorage.getItem("businessName") ||
+      t("messagesOwnerProfessional", language);
 
-  const emergencyBusinessPhone =
-    activeEmergencyRecord.businessPhone ||
-    localStorage.getItem("emergencyBusinessPhone") ||
-    localStorage.getItem("businessEmergencyPhone") ||
-    localStorage.getItem("businessPhone") ||
-    localStorage.getItem("contractorPhone") ||
-    "";
+  const emergencyBusinessPhone = isCanonicalThread
+    ? ""
+    : activeEmergencyRecord.businessPhone ||
+      localStorage.getItem("emergencyBusinessPhone") ||
+      localStorage.getItem("businessEmergencyPhone") ||
+      localStorage.getItem("businessPhone") ||
+      localStorage.getItem("contractorPhone") ||
+      "";
 
   const normalizeContactKey = (value) => String(value || "").trim().toLowerCase();
 
@@ -1530,17 +1643,38 @@ useEffect(() => {
     type: relationshipIdentityType,
   });
 
-  const relationshipDetailSource = {
-    ...conversationRegistryItem,
-    ...conversationMeta,
-    ...conversationLinkedSelectedConversation,
-    ...conversationLinkedHomeownerRequest,
-    ...conversationLinkedQuoteRequest,
-    ...selectedConversation,
-    ...selectedHomeownerRequest,
-    ...selectedQuoteRequest,
-    ...(activeJobSnapshot?.conversationId === conversationId ? activeJobSnapshot : {}),
-  };
+  const relationshipDetailSource = isCanonicalThread
+    ? {
+        projectTitle:
+          canonicalConversationDetail?.relationship?.title || "",
+        title:
+          canonicalConversationDetail?.relationship?.title || "",
+        status:
+          canonicalConversationDetail?.workflow?.status ||
+          canonicalConversationDetail?.status ||
+          "",
+        location:
+          canonicalConversationDetail?.location?.locationText || "",
+        customerName:
+          canonicalConversationDetail?.participants?.homeowner
+            ?.displayName || "",
+        businessName:
+          canonicalConversationDetail?.participants?.business?.name ||
+          "",
+      }
+    : {
+        ...conversationRegistryItem,
+        ...conversationMeta,
+        ...conversationLinkedSelectedConversation,
+        ...conversationLinkedHomeownerRequest,
+        ...conversationLinkedQuoteRequest,
+        ...selectedConversation,
+        ...selectedHomeownerRequest,
+        ...selectedQuoteRequest,
+        ...(activeJobSnapshot?.conversationId === conversationId
+          ? activeJobSnapshot
+          : {}),
+      };
 
   const scopedBusinessProfilePhoto = getScopedProfilePhoto(
     "business",
@@ -2152,34 +2286,38 @@ useEffect(() => {
       primary: true,
       onClick: () => setShowProfileCard(false),
     },
-    {
-      label: t("messagesTextAction", language),
-      onClick: () => {
-        setShowProfileCard(false);
-        textActiveContact();
-      },
-    },
-    {
-      label: t("messagesCallAction", language),
-      onClick: () => {
-        setShowProfileCard(false);
-        callActiveContact();
-      },
-    },
-    {
-      label: t("relationshipEmail", language),
-      onClick: () => {
-        setShowProfileCard(false);
-        emailActiveContact();
-      },
-    },
-    {
-      label: t("messagesEditMore", language),
-      onClick: () => {
-        setShowProfileCard(false);
-        setShowThreadMenu(true);
-      },
-    },
+    ...(!isCanonicalThread
+      ? [
+          {
+            label: t("messagesTextAction", language),
+            onClick: () => {
+              setShowProfileCard(false);
+              textActiveContact();
+            },
+          },
+          {
+            label: t("messagesCallAction", language),
+            onClick: () => {
+              setShowProfileCard(false);
+              callActiveContact();
+            },
+          },
+          {
+            label: t("relationshipEmail", language),
+            onClick: () => {
+              setShowProfileCard(false);
+              emailActiveContact();
+            },
+          },
+          {
+            label: t("messagesEditMore", language),
+            onClick: () => {
+              setShowProfileCard(false);
+              setShowThreadMenu(true);
+            },
+          },
+        ]
+      : []),
   ];
   const relationshipIdentitySections = [
     {
@@ -2248,12 +2386,15 @@ useEffect(() => {
   }, []);
 
   const quickReplies = useMemo(() => {
-    const activeConversationType =
-      localStorage.getItem("meetroConversationType") || "standard";
-    const emergencyDispatchStatus =
-      localStorage.getItem("emergencyDispatchStatus") ||
-      localStorage.getItem("activeJobStatus") ||
-      "";
+    const activeConversationType = isCanonicalEmergencyThread
+      ? "emergency"
+      : localStorage.getItem("meetroConversationType") ||
+        "standard";
+    const quickReplyEmergencyStatus = isCanonicalEmergencyThread
+      ? canonicalEmergencyWorkflow?.status || ""
+      : localStorage.getItem("emergencyDispatchStatus") ||
+        localStorage.getItem("activeJobStatus") ||
+        "";
     const replies = [];
 
     const dedupeReplies = (list = []) => {
@@ -2281,7 +2422,7 @@ useEffect(() => {
     };
 
     const asEmergencyState = () => {
-      const normalizedState = String(emergencyDispatchStatus || "")
+      const normalizedState = String(quickReplyEmergencyStatus || "")
         .toLowerCase()
         .replace(/[\s_-]+/g, "");
 
@@ -2314,7 +2455,15 @@ useEffect(() => {
       const emergencyState = asEmergencyState();
 
       if (emergencyState === "completed") {
-        addReplyKeys(["conversationReplyThankYou", "conversationReplySaveHistory", "conversationReplySendFollowUp"]);
+        addReplyKeys(
+          isCanonicalEmergencyThread
+            ? ["conversationReplyThankYou"]
+            : [
+                "conversationReplyThankYou",
+                "conversationReplySaveHistory",
+                "conversationReplySendFollowUp",
+              ]
+        );
       } else if (emergencyState === "started") {
         addReplyKeys(["conversationReplyCompleteJob", "conversationReplySendUpdate", "conversationReplyNeedParts"]);
       } else if (emergencyState === "arrived") {
@@ -2328,7 +2477,15 @@ useEffect(() => {
       const emergencyState = asEmergencyState();
 
       if (emergencyState === "completed") {
-        addReplyKeys(["conversationReplyThankYou", "conversationReplyLeaveReview", "conversationReplySaveHistory"]);
+        addReplyKeys(
+          isCanonicalEmergencyThread
+            ? ["conversationReplyThankYou"]
+            : [
+                "conversationReplyThankYou",
+                "conversationReplyLeaveReview",
+                "conversationReplySaveHistory",
+              ]
+        );
       }
 
       if (emergencyState === "started" || emergencyState === "arrived") {
@@ -2349,7 +2506,12 @@ useEffect(() => {
     }
 
     return dedupeReplies(replies).slice(0, 4);
-  }, [language, currentViewerRole]);
+  }, [
+    canonicalEmergencyWorkflow?.status,
+    currentViewerRole,
+    isCanonicalEmergencyThread,
+    language,
+  ]);
   const starterMessages = useMemo(
     () => [
       {
@@ -2369,6 +2531,13 @@ useEffect(() => {
   );
 
   useEffect(() => {
+    if (isCanonicalThread) {
+      setJobRecords([]);
+      setJobRecordCount(0);
+      setShowJobRecords(false);
+      return undefined;
+    }
+
     const updateRecordCount = () => {
       const records = getJobRecord(conversationId);
 
@@ -2385,7 +2554,7 @@ useEffect(() => {
       window.removeEventListener("meetroJobRecordUpdated", updateRecordCount);
       window.removeEventListener("storage", updateRecordCount);
     };
-  }, [conversationId]);
+  }, [conversationId, isCanonicalThread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2592,6 +2761,7 @@ useEffect(() => {
 
           if (!cancelled) {
             setCanonicalConversationDetail(detail);
+            setCanonicalDispatchErrorKey("");
             setCanonicalConversationState({
               phase: "ready",
               status: detail.status,
@@ -2599,6 +2769,11 @@ useEffect(() => {
             });
           }
 
+          const detailViewerRole =
+            detail.participants?.viewer?.role ===
+            "professional"
+              ? "business"
+              : "homeowner";
           const messageResult = await authFetch(
             `/conversations/${canonicalConversationId}/messages`,
             {},
@@ -2608,7 +2783,7 @@ useEffect(() => {
             ? normalizeCanonicalMessageCollection(
                 messageResult.data,
                 canonicalConversationId,
-                currentViewerRole
+                detailViewerRole
               )
             : null;
 
@@ -2632,7 +2807,11 @@ useEffect(() => {
             setCanonicalMessagesPhase("ready");
             setCanonicalLoadErrorKey("");
             try {
-              markConversationRead(conversationId, {}, currentViewerRole);
+              markConversationRead(
+                conversationId,
+                {},
+                detailViewerRole
+              );
             } catch {
               // Read-state bookkeeping must never interrupt the visible thread.
             }
@@ -2747,11 +2926,12 @@ useEffect(() => {
     storageKey,
     conversationId,
     starterMessages,
-    currentViewerRole,
+    activeAccountMode,
     setPage,
     isHiringThread,
     isCanonicalThread,
     canonicalConversationId,
+    canonicalReloadKey,
   ]);
 
   useEffect(() => {
@@ -4653,6 +4833,9 @@ const handleImageUpload = (event) => {
               }
 
               const returnPage =
+                normalizeReturnPage(
+                  canonicalRouteContext.returnPage
+                ) ||
                 normalizeReturnPage(routeReturnTo) ||
                 normalizeReturnPage(storedReturnPage) ||
                 (isBusinessContext ? "contractorDashboard" : "messagesInbox");
@@ -4742,7 +4925,7 @@ const handleImageUpload = (event) => {
                 </span>
               )}
 
-              {jobRecordCount > 0 && (
+              {!isCanonicalThread && jobRecordCount > 0 && (
                 <button
                   style={jobRecordMiniBadge}
                   onClick={(event) => {
@@ -5042,23 +5225,24 @@ const handleImageUpload = (event) => {
                 {relationshipIdentityActionLabel}
               </button>
 
-              {threadRelationshipSavedToContacts ? (
-                <button
-                  style={{ ...threadMenuBtn, ...threadMenuBtnDisabled }}
-                  disabled
-                >
-                  {t("stateSaved", language)}
-                </button>
-              ) : (
-                <button
-                  style={threadMenuBtn}
-                  onClick={saveThreadRelationshipToContacts}
-                >
-                  {t("conversationSaveToContacts", language)}
-                </button>
-              )}
+              {!isCanonicalThread &&
+                (threadRelationshipSavedToContacts ? (
+                  <button
+                    style={{ ...threadMenuBtn, ...threadMenuBtnDisabled }}
+                    disabled
+                  >
+                    {t("stateSaved", language)}
+                  </button>
+                ) : (
+                  <button
+                    style={threadMenuBtn}
+                    onClick={saveThreadRelationshipToContacts}
+                  >
+                    {t("conversationSaveToContacts", language)}
+                  </button>
+                ))}
 
-              {hasActiveCallPhone && (
+              {!isCanonicalThread && hasActiveCallPhone && (
                 <button
                   style={threadMenuBtn}
                   onClick={() => {
@@ -5070,55 +5254,59 @@ const handleImageUpload = (event) => {
                 </button>
               )}
 
-              <button
-                style={threadMenuBtn}
-                onClick={() => {
-                  setShowProfileCard(false);
-                  setShowThreadMenu(false);
-                  setShowJobRecords(true);
-                }}
-              >
-                {t("relationshipTimeline", language)}
-              </button>
+              {!isCanonicalThread && (
+                <button
+                  style={threadMenuBtn}
+                  onClick={() => {
+                    setShowProfileCard(false);
+                    setShowThreadMenu(false);
+                    setShowJobRecords(true);
+                  }}
+                >
+                  {t("relationshipTimeline", language)}
+                </button>
+              )}
             </div>
 
-            <div style={menuSection}>
-              <div style={menuSectionTitle}>
-                {t("conversationResourcesKicker", language)}
-              </div>
+            {!isCanonicalThread && (
+              <div style={menuSection}>
+                <div style={menuSectionTitle}>
+                  {t("conversationResourcesKicker", language)}
+                </div>
 
-              <button
-                style={threadMenuBtn}
-                onClick={() => {
-                  setShowThreadMenu(false);
-                  setShowJobRecords(true);
-                }}
-              >
-                {t("messagesDocuments", language)}
-              </button>
-
-              <button
-                style={threadMenuBtn}
-                onClick={() => {
-                  setShowThreadMenu(false);
-                  setShowJobRecords(true);
-                }}
-              >
-                {t("assistantProjectBriefDocumentPhotos", language)}
-              </button>
-
-              {currentViewerRole === "business" && (
                 <button
                   style={threadMenuBtn}
                   onClick={() => {
                     setShowThreadMenu(false);
-                    openChatScheduleModal();
+                    setShowJobRecords(true);
                   }}
                 >
-                  {t("workCenterScheduleTitle", language)}
+                  {t("messagesDocuments", language)}
                 </button>
-              )}
-            </div>
+
+                <button
+                  style={threadMenuBtn}
+                  onClick={() => {
+                    setShowThreadMenu(false);
+                    setShowJobRecords(true);
+                  }}
+                >
+                  {t("assistantProjectBriefDocumentPhotos", language)}
+                </button>
+
+                {currentViewerRole === "business" && (
+                <button
+                  style={threadMenuBtn}
+                    onClick={() => {
+                      setShowThreadMenu(false);
+                      openChatScheduleModal();
+                    }}
+                  >
+                    {t("workCenterScheduleTitle", language)}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div style={menuSection}>
               <div style={menuSectionTitle}>
@@ -5221,7 +5409,7 @@ const handleImageUpload = (event) => {
                   </div>
 
                   <div style={emergencyBannerSubtitle}>
-                    {activeAccountMode === "business" &&
+                    {currentViewerRole === "business" &&
                     emergencyDispatchStatus !== "completed"
                       ? `${t("messagesContactType_customer", language)}: ${emergencyCustomerName}`
                       : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
@@ -5231,7 +5419,88 @@ const handleImageUpload = (event) => {
 
               {currentViewerRole === "business" && (
                 <div style={emergencyChatActions}>
-                  {(!emergencyDispatchStatus ||
+                  {isCanonicalEmergencyThread &&
+                    canonicalEmergencyAllowedActions.includes(
+                      EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
+                    ) && (
+                      <button
+                        style={emergencyPrimaryAction}
+                        disabled={canonicalDispatchPending}
+                        onClick={() =>
+                          advanceEmergencyFromChat(
+                            EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
+                          )
+                        }
+                      >
+                        {t("onTheWay", language)}
+                      </button>
+                    )}
+
+                  {isCanonicalEmergencyThread &&
+                    canonicalEmergencyAllowedActions.includes(
+                      EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
+                    ) && (
+                      <button
+                        style={emergencyPrimaryAction}
+                        disabled={canonicalDispatchPending}
+                        onClick={() =>
+                          advanceEmergencyFromChat(
+                            EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
+                          )
+                        }
+                      >
+                        {t("arrived", language)}
+                      </button>
+                    )}
+
+                  {isCanonicalEmergencyThread &&
+                    canonicalEmergencyAllowedActions.includes(
+                      EMERGENCY_DISPATCH_ACTIONS.START_WORK
+                    ) && (
+                      <button
+                        style={emergencyPrimaryAction}
+                        disabled={canonicalDispatchPending}
+                        onClick={() =>
+                          advanceEmergencyFromChat(
+                            EMERGENCY_DISPATCH_ACTIONS.START_WORK
+                          )
+                        }
+                      >
+                        {t("startWork", language)}
+                      </button>
+                    )}
+
+                  {isCanonicalEmergencyThread &&
+                    canonicalEmergencyAllowedActions.includes(
+                      EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
+                    ) && (
+                      <button
+                        style={completeFromChatBtn}
+                        disabled={canonicalDispatchPending}
+                        onClick={() =>
+                          advanceEmergencyFromChat(
+                            EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
+                          )
+                        }
+                      >
+                        {t("completeEmergency", language)}
+                      </button>
+                    )}
+
+                  {canonicalDispatchPending && (
+                    <div style={canonicalDispatchNotice} role="status">
+                      {t("emergencyDispatchUpdating", language)}
+                    </div>
+                  )}
+
+                  {canonicalDispatchErrorKey && (
+                    <div style={canonicalDispatchError} role="alert">
+                      {t(canonicalDispatchErrorKey, language)}
+                    </div>
+                  )}
+
+                  {!isCanonicalEmergencyThread &&
+                    (!emergencyDispatchStatus ||
                     emergencyDispatchStatus === "pending") && (
                     <button
                       style={emergencyPrimaryAction}
@@ -5241,7 +5510,8 @@ const handleImageUpload = (event) => {
                     </button>
                   )}
 
-                  {emergencyDispatchStatus === "accepted" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "accepted" && (
                     <button
                       style={emergencyPrimaryAction}
                       onClick={() => advanceEmergencyFromChat("enroute")}
@@ -5250,7 +5520,8 @@ const handleImageUpload = (event) => {
                     </button>
                   )}
 
-                  {emergencyDispatchStatus === "enroute" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "enroute" && (
                     <button
                       style={emergencyPrimaryAction}
                       onClick={() => advanceEmergencyFromChat("arrived")}
@@ -5259,7 +5530,8 @@ const handleImageUpload = (event) => {
                     </button>
                   )}
 
-                  {emergencyDispatchStatus === "arrived" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "arrived" && (
                     <button
                       style={emergencyPrimaryAction}
                       onClick={() => advanceEmergencyFromChat("started")}
@@ -5268,7 +5540,8 @@ const handleImageUpload = (event) => {
                     </button>
                   )}
 
-                  {emergencyDispatchStatus === "started" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "started" && (
                     <button
                       style={completeFromChatBtn}
                       onClick={() => advanceEmergencyFromChat("completed")}
@@ -5277,7 +5550,8 @@ const handleImageUpload = (event) => {
                     </button>
                   )}
 
-                  {emergencyDispatchStatus === "completed" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "completed" && (
                     <button
                       style={completeFromChatBtn}
                       onClick={() => {
@@ -5303,12 +5577,27 @@ const handleImageUpload = (event) => {
                 <>
                   <div style={emergencyPillRow}>
                     {emergencyDispatchStatus === "completed" ? (
-                      <>
-                        <div style={completedEmergencyPill}> {t("completed")}</div>
+                      isCanonicalEmergencyThread ? (
                         <div style={completedEmergencyPill}>
-                           {t("conversationClosurePending", language)}
+                          {t("completed", language)}
                         </div>
-                        <div style={completedEmergencyPill}> {t("summary")}</div>
+                      ) : (
+                        <>
+                          <div style={completedEmergencyPill}> {t("completed")}</div>
+                          <div style={completedEmergencyPill}>
+                             {t("conversationClosurePending", language)}
+                          </div>
+                          <div style={completedEmergencyPill}> {t("summary")}</div>
+                        </>
+                      )
+                    ) : isCanonicalEmergencyThread ? (
+                      <>
+                        <div style={emergencyPill}>
+                          {t("active", language)}
+                        </div>
+                        <div style={emergencyPill}>
+                          {emergencyStatusSubtitle}
+                        </div>
                       </>
                     ) : (
                       <>
@@ -5361,7 +5650,51 @@ const handleImageUpload = (event) => {
                 ))}
                   </div>
 
-                  {emergencyDispatchStatus === "completed" &&
+                  {isCanonicalEmergencyThread &&
+                    canonicalConversationDetail.location && (
+                      <div style={canonicalEmergencyLocationCard}>
+                        <strong>
+                          {t("emergencyLocationDetails", language)}
+                        </strong>
+                        <p>
+                          {
+                            canonicalConversationDetail.location
+                              .locationText
+                          }
+                        </p>
+                        {canonicalConversationDetail.location
+                          .unitNumber && (
+                          <p>
+                            <span>
+                              {t("emergencyUnitLabel", language)}:
+                            </span>{" "}
+                            {
+                              canonicalConversationDetail.location
+                                .unitNumber
+                            }
+                          </p>
+                        )}
+                        {canonicalConversationDetail.location
+                          .accessNotes && (
+                          <p>
+                            <span>
+                              {t(
+                                "emergencyAccessNotesLabel",
+                                language
+                              )}
+                              :
+                            </span>{" "}
+                            {
+                              canonicalConversationDetail.location
+                                .accessNotes
+                            }
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus === "completed" &&
                     currentViewerRole !== "business" && (
                     <div style={completedActionRow}>
                       <button
@@ -5390,7 +5723,8 @@ const handleImageUpload = (event) => {
                     </div>
                   )}
 
-                  {emergencyDispatchStatus !== "completed" && (
+                  {!isCanonicalEmergencyThread &&
+                    emergencyDispatchStatus !== "completed" && (
                     <div style={routePreviewCard}>
                     <div style={routePreviewTop}>
                       <div style={routePreviewTitleWrap}>
@@ -6810,7 +7144,7 @@ const handleImageUpload = (event) => {
         )}
 
 
-        {showJobRecords && (
+        {!isCanonicalThread && showJobRecords && (
           <div style={recordOverlay}>
             <div style={recordPanel}>
               <div style={recordHeader}>
@@ -8035,6 +8369,35 @@ const completeFromChatBtn = {
 
 const emergencyChatActions = {
   marginTop: "12px",
+};
+
+const canonicalDispatchNotice = {
+  marginTop: "10px",
+  color: "#7f1d1d",
+  fontSize: "12px",
+  fontWeight: "800",
+  textAlign: "center",
+};
+
+const canonicalDispatchError = {
+  ...canonicalDispatchNotice,
+  padding: "10px 12px",
+  borderRadius: "12px",
+  background: "#ffffff",
+  color: "#b91c1c",
+};
+
+const canonicalEmergencyLocationCard = {
+  display: "grid",
+  gap: "6px",
+  marginTop: "14px",
+  padding: "13px 14px",
+  border: "1px solid rgba(239,68,68,0.14)",
+  borderRadius: "16px",
+  background: "#ffffff",
+  color: "#374151",
+  fontSize: "12px",
+  lineHeight: 1.45,
 };
 
 const emergencyPrimaryAction = {

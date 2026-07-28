@@ -5,15 +5,25 @@ import {
   cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
+  listHomeownerEmergencyResponses,
   prepareEmergencyRequest,
   saveEmergencySafetyAssessment,
+  selectHomeownerEmergencyResponse,
   updateEmergencyDraft,
 } from "../utils/emergencyApi";
 import {
+  buildEmergencyRequestRoute,
   parseEmergencyRequestRoute,
   replaceEmergencyRequestRoute,
 } from "../utils/emergencyRoutes";
-import { getLanguage } from "../utils/language";
+import {
+  buildCanonicalConversationRoute,
+} from "../utils/canonicalConversationMessaging";
+import {
+  fetchCanonicalConversations,
+  findCanonicalEmergencyConversation,
+} from "../utils/requestCommunication";
+import { getLanguage, t } from "../utils/language";
 import {
   formatPersonalAddress,
   resolveDefaultPersonalAddress,
@@ -124,13 +134,21 @@ function getRecoveredPhase(record = {}) {
 }
 
 function buildDraftForm(record = {}, fallback = {}) {
+  const recoveredSpecialty = clean(
+    record.serviceSpecialty ||
+      record.service_specialty
+  );
+  const recoveredService = SERVICE_OPTIONS.find(
+    (option) =>
+      option.value === recoveredSpecialty ||
+      option.specialty === recoveredSpecialty
+  );
+
   return {
     service:
-      clean(
-        record.serviceSpecialty ||
-          record.service_specialty ||
-          fallback.service
-      ) || "emergency_plumbing",
+      recoveredService?.value ||
+      clean(fallback.service) ||
+      "emergency_plumbing",
     title: clean(record.title || fallback.title),
     description: clean(record.description || fallback.description),
     locationText: clean(
@@ -236,6 +254,13 @@ function EmergencyRequest({ setPage }) {
     useState(false);
   const [submissionConfirmationOpen, setSubmissionConfirmationOpen] =
     useState(false);
+  const [responsesPhase, setResponsesPhase] = useState("idle");
+  const [responses, setResponses] = useState([]);
+  const [selectedResponse, setSelectedResponse] = useState(null);
+  const [canonicalConversationId, setCanonicalConversationId] =
+    useState(null);
+  const [selectionPending, setSelectionPending] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
 
   const initialEmergencyRoute = useMemo(
     () =>
@@ -368,6 +393,81 @@ function EmergencyRequest({ setPage }) {
     setPage,
   ]);
 
+  const canonicalRequestId = getRequestId(canonicalRequest);
+  const canonicalRequestStatus = getRequestStatus(canonicalRequest);
+  const shouldLoadResponses = [
+    "ready_for_distribution",
+    "assigned",
+    "professional_en_route",
+    "professional_arrived",
+    "work_in_progress",
+    "completed",
+  ].includes(canonicalRequestStatus);
+
+  useEffect(() => {
+    if (!canonicalRequestId || !shouldLoadResponses) {
+      setResponses([]);
+      setResponsesPhase("idle");
+      setCanonicalConversationId(null);
+      return undefined;
+    }
+
+    let active = true;
+    setResponsesPhase("loading");
+
+    async function loadCanonicalResponseState() {
+      const [responseResult, conversationResult, requestResult] =
+        await Promise.all([
+          listHomeownerEmergencyResponses(canonicalRequestId, {
+            setPage,
+          }),
+          fetchCanonicalConversations("personal", {
+            setPage,
+          }),
+          getEmergencyRequest(canonicalRequestId, {
+            setPage,
+          }),
+        ]);
+
+      if (!active) return;
+
+      if (!responseResult.ok) {
+        setResponsesPhase("error");
+      } else {
+        setResponses(responseResult.responses);
+        setResponsesPhase("ready");
+      }
+
+      if (requestResult.ok && requestResult.emergencyRequest) {
+        setCanonicalRequest(requestResult.emergencyRequest);
+      }
+
+      if (conversationResult.ok) {
+        const conversation = findCanonicalEmergencyConversation(
+          conversationResult.conversations,
+          canonicalRequestId
+        );
+
+        setCanonicalConversationId(
+          conversation?.conversationId || null
+        );
+      }
+    }
+
+    loadCanonicalResponseState();
+    const refreshInterval = window.setInterval(
+      loadCanonicalResponseState,
+      5000
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+    };
+    // Response polling follows the exact backend-owned request identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canonicalRequestId, shouldLoadResponses, setPage]);
+
   const text = {
     en: {
       title: "Emergency Draft",
@@ -421,16 +521,16 @@ function EmergencyRequest({ setPage }) {
       saveSafety: "Save Safety Review",
       safetySaving: "Saving Safety Review…",
       safetySaved:
-        "Safety review saved. Your draft has not been distributed.",
+        "Safety review saved. Submit when you are ready to notify compatible professionals.",
       submissionTitle: "Submit Emergency Request",
       submissionIntro:
         "Your request and safety review are complete. Review the acknowledgment below before submitting.",
       submissionAcknowledgment:
-        "I understand that submitting this request changes it to a read-only canonical record that may become eligible for future professional distribution. Meetro is not currently distributing this request, notifying professionals, assigning anyone, opening a chat, or initiating dispatch.",
+        "I understand that submitting this request makes it read-only and shares its service summary with compatible professionals. My location and access notes remain private until I select a professional.",
       openSubmissionConfirmation: "Submit Emergency Request",
       submissionConfirmTitle: "Submit this Emergency request?",
       submissionConfirmBody:
-        "After submission, this request becomes read-only. It will be marked as submitted and awaiting future distribution. No professional will be notified or assigned by this action.",
+        "After submission, this request becomes read-only and available to compatible professionals. No professional is assigned until you select one.",
       confirmSubmission: "Yes, Submit Request",
       keepEditing: "Keep Editing",
       submitting: "Submitting…",
@@ -438,8 +538,8 @@ function EmergencyRequest({ setPage }) {
         "The Emergency request could not be submitted. Try again.",
       submittedTitle: "Emergency Request Submitted",
       submittedBody:
-        "This canonical Emergency request is submitted and awaiting future distribution. No professional has been notified, matched, assigned, or dispatched, and no chat has been opened.",
-      submittedStatus: "Submitted — Awaiting Future Distribution",
+        "This Emergency request is active and available to compatible professionals. Select a response to create the canonical conversation and begin dispatch.",
+      submittedStatus: "Ready for Professional Responses",
       editDetails: "Edit Draft Details",
       back: "Back to Emergency Help",
       home: "Back Home",
@@ -457,10 +557,10 @@ function EmergencyRequest({ setPage }) {
         "The safety review could not be saved. Try again.",
       canonicalId: "Emergency draft",
       status: "Status",
-      distributionUnavailable: "Distribution unavailable",
+      distributionUnavailable: "Matching compatible professionals",
       completeTitle: "Draft and Safety Review Saved",
       completeBody:
-        "Your information is stored as a canonical Emergency draft. Meetro has not distributed it, assigned a professional, opened a chat, or initiated dispatch.",
+        "Your information is stored as a private canonical Emergency draft. No professional can see it until you submit.",
       cancelRequest: "Cancel Emergency Request",
       cancelConfirmTitle: "Cancel this Emergency request?",
       cancelConfirmBody:
@@ -478,7 +578,7 @@ function EmergencyRequest({ setPage }) {
         "The safety review indicates that this request cannot continue through Meetro. Contact appropriate emergency services when needed.",
       preparedTitle: "Emergency Request Submitted",
       preparedBody:
-        "This canonical Emergency request is submitted and awaiting future distribution. No professional has been notified, matched, assigned, or dispatched, and no chat has been opened.",
+        "This Emergency request is active and available to compatible professionals. Your location and access notes remain private until you select one.",
       readOnlyTitle: "Emergency Request Read-Only",
       readOnlyBody:
         "This canonical Emergency request can no longer be edited from this screen.",
@@ -536,16 +636,16 @@ function EmergencyRequest({ setPage }) {
       saveSafety: "Guardar Revisión",
       safetySaving: "Guardando Revisión…",
       safetySaved:
-        "Revisión guardada. El borrador no ha sido distribuido.",
+        "Revisión guardada. Envía la solicitud cuando estés listo para notificar a profesionales compatibles.",
       submissionTitle: "Enviar Solicitud de Emergencia",
       submissionIntro:
         "Tu solicitud y revisión de seguridad están completas. Revisa el reconocimiento antes de enviarla.",
       submissionAcknowledgment:
-        "Entiendo que enviar esta solicitud la convierte en un registro canónico de solo lectura que podrá ser elegible para distribución profesional futura. Meetro actualmente no distribuirá esta solicitud, no notificará profesionales, no asignará a nadie, no abrirá un chat ni iniciará un despacho.",
+        "Entiendo que enviar esta solicitud la convierte en un registro de solo lectura y comparte el resumen del servicio con profesionales compatibles. Mi ubicación y notas de acceso permanecen privadas hasta que seleccione un profesional.",
       openSubmissionConfirmation: "Enviar Solicitud de Emergencia",
       submissionConfirmTitle: "¿Enviar esta solicitud de Emergencia?",
       submissionConfirmBody:
-        "Después de enviarla, esta solicitud será de solo lectura. Se marcará como enviada y en espera de distribución futura. Esta acción no notificará ni asignará a ningún profesional.",
+        "Después de enviarla, esta solicitud será de solo lectura y estará disponible para profesionales compatibles. Nadie será asignado hasta que selecciones un profesional.",
       confirmSubmission: "Sí, Enviar Solicitud",
       keepEditing: "Continuar Editando",
       submitting: "Enviando…",
@@ -553,8 +653,8 @@ function EmergencyRequest({ setPage }) {
         "No se pudo enviar la solicitud de Emergencia. Inténtalo nuevamente.",
       submittedTitle: "Solicitud de Emergencia Enviada",
       submittedBody:
-        "Esta solicitud canónica de Emergencia fue enviada y está en espera de distribución futura. Ningún profesional ha sido notificado, seleccionado, asignado o despachado, y no se abrió ningún chat.",
-      submittedStatus: "Enviada — En Espera de Distribución Futura",
+        "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Selecciona una respuesta para crear la conversación canónica e iniciar el despacho.",
+      submittedStatus: "Lista para Respuestas Profesionales",
       editDetails: "Editar Detalles",
       back: "Regresar a Ayuda de Emergencia",
       home: "Regresar al Inicio",
@@ -572,10 +672,10 @@ function EmergencyRequest({ setPage }) {
         "No se pudo guardar la revisión. Inténtalo nuevamente.",
       canonicalId: "Borrador de Emergencia",
       status: "Estado",
-      distributionUnavailable: "Distribución no disponible",
+      distributionUnavailable: "Buscando profesionales compatibles",
       completeTitle: "Borrador y Revisión Guardados",
       completeBody:
-        "Tu información está guardada como un borrador canónico de Emergencia. Meetro no lo distribuyó, no asignó un profesional, no abrió un chat ni inició un despacho.",
+        "Tu información está guardada como un borrador canónico privado. Ningún profesional puede verla hasta que la envíes.",
       cancelRequest: "Cancelar Solicitud de Emergencia",
       cancelConfirmTitle: "¿Cancelar esta solicitud de Emergencia?",
       cancelConfirmBody:
@@ -593,7 +693,7 @@ function EmergencyRequest({ setPage }) {
         "La revisión de seguridad indica que esta solicitud no puede continuar por Meetro. Contacta los servicios de emergencia apropiados cuando sea necesario.",
       preparedTitle: "Solicitud de Emergencia Enviada",
       preparedBody:
-        "Esta solicitud canónica de Emergencia fue enviada y está en espera de distribución futura. Ningún profesional ha sido notificado, seleccionado, asignado o despachado, y no se abrió ningún chat.",
+        "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Tu ubicación y notas de acceso permanecen privadas hasta que selecciones uno.",
       readOnlyTitle: "Solicitud de Emergencia de Solo Lectura",
       readOnlyBody:
         "Esta solicitud canónica de Emergencia ya no puede editarse desde esta pantalla.",
@@ -865,6 +965,96 @@ function EmergencyRequest({ setPage }) {
     setPhase("lifecycle");
     setCancelConfirmationOpen(false);
     setRecoveryState("loaded");
+  }
+
+  function requestProfessionalSelection(response) {
+    if (
+      selectionPending ||
+      response?.status !== "pending"
+    ) {
+      return;
+    }
+
+    setSelectedResponse(response);
+    setSelectionError("");
+  }
+
+  function keepWaitingForProfessional() {
+    if (selectionPending) return;
+    setSelectedResponse(null);
+    setSelectionError("");
+  }
+
+  function openCanonicalEmergencyConversation() {
+    if (!canonicalConversationId) return;
+
+    setPage(
+      buildCanonicalConversationRoute(
+        canonicalConversationId,
+        buildEmergencyRequestRoute(canonicalRequestId)
+      )
+    );
+  }
+
+  async function confirmProfessionalSelection() {
+    if (
+      !canonicalRequestId ||
+      !selectedResponse?.id ||
+      selectionPending
+    ) {
+      return;
+    }
+
+    setSelectionPending(true);
+    setSelectionError("");
+
+    const result = await selectHomeownerEmergencyResponse(
+      canonicalRequestId,
+      selectedResponse.id,
+      {
+        setPage,
+      }
+    );
+
+    setSelectionPending(false);
+
+    if (
+      !result.ok ||
+      !result.emergencyRequest ||
+      !result.conversation?.id
+    ) {
+      setSelectionError(
+        result.message ||
+          t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    setCanonicalRequest((current) => ({
+      ...(current || {}),
+      ...result.emergencyRequest,
+    }));
+    setResponses((current) =>
+      current.map((response) =>
+        response.id === selectedResponse.id
+          ? {
+              ...response,
+              status: "active",
+              conversationAvailable: true,
+            }
+          : response.status === "pending"
+            ? { ...response, status: "declined" }
+            : response
+      )
+    );
+    setCanonicalConversationId(result.conversation.id);
+    setSelectedResponse(null);
+    setPage(
+      buildCanonicalConversationRoute(
+        result.conversation.id,
+        buildEmergencyRequestRoute(canonicalRequestId)
+      )
+    );
   }
 
   function getLifecycleCopy() {
@@ -1338,8 +1528,121 @@ function EmergencyRequest({ setPage }) {
                   {canonicalStatus === "ready_for_distribution"
                     ? copy.submittedStatus
                     : canonicalStatus}
-                </strong>
+                  </strong>
               </div>
+
+              {shouldLoadResponses && (
+                <div style={responsesSection}>
+                  <h3 style={responsesTitle}>
+                    {t("emergencyResponsesTitle", language)}
+                  </h3>
+
+                  {canonicalConversationId && (
+                    <div style={conversationReadyCard}>
+                      <strong>
+                        {t("emergencyConversationReady", language)}
+                      </strong>
+                      <button
+                        type="button"
+                        style={primaryButton}
+                        onClick={openCanonicalEmergencyConversation}
+                      >
+                        {t("emergencyOpenConversation", language)}
+                      </button>
+                    </div>
+                  )}
+
+                  {responsesPhase === "loading" && (
+                    <p style={responseStateText} role="status">
+                      {t("emergencyResponsesLoading", language)}
+                    </p>
+                  )}
+
+                  {responsesPhase === "error" && (
+                    <p style={responseErrorText} role="alert">
+                      {t("emergencyResponsesError", language)}
+                    </p>
+                  )}
+
+                  {responsesPhase === "ready" &&
+                    responses.length === 0 && (
+                      <p style={responseStateText}>
+                        {t("emergencyResponsesEmpty", language)}
+                      </p>
+                    )}
+
+                  {responses
+                    .filter((response) =>
+                      ["pending", "active"].includes(
+                        response.status
+                      )
+                    )
+                    .map((response) => {
+                      const businessName =
+                        response.professional.businessName ||
+                        t("messagesOwnerProfessional", language);
+                      const logo =
+                        response.professional.businessLogoUrl ||
+                        response.professional.profileImageUrl;
+
+                      return (
+                        <article
+                          key={response.id}
+                          style={responseCard}
+                        >
+                          <div style={responseHeader}>
+                            <div style={responseAvatar}>
+                              {logo ? (
+                                <img
+                                  src={logo}
+                                  alt=""
+                                  style={responseAvatarImage}
+                                />
+                              ) : (
+                                businessName
+                                  .split(" ")
+                                  .map((word) => word[0])
+                                  .join("")
+                                  .slice(0, 2)
+                                  .toUpperCase()
+                              )}
+                            </div>
+                            <div>
+                              <strong>{businessName}</strong>
+                              <p style={responseMeta}>
+                                {response.professional.category ||
+                                  response.professional.serviceSpecialties[0] ||
+                                  t("messagesOwnerProfessional", language)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {response.status === "active" &&
+                          canonicalConversationId ? (
+                            <button
+                              type="button"
+                              style={primaryButton}
+                              onClick={openCanonicalEmergencyConversation}
+                            >
+                              {t("emergencyOpenConversation", language)}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              style={primaryButton}
+                              onClick={() =>
+                                requestProfessionalSelection(response)
+                              }
+                              disabled={selectionPending}
+                            >
+                              {t("emergencySelectProfessional", language)}
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
+                </div>
+              )}
 
               {cancellationAvailable && (
                 <button
@@ -1407,6 +1710,59 @@ function EmergencyRequest({ setPage }) {
               disabled={pending}
             >
               {copy.keepEditing}
+            </button>
+          </section>
+        )}
+
+        {selectedResponse && (
+          <section
+            style={submissionConfirmationCard}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="emergency-selection-title"
+          >
+            <h2
+              id="emergency-selection-title"
+              style={sectionTitle}
+            >
+              {t("emergencySelectConfirmTitle", language)}
+            </h2>
+
+            <p style={completeBody}>
+              {t("emergencySelectConfirmBody", language, {
+                business:
+                  selectedResponse.professional.businessName ||
+                  t("messagesOwnerProfessional", language),
+              })}
+            </p>
+
+            {selectionError && (
+              <div style={errorNotice} role="alert">
+                {selectionError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={{
+                ...primaryButton,
+                ...(selectionPending ? disabledButton : {}),
+              }}
+              onClick={confirmProfessionalSelection}
+              disabled={selectionPending}
+            >
+              {selectionPending
+                ? copy.submitting
+                : t("emergencySelectConfirm", language)}
+            </button>
+
+            <button
+              type="button"
+              style={secondaryButton}
+              onClick={keepWaitingForProfessional}
+              disabled={selectionPending}
+            >
+              {t("emergencyKeepWaiting", language)}
             </button>
           </section>
         )}
@@ -1786,6 +2142,82 @@ const lifecycleStatus = {
   background: "#f3f4f6",
   color: "#374151",
   fontSize: "14px",
+};
+
+const responsesSection = {
+  display: "grid",
+  gap: "12px",
+  marginTop: "20px",
+};
+
+const responsesTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "18px",
+  fontWeight: "900",
+};
+
+const responseStateText = {
+  margin: 0,
+  padding: "14px",
+  borderRadius: "14px",
+  background: "#f8fafc",
+  color: "#475569",
+  lineHeight: 1.5,
+};
+
+const responseErrorText = {
+  ...responseStateText,
+  background: "#fff7f7",
+  color: "#991b1b",
+};
+
+const conversationReadyCard = {
+  padding: "16px",
+  border: "1px solid #a7f3d0",
+  borderRadius: "16px",
+  background: "#ecfdf5",
+  color: "#065f46",
+};
+
+const responseCard = {
+  padding: "16px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
+  background: "#ffffff",
+};
+
+const responseHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const responseAvatar = {
+  width: "46px",
+  height: "46px",
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+  borderRadius: "15px",
+  background: "#eef4ea",
+  color: "#1f4d34",
+  fontWeight: "900",
+};
+
+const responseAvatarImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+};
+
+const responseMeta = {
+  margin: "4px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const completeBody = {

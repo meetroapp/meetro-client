@@ -4,13 +4,19 @@ import test from "node:test";
 import {
   EMERGENCY_API_ENDPOINTS,
   EMERGENCY_CLIENT_ERROR,
+  EMERGENCY_DISPATCH_ACTIONS,
   cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
+  listHomeownerEmergencyResponses,
+  listProfessionalEmergencyOpportunities,
   normalizeEmergencyApiResult,
   normalizeEmergencyRequestId,
   prepareEmergencyRequest,
+  respondToEmergencyOpportunity,
   saveEmergencySafetyAssessment,
+  selectHomeownerEmergencyResponse,
+  transitionEmergencyDispatch,
   updateEmergencyDraft,
 } from "../src/utils/emergencyApi.js";
 
@@ -104,6 +110,264 @@ test("Emergency endpoint inventory matches the certified backend contract", () =
     EMERGENCY_API_ENDPOINTS.cancel(41),
     "/emergency-requests/41/cancel"
   );
+
+  assert.equal(
+    EMERGENCY_API_ENDPOINTS.professionalOpportunities,
+    "/professional-emergency-opportunities"
+  );
+  assert.equal(
+    EMERGENCY_API_ENDPOINTS.professionalResponse(41),
+    "/professional-emergency-opportunities/41/respond"
+  );
+  assert.equal(
+    EMERGENCY_API_ENDPOINTS.responses(41),
+    "/emergency-requests/41/responses"
+  );
+  assert.equal(
+    EMERGENCY_API_ENDPOINTS.selectResponse(41, 51),
+    "/emergency-requests/41/responses/51/select"
+  );
+});
+
+test("professional Emergency opportunities expose only the bounded public projection", async () => {
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "PROFESSIONAL_EMERGENCY_OPPORTUNITIES_FOUND",
+      opportunities: [
+        {
+          id: 41,
+          sourceType: "emergency",
+          category: "home_repair",
+          serviceDomain: "home_services",
+          serviceSpecialty: "electrical",
+          title: "Electrical Emergency",
+          description: "Partial outage",
+          status: "ready_for_distribution",
+          requestedAt: "2026-07-27T12:00:00.000Z",
+          createdAt: "2026-07-27T11:58:00.000Z",
+          updatedAt: "2026-07-27T12:00:00.000Z",
+          relationship: null,
+          conversation: null,
+          locationText: "Private address",
+          accessNotes: "Private access",
+          homeownerId: 8,
+        },
+      ],
+    },
+  });
+
+  const result = await listProfessionalEmergencyOpportunities({
+    authFetchImpl: transport.authFetchImpl,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.opportunities.length, 1);
+  assert.deepEqual(Object.keys(result.opportunities[0]), [
+    "id",
+    "sourceType",
+    "category",
+    "serviceDomain",
+    "serviceSpecialty",
+    "title",
+    "description",
+    "status",
+    "requestedAt",
+    "createdAt",
+    "updatedAt",
+    "relationship",
+    "conversation",
+  ]);
+  assert.equal(
+    Object.hasOwn(result.opportunities[0], "locationText"),
+    false
+  );
+  assert.deepEqual(transport.calls[0], {
+    endpoint: "/professional-emergency-opportunities",
+    options: {
+      method: "GET",
+      cache: "no-store",
+    },
+    setPage: undefined,
+  });
+});
+
+test("professional Emergency response is idempotent and sends no client-owned identity", async () => {
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "EMERGENCY_RESPONSE_ALREADY_EXISTS",
+      created: false,
+      relationship: {
+        id: 51,
+        emergencyRequestId: 41,
+        status: "responded",
+        conversationAvailable: false,
+        createdAt: "2026-07-27T12:00:00.000Z",
+        respondedAt: "2026-07-27T12:00:00.000Z",
+      },
+    },
+  });
+
+  const result = await respondToEmergencyOpportunity(41, {
+    authFetchImpl: transport.authFetchImpl,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.created, false);
+  assert.equal(result.relationship.id, 51);
+  assert.deepEqual(transport.calls[0], {
+    endpoint: "/professional-emergency-opportunities/41/respond",
+    options: {
+      method: "POST",
+      cache: "no-store",
+      body: "{}",
+    },
+    setPage: undefined,
+  });
+});
+
+test("homeowner response selection returns canonical conversation identity", async () => {
+  const listTransport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      emergencyRequest: {
+        id: 41,
+        status: "ready_for_distribution",
+      },
+      responses: [
+        {
+          id: 51,
+          emergencyRequestId: 41,
+          status: "responded",
+          conversationAvailable: false,
+          professional: {
+            businessName: "Cape Electrical",
+            category: "electrician",
+            serviceSpecialties: ["electrical"],
+            profileImageUrl: null,
+            businessLogoUrl: null,
+          },
+        },
+      ],
+    },
+  });
+  const selectionTransport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      alreadySelected: false,
+      declinedResponseCount: 0,
+      emergencyRequest: {
+        id: 41,
+        status: "assigned",
+        assignedAt: "2026-07-27T12:10:00.000Z",
+      },
+      relationship: {
+        id: 51,
+        emergencyRequestId: 41,
+        status: "active",
+        acceptedAt: "2026-07-27T12:10:00.000Z",
+        conversationAvailable: true,
+      },
+      conversation: {
+        id: 61,
+        relationshipId: 51,
+        status: "active",
+      },
+    },
+  });
+
+  const listed = await listHomeownerEmergencyResponses(41, {
+    authFetchImpl: listTransport.authFetchImpl,
+  });
+  const selected = await selectHomeownerEmergencyResponse(41, 51, {
+    authFetchImpl: selectionTransport.authFetchImpl,
+  });
+
+  assert.equal(listed.ok, true);
+  assert.equal(
+    listed.responses[0].professional.businessName,
+    "Cape Electrical"
+  );
+  assert.equal(selected.ok, true);
+  assert.equal(selected.conversation.id, 61);
+  assert.equal(
+    selected.relationship.conversationAvailable,
+    true
+  );
+  assert.deepEqual(selectionTransport.calls[0], {
+    endpoint: "/emergency-requests/41/responses/51/select",
+    options: {
+      method: "POST",
+      cache: "no-store",
+      body: "{}",
+    },
+    setPage: undefined,
+  });
+});
+
+test("dispatch transitions use the exact backend-authorized action endpoint", async () => {
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      alreadyApplied: false,
+      emergencyRequest: {
+        id: 41,
+        status: "professional_en_route",
+        enRouteAt: "2026-07-27T12:20:00.000Z",
+      },
+      relationship: {
+        id: 51,
+        status: "active",
+      },
+      conversation: {
+        id: 61,
+        status: "active",
+      },
+    },
+  });
+
+  const result = await transitionEmergencyDispatch(
+    41,
+    EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE,
+    { authFetchImpl: transport.authFetchImpl }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.emergencyRequest.status,
+    "professional_en_route"
+  );
+  assert.deepEqual(transport.calls[0], {
+    endpoint: "/emergency-requests/41/en-route",
+    options: {
+      method: "POST",
+      cache: "no-store",
+      body: "{}",
+    },
+    setPage: undefined,
+  });
+});
+
+test("unknown dispatch actions fail before authenticated transport execution", async () => {
+  const transport = createTransport();
+  const result = await transitionEmergencyDispatch(
+    41,
+    "accept_dispatch",
+    { authFetchImpl: transport.authFetchImpl }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.code,
+    "INVALID_EMERGENCY_DISPATCH_ACTION"
+  );
+  assert.equal(transport.calls.length, 0);
 });
 
 test("canonical Emergency success responses preserve backend authority", () => {
