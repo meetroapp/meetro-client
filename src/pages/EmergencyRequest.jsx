@@ -105,12 +105,21 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
-function getRequestId(record = {}) {
-  return record.id ?? record.emergencyRequestId ?? record.emergency_request_id;
+function getRequestId(record) {
+  if (!record) return null;
+
+  return (
+    record.id ??
+    record.emergencyRequestId ??
+    record.emergency_request_id ??
+    null
+  );
 }
 
-function getRequestStatus(record = {}) {
-  return clean(record.status || "draft").toLowerCase() || "draft";
+function getRequestStatus(record) {
+  if (!record) return "draft";
+
+  return clean(record.status ?? "draft").toLowerCase() || "draft";
 }
 
 function isEditableEmergencyDraft(record = {}) {
