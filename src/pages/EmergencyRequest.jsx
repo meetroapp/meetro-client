@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
 import {
@@ -253,6 +253,7 @@ function buildSafetyForm(record = {}) {
 }
 
 function EmergencyRequest({ setPage }) {
+  const safetyReviewHeadingRef = useRef(null);
   const [language, setLanguage] = useState(getLanguage());
   const [canonicalRequest, setCanonicalRequest] = useState(null);
   const [phase, setPhase] = useState("details");
@@ -414,6 +415,29 @@ function EmergencyRequest({ setPage }) {
   ].includes(canonicalRequestStatus);
 
   useEffect(() => {
+    if (phase !== "safety" || !canonicalRequestId) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const heading = safetyReviewHeadingRef.current;
+      if (!heading) return;
+
+      heading.focus({ preventScroll: true });
+      heading.scrollIntoView({
+        behavior: window.matchMedia?.(
+          "(prefers-reduced-motion: reduce)"
+        ).matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [canonicalRequestId, phase]);
+
+  useEffect(() => {
     if (!canonicalRequestId || !shouldLoadResponses) {
       setResponses([]);
       setResponsesPhase("idle");
@@ -506,9 +530,18 @@ function EmergencyRequest({ setPage }) {
       draftSaved:
         "Your Emergency draft is saved privately. Complete the safety review next.",
       draftUpdated: "Your Emergency draft changes were saved.",
+      stepOneComplete: "Step 1 complete",
+      draftSavedShort: "Emergency draft saved.",
+      stepTwo: "Step 2",
       safetyTitle: "Safety Review",
       safetyIntro:
-        "Answer based on current conditions. Meetro may block further workflow when emergency services are more appropriate.",
+        "Select every listed hazard that is currently true. Select only what is true; do not select an item merely to continue.",
+      noListedHazards:
+        "If none of the listed hazards apply, leave the hazard boxes unchecked. Then answer the separate current safety status statements below. This does not mean that no other danger exists.",
+      hazardConditions: "Listed hazard conditions",
+      safetyStatusTitle: "Current safety status",
+      safetyStatusIntro:
+        "Answer these statements separately and truthfully. If it is not safe to remain, leave that statement unchecked; the existing safety review may block the Meetro workflow.",
       immediateDanger: "Someone is in immediate danger",
       medicalEmergency: "There is a medical emergency",
       fireOrSmoke: "There is fire or smoke",
@@ -621,9 +654,18 @@ function EmergencyRequest({ setPage }) {
       draftSaved:
         "Tu borrador de Emergencia se guardó de forma privada. Completa ahora la revisión de seguridad.",
       draftUpdated: "Los cambios del borrador fueron guardados.",
+      stepOneComplete: "Paso 1 completado",
+      draftSavedShort: "Borrador de Emergencia guardado.",
+      stepTwo: "Paso 2",
       safetyTitle: "Revisión de Seguridad",
       safetyIntro:
-        "Responde según las condiciones actuales. Meetro puede bloquear el flujo cuando los servicios de emergencia sean más apropiados.",
+        "Selecciona cada peligro de la lista que sea verdadero en este momento. Selecciona solo lo que sea cierto; no marques una opción únicamente para continuar.",
+      noListedHazards:
+        "Si ninguno de los peligros de la lista aplica, deja esas casillas sin marcar. Luego responde por separado las afirmaciones sobre el estado actual de seguridad. Esto no significa que no exista ningún otro peligro.",
+      hazardConditions: "Peligros indicados",
+      safetyStatusTitle: "Estado actual de seguridad",
+      safetyStatusIntro:
+        "Responde estas afirmaciones por separado y con sinceridad. Si no es seguro permanecer, deja esa afirmación sin marcar; la revisión de seguridad existente puede bloquear el flujo de Meetro.",
       immediateDanger: "Alguien está en peligro inmediato",
       medicalEmergency: "Existe una emergencia médica",
       fireOrSmoke: "Hay fuego o humo",
@@ -1324,107 +1366,139 @@ function EmergencyRequest({ setPage }) {
           editableDraft &&
           phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
-            <h2 style={sectionTitle}>{copy.safetyTitle}</h2>
+            <div style={stepStatus} role="status" aria-live="polite">
+              <span style={stepEyebrow}>{copy.stepOneComplete}</span>
+              <strong style={stepConfirmation}>
+                {copy.draftSavedShort}
+              </strong>
+              <span style={stepNext}>
+                {copy.stepTwo} · {copy.safetyTitle}
+              </span>
+            </div>
+
+            <h2
+              ref={safetyReviewHeadingRef}
+              tabIndex={-1}
+              style={sectionTitle}
+            >
+              {copy.safetyTitle}
+            </h2>
             <p style={sectionIntro}>{copy.safetyIntro}</p>
+            <p style={noHazardsNotice}>{copy.noListedHazards}</p>
 
-            <SafetyCheck
-              label={copy.immediateDanger}
-              checked={safety.immediateDanger}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("immediateDanger", value)
-              }
-            />
+            <fieldset style={safetyGroup}>
+              <legend style={safetyGroupLegend}>
+                {copy.hazardConditions}
+              </legend>
 
-            <SafetyCheck
-              label={copy.medicalEmergency}
-              checked={safety.medicalEmergency}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("medicalEmergency", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.immediateDanger}
+                checked={safety.immediateDanger}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("immediateDanger", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.fireOrSmoke}
-              checked={safety.fireOrSmoke}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("fireOrSmoke", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.medicalEmergency}
+                checked={safety.medicalEmergency}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("medicalEmergency", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.gasLeak}
-              checked={safety.gasOdorOrSuspectedLeak}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("gasOdorOrSuspectedLeak", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.fireOrSmoke}
+                checked={safety.fireOrSmoke}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("fireOrSmoke", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.crimeThreat}
-              checked={safety.activeCrimeOrThreat}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("activeCrimeOrThreat", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.gasLeak}
+                checked={safety.gasOdorOrSuspectedLeak}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("gasOdorOrSuspectedLeak", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.electricalHazard}
-              checked={safety.electricalImmediateHazard}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("electricalImmediateHazard", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.crimeThreat}
+                checked={safety.activeCrimeOrThreat}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("activeCrimeOrThreat", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.collapseRisk}
-              checked={safety.structuralCollapseRisk}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("structuralCollapseRisk", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.electricalHazard}
+                checked={safety.electricalImmediateHazard}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("electricalImmediateHazard", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.flooding}
-              checked={safety.floodingOrWaterDamage}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("floodingOrWaterDamage", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.collapseRisk}
+                checked={safety.structuralCollapseRisk}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("structuralCollapseRisk", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.unableToExit}
-              checked={safety.occupantsUnableToExit}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("occupantsUnableToExit", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.flooding}
+                checked={safety.floodingOrWaterDamage}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("floodingOrWaterDamage", value)
+                }
+              />
 
-            <SafetyCheck
-              label={copy.servicesContacted}
-              checked={safety.emergencyServicesContacted}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("emergencyServicesContacted", value)
-              }
-            />
+              <SafetyCheck
+                label={copy.unableToExit}
+                checked={safety.occupantsUnableToExit}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("occupantsUnableToExit", value)
+                }
+              />
+            </fieldset>
 
-            <SafetyCheck
-              label={copy.safeToRemain}
-              checked={safety.safeToRemainAtLocation}
-              disabled={pending}
-              onChange={(value) =>
-                updateSafety("safeToRemainAtLocation", value)
-              }
-            />
+            <fieldset style={safetyGroup}>
+              <legend style={safetyGroupLegend}>
+                {copy.safetyStatusTitle}
+              </legend>
+              <p style={safetyGroupIntro}>
+                {copy.safetyStatusIntro}
+              </p>
+
+              <SafetyCheck
+                label={copy.servicesContacted}
+                checked={safety.emergencyServicesContacted}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("emergencyServicesContacted", value)
+                }
+              />
+
+              <SafetyCheck
+                label={copy.safeToRemain}
+                checked={safety.safeToRemainAtLocation}
+                disabled={pending}
+                onChange={(value) =>
+                  updateSafety("safeToRemainAtLocation", value)
+                }
+              />
+            </fieldset>
 
             <FieldLabel
               htmlFor="emergency-safety-context"
@@ -1445,6 +1519,12 @@ function EmergencyRequest({ setPage }) {
                 )
               }
             />
+
+            {errorMessage && (
+              <div style={inlineErrorNotice}>
+                {errorMessage}
+              </div>
+            )}
 
             <button
               type="submit"
@@ -2034,6 +2114,70 @@ const sectionIntro = {
   lineHeight: 1.55,
 };
 
+const stepStatus = {
+  display: "grid",
+  gap: "4px",
+  marginBottom: "20px",
+  padding: "16px",
+  border: "1px solid #a7f3d0",
+  borderRadius: "16px",
+  background: "#ecfdf5",
+  color: "#065f46",
+};
+
+const stepEyebrow = {
+  fontSize: "12px",
+  fontWeight: "900",
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+};
+
+const stepConfirmation = {
+  fontSize: "17px",
+  lineHeight: 1.35,
+};
+
+const stepNext = {
+  color: "#047857",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const noHazardsNotice = {
+  margin: "0 0 18px",
+  padding: "14px 16px",
+  border: "1px solid #bfdbfe",
+  borderRadius: "14px",
+  background: "#eff6ff",
+  color: "#1e3a8a",
+  fontSize: "14px",
+  fontWeight: "800",
+  lineHeight: 1.5,
+};
+
+const safetyGroup = {
+  minWidth: 0,
+  margin: "0 0 18px",
+  padding: 0,
+  border: 0,
+};
+
+const safetyGroupLegend = {
+  width: "100%",
+  marginBottom: "10px",
+  padding: 0,
+  color: "#111827",
+  fontSize: "15px",
+  fontWeight: "900",
+};
+
+const safetyGroupIntro = {
+  margin: "0 0 12px",
+  color: "#4b5563",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
 const primaryButton = {
   width: "100%",
   minHeight: "50px",
@@ -2091,6 +2235,12 @@ const errorNotice = {
   fontSize: "14px",
   fontWeight: "800",
   lineHeight: 1.5,
+};
+
+const inlineErrorNotice = {
+  ...errorNotice,
+  marginTop: "18px",
+  marginBottom: 0,
 };
 
 const recoveryMessage = {

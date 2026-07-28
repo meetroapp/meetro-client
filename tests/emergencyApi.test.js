@@ -587,6 +587,11 @@ test("safety assessment uses the governed assessment endpoint", async () => {
   );
 
   assert.equal(result.ok, true);
+  assert.equal(
+    Object.hasOwn(payload, "noHazardsApply"),
+    false
+  );
+  assert.equal(Object.hasOwn(payload, "noneApply"), false);
 
   assert.deepEqual(transport.calls[0], {
     endpoint:
@@ -598,6 +603,57 @@ test("safety assessment uses the governed assessment endpoint", async () => {
     },
     setPage: undefined,
   });
+});
+
+test("all-false safety answers are transported unchanged without invented fields", async () => {
+  const transport = createTransport({
+    response: {
+      ok: true,
+      status: 200,
+    },
+    data: {
+      success: true,
+      code: "EMERGENCY_REQUEST_SAFETY_BLOCKED",
+      emergencyRequest: {
+        id: 41,
+        status: "safety_blocked",
+        safetyAssessment: {
+          disposition: "leave_location",
+        },
+      },
+    },
+  });
+  const payload = {
+    immediateDanger: false,
+    medicalEmergency: false,
+    fireOrSmoke: false,
+    gasOdorOrSuspectedLeak: false,
+    activeCrimeOrThreat: false,
+    electricalImmediateHazard: false,
+    structuralCollapseRisk: false,
+    floodingOrWaterDamage: false,
+    occupantsUnableToExit: false,
+    emergencyServicesContacted: false,
+    safeToRemainAtLocation: false,
+    additionalSafetyContext: "",
+  };
+
+  const result = await saveEmergencySafetyAssessment(41, payload, {
+    authFetchImpl: transport.authFetchImpl,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.code, "EMERGENCY_REQUEST_SAFETY_BLOCKED");
+  assert.equal(result.emergencyRequest.status, "safety_blocked");
+  assert.deepEqual(
+    JSON.parse(transport.calls[0].options.body),
+    payload
+  );
+  assert.equal(
+    Object.hasOwn(payload, "noHazardsApply"),
+    false
+  );
+  assert.equal(Object.hasOwn(payload, "noneApply"), false);
 });
 
 test("prepare and cancel use separate backend lifecycle commands", async () => {

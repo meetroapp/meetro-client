@@ -270,6 +270,65 @@ test("Emergency safety review carries all governed safety fields", () => {
   }
 });
 
+test("Emergency safety review confirms canonical draft progress only after success", () => {
+  assert.match(requestSource, /Step 1 complete/);
+  assert.match(requestSource, /Emergency draft saved\./);
+  assert.match(requestSource, /Step 2/);
+  assert.match(
+    requestSource,
+    /if \(!result\.ok \|\| !result\.emergencyRequest\) \{[\s\S]*?return;[\s\S]*?setCanonicalRequest\(result\.emergencyRequest\);[\s\S]*?setPhase\("safety"\);/
+  );
+  assert.match(
+    requestSource,
+    /phase === "safety"[\s\S]*?role="status" aria-live="polite"/
+  );
+});
+
+test("Emergency safety review permits no listed hazards without inventing authority", () => {
+  assert.match(
+    requestSource,
+    /Select every listed hazard that is currently true/
+  );
+  assert.match(
+    requestSource,
+    /If none of the listed hazards apply, leave the hazard boxes unchecked/
+  );
+  assert.match(requestSource, /Listed hazard conditions/);
+  assert.match(requestSource, /Current safety status/);
+  assert.doesNotMatch(
+    requestSource,
+    /noHazardsApply|noneApply|no_hazards_apply|none_apply/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /some\(\(.*safety|required.*hazard/i
+  );
+});
+
+test("Emergency safety review preserves canonical blocking and truthful action", () => {
+  assert.match(requestSource, /Save Safety Review/);
+  assert.match(requestSource, /safety_blocked/);
+  assert.match(
+    requestSource,
+    /await saveEmergencySafetyAssessment/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /deriveSafetyDisposition|safeToDistribute|isEmergencySafe/
+  );
+});
+
+test("Emergency safety transition focuses once and failures remain visible", () => {
+  assert.match(requestSource, /safetyReviewHeadingRef/);
+  assert.match(requestSource, /heading\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(requestSource, /heading\.scrollIntoView/);
+  assert.match(requestSource, /tabIndex=\{-1\}/);
+  assert.match(
+    requestSource,
+    /errorMessage && \([\s\S]*?inlineErrorNotice/
+  );
+});
+
 test("Emergency Request creates no browser workflow authority", () => {
   for (const forbidden of [
     "localStorage.setItem",
