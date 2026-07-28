@@ -17,6 +17,11 @@ import {
   replaceEmergencyRequestRoute,
 } from "../utils/emergencyRoutes";
 import {
+  EMERGENCY_SERVICE_OPTIONS,
+  isUnsupportedLegacyEmergencySpecialty,
+  normalizeEmergencySpecialtyForDisplay,
+} from "../utils/emergencySpecialties";
+import {
   buildCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
 import {
@@ -28,63 +33,6 @@ import {
   formatPersonalAddress,
   resolveDefaultPersonalAddress,
 } from "../utils/personalAddresses";
-
-const SERVICE_OPTIONS = Object.freeze([
-  {
-    value: "emergency_plumbing",
-    domain: "home_services",
-    specialty: "plumbing_repairs",
-    label: {
-      en: "Emergency Plumbing",
-      es: "Plomería de Emergencia",
-    },
-  },
-  {
-    value: "emergency_electrical",
-    domain: "home_services",
-    specialty: "electrical",
-    label: {
-      en: "Emergency Electrical",
-      es: "Electricidad de Emergencia",
-    },
-  },
-  {
-    value: "roof_leak",
-    domain: "home_services",
-    specialty: "roofing",
-    label: {
-      en: "Roof Leak Repair",
-      es: "Reparación de Techo",
-    },
-  },
-  {
-    value: "locksmith",
-    domain: "home_services",
-    specialty: "locksmith",
-    label: {
-      en: "Locksmith",
-      es: "Cerrajero",
-    },
-  },
-  {
-    value: "storm_preparation",
-    domain: "home_services",
-    specialty: "storm_preparation",
-    label: {
-      en: "Storm Preparation",
-      es: "Preparación para Tormentas",
-    },
-  },
-  {
-    value: "other_urgent_property_issue",
-    domain: "home_services",
-    specialty: "handyman",
-    label: {
-      en: "Other Urgent Property Issue",
-      es: "Otro Problema Urgente",
-    },
-  },
-]);
 
 const INITIAL_SAFETY = Object.freeze({
   immediateDanger: false,
@@ -147,17 +95,14 @@ function buildDraftForm(record = {}, fallback = {}) {
     record.serviceSpecialty ||
       record.service_specialty
   );
-  const recoveredService = SERVICE_OPTIONS.find(
-    (option) =>
-      option.value === recoveredSpecialty ||
-      option.specialty === recoveredSpecialty
-  );
+  const recoveredService =
+    normalizeEmergencySpecialtyForDisplay(recoveredSpecialty);
 
   return {
     service:
-      recoveredService?.value ||
-      clean(fallback.service) ||
-      "emergency_plumbing",
+      recoveredSpecialty
+        ? recoveredService
+        : clean(fallback.service) || "emergency_plumbing",
     title: clean(record.title || fallback.title),
     description: clean(record.description || fallback.description),
     locationText: clean(
@@ -271,6 +216,10 @@ function EmergencyRequest({ setPage }) {
     useState(null);
   const [selectionPending, setSelectionPending] = useState(false);
   const [selectionError, setSelectionError] = useState("");
+  const [
+    unsupportedRecoveredSpecialty,
+    setUnsupportedRecoveredSpecialty,
+  ] = useState("");
 
   const initialEmergencyRoute = useMemo(
     () =>
@@ -379,10 +328,19 @@ function EmergencyRequest({ setPage }) {
       }
 
       const recoveredRequest = result.emergencyRequest;
+      const recoveredSpecialty = clean(
+        recoveredRequest.serviceSpecialty ||
+          recoveredRequest.service_specialty
+      );
 
       setCanonicalRequest(recoveredRequest);
       setForm((current) =>
         buildDraftForm(recoveredRequest, current)
+      );
+      setUnsupportedRecoveredSpecialty(
+        normalizeEmergencySpecialtyForDisplay(recoveredSpecialty)
+          ? ""
+          : recoveredSpecialty
       );
       setSafety(buildSafetyForm(recoveredRequest));
       setPhase(getRecoveredPhase(recoveredRequest));
@@ -753,10 +711,22 @@ function EmergencyRequest({ setPage }) {
   };
 
   const copy = text[language] || text.en;
+  const unsupportedSpecialtyMessage =
+    unsupportedRecoveredSpecialty
+      ? isUnsupportedLegacyEmergencySpecialty(
+          unsupportedRecoveredSpecialty
+        )
+        ? language === "es"
+          ? "Preparación para Tormentas ya no está disponible. Selecciona un servicio de Emergencia compatible para continuar."
+          : "Storm Preparation is no longer available. Choose a supported Emergency service to continue."
+        : language === "es"
+          ? "El servicio guardado ya no está disponible. Selecciona un servicio de Emergencia compatible para continuar."
+          : "The saved specialty is no longer available. Choose a supported Emergency service to continue."
+      : "";
   const selectedService =
-    SERVICE_OPTIONS.find(
+    EMERGENCY_SERVICE_OPTIONS.find(
       (option) => option.value === form.service
-    ) || SERVICE_OPTIONS[0];
+    );
 
   const canonicalStatus = getRequestStatus(canonicalRequest);
   const editableDraft = isEditableEmergencyDraft(canonicalRequest);
@@ -771,6 +741,10 @@ function EmergencyRequest({ setPage }) {
 
     if (errorMessage) {
       setErrorMessage("");
+    }
+
+    if (field === "service" && value) {
+      setUnsupportedRecoveredSpecialty("");
     }
   }
 
@@ -796,8 +770,8 @@ function EmergencyRequest({ setPage }) {
 
     const payload = {
       category: "home_repair",
-      serviceDomain: selectedService.domain,
-      serviceSpecialty: selectedService.specialty,
+      serviceDomain: selectedService?.domain || "",
+      serviceSpecialty: selectedService?.value || "",
       title: clean(form.title),
       description: clean(form.description),
       locationText: clean(form.locationText),
@@ -837,6 +811,7 @@ function EmergencyRequest({ setPage }) {
     }
 
     setCanonicalRequest(result.emergencyRequest);
+    setUnsupportedRecoveredSpecialty("");
     setForm(
       buildDraftForm(result.emergencyRequest, {
         ...form,
@@ -1189,9 +1164,9 @@ function EmergencyRequest({ setPage }) {
           </div>
         )}
 
-        {errorMessage && (
+        {(errorMessage || unsupportedSpecialtyMessage) && (
           <div style={errorNotice} role="alert" aria-live="assertive">
-            {errorMessage}
+            {errorMessage || unsupportedSpecialtyMessage}
           </div>
         )}
 
@@ -1254,7 +1229,7 @@ function EmergencyRequest({ setPage }) {
                 {copy.chooseService}
               </option>
 
-              {SERVICE_OPTIONS.map((option) => (
+              {EMERGENCY_SERVICE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label[language] || option.label.en}
                 </option>

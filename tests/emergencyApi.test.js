@@ -459,8 +459,8 @@ test("draft creation uses authenticated POST without inventing state", async () 
 
   const payload = {
     category: "home_repair",
-    serviceDomain: "electrical",
-    serviceSpecialty: "emergency_wiring",
+    serviceDomain: "home_services",
+    serviceSpecialty: "emergency_electrical_service",
     title: "Partial outage",
     description: "Several rooms have no power.",
     locationText: "Cape Coral, FL",

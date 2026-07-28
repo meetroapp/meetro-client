@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import { EMERGENCY_SERVICE_OPTIONS } from "../utils/emergencySpecialties";
 import { getLanguage } from "../utils/language";
 
 function Emergency({ setPage }) {
@@ -41,38 +42,6 @@ function Emergency({ setPage }) {
         "Meetro connects service requests with professionals. It does not replace 911 or local emergency responders.",
       start: "Start Emergency Draft",
       back: "Back Home",
-      services: [
-        {
-          icon: "plumbing",
-          name: "Emergency Plumbing",
-          note: "Leaks, clogs, broken pipes",
-        },
-        {
-          icon: "electrical",
-          name: "Emergency Electrical",
-          note: "Power issues, outlets, breakers",
-        },
-        {
-          icon: "home",
-          name: "Roof Leak Repair",
-          note: "Storm leaks and roof damage",
-        },
-        {
-          icon: "lock",
-          name: "Locksmith",
-          note: "Lockouts, rekeys, broken locks",
-        },
-        {
-          icon: "warning",
-          name: "Storm Preparation",
-          note: "Shutters, sandbags, damage prevention",
-        },
-        {
-          icon: "emergency",
-          name: "Other Urgent Property Issue",
-          note: "Describe another urgent service need",
-        },
-      ],
     },
     es: {
       title: "Ayuda de Emergencia",
@@ -85,38 +54,6 @@ function Emergency({ setPage }) {
         "Meetro conecta solicitudes de servicio con profesionales. No reemplaza al 911 ni a los servicios de emergencia locales.",
       start: "Comenzar Borrador",
       back: "Regresar al Inicio",
-      services: [
-        {
-          icon: "plumbing",
-          name: "Plomería de Emergencia",
-          note: "Fugas, drenajes tapados, tuberías rotas",
-        },
-        {
-          icon: "electrical",
-          name: "Electricidad de Emergencia",
-          note: "Problemas eléctricos, enchufes y breakers",
-        },
-        {
-          icon: "home",
-          name: "Reparación de Techo",
-          note: "Goteras y daños en el techo",
-        },
-        {
-          icon: "lock",
-          name: "Cerrajero",
-          note: "Cerraduras, llaves y bloqueos",
-        },
-        {
-          icon: "warning",
-          name: "Preparación para Tormentas",
-          note: "Shutters, sacos de arena y prevención",
-        },
-        {
-          icon: "emergency",
-          name: "Otro Problema Urgente",
-          note: "Describe otra necesidad urgente de servicio",
-        },
-      ],
     },
   };
 
@@ -156,8 +93,8 @@ function Emergency({ setPage }) {
         </div>
 
         <div style={grid}>
-          {copy.services.map((service) => (
-            <article key={service.name} style={serviceCard}>
+          {EMERGENCY_SERVICE_OPTIONS.map((service) => (
+            <article key={service.value} style={serviceCard}>
               <div style={serviceTop}>
                 <div style={iconBox}>
                   <MeetroIcon
@@ -168,8 +105,13 @@ function Emergency({ setPage }) {
                 </div>
 
                 <div>
-                  <strong style={serviceName}>{service.name}</strong>
-                  <p style={serviceNote}>{service.note}</p>
+                  <strong style={serviceName}>
+                    {service.label[language] || service.label.en}
+                  </strong>
+                  <p style={serviceNote}>
+                    {service.description[language] ||
+                      service.description.en}
+                  </p>
                 </div>
               </div>
 
