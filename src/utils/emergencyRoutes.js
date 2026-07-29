@@ -1,7 +1,9 @@
 import { normalizeEmergencyRequestId } from "./emergencyApi.js";
+import { normalizeCanonicalEmergencySpecialty } from "./emergencySpecialties.js";
 
 export const EMERGENCY_REQUEST_ROUTE_PAGE = "emergencyRequest";
 export const EMERGENCY_REQUEST_ROUTE_PARAM = "requestId";
+export const EMERGENCY_SPECIALTY_ROUTE_PARAM = "serviceSpecialty";
 
 function cleanRouteValue(value) {
   return String(value ?? "").replace(/^#/, "").trim();
@@ -18,6 +20,7 @@ export function parseEmergencyRequestRoute(routeValue = "") {
       page,
       hasRequestId: false,
       requestId: null,
+      serviceSpecialty: "",
       valid: false,
     };
   }
@@ -29,13 +32,32 @@ export function parseEmergencyRequestRoute(routeValue = "") {
         params.get(EMERGENCY_REQUEST_ROUTE_PARAM)
       )
     : null;
+  const serviceSpecialty = normalizeCanonicalEmergencySpecialty(
+    params.get(EMERGENCY_SPECIALTY_ROUTE_PARAM)
+  );
 
   return {
     page,
     hasRequestId,
     requestId,
+    serviceSpecialty,
     valid: !hasRequestId || Boolean(requestId),
   };
+}
+
+export function buildEmergencyDraftRoute(serviceSpecialty) {
+  const canonicalSpecialty =
+    normalizeCanonicalEmergencySpecialty(serviceSpecialty);
+
+  if (!canonicalSpecialty) {
+    return EMERGENCY_REQUEST_ROUTE_PAGE;
+  }
+
+  const params = new URLSearchParams({
+    [EMERGENCY_SPECIALTY_ROUTE_PARAM]: canonicalSpecialty,
+  });
+
+  return `${EMERGENCY_REQUEST_ROUTE_PAGE}?${params.toString()}`;
 }
 
 export function buildEmergencyRequestRoute(emergencyRequestId) {

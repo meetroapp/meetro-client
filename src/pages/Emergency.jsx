@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import { buildEmergencyDraftRoute } from "../utils/emergencyRoutes";
 import { EMERGENCY_SERVICE_OPTIONS } from "../utils/emergencySpecialties";
 import { getLanguage } from "../utils/language";
 
@@ -118,7 +119,9 @@ function Emergency({ setPage }) {
               <button
                 type="button"
                 style={primaryButton}
-                onClick={() => setPage("emergencyRequest")}
+                onClick={() =>
+                  setPage(buildEmergencyDraftRoute(service.value))
+                }
               >
                 {copy.start}
               </button>

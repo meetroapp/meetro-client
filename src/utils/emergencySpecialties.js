@@ -72,6 +72,12 @@ const CANONICAL_SPECIALTIES = new Set(
   EMERGENCY_SERVICE_OPTIONS.map((option) => option.value)
 );
 
+export function normalizeCanonicalEmergencySpecialty(value) {
+  const specialty = String(value ?? "").trim();
+
+  return CANONICAL_SPECIALTIES.has(specialty) ? specialty : "";
+}
+
 const LEGACY_DISPLAY_ALIASES = Object.freeze({
   plumbing_repairs: "emergency_plumbing",
   electrical: "emergency_electrical_service",
@@ -82,9 +88,9 @@ const LEGACY_DISPLAY_ALIASES = Object.freeze({
 export function normalizeEmergencySpecialtyForDisplay(value) {
   const specialty = String(value ?? "").trim();
 
-  if (CANONICAL_SPECIALTIES.has(specialty)) {
-    return specialty;
-  }
+  const canonicalSpecialty =
+    normalizeCanonicalEmergencySpecialty(specialty);
+  if (canonicalSpecialty) return canonicalSpecialty;
 
   return LEGACY_DISPLAY_ALIASES[specialty] || "";
 }

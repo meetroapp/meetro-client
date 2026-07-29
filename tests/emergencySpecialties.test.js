@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   EMERGENCY_SERVICE_OPTIONS,
   isUnsupportedLegacyEmergencySpecialty,
+  normalizeCanonicalEmergencySpecialty,
   normalizeEmergencySpecialtyForDisplay,
 } from "../src/utils/emergencySpecialties.js";
 
@@ -37,6 +38,35 @@ test("Emergency exposes exactly the five approved canonical specialties", () => 
     ),
     true
   );
+});
+
+test("all five landing cards carry their own canonical values", () => {
+  assert.match(
+    emergencySource,
+    /buildEmergencyDraftRoute\(service\.value\)/
+  );
+
+  for (const specialty of CANONICAL_VALUES) {
+    assert.equal(
+      normalizeCanonicalEmergencySpecialty(specialty),
+      specialty
+    );
+  }
+});
+
+test("navigation hints never accept legacy display aliases", () => {
+  for (const unsupported of [
+    "locksmith",
+    "storm_preparation",
+    "roofing",
+    "electrical",
+    "plumbing_repairs",
+  ]) {
+    assert.equal(
+      normalizeCanonicalEmergencySpecialty(unsupported),
+      ""
+    );
+  }
 });
 
 test("landing page and request selector consume one curated inventory", () => {
@@ -77,6 +107,21 @@ test("Emergency Lockout submits the canonical lockout specialty", () => {
   assert.match(
     requestSource,
     /serviceSpecialty:\s*selectedService\?\.value/
+  );
+});
+
+test("preselection stays editable and payload follows the current selection", () => {
+  assert.match(
+    requestSource,
+    /value=\{form\.service\}[\s\S]*?onChange=\{\(event\) =>[\s\S]*?updateForm\("service", event\.target\.value\)/
+  );
+  assert.match(
+    requestSource,
+    /serviceSpecialty:\s*selectedService\?\.value/
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /id="emergency-service"[\s\S]{0,200}disabled=\{true\}/
   );
 });
 

@@ -102,7 +102,7 @@ function buildDraftForm(record = {}, fallback = {}) {
     service:
       recoveredSpecialty
         ? recoveredService
-        : clean(fallback.service) || "emergency_plumbing",
+        : clean(fallback.service),
     title: clean(record.title || fallback.title),
     description: clean(record.description || fallback.description),
     locationText: clean(
@@ -247,7 +247,7 @@ function EmergencyRequest({ setPage }) {
   );
 
   const [form, setForm] = useState(() => ({
-    service: "emergency_plumbing",
+    service: initialEmergencyRoute.serviceSpecialty || "",
     title: "",
     description: "",
     locationText: defaultAddress,

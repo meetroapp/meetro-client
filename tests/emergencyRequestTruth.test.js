@@ -12,9 +12,17 @@ const requestSource = readFileSync(
   "utf8"
 );
 
+const appSource = readFileSync(
+  new URL("../src/App.jsx", import.meta.url),
+  "utf8"
+);
+
 test("Emergency entry opens the canonical request and matching workflow", () => {
   assert.match(emergencySource, /Emergency requests available/);
-  assert.match(emergencySource, /setPage\("emergencyRequest"\)/);
+  assert.match(
+    emergencySource,
+    /buildEmergencyDraftRoute\(service\.value\)/
+  );
   assert.match(
     emergencySource,
     /connect with a compatible professional/
@@ -27,6 +35,37 @@ test("Emergency entry opens the canonical request and matching workflow", () => 
     /setPage\("emergencyBusinessSelection"\)/
   );
   assert.doesNotMatch(emergencySource, /localStorage/);
+});
+
+test("Emergency card selection uses bounded URL context without browser authority", () => {
+  assert.match(emergencySource, /buildEmergencyDraftRoute/);
+  assert.match(
+    requestSource,
+    /service:\s*initialEmergencyRoute\.serviceSpecialty \|\| ""/
+  );
+  assert.match(
+    requestSource,
+    /buildDraftForm\(recoveredRequest, current\)/
+  );
+
+  for (const forbidden of [
+    "localStorage.setItem",
+    "sessionStorage.setItem",
+  ]) {
+    assert.equal(emergencySource.includes(forbidden), false);
+    assert.equal(requestSource.includes(forbidden), false);
+  }
+});
+
+test("top-level navigation preserves query context while rendering the route page", () => {
+  assert.match(
+    appSource,
+    /const routePage = getRoutePage\(newPage\)/
+  );
+  assert.match(
+    appSource,
+    /window\.location\.hash = finalPage;[\s\S]*?setPageState\(finalRoutePage\)/
+  );
 });
 
 test("Emergency Request uses canonical draft, safety, recovery, submission, and cancellation commands", () => {

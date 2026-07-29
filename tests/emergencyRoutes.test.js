@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   EMERGENCY_REQUEST_ROUTE_PAGE,
+  buildEmergencyDraftRoute,
   buildEmergencyRequestRoute,
   parseEmergencyRequestRoute,
   replaceEmergencyRequestRoute,
@@ -17,6 +18,7 @@ test("Emergency route parser accepts exact canonical identity", () => {
       page: "emergencyRequest",
       hasRequestId: true,
       requestId: 41,
+      serviceSpecialty: "",
       valid: true,
     }
   );
@@ -29,8 +31,17 @@ test("Emergency route parser preserves blank new-draft route", () => {
       page: "emergencyRequest",
       hasRequestId: false,
       requestId: null,
+      serviceSpecialty: "",
       valid: true,
     }
+  );
+});
+
+test("generic Emergency entry carries no fabricated specialty", () => {
+  assert.equal(buildEmergencyDraftRoute(), "emergencyRequest");
+  assert.equal(
+    parseEmergencyRequestRoute("emergencyRequest").serviceSpecialty,
+    ""
   );
 });
 
@@ -51,6 +62,7 @@ test("Emergency route parser rejects malformed identity", () => {
     );
     assert.equal(parsed.hasRequestId, true);
     assert.equal(parsed.requestId, null);
+    assert.equal(parsed.serviceSpecialty, "");
     assert.equal(parsed.valid, false);
   }
 });
@@ -62,6 +74,7 @@ test("non-Emergency routes do not become Emergency identity", () => {
       page: "home",
       hasRequestId: false,
       requestId: null,
+      serviceSpecialty: "",
       valid: false,
     }
   );
@@ -81,6 +94,67 @@ test("Emergency route builder emits normalized exact IDs", () => {
   assert.equal(
     buildEmergencyRequestRoute("invalid"),
     "emergencyRequest"
+  );
+});
+
+test("Emergency new-draft routes carry only canonical specialty hints", () => {
+  const specialties = [
+    "emergency_plumbing",
+    "emergency_electrical_service",
+    "roof_leak_repair",
+    "emergency_lockout",
+    "handyman",
+  ];
+
+  for (const specialty of specialties) {
+    const route = buildEmergencyDraftRoute(specialty);
+
+    assert.equal(
+      route,
+      `emergencyRequest?serviceSpecialty=${specialty}`
+    );
+    assert.deepEqual(parseEmergencyRequestRoute(route), {
+      page: "emergencyRequest",
+      hasRequestId: false,
+      requestId: null,
+      serviceSpecialty: specialty,
+      valid: true,
+    });
+  }
+});
+
+test("unsupported specialty hints are ignored without legacy normalization", () => {
+  for (const specialty of [
+    "locksmith",
+    "storm_preparation",
+    "electrical",
+    "unknown",
+  ]) {
+    assert.equal(
+      buildEmergencyDraftRoute(specialty),
+      "emergencyRequest"
+    );
+    assert.equal(
+      parseEmergencyRequestRoute(
+        `emergencyRequest?serviceSpecialty=${specialty}`
+      ).serviceSpecialty,
+      ""
+    );
+  }
+});
+
+test("backend request identity remains distinct from specialty context", () => {
+  assert.deepEqual(
+    parseEmergencyRequestRoute(
+      "emergencyRequest?requestId=41&serviceSpecialty=handyman"
+    ),
+    {
+      page: "emergencyRequest",
+      hasRequestId: true,
+      requestId: 41,
+      serviceSpecialty: "handyman",
+      valid: true,
+    }
   );
 });
 
