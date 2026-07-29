@@ -462,6 +462,9 @@ function EmergencyRequest({ setPage }) {
   const text = {
     en: {
       title: "Emergency Draft",
+      requestPageTitle: "Emergency Request",
+      completedPageTitle: "Completed Emergency Request",
+      cancelledPageTitle: "Cancelled Emergency Request",
       intro:
         "Describe the urgent service need. Meetro will save a private draft before the safety review.",
       emergencyWarning:
@@ -543,6 +546,7 @@ function EmergencyRequest({ setPage }) {
       editDetails: "Edit Draft Details",
       back: "Back to Emergency Help",
       home: "Back Home",
+      viewMyEmergencyRequests: "View My Emergency Requests",
       required:
         "Service, title, description, and location are required.",
       requestFailed:
@@ -586,6 +590,9 @@ function EmergencyRequest({ setPage }) {
     },
     es: {
       title: "Borrador de Emergencia",
+      requestPageTitle: "Solicitud de Emergencia",
+      completedPageTitle: "Solicitud de Emergencia Completada",
+      cancelledPageTitle: "Solicitud de Emergencia Cancelada",
       intro:
         "Describe la necesidad urgente. Meetro guardará un borrador privado antes de la revisión de seguridad.",
       emergencyWarning:
@@ -667,6 +674,8 @@ function EmergencyRequest({ setPage }) {
       editDetails: "Editar Detalles",
       back: "Regresar a Ayuda de Emergencia",
       home: "Regresar al Inicio",
+      viewMyEmergencyRequests:
+        "Ver Mis Solicitudes de Emergencia",
       required:
         "El servicio, título, descripción y ubicación son obligatorios.",
       requestFailed:
@@ -732,6 +741,30 @@ function EmergencyRequest({ setPage }) {
   const editableDraft = isEditableEmergencyDraft(canonicalRequest);
   const cancellationAvailable =
     canCancelEmergencyRequest(canonicalRequest);
+  const pageTitle =
+    canonicalStatus === "cancelled"
+      ? copy.cancelledPageTitle
+      : ["completed", "resolved"].includes(canonicalStatus)
+        ? copy.completedPageTitle
+        : canonicalStatus === "safety_blocked"
+          ? copy.safetyTitle
+          : !editableDraft
+            ? copy.requestPageTitle
+            : ["safety", "complete"].includes(phase)
+              ? copy.safetyTitle
+              : copy.title;
+  const showWorkCenterAction = [
+    "ready_for_distribution",
+    "active",
+    "selection_pending",
+    "assigned",
+    "professional_en_route",
+    "professional_arrived",
+    "in_service",
+    "work_in_progress",
+    "completed",
+    "resolved",
+  ].includes(canonicalStatus);
 
   function updateForm(field, value) {
     setForm((current) => ({
@@ -1127,7 +1160,7 @@ function EmergencyRequest({ setPage }) {
         </button>
 
         <h1 id="emergency-request-title" style={title}>
-          {copy.title}
+          {pageTitle}
         </h1>
 
         <p style={intro}>{copy.intro}</p>
@@ -1706,6 +1739,17 @@ function EmergencyRequest({ setPage }) {
                       );
                     })}
                 </div>
+              )}
+
+              {showWorkCenterAction && (
+                <button
+                  type="button"
+                  style={secondaryButton}
+                  onClick={() => setPage("myRequests")}
+                  disabled={pending}
+                >
+                  {copy.viewMyEmergencyRequests}
+                </button>
               )}
 
               {cancellationAvailable && (

@@ -7,11 +7,14 @@ import {
   EMERGENCY_DISPATCH_ACTIONS,
   cancelEmergencyRequest,
   createEmergencyDraft,
+  getEmergencyRequests,
   getEmergencyRequest,
   listHomeownerEmergencyResponses,
   listProfessionalEmergencyOpportunities,
   normalizeEmergencyApiResult,
   normalizeEmergencyRequestId,
+  normalizeEmergencyRequestSummary,
+  normalizeEmergencyRequestsResult,
   prepareEmergencyRequest,
   respondToEmergencyOpportunity,
   saveEmergencySafetyAssessment,
@@ -90,6 +93,10 @@ test("Emergency endpoint inventory matches the certified backend contract", () =
     EMERGENCY_API_ENDPOINTS.createDraft,
     "/emergency-requests/drafts"
   );
+  assert.equal(
+    EMERGENCY_API_ENDPOINTS.requests,
+    "/emergency-requests"
+  );
 
   assert.equal(
     EMERGENCY_API_ENDPOINTS.request(41),
@@ -127,6 +134,206 @@ test("Emergency endpoint inventory matches the certified backend contract", () =
     EMERGENCY_API_ENDPOINTS.selectResponse(41, 51),
     "/emergency-requests/41/responses/51/select"
   );
+});
+
+function canonicalEmergencySummary(overrides = {}) {
+  return {
+    emergencyRequestId: 41,
+    title: "Active pipe leak",
+    serviceSpecialty: "emergency_plumbing",
+    status: "ready_for_distribution",
+    createdAt: "2026-07-29T14:00:00.000Z",
+    requestedAt: "2026-07-29T14:02:00.000Z",
+    assignedAt: null,
+    enRouteAt: null,
+    arrivedAt: null,
+    workStartedAt: null,
+    completedAt: null,
+    cancelledAt: null,
+    expiredAt: null,
+    availableResponseCount: 0,
+    hasSelectedProfessional: false,
+    ...overrides,
+  };
+}
+
+test("Emergency collection uses authenticated GET with bounded default options", async () => {
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "EMERGENCY_REQUESTS_RETRIEVED",
+      emergencyRequests: [],
+    },
+  });
+
+  const result = await getEmergencyRequests(
+    {},
+    {
+      authFetchImpl: transport.authFetchImpl,
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.emergencyRequests, []);
+  assert.deepEqual(transport.calls[0], {
+    endpoint: "/emergency-requests?view=active&limit=25",
+    options: {
+      method: "GET",
+      cache: "no-store",
+    },
+    setPage: undefined,
+  });
+});
+
+test("Emergency collection serializes valid views and bounded limits", async () => {
+  for (const [view, limit] of [
+    ["active", 1],
+    ["history", 25],
+    ["all", 50],
+  ]) {
+    const transport = createTransport({
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        code: "EMERGENCY_REQUESTS_RETRIEVED",
+        emergencyRequests: [],
+      },
+    });
+
+    const result = await getEmergencyRequests(
+      { view, limit },
+      {
+        authFetchImpl: transport.authFetchImpl,
+      }
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(
+      transport.calls[0].endpoint,
+      `/emergency-requests?view=${view}&limit=${limit}`
+    );
+  }
+});
+
+test("invalid Emergency collection options fail before transport", async () => {
+  const transport = createTransport();
+
+  for (const options of [
+    { view: "unsupported" },
+    { limit: 0 },
+    { limit: -1 },
+    { limit: 51 },
+    { limit: "25" },
+    { homeownerId: 99 },
+    null,
+  ]) {
+    const result = await getEmergencyRequests(options, {
+      authFetchImpl: transport.authFetchImpl,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 400);
+    assert.equal(
+      result.code,
+      "EMERGENCY_REQUEST_LIST_INVALID"
+    );
+  }
+
+  assert.equal(transport.calls.length, 0);
+});
+
+test("Emergency collection normalizes the dedicated privacy-safe summary", async () => {
+  const summary = canonicalEmergencySummary({
+    availableResponseCount: 2,
+    hasSelectedProfessional: true,
+  });
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "EMERGENCY_REQUESTS_RETRIEVED",
+      emergencyRequests: [summary],
+    },
+  });
+
+  const result = await getEmergencyRequests(
+    { view: "active", limit: 25 },
+    {
+      authFetchImpl: transport.authFetchImpl,
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.emergencyRequests, [summary]);
+  assert.deepEqual(
+    Object.keys(result.emergencyRequests[0]),
+    Object.keys(canonicalEmergencySummary())
+  );
+});
+
+test("Emergency summary normalization rejects malformed identity, count, status, timestamps, and private fields", () => {
+  for (const summary of [
+    canonicalEmergencySummary({ emergencyRequestId: 0 }),
+    canonicalEmergencySummary({
+      emergencyRequestId: "not-an-id",
+    }),
+    canonicalEmergencySummary({
+      availableResponseCount: -1,
+    }),
+    canonicalEmergencySummary({
+      availableResponseCount: "2",
+    }),
+    canonicalEmergencySummary({
+      status: "professional_selected",
+    }),
+    canonicalEmergencySummary({
+      requestedAt: 1722261600000,
+    }),
+    canonicalEmergencySummary({
+      requestedAt: "not-a-timestamp",
+    }),
+    canonicalEmergencySummary({
+      locationText: "Private address",
+    }),
+    canonicalEmergencySummary({
+      homeownerId: 99,
+    }),
+    canonicalEmergencySummary({
+      relationshipId: 151,
+    }),
+    canonicalEmergencySummary({
+      conversationId: 201,
+    }),
+  ]) {
+    assert.equal(
+      normalizeEmergencyRequestSummary(summary),
+      null
+    );
+  }
+});
+
+test("one malformed Emergency summary invalidates the authoritative collection", () => {
+  const result = normalizeEmergencyRequestsResult({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "EMERGENCY_REQUESTS_RETRIEVED",
+      emergencyRequests: [
+        canonicalEmergencySummary(),
+        canonicalEmergencySummary({
+          availableResponseCount: -1,
+        }),
+      ],
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.code,
+    EMERGENCY_CLIENT_ERROR.INVALID_RESPONSE
+  );
+  assert.deepEqual(result.emergencyRequests, []);
 });
 
 test("professional Emergency opportunities expose only the bounded public projection", async () => {

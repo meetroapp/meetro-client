@@ -1,7 +1,11 @@
 import { authFetch } from "./authFetch.js";
+import {
+  isSupportedEmergencySummaryStatus,
+} from "./emergencySummary.js";
 
 export const EMERGENCY_API_ENDPOINTS = Object.freeze({
   createDraft: "/emergency-requests/drafts",
+  requests: "/emergency-requests",
   professionalOpportunities:
     "/professional-emergency-opportunities",
   professionalResponse: (emergencyRequestId) =>
@@ -238,6 +242,231 @@ function invalidEmergencyRelationshipIdResult() {
     code: "INVALID_EMERGENCY_RELATIONSHIP_ID",
     message: "A valid Emergency response ID is required.",
     status: 400,
+  });
+}
+
+const EMERGENCY_SUMMARY_FIELDS = Object.freeze([
+  "emergencyRequestId",
+  "title",
+  "serviceSpecialty",
+  "status",
+  "createdAt",
+  "requestedAt",
+  "assignedAt",
+  "enRouteAt",
+  "arrivedAt",
+  "workStartedAt",
+  "completedAt",
+  "cancelledAt",
+  "expiredAt",
+  "availableResponseCount",
+  "hasSelectedProfessional",
+]);
+
+function normalizeNullableTimestamp(value) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      valid: true,
+      value: null,
+    };
+  }
+
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    !Number.isFinite(Date.parse(value))
+  ) {
+    return {
+      valid: false,
+      value: null,
+    };
+  }
+
+  return {
+    valid: true,
+    value: value.trim(),
+  };
+}
+
+export function normalizeEmergencyRequestSummary(record) {
+  if (
+    !isRecord(record) ||
+    Object.keys(record).some(
+      (field) => !EMERGENCY_SUMMARY_FIELDS.includes(field)
+    )
+  ) {
+    return null;
+  }
+
+  const emergencyRequestId = normalizeEmergencyRequestId(
+    record.emergencyRequestId
+  );
+  const title = cleanText(record.title);
+  const serviceSpecialty = cleanText(
+    record.serviceSpecialty
+  );
+  const status = cleanText(record.status);
+  const availableResponseCount =
+    record.availableResponseCount;
+  const createdAt = normalizeNullableTimestamp(
+    record.createdAt
+  );
+  const timestampFields = [
+    "requestedAt",
+    "assignedAt",
+    "enRouteAt",
+    "arrivedAt",
+    "workStartedAt",
+    "completedAt",
+    "cancelledAt",
+    "expiredAt",
+  ];
+  const timestamps = Object.fromEntries(
+    timestampFields.map((field) => [
+      field,
+      normalizeNullableTimestamp(record[field]),
+    ])
+  );
+
+  if (
+    !emergencyRequestId ||
+    !title ||
+    !serviceSpecialty ||
+    !isSupportedEmergencySummaryStatus(status) ||
+    !createdAt.valid ||
+    !createdAt.value ||
+    !Number.isSafeInteger(availableResponseCount) ||
+    availableResponseCount < 0 ||
+    typeof record.hasSelectedProfessional !== "boolean" ||
+    Object.values(timestamps).some(
+      (timestamp) => !timestamp.valid
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    emergencyRequestId,
+    title,
+    serviceSpecialty,
+    status,
+    createdAt: createdAt.value,
+    ...Object.fromEntries(
+      Object.entries(timestamps).map(([field, timestamp]) => [
+        field,
+        timestamp.value,
+      ])
+    ),
+    availableResponseCount,
+    hasSelectedProfessional:
+      record.hasSelectedProfessional,
+  };
+}
+
+export function normalizeEmergencyRequestsResult(result) {
+  const normalized = normalizeTransportResult(
+    result,
+    "Emergency requests could not be loaded."
+  );
+  const source = normalized.data?.emergencyRequests;
+
+  if (!normalized.ok || !Array.isArray(source)) {
+    return {
+      ...normalized,
+      ok: false,
+      emergencyRequests: [],
+    };
+  }
+
+  const emergencyRequests = source
+    .map(normalizeEmergencyRequestSummary)
+    .filter(Boolean);
+
+  if (emergencyRequests.length !== source.length) {
+    return {
+      ...normalized,
+      ok: false,
+      code: EMERGENCY_CLIENT_ERROR.INVALID_RESPONSE,
+      message:
+        "The Emergency request collection was invalid.",
+      emergencyRequests: [],
+    };
+  }
+
+  return {
+    ...normalized,
+    emergencyRequests,
+  };
+}
+
+function normalizeEmergencyRequestListOptions(options = {}) {
+  if (!isRecord(options)) return null;
+
+  const allowedFields = new Set(["view", "limit"]);
+  if (
+    Object.keys(options).some(
+      (field) => !allowedFields.has(field)
+    )
+  ) {
+    return null;
+  }
+
+  const view =
+    options.view === undefined || options.view === ""
+      ? "active"
+      : options.view;
+  const limit =
+    options.limit === undefined || options.limit === ""
+      ? 25
+      : options.limit;
+
+  if (
+    !["active", "history", "all"].includes(view) ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 50
+  ) {
+    return null;
+  }
+
+  return {
+    view,
+    limit,
+  };
+}
+
+export function getEmergencyRequests(
+  options = {},
+  {
+    authFetchImpl = authFetch,
+    setPage,
+  } = {}
+) {
+  const normalizedOptions =
+    normalizeEmergencyRequestListOptions(options);
+
+  if (!normalizedOptions) {
+    return Promise.resolve(
+      buildEmergencyClientFailure({
+        code: "EMERGENCY_REQUEST_LIST_INVALID",
+        message:
+          "The Emergency request list options are invalid.",
+        status: 400,
+      })
+    );
+  }
+
+  const params = new URLSearchParams({
+    view: normalizedOptions.view,
+    limit: String(normalizedOptions.limit),
+  });
+
+  return executeEmergencyRequest({
+    endpoint: `${EMERGENCY_API_ENDPOINTS.requests}?${params.toString()}`,
+    method: "GET",
+    authFetchImpl,
+    setPage,
+    normalizeResult: normalizeEmergencyRequestsResult,
   });
 }
 
