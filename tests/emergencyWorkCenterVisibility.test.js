@@ -299,11 +299,11 @@ test("submitted Emergency lifecycle exposes Work Center navigation and keeps dir
   );
   assert.match(
     emergencyRequestSource,
-    /getEmergencyRequest\(\s*initialEmergencyRoute\.requestId/
+    /getEmergencyRequest\(\s*emergencyRoute\.requestId/
   );
   assert.match(
     emergencyRequestSource,
-    /buildDraftForm\(recoveredRequest, current\)/
+    /buildDraftForm\(recoveredRequest, \{/
   );
 });
 

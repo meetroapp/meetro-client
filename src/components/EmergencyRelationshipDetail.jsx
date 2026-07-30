@@ -34,6 +34,7 @@ function EmergencyRelationshipDetail({
   onOpenConversation,
   onSelectResponse,
   onCancelRequest,
+  workflowAction,
 }) {
   if (!detail) return null;
 
@@ -249,6 +250,22 @@ function EmergencyRelationshipDetail({
                 {copy.nextStep}
               </h2>
               <p style={sectionText}>{detail.nextStep}</p>
+              {String(workflowAction?.label || "").trim() &&
+                typeof workflowAction?.onClick === "function" && (
+                  <button
+                    type="button"
+                    style={{
+                      ...workflowActionButton,
+                      ...(mutationPending
+                        ? disabledAction
+                        : {}),
+                    }}
+                    disabled={mutationPending}
+                    onClick={workflowAction.onClick}
+                  >
+                    {workflowAction.label}
+                  </button>
+                )}
             </section>
 
             {detail.location && (
@@ -438,6 +455,23 @@ const backButton = {
   fontSize: "14px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const workflowActionButton = {
+  width: "100%",
+  minWidth: 0,
+  minHeight: "48px",
+  marginTop: "12px",
+  padding: "12px 16px",
+  border: "1px solid var(--meetro-color-forest, #1f4d34)",
+  borderRadius: "16px",
+  background: "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxSizing: "border-box",
+  overflowWrap: "anywhere",
 };
 
 const relationshipHeader = {

@@ -14,8 +14,13 @@ import {
 } from "../utils/emergencyApi";
 import {
   buildEmergencyRequestRoute,
+  captureEmergencyRouteOwnership,
+  createEmergencyRouteSessionController,
+  ownEmergencyRequest,
   parseEmergencyRequestRoute,
   replaceEmergencyRequestRoute,
+  selectEmergencyRequestForRoute,
+  settleEmergencyRouteOperation,
 } from "../utils/emergencyRoutes";
 import {
   EMERGENCY_SERVICE_OPTIONS,
@@ -201,11 +206,33 @@ function buildSafetyForm(record = {}) {
   };
 }
 
+function readCurrentEmergencyRoute() {
+  return parseEmergencyRequestRoute(
+    typeof window === "undefined"
+      ? ""
+      : window.location.hash
+  );
+}
+
 function EmergencyRequest({ setPage }) {
   const safetyReviewHeadingRef = useRef(null);
+  const [routeSessionController] = useState(() =>
+    createEmergencyRouteSessionController(
+      readCurrentEmergencyRoute()
+    )
+  );
+
+  const [routeSession, setRouteSession] = useState(
+    () => routeSessionController.current()
+  );
+  const emergencyRoute = routeSession.route;
   const [language, setLanguage] = useState(getLanguage());
-  const [canonicalRequest, setCanonicalRequest] = useState(null);
+  const [ownedCanonicalRequest, setOwnedCanonicalRequest] =
+    useState(null);
   const [phase, setPhase] = useState("details");
+  const [draftWorkflowOpen, setDraftWorkflowOpen] = useState(
+    () => !emergencyRoute.hasRequestId
+  );
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -225,30 +252,19 @@ function EmergencyRequest({ setPage }) {
     setUnsupportedRecoveredSpecialty,
   ] = useState("");
 
-  const initialEmergencyRoute = useMemo(
-    () =>
-      parseEmergencyRequestRoute(
-        typeof window === "undefined"
-          ? ""
-          : window.location.hash
-      ),
-    []
-  );
   const [recoveryFailureKind, setRecoveryFailureKind] =
     useState(() =>
-      initialEmergencyRoute.hasRequestId &&
-      !initialEmergencyRoute.valid
+      emergencyRoute.hasRequestId &&
+      !emergencyRoute.valid
         ? "invalid"
         : ""
     );
 
   const [recoveryState, setRecoveryState] = useState(() =>
-    initialEmergencyRoute.hasRequestId &&
-    (
-      !initialEmergencyRoute.valid ||
-      !initialEmergencyRoute.requestId
-    )
-      ? "failed"
+    emergencyRoute.hasRequestId
+      ? emergencyRoute.valid && emergencyRoute.requestId
+        ? "loading"
+        : "failed"
       : "idle"
   );
 
@@ -258,7 +274,7 @@ function EmergencyRequest({ setPage }) {
   );
 
   const [form, setForm] = useState(() => ({
-    service: initialEmergencyRoute.serviceSpecialty || "",
+    service: emergencyRoute.serviceSpecialty || "",
     title: "",
     description: "",
     locationText: defaultAddress,
@@ -269,6 +285,10 @@ function EmergencyRequest({ setPage }) {
   const [safety, setSafety] = useState({
     ...INITIAL_SAFETY,
   });
+  const canonicalRequest = selectEmergencyRequestForRoute(
+    routeSession,
+    ownedCanonicalRequest
+  );
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -302,33 +322,158 @@ function EmergencyRequest({ setPage }) {
   }, []);
 
   useEffect(() => {
-    if (!initialEmergencyRoute.hasRequestId) {
-      return undefined;
-    }
+    const handleEmergencyRouteChange = () => {
+      const nextSession =
+        routeSessionController.transition(
+          readCurrentEmergencyRoute()
+        );
+      const nextRoute = nextSession.route;
 
-    if (
-      !initialEmergencyRoute.valid ||
-      !initialEmergencyRoute.requestId
-    ) {
+      setOwnedCanonicalRequest(null);
+      setPhase("details");
+      setDraftWorkflowOpen(!nextRoute.hasRequestId);
+      setPending(false);
+      setMessage("");
+      setErrorMessage("");
+      setCancelConfirmationOpen(false);
+      setSubmissionConfirmationOpen(false);
+      setResponsesPhase("idle");
+      setResponses([]);
+      setSelectedResponse(null);
+      setCanonicalConversationId(null);
+      setSelectionPending(false);
+      setSelectionError("");
+      setUnsupportedRecoveredSpecialty("");
+      setForm({
+        service: nextRoute.serviceSpecialty || "",
+        title: "",
+        description: "",
+        locationText: nextRoute.hasRequestId
+          ? ""
+          : defaultAddress,
+        unitNumber: "",
+        accessNotes: "",
+      });
+      setSafety({ ...INITIAL_SAFETY });
+      setRecoveryState(
+        nextRoute.hasRequestId
+          ? nextRoute.valid && nextRoute.requestId
+            ? "loading"
+            : "failed"
+          : "idle"
+      );
+      setRecoveryFailureKind(
+        nextRoute.hasRequestId && !nextRoute.valid
+          ? "invalid"
+          : ""
+      );
+      setRouteSession(nextSession);
+    };
+
+    window.addEventListener(
+      "hashchange",
+      handleEmergencyRouteChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "hashchange",
+        handleEmergencyRouteChange
+      );
+    };
+  }, [defaultAddress, routeSessionController]);
+
+  useEffect(() => {
+    const controller = routeSessionController;
+    const loadOwnership =
+      captureEmergencyRouteOwnership(routeSession);
+
+    if (canonicalRequest) {
       return undefined;
     }
 
     let active = true;
 
-    async function recoverCanonicalDraft() {
+    async function resolveEmergencyRoute() {
+      await Promise.resolve();
+
+      if (
+        !active ||
+        !controller.owns(loadOwnership)
+      ) {
+        return;
+      }
+
+      setOwnedCanonicalRequest(null);
+      setPhase("details");
+      setDraftWorkflowOpen(!emergencyRoute.hasRequestId);
+      setPending(false);
+      setMessage("");
+      setErrorMessage("");
+      setCancelConfirmationOpen(false);
+      setSubmissionConfirmationOpen(false);
+      setResponsesPhase("idle");
+      setResponses([]);
+      setSelectedResponse(null);
+      setCanonicalConversationId(null);
+      setSelectionPending(false);
+      setSelectionError("");
+      setUnsupportedRecoveredSpecialty("");
+      setForm({
+        service: emergencyRoute.serviceSpecialty || "",
+        title: "",
+        description: "",
+        locationText: emergencyRoute.hasRequestId
+          ? ""
+          : defaultAddress,
+        unitNumber: "",
+        accessNotes: "",
+      });
+      setSafety({
+        ...INITIAL_SAFETY,
+      });
+
+      if (!emergencyRoute.hasRequestId) {
+        setRecoveryState("idle");
+        setRecoveryFailureKind("");
+        return;
+      }
+
+      if (
+        !emergencyRoute.valid ||
+        !emergencyRoute.requestId
+      ) {
+        setRecoveryState("failed");
+        setRecoveryFailureKind("invalid");
+        return;
+      }
+
       setRecoveryState("loading");
       setRecoveryFailureKind("");
-      setErrorMessage("");
-      setMessage("");
 
-      const result = await getEmergencyRequest(
-        initialEmergencyRoute.requestId,
-        {
+      const operation = await settleEmergencyRouteOperation(
+        controller,
+        loadOwnership,
+        getEmergencyRequest(emergencyRoute.requestId, {
           setPage,
-        }
+        })
       );
 
-      if (!active) return;
+      if (
+        !active ||
+        operation.status === "stale"
+      ) {
+        return;
+      }
+
+      if (operation.status === "rejected") {
+        setRecoveryState("failed");
+        setRecoveryFailureKind("unavailable");
+        setErrorMessage("");
+        return;
+      }
+
+      const result = operation.value;
 
       if (!result.ok || !result.emergencyRequest) {
         setRecoveryState("failed");
@@ -349,9 +494,32 @@ function EmergencyRequest({ setPage }) {
           recoveredRequest.service_specialty
       );
 
-      setCanonicalRequest(recoveredRequest);
-      setForm((current) =>
-        buildDraftForm(recoveredRequest, current)
+      const nextOwnedRequest = ownEmergencyRequest(
+        routeSession,
+        recoveredRequest
+      );
+
+      if (
+        !selectEmergencyRequestForRoute(
+          routeSession,
+          nextOwnedRequest
+        )
+      ) {
+        setRecoveryState("failed");
+        setRecoveryFailureKind("unavailable");
+        return;
+      }
+
+      setOwnedCanonicalRequest(nextOwnedRequest);
+      setForm(
+        buildDraftForm(recoveredRequest, {
+          service: emergencyRoute.serviceSpecialty || "",
+          title: "",
+          description: "",
+          locationText: "",
+          unitNumber: "",
+          accessNotes: "",
+        })
       );
       setUnsupportedRecoveredSpecialty(
         normalizeEmergencySpecialtyForDisplay(recoveredSpecialty)
@@ -365,15 +533,20 @@ function EmergencyRequest({ setPage }) {
       setRecoveryState("loaded");
     }
 
-    recoverCanonicalDraft();
+    resolveEmergencyRoute();
 
     return () => {
       active = false;
     };
   }, [
-    initialEmergencyRoute.hasRequestId,
-    initialEmergencyRoute.requestId,
-    initialEmergencyRoute.valid,
+    canonicalRequest,
+    defaultAddress,
+    emergencyRoute.hasRequestId,
+    emergencyRoute.requestId,
+    emergencyRoute.serviceSpecialty,
+    emergencyRoute.valid,
+    routeSession,
+    routeSessionController,
     setPage,
   ]);
 
@@ -416,11 +589,20 @@ function EmergencyRequest({ setPage }) {
   }, [canonicalRequestId, phase]);
 
   useEffect(() => {
+    const controller = routeSessionController;
+    const enrichmentOwnership =
+      captureEmergencyRouteOwnership(routeSession);
+
     if (!canonicalRequestId || !shouldLoadResponses) {
       let active = true;
 
       Promise.resolve().then(() => {
-        if (!active) return;
+        if (
+          !active ||
+          !controller.owns(enrichmentOwnership)
+        ) {
+          return;
+        }
         setResponses([]);
         setResponsesPhase("idle");
         setCanonicalConversationId(null);
@@ -435,32 +617,60 @@ function EmergencyRequest({ setPage }) {
 
     async function loadCanonicalResponseState() {
       await Promise.resolve();
-      if (!active) return;
+      if (
+        !active ||
+        !controller.owns(enrichmentOwnership)
+      ) {
+        return;
+      }
 
       setResponses([]);
       setResponsesPhase("loading");
       setCanonicalConversationId(null);
 
-      const [responseResult, conversationResult] =
+      const [responseOperation, conversationOperation] =
         await Promise.all([
-          listHomeownerEmergencyResponses(canonicalRequestId, {
-            setPage,
-          }),
-          fetchCanonicalConversations("personal", {
-            setPage,
-          }),
+          settleEmergencyRouteOperation(
+            controller,
+            enrichmentOwnership,
+            listHomeownerEmergencyResponses(
+              canonicalRequestId,
+              { setPage }
+            )
+          ),
+          settleEmergencyRouteOperation(
+            controller,
+            enrichmentOwnership,
+            fetchCanonicalConversations("personal", {
+              setPage,
+            })
+          ),
         ]);
 
-      if (!active) return;
+      if (
+        !active ||
+        !controller.owns(enrichmentOwnership)
+      ) {
+        return;
+      }
 
-      if (!responseResult.ok) {
+      const responseResult = responseOperation.value;
+      const conversationResult = conversationOperation.value;
+
+      if (
+        responseOperation.status === "rejected" ||
+        !responseResult?.ok
+      ) {
         setResponsesPhase("error");
       } else {
         setResponses(responseResult.responses);
         setResponsesPhase("ready");
       }
 
-      if (conversationResult.ok) {
+      if (
+        conversationOperation.status === "fulfilled" &&
+        conversationResult?.ok
+      ) {
         const conversation = findCanonicalEmergencyConversation(
           conversationResult.conversations,
           canonicalRequestId
@@ -477,7 +687,13 @@ function EmergencyRequest({ setPage }) {
     return () => {
       active = false;
     };
-  }, [canonicalRequestId, shouldLoadResponses, setPage]);
+  }, [
+    canonicalRequestId,
+    routeSession,
+    routeSessionController,
+    shouldLoadResponses,
+    setPage,
+  ]);
 
   const text = {
     en: {
@@ -563,6 +779,9 @@ function EmergencyRequest({ setPage }) {
       submittedBody:
         "This Emergency request is active and available to compatible professionals. Select a response to create the canonical conversation and begin dispatch.",
       editDetails: "Edit Draft Details",
+      continueDraft: "Continue Emergency Draft",
+      completeSafetyReview: "Complete Safety Review",
+      prepareRequest: "Prepare Request",
       back: "Back to Emergency Help",
       home: "Back Home",
       viewMyEmergencyRequests: "View My Emergency Requests",
@@ -686,6 +905,9 @@ function EmergencyRequest({ setPage }) {
       submittedBody:
         "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Selecciona una respuesta para crear la conversación canónica e iniciar el despacho.",
       editDetails: "Editar Detalles",
+      continueDraft: "Continuar Borrador de Emergencia",
+      completeSafetyReview: "Completar Revisión de Seguridad",
+      prepareRequest: "Preparar Solicitud",
       back: "Regresar a Ayuda de Emergencia",
       home: "Regresar al Inicio",
       viewMyEmergencyRequests:
@@ -749,6 +971,19 @@ function EmergencyRequest({ setPage }) {
 
   const canonicalStatus = getRequestStatus(canonicalRequest);
   const editableDraft = isEditableEmergencyDraft(canonicalRequest);
+  const showDraftWorkflow = Boolean(
+    draftWorkflowOpen &&
+      (
+        !emergencyRoute.hasRequestId ||
+        (canonicalRequest && editableDraft)
+      )
+  );
+  const draftWorkflowActionLabel =
+    phase === "complete"
+      ? copy.prepareRequest
+      : phase === "safety"
+        ? copy.completeSafetyReview
+        : copy.continueDraft;
   const cancellationAvailable =
     canCancelEmergencyRequest(canonicalRequest);
   const pageTitle =
@@ -827,6 +1062,42 @@ function EmergencyRequest({ setPage }) {
     }
   }
 
+  function synchronizeCreatedEmergencyRequest(requestId) {
+    const route = buildEmergencyRequestRoute(requestId);
+    const parsedRoute = parseEmergencyRequestRoute(route);
+
+    if (
+      !parsedRoute.valid ||
+      !parsedRoute.hasRequestId ||
+      !parsedRoute.requestId
+    ) {
+      return null;
+    }
+
+    const nextSession =
+      routeSessionController.transition(parsedRoute);
+    replaceEmergencyRequestRoute(parsedRoute.requestId);
+    setRouteSession(nextSession);
+    return nextSession;
+  }
+
+  function ownCanonicalRequestForSession(
+    emergencyRequest,
+    session = routeSessionController.current()
+  ) {
+    const ownedRequest = ownEmergencyRequest(
+      session,
+      emergencyRequest
+    );
+
+    return selectEmergencyRequestForRoute(
+      session,
+      ownedRequest
+    )
+      ? ownedRequest
+      : null;
+  }
+
   async function submitDetails(event) {
     event.preventDefault();
 
@@ -858,27 +1129,64 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
     setPending(true);
     setErrorMessage("");
     setMessage("");
 
     const requestId = getRequestId(canonicalRequest);
-    const result = requestId
-      ? await updateEmergencyDraft(requestId, payload, {
-          setPage,
-        })
-      : await createEmergencyDraft(payload, {
-          setPage,
-        });
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      requestId
+        ? updateEmergencyDraft(requestId, payload, {
+            setPage,
+          })
+        : createEmergencyDraft(payload, {
+            setPage,
+          })
+    );
+
+    if (operation.status === "stale") {
+      return;
+    }
 
     setPending(false);
+
+    if (operation.status === "rejected") {
+      setErrorMessage(copy.requestFailed);
+      return;
+    }
+
+    const result = operation.value;
 
     if (!result.ok || !result.emergencyRequest) {
       setErrorMessage(result.message || copy.requestFailed);
       return;
     }
 
-    setCanonicalRequest(result.emergencyRequest);
+    const canonicalRequestId =
+      getRequestId(result.emergencyRequest);
+    const owningSession = requestId
+      ? controller.current()
+      : synchronizeCreatedEmergencyRequest(
+          canonicalRequestId
+        );
+    const nextOwnedRequest = owningSession
+      ? ownCanonicalRequestForSession(
+          result.emergencyRequest,
+          owningSession
+        )
+      : null;
+
+    if (!nextOwnedRequest) {
+      setErrorMessage(copy.requestFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
     setUnsupportedRecoveredSpecialty("");
     setForm(
       buildDraftForm(result.emergencyRequest, {
@@ -887,10 +1195,7 @@ function EmergencyRequest({ setPage }) {
       })
     );
 
-    const canonicalRequestId =
-      getRequestId(result.emergencyRequest);
-
-    if (canonicalRequestId) {
+    if (requestId && canonicalRequestId) {
       replaceEmergencyRequestRoute(canonicalRequestId);
     }
 
@@ -915,31 +1220,58 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
     setPending(true);
     setErrorMessage("");
     setMessage("");
 
-    const result = await saveEmergencySafetyAssessment(
-      requestId,
-      {
-        ...safety,
-        additionalSafetyContext: clean(
-          safety.additionalSafetyContext
-        ),
-      },
-      {
-        setPage,
-      }
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      saveEmergencySafetyAssessment(
+        requestId,
+        {
+          ...safety,
+          additionalSafetyContext: clean(
+            safety.additionalSafetyContext
+          ),
+        },
+        {
+          setPage,
+        }
+      )
     );
 
+    if (operation.status === "stale") {
+      return;
+    }
+
     setPending(false);
+
+    if (operation.status === "rejected") {
+      setErrorMessage(copy.safetyFailed);
+      return;
+    }
+
+    const result = operation.value;
 
     if (!result.ok || !result.emergencyRequest) {
       setErrorMessage(result.message || copy.safetyFailed);
       return;
     }
 
-    setCanonicalRequest(result.emergencyRequest);
+    const nextOwnedRequest = ownCanonicalRequestForSession(
+      result.emergencyRequest
+    );
+
+    if (!nextOwnedRequest) {
+      setErrorMessage(copy.safetyFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
     setMessage(copy.safetySaved);
     setPhase("complete");
   }
@@ -953,6 +1285,18 @@ function EmergencyRequest({ setPage }) {
     setPhase("details");
     setMessage("");
     setErrorMessage("");
+  }
+
+  function openDraftWorkflow() {
+    if (!canonicalRequest || !editableDraft || pending) {
+      return;
+    }
+
+    setDraftWorkflowOpen(true);
+    setMessage("");
+    setErrorMessage("");
+    setCancelConfirmationOpen(false);
+    setSubmissionConfirmationOpen(false);
   }
 
 
@@ -991,22 +1335,47 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
     setPending(true);
     setMessage("");
     setErrorMessage("");
 
-    const result = await prepareEmergencyRequest(requestId, {
-      setPage,
-    });
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      prepareEmergencyRequest(requestId, { setPage })
+    );
+
+    if (operation.status === "stale") {
+      return;
+    }
 
     setPending(false);
+
+    if (operation.status === "rejected") {
+      setErrorMessage(copy.submissionFailed);
+      return;
+    }
+
+    const result = operation.value;
 
     if (!result.ok || !result.emergencyRequest) {
       setErrorMessage(result.message || copy.submissionFailed);
       return;
     }
 
-    setCanonicalRequest(result.emergencyRequest);
+    const nextOwnedRequest = ownCanonicalRequestForSession(
+      result.emergencyRequest
+    );
+
+    if (!nextOwnedRequest) {
+      setErrorMessage(copy.submissionFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
     setPhase("lifecycle");
     setSubmissionConfirmationOpen(false);
     setCancelConfirmationOpen(false);
@@ -1038,15 +1407,31 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
     setPending(true);
     setMessage("");
     setErrorMessage("");
 
-    const result = await cancelEmergencyRequest(requestId, {
-      setPage,
-    });
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      cancelEmergencyRequest(requestId, { setPage })
+    );
+
+    if (operation.status === "stale") {
+      return;
+    }
 
     setPending(false);
+
+    if (operation.status === "rejected") {
+      setErrorMessage(copy.cancellationFailed);
+      return;
+    }
+
+    const result = operation.value;
 
     if (!result.ok || !result.emergencyRequest) {
       setErrorMessage(
@@ -1055,7 +1440,16 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
-    setCanonicalRequest(result.emergencyRequest);
+    const nextOwnedRequest = ownCanonicalRequestForSession(
+      result.emergencyRequest
+    );
+
+    if (!nextOwnedRequest) {
+      setErrorMessage(copy.cancellationFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
     setPhase("lifecycle");
     setCancelConfirmationOpen(false);
     setRecoveryState("loaded");
@@ -1109,18 +1503,38 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
     setSelectionPending(true);
     setSelectionError("");
 
-    const result = await selectHomeownerEmergencyResponse(
-      canonicalRequestId,
-      selectedResponse.id,
-      {
-        setPage,
-      }
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      selectHomeownerEmergencyResponse(
+        canonicalRequestId,
+        selectedResponse.id,
+        {
+          setPage,
+        }
+      )
     );
 
+    if (operation.status === "stale") {
+      return;
+    }
+
     setSelectionPending(false);
+
+    if (operation.status === "rejected") {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    const result = operation.value;
 
     if (
       !result.ok ||
@@ -1134,10 +1548,19 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
-    setCanonicalRequest((current) => ({
-      ...(current || {}),
+    const nextOwnedRequest = ownCanonicalRequestForSession({
+      ...(canonicalRequest || {}),
       ...result.emergencyRequest,
-    }));
+    });
+
+    if (!nextOwnedRequest) {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
     setResponses((current) =>
       current.map((response) =>
         response.id === selectedResponse.id
@@ -1166,17 +1589,17 @@ function EmergencyRequest({ setPage }) {
       <main
         style={card}
         aria-labelledby={
-          !canonicalRequest || editableDraft
+          !canonicalRequest || showDraftWorkflow
             ? "emergency-request-title"
             : undefined
         }
         aria-label={
-          canonicalRequest && !editableDraft
+          canonicalRequest && !showDraftWorkflow
             ? copy.requestPageTitle
             : undefined
         }
       >
-        {(!canonicalRequest || editableDraft) && (
+        {(!canonicalRequest || showDraftWorkflow) && (
           <>
             <button
               type="button"
@@ -1204,7 +1627,7 @@ function EmergencyRequest({ setPage }) {
           </>
         )}
 
-        {canonicalRequest && editableDraft && (
+        {canonicalRequest && showDraftWorkflow && (
           <section style={canonicalCard} aria-label={copy.canonicalId}>
             <div>
               <span style={canonicalLabel}>{copy.status}</span>
@@ -1256,8 +1679,8 @@ function EmergencyRequest({ setPage }) {
         )}
 
         {recoveryState === "loaded" &&
-          initialEmergencyRoute.hasRequestId &&
-          editableDraft &&
+          emergencyRoute.hasRequestId &&
+          showDraftWorkflow &&
           !message && (
             <div style={successNotice} role="status">
               {copy.recovered}
@@ -1266,6 +1689,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          showDraftWorkflow &&
           editableDraft &&
           phase === "details" && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
@@ -1396,6 +1820,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          showDraftWorkflow &&
           editableDraft &&
           phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
@@ -1583,6 +2008,7 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
+          showDraftWorkflow &&
           editableDraft &&
           phase === "complete" && (
           <section style={completeCard}>
@@ -1634,7 +2060,7 @@ function EmergencyRequest({ setPage }) {
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
           canonicalRequest &&
-          !editableDraft && (
+          !showDraftWorkflow && (
             emergencyRelationshipDetail ? (
               <EmergencyRelationshipDetail
                 detail={emergencyRelationshipDetail}
@@ -1655,6 +2081,14 @@ function EmergencyRequest({ setPage }) {
                   requestProfessionalSelectionById
                 }
                 onCancelRequest={requestCancellation}
+                workflowAction={
+                  editableDraft
+                    ? {
+                        label: draftWorkflowActionLabel,
+                        onClick: openDraftWorkflow,
+                      }
+                    : null
+                }
               />
             ) : (
               <section style={formCard} role="alert">
@@ -1674,8 +2108,7 @@ function EmergencyRequest({ setPage }) {
             )
           )}
 
-        {canonicalRequest &&
-          editableDraft &&
+        {showDraftWorkflow &&
           phase !== "complete" &&
           cancellationAvailable && (
             <button
@@ -1827,7 +2260,7 @@ function EmergencyRequest({ setPage }) {
           </section>
         )}
 
-        {(!canonicalRequest || editableDraft) && (
+        {(!canonicalRequest || showDraftWorkflow) && (
           <>
             <button
               type="button"

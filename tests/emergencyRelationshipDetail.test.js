@@ -109,7 +109,7 @@ test("canonical detail route is ID-backed and refresh-safe without navigation st
   });
   assert.match(
     emergencyRequestSource,
-    /getEmergencyRequest\(\s*initialEmergencyRoute\.requestId/
+    /getEmergencyRequest\(\s*emergencyRoute\.requestId/
   );
   assert.doesNotMatch(
     emergencyRequestSource,

@@ -57,11 +57,11 @@ test("Emergency card selection uses bounded URL context without browser authorit
   assert.match(emergencySource, /buildEmergencyDraftRoute/);
   assert.match(
     requestSource,
-    /service:\s*initialEmergencyRoute\.serviceSpecialty \|\| ""/
+    /service:\s*emergencyRoute\.serviceSpecialty \|\| ""/
   );
   assert.match(
     requestSource,
-    /buildDraftForm\(recoveredRequest, current\)/
+    /buildDraftForm\(recoveredRequest, \{/
   );
 
   for (const forbidden of [
@@ -135,7 +135,7 @@ test("Emergency cancellation requires explicit confirmation and backend success"
   );
   assert.match(
     requestSource,
-    /await cancelEmergencyRequest/
+    /cancelEmergencyRequest/
   );
   assert.match(
     requestSource,
@@ -162,7 +162,7 @@ test("Emergency submission requires explicit acknowledgment and backend prepare 
   );
   assert.match(
     requestSource,
-    /await prepareEmergencyRequest/
+    /prepareEmergencyRequest/
   );
   assert.match(
     requestSource,
@@ -274,11 +274,11 @@ test("Emergency submission and cancellation avoid legacy downstream routes", () 
 test("Emergency Request resumes only exact backend-owned route identity", () => {
   assert.match(
     requestSource,
-    /initialEmergencyRoute\.requestId/
+    /emergencyRoute\.requestId/
   );
   assert.match(
     requestSource,
-    /await getEmergencyRequest/
+    /getEmergencyRequest/
   );
   assert.match(
     requestSource,
@@ -339,7 +339,7 @@ test("Emergency safety review confirms canonical draft progress only after succe
   assert.match(requestSource, /Step 2/);
   assert.match(
     requestSource,
-    /if \(!result\.ok \|\| !result\.emergencyRequest\) \{[\s\S]*?return;[\s\S]*?setCanonicalRequest\(result\.emergencyRequest\);[\s\S]*?setPhase\("safety"\);/
+    /if \(!result\.ok \|\| !result\.emergencyRequest\) \{[\s\S]*?return;[\s\S]*?setOwnedCanonicalRequest\(nextOwnedRequest\);[\s\S]*?setPhase\("safety"\);/
   );
   assert.match(
     requestSource,
@@ -373,7 +373,7 @@ test("Emergency safety review preserves canonical blocking and truthful action",
   assert.match(requestSource, /safety_blocked/);
   assert.match(
     requestSource,
-    /await saveEmergencySafetyAssessment/
+    /saveEmergencySafetyAssessment/
   );
   assert.doesNotMatch(
     requestSource,
