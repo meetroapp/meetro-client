@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
+import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
 import {
   cancelEmergencyRequest,
   createEmergencyDraft,
@@ -24,6 +25,9 @@ import {
 import {
   buildCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
+import {
+  normalizeEmergencyRelationshipDetail,
+} from "../utils/emergencyRelationshipDetail";
 import {
   fetchCanonicalConversations,
   findCanonicalEmergencyConversation,
@@ -230,6 +234,13 @@ function EmergencyRequest({ setPage }) {
       ),
     []
   );
+  const [recoveryFailureKind, setRecoveryFailureKind] =
+    useState(() =>
+      initialEmergencyRoute.hasRequestId &&
+      !initialEmergencyRoute.valid
+        ? "invalid"
+        : ""
+    );
 
   const [recoveryState, setRecoveryState] = useState(() =>
     initialEmergencyRoute.hasRequestId &&
@@ -306,6 +317,7 @@ function EmergencyRequest({ setPage }) {
 
     async function recoverCanonicalDraft() {
       setRecoveryState("loading");
+      setRecoveryFailureKind("");
       setErrorMessage("");
       setMessage("");
 
@@ -320,10 +332,14 @@ function EmergencyRequest({ setPage }) {
 
       if (!result.ok || !result.emergencyRequest) {
         setRecoveryState("failed");
-        setErrorMessage(
-          result.message ||
-            "The Emergency draft could not be loaded."
+        setRecoveryFailureKind(
+          [401, 403].includes(result.status)
+            ? "unauthorized"
+            : result.status === 404
+              ? "not_found"
+              : "unavailable"
         );
+        setErrorMessage("");
         return;
       }
 
@@ -365,11 +381,15 @@ function EmergencyRequest({ setPage }) {
   const canonicalRequestStatus = getRequestStatus(canonicalRequest);
   const shouldLoadResponses = [
     "ready_for_distribution",
+    "active",
+    "selection_pending",
     "assigned",
     "professional_en_route",
     "professional_arrived",
+    "in_service",
     "work_in_progress",
     "completed",
+    "resolved",
   ].includes(canonicalRequestStatus);
 
   useEffect(() => {
@@ -397,25 +417,36 @@ function EmergencyRequest({ setPage }) {
 
   useEffect(() => {
     if (!canonicalRequestId || !shouldLoadResponses) {
-      setResponses([]);
-      setResponsesPhase("idle");
-      setCanonicalConversationId(null);
-      return undefined;
+      let active = true;
+
+      Promise.resolve().then(() => {
+        if (!active) return;
+        setResponses([]);
+        setResponsesPhase("idle");
+        setCanonicalConversationId(null);
+      });
+
+      return () => {
+        active = false;
+      };
     }
 
     let active = true;
-    setResponsesPhase("loading");
 
     async function loadCanonicalResponseState() {
-      const [responseResult, conversationResult, requestResult] =
+      await Promise.resolve();
+      if (!active) return;
+
+      setResponses([]);
+      setResponsesPhase("loading");
+      setCanonicalConversationId(null);
+
+      const [responseResult, conversationResult] =
         await Promise.all([
           listHomeownerEmergencyResponses(canonicalRequestId, {
             setPage,
           }),
           fetchCanonicalConversations("personal", {
-            setPage,
-          }),
-          getEmergencyRequest(canonicalRequestId, {
             setPage,
           }),
         ]);
@@ -427,10 +458,6 @@ function EmergencyRequest({ setPage }) {
       } else {
         setResponses(responseResult.responses);
         setResponsesPhase("ready");
-      }
-
-      if (requestResult.ok && requestResult.emergencyRequest) {
-        setCanonicalRequest(requestResult.emergencyRequest);
       }
 
       if (conversationResult.ok) {
@@ -446,17 +473,10 @@ function EmergencyRequest({ setPage }) {
     }
 
     loadCanonicalResponseState();
-    const refreshInterval = window.setInterval(
-      loadCanonicalResponseState,
-      5000
-    );
 
     return () => {
       active = false;
-      window.clearInterval(refreshInterval);
     };
-    // Response polling follows the exact backend-owned request identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canonicalRequestId, shouldLoadResponses, setPage]);
 
   const text = {
@@ -542,7 +562,6 @@ function EmergencyRequest({ setPage }) {
       submittedTitle: "Emergency Request Submitted",
       submittedBody:
         "This Emergency request is active and available to compatible professionals. Select a response to create the canonical conversation and begin dispatch.",
-      submittedStatus: "Ready for Professional Responses",
       editDetails: "Edit Draft Details",
       back: "Back to Emergency Help",
       home: "Back Home",
@@ -554,9 +573,16 @@ function EmergencyRequest({ setPage }) {
       recoveryLoading: "Loading your Emergency draft…",
       recoveryFailed:
         "This Emergency draft could not be loaded. It may be unavailable or you may not have access.",
+      recoveryInvalid:
+        "This Emergency request link is invalid. Return to My Requests and choose the request again.",
+      recoveryUnauthorized:
+        "You do not have access to this Emergency request.",
+      recoveryNotFound:
+        "This Emergency request was not found.",
+      recoveryUnavailable:
+        "This Emergency request is temporarily unavailable. Try again from My Requests.",
       recovered:
         "Your canonical Emergency draft was loaded from Meetro.",
-      startNewDraft: "Start a New Emergency Draft",
       safetyFailed:
         "The safety review could not be saved. Try again.",
       canonicalId: "Emergency draft",
@@ -574,19 +600,8 @@ function EmergencyRequest({ setPage }) {
       cancelling: "Cancelling…",
       cancellationFailed:
         "The Emergency request could not be cancelled. Try again.",
-      cancelledTitle: "Emergency Request Cancelled",
-      cancelledBody:
-        "This canonical Emergency request was cancelled. It is read-only and was not distributed, assigned, dispatched, or connected to a chat.",
-      safetyBlockedTitle: "Emergency Workflow Blocked",
-      safetyBlockedBody:
-        "The safety review indicates that this request cannot continue through Meetro. Contact appropriate emergency services when needed.",
-      preparedTitle: "Emergency Request Submitted",
-      preparedBody:
-        "This Emergency request is active and available to compatible professionals. Your location and access notes remain private until you select one.",
-      readOnlyTitle: "Emergency Request Read-Only",
       readOnlyBody:
         "This canonical Emergency request can no longer be edited from this screen.",
-      readOnlyStatus: "Canonical lifecycle status",
     },
     es: {
       title: "Borrador de Emergencia",
@@ -670,7 +685,6 @@ function EmergencyRequest({ setPage }) {
       submittedTitle: "Solicitud de Emergencia Enviada",
       submittedBody:
         "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Selecciona una respuesta para crear la conversación canónica e iniciar el despacho.",
-      submittedStatus: "Lista para Respuestas Profesionales",
       editDetails: "Editar Detalles",
       back: "Regresar a Ayuda de Emergencia",
       home: "Regresar al Inicio",
@@ -683,9 +697,16 @@ function EmergencyRequest({ setPage }) {
       recoveryLoading: "Cargando tu borrador de Emergencia…",
       recoveryFailed:
         "No se pudo cargar este borrador de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
+      recoveryInvalid:
+        "Este enlace de solicitud de Emergencia no es válido. Vuelve a Mis Solicitudes y selecciona la solicitud otra vez.",
+      recoveryUnauthorized:
+        "No tienes acceso a esta solicitud de Emergencia.",
+      recoveryNotFound:
+        "No se encontró esta solicitud de Emergencia.",
+      recoveryUnavailable:
+        "Esta solicitud de Emergencia no está disponible temporalmente. Inténtalo de nuevo desde Mis Solicitudes.",
       recovered:
         "Tu borrador canónico de Emergencia fue cargado desde Meetro.",
-      startNewDraft: "Comenzar un Nuevo Borrador",
       safetyFailed:
         "No se pudo guardar la revisión. Inténtalo nuevamente.",
       canonicalId: "Borrador de Emergencia",
@@ -703,19 +724,8 @@ function EmergencyRequest({ setPage }) {
       cancelling: "Cancelando…",
       cancellationFailed:
         "No se pudo cancelar la solicitud de Emergencia. Inténtalo nuevamente.",
-      cancelledTitle: "Solicitud de Emergencia Cancelada",
-      cancelledBody:
-        "Esta solicitud canónica de Emergencia fue cancelada. Es de solo lectura y no fue distribuida, asignada, despachada ni conectada a un chat.",
-      safetyBlockedTitle: "Flujo de Emergencia Bloqueado",
-      safetyBlockedBody:
-        "La revisión de seguridad indica que esta solicitud no puede continuar por Meetro. Contacta los servicios de emergencia apropiados cuando sea necesario.",
-      preparedTitle: "Solicitud de Emergencia Enviada",
-      preparedBody:
-        "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Tu ubicación y notas de acceso permanecen privadas hasta que selecciones uno.",
-      readOnlyTitle: "Solicitud de Emergencia de Solo Lectura",
       readOnlyBody:
         "Esta solicitud canónica de Emergencia ya no puede editarse desde esta pantalla.",
-      readOnlyStatus: "Estado canónico del ciclo de vida",
     },
   };
 
@@ -765,6 +775,31 @@ function EmergencyRequest({ setPage }) {
     "completed",
     "resolved",
   ].includes(canonicalStatus);
+  const emergencyRelationshipDetail = useMemo(
+    () =>
+      normalizeEmergencyRelationshipDetail({
+        emergencyRequest: canonicalRequest,
+        responses,
+        conversationId: canonicalConversationId,
+        language,
+      }),
+    [
+      canonicalConversationId,
+      canonicalRequest,
+      language,
+      responses,
+    ]
+  );
+  const recoveryFailureMessage =
+    recoveryFailureKind === "invalid"
+      ? copy.recoveryInvalid
+      : recoveryFailureKind === "unauthorized"
+        ? copy.recoveryUnauthorized
+        : recoveryFailureKind === "not_found"
+          ? copy.recoveryNotFound
+          : recoveryFailureKind === "unavailable"
+            ? copy.recoveryUnavailable
+            : copy.recoveryFailed;
 
   function updateForm(field, value) {
     setForm((current) => ({
@@ -1038,6 +1073,16 @@ function EmergencyRequest({ setPage }) {
     setSelectionError("");
   }
 
+  function requestProfessionalSelectionById(responseId) {
+    const response = responses.find(
+      (candidate) => candidate.id === responseId
+    );
+
+    if (response) {
+      requestProfessionalSelection(response);
+    }
+  }
+
   function keepWaitingForProfessional() {
     if (selectionPending) return;
     setSelectedResponse(null);
@@ -1116,72 +1161,51 @@ function EmergencyRequest({ setPage }) {
     );
   }
 
-  function getLifecycleCopy() {
-    if (canonicalStatus === "cancelled") {
-      return {
-        title: copy.cancelledTitle,
-        body: copy.cancelledBody,
-      };
-    }
-
-    if (canonicalStatus === "safety_blocked") {
-      return {
-        title: copy.safetyBlockedTitle,
-        body: copy.safetyBlockedBody,
-      };
-    }
-
-    if (canonicalStatus === "ready_for_distribution") {
-      return {
-        title: copy.preparedTitle,
-        body: copy.preparedBody,
-      };
-    }
-
-    return {
-      title: copy.readOnlyTitle,
-      body: copy.readOnlyBody,
-    };
-  }
-
-  const lifecycleCopy = getLifecycleCopy();
-
   return (
     <div className="app-page meetro-form-page" style={page}>
-      <main style={card} aria-labelledby="emergency-request-title">
-        <button
-          type="button"
-          style={backMini}
-          onClick={() => setPage("emergency")}
-          aria-label={copy.back}
-          disabled={pending}
-        >
-          ←
-        </button>
+      <main
+        style={card}
+        aria-labelledby={
+          !canonicalRequest || editableDraft
+            ? "emergency-request-title"
+            : undefined
+        }
+        aria-label={
+          canonicalRequest && !editableDraft
+            ? copy.requestPageTitle
+            : undefined
+        }
+      >
+        {(!canonicalRequest || editableDraft) && (
+          <>
+            <button
+              type="button"
+              style={backMini}
+              onClick={() => setPage("emergency")}
+              aria-label={copy.back}
+              disabled={pending}
+            >
+              ←
+            </button>
 
-        <h1 id="emergency-request-title" style={title}>
-          {pageTitle}
-        </h1>
+            <h1 id="emergency-request-title" style={title}>
+              {pageTitle}
+            </h1>
 
-        <p style={intro}>{copy.intro}</p>
+            <p style={intro}>{copy.intro}</p>
 
-        <div style={emergencyWarning} role="alert">
-          {copy.emergencyWarning}
-        </div>
-
-        <div style={limitationNotice} role="status">
-          {copy.limitation}
-        </div>
-
-        {canonicalRequest && (
-          <section style={canonicalCard} aria-label={copy.canonicalId}>
-            <div>
-              <span style={canonicalLabel}>{copy.canonicalId}</span>
-              <strong style={canonicalValue}>
-                #{getRequestId(canonicalRequest)}
-              </strong>
+            <div style={emergencyWarning} role="alert">
+              {copy.emergencyWarning}
             </div>
 
+            <div style={limitationNotice} role="status">
+              {copy.limitation}
+            </div>
+          </>
+        )}
+
+        {canonicalRequest && editableDraft && (
+          <section style={canonicalCard} aria-label={copy.canonicalId}>
             <div>
               <span style={canonicalLabel}>{copy.status}</span>
               <strong style={canonicalValue}>
@@ -1218,21 +1242,22 @@ function EmergencyRequest({ setPage }) {
         {recoveryState === "failed" && (
           <section style={formCard}>
             <p style={recoveryMessage}>
-              {errorMessage || copy.recoveryFailed}
+              {recoveryFailureMessage}
             </p>
 
             <button
               type="button"
               style={primaryButton}
-              onClick={() => setPage("emergencyRequest")}
+              onClick={() => setPage("myRequests")}
             >
-              {copy.startNewDraft}
+              {copy.viewMyEmergencyRequests}
             </button>
           </section>
         )}
 
         {recoveryState === "loaded" &&
           initialEmergencyRoute.hasRequestId &&
+          editableDraft &&
           !message && (
             <div style={successNotice} role="status">
               {copy.recovered}
@@ -1610,159 +1635,43 @@ function EmergencyRequest({ setPage }) {
           recoveryState !== "failed" &&
           canonicalRequest &&
           !editableDraft && (
-            <section style={lifecycleCard}>
-              <h2 style={sectionTitle}>
-                {lifecycleCopy.title}
-              </h2>
-
-              <p style={completeBody}>
-                {lifecycleCopy.body}
-              </p>
-
-              <div style={lifecycleStatus}>
-                <span>{copy.readOnlyStatus}</span>
-                <strong>
-                  {canonicalStatus === "ready_for_distribution"
-                    ? copy.submittedStatus
-                    : canonicalStatus}
-                  </strong>
-              </div>
-
-              {shouldLoadResponses && (
-                <div style={responsesSection}>
-                  <h3 style={responsesTitle}>
-                    {t("emergencyResponsesTitle", language)}
-                  </h3>
-
-                  {canonicalConversationId && (
-                    <div style={conversationReadyCard}>
-                      <strong>
-                        {t("emergencyConversationReady", language)}
-                      </strong>
-                      <button
-                        type="button"
-                        style={primaryButton}
-                        onClick={openCanonicalEmergencyConversation}
-                      >
-                        {t("emergencyOpenConversation", language)}
-                      </button>
-                    </div>
-                  )}
-
-                  {responsesPhase === "loading" && (
-                    <p style={responseStateText} role="status">
-                      {t("emergencyResponsesLoading", language)}
-                    </p>
-                  )}
-
-                  {responsesPhase === "error" && (
-                    <p style={responseErrorText} role="alert">
-                      {t("emergencyResponsesError", language)}
-                    </p>
-                  )}
-
-                  {responsesPhase === "ready" &&
-                    responses.length === 0 && (
-                      <p style={responseStateText}>
-                        {t("emergencyResponsesEmpty", language)}
-                      </p>
-                    )}
-
-                  {responses
-                    .filter((response) =>
-                      ["pending", "active"].includes(
-                        response.status
-                      )
-                    )
-                    .map((response) => {
-                      const businessName =
-                        response.professional.businessName ||
-                        t("messagesOwnerProfessional", language);
-                      const logo =
-                        response.professional.businessLogoUrl ||
-                        response.professional.profileImageUrl;
-
-                      return (
-                        <article
-                          key={response.id}
-                          style={responseCard}
-                        >
-                          <div style={responseHeader}>
-                            <div style={responseAvatar}>
-                              {logo ? (
-                                <img
-                                  src={logo}
-                                  alt=""
-                                  style={responseAvatarImage}
-                                />
-                              ) : (
-                                businessName
-                                  .split(" ")
-                                  .map((word) => word[0])
-                                  .join("")
-                                  .slice(0, 2)
-                                  .toUpperCase()
-                              )}
-                            </div>
-                            <div>
-                              <strong>{businessName}</strong>
-                              <p style={responseMeta}>
-                                {response.professional.category ||
-                                  response.professional.serviceSpecialties[0] ||
-                                  t("messagesOwnerProfessional", language)}
-                              </p>
-                            </div>
-                          </div>
-
-                          {response.status === "active" &&
-                          canonicalConversationId ? (
-                            <button
-                              type="button"
-                              style={primaryButton}
-                              onClick={openCanonicalEmergencyConversation}
-                            >
-                              {t("emergencyOpenConversation", language)}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              style={primaryButton}
-                              onClick={() =>
-                                requestProfessionalSelection(response)
-                              }
-                              disabled={selectionPending}
-                            >
-                              {t("emergencySelectProfessional", language)}
-                            </button>
-                          )}
-                        </article>
-                      );
-                    })}
-                </div>
-              )}
-
-              {showWorkCenterAction && (
-                <button
-                  type="button"
-                  style={secondaryButton}
-                  onClick={() => setPage("myRequests")}
-                  disabled={pending}
-                >
-                  {copy.viewMyEmergencyRequests}
-                </button>
-              )}
-
-              {cancellationAvailable && (
-                <button
-                  type="button"
-                  style={dangerButton}
-                  onClick={requestCancellation}
-                  disabled={pending}
-                >
-                  {copy.cancelRequest}
-                </button>
-              )}
-            </section>
+            emergencyRelationshipDetail ? (
+              <EmergencyRelationshipDetail
+                detail={emergencyRelationshipDetail}
+                language={language}
+                responsesPhase={
+                  shouldLoadResponses
+                    ? responsesPhase
+                    : "idle"
+                }
+                selectionPending={selectionPending}
+                cancellationAvailable={cancellationAvailable}
+                mutationPending={pending}
+                onBack={() => setPage("myRequests")}
+                onOpenConversation={
+                  openCanonicalEmergencyConversation
+                }
+                onSelectResponse={
+                  requestProfessionalSelectionById
+                }
+                onCancelRequest={requestCancellation}
+              />
+            ) : (
+              <section style={formCard} role="alert">
+                <p style={recoveryMessage}>
+                  {copy.recoveryUnavailable}
+                </p>
+                {showWorkCenterAction && (
+                  <button
+                    type="button"
+                    style={secondaryButton}
+                    onClick={() => setPage("myRequests")}
+                  >
+                    {copy.viewMyEmergencyRequests}
+                  </button>
+                )}
+              </section>
+            )
           )}
 
         {canonicalRequest &&
@@ -1918,23 +1827,27 @@ function EmergencyRequest({ setPage }) {
           </section>
         )}
 
-        <button
-          type="button"
-          style={navigationButton}
-          onClick={() => setPage("emergency")}
-          disabled={pending}
-        >
-          {copy.back}
-        </button>
+        {(!canonicalRequest || editableDraft) && (
+          <>
+            <button
+              type="button"
+              style={navigationButton}
+              onClick={() => setPage("emergency")}
+              disabled={pending}
+            >
+              {copy.back}
+            </button>
 
-        <button
-          type="button"
-          style={homeButton}
-          onClick={() => setPage("home")}
-          disabled={pending}
-        >
-          {copy.home}
-        </button>
+            <button
+              type="button"
+              style={homeButton}
+              onClick={() => setPage("home")}
+              disabled={pending}
+            >
+              {copy.home}
+            </button>
+          </>
+        )}
       </main>
 
       <BottomNav currentPage="emergency" setPage={setPage} />
@@ -2278,11 +2191,6 @@ const completeCard = {
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
 };
 
-const lifecycleCard = {
-  ...completeCard,
-  border: "1px solid #d1d5db",
-};
-
 const confirmationCard = {
   ...completeCard,
   marginTop: "16px",
@@ -2307,95 +2215,6 @@ const acknowledgmentNotice = {
   fontSize: "14px",
   lineHeight: 1.55,
   fontWeight: "700",
-};
-
-const lifecycleStatus = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "16px",
-  marginTop: "16px",
-  padding: "13px 14px",
-  borderRadius: "14px",
-  background: "#f3f4f6",
-  color: "#374151",
-  fontSize: "14px",
-};
-
-const responsesSection = {
-  display: "grid",
-  gap: "12px",
-  marginTop: "20px",
-};
-
-const responsesTitle = {
-  margin: 0,
-  color: "#111827",
-  fontSize: "18px",
-  fontWeight: "900",
-};
-
-const responseStateText = {
-  margin: 0,
-  padding: "14px",
-  borderRadius: "14px",
-  background: "#f8fafc",
-  color: "#475569",
-  lineHeight: 1.5,
-};
-
-const responseErrorText = {
-  ...responseStateText,
-  background: "#fff7f7",
-  color: "#991b1b",
-};
-
-const conversationReadyCard = {
-  padding: "16px",
-  border: "1px solid #a7f3d0",
-  borderRadius: "16px",
-  background: "#ecfdf5",
-  color: "#065f46",
-};
-
-const responseCard = {
-  padding: "16px",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  background: "#ffffff",
-};
-
-const responseHeader = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const responseAvatar = {
-  width: "46px",
-  height: "46px",
-  flexShrink: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  overflow: "hidden",
-  borderRadius: "15px",
-  background: "#eef4ea",
-  color: "#1f4d34",
-  fontWeight: "900",
-};
-
-const responseAvatarImage = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-};
-
-const responseMeta = {
-  margin: "4px 0 0",
-  color: "#64748b",
-  fontSize: "13px",
-  lineHeight: 1.4,
 };
 
 const completeBody = {

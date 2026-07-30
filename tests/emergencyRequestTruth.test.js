@@ -12,6 +12,22 @@ const requestSource = readFileSync(
   "utf8"
 );
 
+const relationshipDetailSource = readFileSync(
+  new URL(
+    "../src/components/EmergencyRelationshipDetail.jsx",
+    import.meta.url
+  ),
+  "utf8"
+);
+
+const summarySource = readFileSync(
+  new URL(
+    "../src/utils/emergencySummary.js",
+    import.meta.url
+  ),
+  "utf8"
+);
+
 const appSource = readFileSync(
   new URL("../src/App.jsx", import.meta.url),
   "utf8"
@@ -164,8 +180,8 @@ test("Emergency submission requires explicit acknowledgment and backend prepare 
 
 test("Emergency submission becomes read-only and available for compatible responses", () => {
   assert.match(
-    requestSource,
-    /Ready for Professional Responses/
+    summarySource,
+    /Waiting for Professional Responses/
   );
   assert.match(
     requestSource,
@@ -212,11 +228,19 @@ test("non-draft Emergency records render read-only canonical lifecycle state", (
   );
   assert.match(
     requestSource,
+    /<EmergencyRelationshipDetail/
+  );
+  assert.match(
+    relationshipDetailSource,
+    /<EmergencyTimeline/
+  );
+  assert.match(
+    summarySource,
     /Emergency Request Cancelled/
   );
   assert.match(
-    requestSource,
-    /Emergency Workflow Blocked/
+    summarySource,
+    /Safety Action Required/
   );
   assert.match(
     requestSource,

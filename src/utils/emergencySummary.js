@@ -67,6 +67,73 @@ const EMERGENCY_WORK_CENTER_LABELS = Object.freeze({
   }),
 });
 
+const EMERGENCY_RELATIONSHIP_NEXT_STEPS = Object.freeze({
+  en: Object.freeze({
+    draft:
+      "Continue the private draft and complete the required safety review.",
+    safety_blocked:
+      "Follow the safety guidance shown for this request and contact emergency services when needed.",
+    ready_for_distribution:
+      "Compatible professionals can respond now. Review responses before selecting anyone.",
+    active:
+      "This request is active and waiting for the next authoritative relationship update.",
+    selection_pending:
+      "Professional selection is being confirmed. No dispatch is implied until the backend confirms it.",
+    assigned:
+      "Your selected professional is connected. Use the conversation to coordinate the service.",
+    professional_en_route:
+      "Your selected professional is on the way. Keep access details current in the conversation.",
+    professional_arrived:
+      "Your selected professional has arrived. Confirm the service area before work begins.",
+    in_service:
+      "Emergency work is in progress. Continue coordination in the conversation.",
+    work_in_progress:
+      "Emergency work is in progress. Continue coordination in the conversation.",
+    completed:
+      "The Emergency work is marked complete. The conversation remains available when the relationship is active.",
+    resolved:
+      "The Emergency work is marked complete. The conversation remains available when the relationship is active.",
+    cancelled:
+      "This request is cancelled and no further Emergency workflow action is available.",
+    expired:
+      "This request expired before completion. Start a new request only if help is still needed.",
+    unable_to_match:
+      "No compatible professional was matched. Start a new request only if help is still needed.",
+  }),
+  es: Object.freeze({
+    draft:
+      "Continúa el borrador privado y completa la revisión de seguridad requerida.",
+    safety_blocked:
+      "Sigue la orientación de seguridad de esta solicitud y contacta a los servicios de emergencia cuando sea necesario.",
+    ready_for_distribution:
+      "Los profesionales compatibles pueden responder ahora. Revisa las respuestas antes de seleccionar a alguien.",
+    active:
+      "Esta solicitud está activa y espera la próxima actualización autorizada de la relación.",
+    selection_pending:
+      "La selección del profesional se está confirmando. No se implica un despacho hasta que el servidor lo confirme.",
+    assigned:
+      "Tu profesional seleccionado está conectado. Usa la conversación para coordinar el servicio.",
+    professional_en_route:
+      "Tu profesional seleccionado está en camino. Mantén los detalles de acceso actualizados en la conversación.",
+    professional_arrived:
+      "Tu profesional seleccionado llegó. Confirma el área de servicio antes de comenzar el trabajo.",
+    in_service:
+      "El trabajo de Emergencia está en progreso. Continúa la coordinación en la conversación.",
+    work_in_progress:
+      "El trabajo de Emergencia está en progreso. Continúa la coordinación en la conversación.",
+    completed:
+      "El trabajo de Emergencia está marcado como completado. La conversación permanece disponible cuando la relación está activa.",
+    resolved:
+      "El trabajo de Emergencia está marcado como completado. La conversación permanece disponible cuando la relación está activa.",
+    cancelled:
+      "Esta solicitud está cancelada y no hay otra acción disponible en el flujo de Emergencia.",
+    expired:
+      "Esta solicitud expiró antes de completarse. Inicia una nueva solo si todavía necesitas ayuda.",
+    unable_to_match:
+      "No se encontró un profesional compatible. Inicia una nueva solicitud solo si todavía necesitas ayuda.",
+  }),
+});
+
 const EMERGENCY_TIMELINE_LABELS = Object.freeze({
   en: Object.freeze({
     requested: "Requested",
@@ -183,6 +250,19 @@ export function getEmergencyWorkCenterStatusLabel(
   return labels[normalized] || "";
 }
 
+export function getEmergencyRelationshipNextStep(
+  status,
+  language = "en"
+) {
+  const normalized = String(status || "").trim();
+  const guidance =
+    EMERGENCY_RELATIONSHIP_NEXT_STEPS[
+      language === "es" ? "es" : "en"
+    ];
+
+  return guidance[normalized] || "";
+}
+
 export function getEmergencyTimeline(
   emergencyRequest = {},
   language = "en"
@@ -207,6 +287,14 @@ export function getEmergencyTimeline(
         timestamp ? index : latest,
       -1
     );
+  const contiguousTimestampIndex =
+    timestamps.reduce(
+      (latest, timestamp, index) =>
+        index === latest + 1 && timestamp
+          ? index
+          : latest,
+      -1
+    );
   const hasStatusIndex = Object.hasOwn(
     EMERGENCY_TIMELINE_STATUS_INDEX,
     status
@@ -220,7 +308,7 @@ export function getEmergencyTimeline(
       status
     );
   const reachedIndex = hasAlternateOutcome
-    ? latestTimestampIndex
+    ? contiguousTimestampIndex
     : hasStatusIndex
       ? statusIndex
       : latestTimestampIndex;
