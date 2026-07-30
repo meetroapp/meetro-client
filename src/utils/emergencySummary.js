@@ -67,6 +67,96 @@ const EMERGENCY_WORK_CENTER_LABELS = Object.freeze({
   }),
 });
 
+const EMERGENCY_TIMELINE_LABELS = Object.freeze({
+  en: Object.freeze({
+    requested: "Requested",
+    accepted: "Accepted",
+    enRoute: "On the Way",
+    arrived: "Arrived",
+    workStarted: "Work Started",
+    completed: "Completed",
+  }),
+  es: Object.freeze({
+    requested: "Solicitada",
+    accepted: "Aceptada",
+    enRoute: "En Camino",
+    arrived: "Llegó",
+    workStarted: "Trabajo Iniciado",
+    completed: "Completada",
+  }),
+});
+
+const EMERGENCY_TIMELINE_STATUS_FALLBACKS =
+  Object.freeze({
+    requested: new Set([
+      "ready_for_distribution",
+      "active",
+      "selection_pending",
+      "assigned",
+      "professional_en_route",
+      "professional_arrived",
+      "in_service",
+      "work_in_progress",
+      "completed",
+      "resolved",
+    ]),
+    accepted: new Set([
+      "assigned",
+      "professional_en_route",
+      "professional_arrived",
+      "in_service",
+      "work_in_progress",
+      "completed",
+    ]),
+    enRoute: new Set([
+      "professional_en_route",
+      "professional_arrived",
+      "work_in_progress",
+      "completed",
+    ]),
+    arrived: new Set([
+      "professional_arrived",
+      "work_in_progress",
+      "completed",
+    ]),
+    workStarted: new Set([
+      "in_service",
+      "work_in_progress",
+      "completed",
+    ]),
+    completed: new Set([
+      "completed",
+      "resolved",
+    ]),
+  });
+
+const EMERGENCY_TIMELINE_STAGES = Object.freeze([
+  Object.freeze({
+    key: "requested",
+    timestampField: "requestedAt",
+  }),
+  Object.freeze({
+    key: "accepted",
+    timestampField: "assignedAt",
+  }),
+  Object.freeze({
+    key: "enRoute",
+    timestampField: "enRouteAt",
+  }),
+  Object.freeze({
+    key: "arrived",
+    timestampField: "arrivedAt",
+  }),
+  Object.freeze({
+    key: "workStarted",
+    timestampField: "workStartedAt",
+  }),
+  Object.freeze({
+    key: "completed",
+    timestampField: "completedAt",
+  }),
+]);
+
 export function isSupportedEmergencySummaryStatus(status) {
   return EMERGENCY_SUMMARY_STATUSES.includes(
     String(status || "").trim()
@@ -83,6 +173,34 @@ export function getEmergencyWorkCenterStatusLabel(
       language === "es" ? "es" : "en"
     ];
   return labels[normalized] || "";
+}
+
+export function getEmergencyReachedTimeline(
+  emergencyRequest = {},
+  language = "en"
+) {
+  const status = String(
+    emergencyRequest.status || ""
+  ).trim();
+  const labels =
+    EMERGENCY_TIMELINE_LABELS[
+      language === "es" ? "es" : "en"
+    ];
+
+  return EMERGENCY_TIMELINE_STAGES
+    .filter(
+      ({ key, timestampField }) =>
+        Boolean(emergencyRequest[timestampField]) ||
+        EMERGENCY_TIMELINE_STATUS_FALLBACKS[
+          key
+        ].has(status)
+    )
+    .map(({ key, timestampField }) => ({
+      key,
+      label: labels[key],
+      reachedAt:
+        emergencyRequest[timestampField] || null,
+    }));
 }
 
 export function getEmergencySpecialtyDisplayLabel(

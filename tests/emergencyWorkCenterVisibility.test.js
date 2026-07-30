@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   ACTIVE_EMERGENCY_SUMMARY_STATUSES,
   EMERGENCY_SUMMARY_STATUSES,
+  getEmergencyReachedTimeline,
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
   isSupportedEmergencySummaryStatus,
@@ -21,6 +22,14 @@ const emergencyRequestSource = readFileSync(
 const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
   "utf8"
+);
+const emergencyCardSource = myRequestsSource.slice(
+  myRequestsSource.indexOf(
+    "function EmergencyRequestCard"
+  ),
+  myRequestsSource.indexOf(
+    "function MyRequests"
+  )
 );
 
 const approvedActiveLabels = new Map([
@@ -175,13 +184,150 @@ test("Emergency cards expose only bounded presentation fields and canonical navi
     myRequestsSource,
     /emergencyRequest\.availableResponseCount/
   );
-  assert.doesNotMatch(
+  assert.match(
+    emergencyCardSource,
+    /selectedProfessionalBusinessName/
+  );
+  assert.match(
+    emergencyCardSource,
+    /Selected Professional/
+  );
+  assert.match(
+    emergencyCardSource,
+    /Review Responses/
+  );
+  assert.match(
+    emergencyCardSource,
+    /conversationAvailable === true[\s\S]*Number\.isSafeInteger\([\s\S]*emergencyRequest\.conversationId/
+  );
+  assert.match(
     myRequestsSource,
-    /emergencyRequest\.(?:locationText|accessNotes|safetyAssessment|professionalEmail|professionalPhone|relationshipId|conversationId)/
+    /buildCanonicalConversationRoute\(\s*emergencyRequest\.conversationId,\s*"myRequests"/
+  );
+  assert.doesNotMatch(
+    emergencyCardSource,
+    /emergencyRequest\.(?:locationText|unitNumber|accessNotes|safetyAssessment|professionalEmail|professionalPhone|relationshipId|latestMessage|unreadCount)/
+  );
+  assert.doesNotMatch(
+    emergencyCardSource,
+    />\s*\{emergencyRequest\.conversationId\}\s*</
   );
   assert.doesNotMatch(
     myRequestsSource,
     /localStorage\.(?:getItem|setItem)\(\s*["'](?:active)?Emergency/
+  );
+});
+
+test("Emergency timeline includes only canonically reached stages", () => {
+  const timeline = getEmergencyReachedTimeline({
+    status: "completed",
+    requestedAt: "2026-07-29T14:00:00.000Z",
+    assignedAt: "2026-07-29T14:05:00.000Z",
+    enRouteAt: "2026-07-29T14:10:00.000Z",
+    arrivedAt: "2026-07-29T14:20:00.000Z",
+    workStartedAt: "2026-07-29T14:25:00.000Z",
+    completedAt: "2026-07-29T15:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    timeline.map((stage) => stage.label),
+    [
+      "Requested",
+      "Accepted",
+      "On the Way",
+      "Arrived",
+      "Work Started",
+      "Completed",
+    ]
+  );
+
+  assert.deepEqual(
+    getEmergencyReachedTimeline({
+      status: "ready_for_distribution",
+      requestedAt: "2026-07-29T14:00:00.000Z",
+    }).map((stage) => stage.label),
+    ["Requested"]
+  );
+
+  assert.deepEqual(
+    getEmergencyReachedTimeline({
+      status: "professional_en_route",
+      requestedAt: "2026-07-29T14:00:00.000Z",
+      assignedAt: "2026-07-29T14:05:00.000Z",
+      enRouteAt: "2026-07-29T14:10:00.000Z",
+    }).map((stage) => stage.label),
+    ["Requested", "Accepted", "On the Way"]
+  );
+
+  assert.deepEqual(
+    getEmergencyReachedTimeline({
+      status: "cancelled",
+    }),
+    []
+  );
+});
+
+test("Emergency timeline status fallbacks never expose future stages", () => {
+  const expectedByStatus = new Map([
+    ["assigned", ["Requested", "Accepted"]],
+    [
+      "professional_arrived",
+      [
+        "Requested",
+        "Accepted",
+        "On the Way",
+        "Arrived",
+      ],
+    ],
+    [
+      "work_in_progress",
+      [
+        "Requested",
+        "Accepted",
+        "On the Way",
+        "Arrived",
+        "Work Started",
+      ],
+    ],
+    [
+      "resolved",
+      ["Requested", "Completed"],
+    ],
+  ]);
+
+  for (const [status, expected] of expectedByStatus) {
+    assert.deepEqual(
+      getEmergencyReachedTimeline({ status }).map(
+        (stage) => stage.label
+      ),
+      expected
+    );
+  }
+});
+
+test("Emergency Work Center adds no conversation-list dependency or polling", () => {
+  assert.doesNotMatch(
+    myRequestsSource,
+    /fetchCanonicalConversations|getRequestCommunicationEndpoint|\/conversations\?/
+  );
+  assert.doesNotMatch(
+    myRequestsSource,
+    /setInterval\s*\(/
+  );
+});
+
+test("Emergency relationship preview retains compact mobile-safe card constraints", () => {
+  assert.match(
+    myRequestsSource,
+    /const emergencyRequestCard = \{[\s\S]*minWidth: 0[\s\S]*display: "grid"/
+  );
+  assert.match(
+    myRequestsSource,
+    /const emergencyRequestActions = \{[\s\S]*minWidth: 0[\s\S]*repeat\(auto-fit, minmax\(min\(100%, 150px\), 1fr\)\)/
+  );
+  assert.match(
+    myRequestsSource,
+    /const emergencyRequestAction = \{[\s\S]*width: "100%"[\s\S]*minHeight: "44px"/
   );
 });
 

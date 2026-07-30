@@ -24,7 +24,9 @@ import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { getEmergencyRequests } from "../utils/emergencyApi";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
+import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
+  getEmergencyReachedTimeline,
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
 } from "../utils/emergencySummary";
@@ -550,6 +552,7 @@ function EmergencyRequestCard({
   emergencyRequest,
   language,
   onOpen,
+  onOpenConversation,
 }) {
   const lifecycleLabel =
     getEmergencyWorkCenterStatusLabel(
@@ -573,6 +576,30 @@ function EmergencyRequestCard({
   );
   const responseCount =
     emergencyRequest.availableResponseCount;
+  const hasActionableResponses =
+    emergencyRequest.status ===
+      "ready_for_distribution" &&
+    responseCount > 0 &&
+    emergencyRequest.hasSelectedProfessional !== true;
+  const selectedProfessionalName =
+    emergencyRequest.hasSelectedProfessional === true
+      ? emergencyRequest
+          .selectedProfessionalBusinessName ||
+        (language === "es"
+          ? "Profesional Seleccionado"
+          : "Selected Professional")
+      : "";
+  const canOpenConversation =
+    emergencyRequest.conversationAvailable === true &&
+    Number.isSafeInteger(
+      emergencyRequest.conversationId
+    ) &&
+    emergencyRequest.conversationId > 0;
+  const reachedTimeline =
+    getEmergencyReachedTimeline(
+      emergencyRequest,
+      language
+    );
   const responseLabel =
     language === "es"
       ? `${responseCount} ${
@@ -607,6 +634,12 @@ function EmergencyRequestCard({
         {lifecycleLabel}
       </strong>
 
+      {selectedProfessionalName && (
+        <strong style={emergencyRequestProfessional}>
+          {selectedProfessionalName}
+        </strong>
+      )}
+
       {submittedDate && (
         <span style={emergencyRequestMeta}>
           {language === "es" ? "Enviada" : "Submitted"}{" "}
@@ -621,16 +654,74 @@ function EmergencyRequestCard({
         </span>
       )}
 
-      <button
-        type="button"
-        className="meetro-visual-primary-button"
-        style={emergencyRequestAction}
-        onClick={onOpen}
-      >
-        {language === "es"
-          ? "Ver Solicitud de Emergencia"
-          : "View Emergency Request"}
-      </button>
+      {reachedTimeline.length > 0 && (
+        <ol
+          style={emergencyRequestTimeline}
+          aria-label={
+            language === "es"
+              ? "Progreso de la solicitud de Emergencia"
+              : "Emergency request progress"
+          }
+        >
+          {reachedTimeline.map((stage) => (
+            <li
+              key={stage.key}
+              style={emergencyRequestTimelineStage}
+            >
+              {stage.label}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div style={emergencyRequestActions}>
+        {hasActionableResponses && (
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={emergencyRequestAction}
+            onClick={onOpen}
+          >
+            {language === "es"
+              ? "Revisar Respuestas"
+              : "Review Responses"}
+          </button>
+        )}
+
+        <button
+          type="button"
+          className={
+            hasActionableResponses ||
+            canOpenConversation
+              ? ""
+              : "meetro-visual-primary-button"
+          }
+          style={
+            hasActionableResponses ||
+            canOpenConversation
+              ? emergencyRequestSecondaryAction
+              : emergencyRequestAction
+          }
+          onClick={onOpen}
+        >
+          {language === "es"
+            ? "Ver Solicitud de Emergencia"
+            : "View Emergency Request"}
+        </button>
+
+        {canOpenConversation && (
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={emergencyRequestAction}
+            onClick={onOpenConversation}
+          >
+            {language === "es"
+              ? "Abrir Conversación"
+              : "Open Conversation"}
+          </button>
+        )}
+      </div>
     </article>
   );
 }
@@ -1233,6 +1324,14 @@ function MyRequests({ setPage }) {
                     setPage(
                       buildEmergencyRequestRoute(
                         emergencyRequest.emergencyRequestId
+                      )
+                    )
+                  }
+                  onOpenConversation={() =>
+                    setPage(
+                      buildCanonicalConversationRoute(
+                        emergencyRequest.conversationId,
+                        "myRequests"
                       )
                     )
                   }
@@ -2295,13 +2394,53 @@ const emergencyRequestLifecycle = {
   lineHeight: 1.4,
 };
 
+const emergencyRequestProfessional = {
+  minWidth: 0,
+  color: "var(--meetro-color-forest)",
+  fontSize: "15px",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
+};
+
 const emergencyRequestMeta = {
   color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.4,
 };
 
+const emergencyRequestTimeline = {
+  minWidth: 0,
+  margin: "2px 0",
+  padding: 0,
+  listStyle: "none",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "6px",
+};
+
+const emergencyRequestTimelineStage = {
+  maxWidth: "100%",
+  padding: "5px 8px",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-forest)",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: 850,
+  overflowWrap: "anywhere",
+};
+
+const emergencyRequestActions = {
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "8px",
+};
+
 const emergencyRequestAction = {
+  width: "100%",
+  minWidth: 0,
   minHeight: "44px",
   marginTop: "4px",
   border: "none",
@@ -2311,6 +2450,13 @@ const emergencyRequestAction = {
   color: "white",
   fontWeight: 900,
   cursor: "pointer",
+};
+
+const emergencyRequestSecondaryAction = {
+  ...emergencyRequestAction,
+  border: "1px solid var(--meetro-color-forest)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
 };
 
 const emergencyRequestState = {

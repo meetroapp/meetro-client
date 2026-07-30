@@ -153,6 +153,9 @@ function canonicalEmergencySummary(overrides = {}) {
     expiredAt: null,
     availableResponseCount: 0,
     hasSelectedProfessional: false,
+    selectedProfessionalBusinessName: null,
+    conversationAvailable: false,
+    conversationId: null,
     ...overrides,
   };
 }
@@ -247,6 +250,10 @@ test("Emergency collection normalizes the dedicated privacy-safe summary", async
   const summary = canonicalEmergencySummary({
     availableResponseCount: 2,
     hasSelectedProfessional: true,
+    selectedProfessionalBusinessName:
+      "Molina Home Services",
+    conversationAvailable: true,
+    conversationId: 201,
   });
   const transport = createTransport({
     response: { ok: true, status: 200 },
@@ -303,7 +310,8 @@ test("Emergency summary normalization rejects malformed identity, count, status,
       relationshipId: 151,
     }),
     canonicalEmergencySummary({
-      conversationId: 201,
+      latestMessagePreview:
+        "This field is not approved for Work Center.",
     }),
   ]) {
     assert.equal(
@@ -311,6 +319,84 @@ test("Emergency summary normalization rejects malformed identity, count, status,
       null
     );
   }
+});
+
+test("Emergency summary enrichment fails closed while preserving valid base card data", () => {
+  for (const overrides of [
+    {
+      hasSelectedProfessional: true,
+      selectedProfessionalBusinessName: 99,
+      conversationAvailable: true,
+      conversationId: "not-an-id",
+    },
+    {
+      hasSelectedProfessional: true,
+      selectedProfessionalBusinessName: "   ",
+      conversationAvailable: true,
+      conversationId: 0,
+    },
+    {
+      hasSelectedProfessional: false,
+      selectedProfessionalBusinessName:
+        "Hidden responder",
+      conversationAvailable: true,
+      conversationId: 201,
+    },
+    {
+      hasSelectedProfessional: true,
+      selectedProfessionalBusinessName:
+        "Molina Home Services",
+      conversationAvailable: false,
+      conversationId: 201,
+    },
+  ]) {
+    const normalized =
+      normalizeEmergencyRequestSummary(
+        canonicalEmergencySummary(overrides)
+      );
+
+    assert.ok(normalized);
+    assert.equal(
+      normalized.emergencyRequestId,
+      41
+    );
+    assert.equal(
+      normalized.selectedProfessionalBusinessName,
+      overrides.selectedProfessionalBusinessName ===
+        "Molina Home Services"
+        ? "Molina Home Services"
+        : null
+    );
+    assert.equal(
+      normalized.conversationAvailable,
+      false
+    );
+    assert.equal(normalized.conversationId, null);
+  }
+});
+
+test("Emergency summary exposes a conversation route identity only for a selected professional and valid availability pair", () => {
+  const normalized =
+    normalizeEmergencyRequestSummary(
+      canonicalEmergencySummary({
+        status: "assigned",
+        hasSelectedProfessional: true,
+        selectedProfessionalBusinessName:
+          "  Molina Home Services  ",
+        conversationAvailable: true,
+        conversationId: 201,
+      })
+    );
+
+  assert.equal(
+    normalized.selectedProfessionalBusinessName,
+    "Molina Home Services"
+  );
+  assert.equal(
+    normalized.conversationAvailable,
+    true
+  );
+  assert.equal(normalized.conversationId, 201);
 });
 
 test("one malformed Emergency summary invalidates the authoritative collection", () => {

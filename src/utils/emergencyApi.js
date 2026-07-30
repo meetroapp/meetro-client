@@ -261,6 +261,9 @@ const EMERGENCY_SUMMARY_FIELDS = Object.freeze([
   "expiredAt",
   "availableResponseCount",
   "hasSelectedProfessional",
+  "selectedProfessionalBusinessName",
+  "conversationAvailable",
+  "conversationId",
 ]);
 
 function normalizeNullableTimestamp(value) {
@@ -327,6 +330,23 @@ export function normalizeEmergencyRequestSummary(record) {
       normalizeNullableTimestamp(record[field]),
     ])
   );
+  const hasSelectedProfessional =
+    record.hasSelectedProfessional;
+  const selectedProfessionalBusinessName =
+    hasSelectedProfessional === true &&
+    typeof record.selectedProfessionalBusinessName ===
+      "string"
+      ? cleanText(
+          record.selectedProfessionalBusinessName
+        ) || null
+      : null;
+  const approvedConversationId =
+    hasSelectedProfessional === true &&
+    record.conversationAvailable === true
+      ? normalizeEmergencyRequestId(
+          record.conversationId
+        )
+      : null;
 
   if (
     !emergencyRequestId ||
@@ -337,7 +357,7 @@ export function normalizeEmergencyRequestSummary(record) {
     !createdAt.value ||
     !Number.isSafeInteger(availableResponseCount) ||
     availableResponseCount < 0 ||
-    typeof record.hasSelectedProfessional !== "boolean" ||
+    typeof hasSelectedProfessional !== "boolean" ||
     Object.values(timestamps).some(
       (timestamp) => !timestamp.valid
     )
@@ -358,8 +378,11 @@ export function normalizeEmergencyRequestSummary(record) {
       ])
     ),
     availableResponseCount,
-    hasSelectedProfessional:
-      record.hasSelectedProfessional,
+    hasSelectedProfessional,
+    selectedProfessionalBusinessName,
+    conversationAvailable:
+      approvedConversationId !== null,
+    conversationId: approvedConversationId,
   };
 }
 
