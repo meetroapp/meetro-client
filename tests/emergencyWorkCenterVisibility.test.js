@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   ACTIVE_EMERGENCY_SUMMARY_STATUSES,
   EMERGENCY_SUMMARY_STATUSES,
-  getEmergencyReachedTimeline,
+  getEmergencyTimeline,
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
   isSupportedEmergencySummaryStatus,
@@ -21,6 +21,10 @@ const emergencyRequestSource = readFileSync(
 );
 const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
+  "utf8"
+);
+const emergencyTimelineSource = readFileSync(
+  new URL("../src/components/EmergencyTimeline.jsx", import.meta.url),
   "utf8"
 );
 const emergencyCardSource = myRequestsSource.slice(
@@ -218,8 +222,8 @@ test("Emergency cards expose only bounded presentation fields and canonical navi
   );
 });
 
-test("Emergency timeline includes only canonically reached stages", () => {
-  const timeline = getEmergencyReachedTimeline({
+test("Emergency Work Center uses the reusable full canonical timeline", () => {
+  const timeline = getEmergencyTimeline({
     status: "completed",
     requestedAt: "2026-07-29T14:00:00.000Z",
     assignedAt: "2026-07-29T14:05:00.000Z",
@@ -240,69 +244,18 @@ test("Emergency timeline includes only canonically reached stages", () => {
       "Completed",
     ]
   );
-
-  assert.deepEqual(
-    getEmergencyReachedTimeline({
-      status: "ready_for_distribution",
-      requestedAt: "2026-07-29T14:00:00.000Z",
-    }).map((stage) => stage.label),
-    ["Requested"]
+  assert.match(
+    emergencyCardSource,
+    /<EmergencyTimeline[\s\S]*emergencyRequest=\{emergencyRequest\}[\s\S]*language=\{language\}/
   );
-
-  assert.deepEqual(
-    getEmergencyReachedTimeline({
-      status: "professional_en_route",
-      requestedAt: "2026-07-29T14:00:00.000Z",
-      assignedAt: "2026-07-29T14:05:00.000Z",
-      enRouteAt: "2026-07-29T14:10:00.000Z",
-    }).map((stage) => stage.label),
-    ["Requested", "Accepted", "On the Way"]
+  assert.doesNotMatch(
+    emergencyCardSource,
+    /reachedTimeline|emergencyRequestTimelineStage/
   );
-
-  assert.deepEqual(
-    getEmergencyReachedTimeline({
-      status: "cancelled",
-    }),
-    []
+  assert.match(
+    emergencyTimelineSource,
+    /data-emergency-timeline="canonical"/
   );
-});
-
-test("Emergency timeline status fallbacks never expose future stages", () => {
-  const expectedByStatus = new Map([
-    ["assigned", ["Requested", "Accepted"]],
-    [
-      "professional_arrived",
-      [
-        "Requested",
-        "Accepted",
-        "On the Way",
-        "Arrived",
-      ],
-    ],
-    [
-      "work_in_progress",
-      [
-        "Requested",
-        "Accepted",
-        "On the Way",
-        "Arrived",
-        "Work Started",
-      ],
-    ],
-    [
-      "resolved",
-      ["Requested", "Completed"],
-    ],
-  ]);
-
-  for (const [status, expected] of expectedByStatus) {
-    assert.deepEqual(
-      getEmergencyReachedTimeline({ status }).map(
-        (stage) => stage.label
-      ),
-      expected
-    );
-  }
 });
 
 test("Emergency Work Center adds no conversation-list dependency or polling", () => {

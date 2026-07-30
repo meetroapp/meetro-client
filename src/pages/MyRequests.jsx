@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import EmergencyTimeline from "../components/EmergencyTimeline";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
@@ -26,7 +27,6 @@ import { getEmergencyRequests } from "../utils/emergencyApi";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
-  getEmergencyReachedTimeline,
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
 } from "../utils/emergencySummary";
@@ -595,11 +595,6 @@ function EmergencyRequestCard({
       emergencyRequest.conversationId
     ) &&
     emergencyRequest.conversationId > 0;
-  const reachedTimeline =
-    getEmergencyReachedTimeline(
-      emergencyRequest,
-      language
-    );
   const responseLabel =
     language === "es"
       ? `${responseCount} ${
@@ -654,25 +649,10 @@ function EmergencyRequestCard({
         </span>
       )}
 
-      {reachedTimeline.length > 0 && (
-        <ol
-          style={emergencyRequestTimeline}
-          aria-label={
-            language === "es"
-              ? "Progreso de la solicitud de Emergencia"
-              : "Emergency request progress"
-          }
-        >
-          {reachedTimeline.map((stage) => (
-            <li
-              key={stage.key}
-              style={emergencyRequestTimelineStage}
-            >
-              {stage.label}
-            </li>
-          ))}
-        </ol>
-      )}
+      <EmergencyTimeline
+        emergencyRequest={emergencyRequest}
+        language={language}
+      />
 
       <div style={emergencyRequestActions}>
         {hasActionableResponses && (
@@ -2406,28 +2386,6 @@ const emergencyRequestMeta = {
   color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.4,
-};
-
-const emergencyRequestTimeline = {
-  minWidth: 0,
-  margin: "2px 0",
-  padding: 0,
-  listStyle: "none",
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "6px",
-};
-
-const emergencyRequestTimelineStage = {
-  maxWidth: "100%",
-  padding: "5px 8px",
-  borderRadius: "999px",
-  background: "var(--meetro-surface-warm)",
-  color: "var(--meetro-color-forest)",
-  fontSize: "11px",
-  lineHeight: 1.2,
-  fontWeight: 850,
-  overflowWrap: "anywhere",
 };
 
 const emergencyRequestActions = {

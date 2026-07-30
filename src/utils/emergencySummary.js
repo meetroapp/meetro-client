@@ -86,51 +86,7 @@ const EMERGENCY_TIMELINE_LABELS = Object.freeze({
   }),
 });
 
-const EMERGENCY_TIMELINE_STATUS_FALLBACKS =
-  Object.freeze({
-    requested: new Set([
-      "ready_for_distribution",
-      "active",
-      "selection_pending",
-      "assigned",
-      "professional_en_route",
-      "professional_arrived",
-      "in_service",
-      "work_in_progress",
-      "completed",
-      "resolved",
-    ]),
-    accepted: new Set([
-      "assigned",
-      "professional_en_route",
-      "professional_arrived",
-      "in_service",
-      "work_in_progress",
-      "completed",
-    ]),
-    enRoute: new Set([
-      "professional_en_route",
-      "professional_arrived",
-      "work_in_progress",
-      "completed",
-    ]),
-    arrived: new Set([
-      "professional_arrived",
-      "work_in_progress",
-      "completed",
-    ]),
-    workStarted: new Set([
-      "in_service",
-      "work_in_progress",
-      "completed",
-    ]),
-    completed: new Set([
-      "completed",
-      "resolved",
-    ]),
-  });
-
-const EMERGENCY_TIMELINE_STAGES = Object.freeze([
+export const EMERGENCY_TIMELINE_STAGES = Object.freeze([
   Object.freeze({
     key: "requested",
     timestampField: "requestedAt",
@@ -157,6 +113,58 @@ const EMERGENCY_TIMELINE_STAGES = Object.freeze([
   }),
 ]);
 
+const EMERGENCY_TIMELINE_STATUS_INDEX = Object.freeze({
+  draft: -1,
+  ready_for_distribution: 0,
+  active: 0,
+  selection_pending: 0,
+  assigned: 1,
+  professional_en_route: 2,
+  professional_arrived: 3,
+  in_service: 4,
+  work_in_progress: 4,
+  completed: 5,
+  resolved: 5,
+});
+
+const EMERGENCY_ALTERNATE_OUTCOMES = Object.freeze({
+  safety_blocked: Object.freeze({
+    timestampField: null,
+    label: Object.freeze({
+      en: "Safety Action Required",
+      es: "Acción de Seguridad Requerida",
+    }),
+  }),
+  cancelled: Object.freeze({
+    timestampField: "cancelledAt",
+    label: Object.freeze({
+      en: "Emergency Request Cancelled",
+      es: "Solicitud de Emergencia Cancelada",
+    }),
+  }),
+  expired: Object.freeze({
+    timestampField: "expiredAt",
+    label: Object.freeze({
+      en: "Emergency Request Expired",
+      es: "Solicitud de Emergencia Expirada",
+    }),
+  }),
+  unable_to_match: Object.freeze({
+    timestampField: null,
+    label: Object.freeze({
+      en: "No Compatible Professional Found",
+      es: "No se Encontró un Profesional Compatible",
+    }),
+  }),
+});
+
+function normalizeCanonicalTimestamp(value) {
+  if (typeof value !== "string") return null;
+  const timestamp = value.trim();
+  if (!timestamp || Number.isNaN(Date.parse(timestamp))) return null;
+  return timestamp;
+}
+
 export function isSupportedEmergencySummaryStatus(status) {
   return EMERGENCY_SUMMARY_STATUSES.includes(
     String(status || "").trim()
@@ -175,7 +183,7 @@ export function getEmergencyWorkCenterStatusLabel(
   return labels[normalized] || "";
 }
 
-export function getEmergencyReachedTimeline(
+export function getEmergencyTimeline(
   emergencyRequest = {},
   language = "en"
 ) {
@@ -187,20 +195,82 @@ export function getEmergencyReachedTimeline(
       language === "es" ? "es" : "en"
     ];
 
-  return EMERGENCY_TIMELINE_STAGES
-    .filter(
-      ({ key, timestampField }) =>
-        Boolean(emergencyRequest[timestampField]) ||
-        EMERGENCY_TIMELINE_STATUS_FALLBACKS[
-          key
-        ].has(status)
-    )
-    .map(({ key, timestampField }) => ({
+  const timestamps = EMERGENCY_TIMELINE_STAGES.map(
+    ({ timestampField }) =>
+      normalizeCanonicalTimestamp(
+        emergencyRequest[timestampField]
+      )
+  );
+  const latestTimestampIndex =
+    timestamps.reduce(
+      (latest, timestamp, index) =>
+        timestamp ? index : latest,
+      -1
+    );
+  const hasStatusIndex = Object.hasOwn(
+    EMERGENCY_TIMELINE_STATUS_INDEX,
+    status
+  );
+  const statusIndex = hasStatusIndex
+    ? EMERGENCY_TIMELINE_STATUS_INDEX[status]
+    : -1;
+  const hasAlternateOutcome =
+    Object.hasOwn(
+      EMERGENCY_ALTERNATE_OUTCOMES,
+      status
+    );
+  const reachedIndex = hasAlternateOutcome
+    ? latestTimestampIndex
+    : hasStatusIndex
+      ? statusIndex
+      : latestTimestampIndex;
+
+  return EMERGENCY_TIMELINE_STAGES.map(
+    ({ key, timestampField }, index) => ({
       key,
       label: labels[key],
+      timestampField,
       reachedAt:
-        emergencyRequest[timestampField] || null,
-    }));
+        index <= reachedIndex
+          ? timestamps[index]
+          : null,
+      state:
+        index > reachedIndex
+          ? "future"
+          : !hasAlternateOutcome &&
+              index === reachedIndex
+            ? "current"
+            : "reached",
+    })
+  );
+}
+
+export function getEmergencyAlternateOutcome(
+  emergencyRequest = {},
+  language = "en"
+) {
+  const status = String(
+    emergencyRequest.status || ""
+  ).trim();
+  const outcome =
+    EMERGENCY_ALTERNATE_OUTCOMES[status];
+
+  if (!outcome) return null;
+
+  return {
+    status,
+    label:
+      outcome.label[
+        language === "es" ? "es" : "en"
+      ],
+    occurredAt: outcome.timestampField
+      ? normalizeCanonicalTimestamp(
+          emergencyRequest[
+            outcome.timestampField
+          ]
+        )
+      : null,
+  };
 }
 
 export function getEmergencySpecialtyDisplayLabel(
