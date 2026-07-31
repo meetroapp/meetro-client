@@ -169,7 +169,7 @@ function EmergencyRelationshipDetail({
             ? " · " + detail.serviceDomainLabel
             : ""}
         </p>
-        <strong style={statusPill} role="status">
+        <strong style={statusPill}>
           {detail.statusLabel}
         </strong>
       </header>
@@ -312,7 +312,7 @@ function EmergencyRelationshipDetail({
                 </h2>
 
                 {responsesPhase === "loading" && (
-                  <p style={sectionText} role="status">
+                  <p style={sectionText}>
                     {copy.responsesLoading}
                   </p>
                 )}

@@ -1,7 +1,6 @@
 import {
-  getEmergencyRelationshipNextStep,
+  getEmergencyResponsePresentation,
   getEmergencySpecialtyDisplayLabel,
-  getEmergencyWorkCenterStatusLabel,
   isSupportedEmergencySummaryStatus,
 } from "./emergencySummary.js";
 
@@ -78,6 +77,7 @@ function normalizeResponseCard(response, emergencyRequestId) {
 
   return {
     id: responseId,
+    emergencyRequestId,
     status: response.status,
     businessName:
       cleanText(professional.businessName) ||
@@ -95,6 +95,26 @@ function normalizeResponseCard(response, emergencyRequestId) {
       response.status === "active" &&
       response.conversationAvailable === true,
   };
+}
+
+function deduplicateResponseCards(responseCards) {
+  const responseCardsById = new Map();
+
+  for (const responseCard of responseCards) {
+    const previousResponse = responseCardsById.get(
+      responseCard.id
+    );
+
+    if (
+      !previousResponse ||
+      (previousResponse.status === "pending" &&
+        responseCard.status === "active")
+    ) {
+      responseCardsById.set(responseCard.id, responseCard);
+    }
+  }
+
+  return [...responseCardsById.values()];
 }
 
 export function normalizeEmergencyRelationshipDetail({
@@ -130,15 +150,24 @@ export function normalizeEmergencyRelationshipDetail({
     return null;
   }
 
-  const normalizedResponseCards = (
-    Array.isArray(responses) ? responses : []
-  )
-    .map((response) =>
-      normalizeResponseCard(response, emergencyRequestId)
-    )
-    .filter(Boolean);
+  const normalizedResponseCards = deduplicateResponseCards(
+    (Array.isArray(responses) ? responses : [])
+      .map((response) =>
+        normalizeResponseCard(response, emergencyRequestId)
+      )
+      .filter(Boolean)
+  );
+  const responsePresentation =
+    getEmergencyResponsePresentation({
+      status,
+      language,
+      responses: normalizedResponseCards,
+      emergencyRequestId,
+      hasSelectedProfessional:
+        SELECTED_PROFESSIONAL_STATUSES.includes(status),
+    });
   const hasSelectedProfessional =
-    SELECTED_PROFESSIONAL_STATUSES.includes(status);
+    responsePresentation.hasSelectedProfessional;
   const responseCards = normalizedResponseCards.filter(
     (response) =>
       hasSelectedProfessional
@@ -182,14 +211,10 @@ export function normalizeEmergencyRelationshipDetail({
     category,
     categoryLabel: titleize(category),
     status,
-    statusLabel: getEmergencyWorkCenterStatusLabel(
-      status,
-      language
-    ),
-    nextStep: getEmergencyRelationshipNextStep(
-      status,
-      language
-    ),
+    statusLabel: responsePresentation.statusLabel,
+    nextStep: responsePresentation.nextStep,
+    pendingResponseCount:
+      responsePresentation.pendingResponseCount,
     timelineRequest: {
       status,
       ...normalizedTimestamps,

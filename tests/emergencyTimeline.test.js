@@ -396,7 +396,7 @@ test("Work Center timeline layout remains width-bounded on mobile", () => {
 test("Emergency card actions and canonical conversation routing remain unchanged", () => {
   assert.match(
     myRequestsSource,
-    /Review Responses/
+    /responsePresentation\.reviewActionLabel/
   );
   assert.match(
     myRequestsSource,

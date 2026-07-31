@@ -5,10 +5,14 @@ import test from "node:test";
 import {
   ACTIVE_EMERGENCY_SUMMARY_STATUSES,
   EMERGENCY_SUMMARY_STATUSES,
+  countPendingEmergencyResponses,
+  getEmergencyRelationshipNextStep,
+  getEmergencyResponsePresentation,
   getEmergencyTimeline,
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
   isSupportedEmergencySummaryStatus,
+  normalizeEmergencyPendingResponseCount,
 } from "../src/utils/emergencySummary.js";
 
 const myRequestsSource = readFileSync(
@@ -72,6 +76,166 @@ test("every canonical active Emergency status has the approved Work Center label
     ),
     false
   );
+});
+
+test("pending response-count normalization accepts only non-negative safe integers", () => {
+  for (const [value, expected] of [
+    [0, 0],
+    [1, 1],
+    [4, 4],
+    [null, 0],
+    [undefined, 0],
+    [Number.NaN, 0],
+    [-1, 0],
+    [1.5, 0],
+    ["2", 0],
+    [{ count: 2 }, 0],
+    [[2], 0],
+  ]) {
+    assert.equal(
+      normalizeEmergencyPendingResponseCount(value),
+      expected
+    );
+  }
+});
+
+test("exact response lists count only unique canonical pending Emergency relationships", () => {
+  const responses = [
+    { id: 1, emergencyRequestId: 42, status: "pending" },
+    { id: 1, emergencyRequestId: 42, status: "pending" },
+    { id: 2, emergencyRequestId: 42, status: "pending" },
+    { id: 3, emergencyRequestId: 42, status: "active" },
+    { id: 4, emergencyRequestId: 42, status: "declined" },
+    { id: 5, emergencyRequestId: 42, status: "withdrawn" },
+    { id: 6, emergencyRequestId: 42, status: "closed" },
+    { id: 7, emergencyRequestId: 42, status: "expired" },
+    { id: 8, emergencyRequestId: 42, status: "cancelled" },
+    { id: 9, emergencyRequestId: 42, status: "rejected" },
+    { id: 10, emergencyRequestId: 41, status: "pending" },
+    { id: "11", emergencyRequestId: 42, status: "pending" },
+    { emergencyRequestId: 42, status: "pending" },
+    null,
+    [],
+  ];
+
+  assert.equal(
+    countPendingEmergencyResponses(responses, 42),
+    2
+  );
+  assert.equal(
+    countPendingEmergencyResponses(responses, null),
+    0
+  );
+  assert.equal(
+    countPendingEmergencyResponses({}, 42),
+    0
+  );
+});
+
+test("response-aware status and next-step presentation stays truthful across count and lifecycle precedence", () => {
+  const zero = getEmergencyResponsePresentation({
+    status: "ready_for_distribution",
+    availableResponseCount: 0,
+  });
+  const one = getEmergencyResponsePresentation({
+    status: "ready_for_distribution",
+    availableResponseCount: 1,
+  });
+  const multiple = getEmergencyResponsePresentation({
+    status: "ready_for_distribution",
+    availableResponseCount: 3,
+  });
+
+  assert.deepEqual(
+    {
+      label: zero.statusLabel,
+      actionable: zero.hasActionableResponses,
+      action: zero.reviewActionLabel,
+    },
+    {
+      label: "Waiting for Professional Responses",
+      actionable: false,
+      action: "",
+    }
+  );
+  assert.match(zero.nextStep, /Eligible professionals can still respond/);
+  assert.equal(one.statusLabel, "1 Professional Response Available");
+  assert.match(one.nextStep, /the available professional response/);
+  assert.equal(one.reviewActionLabel, "Review Response");
+  assert.equal(one.hasActionableResponses, true);
+  assert.equal(
+    multiple.statusLabel,
+    "3 Professional Responses Available"
+  );
+  assert.match(multiple.nextStep, /the 3 available professional responses/);
+  assert.equal(multiple.reviewActionLabel, "Review Responses");
+
+  const selected = getEmergencyResponsePresentation({
+    status: "ready_for_distribution",
+    availableResponseCount: 3,
+    hasSelectedProfessional: true,
+  });
+  const dispatch = getEmergencyResponsePresentation({
+    status: "professional_en_route",
+    availableResponseCount: 3,
+  });
+  const completed = getEmergencyResponsePresentation({
+    status: "completed",
+    availableResponseCount: 3,
+  });
+
+  assert.equal(selected.statusLabel, "Professional Selected");
+  assert.match(selected.nextStep, /selected professional is connected/);
+  assert.equal(selected.hasActionableResponses, false);
+  assert.equal(dispatch.statusLabel, "Professional En Route");
+  assert.match(dispatch.nextStep, /on the way/);
+  assert.equal(completed.statusLabel, "Emergency Work Completed");
+  assert.match(completed.nextStep, /marked complete/);
+  assert.equal(completed.hasActionableResponses, false);
+});
+
+test("public status and next-step helpers share response-aware singular and plural grammar", () => {
+  assert.equal(
+    getEmergencyWorkCenterStatusLabel(
+      "ready_for_distribution",
+      "en",
+      { availableResponseCount: 1 }
+    ),
+    "1 Professional Response Available"
+  );
+  assert.match(
+    getEmergencyRelationshipNextStep(
+      "ready_for_distribution",
+      "en",
+      { availableResponseCount: 2 }
+    ),
+    /2 available professional responses/
+  );
+  assert.equal(
+    getEmergencyWorkCenterStatusLabel(
+      "ready_for_distribution",
+      "es",
+      { availableResponseCount: 2 }
+    ),
+    "2 Respuestas Profesionales Disponibles"
+  );
+
+  for (const invalidCount of [
+    undefined,
+    null,
+    Number.NaN,
+    -1,
+    1.5,
+  ]) {
+    assert.equal(
+      getEmergencyWorkCenterStatusLabel(
+        "ready_for_distribution",
+        "en",
+        { availableResponseCount: invalidCount }
+      ),
+      "Waiting for Professional Responses"
+    );
+  }
 });
 
 test("history statuses use truthful canonical lifecycle labels without adding a history UI", () => {
@@ -198,7 +362,11 @@ test("Emergency cards expose only bounded presentation fields and canonical navi
   );
   assert.match(
     emergencyCardSource,
-    /Review Responses/
+    /responsePresentation\.reviewActionLabel/
+  );
+  assert.match(
+    emergencyCardSource,
+    /getEmergencyResponsePresentation\(\{[\s\S]*availableResponseCount:[\s\S]*hasSelectedProfessional:/
   );
   assert.match(
     emergencyCardSource,

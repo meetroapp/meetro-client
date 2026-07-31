@@ -134,6 +134,47 @@ const EMERGENCY_RELATIONSHIP_NEXT_STEPS = Object.freeze({
   }),
 });
 
+const EMERGENCY_RESPONSE_AWARENESS_COPY = Object.freeze({
+  en: Object.freeze({
+    waitingLabel: "Waiting for Professional Responses",
+    waitingNextStep:
+      "Eligible professionals can still respond. Return here to review responses before selecting anyone.",
+    oneResponseLabel: "1 Professional Response Available",
+    oneResponseNextStep:
+      "Review the available professional response before selecting anyone.",
+    multipleResponsesLabel: (count) =>
+      `${count} Professional Responses Available`,
+    multipleResponsesNextStep: (count) =>
+      `Review and select from the ${count} available professional responses.`,
+    oneResponseAction: "Review Response",
+    multipleResponsesAction: "Review Responses",
+  }),
+  es: Object.freeze({
+    waitingLabel: "Esperando Respuestas de Profesionales",
+    waitingNextStep:
+      "Los profesionales elegibles aún pueden responder. Vuelve aquí para revisar las respuestas antes de seleccionar a alguien.",
+    oneResponseLabel: "1 Respuesta Profesional Disponible",
+    oneResponseNextStep:
+      "Revisa la respuesta profesional disponible antes de seleccionar a alguien.",
+    multipleResponsesLabel: (count) =>
+      `${count} Respuestas Profesionales Disponibles`,
+    multipleResponsesNextStep: (count) =>
+      `Revisa y selecciona entre las ${count} respuestas profesionales disponibles.`,
+    oneResponseAction: "Revisar Respuesta",
+    multipleResponsesAction: "Revisar Respuestas",
+  }),
+});
+
+const SELECTED_EMERGENCY_PRESENTATION_STATUSES = Object.freeze([
+  "assigned",
+  "professional_en_route",
+  "professional_arrived",
+  "in_service",
+  "work_in_progress",
+  "completed",
+  "resolved",
+]);
+
 const EMERGENCY_TIMELINE_LABELS = Object.freeze({
   en: Object.freeze({
     requested: "Requested",
@@ -238,29 +279,176 @@ export function isSupportedEmergencySummaryStatus(status) {
   );
 }
 
-export function getEmergencyWorkCenterStatusLabel(
-  status,
-  language = "en"
+export function normalizeEmergencyPendingResponseCount(value) {
+  return Number.isSafeInteger(value) && value >= 0
+    ? value
+    : 0;
+}
+
+function getCanonicalEmergencyResponseStatuses(
+  responses,
+  emergencyRequestId
 ) {
-  const normalized = String(status || "").trim();
-  const labels =
+  if (
+    !Array.isArray(responses) ||
+    !Number.isSafeInteger(emergencyRequestId) ||
+    emergencyRequestId <= 0
+  ) {
+    return new Map();
+  }
+
+  const statusesByRelationshipId = new Map();
+
+  for (const response of responses) {
+    if (
+      !response ||
+      typeof response !== "object" ||
+      Array.isArray(response) ||
+      !Number.isSafeInteger(response.id) ||
+      response.id <= 0 ||
+      response.emergencyRequestId !== emergencyRequestId ||
+      !["pending", "active"].includes(response.status)
+    ) {
+      continue;
+    }
+
+    const previousStatus = statusesByRelationshipId.get(
+      response.id
+    );
+    statusesByRelationshipId.set(
+      response.id,
+      previousStatus === "active" || response.status === "active"
+        ? "active"
+        : "pending"
+    );
+  }
+
+  return statusesByRelationshipId;
+}
+
+export function countPendingEmergencyResponses(
+  responses,
+  emergencyRequestId
+) {
+  return [...getCanonicalEmergencyResponseStatuses(
+    responses,
+    emergencyRequestId
+  ).values()].filter((status) => status === "pending").length;
+}
+
+export function getEmergencyResponsePresentation({
+  status,
+  language = "en",
+  availableResponseCount,
+  responses,
+  emergencyRequestId,
+  hasSelectedProfessional = false,
+} = {}) {
+  const normalizedStatus = String(status || "").trim();
+  const copy =
+    EMERGENCY_RESPONSE_AWARENESS_COPY[
+      language === "es" ? "es" : "en"
+    ];
+  const baseLabels =
     EMERGENCY_WORK_CENTER_LABELS[
       language === "es" ? "es" : "en"
     ];
-  return labels[normalized] || "";
+  const baseNextSteps =
+    EMERGENCY_RELATIONSHIP_NEXT_STEPS[
+      language === "es" ? "es" : "en"
+    ];
+  const exactResponseStatuses = Array.isArray(responses)
+    ? getCanonicalEmergencyResponseStatuses(
+        responses,
+        emergencyRequestId
+      )
+    : null;
+  const pendingResponseCount = exactResponseStatuses
+    ? [...exactResponseStatuses.values()].filter(
+        (responseStatus) => responseStatus === "pending"
+      ).length
+    : normalizeEmergencyPendingResponseCount(
+        availableResponseCount
+      );
+  const selectedProfessional = Boolean(
+    hasSelectedProfessional === true ||
+      SELECTED_EMERGENCY_PRESENTATION_STATUSES.includes(
+        normalizedStatus
+      ) ||
+      (exactResponseStatuses &&
+        [...exactResponseStatuses.values()].includes("active"))
+  );
+  const responseEligible =
+    normalizedStatus === "ready_for_distribution";
+
+  if (responseEligible && selectedProfessional) {
+    return {
+      pendingResponseCount,
+      hasActionableResponses: false,
+      hasSelectedProfessional: true,
+      statusLabel: baseLabels.assigned,
+      nextStep: baseNextSteps.assigned,
+      reviewActionLabel: "",
+    };
+  }
+
+  if (responseEligible && pendingResponseCount > 0) {
+    const hasOneResponse = pendingResponseCount === 1;
+
+    return {
+      pendingResponseCount,
+      hasActionableResponses: true,
+      hasSelectedProfessional: false,
+      statusLabel: hasOneResponse
+        ? copy.oneResponseLabel
+        : copy.multipleResponsesLabel(pendingResponseCount),
+      nextStep: hasOneResponse
+        ? copy.oneResponseNextStep
+        : copy.multipleResponsesNextStep(pendingResponseCount),
+      reviewActionLabel: hasOneResponse
+        ? copy.oneResponseAction
+        : copy.multipleResponsesAction,
+    };
+  }
+
+  return {
+    pendingResponseCount,
+    hasActionableResponses: false,
+    hasSelectedProfessional: selectedProfessional,
+    statusLabel:
+      responseEligible && pendingResponseCount === 0
+        ? copy.waitingLabel
+        : baseLabels[normalizedStatus] || "",
+    nextStep:
+      responseEligible && pendingResponseCount === 0
+        ? copy.waitingNextStep
+        : baseNextSteps[normalizedStatus] || "",
+    reviewActionLabel: "",
+  };
+}
+
+export function getEmergencyWorkCenterStatusLabel(
+  status,
+  language = "en",
+  responseAwareness = {}
+) {
+  return getEmergencyResponsePresentation({
+    ...responseAwareness,
+    status,
+    language,
+  }).statusLabel;
 }
 
 export function getEmergencyRelationshipNextStep(
   status,
-  language = "en"
+  language = "en",
+  responseAwareness = {}
 ) {
-  const normalized = String(status || "").trim();
-  const guidance =
-    EMERGENCY_RELATIONSHIP_NEXT_STEPS[
-      language === "es" ? "es" : "en"
-    ];
-
-  return guidance[normalized] || "";
+  return getEmergencyResponsePresentation({
+    ...responseAwareness,
+    status,
+    language,
+  }).nextStep;
 }
 
 export function getEmergencyTimeline(

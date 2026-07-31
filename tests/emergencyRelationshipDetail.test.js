@@ -296,7 +296,7 @@ test("selected identity uses a safe generic fallback when the active business na
   );
 });
 
-test("no selected canonical status never fabricates identity from inconsistent active data", () => {
+test("an exact active Emergency relationship overrides stale distribution response awareness", () => {
   const detail = normalize({
     emergencyRequest: request({
       status: "ready_for_distribution",
@@ -305,9 +305,15 @@ test("no selected canonical status never fabricates identity from inconsistent a
     conversationId: 77,
   });
 
-  assert.equal(detail.selectedProfessional, null);
-  assert.equal(detail.conversation.available, false);
-  assert.equal(detail.responseCards.length, 0);
+  assert.equal(
+    detail.selectedProfessional.displayName,
+    "Cape Coral Emergency Plumbing"
+  );
+  assert.equal(detail.statusLabel, "Professional Selected");
+  assert.equal(detail.pendingResponseCount, 0);
+  assert.equal(detail.conversation.available, true);
+  assert.equal(detail.responseCards.length, 1);
+  assert.equal(detail.responseCards[0].status, "active");
 });
 
 test("mismatched, declined, withdrawn, and closed responses cannot supply identity", () => {
@@ -352,7 +358,93 @@ test("pending exact-request responses remain reviewable without fabricating a re
   assert.equal(detail.selectedProfessional, null);
   assert.equal(detail.responseCards.length, 1);
   assert.equal(detail.responseCards[0].status, "pending");
+  assert.equal(detail.pendingResponseCount, 1);
+  assert.equal(
+    detail.statusLabel,
+    "1 Professional Response Available"
+  );
+  assert.match(
+    detail.nextStep,
+    /the available professional response/
+  );
   assert.equal(detail.conversation.available, false);
+});
+
+test("exact response awareness ignores malformed and terminal relationships and deduplicates stable IDs", () => {
+  const detail = normalize({
+    emergencyRequest: request({
+      status: "ready_for_distribution",
+    }),
+    responses: [
+      response({ id: 91, status: "pending" }),
+      response({ id: 91, status: "pending" }),
+      response({ id: 92, status: "pending" }),
+      response({ id: 93, status: "declined" }),
+      response({ id: 94, status: "withdrawn" }),
+      response({ id: 95, status: "closed" }),
+      response({ id: 96, status: "expired" }),
+      response({ id: 97, status: "cancelled" }),
+      response({ id: 98, status: "rejected" }),
+      response({ id: 99, emergencyRequestId: 41, status: "pending" }),
+      response({ id: null, status: "pending" }),
+      null,
+    ],
+    conversationId: null,
+  });
+
+  assert.equal(detail.pendingResponseCount, 2);
+  assert.equal(detail.responseCards.length, 2);
+  assert.equal(
+    detail.statusLabel,
+    "2 Professional Responses Available"
+  );
+  assert.match(
+    detail.nextStep,
+    /the 2 available professional responses/
+  );
+});
+
+test("relationship-detail presentation never combines a waiting label with pending response cards", () => {
+  const detail = normalize({
+    emergencyRequest: request({
+      status: "ready_for_distribution",
+    }),
+    responses: [
+      response({
+        status: "pending",
+        conversationAvailable: false,
+      }),
+    ],
+    conversationId: null,
+  });
+
+  assert.equal(detail.responseCards.length, 1);
+  assert.equal(
+    detail.statusLabel,
+    "1 Professional Response Available"
+  );
+  assert.notEqual(
+    detail.statusLabel,
+    "Waiting for Professional Responses"
+  );
+  assert.match(
+    componentSource,
+    /\{detail\.statusLabel\}[\s\S]*detail\.responseCards\.map/
+  );
+});
+
+test("response-aware relationship hydration remains screen-reader readable without a live announcement", () => {
+  assert.match(
+    componentSource,
+    /<strong style=\{statusPill\}>[\s\S]*\{detail\.statusLabel\}/
+  );
+  assert.match(
+    componentSource,
+    /<p style=\{sectionText\}>[\s\S]*\{copy\.responsesLoading\}/
+  );
+  assert.doesNotMatch(componentSource, /aria-live=/);
+  assert.doesNotMatch(componentSource, /role="status"/);
+  assert.match(componentSource, /copy\.selectProfessional/);
 });
 
 test("once selected, only the exact active relationship identity remains visible", () => {
@@ -646,7 +738,7 @@ test("the restored component is mobile-contained with reachable actions and safe
 test("existing Work Center actions and canonical card routing remain in place", () => {
   assert.match(
     myRequestsSource,
-    /Review Responses/
+    /responsePresentation\.reviewActionLabel/
   );
   assert.match(
     myRequestsSource,

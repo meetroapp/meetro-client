@@ -27,8 +27,8 @@ import { getEmergencyRequests } from "../utils/emergencyApi";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
+  getEmergencyResponsePresentation,
   getEmergencySpecialtyDisplayLabel,
-  getEmergencyWorkCenterStatusLabel,
 } from "../utils/emergencySummary";
 import { formatLocaleDate } from "../utils/localeFormat";
 
@@ -554,11 +554,17 @@ function EmergencyRequestCard({
   onOpen,
   onOpenConversation,
 }) {
+  const responsePresentation =
+    getEmergencyResponsePresentation({
+      status: emergencyRequest.status,
+      language,
+      availableResponseCount:
+        emergencyRequest.availableResponseCount,
+      hasSelectedProfessional:
+        emergencyRequest.hasSelectedProfessional,
+    });
   const lifecycleLabel =
-    getEmergencyWorkCenterStatusLabel(
-      emergencyRequest.status,
-      language
-    );
+    responsePresentation.statusLabel;
   const serviceLabel =
     getEmergencySpecialtyDisplayLabel(
       emergencyRequest.serviceSpecialty,
@@ -574,13 +580,8 @@ function EmergencyRequestCard({
     },
     language
   );
-  const responseCount =
-    emergencyRequest.availableResponseCount;
   const hasActionableResponses =
-    emergencyRequest.status ===
-      "ready_for_distribution" &&
-    responseCount > 0 &&
-    emergencyRequest.hasSelectedProfessional !== true;
+    responsePresentation.hasActionableResponses;
   const selectedProfessionalName =
     emergencyRequest.hasSelectedProfessional === true
       ? emergencyRequest
@@ -595,19 +596,6 @@ function EmergencyRequestCard({
       emergencyRequest.conversationId
     ) &&
     emergencyRequest.conversationId > 0;
-  const responseLabel =
-    language === "es"
-      ? `${responseCount} ${
-          responseCount === 1
-            ? "respuesta profesional disponible"
-            : "respuestas profesionales disponibles"
-        }`
-      : `${responseCount} ${
-          responseCount === 1
-            ? "professional response available"
-            : "professional responses available"
-        }`;
-
   return (
     <article
       className="meetro-visual-surface"
@@ -642,13 +630,6 @@ function EmergencyRequestCard({
         </span>
       )}
 
-      {emergencyRequest.status ===
-        "ready_for_distribution" && (
-        <span style={emergencyRequestMeta}>
-          {responseLabel}
-        </span>
-      )}
-
       <EmergencyTimeline
         emergencyRequest={emergencyRequest}
         language={language}
@@ -662,9 +643,7 @@ function EmergencyRequestCard({
             style={emergencyRequestAction}
             onClick={onOpen}
           >
-            {language === "es"
-              ? "Revisar Respuestas"
-              : "Review Responses"}
+            {responsePresentation.reviewActionLabel}
           </button>
         )}
 
