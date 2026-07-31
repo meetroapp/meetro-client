@@ -15,6 +15,7 @@ import {
   normalizeEmergencyRequestId,
   normalizeEmergencyRequestSummary,
   normalizeEmergencyRequestsResult,
+  normalizeProfessionalEmergencyParticipation,
   prepareEmergencyRequest,
   respondToEmergencyOpportunity,
   saveEmergencySafetyAssessment,
@@ -441,6 +442,7 @@ test("professional Emergency opportunities expose only the bounded public projec
           requestedAt: "2026-07-27T12:00:00.000Z",
           createdAt: "2026-07-27T11:58:00.000Z",
           updatedAt: "2026-07-27T12:00:00.000Z",
+          participation: null,
           relationship: null,
           conversation: null,
           locationText: "Private address",
@@ -469,6 +471,7 @@ test("professional Emergency opportunities expose only the bounded public projec
     "requestedAt",
     "createdAt",
     "updatedAt",
+    "participation",
     "relationship",
     "conversation",
   ]);
@@ -484,6 +487,80 @@ test("professional Emergency opportunities expose only the bounded public projec
     },
     setPage: undefined,
   });
+});
+
+test("professional Emergency participation normalization is strict and fails closed", () => {
+  assert.equal(normalizeProfessionalEmergencyParticipation(undefined), null);
+  assert.equal(normalizeProfessionalEmergencyParticipation(null), null);
+
+  for (const state of [
+    "pending",
+    "active",
+    "declined",
+    "withdrawn",
+    "closed",
+  ]) {
+    assert.deepEqual(
+      normalizeProfessionalEmergencyParticipation({ state }),
+      { state }
+    );
+  }
+
+  for (const malformed of [
+    "pending",
+    1,
+    [],
+    {},
+    { status: "pending" },
+    { state: "unexpected" },
+    { state: "pending", relationshipId: 51 },
+    { state: "pending", professionalUserId: 9 },
+    { state: "pending", contractorId: 80 },
+  ]) {
+    assert.deepEqual(
+      normalizeProfessionalEmergencyParticipation(malformed),
+      { state: "unknown" }
+    );
+  }
+});
+
+test("professional Emergency opportunity hydration preserves bounded participation only", async () => {
+  const transport = createTransport({
+    response: { ok: true, status: 200 },
+    data: {
+      success: true,
+      code: "EMERGENCY_OPPORTUNITIES_FOUND",
+      opportunities: [
+        {
+          id: 41,
+          sourceType: "emergency",
+          category: "home_repair",
+          serviceDomain: "home_services",
+          serviceSpecialty: "electrical",
+          title: "Electrical Emergency",
+          description: "Partial outage",
+          status: "ready_for_distribution",
+          participation: { state: "pending" },
+          relationship: { id: 51 },
+          conversation: { id: 61 },
+        },
+      ],
+    },
+  });
+
+  const result = await listProfessionalEmergencyOpportunities({
+    authFetchImpl: transport.authFetchImpl,
+  });
+
+  assert.deepEqual(result.opportunities[0].participation, {
+    state: "pending",
+  });
+  assert.equal(result.opportunities[0].relationship, null);
+  assert.equal(result.opportunities[0].conversation, null);
+  assert.equal(
+    Object.hasOwn(result.opportunities[0].participation, "relationshipId"),
+    false
+  );
 });
 
 test("professional Emergency response is idempotent and sends no client-owned identity", async () => {

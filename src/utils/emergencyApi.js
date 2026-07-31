@@ -57,6 +57,18 @@ export const EMERGENCY_CLIENT_ERROR = Object.freeze({
   INVALID_RESPONSE: "INVALID_EMERGENCY_RESPONSE",
 });
 
+const PROFESSIONAL_EMERGENCY_PARTICIPATION_STATES = new Set([
+  "pending",
+  "active",
+  "declined",
+  "withdrawn",
+  "closed",
+]);
+
+const UNKNOWN_PROFESSIONAL_EMERGENCY_PARTICIPATION = Object.freeze({
+  state: "unknown",
+});
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -543,6 +555,9 @@ export function normalizeProfessionalEmergencyOpportunitiesResult(
         requestedAt: record.requestedAt || null,
         createdAt: record.createdAt || null,
         updatedAt: record.updatedAt || null,
+        participation: normalizeProfessionalEmergencyParticipation(
+          record.participation
+        ),
         relationship: null,
         conversation: null,
       };
@@ -564,6 +579,21 @@ export function normalizeProfessionalEmergencyOpportunitiesResult(
     ...normalized,
     opportunities,
   };
+}
+
+export function normalizeProfessionalEmergencyParticipation(value) {
+  if (value === undefined || value === null) return null;
+
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== 1 ||
+    typeof value.state !== "string" ||
+    !PROFESSIONAL_EMERGENCY_PARTICIPATION_STATES.has(value.state)
+  ) {
+    return { ...UNKNOWN_PROFESSIONAL_EMERGENCY_PARTICIPATION };
+  }
+
+  return { state: value.state };
 }
 
 export function normalizeProfessionalEmergencyResponseResult(result) {

@@ -21,6 +21,9 @@ import {
 import { isProfessionalSession } from "../utils/session";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
+  resolveProfessionalEmergencyResponsePresentation,
+} from "../utils/professionalEmergencyParticipation";
+import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
@@ -86,6 +89,7 @@ function BusinessLeads({ setPage }) {
         ? {
             phase: "ready",
             created: result.created,
+            participationState: result.relationship?.status || "unknown",
             message: "",
           }
         : {
@@ -284,10 +288,11 @@ function BusinessLeads({ setPage }) {
             {emergencyOpportunities.map((opportunity) => {
               const responseState =
                 emergencyResponseState[opportunity.id] || {};
-              const responsePending =
-                responseState.phase === "loading";
-              const responseConfirmed =
-                responseState.phase === "ready";
+              const responsePresentation =
+                resolveProfessionalEmergencyResponsePresentation({
+                  participation: opportunity.participation,
+                  localState: responseState,
+                });
 
               return (
                 <article
@@ -311,27 +316,18 @@ function BusinessLeads({ setPage }) {
                     type="button"
                     style={{
                       ...leadActionButton,
-                      ...(responseConfirmed
+                      ...(responsePresentation.confirmed
                         ? confirmedResponseButton
                         : {}),
                     }}
                     disabled={
-                      responsePending || responseConfirmed
+                      responsePresentation.actionDisabled
                     }
                     onClick={() =>
                       respondToEmergency(opportunity)
                     }
                   >
-                    {responsePending
-                      ? t("emergencyResponding", language)
-                      : responseConfirmed
-                        ? t(
-                            responseState.created
-                              ? "emergencyResponseSent"
-                              : "emergencyResponseAlreadySent",
-                            language
-                          )
-                        : t("emergencyRespond", language)}
+                    {t(responsePresentation.labelKey, language)}
                   </button>
 
                   {responseState.phase === "error" && (
@@ -340,7 +336,7 @@ function BusinessLeads({ setPage }) {
                     </p>
                   )}
 
-                  {responseConfirmed && (
+                  {responsePresentation.pendingParticipation && (
                     <p style={leadReviewNote}>
                       {t("emergencyResponsePending", language)}
                     </p>
