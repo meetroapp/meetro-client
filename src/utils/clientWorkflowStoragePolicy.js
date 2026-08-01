@@ -83,6 +83,18 @@ export const LEGACY_WORKFLOW_STORAGE_PREFIXES = Object.freeze([
   "emergency",
 ]);
 
+export const PROHIBITED_COMMERCIAL_AUTHORITY_STORAGE_KEYS = Object.freeze([
+  "canonicalCommercialAuthority",
+  "commercialAuthorityAggregates",
+  "commercialAuthorityEvidence",
+  "commercialCommandResults",
+]);
+
+export const PROHIBITED_COMMERCIAL_AUTHORITY_STORAGE_PREFIXES = Object.freeze([
+  "meetro_commercial_authority_",
+  "meetro_commercial_evidence_",
+]);
+
 export function isProductionClientRuntime(options = {}) {
   if (typeof options.production === "boolean") return options.production;
   return import.meta.env?.PROD === true;
@@ -95,7 +107,17 @@ export function canReadLegacyWorkflowStorage(options = {}) {
 export function isLegacyWorkflowStorageKey(key = "") {
   return (
     LEGACY_WORKFLOW_STORAGE_KEYS.includes(key) ||
-    LEGACY_WORKFLOW_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))
+    LEGACY_WORKFLOW_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix)) ||
+    isProhibitedCommercialAuthorityStorageKey(key)
+  );
+}
+
+export function isProhibitedCommercialAuthorityStorageKey(key = "") {
+  return (
+    PROHIBITED_COMMERCIAL_AUTHORITY_STORAGE_KEYS.includes(key) ||
+    PROHIBITED_COMMERCIAL_AUTHORITY_STORAGE_PREFIXES.some((prefix) =>
+      key.startsWith(prefix)
+    )
   );
 }
 
@@ -105,6 +127,7 @@ export function purgeLegacyWorkflowStorage(storage = globalThis.localStorage) {
   const keys = Array.from(
     new Set([
       ...LEGACY_WORKFLOW_STORAGE_KEYS,
+      ...PROHIBITED_COMMERCIAL_AUTHORITY_STORAGE_KEYS,
       ...Array.from({ length: storage.length || 0 }, (_, index) => storage.key(index)),
       ...Object.keys(storage),
     ].filter(Boolean))

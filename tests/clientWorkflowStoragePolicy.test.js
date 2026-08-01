@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 import {
   canReadLegacyWorkflowStorage,
+  isProhibitedCommercialAuthorityStorageKey,
   isLegacyWorkflowStorageKey,
   purgeLegacyWorkflowStorage,
 } from "../src/utils/clientWorkflowStoragePolicy.js";
@@ -77,6 +78,34 @@ test("legacy cleanup removes account workflow data without assigning it to anoth
   assert.equal(storage.getItem("contractorProfile"), null);
   assert.equal(storage.getItem("language"), "es");
   assert.equal(storage.getItem("meetroCommunityDiscoveryInterests"), '["marketing"]');
+});
+
+test("canonical commercial authority keys are prohibited in local and session storage", () => {
+  [
+    "canonicalCommercialAuthority",
+    "commercialAuthorityAggregates",
+    "commercialAuthorityEvidence",
+    "commercialCommandResults",
+    "meetro_commercial_authority_quote",
+    "meetro_commercial_evidence_aggregate-a",
+  ].forEach((key) => {
+    assert.equal(isProhibitedCommercialAuthorityStorageKey(key), true, key);
+    assert.equal(isLegacyWorkflowStorageKey(key), true, key);
+  });
+
+  for (const storageName of ["localStorage", "sessionStorage"]) {
+    const storage = createStorage({
+      canonicalCommercialAuthority: '{"confirmed":true}',
+      commercialAuthorityEvidence: '[{"type":"legacy"}]',
+      language: "en",
+    });
+    const removed = purgeLegacyWorkflowStorage(storage);
+    assert.ok(removed.includes("canonicalCommercialAuthority"), storageName);
+    assert.ok(removed.includes("commercialAuthorityEvidence"), storageName);
+    assert.equal(storage.getItem("canonicalCommercialAuthority"), null);
+    assert.equal(storage.getItem("commercialAuthorityEvidence"), null);
+    assert.equal(storage.getItem("language"), "en");
+  }
 });
 
 test("production modules use the centralized fail-closed storage policy", () => {
