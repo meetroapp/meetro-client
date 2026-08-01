@@ -84,9 +84,7 @@ function isEditableEmergencyDraft(record = {}) {
 }
 
 function canCancelEmergencyRequest(record = {}) {
-  return ["draft", "safety_blocked"].includes(
-    getRequestStatus(record)
-  );
+  return getRequestStatus(record) === "draft";
 }
 
 function getRecoveredPhase(record = {}) {

@@ -40,7 +40,7 @@ test("Customer Relationships source contains no former production fixtures", () 
 
 test("Customer Relationships direct route and professional navigation remain safe", () => {
   assert.match(appSource, /if \(page === "customerRelationshipsCenter"\) \{/);
-  assert.match(appSource, /"customerRelationshipsCenter"[\s\S]*"emergencyCompletionActions"/);
+  assert.match(appSource, /"customerRelationshipsCenter"[\s\S]*"invoiceBuilder"/);
   assert.match(navSource, /page: "customerRelationshipsCenter"/);
   assert.match(businessToolsSource, /setPage\("customerRelationshipsCenter"\)/);
   assert.match(pageSource, /setPage\("businessCommandCenter"\)/);

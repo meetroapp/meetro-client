@@ -80,7 +80,7 @@ function ContractorDetails({ setPage, currentPage }) {
     }
 
     if (returnPage === "emergency") {
-      setPage("emergencyBusinessSelection");
+      setPage("emergency");
       return;
     }
 

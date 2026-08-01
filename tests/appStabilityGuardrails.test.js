@@ -68,7 +68,10 @@ test("startup repairs authenticated professional route state before redirecting 
   assert.match(appSource, /"sessionRestoring"/);
   assert.match(appSource, /SessionRestoringScreen/);
   assert.match(appSource, /setPageState\(getInitialPage\(\)\)/);
-  assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(targetPage\)/);
+  assert.match(
+    appSource,
+    /restoreAuthenticatedSessionFromStorage\([\s\S]{0,80}authoritativeTargetPage[\s\S]{0,20}\)/
+  );
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(routedHash\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(hashPage\)/);
   assert.match(appSource, /restoreAuthenticatedSessionFromStorage\(currentHash\)/);

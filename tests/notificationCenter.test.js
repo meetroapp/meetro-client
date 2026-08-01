@@ -46,8 +46,24 @@ test("notification routes open the existing destination for each workflow type",
     "conversationThread"
   );
   assert.equal(
-    getNotificationRoute({ type: "emergency_update", emergencyId: "em-1" }).page,
-    "emergencyStatus"
+    getNotificationRoute({ type: "emergency_update", emergencyId: "41" }).page,
+    "emergencyRequest?requestId=41"
+  );
+  assert.equal(
+    getNotificationRoute({
+      type: "emergency_update",
+      emergencyId: "41",
+      conversationId: "17",
+    }).page,
+    "conversationThread?conversationId=17&returnPage=notifications"
+  );
+  assert.deepEqual(
+    getNotificationRoute({
+      type: "emergency_update",
+      emergencyId: "legacy-emergency-id",
+      conversationId: "legacy-conversation-id",
+    }),
+    { page: "emergency", context: {} }
   );
   assert.equal(
     getNotificationRoute({ type: "hiring_application" }, "business").page,

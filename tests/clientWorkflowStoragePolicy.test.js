@@ -89,6 +89,7 @@ test("production modules use the centralized fail-closed storage policy", () => 
     "src/pages/ConversationThread.jsx",
     "src/pages/ContractorDashboard.jsx",
     "src/pages/BusinessDashboard.jsx",
+    "src/utils/emergencyLifecycle.js",
     "src/pages/Profile.jsx",
     "src/pages/CompletionSheet.jsx",
     "src/pages/EmergencyCompletionActions.jsx",

@@ -4,6 +4,16 @@ import { normalizeCanonicalEmergencySpecialty } from "./emergencySpecialties.js"
 export const EMERGENCY_REQUEST_ROUTE_PAGE = "emergencyRequest";
 export const EMERGENCY_REQUEST_ROUTE_PARAM = "requestId";
 export const EMERGENCY_SPECIALTY_ROUTE_PARAM = "serviceSpecialty";
+export const LEGACY_EMERGENCY_ROUTE_REDIRECTS = Object.freeze({
+  emergencyBusinessSelection: "emergency",
+  emergencyBusinessSettings: "contractorProfile",
+  emergencyStatus: "myRequests",
+  emergencyDispatch: "contractorDashboard",
+  emergencyCompletionActions: "contractorDashboard",
+  emergencyOperationsCenter: "contractorDashboard",
+  emergencyChat: "messagesInbox",
+  emergencyComplete: "myRequests",
+});
 export const EMERGENCY_ROUTE_MODE = Object.freeze({
   NEW: "new",
   DETAIL: "detail",
@@ -12,6 +22,14 @@ export const EMERGENCY_ROUTE_MODE = Object.freeze({
 
 function cleanRouteValue(value) {
   return String(value ?? "").replace(/^#/, "").trim();
+}
+
+export function resolveLegacyEmergencyRoute(routeValue = "") {
+  const route = cleanRouteValue(routeValue);
+  const queryIndex = route.indexOf("?");
+  const page = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
+
+  return LEGACY_EMERGENCY_ROUTE_REDIRECTS[page] || route;
 }
 
 export function parseEmergencyRequestRoute(routeValue = "") {

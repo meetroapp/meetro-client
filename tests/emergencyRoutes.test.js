@@ -3,11 +3,47 @@ import test from "node:test";
 
 import {
   EMERGENCY_REQUEST_ROUTE_PAGE,
+  LEGACY_EMERGENCY_ROUTE_REDIRECTS,
   buildEmergencyDraftRoute,
   buildEmergencyRequestRoute,
   parseEmergencyRequestRoute,
   replaceEmergencyRequestRoute,
+  resolveLegacyEmergencyRoute,
 } from "../src/utils/emergencyRoutes.js";
+
+test("all legacy Emergency routes redirect to canonical destinations", () => {
+  assert.deepEqual(LEGACY_EMERGENCY_ROUTE_REDIRECTS, {
+    emergencyBusinessSelection: "emergency",
+    emergencyBusinessSettings: "contractorProfile",
+    emergencyStatus: "myRequests",
+    emergencyDispatch: "contractorDashboard",
+    emergencyCompletionActions: "contractorDashboard",
+    emergencyOperationsCenter: "contractorDashboard",
+    emergencyChat: "messagesInbox",
+    emergencyComplete: "myRequests",
+  });
+
+  for (const [legacyRoute, canonicalRoute] of Object.entries(
+    LEGACY_EMERGENCY_ROUTE_REDIRECTS
+  )) {
+    assert.equal(resolveLegacyEmergencyRoute(legacyRoute), canonicalRoute);
+    assert.equal(
+      resolveLegacyEmergencyRoute(`#${legacyRoute}?stale=true`),
+      canonicalRoute
+    );
+  }
+});
+
+test("canonical and unrelated routes pass through the Emergency redirect policy", () => {
+  for (const route of [
+    "emergency",
+    "emergencyRequest?requestId=41",
+    "conversationThread?conversationId=9&returnPage=myRequests",
+    "home",
+  ]) {
+    assert.equal(resolveLegacyEmergencyRoute(route), route);
+  }
+});
 
 test("Emergency route parser accepts exact canonical identity", () => {
   assert.deepEqual(

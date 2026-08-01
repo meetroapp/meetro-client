@@ -1397,7 +1397,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
               ? t("ready")
               : t("setupRequired")
           }
-          onClick={() => setPage("emergencyBusinessSettings")}
+          onClick={() => setPage("contractorProfile")}
         />
 
         <SettingRow

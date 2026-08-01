@@ -201,16 +201,13 @@ test("Emergency submission becomes read-only and available for compatible respon
 test("Emergency cancellation is limited to governed pre-distribution statuses", () => {
   assert.match(
     requestSource,
-    /\["draft", "safety_blocked"\]/
+    /getRequestStatus\(record\) === "draft"/
   );
   assert.match(
     requestSource,
     /canCancelEmergencyRequest/
   );
-  assert.doesNotMatch(
-    requestSource,
-    /\["ready_for_distribution".*"cancel/
-  );
+  assert.doesNotMatch(requestSource, /\["draft", "safety_blocked"\]/);
 });
 
 test("non-draft Emergency records render read-only canonical lifecycle state", () => {

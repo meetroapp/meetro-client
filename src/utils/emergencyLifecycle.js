@@ -5,6 +5,7 @@ import {
 import { t } from "./language";
 import { createNotification } from "./meetroNotifications";
 import { formatMessageTime } from "./displayTime.js";
+import { canReadLegacyWorkflowStorage } from "./clientWorkflowStoragePolicy.js";
 
 function readJson(key, fallback) {
   try {
@@ -18,6 +19,8 @@ export function openActiveEmergencyConversation(
   setPage,
   returnPage = "messagesInbox"
 ) {
+  if (!canReadLegacyWorkflowStorage()) return false;
+
   const activeRecord = readJson("activeEmergencyRecord", {});
   const requestId =
     activeRecord.id ||
@@ -47,6 +50,8 @@ export function openActiveEmergencyConversation(
 }
 
 export function transitionEmergencyStatus(nextStatus, details = {}) {
+  if (!canReadLegacyWorkflowStorage()) return null;
+
   const activeRecord = readJson("activeEmergencyRecord", {});
   const requestId =
     activeRecord.id ||

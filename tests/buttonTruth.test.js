@@ -27,11 +27,12 @@ test("Home communication action truthfully opens the existing messages route", (
   assert.equal(t("homeOpenMessages", "en"), "Open Communication Center");
 });
 
-test("Home emergency action routes to emergency progress or completion review", () => {
+test("Home legacy Emergency cards fall back to the canonical request directory", () => {
   assert.match(homeSource, /function openActiveEmergencyFromHome\(isCompletedReview = false\)/);
-  assert.match(homeSource, /setPage\("emergencyComplete"\)/);
+  assert.match(homeSource, /setPage\("myRequests"\)/);
   assert.match(homeSource, /openActiveEmergencyConversation\(setPage, "home"\)/);
-  assert.match(homeSource, /setPage\("emergencyStatus"\)/);
+  assert.doesNotMatch(homeSource, /setPage\("emergencyStatus"\)/);
+  assert.doesNotMatch(homeSource, /setPage\("emergencyComplete"\)/);
 });
 
 test("completed job Continue Conversation opens the project conversation", () => {

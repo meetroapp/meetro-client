@@ -1982,7 +1982,7 @@ function MyRequests({ setPage }) {
                             "homeowner"
                           );
 
-                          setPage("emergencyComplete");
+                          setPage("myRequests");
                         }}
                       >
                          {language === "es"
@@ -2073,7 +2073,7 @@ function MyRequests({ setPage }) {
                                 request.selectedProfessional || "Professional"
                               );
 
-                              setPage("emergencyComplete");
+                              setPage("myRequests");
                             }}
                           >
                              {language === "es"

@@ -633,12 +633,12 @@ function Home({ setPage }) {
 
   function openActiveEmergencyFromHome(isCompletedReview = false) {
     if (isCompletedReview) {
-      setPage("emergencyComplete");
+      setPage("myRequests");
       return;
     }
 
     if (!openActiveEmergencyConversation(setPage, "home")) {
-      setPage("emergencyStatus");
+      setPage("myRequests");
     }
   }
 

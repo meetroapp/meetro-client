@@ -4978,16 +4978,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
   })();
 
   const selectedService =
-    activeEmergencyRecord.service ||
-    activeEmergencyRecord.title ||
-    localStorage.getItem("selectedEmergencyService") ||
-    "";
+    canReadLegacyWorkflowStorage()
+      ? activeEmergencyRecord.service ||
+        activeEmergencyRecord.title ||
+        localStorage.getItem("selectedEmergencyService") ||
+        ""
+      : "";
 
   const dispatchStatus =
-    activeEmergencyRecord.status ||
-    localStorage.getItem("emergencyDispatchStatus") || "";
+    canReadLegacyWorkflowStorage()
+      ? activeEmergencyRecord.status ||
+        localStorage.getItem("emergencyDispatchStatus") ||
+        ""
+      : "";
 
   const hasActiveEmergency =
+    canReadLegacyWorkflowStorage() &&
     Boolean(dispatchStatus) &&
     dispatchStatus !== "completed" &&
     dispatchStatus !== "cancelled" &&
@@ -8245,7 +8251,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         onPrimary: () => {
           setActiveAccountMode("business");
           localStorage.setItem("dispatchReturnPage", "contractorDashboard");
-          setPage("emergencyDispatch");
+          setPage("contractorDashboard");
         },
         onSecondary: () =>
           openActiveEmergencyConversation(setPage, "contractorDashboard"),
@@ -14113,7 +14119,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               <button
                 style={emptyActionButton}
-                onClick={() => setPage("emergencyBusinessSettings")}
+                onClick={() => setPage("contractorProfile")}
               >
                  {translate("workCenterEmergencySettings", activeLanguage)}
               </button>

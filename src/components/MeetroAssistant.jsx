@@ -334,18 +334,6 @@ const assistantCopy = {
         next: "Share the issue, location, safety details, and photos if available.",
         actions: ["messages"],
       },
-      emergencyStatus: {
-        name: "Emergency Status",
-        purpose: "Track urgent service response and updates.",
-        next: "Watch status updates and continue the conversation if coordination is needed.",
-        actions: ["messages"],
-      },
-      emergencyOperationsCenter: {
-        name: "Emergency Operations",
-        purpose: "Coordinate urgent professional response work.",
-        next: "Review the active dispatch or customer communication.",
-        actions: ["workCenter", "messages"],
-      },
       completionSheet: {
         name: "Completion",
         purpose: "Document work performed. Completion does not automatically mean closure.",
@@ -1933,7 +1921,8 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     };
     const openEmergencyAction = {
       label: language === "es" ? "Continuar emergencia" : "Continue Emergency Work",
-      target: "emergencyOperationsCenter",
+      target: "contractorDashboard",
+      workCenterSection: "active",
     };
     const remindLaterAction = {
       label: language === "es" ? "Recordarme después" : "Remind Me Later",
@@ -2511,7 +2500,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const isBusinessMode =
     getAccountModeForPage(currentPage, activeAccountMode) === "business";
   const roleMode = isBusinessMode ? "business" : "personal";
-  const isChat = currentPage === "conversationThread" || currentPage === "emergencyChat";
+  const isChat = currentPage === "conversationThread";
   const launcherBottomClearance = isBusinessMode || isChat ? 104 : 94;
   const launcherFallbackBottom = `calc(${launcherBottomClearance}px + env(safe-area-inset-bottom))`;
   const launcherButtonSize = getAssistantLauncherButtonSize();
@@ -3673,7 +3662,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     clearAssistantWake();
     if (wakeObservationType === "emergency") {
       setOpen(false);
-      setPage?.(isBusinessMode ? "emergencyOperationsCenter" : "emergencyStatus");
+      setPage?.(isBusinessMode ? "contractorDashboard" : "myRequests");
       return;
     }
 

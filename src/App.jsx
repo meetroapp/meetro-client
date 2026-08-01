@@ -32,6 +32,7 @@ import LoadingScreen from "./components/LoadingScreen";
 import {
   startAppLayoutCoordinator,
 } from "./utils/appLayout";
+import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -58,17 +59,9 @@ import Welcome from "./pages/Welcome";
 import WelcomeIntro from "./pages/WelcomeIntro";
 import Favorites from "./pages/Favorites";
 import Emergency from "./pages/Emergency";
-import EmergencyBusinessSelection from "./pages/EmergencyBusinessSelection";
-import EmergencyBusinessSettings from "./pages/EmergencyBusinessSettings";
 import EmergencyRequest from "./pages/EmergencyRequest";
-import EmergencyStatus from "./pages/EmergencyStatus";
-import EmergencyDispatch from "./pages/EmergencyDispatch";
-import EmergencyCompletionActions from "./pages/EmergencyCompletionActions";
 import InvoiceBuilder from "./pages/InvoiceBuilder";
-import EmergencyOperationsCenter from "./pages/EmergencyOperationsCenter";
 import CompletionSheet from "./pages/CompletionSheet";
-import EmergencyChat from "./pages/EmergencyChat";
-import EmergencyComplete from "./pages/EmergencyComplete";
 import ContractorDashboard from "./pages/ContractorDashboard";
 import CompletedJobDetails from "./pages/CompletedJobDetails";
 import ContractorJobAccepted from "./pages/ContractorJobAccepted";
@@ -221,8 +214,6 @@ const assistantEnabledPages = new Set([
   "projectGallery",
   "completedJobDetails",
   "emergency",
-  "emergencyStatus",
-  "emergencyOperationsCenter",
   "completionSheet",
   "profile",
 ]);
@@ -299,9 +290,6 @@ function App() {
   "contractorDashboard",
   "contractorJobAccepted",
   "customerRelationshipsCenter",
-  "emergencyCompletionActions",
-  "emergencyDispatch",
-  "emergencyOperationsCenter",
   "invoiceBuilder",
   "hiringCenter",
   "teamMembers",
@@ -379,25 +367,33 @@ function App() {
   };
 
   const getGuardedPage = (targetPage = "") => {
-    if (isPublicLegalPage(targetPage)) {
-      return getLegalPageForRoute(targetPage);
+    const authoritativeTargetPage =
+      resolveLegacyEmergencyRoute(targetPage);
+
+    if (isPublicLegalPage(authoritativeTargetPage)) {
+      return getLegalPageForRoute(authoritativeTargetPage);
     }
 
-    if (isPublicUnauthenticatedPage(targetPage)) {
-      return targetPage;
+    if (isPublicUnauthenticatedPage(authoritativeTargetPage)) {
+      return authoritativeTargetPage;
     }
 
     const hasToken = safeGetStorageItem("token");
-    const restoredSession = restoreAuthenticatedSessionFromStorage(targetPage);
+    const restoredSession = restoreAuthenticatedSessionFromStorage(
+      authoritativeTargetPage
+    );
     const resolvedMode = restoredSession.finalMode || "personal";
-    const targetMode = getAccountModeForPage(targetPage, resolvedMode);
+    const targetMode = getAccountModeForPage(
+      authoritativeTargetPage,
+      resolvedMode
+    );
 
-    if (isProfessionalOnlyPage(targetPage) && !hasToken) {
+    if (isProfessionalOnlyPage(authoritativeTargetPage) && !hasToken) {
       return "login";
     }
 
     if (
-      isProfessionalOnlyPage(targetPage) &&
+      isProfessionalOnlyPage(authoritativeTargetPage) &&
       !restoredSession.isProfessional &&
       !isProfessionalSession()
     ) {
@@ -408,9 +404,9 @@ function App() {
       return getDashboardPageForAccountMode(resolvedMode);
     }
 
-    return shouldRouteToProfessionalOnboarding(targetPage)
+    return shouldRouteToProfessionalOnboarding(authoritativeTargetPage)
       ? "professionalOnboarding"
-      : targetPage;
+      : authoritativeTargetPage;
   };
 
   const hasRequiredProfessionalSetupData = () => {
@@ -676,6 +672,8 @@ function App() {
       const hashRoute = getHashRoute();
       persistRouteContext(hashRoute);
       const hashPage = getRoutePage(hashRoute);
+      const legacyRouteRedirected =
+        resolveLegacyEmergencyRoute(hashRoute) !== hashRoute;
 
       const hasToken =
         safeGetStorageItem("token");
@@ -705,7 +703,7 @@ function App() {
 
 	      if (hashPage) {
 	        const guardedPage = getGuardedPage(hashPage);
-	        if (hashRoute === hashPage) {
+	        if (legacyRouteRedirected || hashRoute === hashPage) {
 	          window.location.hash = guardedPage;
 	        }
 	        setPageState(guardedPage);
@@ -723,6 +721,8 @@ function App() {
       const currentRoute = getHashRoute();
       persistRouteContext(currentRoute);
       const currentHash = getRoutePage(currentRoute);
+      const legacyRouteRedirected =
+        resolveLegacyEmergencyRoute(currentRoute) !== currentRoute;
 
       if (currentHash && isPublicLegalPage(currentHash)) {
         const legalPage = getLegalPageForRoute(currentHash);
@@ -749,7 +749,7 @@ function App() {
 
 	      if (currentHash) {
 	        const guardedPage = getGuardedPage(currentHash);
-	        if (currentRoute === currentHash) {
+	        if (legacyRouteRedirected || currentRoute === currentHash) {
 	          window.location.hash = guardedPage;
 	        }
 	        setPageState(guardedPage);
@@ -787,7 +787,14 @@ function App() {
       handleVisibilityResume
     );
 
+    const initialRouteTimer = window.setTimeout(
+      handleHashChange,
+      0
+    );
+
     return () => {
+      window.clearTimeout(initialRouteTimer);
+
       window.removeEventListener(
         "hashchange",
         handleHashChange
@@ -848,7 +855,7 @@ function App() {
     />
   ) : null;
 
-	  const setPage = (newPage) => {
+	  const setPage = (requestedPage) => {
     if (
       sessionHydration.status === SESSION_HYDRATION.restoring ||
       startupReadiness.status === STARTUP_READINESS.restoring
@@ -856,6 +863,7 @@ function App() {
       return;
     }
 
+    const newPage = resolveLegacyEmergencyRoute(requestedPage);
     const routePage = getRoutePage(newPage);
     const routeMomentId = getMeetroMomentRouteId(newPage);
 
@@ -1168,14 +1176,6 @@ if (page === "emergency") {
   return withStartupChrome(withAssistantLayer(<Emergency setPage={setPage} />, page, setPage), updateNotice);
 }
 
-if (page === "emergencyBusinessSelection") {
-  return withStartupChrome(<EmergencyBusinessSelection setPage={setPage} />, updateNotice);
-}
-
-if (page === "emergencyBusinessSettings") {
-  return withStartupChrome(<EmergencyBusinessSettings setPage={setPage} />, updateNotice);
-}
-
 if (page === "emergencyRequest") {
   return withStartupChrome((
     <EmergencyRequest
@@ -1185,40 +1185,12 @@ if (page === "emergencyRequest") {
   ), updateNotice);
 }
 
-if (page === "emergencyStatus") {
-  return withStartupChrome(withAssistantLayer(<EmergencyStatus setPage={setPage} />, page, setPage), updateNotice);
-}
-
-if (page === "emergencyDispatch") {
-  return withStartupChrome(<EmergencyDispatch setPage={setPage} />, updateNotice);
-}
-
-if (page === "emergencyCompletionActions") {
-  return withStartupChrome(<EmergencyCompletionActions setPage={setPage} />, updateNotice);
-}
-
 if (page === "invoiceBuilder") {
   return withStartupChrome(withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage), updateNotice);
 }
 
-if (page === "emergencyOperationsCenter") {
-  return withStartupChrome(withAssistantLayer(
-    <EmergencyOperationsCenter setPage={setPage} />,
-    page,
-    setPage
-  ), updateNotice);
-}
-
 if (page === "completionSheet") {
   return withStartupChrome(withAssistantLayer(<CompletionSheet setPage={setPage} />, page, setPage), updateNotice);
-}
-
-if (page === "emergencyChat") {
-  return withStartupChrome(<EmergencyChat setPage={setPage} />, updateNotice);
-}
-
-if (page === "emergencyComplete") {
-  return withStartupChrome(<EmergencyComplete setPage={setPage} />, updateNotice);
 }
 
 if (page === "contractorDashboard" || page === "workCenter") {

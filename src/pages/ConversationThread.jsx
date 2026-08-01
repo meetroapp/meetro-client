@@ -788,8 +788,15 @@ function ConversationThreadInner({ setPage, embedded = false }) {
     }
   })();
 
-  const storedConversationType =
+  const legacyWorkflowStorageEnabled =
+    canReadLegacyWorkflowStorage();
+  const rawStoredConversationType =
     localStorage.getItem("meetroConversationType") || "standard";
+  const storedConversationType =
+    rawStoredConversationType === "emergency" &&
+    !legacyWorkflowStorageEnabled
+      ? "standard"
+      : rawStoredConversationType;
   const conversationType = canonicalRouteContext.valid
     ? CONVERSATION_THREAD_TYPES.CANONICAL
     : storedConversationType === CONVERSATION_THREAD_TYPES.CANONICAL
@@ -831,9 +838,12 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const isCanonicalEmergencyThread =
     isCanonicalThread &&
     canonicalConversationDetail?.type === "emergency";
+  const isLegacyEmergencyThread =
+    legacyWorkflowStorageEnabled &&
+    !isCanonicalThread &&
+    conversationType === "emergency";
   const isEmergencyThread =
-    conversationType === "emergency" ||
-    isCanonicalEmergencyThread;
+    isCanonicalEmergencyThread || isLegacyEmergencyThread;
   const isHiringThread = isHiringConversationType(conversationType);
   const isRequestOpportunityReadOnly =
     conversationType === CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY;
@@ -881,7 +891,7 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const hasThreadSearch = Boolean(conversationSearchQuery);
 
   const activeEmergencyRecord = (() => {
-    if (!isEmergencyThread || isCanonicalThread) return {};
+    if (!isLegacyEmergencyThread) return {};
 
     try {
       return JSON.parse(localStorage.getItem("activeEmergencyRecord") || "{}");
@@ -905,9 +915,9 @@ function ConversationThreadInner({ setPage, embedded = false }) {
 
   const emergencyDispatchStatus =
     canonicalEmergencyWorkflow?.status ||
-    (isEmergencyThread && activeEmergencyRecord.status) ||
-    (!isCanonicalThread
-      ? localStorage.getItem("emergencyDispatchStatus") ||
+    (isLegacyEmergencyThread
+      ? activeEmergencyRecord.status ||
+        localStorage.getItem("emergencyDispatchStatus") ||
         activeJobSnapshot?.status ||
         localStorage.getItem("activeJobStatus") ||
         ""
@@ -984,6 +994,8 @@ useEffect(() => {
       setCanonicalReloadKey((value) => value + 1);
       return;
     }
+
+    if (!isLegacyEmergencyThread) return;
 
     const nextStatus = nextStatusOrAction;
     transitionEmergencyStatus(nextStatus, {
@@ -2386,15 +2398,21 @@ useEffect(() => {
   }, []);
 
   const quickReplies = useMemo(() => {
-    const activeConversationType = isCanonicalEmergencyThread
+    const selectedConversationType =
+      localStorage.getItem("meetroConversationType") || "standard";
+    const activeConversationType =
+      isCanonicalEmergencyThread || isLegacyEmergencyThread
       ? "emergency"
-      : localStorage.getItem("meetroConversationType") ||
-        "standard";
+      : selectedConversationType === "emergency"
+        ? "standard"
+        : selectedConversationType;
     const quickReplyEmergencyStatus = isCanonicalEmergencyThread
       ? canonicalEmergencyWorkflow?.status || ""
-      : localStorage.getItem("emergencyDispatchStatus") ||
-        localStorage.getItem("activeJobStatus") ||
-        "";
+      : isLegacyEmergencyThread
+        ? localStorage.getItem("emergencyDispatchStatus") ||
+          localStorage.getItem("activeJobStatus") ||
+          ""
+        : "";
     const replies = [];
 
     const dedupeReplies = (list = []) => {
@@ -2510,6 +2528,7 @@ useEffect(() => {
     canonicalEmergencyWorkflow?.status,
     currentViewerRole,
     isCanonicalEmergencyThread,
+    isLegacyEmergencyThread,
     language,
   ]);
   const starterMessages = useMemo(
@@ -3306,10 +3325,10 @@ useEffect(() => {
     ) {
       captureConversationOriginContext({
         sourcePage: "conversationThread",
-        workspace: isEmergencyThread ? "emergencyComplete" : "completedJobDetails",
+        workspace: isEmergencyThread ? "myRequests" : "completedJobDetails",
         viewerRole: currentViewerRole,
       });
-      setPage(isEmergencyThread ? "emergencyComplete" : "completedJobDetails");
+      setPage(isEmergencyThread ? "myRequests" : "completedJobDetails");
       return;
     }
 
@@ -5700,7 +5719,7 @@ const handleImageUpload = (event) => {
                       <button
                         style={historyBtn}
                         onClick={() => {
-                          setPage("emergencyComplete");
+                          setPage("myRequests");
                         }}
                       >
                          {t("assistantFieldActionReviewCompletion", language)}
@@ -5711,10 +5730,10 @@ const handleImageUpload = (event) => {
                         onClick={() =>
                           setPage(
                             emergencyDispatchStatus === "completed"
-                              ? "emergencyCompletionActions"
+                              ? "contractorDashboard"
                               : activeAccountMode === "business"
-                              ? "emergencyDispatch"
-                              : "emergencyStatus"
+                              ? "contractorDashboard"
+                              : "myRequests"
                           )
                         }
                       >
@@ -5745,10 +5764,10 @@ const handleImageUpload = (event) => {
                           localStorage.setItem("conversationReturnPage", "conversationThread");
                           setPage(
                             emergencyDispatchStatus === "completed"
-                              ? "emergencyCompletionActions"
+                              ? "contractorDashboard"
                               : activeAccountMode === "business"
-                              ? "emergencyDispatch"
-                              : "emergencyStatus"
+                              ? "contractorDashboard"
+                              : "myRequests"
                           );
                         }}
                       >

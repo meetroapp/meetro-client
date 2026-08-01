@@ -1,3 +1,10 @@
+import {
+  buildCanonicalConversationRoute,
+  normalizeCanonicalConversationId,
+} from "./canonicalConversationMessaging.js";
+import { normalizeEmergencyRequestId } from "./emergencyApi.js";
+import { buildEmergencyRequestRoute } from "./emergencyRoutes.js";
+
 const PROJECT_UPDATE_TYPES = new Set([
   "project_update",
   "work_update",
@@ -66,6 +73,28 @@ export function getNotificationRoute(notification = {}, activeAccountMode = "per
   const quoteId = notification.quoteId || metadata.quoteId || "";
   const emergencyId = notification.emergencyId || metadata.emergencyId || "";
 
+  if (category === "emergency") {
+    const normalizedConversationId = /^[1-9]\d*$/.test(
+      String(conversationId).trim()
+    )
+      ? normalizeCanonicalConversationId(Number(conversationId))
+      : null;
+    const normalizedEmergencyId =
+      normalizeEmergencyRequestId(emergencyId);
+
+    return {
+      page: normalizedConversationId
+        ? buildCanonicalConversationRoute(
+            normalizedConversationId,
+            "notifications"
+          )
+        : normalizedEmergencyId
+          ? buildEmergencyRequestRoute(normalizedEmergencyId)
+          : "emergency",
+      context: {},
+    };
+  }
+
   if (notificationType.startsWith("team_member_")) {
     return {
       page: activeAccountMode === "business" ? "teamMembers" : "home",
@@ -112,15 +141,6 @@ export function getNotificationRoute(notification = {}, activeAccountMode = "per
         meetroConversationType: "standard",
         selectedHomeownerRequestId: requestId,
         conversationReturnPage: activeAccountMode === "business" ? "businessDashboard" : "home",
-      },
-    };
-  }
-
-  if (category === "emergency") {
-    return {
-      page: emergencyId ? "emergencyStatus" : "emergency",
-      context: {
-        selectedEmergencyId: emergencyId,
       },
     };
   }
