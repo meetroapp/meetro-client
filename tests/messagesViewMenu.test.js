@@ -464,7 +464,10 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /function openConversation\(quote, options = \{\}\)/);
   assert.match(messagesSource, /const conversation = prepareConversation\(quote, \{ updateList: false \}\);/);
   assert.doesNotMatch(messagesSource, /setPage\("conversationThread"\);\n\n\s+window\.setTimeout\(\(\) => \{\n\s+prepareConversation/);
-  assert.match(messagesSource, /options\.preferSplitPane === true && !options\.forceRoute/);
+  assert.match(
+    messagesSource,
+    /options\.preferSplitPane === true[\s\S]*!options\.forceRoute|isEmergencySource[\s\S]*!options\.forceRoute/
+  );
   assert.match(messagesSource, /setActiveSplitConversationId\(""\);[\s\S]*setPage\("conversationThread"\)/);
   assert.match(messagesSource, /record\.conversationId,[\s\S]*record\.threadId,[\s\S]*record\.sourceConversationId,[\s\S]*record\.id,/);
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
@@ -499,7 +502,7 @@ test("Messages renders an adaptive workspace without changing mobile conversatio
   assert.match(messagesSource, /t\("messagesContextAria", language\)/);
   assert.match(messagesSource, /messagesContextEmpty/);
   assert.match(messagesSource, /<ConversationThread[\s\S]*embedded/);
-  assert.match(messagesSource, /isWideWorkspace \&\& renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /isWideWorkspace\s*&&\s*renderWorkspaceContextPanel\(\)/);
   assert.match(messagesSource, /preferSplitPane: isSplitPane && \(!savedHistory \|\| isEmergencyCanonicalThread\)/);
   assert.match(messagesSource, /forceRoute: !isSplitPane && !isEmergencyCanonicalThread/);
   assert.match(messagesSource, /setPage\("conversationThread"\)/);

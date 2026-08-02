@@ -17,6 +17,14 @@ const readSource = (path) =>
 
 const appSource = readSource("src/App.jsx");
 const inboxSource = readSource("src/pages/MessagesInbox.jsx");
+const openConversationSource = inboxSource.slice(
+  inboxSource.indexOf("function openConversation("),
+  inboxSource.indexOf("function openConversationRow")
+);
+const openConversationIdFastSource = inboxSource.slice(
+  inboxSource.indexOf("function openConversationIdFast("),
+  inboxSource.indexOf("function createConversationFromRelationship")
+);
 const threadSource = readSource("src/pages/ConversationThread.jsx");
 const detailSource = readSource(
   "src/components/EmergencyRelationshipDetail.jsx"
@@ -150,6 +158,51 @@ test("Emergency row selection retains the left list and activates the embedded t
   assert.match(
     inboxSource,
     /<div style=\{isSplitPane \? splitListPane : undefined\}>[\s\S]*<ConversationThread[\s\S]*embedded/
+  );
+});
+
+test("desktop Emergency click never sets standalone conversationThread", () => {
+  const canonicalEmergencyBlock = openConversationSource.match(
+    /if \(canonicalEmergencyId\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*const conversation/s
+  );
+
+  assert.match(
+    openConversationSource,
+    /if \(canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId/
+  );
+  assert.match(
+    openConversationSource,
+    /if \(canonicalEmergencyId\)[\s\S]*setPage\("messagesInbox"\)/
+  );
+  assert.ok(
+    !canonicalEmergencyBlock ||
+      !canonicalEmergencyBlock[0].includes('setPage("conversationThread")'),
+    "canonical Emergency open branch does not write conversationThread"
+  );
+  assert.match(
+    openConversationSource,
+    /if \(isSplitPane\)[\s\S]*setPage\("messagesInbox"\)/
+  );
+  assert.match(
+    openConversationSource,
+    /safeSetStorage\("activeConversationId", String\(canonicalEmergencyId\)\)/
+  );
+});
+
+test("desktop Emergency hash navigation does not write legacy plain #conversationThread", () => {
+  const emergencyConversationHash = buildCanonicalConversationRoute(
+    195,
+    "messagesInbox"
+  );
+
+  assert.ok(
+    emergencyConversationHash.startsWith("conversationThread")
+  );
+  assert.ok(
+    emergencyConversationHash.includes("conversationId=195")
+  );
+  assert.ok(
+    emergencyConversationHash !== "conversationThread"
   );
 });
 
@@ -298,6 +351,13 @@ test("ordinary split-view selection behavior remains available", () => {
   assert.match(
     inboxSource,
     /const shouldUseSplitPane =[\s\S]*options\.preferSplitPane === true[\s\S]*if \(shouldUseSplitPane\)[\s\S]*setActiveSplitConversationId/
+  );
+});
+
+test("Emergency fast-open path also guards split behavior on desktop", () => {
+  assert.match(
+    openConversationIdFastSource,
+    /isSplitPane[\s\S]*options\.preferSplitPane === true[\s\S]*isEmergencyConversationType\(stagedConversation\)/
   );
 });
 

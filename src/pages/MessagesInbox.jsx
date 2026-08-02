@@ -1136,6 +1136,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setCompactContextOpen(false);
 
     const canonicalEmergencyId = getCanonicalEmergencyConversationId(quote);
+    const isEmergencySource = isEmergencyConversationType(quote);
 
     if (canonicalEmergencyId) {
       setQuotes((current) =>
@@ -1146,6 +1147,14 @@ function MessagesInbox({ setPage, currentPage }) {
         )
       );
       setActiveSplitConversationId(String(canonicalEmergencyId));
+      safeSetStorage("activeConversationId", String(canonicalEmergencyId));
+      safeSetStorage("conversationReturnPage", "messagesInbox");
+
+      if (isSplitPane) {
+        setPage("messagesInbox");
+        return;
+      }
+
       setPage(
         buildCanonicalConversationRoute(
           canonicalEmergencyId,
@@ -1159,7 +1168,9 @@ function MessagesInbox({ setPage, currentPage }) {
     if (!conversation) return;
 
     const shouldUseSplitPane =
-      isSplitPane && options.preferSplitPane === true && !options.forceRoute;
+      isSplitPane &&
+      (options.preferSplitPane === true || isEmergencySource) &&
+      !options.forceRoute;
 
     if (shouldUseSplitPane) {
       setActiveSplitConversationId(String(conversation.id));
@@ -2633,7 +2644,10 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     const shouldUseSplitPane =
-      isSplitPane && options.preferSplitPane === true && !options.forceRoute;
+      isSplitPane &&
+      (options.preferSplitPane === true ||
+        isEmergencyConversationType(stagedConversation)) &&
+      !options.forceRoute;
 
     if (shouldUseSplitPane) {
       setActiveSplitConversationId(id);
