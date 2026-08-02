@@ -65,6 +65,8 @@ function BusinessDashboard({ setPage }) {
   const [availableNow, setAvailableNow] = useState(false);
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
+  const legacyEmergencyAuthorityEnabled =
+    canReadLegacyWorkflowStorage();
 
   const businessName =
     profile?.business_name ||
@@ -275,7 +277,7 @@ function BusinessDashboard({ setPage }) {
   }
 
   const dashboardEmergencyRecord = (() => {
-    if (!canReadLegacyWorkflowStorage()) return {};
+    if (!legacyEmergencyAuthorityEnabled) return {};
     try {
       return JSON.parse(
         localStorage.getItem("activeEmergencyRecord") || "{}"
@@ -286,14 +288,18 @@ function BusinessDashboard({ setPage }) {
   })();
 
   const dashboardEmergencyService =
-    dashboardEmergencyRecord.service ||
-    dashboardEmergencyRecord.title ||
-    localStorage.getItem("selectedEmergencyService") ||
-    "";
+    legacyEmergencyAuthorityEnabled
+      ? dashboardEmergencyRecord.service ||
+        dashboardEmergencyRecord.title ||
+        localStorage.getItem("selectedEmergencyService") ||
+        ""
+      : "";
 
   const dashboardEmergencyCategory =
-    localStorage.getItem("selectedEmergencyCategory") ||
-    inferRequestCategory({ service: dashboardEmergencyService });
+    legacyEmergencyAuthorityEnabled
+      ? localStorage.getItem("selectedEmergencyCategory") ||
+        inferRequestCategory({ service: dashboardEmergencyService })
+      : "";
 
   const canDashboardSeeEmergency = canProfessionalSeeLocalLead(
     professionalMatchProfile,
@@ -307,10 +313,14 @@ function BusinessDashboard({ setPage }) {
   );
 
   const dispatchStatus =
-    dashboardEmergencyRecord.status ||
-    localStorage.getItem("emergencyDispatchStatus") || "";
+    legacyEmergencyAuthorityEnabled
+      ? dashboardEmergencyRecord.status ||
+        localStorage.getItem("emergencyDispatchStatus") ||
+        ""
+      : "";
 
   const hasActiveEmergency =
+    legacyEmergencyAuthorityEnabled &&
     canDashboardSeeEmergency &&
     dashboardEmergencyService &&
     ["pending", "accepted", "enroute", "arrived", "started", "completed"].includes(

@@ -36,7 +36,12 @@ test("Service Selector remains the reference viewport-owned editor pattern", () 
   assert.match(selectorSource, /footerCancelButton/);
   assert.match(selectorSource, /footerDoneButton/);
   assert.match(profileSource, /placement="center"/);
-  assert.match(profileSource, /doneLabel=\{t\("save"\)\}/);
+  assert.match(
+    profileSource,
+    /doneLabel=\{onSave \? `\$\{t\("save"\)\}\$\{saving \? "…" : ""\}` : t\("done"\)\}/
+  );
+  assert.match(profileSource, /doneDisabled=\{saving\}/);
+  assert.match(profileSource, /statusMessage=\{saving \? `\$\{t\("save"\)\}…` : saveError\}/);
 });
 
 test("Portfolio item editor follows the temporary editor contract", () => {

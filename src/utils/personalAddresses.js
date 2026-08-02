@@ -189,8 +189,17 @@ export function readPersonalAddresses(options = {}) {
   } catch {
     return [];
   }
-  const records = scoped.length ? scoped : readLegacyRecords(storage, options);
-  return normalizeCollection(records, options);
+  if (scoped.length) {
+    return normalizeCollection(scoped, options);
+  }
+
+  const legacyRecords = normalizeCollection(
+    readLegacyRecords(storage, options),
+    options
+  );
+  if (!legacyRecords.length) return [];
+
+  return writePersonalAddresses(legacyRecords, { ...options, storage });
 }
 
 function writePersonalAddresses(addresses, options = {}) {

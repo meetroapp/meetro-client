@@ -1,10 +1,19 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroDetailsButton from "../components/MeetroDetailsButton";
 import MeetroIcon from "../components/MeetroIcon";
 import SpotlightSlideshow from "../components/SpotlightSlideshow";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
+import {
+  getRequestCommunicationEndpoint,
+  normalizeRequestConversations,
+} from "../utils/requestCommunication";
+import {
+  HOMEOWNER_CONVERSATION_ENTRY_ACTIONS,
+  resolveHomeownerConversationEntry,
+  stageHomeownerCanonicalConversation,
+} from "../utils/homeownerConversationEntry";
 import {
   REQUEST_COLLECTION_STATUS,
   resolveHomeownerRequestCollection,
@@ -57,6 +66,29 @@ import {
   getSpotlightRequestContexts,
   isNoContextSpotlightSafeBusiness,
 } from "../utils/localSpotlightVisibility";
+
+const HOMEOWNER_CONVERSATION_LOAD_STATUS = Object.freeze({
+  LOADING: "loading",
+  READY: "ready",
+  UNAVAILABLE: "unavailable",
+});
+
+const HOMEOWNER_CONVERSATION_FRESHNESS_MS = 2_000;
+
+function getHomeownerSessionIdentity(storage = globalThis.localStorage) {
+  if (!storage?.getItem) return "";
+
+  const storedIdentity = storage.getItem("meetroLastAccountIdentity");
+  if (storedIdentity) return storedIdentity;
+
+  const userId = storage.getItem("userId");
+  if (userId) return `id:${userId}`;
+
+  const userEmail = String(storage.getItem("userEmail") || "")
+    .trim()
+    .toLowerCase();
+  return userEmail ? `email:${userEmail}` : "";
+}
 
 const homeLayoutMediaStyles = `
   .home-top-bar,
@@ -165,6 +197,22 @@ function Home({ setPage }) {
     REQUEST_COLLECTION_STATUS.LOADING
   );
   const [requestReloadKey, setRequestReloadKey] = useState(0);
+  const [canonicalHomeownerConversations, setCanonicalHomeownerConversations] =
+    useState([]);
+  const [canonicalConversationStatus, setCanonicalConversationStatus] = useState(
+    HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
+  );
+  const [conversationReloadKey, setConversationReloadKey] = useState(0);
+  const canonicalConversationLoadRef = useRef({
+    identity: "",
+    records: [],
+    hasLastGood: false,
+    lastLoadedAt: 0,
+    inFlight: null,
+    abortController: null,
+    generation: 0,
+    sequence: 0,
+  });
 
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
@@ -200,10 +248,6 @@ function Home({ setPage }) {
   const conversationRegistry = canReadLegacyWorkflowStorage()
     ? JSON.parse(localStorage.getItem("meetro_conversation_registry") || "[]")
     : [];
-  const homeownerConversationMetrics = getConversationMetrics({
-    registry: conversationRegistry,
-    role: "homeowner",
-  });
 
   useEffect(() => {
     const handleLanguageChange = () => updateLanguage(getLanguage());
@@ -255,6 +299,170 @@ function Home({ setPage }) {
     };
   }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
 
+  const loadCanonicalHomeownerConversations = useCallback(
+    ({ force = false } = {}) => {
+      const loadState = canonicalConversationLoadRef.current;
+      const identity = getHomeownerSessionIdentity();
+
+      if (identity !== loadState.identity) {
+        loadState.abortController?.abort();
+        loadState.identity = identity;
+        loadState.records = [];
+        loadState.hasLastGood = false;
+        loadState.lastLoadedAt = 0;
+        loadState.inFlight = null;
+        loadState.abortController = null;
+        loadState.generation += 1;
+        loadState.sequence += 1;
+        setCanonicalHomeownerConversations([]);
+        setCanonicalConversationStatus(
+          identity
+            ? HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
+            : HOMEOWNER_CONVERSATION_LOAD_STATUS.UNAVAILABLE
+        );
+      }
+
+      if (!identity) {
+        setCanonicalConversationStatus(
+          HOMEOWNER_CONVERSATION_LOAD_STATUS.UNAVAILABLE
+        );
+        return Promise.resolve(null);
+      }
+
+      const isFresh =
+        loadState.hasLastGood &&
+        Date.now() - loadState.lastLoadedAt <
+          HOMEOWNER_CONVERSATION_FRESHNESS_MS;
+      if (!force && isFresh) {
+        return Promise.resolve(loadState.records);
+      }
+      if (loadState.inFlight) return loadState.inFlight;
+
+      const generation = loadState.generation;
+      const sequence = ++loadState.sequence;
+      const abortController = new AbortController();
+      loadState.abortController = abortController;
+
+      if (!loadState.hasLastGood) {
+        setCanonicalConversationStatus(
+          HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
+        );
+      }
+
+      const request = (async () => {
+        try {
+          const result = await authFetch(
+            getRequestCommunicationEndpoint("personal"),
+            { cache: "no-store", signal: abortController.signal },
+            setPage
+          );
+
+          if (
+            abortController.signal.aborted ||
+            generation !== loadState.generation ||
+            sequence !== loadState.sequence ||
+            identity !== getHomeownerSessionIdentity()
+          ) {
+            return null;
+          }
+
+          if (!result?.response?.ok) {
+            throw new Error("Homeowner conversations are unavailable.");
+          }
+
+          const conversations = normalizeRequestConversations(
+            result.data || {},
+            "personal"
+          );
+          if (!conversations) {
+            throw new Error("Homeowner conversation response is invalid.");
+          }
+
+          loadState.hasLastGood = true;
+          loadState.lastLoadedAt = Date.now();
+          loadState.records = conversations;
+          setCanonicalHomeownerConversations(conversations);
+          setCanonicalConversationStatus(
+            HOMEOWNER_CONVERSATION_LOAD_STATUS.READY
+          );
+          return conversations;
+        } catch {
+          if (
+            abortController.signal.aborted ||
+            generation !== loadState.generation ||
+            sequence !== loadState.sequence
+          ) {
+            return null;
+          }
+
+          if (!loadState.hasLastGood) {
+            setCanonicalHomeownerConversations([]);
+            setCanonicalConversationStatus(
+              HOMEOWNER_CONVERSATION_LOAD_STATUS.UNAVAILABLE
+            );
+          } else {
+            setCanonicalConversationStatus(
+              HOMEOWNER_CONVERSATION_LOAD_STATUS.READY
+            );
+          }
+          return null;
+        } finally {
+          if (
+            generation === loadState.generation &&
+            sequence === loadState.sequence
+          ) {
+            loadState.inFlight = null;
+            loadState.abortController = null;
+          }
+        }
+      })();
+
+      loadState.inFlight = request;
+      return request;
+    },
+    [setPage]
+  );
+
+  useEffect(() => {
+    const loadState = canonicalConversationLoadRef.current;
+    const initialLoadTimer = window.setTimeout(() => {
+      loadCanonicalHomeownerConversations({ force: true });
+    }, 0);
+
+    const handleFocus = () => loadCanonicalHomeownerConversations();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadCanonicalHomeownerConversations();
+      }
+    };
+    const handleIdentityStorageChange = (event) => {
+      if (
+        ["meetroLastAccountIdentity", "userId", "userEmail"].includes(
+          event.key
+        )
+      ) {
+        loadCanonicalHomeownerConversations({ force: true });
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("storage", handleIdentityStorageChange);
+
+    return () => {
+      window.clearTimeout(initialLoadTimer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("storage", handleIdentityStorageChange);
+
+      loadState.generation += 1;
+      loadState.sequence += 1;
+      loadState.abortController?.abort();
+      loadState.abortController = null;
+      loadState.inFlight = null;
+    };
+  }, [conversationReloadKey, loadCanonicalHomeownerConversations]);
+
   const homeownerRequestsUnavailable =
     !legacyWorkflowStorageEnabled &&
     backendRequestStatus === REQUEST_COLLECTION_STATUS.UNAVAILABLE;
@@ -262,11 +470,63 @@ function Home({ setPage }) {
     !legacyWorkflowStorageEnabled &&
     backendRequestStatus === REQUEST_COLLECTION_STATUS.LOADING;
 
+  const activeCanonicalConversationCount = canonicalHomeownerConversations.filter(
+    (conversation) =>
+      conversation.archived !== true &&
+      String(conversation.status || "active").toLowerCase() === "active"
+  ).length;
+
+  const conversationActivity = (() => {
+    if (
+      canonicalConversationStatus ===
+      HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
+    ) {
+      return {
+        title: t("homeConversationActivityTitle", language),
+        text: t("homeConversationActivityLoading", language),
+      };
+    }
+
+    if (
+      canonicalConversationStatus ===
+      HOMEOWNER_CONVERSATION_LOAD_STATUS.UNAVAILABLE
+    ) {
+      return {
+        title: t("homeConversationActivityUnavailable", language),
+        text: t("homeConversationActivityUnavailableText", language),
+      };
+    }
+
+    if (activeCanonicalConversationCount === 0) {
+      return {
+        title: t("homeNoActiveConversations", language),
+        text: t("homeNoActiveConversationsText", language),
+      };
+    }
+
+    return {
+      title:
+        activeCanonicalConversationCount === 1
+          ? t("homeActiveConversationCount", language)
+          : t("homeActiveConversationsCount", language, {
+              count: activeCanonicalConversationCount,
+            }),
+      text: t("homeConversationActivityText", language),
+    };
+  })();
+
   const requestUnavailableCard = (
     <div style={compactEmptyCard} role="status">
       <strong>Requests unavailable</strong>
       <span>Meetro could not load your requests. Try again.</span>
-      <button type="button" style={secondaryButton} onClick={() => setRequestReloadKey((value) => value + 1)}>
+      <button
+        type="button"
+        style={secondaryButton}
+        onClick={() => {
+          setRequestReloadKey((value) => value + 1);
+          setConversationReloadKey((value) => value + 1);
+        }}
+      >
         Try Again
       </button>
     </div>
@@ -287,40 +547,38 @@ function Home({ setPage }) {
       .unreadConversationCount
   );
 
-  function openWorkConversationForRequest(request = {}) {
-    const requestId = request.requestId || request.id || "";
-    const conversationId =
-      request.conversationId ||
-      request.activeConversationId ||
-      request.projectConversationId ||
-      requestId ||
-      `request-${Date.now()}`;
-    const professionalName =
-      request.selectedProfessional ||
-      request.businessName ||
-      request.professionalName ||
-      "Professional";
+  function getConversationEntryForRequest(request = {}) {
+    return resolveHomeownerConversationEntry({
+      request,
+      canonicalConversations: canonicalHomeownerConversations,
+    });
+  }
 
-    localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
+  function stageHomeownerRequestContext(request = {}) {
+    const requestId = request.requestId ?? request.id;
+    if (requestId != null && requestId !== "") {
+      localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    }
     localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
-    localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
-    localStorage.setItem("activeConversationId", String(conversationId));
-    localStorage.setItem("activeConversationName", professionalName);
-    localStorage.setItem("meetroConversationType", "standard");
-    localStorage.setItem(
+  }
+
+  function openRequestFromHome(request = {}) {
+    stageHomeownerRequestContext(request);
+    setPage("myRequests");
+  }
+
+  function clearSelectedConversationContext() {
+    [
+      "activeConversationId",
+      "activeConversationName",
+      "conversationBusinessName",
+      "meetroConversationType",
       "selectedConversation",
-      JSON.stringify({
-        id: conversationId,
-        type: "work",
-        category: "work",
-        businessName: professionalName,
-        projectTitle: request.title || request.category || "Service Request",
-        requestId,
-      })
-    );
-    localStorage.setItem("conversationReturnPage", "home");
-    localStorage.setItem("returnPage", "home");
-    setPage("conversationThread");
+      "selectedContractor",
+      "selectedMessageReceiverId",
+      "selectedQuoteRequest",
+      "selectedQuoteRequestId",
+    ].forEach((key) => localStorage.removeItem(key));
   }
 
   function switchMode(mode) {
@@ -349,17 +607,38 @@ function Home({ setPage }) {
 
   function openHomeownerProject(request = {}) {
     setActiveAccountMode("personal");
-    openWorkConversationForRequest(request);
+    const decision = getConversationEntryForRequest(request);
+
+    if (
+      decision.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
+    ) {
+      const context = stageHomeownerCanonicalConversation(decision, request);
+      if (context) {
+        setPage("conversationThread");
+        return;
+      }
+    }
+
+    if (decision.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX) {
+      stageHomeownerRequestContext(request);
+      clearSelectedConversationContext();
+      localStorage.setItem("conversationReturnPage", "home");
+      localStorage.setItem("returnPage", "home");
+      setPage("messagesInbox");
+      return;
+    }
+
+    openRequestFromHome(request);
   }
 
   function openActiveEmergencyFromHome(isCompletedReview = false) {
     if (isCompletedReview) {
-      setPage("emergencyComplete");
+      setPage("myRequests");
       return;
     }
 
     if (!openActiveEmergencyConversation(setPage, "home")) {
-      setPage("emergencyStatus");
+      setPage("myRequests");
     }
   }
 
@@ -502,6 +781,7 @@ function Home({ setPage }) {
                   key={request.requestId || request.id || request.createdAt}
                   request={request}
                   language={language}
+                  conversationEntry={getConversationEntryForRequest(request)}
                   onClick={() => openHomeownerProject(request)}
                 />
               ))}
@@ -570,8 +850,13 @@ function Home({ setPage }) {
           <ServiceHistoryDetailsSheet
             request={historyDetailsRequest}
             language={language}
+            conversationEntry={getConversationEntryForRequest(
+              historyDetailsRequest
+            )}
             onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
-            onMessageProfessional={() => openWorkConversationForRequest(historyDetailsRequest)}
+            onMessageProfessional={() =>
+              openHomeownerProject(historyDetailsRequest)
+            }
             onClose={() => setHistoryDetailsRequest(null)}
           />
         )}
@@ -661,6 +946,7 @@ function Home({ setPage }) {
                     key={request.requestId || request.id || request.createdAt}
                     request={request}
                     language={language}
+                    conversationEntry={getConversationEntryForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -703,6 +989,7 @@ function Home({ setPage }) {
                     key={request.requestId || request.id || request.createdAt}
                     request={request}
                     language={language}
+                    conversationEntry={getConversationEntryForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -862,15 +1149,9 @@ function Home({ setPage }) {
           </div>
           <div className="home-message-focus-copy" style={messageFocusCopy}>
             <strong style={messageFocusTitle}>
-              {homeownerConversationMetrics.unreadConversationCount > 0
-                ? `${homeownerConversationMetrics.unreadConversationCount} ${t("homeMessagesCount", language)}`
-                : t("homeMessagesAllCaughtUp")}
+              {conversationActivity.title}
             </strong>
-            <p style={messageFocusText}>
-              {homeownerConversationMetrics.unreadConversationCount > 0
-                ? t("homeMessagesNeedAttentionText")
-                : t("homeMessagesAllCaughtUpText")}
-            </p>
+            <p style={messageFocusText}>{conversationActivity.text}</p>
           </div>
           <span className="home-message-open-text" style={messageOpenText}>
             {t("homeOpenMessages")}
@@ -882,14 +1163,9 @@ function Home({ setPage }) {
         <ActiveRequestDetailsSheet
           request={detailsRequest}
           language={language}
-          onOpenRequest={() => {
-            localStorage.setItem(
-              "selectedHomeownerRequestId",
-              detailsRequest.requestId || detailsRequest.id
-            );
-            setPage("myRequests");
-          }}
-          onMessageProfessional={() => openWorkConversationForRequest(detailsRequest)}
+          conversationEntry={getConversationEntryForRequest(detailsRequest)}
+          onOpenRequest={() => openRequestFromHome(detailsRequest)}
+          onMessageProfessional={() => openHomeownerProject(detailsRequest)}
           onClose={() => setDetailsRequest(null)}
         />
       )}
@@ -898,8 +1174,11 @@ function Home({ setPage }) {
         <ServiceHistoryDetailsSheet
           request={historyDetailsRequest}
           language={language}
+          conversationEntry={getConversationEntryForRequest(
+            historyDetailsRequest
+          )}
           onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
-          onMessageProfessional={() => openWorkConversationForRequest(historyDetailsRequest)}
+          onMessageProfessional={() => openHomeownerProject(historyDetailsRequest)}
           onClose={() => setHistoryDetailsRequest(null)}
         />
       )}
@@ -1513,10 +1792,21 @@ function ToolCard({ icon, title, text, onClick }) {
   );
 }
 
-function ProjectCard({ request, language, onClick }) {
+function ProjectCard({ request, language, conversationEntry, onClick }) {
   const journey = getHomeownerProjectJourney(request, language);
-  const professionalName = journey.professionalName;
-  const actionLabel = getHomeProjectActionLabel(request, journey, language);
+  const professionalName =
+    conversationEntry?.action ===
+    HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
+      ? conversationEntry.conversation?.businessName ||
+        conversationEntry.conversation?.business_name ||
+        ""
+      : "";
+  const actionLabel = getHomeProjectEntryActionLabel(
+    request,
+    journey,
+    conversationEntry,
+    language
+  );
   const nextStepCopy = getHomeProjectNextStepCopy(request, journey, language);
 
   return (
@@ -1682,9 +1972,30 @@ function getHomeProjectActionLabel(request = {}, journey = {}, language = "en") 
   return t("continueConversation", language);
 }
 
+function getHomeProjectEntryActionLabel(
+  request = {},
+  journey = {},
+  conversationEntry = {},
+  language = "en"
+) {
+  if (
+    conversationEntry.action ===
+    HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
+  ) {
+    return getHomeProjectActionLabel(request, journey, language);
+  }
+
+  if (conversationEntry.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX) {
+    return t("homeOpenMessages", language);
+  }
+
+  return t("homeOpenRequest", language);
+}
+
 function ActiveRequestDetailsSheet({
   request,
   language,
+  conversationEntry,
   onClose,
   onOpenRequest,
   onMessageProfessional,
@@ -1705,14 +2016,13 @@ function ActiveRequestDetailsSheet({
     : request.viewedByBusinesses || 0;
   const messagesCount = request.messagesCount || 0;
   const hasMessaging =
-    messagesCount > 0 ||
-    Boolean(
-      request.conversationId ||
-        request.activeConversationId ||
-        request.threadId ||
-        request.selectedProfessional ||
-        request.acceptedQuote
-    );
+    conversationEntry?.action ===
+      HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION ||
+    conversationEntry?.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX;
+  const messagingActionLabel =
+    conversationEntry?.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX
+      ? t("homeOpenMessages", language)
+      : t("homeMessageProfessional", language);
   const serviceType =
     request.serviceType ||
     request.category ||
@@ -1795,7 +2105,7 @@ function ActiveRequestDetailsSheet({
             style={detailsSecondaryAction}
             onClick={onMessageProfessional}
           >
-            {t("homeMessageProfessional", language)}
+            {messagingActionLabel}
             <MeetroIcon name="messages" size={16} decorative />
           </button>
         )}
@@ -1841,6 +2151,7 @@ function displayText(value, fallback = "") {
 function ServiceHistoryDetailsSheet({
   request = {},
   language,
+  conversationEntry,
   onClose,
   onOpenRecord,
   onMessageProfessional,
@@ -1876,13 +2187,14 @@ function ServiceHistoryDetailsSheet({
     request.acceptedQuote?.businessName ||
     request.quote?.businessName ||
     "";
-  const hasMessaging = Boolean(
-    request.conversationId ||
-      request.threadId ||
-      request.activeConversationId ||
-      request.selectedProfessional ||
-      request.acceptedQuote
-  );
+  const hasMessaging =
+    conversationEntry?.action ===
+      HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION ||
+    conversationEntry?.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX;
+  const messagingActionLabel =
+    conversationEntry?.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.INBOX
+      ? t("homeOpenMessages", language)
+      : t("homeMessageProfessional", language);
   const statusText = [
     t("homeCompleted", language),
     paymentStatus,
@@ -1979,7 +2291,7 @@ function ServiceHistoryDetailsSheet({
             style={detailsSecondaryAction}
             onClick={onMessageProfessional}
           >
-            {t("homeMessageProfessional", language)}
+            {messagingActionLabel}
             <span aria-hidden="true">◌</span>
           </button>
         )}

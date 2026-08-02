@@ -37,6 +37,30 @@ function post(overrides = {}) {
   };
 }
 
+function homeownerConversation(overrides = {}) {
+  return {
+    conversation_id: 91,
+    request_id: 12,
+    request_title: "Paint living room",
+    display: {
+      name: "Cape Painting",
+      image_url: "",
+      category: "painting",
+    },
+    status: {
+      value: "active",
+      active: true,
+      archived: false,
+    },
+    last_activity: "2026-07-20T10:00:00.000Z",
+    last_message_preview: null,
+    unread_count: 0,
+    conversation_available: true,
+    permissions: { canSendMessages: true },
+    ...overrides,
+  };
+}
+
 test("failed, malformed, empty, and populated request reads remain distinct", () => {
   assert.deepEqual(resolveHomeownerRequestCollection({
     response: { ok: false, status: 500 },
@@ -69,32 +93,113 @@ test("canonical edit and cancellation responses replace only the matching reques
   assert.notEqual(replaced[1], original[1]);
 });
 
-test("Communication uses account-correct authoritative request sources", () => {
-  assert.equal(getRequestCommunicationEndpoint("personal"), "/posts");
+test("Communication uses account-correct authoritative messaging sources", () => {
+  assert.equal(
+    getRequestCommunicationEndpoint("personal"),
+    "/conversations?perspective=homeowner"
+  );
   assert.equal(
     getRequestCommunicationEndpoint("business"),
-    "/professional-request-opportunities"
-  );
-  assert.deepEqual(
-    normalizeRequestConversations({ posts: [post()] }, "personal").map((item) => item.id),
-    [12]
-  );
-  assert.deepEqual(
-    normalizeRequestConversations({ opportunities: [post()] }, "business").map((item) => item.id),
-    [12]
+    "/conversations?perspective=professional"
   );
   assert.deepEqual(
     normalizeRequestConversations(
-      { posts: [post({ status: "cancelled" })] },
+      { conversations: [homeownerConversation()] },
+      "personal"
+    ).map((item) => item.id),
+    [91]
+  );
+  assert.deepEqual(
+    normalizeRequestConversations(
+      {
+        conversations: [
+          {
+            id: 92,
+            relationship: {
+              id: 32,
+              title: "Paint living room",
+              stage: "conversation",
+            },
+            display: {
+              name: "Homeowner",
+              image_url: "",
+              category: "",
+            },
+            status: {
+              value: "active",
+              active: true,
+              archived: false,
+            },
+            conversation_available: true,
+          },
+        ],
+      },
+      "business"
+    ).map((item) => item.id),
+    [92]
+  );
+  assert.deepEqual(
+    normalizeRequestConversations(
+      {
+        conversations: [homeownerConversation({
+          status: { value: "closed", active: false, archived: false },
+        })],
+      },
       "personal"
     ).map(({ status, createdAt, updatedAt }) => ({ status, createdAt, updatedAt })),
     [{
-      status: "cancelled",
+      status: "closed",
       createdAt: "2026-07-20T10:00:00.000Z",
       updatedAt: "2026-07-20T10:00:00.000Z",
     }]
   );
   assert.equal(normalizeRequestConversations({}, "personal"), null);
+});
+
+test("Home keeps request and canonical conversation authority separate", () => {
+  assert.match(homeSource, /authFetch\("\/posts", \{ cache: "no-store" \}/);
+  assert.match(
+    homeSource,
+    /getRequestCommunicationEndpoint\("personal"\)/
+  );
+  assert.match(
+    homeSource,
+    /normalizeRequestConversations\([\s\S]*result\.data \|\| \{\},[\s\S]*"personal"/
+  );
+  assert.match(homeSource, /canonicalHomeownerConversations/);
+  assert.match(homeSource, /backendHomeownerRequests/);
+  assert.doesNotMatch(homeSource, /request-\$\{Date\.now/);
+  assert.doesNotMatch(homeSource, /openWorkConversationForRequest/);
+  assert.doesNotMatch(homeSource, /authFetch\(`?\/conversations\/\$\{/);
+  assert.doesNotMatch(homeSource, /authFetch\(`?\/messages\/\$\{/);
+});
+
+test("Home canonical refresh is bounded and preserves last-good data", () => {
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_FRESHNESS_MS/);
+  assert.match(homeSource, /if \(!force && isFresh\)/);
+  assert.match(homeSource, /if \(loadState\.inFlight\) return loadState\.inFlight/);
+  assert.match(homeSource, /loadState\.hasLastGood = true/);
+  assert.match(homeSource, /if \(!loadState\.hasLastGood\)/);
+  assert.match(homeSource, /generation !== loadState\.generation/);
+  assert.match(homeSource, /sequence !== loadState\.sequence/);
+  assert.match(homeSource, /window\.addEventListener\("focus"/);
+  assert.match(homeSource, /document\.addEventListener\("visibilitychange"/);
+  assert.doesNotMatch(homeSource, /setInterval\(/);
+  assert.doesNotMatch(homeSource, /dispatchEvent\(new StorageEvent/);
+});
+
+test("Home cards and details share the canonical conversation decision", () => {
+  assert.match(
+    homeSource,
+    /function getConversationEntryForRequest\(request = \{\}\)/
+  );
+  assert.match(
+    homeSource,
+    /conversationEntry=\{getConversationEntryForRequest\(detailsRequest\)\}/
+  );
+  assert.match(homeSource, /function ActiveRequestDetailsSheet\(/);
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_ENTRY_ACTIONS\.INBOX/);
+  assert.match(homeSource, /HOMEOWNER_CONVERSATION_ENTRY_ACTIONS\.CONVERSATION/);
 });
 
 test("request surfaces render unavailable states and owner mutations without local authority", () => {
@@ -117,7 +222,7 @@ test("request surfaces render unavailable states and owner mutations without loc
   assert.match(messagesSource, /quote\.conversation_type === "request_opportunity"/);
   assert.match(messagesSource, /reason: "messages_unavailable"/);
   assert.match(threadSource, /isRequestOpportunityReadOnly/);
-  assert.match(threadSource, /Messaging is not available for this request yet/);
+  assert.match(threadSource, /conversationOpportunityMessagingUnavailable/);
   assert.match(businessLeadsSource, /requestProfessionalOpportunities/);
   assert.doesNotMatch(businessLeadsSource, /authFetch/);
   assert.match(opportunityCoordinatorSource, /authFetch\([\s\S]*"\/professional-request-opportunities"/);

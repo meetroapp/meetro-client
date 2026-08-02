@@ -4108,7 +4108,19 @@ const highTrafficParityLabels = {
       "Current status, next action, and quick access for each request.",
     homeOpenMessages: "Open Communication Center",
     communicationCenterTitle: "Communication Center",
-    homeMessagesGuide: "Review only the conversations that need attention.",
+    homeMessagesGuide: "Continue your conversations in one place.",
+    homeConversationActivityTitle: "Conversation activity",
+    homeActiveConversationCount: "1 active conversation",
+    homeActiveConversationsCount: "{count} active conversations",
+    homeConversationActivityText:
+      "Continue your conversations in the Communication Center.",
+    homeNoActiveConversations: "No active conversations yet",
+    homeNoActiveConversationsText:
+      "New conversations will appear after a professional connects with your request.",
+    homeConversationActivityLoading: "Loading conversation activity...",
+    homeConversationActivityUnavailable: "Conversation activity unavailable",
+    homeConversationActivityUnavailableText:
+      "Open the Communication Center to try again.",
     homeHistoryEyebrow: "Completed work",
     homeServiceHistoryTitle: "Service History",
     homeServiceHistoryGuide:
@@ -4504,8 +4516,21 @@ const highTrafficParityLabels = {
       "Estado actual, siguiente acción y acceso rápido a cada solicitud.",
     homeOpenMessages: "Abrir Centro de Comunicación",
     communicationCenterTitle: "Centro de Comunicación",
-    homeMessagesGuide:
-      "Revisa solo las conversaciones que necesitan atención.",
+    homeMessagesGuide: "Continúa tus conversaciones en un solo lugar.",
+    homeConversationActivityTitle: "Actividad de conversaciones",
+    homeActiveConversationCount: "1 conversación activa",
+    homeActiveConversationsCount: "{count} conversaciones activas",
+    homeConversationActivityText:
+      "Continúa tus conversaciones en el Centro de Comunicación.",
+    homeNoActiveConversations: "Aún no hay conversaciones activas",
+    homeNoActiveConversationsText:
+      "Las conversaciones aparecerán cuando un profesional se conecte con tu solicitud.",
+    homeConversationActivityLoading:
+      "Cargando actividad de conversaciones...",
+    homeConversationActivityUnavailable:
+      "La actividad de conversaciones no está disponible",
+    homeConversationActivityUnavailableText:
+      "Abre el Centro de Comunicación para volver a intentarlo.",
     homeHistoryEyebrow: "Trabajo completado",
     homeServiceHistoryTitle: "Historial de servicio",
     homeServiceHistoryGuide:
@@ -4908,8 +4933,21 @@ const highTrafficParityLabels = {
       "Statut actuel, prochaine action et accès rapide à chaque demande.",
     homeOpenMessages: "Ouvrir le centre de communication",
     communicationCenterTitle: "Centre de communication",
-    homeMessagesGuide:
-      "Consultez uniquement les conversations qui nécessitent votre attention.",
+    homeMessagesGuide: "Poursuivez vos conversations au même endroit.",
+    homeConversationActivityTitle: "Activité des conversations",
+    homeActiveConversationCount: "1 conversation active",
+    homeActiveConversationsCount: "{count} conversations actives",
+    homeConversationActivityText:
+      "Poursuivez vos conversations dans le centre de communication.",
+    homeNoActiveConversations: "Aucune conversation active pour le moment",
+    homeNoActiveConversationsText:
+      "Les conversations apparaîtront lorsqu’un professionnel se connectera à votre demande.",
+    homeConversationActivityLoading:
+      "Chargement de l’activité des conversations...",
+    homeConversationActivityUnavailable:
+      "L’activité des conversations est indisponible",
+    homeConversationActivityUnavailableText:
+      "Ouvrez le centre de communication pour réessayer.",
     homeHistoryEyebrow: "Travail terminé",
     homeServiceHistoryTitle: "Historique des services",
     homeServiceHistoryGuide:
@@ -5336,8 +5374,21 @@ const highTrafficParityLabels = {
       "Status atual, próxima ação e acesso rápido para cada solicitação.",
     homeOpenMessages: "Abrir Centro de Comunicação",
     communicationCenterTitle: "Centro de Comunicação",
-    homeMessagesGuide:
-      "Revise apenas as conversas que precisam de atenção.",
+    homeMessagesGuide: "Continue suas conversas em um só lugar.",
+    homeConversationActivityTitle: "Atividade das conversas",
+    homeActiveConversationCount: "1 conversa ativa",
+    homeActiveConversationsCount: "{count} conversas ativas",
+    homeConversationActivityText:
+      "Continue suas conversas no Centro de Comunicação.",
+    homeNoActiveConversations: "Nenhuma conversa ativa ainda",
+    homeNoActiveConversationsText:
+      "As conversas aparecerão quando um profissional se conectar à sua solicitação.",
+    homeConversationActivityLoading:
+      "Carregando atividade das conversas...",
+    homeConversationActivityUnavailable:
+      "A atividade das conversas está indisponível",
+    homeConversationActivityUnavailableText:
+      "Abra o Centro de Comunicação para tentar novamente.",
     homeHistoryEyebrow: "Trabalho concluído",
     homeServiceHistoryTitle: "Histórico de serviços",
     homeServiceHistoryGuide:

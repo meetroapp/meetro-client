@@ -9,10 +9,8 @@ import {
   t,
 } from "../utils/language";
 import {
-  hasBusinessProfileOwnership,
+  getDashboardPageForAccountMode,
   saveMeetroSession,
-  getPostLoginPage,
-  isProfessionalUser,
 } from "../utils/session";
 import {
   TWO_FACTOR_FAILURE,
@@ -405,10 +403,6 @@ function Login({ setPage }) {
     setMode("login");
   }
 
-  function checkIsProfessional(user = {}) {
-    return isProfessionalUser(user) || hasBusinessProfileOwnership(user);
-  }
-
   async function enterQAMobileWorkflowState() {
     if (!import.meta.env.DEV) return;
 
@@ -489,14 +483,8 @@ function Login({ setPage }) {
     ].forEach((key) => localStorage.removeItem(key));
   }
 
-  function routeUser(data, sessionResult = {}) {
-    const user = data.user || {};
-    const page =
-      sessionResult.isProfessional || checkIsProfessional(user)
-        ? "businessDashboard"
-        : getPostLoginPage(user);
-
-    setPage(page);
+  function routeUser(sessionResult = {}) {
+    setPage(getDashboardPageForAccountMode(sessionResult.finalMode));
   }
 
   async function handleSubmit() {
@@ -683,7 +671,7 @@ function Login({ setPage }) {
         return;
       }
 
-      routeUser(verifiedLoginData, sessionResult);
+      routeUser(sessionResult);
     } catch (error) {
       console.error(error);
       setVerificationError(T.verificationUnavailable);

@@ -104,7 +104,7 @@ function WorkflowCompletionCloseoutCard({
               onClick={(event) => {
                 event.stopPropagation();
                 localStorage.setItem("completedJobViewMode", "homeowner");
-                setPage("emergencyComplete");
+                setPage("myRequests");
               }}
             >
               {t("leaveReview")}

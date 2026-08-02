@@ -349,7 +349,6 @@ function Profile({ setPage, currentPage, embedded = false }) {
     }
 
     setActiveAccountMode(mode);
-    localStorage.setItem("meetroPreferredAccountMode", mode);
     setActiveMode(mode);
     setRelationshipInsightsEnabledState(
       areRelationshipInsightsEnabled({ role: mode })
@@ -1398,7 +1397,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
               ? t("ready")
               : t("setupRequired")
           }
-          onClick={() => setPage("emergencyBusinessSettings")}
+          onClick={() => setPage("contractorProfile")}
         />
 
         <SettingRow

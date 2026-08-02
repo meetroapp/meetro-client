@@ -97,6 +97,7 @@ function collectRegistryServices() {
       capabilityId: `capability:${option.value}`,
       labelKey: option.labelKey,
       domain: group.domain,
+      canonicalRequestCategory: option.value,
       requestCategory:
         REQUEST_CATEGORY_BY_SERVICE[option.value] || normalizeServiceCategory(option.value),
       aliases: SERVICE_ALIASES[option.value] || [],

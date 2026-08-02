@@ -62,7 +62,7 @@ function ContractorJobAccepted({ setPage, language = "en" }) {
             if (
               !openActiveEmergencyConversation(setPage, "contractorDashboard")
             ) {
-              setPage("emergencyDispatch");
+              setPage("contractorDashboard");
             }
           }}
         >

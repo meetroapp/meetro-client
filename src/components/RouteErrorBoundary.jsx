@@ -1,5 +1,6 @@
 import { Component } from "react";
 import useLanguage from "../hooks/useLanguage";
+import { attemptDynamicImportRecovery } from "../utils/dynamicImportRecovery";
 import { t } from "../utils/language";
 
 function getStorageValue(key, fallback = "") {
@@ -59,6 +60,8 @@ class RouteErrorBoundary extends Component {
   }
 
   componentDidCatch(error) {
+    attemptDynamicImportRecovery(error);
+
     if (import.meta.env.DEV) {
       console.error("Meetro route error", error);
     }

@@ -93,6 +93,16 @@ import { getProfessionalWorkMetrics } from "../utils/dashboardMetrics";
 import { readBusinessAvailability } from "../utils/businessAvailability";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import {
+  canonicalEvaluationContentToForm,
+  getCanonicalEvaluationSourceContext,
+  parseCanonicalEvaluationRoute,
+} from "../utils/canonicalEvaluation";
+import {
+  completeCanonicalEvaluationDraft,
+  loadCanonicalEvaluationForRecord,
+  saveCanonicalEvaluationDraft,
+} from "../utils/evaluationAuthorityController";
+import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
   shouldWarnBeforeAction,
@@ -300,7 +310,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState(null);
   const [appointmentReminderNotice, setAppointmentReminderNotice] = useState(null);
   const [pendingScheduleDelivery, setPendingScheduleDelivery] = useState(null);
-  const [evaluationTarget, setEvaluationTarget] = useState(null);
+  const canonicalEvaluationRouteRecordRef = useRef(
+    parseCanonicalEvaluationRoute(
+      typeof window === "undefined" ? "" : window.location.hash
+    )
+  );
+  const [evaluationTarget, setEvaluationTarget] = useState(() =>
+    canonicalEvaluationRouteRecordRef.current
+      ? {
+          ...canonicalEvaluationRouteRecordRef.current,
+          type: "canonical_emergency_evaluation",
+        }
+      : null
+  );
   const [evaluationForm, setEvaluationForm] = useState({
     serviceType: "",
     context: "",
@@ -320,6 +342,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [evaluationSaveNotice, setEvaluationSaveNotice] = useState("");
   const [evaluationSaveError, setEvaluationSaveError] = useState("");
   const [evaluationToast, setEvaluationToast] = useState(null);
+  const [canonicalEvaluation, setCanonicalEvaluation] = useState(null);
+  const [canonicalEvaluationLoading, setCanonicalEvaluationLoading] = useState(
+    Boolean(canonicalEvaluationRouteRecordRef.current)
+  );
+  const canonicalEvaluationContextRef = useRef("");
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
   const [jobReportTarget, setJobReportTarget] = useState(null);
@@ -534,6 +561,36 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setWorkflowDependencyPrompt(null);
     setPage("conversationThread");
   }
+
+  useEffect(() => {
+    const record = canonicalEvaluationRouteRecordRef.current;
+    if (!record) return undefined;
+    let active = true;
+
+    loadCanonicalEvaluationForRecord({ record, setPage })
+      .then((confirmed) => {
+        if (!active) return;
+        setCanonicalEvaluation(confirmed);
+        if (confirmed) {
+          setEvaluationForm((current) =>
+            canonicalEvaluationContentToForm(confirmed, current) || current
+          );
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        setEvaluationSaveError(
+          error?.message || "The Evaluation could not be confirmed by the server."
+        );
+      })
+      .finally(() => {
+        if (active) setCanonicalEvaluationLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [setPage]);
 
   useEffect(() => {
     if (!workflowDependencyPrompt?.dependency) return;
@@ -1651,6 +1708,96 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setEvaluationSaveError("");
   }
 
+  function canonicalEvaluationErrorMessage(error) {
+    if (error?.code === "STALE_EVALUATION_VERSION") {
+      return "This Evaluation changed on another session. Reopen it to load the current version.";
+    }
+    if (error?.code === "EVALUATION_COMPLETED") {
+      return "This Evaluation is completed and cannot be edited or reopened.";
+    }
+    return error?.message || "The Evaluation could not be confirmed by the server.";
+  }
+
+  function canonicalEvaluationContextKey(record) {
+    const context = getCanonicalEvaluationSourceContext(record);
+    return context
+      ? `${context.type}:${context.emergencyRequestId}`
+      : "";
+  }
+
+  async function hydrateCanonicalEvaluation(record) {
+    const contextKey = canonicalEvaluationContextKey(record);
+    canonicalEvaluationContextRef.current = contextKey;
+    setCanonicalEvaluationLoading(true);
+    setCanonicalEvaluation(null);
+    try {
+      const confirmed = await loadCanonicalEvaluationForRecord({ record, setPage });
+      if (canonicalEvaluationContextRef.current !== contextKey) return null;
+      setCanonicalEvaluation(confirmed);
+      if (confirmed) {
+        setEvaluationForm((current) =>
+          canonicalEvaluationContentToForm(confirmed, current) || current
+        );
+      }
+      return confirmed;
+    } catch (error) {
+      if (canonicalEvaluationContextRef.current !== contextKey) return null;
+      showEvaluationSaveFeedback("error", canonicalEvaluationErrorMessage(error));
+      return null;
+    } finally {
+      if (canonicalEvaluationContextRef.current === contextKey) {
+        setCanonicalEvaluationLoading(false);
+      }
+    }
+  }
+
+  async function persistCanonicalEvaluation(record, { complete = false } = {}) {
+    const contextKey = canonicalEvaluationContextKey(record);
+    canonicalEvaluationContextRef.current = contextKey;
+    const currentContext = canonicalEvaluation?.aggregate?.sourceContext;
+    const scopedCurrent =
+      currentContext &&
+      `${currentContext.type}:${currentContext.emergencyRequestId}` ===
+        contextKey
+        ? canonicalEvaluation
+        : null;
+    setCanonicalEvaluationLoading(true);
+    setEvaluationSaveError("");
+    setEvaluationSaveNotice("");
+    try {
+      const confirmed = complete
+        ? await completeCanonicalEvaluationDraft({
+            record,
+            form: evaluationForm,
+            currentEvaluation: scopedCurrent,
+            setPage,
+          })
+        : await saveCanonicalEvaluationDraft({
+            record,
+            form: evaluationForm,
+            currentEvaluation: scopedCurrent,
+            setPage,
+          });
+      if (canonicalEvaluationContextRef.current !== contextKey) return confirmed;
+      setCanonicalEvaluation(confirmed);
+      showEvaluationSaveFeedback(
+        "success",
+        complete
+          ? `Evaluation completed at server version ${confirmed.aggregate.version}.`
+          : `Evaluation saved at server version ${confirmed.aggregate.version}.`
+      );
+      return confirmed;
+    } catch (error) {
+      if (canonicalEvaluationContextRef.current !== contextKey) return null;
+      showEvaluationSaveFeedback("error", canonicalEvaluationErrorMessage(error));
+      return null;
+    } finally {
+      if (canonicalEvaluationContextRef.current === contextKey) {
+        setCanonicalEvaluationLoading(false);
+      }
+    }
+  }
+
   function getVisitEvaluationWorkItems(item = {}) {
     const savedItems =
       item.evaluation?.workItems ||
@@ -1740,6 +1887,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       workItems: getVisitEvaluationWorkItems(item),
       nextStep: savedEvaluation.recommendedNextStep || "quote",
     });
+    if (!canReadLegacyWorkflowStorage()) {
+      void hydrateCanonicalEvaluation(item);
+    }
     setShowScheduleForm(false);
   }
 
@@ -2505,7 +2655,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function saveEvaluationRecord(item = evaluationTarget, options = {}) {
-    if (!canReadLegacyWorkflowStorage()) return null;
+    if (!canReadLegacyWorkflowStorage()) {
+      void persistCanonicalEvaluation(item);
+      return null;
+    }
     setEvaluationSaveNotice("");
     setEvaluationSaveError("");
     setEvaluationToast(null);
@@ -4978,16 +5131,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
   })();
 
   const selectedService =
-    activeEmergencyRecord.service ||
-    activeEmergencyRecord.title ||
-    localStorage.getItem("selectedEmergencyService") ||
-    "";
+    canReadLegacyWorkflowStorage()
+      ? activeEmergencyRecord.service ||
+        activeEmergencyRecord.title ||
+        localStorage.getItem("selectedEmergencyService") ||
+        ""
+      : "";
 
   const dispatchStatus =
-    activeEmergencyRecord.status ||
-    localStorage.getItem("emergencyDispatchStatus") || "";
+    canReadLegacyWorkflowStorage()
+      ? activeEmergencyRecord.status ||
+        localStorage.getItem("emergencyDispatchStatus") ||
+        ""
+      : "";
 
   const hasActiveEmergency =
+    canReadLegacyWorkflowStorage() &&
     Boolean(dispatchStatus) &&
     dispatchStatus !== "completed" &&
     dispatchStatus !== "cancelled" &&
@@ -8245,7 +8404,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         onPrimary: () => {
           setActiveAccountMode("business");
           localStorage.setItem("dispatchReturnPage", "contractorDashboard");
-          setPage("emergencyDispatch");
+          setPage("contractorDashboard");
         },
         onSecondary: () =>
           openActiveEmergencyConversation(setPage, "contractorDashboard"),
@@ -9698,6 +9857,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       }),
       nextStep: savedEvaluation.recommendedNextStep || "quote",
     });
+    if (!canReadLegacyWorkflowStorage()) {
+      void hydrateCanonicalEvaluation(job);
+    }
   };
 
   const saveSarahPageEvaluationNotes = (job = {}) => {
@@ -9712,6 +9874,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
         message:
           translate("workCenterSelectServiceTypeAndContextBeforeSavingEvaluationNotes", activeLanguage),
       });
+      return null;
+    }
+
+    if (!canReadLegacyWorkflowStorage()) {
+      void persistCanonicalEvaluation(job);
       return null;
     }
 
@@ -12051,10 +12218,31 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <button
                               type="button"
                               style={startScheduleBtn}
+                              disabled={canonicalEvaluationLoading}
                               onClick={() => saveSarahPageEvaluationNotes(scopedJob)}
                             >
-                              {translate("workCenterSaveEvaluationNotes", activeLanguage)}
+                              {canonicalEvaluationLoading
+                                ? "Saving Evaluation…"
+                                : translate("workCenterSaveEvaluationNotes", activeLanguage)}
                             </button>
+                            {!canReadLegacyWorkflowStorage() && canonicalEvaluation && (
+                              <>
+                                <p style={jobWorkspaceDisclosureText}>
+                                  Server-confirmed {canonicalEvaluation.evaluation.status} · version{" "}
+                                  {canonicalEvaluation.aggregate.version}. Quote and Authorization remain unavailable.
+                                </p>
+                                {canonicalEvaluation.evaluation.status === "draft" && (
+                                  <button
+                                    type="button"
+                                    style={secondaryScheduleBtn}
+                                    disabled={canonicalEvaluationLoading}
+                                    onClick={() => void persistCanonicalEvaluation(scopedJob, { complete: true })}
+                                  >
+                                    Complete Evaluation
+                                  </button>
+                                )}
+                              </>
+                            )}
                               </>
                             )}
                           </>
@@ -13214,11 +13402,33 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <button
                   type="button"
                   style={secondaryScheduleBtn}
+                  disabled={canonicalEvaluationLoading}
                   onClick={() => saveEvaluationRecord(evaluationTarget, { keepOpen: true })}
                 >
-                  {translate("workCenterSaveEvaluation", activeLanguage)}
+                  {canonicalEvaluationLoading
+                    ? "Saving Evaluation…"
+                    : translate("workCenterSaveEvaluation", activeLanguage)}
                 </button>
-                {!hasEvaluationForAppointment(evaluationTarget) && (
+                {!canReadLegacyWorkflowStorage() && canonicalEvaluation && (
+                  <>
+                    <p style={{ ...jobWorkspaceDisclosureText, gridColumn: "1 / -1" }}>
+                      Server-confirmed {canonicalEvaluation.evaluation.status} · version{" "}
+                      {canonicalEvaluation.aggregate.version}. Quote and Authorization remain unavailable.
+                    </p>
+                    {canonicalEvaluation.evaluation.status === "draft" && (
+                      <button
+                        type="button"
+                        style={startScheduleBtn}
+                        disabled={canonicalEvaluationLoading}
+                        onClick={() => void persistCanonicalEvaluation(evaluationTarget, { complete: true })}
+                      >
+                        Complete Evaluation
+                      </button>
+                    )}
+                  </>
+                )}
+                {!hasEvaluationForAppointment(evaluationTarget) &&
+                  !canonicalEvaluation && (
                   <p style={{ ...jobWorkspaceDisclosureText, gridColumn: "1 / -1" }}>
                     {translate("workCenterRecordEvaluationNotesBeforePreparingAProposal", activeLanguage)}
                   </p>
@@ -14113,7 +14323,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               <button
                 style={emptyActionButton}
-                onClick={() => setPage("emergencyBusinessSettings")}
+                onClick={() => setPage("contractorProfile")}
               >
                  {translate("workCenterEmergencySettings", activeLanguage)}
               </button>

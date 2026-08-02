@@ -601,7 +601,7 @@ function CompletionSheet({ setPage }) {
       localStorage.setItem("activeWorkCenterTab", "completed");
       setPage("contractorDashboard");
     } else if (isEmergencyCompletion) {
-      setPage("emergencyComplete");
+      setPage("myRequests");
     } else {
       localStorage.setItem("completedJobViewMode", "homeowner");
       setPage("completedJobDetails");

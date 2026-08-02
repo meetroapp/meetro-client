@@ -18,11 +18,6 @@ import {
   getRequestCommunicationEndpoint,
   normalizeRequestConversations,
 } from "../utils/requestCommunication";
-import {
-  PROFESSIONAL_OPPORTUNITY_PHASE,
-  requestProfessionalOpportunities,
-  subscribeProfessionalOpportunities,
-} from "../utils/professionalOpportunityCoordinator";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
 import {
@@ -41,6 +36,11 @@ import {
   applyConversationIdentity,
   getConversationParticipantIdentity,
 } from "../utils/conversationIdentity";
+import {
+  buildCanonicalConversationRoute,
+  CONVERSATION_THREAD_TYPES,
+  getOpportunityThreadIdentity,
+} from "../utils/canonicalConversationMessaging";
 import {
   createRelationshipLayerModel,
   isInactiveImportedContact,
@@ -641,140 +641,16 @@ function MessagesInbox({ setPage, currentPage }) {
       const parsed = JSON.parse(
         localStorage.getItem("activeEmergencyRecord") || "{}"
       );
+      const emergencyStatus = String(parsed?.status || "").toLowerCase();
 
-      return parsed && typeof parsed === "object" ? parsed : {};
+      return parsed &&
+        typeof parsed === "object" &&
+        !["cancelled", "closed", "archived"].includes(emergencyStatus)
+        ? parsed
+        : {};
     } catch {
       return {};
     }
-  }
-
-  function getEmergencyConversation() {
-  if (!canReadLegacyWorkflowStorage()) return null;
-  const currentUserKey =
-    localStorage.getItem("userId") ||
-    localStorage.getItem("userEmail") ||
-    "guest";
-
-  const activeEmergencyRecord = readActiveEmergencyRecord();
-
-  const emergencyConversationId =
-    activeEmergencyRecord.conversationId ||
-    localStorage.getItem("emergencyConversationId") ||
-    `emergency-active-request-${currentUserKey}`;
-
-  const emergencySaved =
-    localStorage.getItem(`meetro_conversation_${emergencyConversationId}`) ||
-    localStorage.getItem(`meetro_emergency_conversation_meta_${currentUserKey}`);
-
-  const emergencyStatus =
-    activeEmergencyRecord.status ||
-    localStorage.getItem("emergencyDispatchStatus") ||
-    "";
-  const emergencyArchived =
-    localStorage.getItem(
-      `meetro_conversation_saved_${emergencyConversationId}`
-    ) === "true";
-
-  const hasActiveEmergency =
-    Boolean(emergencySaved || activeEmergencyRecord.id) &&
-    !emergencyArchived &&
-    !["cancelled", "closed", "archived"].includes(emergencyStatus);
-
-  if (!hasActiveEmergency) return null;
-
-  const conversationMeta = getConversationMeta(emergencyConversationId);
-  const savedMessages = (() => {
-    try {
-      return JSON.parse(
-        localStorage.getItem(`meetro_conversation_${emergencyConversationId}`) ||
-          "[]"
-      );
-    } catch {
-      return [];
-    }
-  })();
-  const latestMessage = savedMessages[savedMessages.length - 1];
-  const latestMessageText =
-    latestMessage?.title ||
-    latestMessage?.text ||
-    conversationMeta.lastMessage ||
-    "";
-
-  const emergencyService =
-    activeEmergencyRecord.service ||
-    activeEmergencyRecord.title ||
-    localStorage.getItem(`selectedEmergencyService_${currentUserKey}`) ||
-    activeJobSnapshot?.service ||
-    localStorage.getItem("activeJobService") ||
-    localStorage.getItem("selectedEmergencyService") ||
-    t("messagesEmergencyRequest", language);
-  const emergencyBusinessName =
-    activeEmergencyRecord.businessName ||
-    activeEmergencyRecord.business_name ||
-    activeEmergencyRecord.providerName ||
-    activeEmergencyRecord.provider_name ||
-    conversationMeta.businessName ||
-    conversationMeta.business_name ||
-    conversationMeta.providerName ||
-    conversationMeta.provider_name ||
-    localStorage.getItem("conversationBusinessName") ||
-    localStorage.getItem("businessName") ||
-    "";
-  const emergencyBusinessPhoto =
-    activeEmergencyRecord.businessProfilePhoto ||
-    activeEmergencyRecord.business_profile_photo ||
-    activeEmergencyRecord.businessProfilePhotoUrl ||
-    activeEmergencyRecord.business_profile_photo_url ||
-    activeEmergencyRecord.businessLogo ||
-    activeEmergencyRecord.business_logo ||
-    conversationMeta.businessProfilePhoto ||
-    conversationMeta.businessProfilePhotoUrl ||
-    conversationMeta.businessLogo ||
-    localStorage.getItem("businessImageUrl") ||
-    "";
-
-  return {
-    id: emergencyConversationId,
-    businessName: emergencyBusinessName,
-    providerName: emergencyBusinessName,
-    businessProfilePhoto: emergencyBusinessPhoto,
-    businessLogo: emergencyBusinessPhoto,
-    project_title: emergencyService,
-    project_description:
-      latestMessageText ||
-      activeEmergencyRecord.issue ||
-      activeEmergencyRecord.project_description ||
-      t("messagesSavedEmergencyConversation", language),
-    homeowner_email:
-      activeEmergencyRecord.customerName ||
-      activeEmergencyRecord.customer ||
-      t("messagesEmergencyClient", language),
-    location:
-      activeEmergencyRecord.location ||
-      localStorage.getItem("emergencyLocation") ||
-      t("messagesEmergencyLocation", language),
-    status:
-      emergencyStatus ||
-      t("emergency", language),
-    unread:
-      isConversationUnreadForRole(emergencyConversationId, undefined, false),
-    conversation_type: "emergency",
-    saved_to_history: false,
-  };
-}
-
-  function mergeEmergencyConversation(list) {
-    const emergencyConversation = getEmergencyConversation();
-
-    if (!emergencyConversation) return list;
-
-    const withoutDuplicate = list.filter(
-      (item) =>
-        String(item.id) !== String(emergencyConversation.id) &&
-        !String(item.id).startsWith("emergency-active-request-")
-    );
-
-    return [emergencyConversation, ...withoutDuplicate];
   }
 
   useEffect(() => {
@@ -856,56 +732,6 @@ function MessagesInbox({ setPage, currentPage }) {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccountMode, language]);
-
-  useEffect(() => {
-    if (activeAccountMode !== "business") return undefined;
-
-    return subscribeProfessionalOpportunities((snapshot) => {
-      const hasConfirmedData = snapshot.updatedAt > 0;
-
-      if (
-        snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.LOADING &&
-        !hasConfirmedData
-      ) {
-        setLoading(true);
-        return;
-      }
-
-      if (snapshot.phase === PROFESSIONAL_OPPORTUNITY_PHASE.INITIAL_ERROR) {
-        setAccountConnectionState({
-          connected: false,
-          reason: "messages_unavailable",
-          title: "Messages unavailable",
-          message: "Meetro could not load conversations. Try again.",
-          requiresLogin: false,
-        });
-        setQuotes([]);
-        setLoading(false);
-        return;
-      }
-
-      if (!hasConfirmedData) return;
-
-      setAccountConnectionState({ connected: true, reason: "connected" });
-      const visibleConversations = canReadLegacyWorkflowStorage()
-        ? mergeEmergencyConversation([
-            ...getRegistryConversationsForList(),
-            ...getScopedContactConversationsForList(),
-            ...snapshot.records,
-            ...getLocalBusinessConversationsForList(),
-          ])
-        : snapshot.records;
-
-      setQuotes(
-        filterDeletedConversations(dedupeConversations(visibleConversations))
-      );
-      hasLoadedConversationProjectionRef.current = true;
-      setLoading(false);
-    });
-
-    // The coordinator owns request freshness and refresh-error preservation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountMode]);
 
   useEffect(() => {
     writeUnreadConversationCount(quotes);
@@ -1002,15 +828,6 @@ function MessagesInbox({ setPage, currentPage }) {
         return;
       }
 
-      if (activeAccountMode === "business") {
-        await requestProfessionalOpportunities({
-          caller: "MessagesInbox",
-          trigger,
-          setPage,
-        });
-        return;
-      }
-
       const endpoint = getRequestCommunicationEndpoint(activeAccountMode);
       const result = await authFetch(
         endpoint,
@@ -1069,12 +886,16 @@ function MessagesInbox({ setPage, currentPage }) {
       }
 
       const visibleConversations = canReadLegacyWorkflowStorage()
-        ? mergeEmergencyConversation([
+        ? [
             ...getRegistryConversationsForList(),
             ...getScopedContactConversationsForList(),
             ...nextQuotes,
             ...getLocalBusinessConversationsForList(),
-          ])
+          ].filter(
+            (conversation) =>
+              conversation.sourceType === "emergency" ||
+              conversation.conversation_type !== "emergency"
+          )
         : nextQuotes;
 
       setQuotes(
@@ -1164,8 +985,24 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (!id) return null;
 
-    const conversationType =
+    const projectedConversationType =
       projectedQuote.conversation_type || quote.conversation_type || quote.type || "standard";
+    const isOpportunityThread = [
+      CONVERSATION_THREAD_TYPES.CANONICAL,
+      CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY,
+    ].includes(projectedConversationType);
+    const opportunityIdentity = isOpportunityThread
+      ? getOpportunityThreadIdentity(projectedQuote)
+      : null;
+    const conversationType = opportunityIdentity?.threadType || projectedConversationType;
+    const requestId = String(
+      projectedQuote.request_id || quote.request_id || id
+    ).trim();
+    const activeThreadId = opportunityIdentity?.conversationId
+      ? String(opportunityIdentity.conversationId)
+      : isOpportunityThread
+      ? `request-opportunity-${requestId}`
+      : id;
     const activeName =
       projectedQuote.participantName ||
       projectedQuote.customerName ||
@@ -1176,13 +1013,19 @@ function MessagesInbox({ setPage, currentPage }) {
 
     const threadPayload = {
       ...projectedQuote,
-      id,
-      conversationId: projectedQuote.conversationId || quote.conversationId || id,
-      activeConversationId: id,
+      id: opportunityIdentity?.conversationId
+        ? String(opportunityIdentity.conversationId)
+        : id,
+      requestId,
+      conversationId: isOpportunityThread
+        ? opportunityIdentity.conversationId
+        : projectedQuote.conversationId || quote.conversationId || id,
+      activeConversationId: activeThreadId,
+      threadType: conversationType,
       conversation_type: conversationType,
     };
 
-    safeSetStorage("selectedQuoteRequestId", id);
+    safeSetStorage("selectedQuoteRequestId", requestId);
     safeSetStorage("selectedQuoteRequest", JSON.stringify(threadPayload));
     safeSetStorage("selectedConversation", JSON.stringify(threadPayload));
     safeSetStorage(
@@ -1190,7 +1033,7 @@ function MessagesInbox({ setPage, currentPage }) {
       String(projectedQuote.homeowner_id || quote.homeowner_id || "")
     );
     safeSetStorage("conversationReturnPage", "messagesInbox");
-    safeSetStorage("activeConversationId", id);
+    safeSetStorage("activeConversationId", activeThreadId);
     safeSetStorage("activeConversationName", activeName);
     safeSetStorage("meetroConversationType", conversationType);
 
@@ -1258,6 +1101,30 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function openConversation(quote, options = {}) {
+    const canonicalEmergencyId =
+      quote?.sourceType === "emergency" &&
+      quote?.threadType === CONVERSATION_THREAD_TYPES.CANONICAL
+        ? quote.conversationId || quote.conversation_id
+        : null;
+
+    if (canonicalEmergencyId) {
+      setQuotes((current) =>
+        current.map((item) =>
+          String(item.id) === String(quote.id)
+            ? { ...item, unread: false }
+            : item
+        )
+      );
+      setActiveSplitConversationId("");
+      setPage(
+        buildCanonicalConversationRoute(
+          canonicalEmergencyId,
+          "messagesInbox"
+        )
+      );
+      return;
+    }
+
     const conversation = prepareConversation(quote, { updateList: false });
     if (!conversation) return;
 
@@ -1310,6 +1177,8 @@ function MessagesInbox({ setPage, currentPage }) {
   const isHiringConversation = (quote) =>
     isHiringConversationType(quote.conversation_type || quote.type);
   const isEmergencyConversationType = (quote) =>
+    quote.sourceType === "emergency" ||
+    quote.source?.type === "emergency" ||
     quote.conversation_type === "emergency";
   const isWorkConversation = (quote) =>
     !quote.saved_to_history &&
@@ -2241,10 +2110,42 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function normalizeConversationForOpen(summaryOrRecord = {}) {
     const conversation = summaryOrRecord.conversation || summaryOrRecord;
-    const id = getConversationIdForOpen({
+    const projectedConversationType =
+      conversation.conversation_type ||
+      summaryOrRecord.conversation_type ||
+      conversation.threadType ||
+      summaryOrRecord.threadType ||
+      "standard";
+    const canonicalThreadType =
+      conversation.threadType ||
+      summaryOrRecord.threadType ||
+      projectedConversationType;
+    const isOpportunityThread = [
+      CONVERSATION_THREAD_TYPES.CANONICAL,
+      CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY,
+    ].includes(canonicalThreadType);
+    const opportunityIdentity = isOpportunityThread
+      ? getOpportunityThreadIdentity({
+          ...summaryOrRecord,
+          ...conversation,
+        })
+      : null;
+    const legacyId = getConversationIdForOpen({
       ...summaryOrRecord,
       ...conversation,
     });
+    const requestId = String(
+      conversation.request_id ||
+        summaryOrRecord.request_id ||
+        conversation.requestId ||
+        summaryOrRecord.requestId ||
+        conversation.id ||
+        summaryOrRecord.id ||
+        ""
+    ).trim();
+    const id = isOpportunityThread
+      ? String(opportunityIdentity?.conversationId || requestId).trim()
+      : legacyId;
 
     if (!id) return null;
 
@@ -2252,7 +2153,18 @@ function MessagesInbox({ setPage, currentPage }) {
       ...summaryOrRecord,
       ...conversation,
       id,
-      conversationId: conversation.conversationId || id,
+      requestId: isOpportunityThread ? requestId : conversation.requestId,
+      conversationId: isOpportunityThread
+        ? opportunityIdentity.conversationId
+        : conversation.conversationId || id,
+      threadType: isOpportunityThread
+        ? opportunityIdentity.threadType
+        : conversation.threadType,
+      conversation_type: isOpportunityThread
+        ? conversation.conversation_type ||
+          summaryOrRecord.conversation_type ||
+          opportunityIdentity.threadType
+        : projectedConversationType,
       saved_to_history:
         conversation.saved_to_history ??
         summaryOrRecord.saved_to_history ??
@@ -2262,13 +2174,17 @@ function MessagesInbox({ setPage, currentPage }) {
         ...summaryOrRecord,
         ...conversation,
         id,
-        conversationId: conversation.conversationId || id,
+        conversationId: isOpportunityThread
+          ? opportunityIdentity.conversationId
+          : conversation.conversationId || id,
       }),
       user_saved_to_history: isConversationUserSavedToHistory({
         ...summaryOrRecord,
         ...conversation,
         id,
-        conversationId: conversation.conversationId || id,
+        conversationId: isOpportunityThread
+          ? opportunityIdentity.conversationId
+          : conversation.conversationId || id,
       }),
       unread: conversation.unread ?? summaryOrRecord.unread ?? false,
     };

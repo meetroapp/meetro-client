@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import EmergencyTimeline from "../components/EmergencyTimeline";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
@@ -22,6 +23,15 @@ import {
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getEmergencyRequests } from "../utils/emergencyApi";
+import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
+import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
+import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
+import {
+  getEmergencyResponsePresentation,
+  getEmergencySpecialtyDisplayLabel,
+} from "../utils/emergencySummary";
+import { formatLocaleDate } from "../utils/localeFormat";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -539,6 +549,143 @@ function HomeownerWorkflowHub({
   );
 }
 
+function EmergencyRequestCard({
+  emergencyRequest,
+  language,
+  onOpen,
+  onOpenConversation,
+}) {
+  const responsePresentation =
+    getEmergencyResponsePresentation({
+      status: emergencyRequest.status,
+      language,
+      availableResponseCount:
+        emergencyRequest.availableResponseCount,
+      hasSelectedProfessional:
+        emergencyRequest.hasSelectedProfessional,
+    });
+  const lifecycleLabel =
+    responsePresentation.statusLabel;
+  const serviceLabel =
+    getEmergencySpecialtyDisplayLabel(
+      emergencyRequest.serviceSpecialty,
+      language
+    );
+  const submittedAt =
+    emergencyRequest.requestedAt ||
+    emergencyRequest.createdAt;
+  const submittedDate = formatLocaleDate(
+    submittedAt,
+    {
+      dateStyle: "medium",
+    },
+    language
+  );
+  const hasActionableResponses =
+    responsePresentation.hasActionableResponses;
+  const selectedProfessionalName =
+    emergencyRequest.hasSelectedProfessional === true
+      ? emergencyRequest
+          .selectedProfessionalBusinessName ||
+        (language === "es"
+          ? "Profesional Seleccionado"
+          : "Selected Professional")
+      : "";
+  const canOpenConversation =
+    emergencyRequest.conversationAvailable === true &&
+    Number.isSafeInteger(
+      emergencyRequest.conversationId
+    ) &&
+    emergencyRequest.conversationId > 0;
+  return (
+    <article
+      className="meetro-visual-surface"
+      style={emergencyRequestCard}
+    >
+      <div style={emergencyRequestHeader}>
+        <span style={emergencyRequestBadge}>
+          {language === "es" ? "Emergencia" : "Emergency"}
+        </span>
+        <span style={emergencyRequestService}>
+          {serviceLabel}
+        </span>
+      </div>
+
+      <h3 style={emergencyRequestTitle}>
+        {emergencyRequest.title}
+      </h3>
+      <strong style={emergencyRequestLifecycle}>
+        {lifecycleLabel}
+      </strong>
+
+      {selectedProfessionalName && (
+        <strong style={emergencyRequestProfessional}>
+          {selectedProfessionalName}
+        </strong>
+      )}
+
+      {submittedDate && (
+        <span style={emergencyRequestMeta}>
+          {language === "es" ? "Enviada" : "Submitted"}{" "}
+          {submittedDate}
+        </span>
+      )}
+
+      <EmergencyTimeline
+        emergencyRequest={emergencyRequest}
+        language={language}
+      />
+
+      <div style={emergencyRequestActions}>
+        {hasActionableResponses && (
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={emergencyRequestAction}
+            onClick={onOpen}
+          >
+            {responsePresentation.reviewActionLabel}
+          </button>
+        )}
+
+        <button
+          type="button"
+          className={
+            hasActionableResponses ||
+            canOpenConversation
+              ? ""
+              : "meetro-visual-primary-button"
+          }
+          style={
+            hasActionableResponses ||
+            canOpenConversation
+              ? emergencyRequestSecondaryAction
+              : emergencyRequestAction
+          }
+          onClick={onOpen}
+        >
+          {language === "es"
+            ? "Ver Solicitud de Emergencia"
+            : "View Emergency Request"}
+        </button>
+
+        {canOpenConversation && (
+          <button
+            type="button"
+            className="meetro-visual-primary-button"
+            style={emergencyRequestAction}
+            onClick={onOpenConversation}
+          >
+            {language === "es"
+              ? "Revisar conversación"
+              : "Review Conversation"}
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function MyRequests({ setPage }) {
   const language = getLanguage();
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
@@ -551,6 +698,13 @@ function MyRequests({ setPage }) {
   const [requestReloadKey, setRequestReloadKey] = useState(0);
   const [requestMutationStatus, setRequestMutationStatus] = useState("idle");
   const [requestMutationError, setRequestMutationError] = useState("");
+  const [emergencyRequests, setEmergencyRequests] = useState([]);
+  const [
+    emergencyRequestStatus,
+    setEmergencyRequestStatus,
+  ] = useState(REQUEST_COLLECTION_STATUS.LOADING);
+  const [emergencyReloadKey, setEmergencyReloadKey] =
+    useState(0);
 
   function readRequestArray(key) {
     try {
@@ -606,6 +760,64 @@ function MyRequests({ setPage }) {
 
     recoverHomeownerRequests();
   }, [requestReloadKey, setPage]);
+
+  useEffect(() => {
+    const refreshCoordinator =
+      createEmergencyRefreshCoordinator({
+        load: async () => {
+          const result = await getEmergencyRequests(
+            {
+              view: "active",
+              limit: 25,
+            },
+            {
+              setPage,
+            }
+          );
+          if (!result.ok) {
+            throw new Error(
+              result.message ||
+                "Emergency requests could not be loaded."
+            );
+          }
+
+          return result.emergencyRequests;
+        },
+        onSuccess: (records) => {
+          setEmergencyRequests(records);
+          setEmergencyRequestStatus(
+            records.length > 0
+              ? REQUEST_COLLECTION_STATUS.READY
+              : REQUEST_COLLECTION_STATUS.EMPTY
+          );
+        },
+        onError: (_error, { hasConfirmedData }) => {
+          if (!hasConfirmedData) {
+            setEmergencyRequestStatus(
+              REQUEST_COLLECTION_STATUS.UNAVAILABLE
+            );
+          }
+        },
+      });
+
+    void refreshCoordinator.start();
+
+    const handleVisibilityChange = () => {
+      void refreshCoordinator.handleVisibilityChange();
+    };
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      refreshCoordinator.stop();
+    };
+  }, [emergencyReloadKey, setPage]);
 
   void recoveryTick;
 
@@ -999,6 +1211,111 @@ function MyRequests({ setPage }) {
           {t("myRequestsPerspectiveText", language)}
         </p>
       </section>
+
+      {emergencyRequestStatus ===
+        REQUEST_COLLECTION_STATUS.LOADING && (
+        <section
+          style={emergencyRequestSection}
+          aria-labelledby="emergency-requests-heading"
+        >
+          <h2
+            id="emergency-requests-heading"
+            style={emergencyRequestSectionTitle}
+          >
+            {language === "es"
+              ? "Solicitudes de Emergencia"
+              : "Emergency Requests"}
+          </h2>
+          <div
+            className="meetro-visual-surface"
+            style={emergencyRequestState}
+            role="status"
+          >
+            {language === "es"
+              ? "Cargando solicitudes de Emergencia…"
+              : "Loading Emergency requests…"}
+          </div>
+        </section>
+      )}
+
+      {emergencyRequestStatus ===
+        REQUEST_COLLECTION_STATUS.UNAVAILABLE && (
+        <section
+          style={emergencyRequestSection}
+          aria-labelledby="emergency-requests-heading"
+        >
+          <h2
+            id="emergency-requests-heading"
+            style={emergencyRequestSectionTitle}
+          >
+            {language === "es"
+              ? "Solicitudes de Emergencia"
+              : "Emergency Requests"}
+          </h2>
+          <div
+            className="meetro-visual-surface"
+            style={emergencyRequestState}
+            role="alert"
+          >
+            <strong>
+              {language === "es"
+                ? "Las solicitudes de Emergencia no están disponibles."
+                : "Emergency requests are unavailable."}
+            </strong>
+            <button
+              type="button"
+              style={emergencyRetryButton}
+              onClick={() =>
+                setEmergencyReloadKey((value) => value + 1)
+              }
+            >
+              {language === "es" ? "Intentar de Nuevo" : "Try Again"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {emergencyRequestStatus ===
+        REQUEST_COLLECTION_STATUS.READY &&
+        emergencyRequests.length > 0 && (
+          <section
+            style={emergencyRequestSection}
+            aria-labelledby="emergency-requests-heading"
+          >
+            <h2
+              id="emergency-requests-heading"
+              style={emergencyRequestSectionTitle}
+            >
+              {language === "es"
+                ? "Solicitudes de Emergencia"
+                : "Emergency Requests"}
+            </h2>
+            <div style={emergencyRequestGrid}>
+              {emergencyRequests.map((emergencyRequest) => (
+                <EmergencyRequestCard
+                  key={emergencyRequest.emergencyRequestId}
+                  emergencyRequest={emergencyRequest}
+                  language={language}
+                  onOpen={() =>
+                    setPage(
+                      buildEmergencyRequestRoute(
+                        emergencyRequest.emergencyRequestId
+                      )
+                    )
+                  }
+                  onOpenConversation={() =>
+                    setPage(
+                      buildCanonicalConversationRoute(
+                        emergencyRequest.conversationId,
+                        "myRequests"
+                      )
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
       {requestMutationStatus === "pending" && (
         <div className="meetro-visual-surface" style={emptyCard} role="status">
@@ -1682,7 +1999,7 @@ function MyRequests({ setPage }) {
                             "homeowner"
                           );
 
-                          setPage("emergencyComplete");
+                          setPage("myRequests");
                         }}
                       >
                          {language === "es"
@@ -1773,7 +2090,7 @@ function MyRequests({ setPage }) {
                                 request.selectedProfessional || "Professional"
                               );
 
-                              setPage("emergencyComplete");
+                              setPage("myRequests");
                             }}
                           >
                              {language === "es"
@@ -1982,6 +2299,141 @@ const workCenterPerspectiveText = {
   fontSize: "14px",
   lineHeight: 1.45,
   fontWeight: 700,
+};
+
+const emergencyRequestSection = {
+  margin: "0 auto 20px",
+};
+
+const emergencyRequestSectionTitle = {
+  margin: "0 0 12px",
+  color: "var(--meetro-color-ink)",
+  fontSize: "22px",
+  lineHeight: 1.2,
+  fontWeight: 950,
+};
+
+const emergencyRequestGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+  gap: "14px",
+};
+
+const emergencyRequestCard = {
+  minWidth: 0,
+  padding: "20px",
+  borderRadius: "24px",
+  border: "1px solid #fecaca",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
+  display: "grid",
+  gap: "10px",
+};
+
+const emergencyRequestHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const emergencyRequestBadge = {
+  padding: "6px 10px",
+  borderRadius: "999px",
+  background: "#fef2f2",
+  color: "#991b1b",
+  fontSize: "11px",
+  fontWeight: 950,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const emergencyRequestService = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "13px",
+  fontWeight: 850,
+};
+
+const emergencyRequestTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "20px",
+  lineHeight: 1.25,
+  overflowWrap: "anywhere",
+};
+
+const emergencyRequestLifecycle = {
+  color: "#7f1d1d",
+  fontSize: "14px",
+  lineHeight: 1.4,
+};
+
+const emergencyRequestProfessional = {
+  minWidth: 0,
+  color: "var(--meetro-color-forest)",
+  fontSize: "15px",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
+};
+
+const emergencyRequestMeta = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+};
+
+const emergencyRequestActions = {
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "8px",
+};
+
+const emergencyRequestAction = {
+  width: "100%",
+  minWidth: 0,
+  minHeight: "44px",
+  marginTop: "4px",
+  border: "none",
+  borderRadius: "16px",
+  padding: "12px 14px",
+  background: "var(--meetro-color-forest)",
+  color: "white",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const emergencyRequestSecondaryAction = {
+  ...emergencyRequestAction,
+  border: "1px solid var(--meetro-color-forest)",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+};
+
+const emergencyRequestState = {
+  padding: "16px",
+  borderRadius: "20px",
+  border: "1px solid var(--meetro-color-line)",
+  background: "var(--meetro-surface-warm)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "12px",
+};
+
+const emergencyRetryButton = {
+  minHeight: "44px",
+  border: "1px solid var(--meetro-color-forest)",
+  borderRadius: "14px",
+  padding: "10px 14px",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  fontWeight: 900,
+  cursor: "pointer",
 };
 
 const emptyCard = {
