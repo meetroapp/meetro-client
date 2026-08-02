@@ -515,3 +515,56 @@ test("standalone and phone canonical thread ownership remain unchanged", () => {
   );
   assert.doesNotMatch(inboxSource, /\/conversations\/\$\{[^}]+\}\/messages/);
 });
+
+test("embedded Emergency selection disables legacy quote-message hydration", () => {
+  const embeddedThreadSource = inboxSource.slice(
+    inboxSource.indexOf("{activeSplitConversation ? ("),
+    inboxSource.indexOf("{isWideWorkspace && renderWorkspaceContextPanel()}")
+  );
+  const legacyLoadSource = threadSource.slice(
+    threadSource.indexOf("const selectedQuoteRequestId ="),
+    threadSource.indexOf("const initializeConversationLoad = () =>")
+  );
+
+  assert.match(
+    embeddedThreadSource,
+    /allowLegacyQuoteMessageFetch=\{[\s\S]*!isEmergencyConversationType\(activeSplitConversation\)/
+  );
+  assert.match(
+    legacyLoadSource,
+    /const canFetchBackendMessages =\s*allowLegacyQuoteMessageFetch &&/
+  );
+  assert.match(
+    legacyLoadSource,
+    /`\/messages\/\$\{selectedQuoteRequestId\}`/
+  );
+});
+
+test("canonical Emergency hydration cannot fall through to the legacy request endpoint", () => {
+  const canonicalLoadStart = threadSource.indexOf("if (isCanonicalThread) {");
+  const canonicalReturn = threadSource.indexOf("return;", canonicalLoadStart);
+  const legacyEndpoint = threadSource.indexOf(
+    "`/messages/${selectedQuoteRequestId}`",
+    canonicalReturn
+  );
+
+  assert.ok(canonicalLoadStart > -1);
+  assert.ok(canonicalReturn > canonicalLoadStart);
+  assert.ok(legacyEndpoint > canonicalReturn);
+  assert.match(
+    threadSource.slice(canonicalLoadStart, legacyEndpoint),
+    /`\/conversations\/\$\{canonicalConversationId\}\/messages`/
+  );
+});
+
+test("ordinary and standalone legacy quote messaging keep their existing default", () => {
+  assert.match(
+    threadSource,
+    /function ConversationThread\(\{[\s\S]*allowLegacyQuoteMessageFetch = true/
+  );
+  assert.match(appSource, /<ConversationThread setPage=\{setPage\} \/>/);
+  assert.doesNotMatch(
+    appSource,
+    /<ConversationThread setPage=\{setPage\} allowLegacyQuoteMessageFetch=\{false\}/
+  );
+});

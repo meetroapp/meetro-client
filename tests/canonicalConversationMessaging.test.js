@@ -335,6 +335,32 @@ test("Emergency list projection preserves canonical identity without private loc
   );
 });
 
+test("Emergency request identity cannot be promoted to conversation identity", () => {
+  const [record] = normalizeRequestConversations(
+    {
+      conversations: [
+        emergencyConversation({
+          id: 195,
+          conversation_id: 195,
+          emergency_request_id: 8,
+          source: {
+            type: "emergency",
+            id: 8,
+            title: "Emergency request",
+            isEmergency: true,
+          },
+        }),
+      ],
+    },
+    "business"
+  );
+
+  assert.equal(record.conversationId, 195);
+  assert.equal(record.emergencyRequestId, 8);
+  assert.equal(record.request_id, null);
+  assert.notEqual(record.emergencyRequestId, record.conversationId);
+});
+
 test("canonical Emergency routes survive reload without browser storage identity", () => {
   const route = buildCanonicalConversationRoute(95, "messagesInbox");
   const parsed = parseCanonicalConversationRoute(`#${route}`);

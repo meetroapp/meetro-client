@@ -634,6 +634,7 @@ function ConversationThreadInner({
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
   canonicalConversationId: canonicalConversationIdOverride,
+  allowLegacyQuoteMessageFetch = true,
 }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
@@ -2906,6 +2907,7 @@ useEffect(() => {
         localStorage.getItem("selectedQuoteRequestId") || conversationId;
       const localMessages = loadLocalMessages();
       const canFetchBackendMessages =
+        allowLegacyQuoteMessageFetch &&
         selectedQuoteRequestId &&
         !isHiringThread &&
         !isRequestOpportunityReadOnly &&
@@ -3068,6 +3070,7 @@ useEffect(() => {
     isCanonicalEmergencyThread,
     canonicalConversationId,
     canonicalReloadKey,
+    allowLegacyQuoteMessageFetch,
   ]);
 
   useEffect(() => {
@@ -10842,6 +10845,7 @@ function ConversationThread({
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
   canonicalConversationId,
+  allowLegacyQuoteMessageFetch = true,
 }) {
   const language = useLanguage();
   return (
@@ -10854,6 +10858,7 @@ function ConversationThread({
           onCanonicalEmergencyContextChange
         }
         canonicalConversationId={canonicalConversationId}
+        allowLegacyQuoteMessageFetch={allowLegacyQuoteMessageFetch}
       />
     </ConversationThreadErrorBoundary>
   );

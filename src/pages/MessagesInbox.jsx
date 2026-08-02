@@ -5508,6 +5508,9 @@ function MessagesInbox({ setPage, currentPage }) {
             {activeSplitConversation ? (
               <ConversationThread
                 canonicalConversationId={activeSplitCanonicalConversationId}
+                allowLegacyQuoteMessageFetch={
+                  !isEmergencyConversationType(activeSplitConversation)
+                }
                 embedded
                 emergencyContextMode={isWideWorkspace ? "panel" : "stacked"}
                 onCanonicalEmergencyContextChange={

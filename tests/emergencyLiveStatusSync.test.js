@@ -259,6 +259,34 @@ test("canonical detail publication cannot restart embedded message hydration", (
   );
 });
 
+test("Emergency refresh cannot retry the legacy quote-message endpoint", () => {
+  const messagesSource = readFileSync(
+    new URL("../src/pages/MessagesInbox.jsx", import.meta.url),
+    "utf8"
+  );
+  const conversationSource = readFileSync(
+    new URL("../src/pages/ConversationThread.jsx", import.meta.url),
+    "utf8"
+  );
+  const embeddedThreadSource = messagesSource.slice(
+    messagesSource.indexOf("{activeSplitConversation ? ("),
+    messagesSource.indexOf("{isWideWorkspace && renderWorkspaceContextPanel()}")
+  );
+
+  assert.match(
+    embeddedThreadSource,
+    /allowLegacyQuoteMessageFetch=\{[\s\S]*!isEmergencyConversationType\(activeSplitConversation\)/
+  );
+  assert.match(
+    conversationSource,
+    /if \(isCanonicalEmergencyThread\) \{[\s\S]*createEmergencyRefreshCoordinator/
+  );
+  assert.equal(
+    (messagesSource.match(/setInterval\(/g) || []).length,
+    0
+  );
+});
+
 test("Emergency refresh coordination creates no browser lifecycle authority", () => {
   const source = readFileSync(
     new URL("../src/utils/emergencyRefreshCoordinator.js", import.meta.url),

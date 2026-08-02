@@ -580,6 +580,20 @@ test("ConversationThread renders local or empty messages before backend hydratio
   assert.match(conversationThreadSource, /Read receipts and inbox refreshes must never block the active thread/);
 });
 
+test("business profile hydration does not own message collection requests", () => {
+  const businessProfileSource = fs.readFileSync(
+    new URL("../src/utils/businessServiceProfile.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(businessProfileSource, /\/messages\//);
+  assert.doesNotMatch(businessProfileSource, /\/conversations\/[^\s]*\/messages/);
+  assert.match(
+    conversationThreadSource,
+    /`\/conversations\/\$\{canonicalConversationId\}\/messages`/
+  );
+});
+
 test("Saved Conversation History is user-saved only and conversation menu owns the save action", () => {
   assert.match(messagesSource, /import \{[\s\S]*isConversationUserSavedToHistory[\s\S]*\} from "\.\.\/utils\/conversationUnread"/);
   assert.match(messagesSource, /function isSavedChatHistoryConversation\(quote = \{\}\) \{\s*return isConversationUserSavedToHistory\(quote\);\s*\}/);
