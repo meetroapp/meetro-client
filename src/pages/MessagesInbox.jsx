@@ -654,6 +654,26 @@ function MessagesInbox({ setPage, currentPage }) {
     setActiveEmergencyContext(context || null);
   }, []);
 
+  const handleSplitThreadPageChange = useCallback(
+    (nextPage) => {
+      if (nextPage === "messagesInbox" && routedConversationId) {
+        setActiveSplitConversationId("");
+        setActiveSplitCanonicalConversationId(null);
+        setPage("messagesInbox");
+        return;
+      }
+
+      if (nextPage === "messagesInbox" || nextPage === "conversationThread") {
+        setActiveSplitConversationId("");
+        setActiveSplitCanonicalConversationId(null);
+        return;
+      }
+
+      setPage(nextPage);
+    },
+    [routedConversationId, setPage]
+  );
+
   function getCanonicalEmergencyConversationId(quote = {}) {
     const isEmergencySource =
       quote?.sourceType === "emergency" ||
@@ -5493,22 +5513,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 onCanonicalEmergencyContextChange={
                   handleCanonicalEmergencyContextChange
                 }
-                setPage={(nextPage) => {
-                  if (nextPage === "messagesInbox" && routedConversationId) {
-                    setActiveSplitConversationId("");
-                    setActiveSplitCanonicalConversationId(null);
-                    setPage("messagesInbox");
-                    return;
-                  }
-
-                  if (nextPage === "messagesInbox" || nextPage === "conversationThread") {
-                    setActiveSplitConversationId("");
-                    setActiveSplitCanonicalConversationId(null);
-                    return;
-                  }
-
-                  setPage(nextPage);
-                }}
+                setPage={handleSplitThreadPageChange}
               />
             ) : (
               <div style={splitPlaceholder} className="meetro-visual-empty-state meetro-visual-surface">

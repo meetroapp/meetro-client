@@ -215,6 +215,50 @@ test("transient refresh failure preserves the last confirmed canonical state", a
   coordinator.stop();
 });
 
+test("ConversationThread preserves confirmed canonical messages on refresh failure", () => {
+  const conversationSource = readFileSync(
+    new URL("../src/pages/ConversationThread.jsx", import.meta.url),
+    "utf8"
+  );
+  const canonicalLoadSource = conversationSource.slice(
+    conversationSource.indexOf("const loadMessages = async () =>"),
+    conversationSource.indexOf("const initializeConversationLoad = () =>")
+  );
+
+  assert.match(
+    canonicalLoadSource,
+    /setCanonicalMessagesPhase\(\s*canonicalConfirmedMessagesRef\.current\s*\? "ready"\s*: "error"\s*\)/
+  );
+  assert.match(
+    canonicalLoadSource,
+    /canonicalConfirmedMessagesRef\.current = true;[\s\S]*setMessages\([\s\S]*setCanonicalMessagesPhase\("ready"\)/
+  );
+});
+
+test("canonical detail publication cannot restart embedded message hydration", () => {
+  const messagesSource = readFileSync(
+    new URL("../src/pages/MessagesInbox.jsx", import.meta.url),
+    "utf8"
+  );
+  const callbackSource = messagesSource.slice(
+    messagesSource.indexOf("const handleCanonicalEmergencyContextChange"),
+    messagesSource.indexOf("function getCanonicalEmergencyConversationId")
+  );
+
+  assert.match(
+    callbackSource,
+    /const handleCanonicalEmergencyContextChange = useCallback\([\s\S]*?, \[\]\);/
+  );
+  assert.match(
+    callbackSource,
+    /const handleSplitThreadPageChange = useCallback\([\s\S]*?\[routedConversationId, setPage\]/
+  );
+  assert.doesNotMatch(
+    callbackSource,
+    /\[activeEmergencyContext|\[activeSplitConversation|\[quotes/
+  );
+});
+
 test("Emergency refresh coordination creates no browser lifecycle authority", () => {
   const source = readFileSync(
     new URL("../src/utils/emergencyRefreshCoordinator.js", import.meta.url),

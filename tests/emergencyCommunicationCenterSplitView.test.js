@@ -447,7 +447,71 @@ test("Emergency canonical hydration never uses requestId in embedded split path"
     assert.ok(nonCanonicalSplitBlock, "non-emergency split branch clears canonical split id");
 
     const routeBackClearBlock = inboxSource.match(
-      /setPage=\{\(nextPage\) => \{[\s\S]*?if \(nextPage === "messagesInbox" \|\| nextPage === "conversationThread"\) \{[\s\S]*?setActiveSplitCanonicalConversationId\(null\);/
+      /const handleSplitThreadPageChange = useCallback\([\s\S]*?if \(nextPage === "messagesInbox" \|\| nextPage === "conversationThread"\) \{[\s\S]*?setActiveSplitCanonicalConversationId\(null\);/
     );
     assert.ok(routeBackClearBlock, "split close callback clears canonical split id");
   });
+
+test("embedded canonical thread receives a stable navigation callback", () => {
+  const callbackSource = inboxSource.slice(
+    inboxSource.indexOf("const handleSplitThreadPageChange = useCallback("),
+    inboxSource.indexOf("function getCanonicalEmergencyConversationId")
+  );
+  const embeddedThreadSource = inboxSource.slice(
+    inboxSource.indexOf("{activeSplitConversation ? ("),
+    inboxSource.indexOf("{isWideWorkspace && renderWorkspaceContextPanel()}")
+  );
+
+  assert.match(callbackSource, /\[routedConversationId, setPage\]/);
+  assert.doesNotMatch(
+    callbackSource,
+    /activeEmergencyContext|activeSplitConversation|quotes/
+  );
+  assert.match(
+    embeddedThreadSource,
+    /setPage=\{handleSplitThreadPageChange\}/
+  );
+  assert.doesNotMatch(embeddedThreadSource, /setPage=\{\(nextPage\) =>/);
+});
+
+test("same embedded conversation remains mounted while parent context refreshes", () => {
+  const embeddedThreadSource = inboxSource.slice(
+    inboxSource.indexOf("{activeSplitConversation ? ("),
+    inboxSource.indexOf("{isWideWorkspace && renderWorkspaceContextPanel()}")
+  );
+
+  assert.doesNotMatch(embeddedThreadSource, /<ConversationThread[\s\S]*?key=/);
+  assert.match(
+    embeddedThreadSource,
+    /canonicalConversationId=\{activeSplitCanonicalConversationId\}/
+  );
+  assert.match(
+    embeddedThreadSource,
+    /onCanonicalEmergencyContextChange=\{[\s\S]*handleCanonicalEmergencyContextChange/
+  );
+});
+
+test("canonical conversation switches reset loading without resetting stable refreshes", () => {
+  assert.match(
+    threadSource,
+    /const canonicalRouteChanged =[\s\S]*canonicalConversationIdentityRef\.current !==[\s\S]*canonicalConversationId/
+  );
+  assert.match(
+    threadSource,
+    /if \(canonicalRouteChanged\) \{[\s\S]*setMessages\(\[\]\)[\s\S]*setCanonicalMessagesPhase\("loading"\)/
+  );
+  assert.doesNotMatch(
+    threadSource,
+    /else if \(isCanonicalThread\)[\s\S]{0,300}setCanonicalMessagesPhase\("loading"\)/
+  );
+});
+
+test("standalone and phone canonical thread ownership remain unchanged", () => {
+  assert.match(appSource, /<ConversationThread setPage=\{setPage\} \/>/);
+  assert.match(threadSource, /emergencyContextMode = "stacked"/);
+  assert.match(
+    threadSource,
+    /createEmergencyRefreshCoordinator\(\{[\s\S]*load: loadMessages/
+  );
+  assert.doesNotMatch(inboxSource, /\/conversations\/\$\{[^}]+\}\/messages/);
+});

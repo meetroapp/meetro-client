@@ -2889,7 +2889,11 @@ useEffect(() => {
               canSendMessages:
                 current.phase === "ready" ? current.canSendMessages : false,
             }));
-            setCanonicalMessagesPhase("error");
+            setCanonicalMessagesPhase(
+              canonicalConfirmedMessagesRef.current
+                ? "ready"
+                : "error"
+            );
             setCanonicalLoadErrorKey(
               "conversationCanonicalMessagesUnavailable"
             );
