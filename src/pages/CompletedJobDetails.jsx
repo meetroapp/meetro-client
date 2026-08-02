@@ -29,6 +29,10 @@ import {
   getMomentPreviewPhotos,
   normalizeCompletedJobRecord,
 } from "../utils/completedJobDetails";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -1442,7 +1446,10 @@ function CompletedJobDetails({ setPage, completedRecord = null }) {
                 style={secondaryButton}
                 onClick={() => openProjectConversation("completion_review")}
               >
-                {t("messageProfessional")}
+                {getConversationActionLabel(
+                  CONVERSATION_ACTION_STAGE.HISTORY,
+                  language
+                )}
               </button>
 
               <button
@@ -1475,7 +1482,10 @@ function CompletedJobDetails({ setPage, completedRecord = null }) {
                 style={secondaryButton}
                 onClick={() => openProjectConversation("completion_review")}
               >
-                Continue Conversation
+                {getConversationActionLabel(
+                  CONVERSATION_ACTION_STAGE.HISTORY,
+                  language
+                )}
               </button>
 
               <button

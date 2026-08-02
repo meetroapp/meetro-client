@@ -12,6 +12,10 @@ import {
   upsertUnifiedClosedJob,
 } from "../utils/unifiedJobHistory";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 
 function EmergencyCompletionActions({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -327,7 +331,7 @@ function EmergencyCompletionActions({ setPage }) {
         </button>
 
         <button style={secondaryBtn} onClick={continueConversation}>
-          <MeetroIcon name="messages" size={18} decorative /> {language === "es" ? "Continuar conversación" : "Continue Conversation"}
+          <MeetroIcon name="messages" size={18} decorative /> {getConversationActionLabel(CONVERSATION_ACTION_STAGE.HISTORY, language)}
         </button>
 
         <button style={secondaryBtn} onClick={() => setPage("contractorDashboard")}>

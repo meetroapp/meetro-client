@@ -17,6 +17,10 @@ const activeWorkflowFiles = [
   "../src/pages/QuoteRequests.jsx",
   "../src/pages/CompletedJobDetails.jsx",
   "../src/pages/BusinessDashboard.jsx",
+  "../src/pages/BusinessLeads.jsx",
+  "../src/pages/EmergencyCompletionActions.jsx",
+  "../src/pages/MeetroJourney.jsx",
+  "../src/components/EmergencyRelationshipDetail.jsx",
 ];
 
 const activeWorkflowSource = activeWorkflowFiles
@@ -71,12 +75,24 @@ test("audited workflow screens do not use legacy AI-first visible language", () 
 test("audited workflow screens use action-first labels for major project actions", () => {
   assert.doesNotMatch(
     activeWorkflowSource,
-    /Open Conversation|Open Chat|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project/
+    /Open Conversation|Open Chat|View Chat|Message Thread|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project/
   );
   assert.match(activeWorkflowSource, /assistantActionOpenConversation/);
   assert.match(activeWorkflowSource, /assistantCompanionOpenWorkCenter/);
   assert.match(activeWorkflowSource, /assistantActionOpenSchedule/);
   assert.match(activeWorkflowSource, /assistantProjectBriefNextStartWork/);
+});
+
+test("conversation action keys follow the relationship-state standard", () => {
+  for (const language of languages) {
+    assert.doesNotMatch(t("openConversation", language), /^(Open|View)\b/i);
+    assert.doesNotMatch(t("openChat", language), /^(Open|View)\b/i);
+    assert.doesNotMatch(t("openEmergencyChat", language), /^(Open|View)\b/i);
+  }
+
+  assert.equal(t("openConversation", "en"), "Continue Conversation");
+  assert.equal(t("openChat", "en"), "Continue Conversation");
+  assert.equal(t("openEmergencyChat", "en"), "Continue Conversation");
 });
 
 test("workflow language keys are translated for every supported language", () => {

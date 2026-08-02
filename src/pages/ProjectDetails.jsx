@@ -24,6 +24,10 @@ import {
   writeRequestCompanionContext,
 } from "../utils/requestCompanionContext";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 
 const UNSUPPORTED_COMPLETION_CLOSURE_STATUSES = new Set([
   "completed",
@@ -878,7 +882,10 @@ if (data.post) {
               >
                  {(isProfessionalProject || isBusinessLeadReviewPage)
                   ? t("contactCustomerArrangeVisit")
-                  : t("openProjectConversation")}
+                  : getConversationActionLabel(
+                      CONVERSATION_ACTION_STAGE.ACTIVE,
+                      language
+                    )}
               </button>
             </div>
             )}
@@ -1101,8 +1108,14 @@ function ProjectJourneyPanel({
       Number(request.messagesCount || 0) > 0
   );
   const communicationLabel = hasConversation
-    ? t("continueConversation", language)
-    : t("messageProfessional", language);
+    ? getConversationActionLabel(
+        CONVERSATION_ACTION_STAGE.ACTIVE,
+        language
+      )
+    : getConversationActionLabel(
+        CONVERSATION_ACTION_STAGE.NEW,
+        language
+      );
 
   return (
     <section style={journeyShell} aria-label={t("projectJourney", language)}>

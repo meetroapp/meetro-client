@@ -49,7 +49,7 @@ const SLIDES = [
     title: "Conversation opens",
     screen: "conversation",
     activeStep: 1,
-    highlight: "Message thread",
+    highlight: "Conversation",
     note: "Both sides use the same conversation layer for questions, photos, and next steps.",
   },
   {

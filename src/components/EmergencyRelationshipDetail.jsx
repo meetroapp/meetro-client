@@ -5,6 +5,10 @@ import {
   getEmergencySpecialtyDisplayLabel,
   getEmergencyWorkCenterStatusLabel,
 } from "../utils/emergencySummary";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 
 function formatTimestamp(value, language) {
   if (!value) return "";
@@ -234,7 +238,6 @@ function EmergencyRelationshipDetail({
       waitingType: "Relationship Status",
       waitingIntro:
         "No professional relationship is shown until Meetro confirms a selection.",
-      openConversation: "Review Conversation",
       lifecycle: "Emergency progress",
       nextStep: "What happens next",
       location: "Service location and access",
@@ -269,7 +272,6 @@ function EmergencyRelationshipDetail({
       waitingType: "Estado de la Relación",
       waitingIntro:
         "No se muestra una relación profesional hasta que Meetro confirme una selección.",
-      openConversation: "Revisar conversación",
       lifecycle: "Progreso de Emergencia",
       nextStep: "Qué sucede después",
       location: "Ubicación y acceso al servicio",
@@ -299,7 +301,12 @@ function EmergencyRelationshipDetail({
     typeof onOpenConversation === "function"
       ? [
           {
-            label: copy.openConversation,
+            label: getConversationActionLabel(
+              detail.completed
+                ? CONVERSATION_ACTION_STAGE.HISTORY
+                : CONVERSATION_ACTION_STAGE.ACTIVE,
+              language
+            ),
             primary: true,
             onClick: onOpenConversation,
           },

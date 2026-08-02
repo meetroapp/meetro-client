@@ -11,6 +11,10 @@ import {
   getActiveJobSnapshot,
 } from "../utils/workCenter";
 import { restoreConversationOriginContext } from "../utils/conversationOrigin";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -503,9 +507,10 @@ ${invoice.customerMessage || "—"}`;
                 customerName:
                   customerName || localStorage.getItem("workCenterReturnCustomer") || "",
               })
-            : language === "es"
-              ? "Volver al chat"
-              : "Back to Chat"}
+            : getConversationActionLabel(
+                CONVERSATION_ACTION_STAGE.ACTIVE,
+                language
+              )}
         </button>
 
         <div style={icon}>INV</div>

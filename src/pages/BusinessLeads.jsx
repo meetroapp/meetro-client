@@ -26,6 +26,10 @@ import {
   resolveProfessionalEmergencyResponsePresentation,
 } from "../utils/professionalEmergencyParticipation";
 import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
+import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
@@ -309,7 +313,14 @@ function BusinessLeads({ setPage }) {
                     openCanonicalEmergencyConversation(conversation)
                   }
                 >
-                  {t("emergencyOpenConversation", language)}
+                  {getConversationActionLabel(
+                    ["completed", "resolved"].includes(
+                      conversation.workflow?.status
+                    )
+                      ? CONVERSATION_ACTION_STAGE.HISTORY
+                      : CONVERSATION_ACTION_STAGE.ACTIVE,
+                    language
+                  )}
                 </button>
                 {[
                   "professional_arrived",

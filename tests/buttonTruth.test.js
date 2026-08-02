@@ -35,12 +35,12 @@ test("Home legacy Emergency cards fall back to the canonical request directory",
   assert.doesNotMatch(homeSource, /setPage\("emergencyComplete"\)/);
 });
 
-test("completed job Continue Conversation opens the project conversation", () => {
-  assert.match(completedJobDetailsSource, /Continue Conversation/);
+test("completed job Review Conversation opens the same project conversation", () => {
+  assert.match(completedJobDetailsSource, /CONVERSATION_ACTION_STAGE\.HISTORY/);
   assert.match(completedJobDetailsSource, /onClick=\{\(\) => openProjectConversation\("completion_review"\)\}/);
   assert.doesNotMatch(
     completedJobDetailsSource,
-    /Continue Conversation[\s\S]{0,220}setPage\("messagesInbox"\)/
+    /CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]{0,220}setPage\("messagesInbox"\)/
   );
 });
 

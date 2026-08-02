@@ -393,7 +393,7 @@ test("Work Center timeline layout remains width-bounded on mobile", () => {
   );
 });
 
-test("Emergency card actions and canonical conversation routing remain unchanged", () => {
+test("Emergency card actions use state-aware conversation language without changing routing", () => {
   assert.match(
     myRequestsSource,
     /responsePresentation\.reviewActionLabel/
@@ -404,7 +404,11 @@ test("Emergency card actions and canonical conversation routing remain unchanged
   );
   assert.match(
     myRequestsSource,
-    /Review Conversation/
+    /HISTORY_EMERGENCY_SUMMARY_STATUSES\.includes/
+  );
+  assert.match(
+    myRequestsSource,
+    /getConversationActionLabel/
   );
   assert.match(
     myRequestsSource,

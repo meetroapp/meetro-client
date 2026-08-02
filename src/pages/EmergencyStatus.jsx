@@ -70,7 +70,7 @@ function EmergencyStatus({ setPage }) {
       dispatchReady: "Dispatch Ready",
       message: "Message",
       cancel: "Cancel Request",
-      backHome: "Back to Chat",
+      backHome: "Back Home",
       emergencyServices: "Emergency Services",
       rate: "Rate Professional",
       pendingTitle: "Looking for an available professional",

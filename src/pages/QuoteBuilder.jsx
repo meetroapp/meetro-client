@@ -8,6 +8,10 @@ import {
   normalizeLaborPricingType,
 } from "../utils/pricingCalculations";
 import { restoreConversationOriginContext } from "../utils/conversationOrigin";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 
 function safeJson(value, fallback = null) {
@@ -1233,9 +1237,10 @@ ${businessIdentity.businessName}`;
             ? "Salir de cotización"
             : "Exit Quote"
           : isRevisedQuoteFlow
-          ? isSpanish
-            ? "Volver al chat"
-            : "Back to Chat"
+          ? getConversationActionLabel(
+              CONVERSATION_ACTION_STAGE.ACTIVE,
+              language
+            )
           : isSpanish
           ? isBusinessToolsReturn
             ? "Volver a Herramientas"

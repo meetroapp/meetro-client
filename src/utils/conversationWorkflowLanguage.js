@@ -10,7 +10,7 @@ const rows = [
   ["emergencySelectConfirm", "Yes, Select Professional", "Sí, seleccionar profesional", "Oui, sélectionner", "Sim, selecionar profissional"],
   ["emergencyKeepWaiting", "Keep Waiting", "Seguir esperando", "Continuer d'attendre", "Continuar aguardando"],
   ["emergencySelectionFailed", "The professional could not be selected. Try again.", "No se pudo seleccionar al profesional. Inténtalo nuevamente.", "Impossible de sélectionner le professionnel. Réessayez.", "Não foi possível selecionar o profissional. Tente novamente."],
-  ["emergencyOpenConversation", "Open Emergency Conversation", "Abrir conversación de emergencia", "Ouvrir la conversation d'urgence", "Abrir conversa de emergência"],
+  ["emergencyOpenConversation", "Continue Conversation", "Continuar conversación", "Continuer la conversation", "Continuar conversa"],
   ["emergencyConversationReady", "Your Emergency conversation is ready.", "Tu conversación de Emergencia está lista.", "Votre conversation d'urgence est prête.", "Sua conversa de emergência está pronta."],
   ["emergencyResponsePending", "Waiting for homeowner selection", "Esperando la selección del cliente", "En attente de la sélection du propriétaire", "Aguardando a seleção do cliente"],
   ["emergencyDistributionActive", "Matching compatible professionals", "Buscando profesionales compatibles", "Recherche de professionnels compatibles", "Buscando profissionais compatíveis"],

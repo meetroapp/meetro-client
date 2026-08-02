@@ -292,7 +292,7 @@ function saveConversationRegistryItem(item) {
     id: String(item.id),
     project_title: item.project_title || item.name || "Conversation",
     project_description:
-      item.project_description || item.lastMessage || "Tap to open conversation",
+      item.project_description || item.lastMessage || "Tap to continue conversation",
     homeowner_email: item.homeowner_email || item.customer || item.name || "Contact",
     location: item.location || "Saved Contact",
     status: userSavedToHistory

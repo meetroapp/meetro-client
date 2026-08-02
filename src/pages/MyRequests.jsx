@@ -28,9 +28,14 @@ import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoor
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
+  HISTORY_EMERGENCY_SUMMARY_STATUSES,
   getEmergencyResponsePresentation,
   getEmergencySpecialtyDisplayLabel,
 } from "../utils/emergencySummary";
+import {
+  CONVERSATION_ACTION_STAGE,
+  getConversationActionLabel,
+} from "../utils/conversationActionLanguage";
 import { formatLocaleDate } from "../utils/localeFormat";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
@@ -476,6 +481,11 @@ function HomeownerWorkflowHub({
     },
   ].filter((section) => section.visible);
   const primaryIsConversation = workflow.primaryActionKey === "messageProfessional";
+  const conversationActionStage = ["completion", "history"].includes(
+    workflow.key
+  )
+    ? CONVERSATION_ACTION_STAGE.HISTORY
+    : CONVERSATION_ACTION_STAGE.ACTIVE;
   const canonicalConversationId =
     request.conversation_id || request.conversationId || "";
   const hasAuthoritativeConversation = Boolean(
@@ -537,11 +547,19 @@ function HomeownerWorkflowHub({
               : onPrimaryAction?.(workflow, request)
           }
         >
-          {workflow.primaryActionLabel}
+          {primaryIsConversation
+            ? getConversationActionLabel(
+                conversationActionStage,
+                language
+              )
+            : workflow.primaryActionLabel}
         </button>}
         {!hideCommunicationAction && !primaryIsConversation && hasAuthoritativeConversation && (
           <button type="button" style={workflowHubSecondaryButton} onClick={onOpenConversation}>
-            {t("myRequestsMessageProfessional", language)}
+            {getConversationActionLabel(
+              conversationActionStage,
+              language
+            )}
           </button>
         )}
       </div>
@@ -597,6 +615,12 @@ function EmergencyRequestCard({
       emergencyRequest.conversationId
     ) &&
     emergencyRequest.conversationId > 0;
+  const conversationActionStage =
+    HISTORY_EMERGENCY_SUMMARY_STATUSES.includes(
+      emergencyRequest.status
+    )
+      ? CONVERSATION_ACTION_STAGE.HISTORY
+      : CONVERSATION_ACTION_STAGE.ACTIVE;
   return (
     <article
       className="meetro-visual-surface"
@@ -676,9 +700,10 @@ function EmergencyRequestCard({
             style={emergencyRequestAction}
             onClick={onOpenConversation}
           >
-            {language === "es"
-              ? "Revisar conversación"
-              : "Review Conversation"}
+            {getConversationActionLabel(
+              conversationActionStage,
+              language
+            )}
           </button>
         )}
       </div>
@@ -1776,7 +1801,10 @@ function MyRequests({ setPage }) {
                                 style={quoteMessageButton}
                                 onClick={() => openRequestConversation(request, quote)}
                               >
-                                {t("messageProfessional", language)}
+                                {getConversationActionLabel(
+                                  CONVERSATION_ACTION_STAGE.ACTIVE,
+                                  language
+                                )}
                               </button>
 
                               <div style={quoteUnavailableNotice}>

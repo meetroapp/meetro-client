@@ -517,7 +517,7 @@ test("canonical conversation route preserves the exact Emergency detail return c
 test("conversation UI is guarded and contains no messages, preview, unread, or visible conversation ID", () => {
   assert.match(
     componentSource,
-    /detail\.conversation\.available[\s\S]*copy\.openConversation/
+    /detail\.conversation\.available[\s\S]*getConversationActionLabel/
   );
   assert.doesNotMatch(
     componentSource,
