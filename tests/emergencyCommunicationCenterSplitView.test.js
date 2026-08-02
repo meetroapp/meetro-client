@@ -382,3 +382,53 @@ test("Communication Center containment and account-mode scoping remain in place"
     /activeAccountMode === "business" \? "business" : "homeowner"/
   );
 });
+
+test("embedded thread receives canonicalConversationId override from split selection", () => {
+  assert.match(
+    inboxSource,
+    /<ConversationThread[\s\S]*canonicalConversationId=\{activeSplitCanonicalConversationId \|\| ""\}/
+  );
+  assert.match(
+    threadSource,
+    /function ConversationThreadInner\(\{\s*[\s\S]*canonicalConversationId: canonicalConversationIdOverride,[\s\S]*\}/
+  );
+  assert.match(
+    threadSource,
+    /const forcedCanonicalConversationId = normalizeCanonicalConversationId\(\s*canonicalConversationIdOverride\s*\)/
+  );
+  assert.match(
+    threadSource,
+    /const canonicalConversationId = forcedCanonicalConversationId \|\|/
+  );
+});
+
+test("Emergency canonical hydration never uses requestId in embedded split path", () => {
+  assert.match(
+    openConversationSource,
+    /const canonicalEmergencyId = getCanonicalEmergencyConversationId\(quote\);/
+  );
+  assert.doesNotMatch(
+    openConversationSource,
+    /quote\.request_id/
+  );
+  assert.match(
+    inboxSource,
+    /function getCanonicalEmergencyConversationId\([\s\S]*?const isEmergencySource[\s\S]*quote\?\.conversationId \|\| quote\?\.conversation_id \|\| quote\?\.id/s
+  );
+  assert.match(
+    openConversationIdFastSource,
+    /setActiveSplitCanonicalConversationId\([\s\S]*getCanonicalEmergencyConversationId\(stagedConversation\)/
+  );
+});
+
+test("embedded split clears stale emergency identity when switching away from canonical rows", () => {
+  const nonCanonicalSplitBlock = openConversationSource.match(
+    /if \(isSplitPane\)[\s\S]*?setActiveSplitConversationId\(String\(conversation\.id\)\);[\s\S]*?setActiveSplitCanonicalConversationId\(""\);/
+  );
+  assert.ok(nonCanonicalSplitBlock, "non-emergency split branch clears canonical split id");
+
+  const routeBackClearBlock = inboxSource.match(
+    /setPage=\{\(nextPage\) => \{[\s\S]*?if \(nextPage === "messagesInbox" \|\| nextPage === "conversationThread"\) \{[\s\S]*?setActiveSplitCanonicalConversationId\(""\);/
+  );
+  assert.ok(routeBackClearBlock, "split close callback clears canonical split id");
+});

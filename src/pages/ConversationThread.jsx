@@ -633,6 +633,7 @@ function ConversationThreadInner({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  canonicalConversationId: canonicalConversationIdOverride,
 }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
@@ -789,6 +790,14 @@ function ConversationThreadInner({
   const canonicalRouteContext = parseCanonicalConversationRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
+  const forcedCanonicalConversationId = normalizeCanonicalConversationId(
+    canonicalConversationIdOverride
+  );
+  const canonicalConversationId = forcedCanonicalConversationId || (
+    canonicalRouteContext.valid
+      ? canonicalRouteContext.conversationId
+      : null
+  );
   const selectedThreadPayload = (() => {
     try {
       return JSON.parse(localStorage.getItem("selectedConversation") || "null");
@@ -806,16 +815,13 @@ function ConversationThreadInner({
     !legacyWorkflowStorageEnabled
       ? "standard"
       : rawStoredConversationType;
-  const conversationType = canonicalRouteContext.valid
+  const conversationType = Boolean(canonicalConversationId)
     ? CONVERSATION_THREAD_TYPES.CANONICAL
     : storedConversationType === CONVERSATION_THREAD_TYPES.CANONICAL
-    ? "standard"
-    : storedConversationType;
+      ? "standard"
+      : storedConversationType;
   const isCanonicalThread =
     conversationType === CONVERSATION_THREAD_TYPES.CANONICAL;
-  const canonicalConversationId = isCanonicalThread
-    ? canonicalRouteContext.conversationId
-    : null;
   const conversationId = isCanonicalThread
     ? String(canonicalConversationId || "")
     : localStorage.getItem("activeConversationId") ||
@@ -10831,6 +10837,7 @@ function ConversationThread({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  canonicalConversationId,
 }) {
   const language = useLanguage();
   return (
@@ -10842,6 +10849,7 @@ function ConversationThread({
         onCanonicalEmergencyContextChange={
           onCanonicalEmergencyContextChange
         }
+        canonicalConversationId={canonicalConversationId}
       />
     </ConversationThreadErrorBoundary>
   );
