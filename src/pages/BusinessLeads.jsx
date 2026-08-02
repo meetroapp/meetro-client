@@ -11,6 +11,7 @@ import {
 import {
   buildCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
+import { buildCanonicalEvaluationRoute } from "../utils/canonicalEvaluation";
 import {
   listProfessionalEmergencyOpportunities,
   respondToEmergencyOpportunity,
@@ -64,6 +65,13 @@ function BusinessLeads({ setPage }) {
         "businessLeads"
       )
     );
+  }
+
+  function openCanonicalEmergencyEvaluation(conversation) {
+    const route = buildCanonicalEvaluationRoute(
+      conversation?.emergencyRequestId
+    );
+    if (route) setPage(route);
   }
 
   async function respondToEmergency(opportunity) {
@@ -255,6 +263,21 @@ function BusinessLeads({ setPage }) {
                 >
                   {t("emergencyOpenConversation", language)}
                 </button>
+                {[
+                  "professional_arrived",
+                  "work_in_progress",
+                  "completed",
+                ].includes(conversation.workflow?.status) && (
+                  <button
+                    type="button"
+                    style={leadActionButton}
+                    onClick={() =>
+                      openCanonicalEmergencyEvaluation(conversation)
+                    }
+                  >
+                    Open Evaluation
+                  </button>
+                )}
               </article>
             ))}
           </div>

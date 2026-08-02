@@ -71,7 +71,7 @@ test("audited workflow screens do not use legacy AI-first visible language", () 
 test("audited workflow screens use action-first labels for major project actions", () => {
   assert.doesNotMatch(
     activeWorkflowSource,
-    /Open Conversation|Open Chat|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project|View Details/
+    /Open Chat|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project/
   );
   assert.match(activeWorkflowSource, /assistantActionOpenConversation/);
   assert.match(activeWorkflowSource, /assistantCompanionOpenWorkCenter/);

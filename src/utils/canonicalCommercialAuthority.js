@@ -31,12 +31,18 @@ export const COMMERCIAL_CAPABILITIES = Object.freeze([
 export const CANONICAL_COMMERCIAL_EVIDENCE_TYPES = Object.freeze([
   "commercial.aggregate.created",
   "commercial.aggregate.version_advanced",
+  "evaluation_created",
+  "evaluation_draft_updated",
+  "evaluation_completed",
 ]);
 
 const EVIDENCE_COMMANDS = Object.freeze({
   "commercial.aggregate.created": "commercial.aggregate.create",
   "commercial.aggregate.version_advanced":
     "commercial.aggregate.version.advance",
+  evaluation_created: "evaluation.create",
+  evaluation_draft_updated: "evaluation.draft.update",
+  evaluation_completed: "evaluation.complete",
 });
 
 const UUID_PATTERN =
@@ -158,6 +164,7 @@ export function isCanonicalCommercialEvidence(value) {
   const traceability = isPlainObject(evidence.traceability)
     ? evidence.traceability
     : {};
+  const evaluationEvidence = evidence.type.startsWith("evaluation_");
 
   return Boolean(
     canonicalUuid(evidence.id) &&
@@ -174,6 +181,8 @@ export function isCanonicalCommercialEvidence(value) {
       traceability.governingCharterId === "MC-WORKFLOW-001C" &&
       traceability.governingProgramId === "MC-WORKFLOW-001D" &&
       traceability.implementationMilestoneId === "MC-WORKFLOW-002A" &&
+      (!evaluationEvidence ||
+        traceability.capabilityMilestoneId === "MC-WORKFLOW-002B") &&
       traceability.certificationTarget === "MC-WORKFLOW-002R"
   );
 }

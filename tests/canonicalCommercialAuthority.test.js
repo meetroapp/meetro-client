@@ -139,6 +139,9 @@ test("legacy workflow events never satisfy canonical commercial evidence", () =>
   assert.deepEqual(CANONICAL_COMMERCIAL_EVIDENCE_TYPES, [
     "commercial.aggregate.created",
     "commercial.aggregate.version_advanced",
+    "evaluation_created",
+    "evaluation_draft_updated",
+    "evaluation_completed",
   ]);
   assert.equal(
     isCanonicalCommercialEvidence({
