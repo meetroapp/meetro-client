@@ -24,6 +24,7 @@ import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { getEmergencyRequests } from "../utils/emergencyApi";
+import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
@@ -761,44 +762,60 @@ function MyRequests({ setPage }) {
   }, [requestReloadKey, setPage]);
 
   useEffect(() => {
-    let active = true;
+    const refreshCoordinator =
+      createEmergencyRefreshCoordinator({
+        load: async () => {
+          const result = await getEmergencyRequests(
+            {
+              view: "active",
+              limit: 25,
+            },
+            {
+              setPage,
+            }
+          );
+          if (!result.ok) {
+            throw new Error(
+              result.message ||
+                "Emergency requests could not be loaded."
+            );
+          }
 
-    async function loadEmergencyRequests() {
-      setEmergencyRequestStatus(
-        REQUEST_COLLECTION_STATUS.LOADING
-      );
-
-      const result = await getEmergencyRequests(
-        {
-          view: "active",
-          limit: 25,
+          return result.emergencyRequests;
         },
-        {
-          setPage,
-        }
-      );
+        onSuccess: (records) => {
+          setEmergencyRequests(records);
+          setEmergencyRequestStatus(
+            records.length > 0
+              ? REQUEST_COLLECTION_STATUS.READY
+              : REQUEST_COLLECTION_STATUS.EMPTY
+          );
+        },
+        onError: (_error, { hasConfirmedData }) => {
+          if (!hasConfirmedData) {
+            setEmergencyRequestStatus(
+              REQUEST_COLLECTION_STATUS.UNAVAILABLE
+            );
+          }
+        },
+      });
 
-      if (!active) return;
+    void refreshCoordinator.start();
 
-      if (!result.ok) {
-        setEmergencyRequestStatus(
-          REQUEST_COLLECTION_STATUS.UNAVAILABLE
-        );
-        return;
-      }
-
-      setEmergencyRequests(result.emergencyRequests);
-      setEmergencyRequestStatus(
-        result.emergencyRequests.length > 0
-          ? REQUEST_COLLECTION_STATUS.READY
-          : REQUEST_COLLECTION_STATUS.EMPTY
-      );
-    }
-
-    loadEmergencyRequests();
+    const handleVisibilityChange = () => {
+      void refreshCoordinator.handleVisibilityChange();
+    };
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
 
     return () => {
-      active = false;
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      refreshCoordinator.stop();
     };
   }, [emergencyReloadKey, setPage]);
 

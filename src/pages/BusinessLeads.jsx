@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
 import { getLanguage, t } from "../utils/language";
@@ -16,6 +16,7 @@ import {
   listProfessionalEmergencyOpportunities,
   respondToEmergencyOpportunity,
 } from "../utils/emergencyApi";
+import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import {
   fetchCanonicalConversations,
 } from "../utils/requestCommunication";
@@ -31,6 +32,7 @@ import {
 } from "../utils/professionalOpportunityCoordinator";
 
 function BusinessLeads({ setPage }) {
+  const emergencyRefreshCoordinatorRef = useRef(null);
   const [language, setLanguage] = useState(getLanguage());
   const [status, setStatus] = useState("loading");
   const [opportunities, setOpportunities] = useState([]);
@@ -108,6 +110,13 @@ function BusinessLeads({ setPage }) {
               t("emergencyResponseFailed", language),
           },
     }));
+
+    if (result.ok) {
+      await emergencyRefreshCoordinatorRef.current?.refresh({
+        invalidate: true,
+        trigger: "response-mutation",
+      });
+    }
   }
 
   useEffect(() => {
@@ -148,47 +157,86 @@ function BusinessLeads({ setPage }) {
   useEffect(() => {
     if (!isProfessional) return undefined;
 
-    let active = true;
+    let hasConfirmedOpportunities = false;
+    let hasConfirmedConversations = false;
+    const refreshCoordinator =
+      createEmergencyRefreshCoordinator({
+        load: async () => {
+          const [opportunityResult, conversationResult] =
+            await Promise.all([
+              listProfessionalEmergencyOpportunities({
+                setPage,
+              }),
+              fetchCanonicalConversations("business", {
+                setPage,
+              }),
+            ]);
 
-    async function loadEmergencyWork() {
-      setEmergencyStatus("loading");
+          if (!opportunityResult.ok && !conversationResult.ok) {
+            throw new Error(
+              "Emergency professional work could not be refreshed."
+            );
+          }
 
-      const [opportunityResult, conversationResult] =
-        await Promise.all([
-          listProfessionalEmergencyOpportunities({
-            setPage,
-          }),
-          fetchCanonicalConversations("business", {
-            setPage,
-          }),
-        ]);
+          return { opportunityResult, conversationResult };
+        },
+        onSuccess: ({
+          opportunityResult,
+          conversationResult,
+        }) => {
+          if (opportunityResult.ok) {
+            hasConfirmedOpportunities = true;
+            setEmergencyOpportunities(
+              opportunityResult.opportunities
+            );
+            setEmergencyStatus("ready");
+          } else if (!hasConfirmedOpportunities) {
+            setEmergencyStatus("unavailable");
+          }
 
-      if (!active) return;
+          if (conversationResult.ok) {
+            hasConfirmedConversations = true;
+            setActiveEmergencyConversations(
+              conversationResult.conversations.filter(
+                (conversation) =>
+                  conversation.sourceType === "emergency"
+              )
+            );
+          } else if (!hasConfirmedConversations) {
+            setActiveEmergencyConversations([]);
+          }
+        },
+        onError: (_error, { hasConfirmedData }) => {
+          if (!hasConfirmedData) {
+            setEmergencyStatus("unavailable");
+          }
+        },
+      });
 
-      if (!opportunityResult.ok) {
-        setEmergencyStatus("unavailable");
-        setEmergencyOpportunities([]);
-      } else {
-        setEmergencyOpportunities(
-          opportunityResult.opportunities
-        );
-        setEmergencyStatus("ready");
-      }
+    emergencyRefreshCoordinatorRef.current =
+      refreshCoordinator;
+    void refreshCoordinator.start();
 
-      setActiveEmergencyConversations(
-        conversationResult.ok
-          ? conversationResult.conversations.filter(
-              (conversation) =>
-                conversation.sourceType === "emergency"
-            )
-          : []
-      );
-    }
-
-    loadEmergencyWork();
+    const handleVisibilityChange = () => {
+      void refreshCoordinator.handleVisibilityChange();
+    };
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
 
     return () => {
-      active = false;
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      refreshCoordinator.stop();
+      if (
+        emergencyRefreshCoordinatorRef.current ===
+        refreshCoordinator
+      ) {
+        emergencyRefreshCoordinatorRef.current = null;
+      }
     };
   }, [isProfessional, reloadKey, setPage]);
 

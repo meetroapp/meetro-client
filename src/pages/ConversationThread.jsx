@@ -26,6 +26,7 @@ import {
   EMERGENCY_DISPATCH_ACTIONS,
   transitionEmergencyDispatch,
 } from "../utils/emergencyApi";
+import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
 import HiringUnavailableState from "../components/HiringUnavailableState";
 import CompletionWorkflowPresentation from "../components/workflows/presentations/CompletionWorkflowPresentation";
@@ -700,6 +701,9 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const scheduleSwipeStartRef = useRef({ x: 0, y: 0 });
   const gallerySwipeStartRef = useRef({ x: 0, y: 0 });
   const textareaRef = useRef(null);
+  const canonicalConversationIdentityRef = useRef(null);
+  const canonicalConfirmedDetailRef = useRef(false);
+  const canonicalConfirmedMessagesRef = useRef(false);
 
   const getLocalizedMessageField = useCallback(
     (message, field) => {
@@ -2766,19 +2770,22 @@ useEffect(() => {
 
           if (!detail) {
             if (!cancelled) {
-              setCanonicalConversationState({
-                phase: "error",
-                status: "",
-                canSendMessages: false,
-              });
-              setCanonicalConversationDetail(null);
-              setCanonicalMessagesPhase("error");
+              if (!canonicalConfirmedDetailRef.current) {
+                setCanonicalConversationState({
+                  phase: "error",
+                  status: "",
+                  canSendMessages: false,
+                });
+                setCanonicalConversationDetail(null);
+                setCanonicalMessagesPhase("error");
+              }
               setCanonicalLoadErrorKey("conversationCanonicalUnavailable");
             }
             return;
           }
 
           if (!cancelled) {
+            canonicalConfirmedDetailRef.current = true;
             setCanonicalConversationDetail(detail);
             setCanonicalDispatchErrorKey("");
             setCanonicalConversationState({
@@ -2808,7 +2815,11 @@ useEffect(() => {
 
           if (!canonicalMessages) {
             if (!cancelled) {
-              setCanonicalMessagesPhase("error");
+              setCanonicalMessagesPhase(
+                canonicalConfirmedMessagesRef.current
+                  ? "ready"
+                  : "error"
+              );
               setCanonicalLoadErrorKey(
                 "conversationCanonicalMessagesUnavailable"
               );
@@ -2817,6 +2828,7 @@ useEffect(() => {
           }
 
           if (!cancelled) {
+            canonicalConfirmedMessagesRef.current = true;
             setMessages(
               canonicalMessages.map((message) => ({
                 ...message,
@@ -2905,6 +2917,18 @@ useEffect(() => {
           }
         } catch (err) {
           console.error("Failed to load backend messages", err);
+          if (!cancelled) {
+            if (!canonicalConfirmedDetailRef.current) {
+              setCanonicalConversationState({
+                phase: "error",
+                status: "",
+                canSendMessages: false,
+              });
+              setCanonicalConversationDetail(null);
+              setCanonicalMessagesPhase("error");
+            }
+            setCanonicalLoadErrorKey("conversationCanonicalUnavailable");
+          }
         }
       }
 
@@ -2915,21 +2939,76 @@ useEffect(() => {
       }
     };
 
-    Promise.resolve().then(() => {
+    const initializeConversationLoad = () => {
       if (cancelled) return;
 
-      if (isCanonicalThread) setMessages([]);
-      setCanonicalConversationDetail(null);
-      setCanonicalConversationState({
-        phase: isCanonicalThread ? "loading" : "idle",
-        status: "",
-        canSendMessages: false,
-      });
-      setCanonicalMessagesPhase(isCanonicalThread ? "loading" : "idle");
+      const canonicalRouteChanged =
+        isCanonicalThread &&
+        canonicalConversationIdentityRef.current !==
+          canonicalConversationId;
+
+      if (isCanonicalThread) {
+        canonicalConversationIdentityRef.current =
+          canonicalConversationId;
+      } else {
+        canonicalConversationIdentityRef.current = null;
+        canonicalConfirmedDetailRef.current = false;
+        canonicalConfirmedMessagesRef.current = false;
+      }
+
+      if (canonicalRouteChanged) {
+        canonicalConfirmedDetailRef.current = false;
+        canonicalConfirmedMessagesRef.current = false;
+        setMessages([]);
+        setCanonicalConversationDetail(null);
+        setCanonicalConversationState({
+          phase: "loading",
+          status: "",
+          canSendMessages: false,
+        });
+        setCanonicalMessagesPhase("loading");
+      } else if (!isCanonicalThread) {
+        setCanonicalConversationDetail(null);
+        setCanonicalConversationState({
+          phase: "idle",
+          status: "",
+          canSendMessages: false,
+        });
+        setCanonicalMessagesPhase("idle");
+      }
+
       setCanonicalLoadErrorKey("");
       setCanonicalSendErrorKey("");
-      loadMessages();
-    });
+    };
+
+    initializeConversationLoad();
+
+    if (isCanonicalEmergencyThread) {
+      const refreshCoordinator =
+        createEmergencyRefreshCoordinator({
+          load: loadMessages,
+        });
+      const handleVisibilityChange = () => {
+        void refreshCoordinator.handleVisibilityChange();
+      };
+
+      document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      void refreshCoordinator.start();
+
+      return () => {
+        cancelled = true;
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange
+        );
+        refreshCoordinator.stop();
+      };
+    }
+
+    void loadMessages();
 
     const pollingInterval = setInterval(() => {
       if (!document.hidden) {
@@ -2949,6 +3028,7 @@ useEffect(() => {
     setPage,
     isHiringThread,
     isCanonicalThread,
+    isCanonicalEmergencyThread,
     canonicalConversationId,
     canonicalReloadKey,
   ]);

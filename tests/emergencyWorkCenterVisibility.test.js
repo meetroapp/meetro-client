@@ -283,7 +283,7 @@ test("homeowner Work Center loads Emergency requests independently and renders t
   );
   assert.match(
     myRequestsSource,
-    /result\.emergencyRequests\.length > 0[\s\S]*REQUEST_COLLECTION_STATUS\.READY[\s\S]*REQUEST_COLLECTION_STATUS\.EMPTY/
+    /records\.length > 0[\s\S]*REQUEST_COLLECTION_STATUS\.READY[\s\S]*REQUEST_COLLECTION_STATUS\.EMPTY/
   );
   assert.match(
     myRequestsSource,
@@ -309,7 +309,7 @@ test("homeowner Work Center loads Emergency requests independently and renders t
 test("Emergency collection failure and ordinary request failure remain independently represented", () => {
   const emergencyEffectStart =
     myRequestsSource.indexOf(
-      "async function loadEmergencyRequests()"
+      "createEmergencyRefreshCoordinator({"
     );
   const emergencyEffectEnd =
     myRequestsSource.indexOf(
@@ -323,7 +323,7 @@ test("Emergency collection failure and ordinary request failure remain independe
 
   assert.match(
     emergencyEffect,
-    /if \(!result\.ok\)[\s\S]*REQUEST_COLLECTION_STATUS\.UNAVAILABLE/
+    /if \(!result\.ok\)[\s\S]*throw new Error[\s\S]*onError:[\s\S]*!hasConfirmedData[\s\S]*REQUEST_COLLECTION_STATUS\.UNAVAILABLE/
   );
   assert.doesNotMatch(
     emergencyEffect,
@@ -426,7 +426,7 @@ test("Emergency Work Center uses the reusable full canonical timeline", () => {
   );
 });
 
-test("Emergency Work Center adds no conversation-list dependency or polling", () => {
+test("Emergency Work Center adds no conversation-list dependency or direct polling loop", () => {
   assert.doesNotMatch(
     myRequestsSource,
     /fetchCanonicalConversations|getRequestCommunicationEndpoint|\/conversations\?/
@@ -434,6 +434,10 @@ test("Emergency Work Center adds no conversation-list dependency or polling", ()
   assert.doesNotMatch(
     myRequestsSource,
     /setInterval\s*\(/
+  );
+  assert.match(
+    myRequestsSource,
+    /createEmergencyRefreshCoordinator/
   );
 });
 

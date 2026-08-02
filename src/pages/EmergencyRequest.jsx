@@ -33,6 +33,7 @@ import {
 import {
   normalizeEmergencyRelationshipDetail,
 } from "../utils/emergencyRelationshipDetail";
+import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import {
   fetchCanonicalConversations,
   findCanonicalEmergencyConversation,
@@ -214,6 +215,7 @@ function readCurrentEmergencyRoute() {
 
 function EmergencyRequest({ setPage }) {
   const safetyReviewHeadingRef = useRef(null);
+  const emergencyRefreshCoordinatorRef = useRef(null);
   const [routeSessionController] = useState(() =>
     createEmergencyRouteSessionController(
       readCurrentEmergencyRoute()
@@ -550,6 +552,85 @@ function EmergencyRequest({ setPage }) {
 
   const canonicalRequestId = getRequestId(canonicalRequest);
   const canonicalRequestStatus = getRequestStatus(canonicalRequest);
+
+  useEffect(() => {
+    if (!canonicalRequestId || !emergencyRoute.valid) {
+      emergencyRefreshCoordinatorRef.current?.stop();
+      emergencyRefreshCoordinatorRef.current = null;
+      return undefined;
+    }
+
+    const refreshCoordinator =
+      createEmergencyRefreshCoordinator({
+        load: async () => {
+          const result = await getEmergencyRequest(
+            canonicalRequestId,
+            { setPage }
+          );
+
+          if (!result.ok || !result.emergencyRequest) {
+            throw new Error(
+              result.message ||
+                "The Emergency request could not be refreshed."
+            );
+          }
+
+          const nextOwnedRequest = ownEmergencyRequest(
+            routeSession,
+            result.emergencyRequest
+          );
+
+          if (
+            !selectEmergencyRequestForRoute(
+              routeSession,
+              nextOwnedRequest
+            )
+          ) {
+            throw new Error(
+              "The refreshed Emergency request did not match the active route."
+            );
+          }
+
+          return nextOwnedRequest;
+        },
+        onSuccess: (nextOwnedRequest) => {
+          setOwnedCanonicalRequest(nextOwnedRequest);
+          setRecoveryState("loaded");
+        },
+      });
+
+    emergencyRefreshCoordinatorRef.current =
+      refreshCoordinator;
+    void refreshCoordinator.start({ immediate: false });
+
+    const handleVisibilityChange = () => {
+      void refreshCoordinator.handleVisibilityChange();
+    };
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+      refreshCoordinator.stop();
+      if (
+        emergencyRefreshCoordinatorRef.current ===
+        refreshCoordinator
+      ) {
+        emergencyRefreshCoordinatorRef.current = null;
+      }
+    };
+  }, [
+    canonicalRequestId,
+    emergencyRoute.valid,
+    routeSession,
+    setPage,
+  ]);
+
   const shouldLoadResponses = [
     "ready_for_distribution",
     "active",
@@ -1096,6 +1177,20 @@ function EmergencyRequest({ setPage }) {
       : null;
   }
 
+  async function refreshCanonicalRequestAfterMutation() {
+    const coordinator =
+      emergencyRefreshCoordinatorRef.current;
+    if (!coordinator) return null;
+
+    const result = await coordinator.refresh({
+      invalidate: true,
+      trigger: "mutation",
+    });
+    return result.status === "applied"
+      ? result.value
+      : null;
+  }
+
   async function submitDetails(event) {
     event.preventDefault();
 
@@ -1378,6 +1473,7 @@ function EmergencyRequest({ setPage }) {
     setSubmissionConfirmationOpen(false);
     setCancelConfirmationOpen(false);
     setRecoveryState("loaded");
+    await refreshCanonicalRequestAfterMutation();
   }
 
   function requestCancellation() {
@@ -1451,6 +1547,7 @@ function EmergencyRequest({ setPage }) {
     setPhase("lifecycle");
     setCancelConfirmationOpen(false);
     setRecoveryState("loaded");
+    await refreshCanonicalRequestAfterMutation();
   }
 
   function requestProfessionalSelection(response) {
@@ -1574,6 +1671,7 @@ function EmergencyRequest({ setPage }) {
     );
     setCanonicalConversationId(result.conversation.id);
     setSelectedResponse(null);
+    await refreshCanonicalRequestAfterMutation();
     setPage(
       buildCanonicalConversationRoute(
         result.conversation.id,
