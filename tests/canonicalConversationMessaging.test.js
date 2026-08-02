@@ -353,6 +353,7 @@ test("canonical Emergency routes survive reload without browser storage identity
 
 test("canonical conversation IDs fail closed unless they are positive safe integers", () => {
   assert.equal(normalizeCanonicalConversationId(91), 91);
+  assert.equal(normalizeCanonicalConversationId("91"), 91);
 
   for (const invalid of [
     null,
@@ -360,11 +361,24 @@ test("canonical conversation IDs fail closed unless they are positive safe integ
     0,
     -1,
     1.5,
-    "91",
+    "",
+    " ",
+    "91.0",
+    "1e3",
+    "00195",
+    "abc91",
     Number.NaN,
     Number.POSITIVE_INFINITY,
     Number.MAX_SAFE_INTEGER + 1,
+    { id: 91 },
+    [91],
   ]) {
+    assert.equal(normalizeCanonicalConversationId(invalid), null);
+  }
+});
+
+test("canonical conversation IDs do not parse decimal or symbolic text", () => {
+  for (const invalid of ["195.0", "1e3", "-195", "0", "abc195", "195abc", "195 ", " 195"]) {
     assert.equal(normalizeCanonicalConversationId(invalid), null);
   }
 });
@@ -376,8 +390,8 @@ test("canonical detail accepts only matching authoritative identity", () => {
     normalizeCanonicalConversationDetail(
       detail({ conversation: { id: "91", status: "active" } }),
       91
-    ),
-    null
+    )?.conversationId,
+    91
   );
 });
 

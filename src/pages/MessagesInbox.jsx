@@ -547,7 +547,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const routedConversationId =
     canonicalRouteContext.valid &&
     canonicalRouteContext.returnPage === "messagesInbox"
-      ? String(canonicalRouteContext.conversationId)
+      ? canonicalRouteContext.conversationId
       : "";
 
   const [quotes, setQuotes] = useState([]);
@@ -569,7 +569,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const [
     activeSplitCanonicalConversationId,
     setActiveSplitCanonicalConversationId,
-  ] = useState(routedConversationId || "");
+  ] = useState(routedConversationId || null);
   const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [messageSection, setMessageSectionState] = useState(
@@ -660,13 +660,11 @@ function MessagesInbox({ setPage, currentPage }) {
       quote?.source?.type === "emergency" ||
       quote?.conversation_type === "emergency";
 
-    if (!isEmergencySource) return "";
+    if (!isEmergencySource) return null;
 
-    return String(
-      normalizeCanonicalConversationId(
-        quote?.conversationId || quote?.conversation_id || quote?.id
-      ) || ""
-    ).trim();
+    return normalizeCanonicalConversationId(
+      quote?.conversationId || quote?.conversation_id || quote?.id
+    );
   }
 
 
@@ -1151,7 +1149,7 @@ function MessagesInbox({ setPage, currentPage }) {
         )
       );
       setActiveSplitConversationId(String(canonicalEmergencyId));
-      setActiveSplitCanonicalConversationId(String(canonicalEmergencyId));
+      setActiveSplitCanonicalConversationId(canonicalEmergencyId);
       safeSetStorage("activeConversationId", String(canonicalEmergencyId));
       safeSetStorage("conversationReturnPage", "messagesInbox");
 
@@ -1179,7 +1177,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (shouldUseSplitPane) {
       setActiveSplitConversationId(String(conversation.id));
-      setActiveSplitCanonicalConversationId("");
+      setActiveSplitCanonicalConversationId(null);
       window.setTimeout(() => {
         prepareConversation(conversation, { updateList: false });
       }, 0);
@@ -1187,7 +1185,7 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     setActiveSplitConversationId("");
-    setActiveSplitCanonicalConversationId("");
+    setActiveSplitCanonicalConversationId(null);
     setPage("conversationThread");
   }
 
@@ -2661,13 +2659,13 @@ function MessagesInbox({ setPage, currentPage }) {
       setActiveSplitCanonicalConversationId(
         isEmergencyConversationType(stagedConversation)
           ? getCanonicalEmergencyConversationId(stagedConversation)
-          : ""
+          : null
       );
       return;
     }
 
     setActiveSplitConversationId("");
-    setActiveSplitCanonicalConversationId("");
+    setActiveSplitCanonicalConversationId(null);
     setPage("conversationThread");
   }
 
@@ -5489,7 +5487,7 @@ function MessagesInbox({ setPage, currentPage }) {
           <div style={splitThreadPane}>
             {activeSplitConversation ? (
               <ConversationThread
-                canonicalConversationId={activeSplitCanonicalConversationId || ""}
+                canonicalConversationId={activeSplitCanonicalConversationId}
                 embedded
                 emergencyContextMode={isWideWorkspace ? "panel" : "stacked"}
                 onCanonicalEmergencyContextChange={
@@ -5498,14 +5496,14 @@ function MessagesInbox({ setPage, currentPage }) {
                 setPage={(nextPage) => {
                   if (nextPage === "messagesInbox" && routedConversationId) {
                     setActiveSplitConversationId("");
-                    setActiveSplitCanonicalConversationId("");
+                    setActiveSplitCanonicalConversationId(null);
                     setPage("messagesInbox");
                     return;
                   }
 
                   if (nextPage === "messagesInbox" || nextPage === "conversationThread") {
                     setActiveSplitConversationId("");
-                    setActiveSplitCanonicalConversationId("");
+                    setActiveSplitCanonicalConversationId(null);
                     return;
                   }
 

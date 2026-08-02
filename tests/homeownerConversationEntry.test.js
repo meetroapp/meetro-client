@@ -110,7 +110,7 @@ test("multiple canonical rows for one request resolve to the inbox without choos
 });
 
 test("missing, zero, negative, decimal, and string conversation IDs fail closed", () => {
-  const invalidIds = [undefined, 0, -91, 91.5, "91"];
+  const invalidIds = [undefined, 0, -91, 91.5, "00191"];
 
   invalidIds.forEach((conversationId) => {
     const result = resolveHomeownerConversationEntry({
@@ -144,7 +144,7 @@ test("missing request_id and rows for another request are ignored", () => {
 
 test("invalid request IDs never become conversation IDs", () => {
   const result = resolveHomeownerConversationEntry({
-    request: request({ id: "12", requestId: "12" }),
+    request: request({ id: "12a", requestId: "12a" }),
     canonicalConversations: [canonicalConversation()],
   });
 

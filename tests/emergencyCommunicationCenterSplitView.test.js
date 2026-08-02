@@ -383,14 +383,14 @@ test("Communication Center containment and account-mode scoping remain in place"
   );
 });
 
-test("embedded thread receives canonicalConversationId override from split selection", () => {
-  assert.match(
-    inboxSource,
-    /<ConversationThread[\s\S]*canonicalConversationId=\{activeSplitCanonicalConversationId \|\| ""\}/
-  );
-  assert.match(
-    threadSource,
-    /function ConversationThreadInner\(\{\s*[\s\S]*canonicalConversationId: canonicalConversationIdOverride,[\s\S]*\}/
+  test("embedded thread receives canonicalConversationId override from split selection", () => {
+    assert.match(
+      inboxSource,
+      /<ConversationThread[\s\S]*canonicalConversationId=\{activeSplitCanonicalConversationId\}/
+    );
+    assert.match(
+      threadSource,
+      /function ConversationThreadInner\(\{\s*[\s\S]*canonicalConversationId: canonicalConversationIdOverride,[\s\S]*\}/
   );
   assert.match(
     threadSource,
@@ -398,9 +398,28 @@ test("embedded thread receives canonicalConversationId override from split selec
   );
   assert.match(
     threadSource,
-    /const canonicalConversationId = forcedCanonicalConversationId \|\|/
-  );
-});
+      /const canonicalConversationId = forcedCanonicalConversationId \|\|/
+    );
+  });
+
+  test("embedded canonical split path stores numeric emergency IDs", () => {
+    assert.match(
+      inboxSource,
+      /function getCanonicalEmergencyConversationId\(quote = \{\}\) \{[\s\S]*?const isEmergencySource =[\s\S]*?return normalizeCanonicalConversationId\([\s\S]*quote\?\.conversationId \|\| quote\?\.conversation_id \|\| quote\?\.id\s*\);/,
+      "getCanonicalEmergencyConversationId now stores normalized numeric conversation IDs"
+    );
+
+    assert.match(
+      openConversationSource,
+      /setActiveSplitCanonicalConversationId\(canonicalEmergencyId\);/
+    );
+
+    assert.match(
+      openConversationIdFastSource,
+      /setActiveSplitCanonicalConversationId\([\s\S]*?getCanonicalEmergencyConversationId\(stagedConversation\)[\s\S]*?: null/,
+      "openConversationIdFast should clear canonical id with null"
+    );
+  });
 
 test("Emergency canonical hydration never uses requestId in embedded split path", () => {
   assert.match(
@@ -421,14 +440,14 @@ test("Emergency canonical hydration never uses requestId in embedded split path"
   );
 });
 
-test("embedded split clears stale emergency identity when switching away from canonical rows", () => {
-  const nonCanonicalSplitBlock = openConversationSource.match(
-    /if \(isSplitPane\)[\s\S]*?setActiveSplitConversationId\(String\(conversation\.id\)\);[\s\S]*?setActiveSplitCanonicalConversationId\(""\);/
-  );
-  assert.ok(nonCanonicalSplitBlock, "non-emergency split branch clears canonical split id");
+  test("embedded split clears stale emergency identity when switching away from canonical rows", () => {
+    const nonCanonicalSplitBlock = openConversationSource.match(
+      /if \(isSplitPane\)[\s\S]*?setActiveSplitConversationId\(String\(conversation\.id\)\);[\s\S]*?setActiveSplitCanonicalConversationId\(null\);/
+    );
+    assert.ok(nonCanonicalSplitBlock, "non-emergency split branch clears canonical split id");
 
-  const routeBackClearBlock = inboxSource.match(
-    /setPage=\{\(nextPage\) => \{[\s\S]*?if \(nextPage === "messagesInbox" \|\| nextPage === "conversationThread"\) \{[\s\S]*?setActiveSplitCanonicalConversationId\(""\);/
-  );
-  assert.ok(routeBackClearBlock, "split close callback clears canonical split id");
-});
+    const routeBackClearBlock = inboxSource.match(
+      /setPage=\{\(nextPage\) => \{[\s\S]*?if \(nextPage === "messagesInbox" \|\| nextPage === "conversationThread"\) \{[\s\S]*?setActiveSplitCanonicalConversationId\(null\);/
+    );
+    assert.ok(routeBackClearBlock, "split close callback clears canonical split id");
+  });

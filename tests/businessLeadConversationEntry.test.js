@@ -78,7 +78,15 @@ test("valid canonical opportunity is actionable with separate identities", () =>
 });
 
 test("missing or malformed canonical conversation identity fails closed", () => {
-  for (const conversationId of [undefined, null, 0, -1, 1.5, "91", Number.NaN]) {
+  for (const conversationId of [
+    undefined,
+    null,
+    0,
+    -1,
+    1.5,
+    "00191",
+    Number.NaN,
+  ]) {
     assert.equal(
       getBusinessLeadConversationContext(
         opportunity({ conversationId, conversation_id: conversationId })

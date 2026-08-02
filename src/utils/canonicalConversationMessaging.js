@@ -10,7 +10,23 @@ export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
 export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
 
 export function normalizeCanonicalConversationId(value) {
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+  if (Number.isSafeInteger(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value;
+
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeRouteId(value) {
