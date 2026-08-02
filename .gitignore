@@ -33,3 +33,5 @@ ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/
 
 # Generated presentation artifacts
 output/
+.vercel/
+.env*
