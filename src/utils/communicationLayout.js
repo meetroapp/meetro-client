@@ -13,3 +13,16 @@ export function getCommunicationLayout(snapshot = {}) {
     contentWidth,
   });
 }
+
+export function shouldUseCommunicationCenterConversationRoute(
+  route = {},
+  snapshot = {}
+) {
+  const layout = getCommunicationLayout(snapshot);
+
+  return Boolean(
+    layout.mode === "desktop" &&
+      route.valid === true &&
+      route.returnPage === "messagesInbox"
+  );
+}

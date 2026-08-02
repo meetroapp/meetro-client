@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getCommunicationLayout } from "../utils/communicationLayout";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
@@ -6,6 +6,7 @@ import SafeBackBar from "../components/SafeBackBar";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
 import RelationshipIdentityPage from "../components/RelationshipIdentityPage";
+import { EmergencyConversationContextPanel } from "../components/EmergencyRelationshipDetail";
 import ConversationThread from "./ConversationThread";
 import { authFetch, clearMeetroSession } from "../utils/authFetch";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
@@ -39,7 +40,9 @@ import {
 import {
   buildCanonicalConversationRoute,
   CONVERSATION_THREAD_TYPES,
+  normalizeCanonicalConversationId,
   getOpportunityThreadIdentity,
+  parseCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
 import {
   createRelationshipLayerModel,
@@ -538,6 +541,14 @@ function MessagesInbox({ setPage, currentPage }) {
   const communicationLayout = getCommunicationLayout(appLayoutMetrics);
   const isSplitPane = communicationLayout.mode === "desktop";
   const isWideWorkspace = communicationLayout.columns === 3;
+  const canonicalRouteContext = parseCanonicalConversationRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const routedConversationId =
+    canonicalRouteContext.valid &&
+    canonicalRouteContext.returnPage === "messagesInbox"
+      ? String(canonicalRouteContext.conversationId)
+      : "";
 
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -553,8 +564,9 @@ function MessagesInbox({ setPage, currentPage }) {
   );
   const [compactContextOpen, setCompactContextOpen] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
-    localStorage.getItem("activeConversationId") || ""
+    routedConversationId || localStorage.getItem("activeConversationId") || ""
   );
+  const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [messageSection, setMessageSectionState] = useState(
     normalizeMessageSection(localStorage.getItem("meetroMessageSection"))
@@ -633,6 +645,25 @@ function MessagesInbox({ setPage, currentPage }) {
       document.body.classList.remove("messages-focused-flow-open");
     };
   }, [focusedMessagesFlowOpen]);
+
+  const handleCanonicalEmergencyContextChange = useCallback((context) => {
+    setActiveEmergencyContext(context || null);
+  }, []);
+
+  function getCanonicalEmergencyConversationId(quote = {}) {
+    const isEmergencySource =
+      quote?.sourceType === "emergency" ||
+      quote?.source?.type === "emergency" ||
+      quote?.conversation_type === "emergency";
+
+    if (!isEmergencySource) return "";
+
+    return String(
+      normalizeCanonicalConversationId(
+        quote?.conversationId || quote?.conversation_id || quote?.id
+      ) || ""
+    ).trim();
+  }
 
 
   function readActiveEmergencyRecord() {
@@ -1101,11 +1132,10 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   function openConversation(quote, options = {}) {
-    const canonicalEmergencyId =
-      quote?.sourceType === "emergency" &&
-      quote?.threadType === CONVERSATION_THREAD_TYPES.CANONICAL
-        ? quote.conversationId || quote.conversation_id
-        : null;
+    setActiveEmergencyContext(null);
+    setCompactContextOpen(false);
+
+    const canonicalEmergencyId = getCanonicalEmergencyConversationId(quote);
 
     if (canonicalEmergencyId) {
       setQuotes((current) =>
@@ -1115,7 +1145,7 @@ function MessagesInbox({ setPage, currentPage }) {
             : item
         )
       );
-      setActiveSplitConversationId("");
+      setActiveSplitConversationId(String(canonicalEmergencyId));
       setPage(
         buildCanonicalConversationRoute(
           canonicalEmergencyId,
@@ -1168,9 +1198,15 @@ function MessagesInbox({ setPage, currentPage }) {
       safeRemoveStorage("meetroMessagesOpenSavedHistory");
     }
 
+    const savedHistory = Boolean(options.returnToSavedHistory);
+    const isEmergencyCanonicalThread = Boolean(
+      savedHistory &&
+        getCanonicalEmergencyConversationId(conversation)
+    );
+
     openConversation(conversation, {
-      preferSplitPane: isSplitPane && !options.returnToSavedHistory,
-      forceRoute: !isSplitPane || options.returnToSavedHistory,
+      preferSplitPane: isSplitPane && (!savedHistory || isEmergencyCanonicalThread),
+      forceRoute: !isSplitPane && !isEmergencyCanonicalThread,
     });
   }
 
@@ -1715,15 +1751,33 @@ function MessagesInbox({ setPage, currentPage }) {
     language
   );
   const emptyCopy = getEmptyMessageCopy();
-  const activeSplitConversation = searchedVisibleQuotes.find(
+  const listedActiveSplitConversation = searchedVisibleQuotes.find(
     (quote) => String(quote.id) === String(activeSplitConversationId)
   ) || liveIdentityQuotes.find((quote) => {
     const conversation = normalizeConversationForOpen(quote);
     return conversation && String(conversation.id) === String(activeSplitConversationId);
   });
+  const routedSplitConversation =
+    routedConversationId &&
+    routedConversationId === String(activeSplitConversationId)
+      ? {
+          id: routedConversationId,
+          conversationId: canonicalRouteContext.conversationId,
+          conversation_id: canonicalRouteContext.conversationId,
+          threadType: CONVERSATION_THREAD_TYPES.CANONICAL,
+          conversation_type: CONVERSATION_THREAD_TYPES.CANONICAL,
+        }
+      : null;
+  const activeSplitConversation =
+    listedActiveSplitConversation || routedSplitConversation;
   const activeWorkspaceConversation = activeSplitConversation
     ? normalizeConversationForOpen(activeSplitConversation)
     : null;
+  const activeEmergencyContextMatchesConversation = Boolean(
+    activeEmergencyContext?.detail?.type === "emergency" &&
+      String(activeEmergencyContext.conversationId) ===
+        String(activeSplitConversationId)
+  );
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
     : null;
@@ -3026,6 +3080,22 @@ function MessagesInbox({ setPage, currentPage }) {
   function renderWorkspaceContextPanel() {
     const conversation = activeWorkspaceConversation;
     const relationship = activeWorkspaceRelationship;
+
+    if (activeEmergencyContextMatchesConversation) {
+      return (
+        <aside
+          style={workspaceContextPane}
+          aria-label={t("messagesContextAria", language)}
+          className="meetro-visual-surface"
+          data-emergency-context-panel="canonical"
+        >
+          <EmergencyConversationContextPanel
+            detail={activeEmergencyContext.detail}
+            language={language}
+          />
+        </aside>
+      );
+    }
 
     if (!conversation) {
       return (
@@ -4385,7 +4455,9 @@ function MessagesInbox({ setPage, currentPage }) {
             )}
           </div>
 
-          {isSplitPane && !isWideWorkspace && (
+          {isSplitPane &&
+            !isWideWorkspace &&
+            !activeEmergencyContextMatchesConversation && (
             <button
               type="button"
               style={compactContextToggle}
@@ -5391,7 +5463,17 @@ function MessagesInbox({ setPage, currentPage }) {
             {activeSplitConversation ? (
               <ConversationThread
                 embedded
+                emergencyContextMode={isWideWorkspace ? "panel" : "stacked"}
+                onCanonicalEmergencyContextChange={
+                  handleCanonicalEmergencyContextChange
+                }
                 setPage={(nextPage) => {
+                  if (nextPage === "messagesInbox" && routedConversationId) {
+                    setActiveSplitConversationId("");
+                    setPage("messagesInbox");
+                    return;
+                  }
+
                   if (nextPage === "messagesInbox" || nextPage === "conversationThread") {
                     setActiveSplitConversationId("");
                     return;
@@ -5416,7 +5498,10 @@ function MessagesInbox({ setPage, currentPage }) {
       </div>
       )}
 
-      {isSplitPane && !isWideWorkspace && compactContextOpen && (
+      {isSplitPane &&
+        !isWideWorkspace &&
+        !activeEmergencyContextMatchesConversation &&
+        compactContextOpen && (
         <div id="communication-inline-context" style={compactContextRegion}>
           {renderWorkspaceContextPanel()}
         </div>

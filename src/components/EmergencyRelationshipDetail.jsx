@@ -1,5 +1,10 @@
 import EmergencyTimeline from "./EmergencyTimeline";
 import RelationshipIdentityPage from "./RelationshipIdentityPage";
+import {
+  getEmergencyRelationshipNextStep,
+  getEmergencySpecialtyDisplayLabel,
+  getEmergencyWorkCenterStatusLabel,
+} from "../utils/emergencySummary";
 
 function formatTimestamp(value, language) {
   if (!value) return "";
@@ -21,6 +26,180 @@ function initialsFor(value = "") {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
+}
+
+function titleize(value = "") {
+  return String(value || "")
+    .trim()
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function EmergencyConversationContextPanel({
+  detail,
+  language = "en",
+}) {
+  if (!detail || detail.type !== "emergency") return null;
+
+  const copy = language === "es"
+    ? {
+        eyebrow: "Contexto de Emergencia",
+        relationship: "Relación",
+        customer: "Cliente",
+        professional: "Profesional seleccionado",
+        category: "Categoría del negocio",
+        request: "Solicitud",
+        service: "Servicio",
+        domain: "Área de servicio",
+        progress: "Progreso de Emergencia",
+        nextStep: "Qué sucede después",
+        location: "Ubicación y acceso al servicio",
+        unit: "Unidad / Apartamento / Suite",
+        access: "Notas de acceso",
+        professionalFallback: "Profesional Seleccionado",
+        customerFallback: "Cliente",
+      }
+    : {
+        eyebrow: "Emergency Context",
+        relationship: "Relationship",
+        customer: "Customer",
+        professional: "Selected Professional",
+        category: "Business category",
+        request: "Request",
+        service: "Service",
+        domain: "Service area",
+        progress: "Emergency progress",
+        nextStep: "What happens next",
+        location: "Service location and access",
+        unit: "Unit / Apt / Suite",
+        access: "Access notes",
+        professionalFallback: "Selected Professional",
+        customerFallback: "Customer",
+      };
+  const relationship = detail.relationship || {};
+  const source = relationship.source || {};
+  const workflow = detail.workflow || {};
+  const participants = detail.participants || {};
+  const business = participants.business || {};
+  const homeowner = participants.homeowner || {};
+  const title = String(relationship.title || source.title || "Emergency").trim();
+  const status = String(workflow.status || "").trim();
+  const statusLabel = getEmergencyWorkCenterStatusLabel(status, language);
+  const nextStep = getEmergencyRelationshipNextStep(status, language);
+  const serviceSpecialty = String(source.serviceSpecialty || "").trim();
+  const serviceDomain = String(source.serviceDomain || "").trim();
+  const businessName = String(business.name || "").trim() || copy.professionalFallback;
+  const customerName = String(homeowner.displayName || "").trim() || copy.customerFallback;
+  const businessCategory = String(business.category || "").trim();
+  const location = detail.location || null;
+  const timelineRequest = {
+    status,
+    assignedAt: workflow.assignedAt || null,
+    enRouteAt: workflow.enRouteAt || null,
+    arrivedAt: workflow.arrivedAt || null,
+    workStartedAt: workflow.workStartedAt || null,
+    completedAt: workflow.completedAt || null,
+  };
+
+  return (
+    <div
+      style={conversationContextShell}
+      data-emergency-conversation-context="canonical"
+    >
+      <header style={conversationContextHeader}>
+        <p style={conversationContextEyebrow}>{copy.eyebrow}</p>
+        <h2 style={conversationContextTitle}>{title}</h2>
+        {statusLabel && (
+          <strong style={conversationContextStatus}>{statusLabel}</strong>
+        )}
+      </header>
+
+      <section style={conversationContextSection}>
+        <h3 style={conversationContextSectionTitle}>{copy.relationship}</h3>
+        <div style={conversationContextFacts}>
+          <div style={conversationContextFact}>
+            <span>{copy.customer}</span>
+            <strong>{customerName}</strong>
+          </div>
+          <div style={conversationContextFact}>
+            <span>{copy.professional}</span>
+            <strong>{businessName}</strong>
+          </div>
+          {businessCategory && (
+            <div style={conversationContextFact}>
+              <span>{copy.category}</span>
+              <strong>{titleize(businessCategory)}</strong>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {(serviceSpecialty || serviceDomain) && (
+        <section style={conversationContextSection}>
+          <h3 style={conversationContextSectionTitle}>{copy.request}</h3>
+          <div style={conversationContextFacts}>
+            {serviceSpecialty && (
+              <div style={conversationContextFact}>
+                <span>{copy.service}</span>
+                <strong>
+                  {getEmergencySpecialtyDisplayLabel(serviceSpecialty, language)}
+                </strong>
+              </div>
+            )}
+            {serviceDomain && (
+              <div style={conversationContextFact}>
+                <span>{copy.domain}</span>
+                <strong>{titleize(serviceDomain)}</strong>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section style={conversationContextSection}>
+        <h3 style={conversationContextSectionTitle}>{copy.progress}</h3>
+        <EmergencyTimeline
+          emergencyRequest={timelineRequest}
+          language={language}
+        />
+      </section>
+
+      {nextStep && (
+        <section style={conversationContextNextStep}>
+          <h3 style={conversationContextSectionTitle}>{copy.nextStep}</h3>
+          <p style={conversationContextText}>{nextStep}</p>
+        </section>
+      )}
+
+      {location &&
+        (location.locationText || location.unitNumber || location.accessNotes) && (
+          <section style={conversationContextSection}>
+            <h3 style={conversationContextSectionTitle}>{copy.location}</h3>
+            {location.locationText && (
+              <address style={conversationContextAddress}>
+                {location.locationText}
+              </address>
+            )}
+            <div style={conversationContextFacts}>
+              {location.unitNumber && (
+                <div style={conversationContextFact}>
+                  <span>{copy.unit}</span>
+                  <strong>{location.unitNumber}</strong>
+                </div>
+              )}
+              {location.accessNotes && (
+                <div style={conversationContextFact}>
+                  <span>{copy.access}</span>
+                  <strong>{location.accessNotes}</strong>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+    </div>
+  );
 }
 
 function EmergencyRelationshipDetail({
@@ -439,6 +618,115 @@ const relationshipShell = {
   margin: "0 auto",
   boxSizing: "border-box",
   overflowX: "hidden",
+};
+
+const conversationContextShell = {
+  display: "grid",
+  gap: "14px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
+};
+
+const conversationContextHeader = {
+  display: "grid",
+  gap: "8px",
+  minWidth: 0,
+  padding: "4px 2px 14px",
+};
+
+const conversationContextEyebrow = {
+  margin: 0,
+  color: "#991b1b",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "0.09em",
+  textTransform: "uppercase",
+};
+
+const conversationContextTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "20px",
+  lineHeight: 1.15,
+  fontWeight: "950",
+  overflowWrap: "anywhere",
+};
+
+const conversationContextStatus = {
+  justifySelf: "start",
+  maxWidth: "100%",
+  padding: "7px 10px",
+  border: "1px solid #fca5a5",
+  borderRadius: "999px",
+  background: "#fee2e2",
+  color: "#991b1b",
+  fontSize: "12px",
+  lineHeight: 1.3,
+  overflowWrap: "anywhere",
+};
+
+const conversationContextSection = {
+  display: "grid",
+  gap: "10px",
+  minWidth: 0,
+  paddingTop: "14px",
+  borderTop: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
+};
+
+const conversationContextNextStep = {
+  ...conversationContextSection,
+  padding: "14px",
+  border: "1px solid #bfdbfe",
+  borderRadius: "18px",
+  background: "#eff6ff",
+};
+
+const conversationContextSectionTitle = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "14px",
+  lineHeight: 1.3,
+  fontWeight: "950",
+};
+
+const conversationContextFacts = {
+  display: "grid",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const conversationContextFact = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  color: "#64748b",
+  fontSize: "11px",
+  lineHeight: 1.4,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const conversationContextText = {
+  margin: 0,
+  color: "#475569",
+  fontSize: "13px",
+  lineHeight: 1.5,
+  overflowWrap: "anywhere",
+};
+
+const conversationContextAddress = {
+  margin: 0,
+  color: "#0f172a",
+  fontSize: "13px",
+  fontStyle: "normal",
+  fontWeight: "900",
+  lineHeight: 1.5,
+  whiteSpace: "pre-wrap",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const backButton = {

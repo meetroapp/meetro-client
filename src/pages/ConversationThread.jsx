@@ -628,7 +628,12 @@ const MessageItem = memo(({ message }) => {
 });
 
 
-function ConversationThreadInner({ setPage, embedded = false }) {
+function ConversationThreadInner({
+  setPage,
+  embedded = false,
+  emergencyContextMode = "stacked",
+  onCanonicalEmergencyContextChange,
+}) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
   const [language, setLanguageState] = useState(getLanguage());
@@ -842,6 +847,9 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   const isCanonicalEmergencyThread =
     isCanonicalThread &&
     canonicalConversationDetail?.type === "emergency";
+  const emergencyContextInSidePanel =
+    isCanonicalEmergencyThread &&
+    emergencyContextMode === "panel";
   const isLegacyEmergencyThread =
     legacyWorkflowStorageEnabled &&
     !isCanonicalThread &&
@@ -893,6 +901,25 @@ function ConversationThreadInner({ setPage, embedded = false }) {
   }, [messages, isHiringThread, conversationSearchQuery]);
 
   const hasThreadSearch = Boolean(conversationSearchQuery);
+
+  useEffect(() => {
+    if (typeof onCanonicalEmergencyContextChange !== "function") {
+      return;
+    }
+
+    onCanonicalEmergencyContextChange(
+      isCanonicalEmergencyThread && canonicalConversationDetail
+        ? {
+            conversationId: canonicalConversationDetail.conversationId,
+            detail: canonicalConversationDetail,
+          }
+        : null
+    );
+  }, [
+    canonicalConversationDetail,
+    isCanonicalEmergencyThread,
+    onCanonicalEmergencyContextChange,
+  ]);
 
   const activeEmergencyRecord = (() => {
     if (!isLegacyEmergencyThread) return {};
@@ -5471,6 +5498,9 @@ const handleImageUpload = (event) => {
 
           {hasActiveEmergencyJob && (
             <div
+              data-emergency-thread-context={
+                emergencyContextInSidePanel ? "side-panel" : "stacked"
+              }
               style={{
                 ...emergencyBanner,
                 ...(emergencyDispatchStatus === "completed"
@@ -5480,16 +5510,18 @@ const handleImageUpload = (event) => {
             >
               <div style={emergencyBannerTop}>
 
-                <button
-                  style={emergencyExpandBtn}
-                  onClick={() =>
-                    setEmergencyPanelExpanded((prev) => !prev)
-                  }
-                >
-                  {emergencyPanelExpanded
-                    ? t("conversationHideDetails", language)
-                    : t("conversationReviewDetails", language)}
-                </button>
+                {!emergencyContextInSidePanel && (
+                  <button
+                    style={emergencyExpandBtn}
+                    onClick={() =>
+                      setEmergencyPanelExpanded((prev) => !prev)
+                    }
+                  >
+                    {emergencyPanelExpanded
+                      ? t("conversationHideDetails", language)
+                      : t("conversationReviewDetails", language)}
+                  </button>
+                )}
 
                 <div
                   style={{
@@ -5672,7 +5704,7 @@ const handleImageUpload = (event) => {
                 </div>
               )}
 
-              {emergencyPanelExpanded && (
+              {emergencyPanelExpanded && !emergencyContextInSidePanel && (
                 <>
                   <div style={emergencyPillRow}>
                     {emergencyDispatchStatus === "completed" ? (
@@ -10794,11 +10826,23 @@ class ConversationThreadErrorBoundary extends Component {
   }
 }
 
-function ConversationThread({ setPage, embedded = false }) {
+function ConversationThread({
+  setPage,
+  embedded = false,
+  emergencyContextMode = "stacked",
+  onCanonicalEmergencyContextChange,
+}) {
   const language = useLanguage();
   return (
     <ConversationThreadErrorBoundary setPage={setPage} language={language}>
-      <ConversationThreadInner setPage={setPage} embedded={embedded} />
+      <ConversationThreadInner
+        setPage={setPage}
+        embedded={embedded}
+        emergencyContextMode={emergencyContextMode}
+        onCanonicalEmergencyContextChange={
+          onCanonicalEmergencyContextChange
+        }
+      />
     </ConversationThreadErrorBoundary>
   );
 }

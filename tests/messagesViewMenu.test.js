@@ -459,8 +459,8 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /safeSetStorage\("selectedConversation", JSON\.stringify\(threadPayload\)\)/);
   assert.match(messagesSource, /setRelationshipViewMenuOpen\(false\);[\s\S]*setRelationshipActionMenuOpen\(false\);/);
   assert.match(messagesSource, /setActiveContactCardId\(""\);[\s\S]*setSavedHistoryOpen\(false\);/);
-  assert.match(messagesSource, /preferSplitPane: isSplitPane && !options\.returnToSavedHistory/);
-  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
+  assert.match(messagesSource, /preferSplitPane: isSplitPane && \(!savedHistory \|\| isEmergencyCanonicalThread\)/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane && !isEmergencyCanonicalThread/);
   assert.match(messagesSource, /function openConversation\(quote, options = \{\}\)/);
   assert.match(messagesSource, /const conversation = prepareConversation\(quote, \{ updateList: false \}\);/);
   assert.doesNotMatch(messagesSource, /setPage\("conversationThread"\);\n\n\s+window\.setTimeout\(\(\) => \{\n\s+prepareConversation/);
@@ -499,8 +499,9 @@ test("Messages renders an adaptive workspace without changing mobile conversatio
   assert.match(messagesSource, /t\("messagesContextAria", language\)/);
   assert.match(messagesSource, /messagesContextEmpty/);
   assert.match(messagesSource, /<ConversationThread[\s\S]*embedded/);
-  assert.match(messagesSource, /preferSplitPane: isSplitPane && !options\.returnToSavedHistory/);
-  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
+  assert.match(messagesSource, /isWideWorkspace \&\& renderWorkspaceContextPanel\(\)/);
+  assert.match(messagesSource, /preferSplitPane: isSplitPane && \(!savedHistory \|\| isEmergencyCanonicalThread\)/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane && !isEmergencyCanonicalThread/);
   assert.match(messagesSource, /setPage\("conversationThread"\)/);
 });
 
@@ -561,7 +562,7 @@ test("Messages desktop relationship panel containment preserves list thread and 
   assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
   assert.match(messagesSource, /isWideWorkspace \? wideWorkspaceShell : \{\}/);
   assert.match(messagesSource, /<ConversationThread[\s\S]*embedded/);
-  assert.match(messagesSource, /forceRoute: !isSplitPane \|\| options\.returnToSavedHistory/);
+  assert.match(messagesSource, /forceRoute: !isSplitPane && !isEmergencyCanonicalThread/);
 });
 
 test("ConversationThread renders local or empty messages before backend hydration", () => {

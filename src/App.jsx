@@ -32,6 +32,9 @@ import LoadingScreen from "./components/LoadingScreen";
 import {
   startAppLayoutCoordinator,
 } from "./utils/appLayout";
+import useAppLayoutMetrics from "./hooks/useAppLayoutMetrics";
+import { shouldUseCommunicationCenterConversationRoute } from "./utils/communicationLayout";
+import { parseCanonicalConversationRoute } from "./utils/canonicalConversationMessaging";
 import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
 
 const Home = lazy(() => import("./pages/Home"));
@@ -265,6 +268,7 @@ function withGuideLayer(component, currentPage, setPage) {
 
 function App() {
   const language = useLanguage();
+  const appLayoutMetrics = useAppLayoutMetrics();
 
   useEffect(() => {
     const root = document.getElementById("root");
@@ -1040,8 +1044,22 @@ if (page === "quoteRequests") {
 }
 
 if (page === "conversationThread") {
+  const canonicalConversationRoute = parseCanonicalConversationRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const useCommunicationCenterShell =
+    shouldUseCommunicationCenterConversationRoute(
+      canonicalConversationRoute,
+      appLayoutMetrics
+    );
+  const conversationThreadRoute = useCommunicationCenterShell
+    ? withSuspense(
+        <MessagesInbox setPage={setPage} currentPage={page} />
+      )
+    : withSuspense(<ConversationThread setPage={setPage} />);
+
   return withStartupChrome(withAssistantLayer(
-    withSuspense(<ConversationThread setPage={setPage} />),
+    conversationThreadRoute,
     page,
     setPage
   ), updateNotice);
