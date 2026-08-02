@@ -28,6 +28,10 @@ import {
   CONVERSATION_ACTION_STAGE,
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
+import {
+  getCanonicalConversationActionId,
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
 
 const UNSUPPORTED_COMPLETION_CLOSURE_STATUSES = new Set([
   "completed",
@@ -151,7 +155,6 @@ function ProjectDetails({ setPage, currentPage }) {
   const [workflowUnavailableNotice, setWorkflowUnavailableNotice] = useState(false);
 
   const activeProjectData = getSelectedActiveProject();
-  const activeJobSnapshotJobId = activeJobSnapshot?.jobId || "";
   const openedFromConversation = Boolean(getConversationOriginContext());
   const projectDetailsReturnPageValue =
     localStorage.getItem("projectDetailsReturnPage") || "";
@@ -211,28 +214,37 @@ function ProjectDetails({ setPage, currentPage }) {
     if (!post) return;
 
     const requestId = post.requestId || post.id || "";
-    const conversationId =
-      post.conversationId ||
-      post.activeConversationId ||
-      post.projectConversationId ||
-      requestId ||
-      `request-${Date.now()}`;
+    const target = getCanonicalConversationActionTarget(post, {
+      returnPage: "projectDetails",
+      preferCommunicationCenterShell: true,
+    });
+
+    if (!target.ok) {
+      setWorkflowUnavailableNotice(true);
+      return;
+    }
+
     const professionalName =
       post.selectedProfessional ||
       post.businessName ||
       post.professionalName ||
       "Professional";
 
-    localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
+    localStorage.setItem(
+      "selectedHomeownerRequestId",
+      String(requestId || target.conversationId)
+    );
     localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
     localStorage.setItem("selectedQuoteRequest", JSON.stringify(post));
-    localStorage.setItem("activeConversationId", String(conversationId));
+    localStorage.setItem("activeConversationId", String(target.conversationId));
     localStorage.setItem("activeConversationName", professionalName);
-    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("meetroConversationType", "canonical_conversation");
     localStorage.setItem(
       "selectedConversation",
       JSON.stringify({
-        id: conversationId,
+        id: target.conversationId,
+        conversationId: target.conversationId,
+        conversation_id: target.conversationId,
         type: "work",
         category: "work",
         businessName: professionalName,
@@ -242,7 +254,7 @@ function ProjectDetails({ setPage, currentPage }) {
     );
     localStorage.setItem("conversationReturnPage", "projectDetails");
     localStorage.setItem("returnPage", "projectDetails");
-    setPage("conversationThread");
+    setPage(target.route);
   }
 
   function handleJourneyPrimaryAction(actionKey) {
@@ -295,23 +307,12 @@ function ProjectDetails({ setPage, currentPage }) {
       const activeProject = getSelectedActiveProject();
       const originConversation = getConversationOriginContext();
 
-      const activeProjectId =
-        activeProject?.project?.conversationId ||
-        activeProject?.conversationId ||
-        activeProject?.project?.requestId ||
-        activeProject?.requestId ||
-        activeProject?.project?.id ||
-        activeProject?.id ||
-        activeJobSnapshotJobId ||
-        localStorage.getItem("activeJobId") ||
-        localStorage.getItem("selectedPostId") ||
-        localStorage.getItem("activeConversationId") ||
-        "demo-homeowner-1";
-
       const conversationId =
-        originConversation?.conversationId || `active-job-${activeProjectId}`;
+        originConversation?.conversationId ||
+        getCanonicalConversationActionId(activeProject) ||
+        "";
 
-      if (!originConversation?.conversationId) {
+      if (!originConversation?.conversationId && conversationId) {
         localStorage.setItem("activeConversationId", conversationId);
       }
 
@@ -329,7 +330,7 @@ function ProjectDetails({ setPage, currentPage }) {
       window.removeEventListener("meetroJobRecordUpdated", loadJobRecords);
       window.removeEventListener("storage", loadJobRecords);
     };
-  }, [activeJobSnapshotJobId]);
+  }, []);
 
   useEffect(() => {
     async function fetchPost() {
@@ -1099,13 +1100,7 @@ function ProjectJourneyPanel({
   const timelineEvents = getHomeownerProjectTimelineEvents(request, language);
   const primaryIsMessage = journey.primaryActionKey === "messageProfessional";
   const hasConversation = Boolean(
-    request.conversationId ||
-      request.activeConversationId ||
-      request.projectConversationId ||
-      request.threadId ||
-      request.selectedProfessional ||
-      request.businessName ||
-      Number(request.messagesCount || 0) > 0
+    getCanonicalConversationActionId(request)
   );
   const communicationLabel = hasConversation
     ? getConversationActionLabel(

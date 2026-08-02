@@ -4,13 +4,12 @@ import SafeBackBar from "../components/SafeBackBar";
 import { getLanguage, t } from "../utils/language";
 import { purgeProfessionalLeadCaches } from "../utils/businessLeadSourceTruth";
 import {
-  CONVERSATION_THREAD_PAGE,
   getBusinessLeadConversationContext,
   stageBusinessLeadConversation,
 } from "../utils/businessLeadConversationEntry";
 import {
-  buildCanonicalConversationRoute,
-} from "../utils/canonicalConversationMessaging";
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
 import { buildCanonicalEvaluationRoute } from "../utils/canonicalEvaluation";
 import {
   listProfessionalEmergencyOpportunities,
@@ -55,22 +54,30 @@ function BusinessLeads({ setPage }) {
     const context = stageBusinessLeadConversation(opportunity);
     if (!context) return;
 
-    setPage(CONVERSATION_THREAD_PAGE);
+    const target = getCanonicalConversationActionTarget(
+      { conversationId: context.conversationId },
+      {
+        returnPage: context.returnPage,
+        preferCommunicationCenterShell: true,
+      }
+    );
+    if (!target.ok) return;
+
+    setPage(target.route);
   }
 
   function openCanonicalEmergencyConversation(conversation) {
-    const conversationId =
-      conversation?.conversationId ||
-      conversation?.conversation_id;
-
-    if (!conversationId) return;
-
-    setPage(
-      buildCanonicalConversationRoute(
-        conversationId,
-        "businessLeads"
-      )
+    const target = getCanonicalConversationActionTarget(
+      conversation,
+      {
+        returnPage: "businessLeads",
+        preferCommunicationCenterShell: true,
+      }
     );
+
+    if (!target.ok) return;
+
+    setPage(target.route);
   }
 
   function openCanonicalEmergencyEvaluation(conversation) {

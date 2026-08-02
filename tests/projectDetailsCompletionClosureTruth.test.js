@@ -54,7 +54,8 @@ test("Project Details sanitizes stale browser-local completion and closure befor
 
 test("Project Details preserves viewing, messaging, navigation, and responsive shell", () => {
   assert.match(projectDetailsSource, /function openProjectConversation/);
-  assert.match(projectDetailsSource, /setPage\("conversationThread"\)/);
+  assert.match(projectDetailsSource, /getCanonicalConversationActionTarget\(post/);
+  assert.match(projectDetailsSource, /setPage\(target\.route\)/);
   assert.match(projectDetailsSource, /setPage\("myRequests"\)/);
   assert.match(projectDetailsSource, /HomeownerProjectHeader/);
   assert.match(projectDetailsSource, /ProjectJourneyPanel/);

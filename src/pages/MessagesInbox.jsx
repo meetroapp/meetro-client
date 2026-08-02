@@ -39,6 +39,7 @@ import {
 } from "../utils/conversationIdentity";
 import {
   buildCanonicalConversationRoute,
+  CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
   CONVERSATION_THREAD_TYPES,
   normalizeCanonicalConversationId,
   getOpportunityThreadIdentity,
@@ -546,7 +547,9 @@ function MessagesInbox({ setPage, currentPage }) {
   );
   const routedConversationId =
     canonicalRouteContext.valid &&
-    canonicalRouteContext.returnPage === "messagesInbox"
+    (canonicalRouteContext.returnPage === "messagesInbox" ||
+      canonicalRouteContext.shell ===
+        CANONICAL_CONVERSATION_COMMUNICATION_SHELL)
       ? canonicalRouteContext.conversationId
       : "";
 

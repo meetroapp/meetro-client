@@ -23,6 +23,7 @@ export function shouldUseCommunicationCenterConversationRoute(
   return Boolean(
     layout.mode === "desktop" &&
       route.valid === true &&
-      route.returnPage === "messagesInbox"
+      (route.returnPage === "messagesInbox" ||
+        route.shell === "communicationCenter")
   );
 }

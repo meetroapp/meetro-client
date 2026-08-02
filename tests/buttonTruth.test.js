@@ -38,6 +38,8 @@ test("Home legacy Emergency cards fall back to the canonical request directory",
 test("completed job Review Conversation opens the same project conversation", () => {
   assert.match(completedJobDetailsSource, /CONVERSATION_ACTION_STAGE\.HISTORY/);
   assert.match(completedJobDetailsSource, /onClick=\{\(\) => openProjectConversation\("completion_review"\)\}/);
+  assert.match(completedJobDetailsSource, /getCanonicalConversationActionTarget\(/);
+  assert.match(completedJobDetailsSource, /setPage\(target\.route\)/);
   assert.doesNotMatch(
     completedJobDetailsSource,
     /CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]{0,220}setPage\("messagesInbox"\)/

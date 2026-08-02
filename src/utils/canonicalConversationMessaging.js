@@ -8,6 +8,9 @@ export const CANONICAL_MESSAGE_MAX_LENGTH = 5000;
 export const CANONICAL_CONVERSATION_ROUTE_PAGE = "conversationThread";
 export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
 export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
+export const CANONICAL_CONVERSATION_SHELL_PARAM = "shell";
+export const CANONICAL_CONVERSATION_COMMUNICATION_SHELL =
+  "communicationCenter";
 
 export function normalizeCanonicalConversationId(value) {
   if (Number.isSafeInteger(value) && value > 0) {
@@ -47,11 +50,15 @@ export function parseCanonicalConversationRoute(routeValue = "") {
   const returnPage = String(
     params.get(CANONICAL_CONVERSATION_RETURN_PARAM) || ""
   ).trim();
+  const shell = String(
+    params.get(CANONICAL_CONVERSATION_SHELL_PARAM) || ""
+  ).trim();
 
   return {
     page,
     conversationId,
     returnPage,
+    shell,
     valid:
       page === CANONICAL_CONVERSATION_ROUTE_PAGE &&
       Boolean(conversationId),
@@ -60,7 +67,8 @@ export function parseCanonicalConversationRoute(routeValue = "") {
 
 export function buildCanonicalConversationRoute(
   conversationId,
-  returnPage = "messagesInbox"
+  returnPage = "messagesInbox",
+  options = {}
 ) {
   const normalizedId = normalizeCanonicalConversationId(conversationId);
   if (!normalizedId) return CANONICAL_CONVERSATION_ROUTE_PAGE;
@@ -74,6 +82,15 @@ export function buildCanonicalConversationRoute(
     params.set(
       CANONICAL_CONVERSATION_RETURN_PARAM,
       normalizedReturnPage
+    );
+  }
+
+  if (
+    options?.shell === CANONICAL_CONVERSATION_COMMUNICATION_SHELL
+  ) {
+    params.set(
+      CANONICAL_CONVERSATION_SHELL_PARAM,
+      CANONICAL_CONVERSATION_COMMUNICATION_SHELL
     );
   }
 

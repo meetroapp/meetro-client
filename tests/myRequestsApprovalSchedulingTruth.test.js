@@ -57,7 +57,8 @@ test("My Requests sanitizes stale browser-local approved and scheduled records b
 
 test("My Requests preserves request viewing, quote review, conversation, and routing", () => {
   assert.match(myRequestsSource, /function openRequestConversation/);
-  assert.match(myRequestsSource, /setPage\("conversationThread"\)/);
+  assert.match(myRequestsSource, /getCanonicalConversationActionTarget/);
+  assert.match(myRequestsSource, /setPage\(target\.route\)/);
   assert.match(myRequestsSource, /quoteReview/);
   assert.match(myRequestsSource, /getQuoteTotal/);
   assert.match(myRequestsSource, /getQuoteScopeText/);

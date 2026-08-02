@@ -28,6 +28,9 @@ import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoor
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
 import {
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
+import {
   HISTORY_EMERGENCY_SUMMARY_STATUSES,
   getEmergencyResponsePresentation,
   getEmergencySpecialtyDisplayLabel,
@@ -486,10 +489,9 @@ function HomeownerWorkflowHub({
   )
     ? CONVERSATION_ACTION_STAGE.HISTORY
     : CONVERSATION_ACTION_STAGE.ACTIVE;
-  const canonicalConversationId =
-    request.conversation_id || request.conversationId || "";
   const hasAuthoritativeConversation = Boolean(
-    request.conversation_available === true && canonicalConversationId
+    request.conversation_available === true &&
+      getCanonicalConversationActionTarget(request).ok
   );
   const submittedOnly = workflow.key === "request";
   const showPrimaryAction =
@@ -954,18 +956,42 @@ function MyRequests({ setPage }) {
 
   function openRequestConversation(request, quote = {}) {
     const requestId = request.requestId || request.id || quote.requestId || "";
-    const conversationId =
-      quote.conversationId ||
-      request.conversationId ||
-      request.activeConversationId ||
-      requestId;
+    const target = getCanonicalConversationActionTarget(
+      {
+        conversationId:
+          quote.conversationId ||
+          quote.conversation_id ||
+          request.conversationId ||
+          request.conversation_id,
+      },
+      {
+        returnPage: "myRequests",
+        preferCommunicationCenterShell: true,
+      }
+    );
+
+    if (!target.ok) {
+      addNotification({
+        type: "conversation_unavailable",
+        title:
+          language === "es"
+            ? "Conversación no disponible"
+            : "Conversation unavailable",
+        message:
+          language === "es"
+            ? "Meetro no confirmó una conversación para esta solicitud todavía."
+            : "Meetro has not confirmed a conversation for this request yet.",
+        priority: "normal",
+      });
+      return;
+    }
 
     localStorage.setItem("selectedHomeownerRequestId", String(requestId));
     localStorage.setItem("selectedHomeownerRequest", JSON.stringify(request));
     localStorage.setItem("selectedQuoteRequest", JSON.stringify(request));
-    localStorage.setItem("selectedQuoteRequestId", String(requestId || conversationId));
-    localStorage.setItem("activeConversationId", String(conversationId));
-    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("selectedQuoteRequestId", String(requestId));
+    localStorage.setItem("activeConversationId", String(target.conversationId));
+    localStorage.setItem("meetroConversationType", "canonical_conversation");
     localStorage.setItem(
       "activeConversationName",
       quote.businessName || request.selectedProfessional || request.businessName || "Professional"
@@ -973,7 +999,9 @@ function MyRequests({ setPage }) {
     localStorage.setItem(
       "selectedConversation",
       JSON.stringify({
-        id: conversationId,
+        id: target.conversationId,
+        conversationId: target.conversationId,
+        conversation_id: target.conversationId,
         type: "work",
         category: "work",
         businessName:
@@ -984,7 +1012,7 @@ function MyRequests({ setPage }) {
     );
     localStorage.setItem("conversationReturnPage", "myRequests");
     localStorage.setItem("returnPage", "myRequests");
-    setPage("conversationThread");
+    setPage(target.route);
   }
 
   function openHomeownerWorkflow(request, workflow = {}) {
@@ -998,10 +1026,10 @@ function MyRequests({ setPage }) {
       requestId;
     const conversationId =
       request.conversationId ||
-      request.activeConversationId ||
-      request.projectConversationId ||
+      request.conversation_id ||
       workflow.quote?.conversationId ||
-      requestId;
+      workflow.quote?.conversation_id ||
+      "";
     const projectRecord = {
       ...request,
       requestId,
@@ -1332,7 +1360,8 @@ function MyRequests({ setPage }) {
                     setPage(
                       buildCanonicalConversationRoute(
                         emergencyRequest.conversationId,
-                        "myRequests"
+                        "myRequests",
+                        { shell: "communicationCenter" }
                       )
                     )
                   }

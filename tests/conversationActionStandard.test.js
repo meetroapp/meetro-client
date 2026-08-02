@@ -103,7 +103,15 @@ test("new relationship entry points start a conversation", () => {
 test("conversation routing and permission handlers remain unchanged", () => {
   assert.match(
     myRequestsSource,
-    /buildCanonicalConversationRoute\(\s*emergencyRequest\.conversationId,\s*"myRequests"/
+    /buildCanonicalConversationRoute\(\s*emergencyRequest\.conversationId,\s*"myRequests",\s*\{ shell: "communicationCenter" \}/
+  );
+  assert.match(
+    projectDetailsSource,
+    /getCanonicalConversationActionTarget\(post,[\s\S]*preferCommunicationCenterShell:\s*true/
+  );
+  assert.match(
+    myRequestsSource,
+    /getCanonicalConversationActionTarget\([\s\S]*preferCommunicationCenterShell:\s*true/
   );
   assert.match(
     quoteBuilderSource,

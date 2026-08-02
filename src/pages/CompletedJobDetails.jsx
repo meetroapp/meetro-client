@@ -33,6 +33,10 @@ import {
   CONVERSATION_ACTION_STAGE,
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
+import {
+  getCanonicalConversationActionId,
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -236,12 +240,7 @@ function CompletedJobDetails({ setPage, completedRecord = null }) {
     ).toLowerCase() === "closed";
 
   function getProjectConversationId() {
-    return (
-      completedProject?.conversationId ||
-      completedProject?.activeConversationId ||
-      completedProject?.projectConversationId ||
-      requestId
-    );
+    return getCanonicalConversationActionId(completedProject);
   }
 
   const buildTimelineSourceProject = (sourceProject = {}) => ({
@@ -471,17 +470,34 @@ function CompletedJobDetails({ setPage, completedRecord = null }) {
   const openProjectConversation = (context = "completion") => {
     if (restoreConversationOriginContext(setPage)) return;
 
-    const conversationId = getProjectConversationId();
+    const target = getCanonicalConversationActionTarget(
+      completedProject,
+      {
+        returnPage: "completedJobDetails",
+        preferCommunicationCenterShell: true,
+      }
+    );
+
+    if (!target.ok) {
+      setTimelineMomentNotice(
+        "Conversation history is unavailable until Meetro confirms the preserved conversation."
+      );
+      return;
+    }
+
+    const conversationId = target.conversationId;
 
     localStorage.setItem("selectedHomeownerRequestId", String(requestId || conversationId));
     localStorage.setItem("selectedHomeownerRequest", JSON.stringify(completedProject || {}));
     localStorage.setItem("activeConversationId", String(conversationId));
-    localStorage.setItem("meetroConversationType", "standard");
+    localStorage.setItem("meetroConversationType", "canonical_conversation");
     localStorage.setItem("activeConversationName", isHomeownerView ? businessName : customer);
     localStorage.setItem(
       "selectedConversation",
       JSON.stringify({
         id: conversationId,
+        conversationId,
+        conversation_id: conversationId,
         type: "work",
         category: "work",
         businessName,
@@ -494,7 +510,7 @@ function CompletedJobDetails({ setPage, completedRecord = null }) {
     );
     localStorage.setItem("conversationReturnPage", "completedJobDetails");
     localStorage.setItem("returnPage", "completedJobDetails");
-    setPage("conversationThread");
+    setPage(target.route);
   };
 
   const readConcernPhotos = (event) => {

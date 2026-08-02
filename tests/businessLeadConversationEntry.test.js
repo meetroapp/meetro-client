@@ -246,7 +246,8 @@ test("Business Leads conditionally renders an accessible shared-route CTA", () =
   assert.match(leadsSource, /type="button"/);
   assert.match(leadsSource, /aria-label=/);
   assert.match(leadsSource, /t\("openConversation", language\)/);
-  assert.match(leadsSource, /setPage\(CONVERSATION_THREAD_PAGE\)/);
+  assert.match(leadsSource, /getCanonicalConversationActionTarget/);
+  assert.match(leadsSource, /setPage\(target\.route\)/);
   assert.match(leadsSource, /onClick=\{\(\) => openOpportunityConversation\(opportunity\)\}/);
 });
 

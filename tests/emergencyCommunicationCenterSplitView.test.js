@@ -141,6 +141,31 @@ test("non-Communication return routes remain standalone", () => {
   );
 });
 
+test("outside Emergency actions may preserve their return page while requesting the Communication shell", () => {
+  const route = parseCanonicalConversationRoute(
+    `#${buildCanonicalConversationRoute(195, "myRequests", {
+      shell: "communicationCenter",
+    })}`
+  );
+
+  assert.equal(route.returnPage, "myRequests");
+  assert.equal(route.shell, "communicationCenter");
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(
+      route,
+      desktopSnapshot()
+    ),
+    true
+  );
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(route, {
+      layoutMode: "mobile",
+      contentWidth: 390,
+    }),
+    false
+  );
+});
+
 test("existing adaptive layout signal controls the three-column workspace", () => {
   assert.equal(getCommunicationLayout(desktopSnapshot(1039)).columns, 2);
   assert.equal(getCommunicationLayout(desktopSnapshot(1040)).columns, 3);

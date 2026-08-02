@@ -506,6 +506,7 @@ test("canonical conversation route preserves the exact Emergency detail return c
     page: "conversationThread",
     conversationId: 77,
     returnPage,
+    shell: "",
     valid: true,
   });
   assert.match(

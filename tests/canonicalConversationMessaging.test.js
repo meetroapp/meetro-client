@@ -373,6 +373,7 @@ test("canonical Emergency routes survive reload without browser storage identity
     page: "conversationThread",
     conversationId: 95,
     returnPage: "messagesInbox",
+    shell: "",
     valid: true,
   });
 });
