@@ -134,7 +134,7 @@ test("Communication Center header stacks action above tabs on phones", () => {
   assert.match(messagesInboxSource, /className="messages-section-navigation"/);
   assert.match(
     messagesInboxSource,
-    /@media \(max-width: 430px\)[\s\S]*\.messages-hub-header[\s\S]*display: grid !important;/
+    /@media \(max-width: 599px\)[\s\S]*\.messages-hub-header[\s\S]*display: grid !important;/
   );
   assert.match(messagesInboxSource, /\.messages-header-action-button[\s\S]*width: 100% !important;/);
   assert.match(

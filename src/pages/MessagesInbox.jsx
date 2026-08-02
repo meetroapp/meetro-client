@@ -98,7 +98,7 @@ const IconNewChat = () => (
 );
 
 const messagesMobileLayoutStyles = `
-  @media (max-width: 430px) {
+  @media (max-width: 599px) {
     .messages-hub-header {
       display: grid !important;
       grid-template-columns: minmax(0, 1fr) !important;
@@ -126,6 +126,49 @@ const messagesMobileLayoutStyles = `
       max-width: 100% !important;
       min-height: 44px !important;
       justify-content: center !important;
+    }
+
+    .messages-header-action-menu {
+      left: 0 !important;
+      right: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .messages-contact-entry {
+      position: relative !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      contain: inline-size;
+      overflow-x: hidden !important;
+      overscroll-behavior-x: none;
+    }
+
+    .messages-contact-entry,
+    .messages-contact-entry * {
+      box-sizing: border-box !important;
+      max-inline-size: 100%;
+      min-inline-size: 0;
+    }
+
+    .messages-contact-entry input:not([type="checkbox"]),
+    .messages-contact-entry textarea,
+    .messages-contact-entry select {
+      display: block;
+      inline-size: 100% !important;
+      font-size: 16px !important;
+    }
+
+    .messages-contact-search-input {
+      font-size: 16px !important;
+    }
+
+    .messages-contact-import-copy {
+      inline-size: 100%;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .messages-section-navigation {
@@ -463,18 +506,13 @@ function getDefaultImportType(activeMode = "business") {
 
 function createEmptyContactImport(activeMode = "business") {
   return {
-    step: "source",
-    source: "",
+    step: "select",
+    source: "phone",
     contacts: [],
     selectedIds: [],
+    search: "",
     defaultType: getDefaultImportType(activeMode),
-    notice: "",
-    manual: {
-      name: "",
-      phone: "",
-      email: "",
-      address: "",
-    },
+    notice: "Loading contacts…",
   };
 }
 
@@ -527,6 +565,7 @@ function MessagesInbox({ setPage, currentPage }) {
   );
   const [relationshipViewMenuOpen, setRelationshipViewMenuOpen] = useState(false);
   const [relationshipActionMenuOpen, setRelationshipActionMenuOpen] = useState(false);
+  const [contactEntryMode, setContactEntryMode] = useState("closed");
   const [conversationStarter, setConversationStarter] = useState(null);
   const [relationshipComposer, setRelationshipComposer] = useState(null);
   const [contactImport, setContactImport] = useState(null);
@@ -561,11 +600,13 @@ function MessagesInbox({ setPage, currentPage }) {
     setMessageSectionState(nextSection);
     setRelationshipViewMenuOpen(false);
     setRelationshipActionMenuOpen(false);
+    setContactEntryMode("closed");
     setActiveRelationshipId("");
     setActiveContactCardId("");
     setActiveContactCardSnapshot(null);
     setConversationStarter(null);
     setRelationshipComposer(null);
+    setContactImport(null);
     setTicketComposer(null);
     localStorage.removeItem("meetroMessagesOpenSavedHistory");
     setSavedHistoryOpen(false);
@@ -757,6 +798,7 @@ function MessagesInbox({ setPage, currentPage }) {
       setAccountConnectionState(nextConnectionState);
       setQuotes([]);
       setLoading(false);
+      setContactEntryMode("closed");
       setConversationStarter(null);
       setRelationshipComposer(null);
       setContactImport(null);
@@ -1243,6 +1285,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setActiveRelationshipId("");
     setActiveContactCardId("");
     setActiveContactCardSnapshot(null);
+    setContactEntryMode("closed");
     setConversationStarter(null);
     setRelationshipComposer(null);
     setContactImport(null);
@@ -1837,6 +1880,20 @@ function MessagesInbox({ setPage, currentPage }) {
     ? contactImport.contacts.filter((contact) =>
         contactImport.selectedIds.includes(contact.id)
       )
+    : [];
+  const normalizedContactImportSearch = normalizeMessageSearchText(
+    contactImport?.search || ""
+  );
+  const visibleImportContacts = contactImport
+    ? normalizedContactImportSearch
+      ? contactImport.contacts.filter((contact) =>
+          normalizeMessageSearchText(
+            [contact.name, contact.phone, contact.email, contact.address]
+              .filter(Boolean)
+              .join(" ")
+          ).includes(normalizedContactImportSearch)
+        )
+      : contactImport.contacts
     : [];
   const conversationStarterCandidates = conversationStarter
     ? getConversationStarterCandidates()
@@ -3227,6 +3284,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setTicketComposer(null);
 
     if (type === "savedHistory") {
+      setContactEntryMode("closed");
       setConversationStarter(null);
       setRelationshipComposer(null);
       setContactImport(null);
@@ -3238,6 +3296,7 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (type === "hiringCenter") {
+      setContactEntryMode("closed");
       setConversationStarter(null);
       setRelationshipComposer(null);
       setContactImport(null);
@@ -3248,6 +3307,7 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (type === "emergencyCenter") {
+      setContactEntryMode("closed");
       setConversationStarter(null);
       setRelationshipComposer(null);
       setContactImport(null);
@@ -3258,6 +3318,7 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (type === "chat") {
+      setContactEntryMode("closed");
       setRelationshipComposer(null);
       setContactImport(null);
       setActiveContactCardId("");
@@ -3267,6 +3328,7 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (type === "group") {
+      setContactEntryMode("closed");
       setRelationshipComposer(null);
       setContactImport(null);
       setActiveContactCardId("");
@@ -3278,12 +3340,15 @@ function MessagesInbox({ setPage, currentPage }) {
     setConversationStarter(null);
 
     if (type === "import") {
+      setContactEntryMode("import");
       setRelationshipComposer(null);
       setContactImport(createEmptyContactImport(activeAccountMode));
+      void importPhoneContacts();
       return;
     }
 
     setContactImport(null);
+    setContactEntryMode(messageSection === "contacts" ? "manual" : "closed");
     setRelationshipComposer({
       ...createEmptyComposer(type, label),
       section: messageSection,
@@ -3345,6 +3410,7 @@ function MessagesInbox({ setPage, currentPage }) {
   function startContactFromConversationPicker() {
     setActiveContactCardId("");
     setActiveContactCardSnapshot(null);
+    setContactEntryMode("manual");
     setRelationshipComposer({
       ...createEmptyComposer(
         activeAccountMode === "business" ? "customer" : "professional",
@@ -3487,18 +3553,22 @@ function MessagesInbox({ setPage, currentPage }) {
     setContactImport((current) => (current ? { ...current, ...patch } : current));
   }
 
-  function updateManualImportContact(field, value) {
-    setContactImport((current) =>
-      current
-        ? {
-            ...current,
-            manual: {
-              ...current.manual,
-              [field]: value,
-            },
-          }
-        : current
+  function closeContactEntry() {
+    setContactEntryMode("closed");
+    setRelationshipActionMenuOpen(false);
+    setContactImport(null);
+    setRelationshipComposer((current) =>
+      current?.section === "contacts" ? null : current
     );
+  }
+
+  function returnToContactEntryChoice() {
+    setContactEntryMode("choice");
+    setContactImport(null);
+    setRelationshipComposer((current) =>
+      current?.section === "contacts" ? null : current
+    );
+    setRelationshipActionMenuOpen(true);
   }
 
   function addImportedContacts(nextContacts = [], source = "") {
@@ -3526,15 +3596,12 @@ function MessagesInbox({ setPage, currentPage }) {
         step: "select",
         source: source || current.source,
         contacts: [...current.contacts, ...normalizedContacts],
-        selectedIds: [
-          ...new Set([
-            ...current.selectedIds,
-            ...normalizedContacts.map((contact) => contact.id),
-          ]),
-        ],
+        selectedIds: current.selectedIds.filter((contactId) =>
+          existingIds.has(contactId)
+        ),
         notice: normalizedContacts.length
-          ? `${normalizedContacts.length} contact${normalizedContacts.length === 1 ? "" : "s"} ready to review.`
-          : "No contacts were found. Add contacts manually or choose another source.",
+          ? `${normalizedContacts.length} contact${normalizedContacts.length === 1 ? "" : "s"} available. Select the contacts to import.`
+          : "No contacts were found. Import a file or go back to choose manual entry.",
       };
     });
   }
@@ -3554,7 +3621,7 @@ function MessagesInbox({ setPage, currentPage }) {
         notice:
           nativeResult.permission === "denied"
             ? CONTACTS_ACCESS_OFF_MESSAGE
-            : "Phone contacts are unavailable on this device. Add contacts manually or import a file.",
+            : "Phone contacts are unavailable on this device. Import a file or go back to choose manual entry.",
       });
       return;
     }
@@ -3579,7 +3646,7 @@ function MessagesInbox({ setPage, currentPage }) {
       step: "select",
       source: "phone",
       notice:
-        "Phone contacts are not available from this device yet. Add contacts manually or import a file.",
+        "Phone contacts are not available from this device yet. Import a file or go back to choose manual entry.",
     });
   }
 
@@ -3603,52 +3670,9 @@ function MessagesInbox({ setPage, currentPage }) {
       updateContactImport({
         step: "select",
         source: "file",
-        notice: "Meetro could not read that file. Add contacts manually or choose another file.",
+        notice: "Meetro could not read that file. Choose another file or go back to manual entry.",
       });
     }
-  }
-
-  function startManualContactImport() {
-    updateContactImport({
-      step: "select",
-      source: "manual",
-      notice: "Add contacts manually, then review before importing.",
-    });
-  }
-
-  function addManualImportContact() {
-    if (!contactImport) return;
-
-    const manual = contactImport.manual || {};
-    const contact = normalizeImportedContact(
-      {
-        ...manual,
-        source: "manual",
-        type: contactImport.defaultType,
-      },
-      contactImport.contacts.length,
-      contactImport.defaultType
-    );
-
-    if (!contact.name && !contact.email && !contact.phone) {
-      updateContactImport({ notice: "Add a name, phone, or email before adding this contact." });
-      return;
-    }
-
-    addImportedContacts([contact], "manual");
-    setContactImport((current) =>
-      current
-        ? {
-            ...current,
-            manual: {
-              name: "",
-              phone: "",
-              email: "",
-              address: "",
-            },
-          }
-        : current
-    );
   }
 
   function updateImportedContact(contactId, field, value) {
@@ -3682,16 +3706,20 @@ function MessagesInbox({ setPage, currentPage }) {
     });
   }
 
-  function selectAllImportedContacts() {
-    setContactImport((current) =>
-      current
-        ? {
-            ...current,
-            selectedIds: current.contacts.map((contact) => contact.id),
-            notice: "All contacts selected.",
-          }
-        : current
-    );
+  function toggleAllImportedContacts() {
+    setContactImport((current) => {
+      if (!current) return current;
+      const contactIds = [...new Set(current.contacts.map((contact) => contact.id))];
+      const allSelected =
+        contactIds.length > 0 &&
+        contactIds.every((contactId) => current.selectedIds.includes(contactId));
+
+      return {
+        ...current,
+        selectedIds: allSelected ? [] : contactIds,
+        notice: allSelected ? "All contacts cleared." : "All contacts selected.",
+      };
+    });
   }
 
   function moveContactImportToReview() {
@@ -3838,6 +3866,9 @@ function MessagesInbox({ setPage, currentPage }) {
         "I'd like to connect with you on Meetro when it launches."
       )}`;
       setRelationshipComposer(null);
+      if (relationshipComposer.section === "contacts") {
+        setContactEntryMode("closed");
+      }
       setRelationshipNotice("Invite started from your email app.");
       return;
     }
@@ -4297,6 +4328,9 @@ function MessagesInbox({ setPage, currentPage }) {
           onClick={() => {
             setRelationshipViewMenuOpen(false);
             setRelationshipActionMenuOpen(false);
+            if (messageSection === "contacts") {
+              closeContactEntry();
+            }
           }}
         />
       )}
@@ -4317,7 +4351,17 @@ function MessagesInbox({ setPage, currentPage }) {
                     : relationshipAddButton
                 }
                 onClick={() => {
-                  setRelationshipActionMenuOpen((open) => !open);
+                  const nextOpen = !relationshipActionMenuOpen;
+                  setRelationshipActionMenuOpen(nextOpen);
+
+                  if (messageSection === "contacts") {
+                    setContactEntryMode(nextOpen ? "choice" : "closed");
+                    setContactImport(null);
+                    setRelationshipComposer((current) =>
+                      current?.section === "contacts" ? null : current
+                    );
+                  }
+
                   setRelationshipViewMenuOpen(false);
                 }}
                 aria-expanded={relationshipActionMenuOpen}
@@ -4332,6 +4376,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
               {relationshipActionMenuOpen && (
                 <div
+                  className="messages-header-action-menu"
                   style={relationshipActionDropdown}
                   role="menu"
                   aria-label={getHeaderActionMenuLabel()}
@@ -4404,6 +4449,7 @@ function MessagesInbox({ setPage, currentPage }) {
               <MeetroIcon name="discover" size={18} decorative />
               <input
                 id="messages-search"
+                className="messages-contact-search-input"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder={getMessageSearchPlaceholder()}
@@ -4632,8 +4678,12 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {contactImport && (
-        <section style={relationshipPanel} aria-label={t("messagesImportContacts", language)} className="meetro-visual-surface">
+      {contactEntryMode === "import" && contactImport && (
+        <section
+          style={relationshipPanel}
+          aria-label={t("messagesImportContacts", language)}
+          className="meetro-visual-surface messages-contact-entry messages-contact-import"
+        >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
               <p style={filterEyebrow}>{t("messagesRelationships", language)}</p>
@@ -4642,13 +4692,23 @@ function MessagesInbox({ setPage, currentPage }) {
                 {t("messagesImportDescription", language)}
               </p>
             </div>
-            <button
-              type="button"
-              style={relationshipCloseButton}
-              onClick={() => setContactImport(null)}
-            >
-              {t("actionCancel", language)}
-            </button>
+            <div style={relationshipHeaderActions}>
+              <button
+                type="button"
+                style={relationshipCloseButton}
+                onClick={returnToContactEntryChoice}
+                title={t("messagesImportManual", language)}
+              >
+                {t("actionBack", language)}
+              </button>
+              <button
+                type="button"
+                style={relationshipCloseButton}
+                onClick={closeContactEntry}
+              >
+                {t("actionCancel", language)}
+              </button>
+            </div>
           </div>
 
           <input
@@ -4661,35 +4721,6 @@ function MessagesInbox({ setPage, currentPage }) {
 
           {contactImport.notice && (
             <div style={contactImportNotice}>{contactImport.notice}</div>
-          )}
-
-          {contactImport.step === "source" && (
-            <div style={contactImportSourceGrid}>
-              <button
-                type="button"
-                style={contactImportSourceButton}
-                onClick={importPhoneContacts}
-              >
-                <strong>{t("messagesImportPhone", language)}</strong>
-                <span>{t("messagesImportPhoneHelp", language)}</span>
-              </button>
-              <button
-                type="button"
-                style={contactImportSourceButton}
-                onClick={openContactImportFilePicker}
-              >
-                <strong>{t("messagesImportFile", language)}</strong>
-                <span>{t("messagesImportFileHelp", language)}</span>
-              </button>
-              <button
-                type="button"
-                style={contactImportSourceButton}
-                onClick={startManualContactImport}
-              >
-                <strong>{t("messagesImportManual", language)}</strong>
-                <span>{t("messagesImportManualHelp", language)}</span>
-              </button>
-            </div>
           )}
 
           {contactImport.step === "select" && (
@@ -4711,92 +4742,82 @@ function MessagesInbox({ setPage, currentPage }) {
                 </select>
               </label>
 
-              <div style={contactImportManualCard}>
-                <p style={contactImportSectionTitle}>{t("messagesAddContactManually", language)}</p>
-                <div style={relationshipFieldGrid}>
-                  <label style={relationshipField}>
-                    <span>{t("messagesName", language)}</span>
-                    <input
-                      value={contactImport.manual.name}
-                      onChange={(event) =>
-                        updateManualImportContact("name", event.target.value)
-                      }
-                      placeholder={t("messagesName", language)}
-                      style={relationshipInput}
-                    />
-                  </label>
-                  <label style={relationshipField}>
-                    <span>{t("messagesPhone", language)}</span>
-                    <input
-                      value={contactImport.manual.phone}
-                      onChange={(event) =>
-                        updateManualImportContact("phone", event.target.value)
-                      }
-                      placeholder={t("messagesPhone", language)}
-                      style={relationshipInput}
-                    />
-                  </label>
-                  <label style={relationshipField}>
-                    <span>{t("messagesEmail", language)}</span>
-                    <input
-                      value={contactImport.manual.email}
-                      onChange={(event) =>
-                        updateManualImportContact("email", event.target.value)
-                      }
-                      placeholder={t("messagesEmail", language)}
-                      style={relationshipInput}
-                    />
-                  </label>
-                  <label style={relationshipField}>
-                    <span>{t("messagesAddress", language)}</span>
-                    <input
-                      value={contactImport.manual.address}
-                      onChange={(event) =>
-                        updateManualImportContact("address", event.target.value)
-                      }
-                      placeholder={t("messagesAddressPlaceholder", language)}
-                      style={relationshipInput}
-                    />
-                  </label>
-                </div>
+              <label style={relationshipField}>
+                <span>{t("messagesSearchContacts", language)}</span>
+                <input
+                  type="search"
+                  value={contactImport.search}
+                  onChange={(event) =>
+                    updateContactImport({ search: event.target.value, notice: "" })
+                  }
+                  placeholder={t("messagesSearchContacts", language)}
+                  style={relationshipInput}
+                  aria-label={t("messagesSearchContacts", language)}
+                />
+              </label>
+
+              <div style={contactImportActionRow}>
+                <span role="status" aria-live="polite" style={contactImportSelectedCount}>
+                  {selectedImportContacts.length} selected
+                </span>
                 <button
                   type="button"
                   style={relationshipSecondaryAction}
-                  onClick={addManualImportContact}
+                  onClick={importPhoneContacts}
                 >
-                  {t("messagesAddContact", language)}
+                  {t("messagesImportPhone", language)}
+                </button>
+                <button
+                  type="button"
+                  style={relationshipSecondaryAction}
+                  onClick={openContactImportFilePicker}
+                >
+                  {t("messagesImportFile", language)}
+                </button>
+                {contactImport.contacts.length > 0 && (
+                  <button
+                    type="button"
+                    style={relationshipSecondaryAction}
+                    onClick={toggleAllImportedContacts}
+                  >
+                    {contactImport.contacts.every((contact) =>
+                      contactImport.selectedIds.includes(contact.id)
+                    )
+                      ? "Clear All"
+                      : t("messagesSelectAllContacts", language)}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={selectedImportContacts.length === 0}
+                  aria-disabled={selectedImportContacts.length === 0}
+                  style={{
+                    ...relationshipPrimaryAction,
+                    ...(selectedImportContacts.length === 0
+                      ? relationshipDisabledAction
+                      : {}),
+                  }}
+                  onClick={moveContactImportToReview}
+                >
+                  {t("messagesReviewImport", language)}
                 </button>
               </div>
 
-              {contactImport.contacts.length > 0 && (
-                <>
-                  <div style={contactImportActionRow}>
-                    <button
-                      type="button"
-                      style={relationshipSecondaryAction}
-                      onClick={selectAllImportedContacts}
-                    >
-                      {t("messagesSelectAllContacts", language)}
-                    </button>
-                    <button
-                      type="button"
-                      style={relationshipPrimaryAction}
-                      onClick={moveContactImportToReview}
-                    >
-                      {t("messagesReviewImport", language)}
-                    </button>
-                  </div>
-
-                  <div style={contactImportList}>
-                    {contactImport.contacts.map((contact) => (
+              {visibleImportContacts.length > 0 ? (
+                <div style={contactImportList}>
+                    {visibleImportContacts.map((contact) => (
                       <div key={contact.id} style={contactImportRow}>
                         <label style={contactImportSelectLabel}>
                           <input
                             type="checkbox"
                             checked={contactImport.selectedIds.includes(contact.id)}
                             onChange={() => toggleImportedContact(contact.id)}
+                            aria-label={`Select ${contact.name || contact.email || contact.phone}`}
                           />
-                          <span style={contactImportNameBlock}>
+                          <span
+                            className="messages-contact-import-copy"
+                            style={contactImportNameBlock}
+                          >
                             <strong>{contact.name || contact.email || contact.phone}</strong>
                             <span>
                               {[contact.phone, contact.email, contact.address]
@@ -4820,8 +4841,13 @@ function MessagesInbox({ setPage, currentPage }) {
                         </select>
                       </div>
                     ))}
-                  </div>
-                </>
+                </div>
+              ) : (
+                <p style={contactImportEmptyState}>
+                  {contactImport.contacts.length > 0
+                    ? "No contacts match this search."
+                    : "No contacts available. Import a file or go back to choose manual entry."}
+                </p>
               )}
             </div>
           )}
@@ -4846,7 +4872,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
                   return (
                     <div key={contact.id} style={contactImportReviewRow}>
-                      <span style={contactImportNameBlock}>
+                      <span
+                        className="messages-contact-import-copy"
+                        style={contactImportNameBlock}
+                      >
                         <strong>{contact.name || contact.email || contact.phone}</strong>
                         <span>
                           {typeLabel}
@@ -4874,7 +4903,14 @@ function MessagesInbox({ setPage, currentPage }) {
                 </button>
                 <button
                   type="button"
-                  style={relationshipPrimaryAction}
+                  disabled={selectedImportContacts.length === 0}
+                  aria-disabled={selectedImportContacts.length === 0}
+                  style={{
+                    ...relationshipPrimaryAction,
+                    ...(selectedImportContacts.length === 0
+                      ? relationshipDisabledAction
+                      : {}),
+                  }}
                   onClick={saveContactImport}
                 >
                   {t("messagesImportContacts", language)}
@@ -4885,11 +4921,16 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {relationshipComposer && (
+      {relationshipComposer &&
+        (relationshipComposer.section !== "contacts" || contactEntryMode === "manual") && (
         <section
           style={relationshipPanel}
           aria-label={relationshipComposer.label}
-          className="meetro-visual-surface"
+          className={`meetro-visual-surface${
+            relationshipComposer.section === "contacts"
+              ? " messages-contact-entry messages-contact-manual-entry"
+              : ""
+          }`}
         >
           <form onSubmit={saveRelationshipComposer} style={relationshipComposerForm}>
             <div style={relationshipPanelHeader}>
@@ -4906,13 +4947,32 @@ function MessagesInbox({ setPage, currentPage }) {
                     : t("messagesStartConversationHelp", language)}
                 </p>
               </div>
-              <button
-                type="button"
-                style={relationshipCloseButton}
-                onClick={() => setRelationshipComposer(null)}
-              >
-                {t("actionCancel", language)}
-              </button>
+              {relationshipComposer.section === "contacts" ? (
+                <div style={relationshipHeaderActions}>
+                  <button
+                    type="button"
+                    style={relationshipCloseButton}
+                    onClick={returnToContactEntryChoice}
+                  >
+                    {t("actionBack", language)}
+                  </button>
+                  <button
+                    type="button"
+                    style={relationshipCloseButton}
+                    onClick={closeContactEntry}
+                  >
+                    {t("actionCancel", language)}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  style={relationshipCloseButton}
+                  onClick={() => setRelationshipComposer(null)}
+                >
+                  {t("actionCancel", language)}
+                </button>
+              )}
             </div>
 
             {relationshipComposer.type === "space" ? (
@@ -6599,6 +6659,14 @@ const relationshipPanelHeaderText = {
   overflowWrap: "anywhere",
 };
 
+const relationshipHeaderActions = {
+  display: "flex",
+  gap: "8px",
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+  maxWidth: "100%",
+};
+
 const relationshipPanelTitle = {
   margin: "4px 0 0",
   color: "#111827",
@@ -6735,32 +6803,6 @@ const contactImportNotice = {
   overflowWrap: "anywhere",
 };
 
-const contactImportSourceGrid = {
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  display: "grid",
-  gap: "10px",
-  overflowX: "hidden",
-};
-
-const contactImportSourceButton = {
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  border: "1px solid rgba(31,77,52,0.14)",
-  borderRadius: "18px",
-  background: "rgba(248,250,252,0.92)",
-  color: "#0f172a",
-  padding: "13px",
-  display: "grid",
-  gap: "5px",
-  textAlign: "left",
-  cursor: "pointer",
-  boxSizing: "border-box",
-  overflowX: "hidden",
-};
-
 const contactImportFlow = {
   width: "100%",
   maxWidth: "100%",
@@ -6770,26 +6812,35 @@ const contactImportFlow = {
   overflowX: "hidden",
 };
 
-const contactImportManualCard = {
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  border: "1px solid rgba(226,232,240,0.9)",
-  borderRadius: "18px",
-  background: "#fbfdff",
-  padding: "12px",
-  display: "grid",
-  gap: "10px",
-  boxSizing: "border-box",
-  overflowX: "hidden",
-};
-
 const contactImportSectionTitle = {
   margin: 0,
   color: "#111827",
   fontSize: "14px",
   fontWeight: "950",
   lineHeight: 1.25,
+};
+
+const contactImportSelectedCount = {
+  marginRight: "auto",
+  color: "#334155",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const contactImportEmptyState = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  margin: 0,
+  padding: "14px",
+  borderRadius: "16px",
+  background: "#f8fafc",
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.4,
+  boxSizing: "border-box",
+  overflowWrap: "anywhere",
 };
 
 const contactImportActionRow = {
@@ -6847,6 +6898,7 @@ const contactImportSelectLabel = {
 };
 
 const contactImportNameBlock = {
+  width: "100%",
   minWidth: 0,
   maxWidth: "100%",
   display: "grid",
@@ -6854,7 +6906,9 @@ const contactImportNameBlock = {
   color: "#0f172a",
   fontSize: "13px",
   fontWeight: "850",
+  overflow: "hidden",
   overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const contactImportTypeSelect = {
