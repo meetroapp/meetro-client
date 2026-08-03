@@ -823,10 +823,12 @@ function BusinessDashboard({ setPage }) {
 
           @media (min-width: 1100px) {
             #root[data-app-layout="desktop"] .app-page.business-dashboard.meetro-wide-page {
-              width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
-              max-width: min(calc(100vw - var(--meetro-sidebar-width)), 1228px) !important;
-              margin-left: var(--meetro-sidebar-width) !important;
-              margin-right: auto !important;
+              --meetro-dashboard-workspace-max: min(var(--meetro-layout-wide-mid-max), var(--meetro-workspace-max-width));
+              --meetro-dashboard-workspace-extra: max(0px, calc((100vw - var(--meetro-sidebar-width) - var(--meetro-dashboard-workspace-max)) / 2));
+              width: min(calc(100vw - var(--meetro-sidebar-width)), var(--meetro-dashboard-workspace-max)) !important;
+              max-width: var(--meetro-dashboard-workspace-max) !important;
+              margin-left: calc(var(--meetro-sidebar-width) + var(--meetro-dashboard-workspace-extra)) !important;
+              margin-right: var(--meetro-dashboard-workspace-extra) !important;
               padding-top: clamp(24px, 2.8vw, 40px) !important;
               padding-left: clamp(24px, 3vw, 48px) !important;
               padding-right: clamp(24px, 3vw, 48px) !important;

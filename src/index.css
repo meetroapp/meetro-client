@@ -1338,6 +1338,7 @@ body {
   --meetro-layout-content-max: 1120px;
   --meetro-layout-wide-mid-max: 1280px;
   --meetro-layout-wide-max: 1360px;
+  --meetro-workspace-max-width: 1480px;
   --meetro-layout-readable-mid-max: 920px;
   --meetro-layout-readable-max: 960px;
   --meetro-layout-form-max: 860px;
@@ -1866,6 +1867,14 @@ h6 {
   max-width: 100%;
   min-width: 0;
   overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.meetro-standard-workspace {
+  width: 100%;
+  max-width: var(--meetro-workspace-max-width);
+  margin-left: auto;
+  margin-right: auto;
   box-sizing: border-box;
 }
 

@@ -897,18 +897,37 @@ const adaptiveNavigationStyles = `
   #root[data-app-layout="desktop"] .page-shell,
   #root[data-app-layout="desktop"] .business-dashboard,
   #root[data-app-layout="desktop"] .contractor-dashboard {
-      width: calc(100% - var(--meetro-sidebar-width)) !important;
-      max-width: calc(100vw - var(--meetro-sidebar-width)) !important;
-      margin-left: var(--meetro-sidebar-width) !important;
-      margin-right: 0 !important;
+      --meetro-page-max-width: var(--meetro-workspace-max-width);
+      --meetro-page-available-width: calc(100vw - var(--meetro-sidebar-width));
+      --meetro-page-resolved-max-width: min(var(--meetro-page-max-width), var(--meetro-workspace-max-width));
+      --meetro-page-inline-extra: max(0px, calc((var(--meetro-page-available-width) - var(--meetro-page-resolved-max-width)) / 2));
+      width: min(var(--meetro-page-available-width), var(--meetro-page-resolved-max-width)) !important;
+      max-width: var(--meetro-page-resolved-max-width) !important;
+      margin-left: calc(var(--meetro-sidebar-width) + var(--meetro-page-inline-extra)) !important;
+      margin-right: var(--meetro-page-inline-extra) !important;
       padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
   }
 
-  #root[data-app-layout="desktop"] .meetro-responsive-page,
-  #root[data-app-layout="desktop"] .meetro-readable-page,
-  #root[data-app-layout="desktop"] .meetro-form-page,
+  #root[data-app-layout="desktop"] .meetro-responsive-page {
+      --meetro-page-max-width: var(--meetro-layout-content-max);
+  }
+
+  #root[data-app-layout="desktop"] .meetro-readable-page {
+      --meetro-page-max-width: var(--meetro-layout-readable-max);
+  }
+
+  #root[data-app-layout="desktop"] .meetro-form-page {
+      --meetro-page-max-width: var(--meetro-layout-form-max);
+  }
+
   #root[data-app-layout="desktop"] .meetro-wide-page {
-      max-width: calc(100vw - var(--meetro-sidebar-width)) !important;
+      --meetro-page-max-width: var(--meetro-layout-wide-max);
+  }
+
+  #root[data-app-layout="desktop"] .messages-inbox-page,
+  #root[data-app-layout="desktop"] .messages-relationship-identity-page {
+      --meetro-page-resolved-max-width: var(--meetro-page-available-width);
+      --meetro-page-inline-extra: 0px;
   }
 
   #root[data-app-layout="desktop"] .desktop-sidebar-item:focus-visible {

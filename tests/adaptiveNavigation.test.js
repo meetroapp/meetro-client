@@ -216,7 +216,15 @@ test("desktop layout removes BottomNav reservation without changing mobile safe 
   assert.match(indexCssSource, /--meetro-sidebar-width: var\(--meetro-layout-sidebar-width\)/);
   assert.match(
     bottomNavSource,
-    /width: calc\(100% - var\(--meetro-sidebar-width\)\) !important;/
+    /--meetro-page-available-width: calc\(100vw - var\(--meetro-sidebar-width\)\);/
+  );
+  assert.match(
+    bottomNavSource,
+    /width: min\(var\(--meetro-page-available-width\), var\(--meetro-page-resolved-max-width\)\) !important;/
+  );
+  assert.match(
+    bottomNavSource,
+    /margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-page-inline-extra\)\) !important;/
   );
 });
 

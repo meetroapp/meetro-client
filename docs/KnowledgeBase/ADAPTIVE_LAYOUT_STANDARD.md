@@ -61,6 +61,7 @@ Shared layout constants live in `src/index.css`.
 | `--meetro-layout-content-max` | `1120px` | Standard responsive workspace width. |
 | `--meetro-layout-wide-mid-max` | `1280px` | Medium-wide workspace width before full wide expansion. |
 | `--meetro-layout-wide-max` | `1360px` | Maximum wide workspace width. |
+| `--meetro-workspace-max-width` | `1480px` | Absolute standard workspace expansion limit inside the post-sidebar content region. |
 | `--meetro-layout-readable-mid-max` | `920px` | Medium readable/detail pages. |
 | `--meetro-layout-readable-max` | `960px` | Wide readable/detail pages. |
 | `--meetro-layout-form-max` | `860px` | Focused forms and builders before preview layouts exist. |
@@ -68,6 +69,8 @@ Shared layout constants live in `src/index.css`.
 Desktop pages should not stretch beyond the appropriate token simply because screen width is available.
 
 Extra width should improve composition, not scale components indefinitely.
+
+On large desktop and ultrawide displays, ordinary workspaces center inside the content region that remains after the sidebar is reserved. The sidebar is not part of the measured workspace width. Page backgrounds may continue across the available viewport, but standard card-based workspaces must stop at `--meetro-workspace-max-width` or at their narrower surface-specific token.
 
 ## Official Spacing System
 
@@ -219,10 +222,13 @@ Use these shells intentionally:
 - `meetro-wide-page`: dashboards, galleries, and multi-column workspaces.
 - `meetro-readable-page`: detail, identity, legal, and project pages.
 - `meetro-form-page`: focused forms and builders.
+- `meetro-standard-workspace`: shared maximum-width utility for ordinary card-based desktop workspaces.
 - `meetro-responsive-grid`: shared responsive grid behavior.
 - `meetro-responsive-card`: shared overflow and card containment.
 
 If a page needs a new layout primitive, first ask whether one of these shells already expresses the surface's role.
+
+Specialized split-shell surfaces, such as Communication Center, may opt out of the standard maximum when their existing architecture requires full post-sidebar width. Any opt-out must be explicit and must continue protecting tablet and phone containment.
 
 ## Future Evolution
 

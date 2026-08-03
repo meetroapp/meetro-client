@@ -33,6 +33,7 @@ test("shared adaptive layout tokens remain present in the global stylesheet", ()
     "--meetro-layout-content-max: 1120px",
     "--meetro-layout-wide-mid-max: 1280px",
     "--meetro-layout-wide-max: 1360px",
+    "--meetro-workspace-max-width: 1480px",
     "--meetro-layout-readable-mid-max: 920px",
     "--meetro-layout-readable-max: 960px",
     "--meetro-layout-form-max: 860px",
@@ -56,6 +57,7 @@ test("adaptive shells use shared width and spacing tokens instead of hard-coded 
   assert.match(indexCssSource, /\.meetro-wide-page[\s\S]*max-width: var\(--meetro-layout-wide-mid-max\) !important;/);
   assert.match(indexCssSource, /\.meetro-readable-page,[\s\S]*\.meetro-form-page[\s\S]*max-width: var\(--meetro-layout-readable-mid-max\) !important;/);
   assert.match(indexCssSource, /\.meetro-form-page[\s\S]*max-width: var\(--meetro-layout-form-max\) !important;/);
+  assert.match(indexCssSource, /\.meetro-standard-workspace[\s\S]*max-width: var\(--meetro-workspace-max-width\);/);
   assert.match(indexCssSource, /\.meetro-responsive-grid[\s\S]*gap: var\(--meetro-layout-grid-gap-compact\);/);
   assert.match(indexCssSource, /gap: var\(--meetro-layout-grid-gap\);/);
   assert.match(indexCssSource, /\.meetro-wide-page[\s\S]*max-width: var\(--meetro-layout-wide-max\) !important;/);

@@ -27,7 +27,15 @@ test("business dashboard desktop presentation begins at the stable tablet breakp
   assert.match(source, /#root\[data-app-layout="desktop"\]/);
   assert.match(
     source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*width: min\(calc\(100vw - var\(--meetro-sidebar-width\)\), 1228px\) !important;/
+    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*--meetro-dashboard-workspace-max: min\(var\(--meetro-layout-wide-mid-max\), var\(--meetro-workspace-max-width\)\);/
+  );
+  assert.match(
+    source,
+    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*width: min\(calc\(100vw - var\(--meetro-sidebar-width\)\), var\(--meetro-dashboard-workspace-max\)\) !important;/
+  );
+  assert.match(
+    source,
+    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
   );
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: none !important;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
