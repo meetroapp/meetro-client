@@ -1693,16 +1693,20 @@ const portfolioCard = {
 
 const portfolioCoverWrap = {
   position: "relative",
-  width: "100%",
-  height: "180px",
+  width: "min(320px, calc(100% - 32px))",
+  aspectRatio: "16 / 9",
+  margin: "16px 16px 0",
   background: "#f1f5f9",
   overflow: "hidden",
+  borderRadius: "18px",
+  boxSizing: "border-box",
 };
 
 const portfolioCoverImage = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
+  objectPosition: "center",
   display: "block",
 };
 

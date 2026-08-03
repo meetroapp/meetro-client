@@ -1776,17 +1776,20 @@ const editImage = {
 
 const coverImageWrap = {
   position: "relative",
-  width: "100%",
-  height: "250px",
+  width: "min(320px, calc(100% - 36px))",
+  aspectRatio: "16 / 9",
+  margin: "18px 18px 0",
   overflow: "hidden",
-  borderRadius: "28px 28px 0 0",
+  borderRadius: "22px",
   background: "#f1f5f9",
+  boxSizing: "border-box",
 };
 
 const coverImageStyle = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
+  objectPosition: "center",
   display: "block",
 };
 
