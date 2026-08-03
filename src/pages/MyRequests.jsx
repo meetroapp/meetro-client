@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import EmergencyTimeline from "../components/EmergencyTimeline";
 import { getLanguage, t } from "../utils/language";
@@ -13,6 +13,25 @@ import {
   getMediaDeferredCopy,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
+import {
+  REQUEST_PHOTO_MAX_COUNT,
+  cleanupRequestPhoto,
+  createTemporaryRequestPhotoPreview,
+  isRequestPhotoUploadEnabled,
+  uploadRequestPhotos,
+  validateRequestPhotoFiles,
+} from "../utils/requestPhotoMedia";
+import {
+  REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
+  buildRequestPhotoReplacementPayload,
+  createLocalRequestPhotoItem,
+  getPendingLocalRequestPhotoItems,
+  getRequestPhotoPreviewUrl,
+  hydrateRequestEditPhotos,
+  removeRequestEditPhotoAt,
+  reorderRequestEditPhotos,
+  revokeLocalRequestEditPhotoPreviews,
+} from "../utils/requestEditPhotoState";
 import {
   getHomeownerLifecycleStage,
   getAuthoritativeHomeownerRequestCounts,
@@ -139,6 +158,64 @@ function getApprovalSchedulingUnavailableCopy(language) {
   };
 }
 
+function getRequestEditPhotoErrorMessage(code, language) {
+  if (code === "REQUEST_PHOTO_FORMAT_INVALID") {
+    return t("invalidProfileImageFormat", language);
+  }
+  if (code === "REQUEST_PHOTO_TOO_LARGE") {
+    return t("profileImageTooLarge", language);
+  }
+  if (code === "REQUEST_PHOTO_COUNT_EXCEEDED") {
+    return language === "es"
+      ? `Agrega hasta ${REQUEST_PHOTO_MAX_COUNT} fotos por solicitud.`
+      : `Add up to ${REQUEST_PHOTO_MAX_COUNT} photos per request.`;
+  }
+  if (code === "REQUEST_PHOTO_UPLOAD_FAILED") {
+    return t("uploadError", language);
+  }
+  if (code === "REQUEST_EDIT_PHOTO_METADATA_REQUIRED") {
+    return language === "es"
+      ? "No se pudo confirmar la información gobernada de estas fotos. Vuelve a seleccionar las fotos e inténtalo otra vez."
+      : "Meetro could not confirm governed metadata for these photos. Re-select the photos and try again.";
+  }
+  if (code === REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED) {
+    return language === "es"
+      ? "Esta solicitud incluye fotos antiguas que se pueden ver, pero no se pueden preservar mediante la edición gobernada. Elimina esas fotos y agrégalas otra vez antes de guardar cambios de fotos."
+      : "This request includes older photos that can be viewed, but cannot be preserved through governed photo editing. Remove those photos and add them again before saving photo changes.";
+  }
+  return t("uploadFailed", language);
+}
+
+function getRequestEditCleanupWarning(language) {
+  return language === "es"
+    ? "La solicitud no se guardó. Meetro intentó limpiar las fotos nuevas cargadas durante este intento, pero algunas pueden requerir limpieza más tarde."
+    : "The request was not saved. Meetro tried to clean up the new photos uploaded during this attempt, but some may need later cleanup.";
+}
+
+function getRequestEditPhotoOrderLabel(language, direction, index) {
+  const position = index + 1;
+  const labels = {
+    es:
+      direction < 0
+        ? `Mover foto ${position} a la izquierda`
+        : `Mover foto ${position} a la derecha`,
+    fr:
+      direction < 0
+        ? `Deplacer la photo ${position} vers la gauche`
+        : `Deplacer la photo ${position} vers la droite`,
+    pt:
+      direction < 0
+        ? `Mover foto ${position} para a esquerda`
+        : `Mover foto ${position} para a direita`,
+  };
+  return (
+    labels[language] ||
+    (direction < 0
+      ? `Move photo ${position} left`
+      : `Move photo ${position} right`)
+  );
+}
+
 function PhotoStrip({ request, onPreview, language }) {
   const photos = [
     ...(Array.isArray(request.request_photos)
@@ -210,14 +287,21 @@ function EditPhotoManager({
   uploading,
   onUpload,
   onRemove,
+  onMove,
   onPreview,
   language,
   mediaUploadDeferred = false,
+  photoError = "",
+  cleanupWarning = "",
 }) {
   const mediaDeferredCopy = getMediaDeferredCopy(language);
   const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
   const getPhotoLabel = (index) =>
     language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
+  const addDisabled =
+    uploading ||
+    mediaUploadDeferred ||
+    photos.length >= REQUEST_PHOTO_MAX_COUNT;
 
   return (
     <div style={editPhotoManager}>
@@ -232,19 +316,23 @@ function EditPhotoManager({
           type="button"
           style={{
             ...addPhotoButton,
-            ...(mediaUploadDeferred ? disabledAddPhotoButton : {}),
+            ...(addDisabled ? disabledAddPhotoButton : {}),
           }}
           onClick={() => {
-            if (!mediaUploadDeferred) {
-              document.getElementById("editPhotoInput").click();
+            if (!addDisabled) {
+              document.getElementById("editPhotoInput")?.click();
             }
           }}
-          disabled={uploading || mediaUploadDeferred}
+          disabled={addDisabled}
         >
           {mediaUploadDeferred
             ? mediaDeferredCopy.title
             : uploading
             ? t("uploading")
+            : photos.length >= REQUEST_PHOTO_MAX_COUNT
+            ? language === "es"
+              ? "Máximo de fotos"
+              : "Photo limit"
             : t("addPhotos")}
         </button>
       </div>
@@ -252,12 +340,24 @@ function EditPhotoManager({
       <input
         id="editPhotoInput"
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         multiple
-        disabled={mediaUploadDeferred}
+        disabled={addDisabled}
         onChange={onUpload}
         style={{ display: "none" }}
       />
+
+      {photoError && (
+        <p role="alert" aria-live="assertive" style={uploadingText}>
+          {photoError}
+        </p>
+      )}
+
+      {cleanupWarning && (
+        <p role="status" aria-live="polite" style={editPhotoCleanupWarning}>
+          {cleanupWarning}
+        </p>
+      )}
 
       {photos.length === 0 ? (
         <div style={galleryEmpty}>
@@ -267,30 +367,88 @@ function EditPhotoManager({
         </div>
       ) : (
         <div style={swipeGalleryRow}>
-          {photos.map((photo, index) => (
-            <div key={photo + index} style={editPhotoCard}>
-              <button
-                type="button"
-                style={editPhotoPreviewButton}
-                onClick={() => onPreview(photo)}
-              >
-                <img src={photo} alt="" style={swipePhotoImage} />
-              </button>
+          {photos.map((photo, index) => {
+            const previewUrl = getRequestPhotoPreviewUrl(photo);
+            return (
+              <div key={photo.id || previewUrl || index} style={editPhotoCard}>
+                <button
+                  type="button"
+                  style={editPhotoPreviewButton}
+                  onClick={() => previewUrl && onPreview(previewUrl)}
+                >
+                  <img src={previewUrl} alt="" style={swipePhotoImage} />
+                </button>
 
-              <button
-                type="button"
-                style={deletePhotoButton}
-                onClick={() => onRemove(index)}
-              >
-                ×
-              </button>
+                <button
+                  type="button"
+                  style={deletePhotoButton}
+                  onClick={() => onRemove(index)}
+                  aria-label={
+                    language === "es"
+                      ? `Eliminar foto ${index + 1}`
+                      : `Remove photo ${index + 1}`
+                  }
+                  title={
+                    language === "es"
+                      ? `Eliminar foto ${index + 1}`
+                      : `Remove photo ${index + 1}`
+                  }
+                >
+                  ×
+                </button>
 
-              <span style={swipePhotoOverlay}>
-                {index === 0 ? mainPhotoLabel : getPhotoLabel(index)}
-              </span>
-            </div>
-          ))}
+                <div style={editPhotoOrderControls}>
+                  <button
+                    type="button"
+                    onClick={() => onMove(index, -1)}
+                    disabled={index === 0}
+                    aria-label={getRequestEditPhotoOrderLabel(language, -1, index)}
+                    title={getRequestEditPhotoOrderLabel(language, -1, index)}
+                    style={{
+                      ...editPhotoOrderButton,
+                      ...(index === 0 ? editPhotoOrderButtonDisabled : {}),
+                    }}
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMove(index, 1)}
+                    disabled={index === photos.length - 1}
+                    aria-label={getRequestEditPhotoOrderLabel(language, 1, index)}
+                    title={getRequestEditPhotoOrderLabel(language, 1, index)}
+                    style={{
+                      ...editPhotoOrderButton,
+                      ...(index === photos.length - 1
+                        ? editPhotoOrderButtonDisabled
+                        : {}),
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
+
+                <span style={swipePhotoOverlay}>
+                  {index === 0 ? mainPhotoLabel : getPhotoLabel(index)}
+                </span>
+
+                {photo.displayOnly && (
+                  <span style={legacyPhotoBadge}>
+                    {language === "es" ? "Antigua" : "Older photo"}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {photos.some((photo) => photo?.displayOnly) && (
+        <p role="note" style={legacyPhotoWarning}>
+          {language === "es"
+            ? "Esta foto antigua se puede ver, pero no se puede preservar mediante la edición gobernada. Elimínala y agrégala otra vez antes de guardar cambios de fotos."
+            : "This older photo can be viewed, but it cannot be preserved through governed photo editing. Remove it and add it again before saving photo changes."}
+        </p>
       )}
     </div>
   );
@@ -716,7 +874,9 @@ function EmergencyRequestCard({
 
 function MyRequests({ setPage }) {
   const language = getLanguage();
-  const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
+  const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
+  const mediaUploadDeferred =
+    isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
 
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [backendRequests, setBackendRequests] = useState([]);
@@ -861,8 +1021,12 @@ function MyRequests({ setPage }) {
     description: "",
     location: "",
     photos: [],
+    photosChanged: false,
+    photoError: "",
+    cleanupWarning: "",
   });
-  const [uploadingPhotos] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const editPhotoSessionUploadsRef = useRef([]);
 
   const pendingCancelRequest = pendingCancelId
     ? requests.find(
@@ -1079,16 +1243,39 @@ function MyRequests({ setPage }) {
     openRequestConversation(projectRecord, workflow.quote || {});
   }
 
+  async function cleanupUploadedEditRequestPhotos(mediaItems = []) {
+    if (!mediaItems.length) return true;
+    try {
+      const results = await Promise.all(
+        mediaItems.map((media) =>
+          cleanupRequestPhoto({
+            media,
+            authFetchImpl: authFetch,
+            setPage,
+          })
+        )
+      );
+      return results.every(Boolean);
+    } catch {
+      return false;
+    }
+  }
+
   function startEdit(request) {
+    revokeLocalRequestEditPhotoPreviews(editForm.photos);
+    if (editPhotoSessionUploadsRef.current.length > 0) {
+      void cleanupUploadedEditRequestPhotos(editPhotoSessionUploadsRef.current);
+      editPhotoSessionUploadsRef.current = [];
+    }
     setEditingId(request.requestId || request.id);
     setEditForm({
       title: request.title || "",
       description: request.description || "",
       location: request.location || "",
-      photos: [
-        ...(Array.isArray(request.photos) ? request.photos : []),
-        ...(request.image_url ? [request.image_url] : []),
-      ].filter(Boolean),
+      photos: hydrateRequestEditPhotos(request),
+      photosChanged: false,
+      photoError: "",
+      cleanupWarning: "",
     });
   }
 
@@ -1112,50 +1299,238 @@ function MyRequests({ setPage }) {
     localStorage.removeItem("meetroOpenHomeownerRequestEdit");
     const timeoutId = window.setTimeout(() => startEdit(selectedRequest), 0);
     return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests, selectedId]);
+
+  function clearEditPhotoSession() {
+    revokeLocalRequestEditPhotoPreviews(editForm.photos);
+    editPhotoSessionUploadsRef.current = [];
+    setEditForm({
+      title: "",
+      description: "",
+      location: "",
+      photos: [],
+      photosChanged: false,
+      photoError: "",
+      cleanupWarning: "",
+    });
+  }
 
   async function saveEdit(requestId) {
     if (canReadLegacyWorkflowStorage()) return;
     setRequestMutationStatus("pending");
     setRequestMutationError("");
+    setEditForm((current) => ({
+      ...current,
+      photoError: "",
+      cleanupWarning: "",
+    }));
+
+    let uploadedMediaForCleanup = [];
+
     try {
+      const body = {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        location: editForm.location.trim(),
+      };
+
+      if (editForm.photosChanged) {
+        if (mediaUploadDeferred) {
+          const copy = getMediaDeferredCopy(language);
+          setRequestMutationStatus("failed");
+          setEditForm((current) => ({
+            ...current,
+            photoError: copy.detail,
+          }));
+          return;
+        }
+
+        if (editForm.photos.some((photo) => photo?.displayOnly)) {
+          setRequestMutationStatus("failed");
+          setEditForm((current) => ({
+            ...current,
+            photoError: getRequestEditPhotoErrorMessage(
+              REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
+              language
+            ),
+          }));
+          return;
+        }
+
+        const pendingLocalPhotos = getPendingLocalRequestPhotoItems(editForm.photos);
+        const uploadedMediaByItemId = new Map();
+
+        if (pendingLocalPhotos.length > 0) {
+          setUploadingPhotos(true);
+          const uploadedRequestPhotos = await uploadRequestPhotos({
+            files: pendingLocalPhotos.map((photo) => photo.file),
+            authFetchImpl: authFetch,
+            setPage,
+          });
+
+          if (!uploadedRequestPhotos.ok) {
+            setRequestMutationStatus("failed");
+            setEditForm((current) => ({
+              ...current,
+              photoError: getRequestEditPhotoErrorMessage(
+                uploadedRequestPhotos.code,
+                language
+              ),
+            }));
+            return;
+          }
+
+          uploadedMediaForCleanup = uploadedRequestPhotos.photos;
+          editPhotoSessionUploadsRef.current = uploadedMediaForCleanup;
+          pendingLocalPhotos.forEach((photo, index) => {
+            uploadedMediaByItemId.set(photo.id, uploadedMediaForCleanup[index]);
+          });
+        }
+
+        const replacement = buildRequestPhotoReplacementPayload(editForm.photos, {
+          uploadedMediaByItemId,
+        });
+
+        if (!replacement.ok) {
+          const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
+            uploadedMediaForCleanup
+          );
+          editPhotoSessionUploadsRef.current = [];
+          setRequestMutationStatus("failed");
+          setEditForm((current) => ({
+            ...current,
+            photoError: getRequestEditPhotoErrorMessage(replacement.code, language),
+            cleanupWarning: cleanupSucceeded
+              ? ""
+              : getRequestEditCleanupWarning(language),
+          }));
+          return;
+        }
+
+        body.request_photos = replacement.request_photos;
+      }
+
       const result = await authFetch(
         `/posts/${encodeURIComponent(requestId)}`,
         {
           method: "PUT",
-          body: JSON.stringify({
-            title: editForm.title.trim(),
-            description: editForm.description.trim(),
-            location: editForm.location.trim(),
-          }),
+          body: JSON.stringify(body),
         },
         setPage
       );
       if (!result?.response?.ok || !result.data?.post) {
+        const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
+          uploadedMediaForCleanup
+        );
+        editPhotoSessionUploadsRef.current = [];
         setRequestMutationStatus("failed");
         setRequestMutationError(result?.data?.message || "The request could not be updated.");
+        setEditForm((current) => ({
+          ...current,
+          cleanupWarning: cleanupSucceeded
+            ? ""
+            : getRequestEditCleanupWarning(language),
+        }));
         return;
       }
       setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
       setRequestMutationStatus("confirmed");
       setEditingId(null);
+      clearEditPhotoSession();
     } catch {
+      const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
+        uploadedMediaForCleanup
+      );
+      editPhotoSessionUploadsRef.current = [];
       setRequestMutationStatus("failed");
       setRequestMutationError("The request could not be updated. Try again.");
+      setEditForm((current) => ({
+        ...current,
+        cleanupWarning: cleanupSucceeded
+          ? ""
+          : getRequestEditCleanupWarning(language),
+      }));
+    } finally {
+      setUploadingPhotos(false);
     }
   }
 
   function handleEditPhotoUpload(event) {
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    const copy = getMediaDeferredCopy(language);
-    addNotification({ title: copy.title, message: copy.detail, type: "media" });
+
+    if (mediaUploadDeferred) {
+      const copy = getMediaDeferredCopy(language);
+      setEditForm((current) => ({
+        ...current,
+        photoError: copy.detail,
+      }));
+      addNotification({ title: copy.title, message: copy.detail, type: "media" });
+      return;
+    }
+
+    const validation = validateRequestPhotoFiles(files, {
+      existingCount: editForm.photos.length,
+    });
+    if (!validation.ok) {
+      setEditForm((current) => ({
+        ...current,
+        photoError: getRequestEditPhotoErrorMessage(validation.code, language),
+      }));
+      return;
+    }
+
+    const additions = validation.files.map((file) =>
+      createLocalRequestPhotoItem(createTemporaryRequestPhotoPreview(file))
+    );
+    setEditForm((current) => ({
+      ...current,
+      photos: [...current.photos, ...additions],
+      photosChanged: true,
+      photoError: "",
+      cleanupWarning: "",
+    }));
   }
 
   function removeEditPhoto(indexToRemove) {
+    setEditForm((current) => {
+      const removed = current.photos[indexToRemove];
+      if (!removed) return current;
+      if (removed.kind === "local") removed.revoke?.();
+      return {
+        ...current,
+        photos: removeRequestEditPhotoAt(current.photos, indexToRemove),
+        photosChanged: true,
+        photoError: "",
+        cleanupWarning: "",
+      };
+    });
+  }
+
+  function moveEditPhoto(index, direction) {
     setEditForm((current) => ({
       ...current,
-      photos: current.photos.filter((_, index) => index !== indexToRemove),
+      photos: reorderRequestEditPhotos(current.photos, index, direction),
+      photosChanged: true,
+      photoError: "",
+      cleanupWarning: "",
     }));
+  }
+
+  async function cancelEdit() {
+    const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
+      editPhotoSessionUploadsRef.current
+    );
+    if (!cleanupSucceeded) {
+      addNotification({
+        title: language === "es" ? "Limpieza pendiente" : "Cleanup pending",
+        message: getRequestEditCleanupWarning(language),
+        type: "media",
+      });
+    }
+    setEditingId(null);
+    clearEditPhotoSession();
   }
 
   function requestCancelProject(requestId) {
@@ -1673,9 +2048,12 @@ function MyRequests({ setPage }) {
                           uploading={uploadingPhotos}
                           onUpload={handleEditPhotoUpload}
                           onRemove={removeEditPhoto}
+                          onMove={moveEditPhoto}
                           onPreview={setPreviewImage}
                           language={language}
                           mediaUploadDeferred={mediaUploadDeferred}
+                          photoError={editForm.photoError}
+                          cleanupWarning={editForm.cleanupWarning}
                         />
                       ) : (
                         <PhotoStrip
@@ -2080,7 +2458,7 @@ function MyRequests({ setPage }) {
 
                     <button
                       style={secondaryButton}
-                      onClick={() => setEditingId(null)}
+                      onClick={cancelEdit}
                     >
                       {t("myRequestsCancelEdit", language)}
                     </button>
@@ -3193,6 +3571,20 @@ const editPhotoManager = {
   gap: "12px",
 };
 
+const uploadingText = {
+  margin: 0,
+  color: "#b45309",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const editPhotoCleanupWarning = {
+  margin: 0,
+  color: "#92400e",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
 const addPhotoButton = {
   border: "none",
   background: "var(--meetro-color-forest, #1f4d34)",
@@ -3245,6 +3637,57 @@ const deletePhotoButton = {
   fontWeight: "900",
   cursor: "pointer",
   zIndex: 2,
+};
+
+const editPhotoOrderControls = {
+  position: "absolute",
+  left: "8px",
+  bottom: "8px",
+  display: "flex",
+  gap: "6px",
+  zIndex: 2,
+};
+
+const editPhotoOrderButton = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.64)",
+  background: "rgba(15,23,42,0.72)",
+  color: "white",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const editPhotoOrderButtonDisabled = {
+  opacity: 0.4,
+  cursor: "not-allowed",
+};
+
+const legacyPhotoBadge = {
+  position: "absolute",
+  left: "8px",
+  top: "8px",
+  zIndex: 3,
+  borderRadius: "999px",
+  padding: "4px 8px",
+  background: "rgba(251, 191, 36, 0.94)",
+  color: "#78350f",
+  fontSize: "10px",
+  fontWeight: "950",
+  letterSpacing: "0.02em",
+};
+
+const legacyPhotoWarning = {
+  margin: 0,
+  padding: "10px 12px",
+  borderRadius: "14px",
+  border: "1px solid rgba(251, 191, 36, 0.42)",
+  background: "#fffbeb",
+  color: "#92400e",
+  fontSize: "13px",
+  fontWeight: "800",
+  lineHeight: 1.45,
 };
 
 const primaryButton = {
