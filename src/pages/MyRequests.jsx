@@ -489,11 +489,12 @@ function HomeownerWorkflowHub({
   )
     ? CONVERSATION_ACTION_STAGE.HISTORY
     : CONVERSATION_ACTION_STAGE.ACTIVE;
+  const submittedOnly = workflow.key === "request";
   const hasAuthoritativeConversation = Boolean(
-    request.conversation_available === true &&
+    !submittedOnly &&
+      request.conversation_available === true &&
       getCanonicalConversationActionTarget(request).ok
   );
-  const submittedOnly = workflow.key === "request";
   const showPrimaryAction =
     !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
 
@@ -556,7 +557,7 @@ function HomeownerWorkflowHub({
               )
             : workflow.primaryActionLabel}
         </button>}
-        {!hideCommunicationAction && !primaryIsConversation && hasAuthoritativeConversation && (
+        {!hideCommunicationAction && !submittedOnly && !primaryIsConversation && hasAuthoritativeConversation && (
           <button type="button" style={workflowHubSecondaryButton} onClick={onOpenConversation}>
             {getConversationActionLabel(
               conversationActionStage,

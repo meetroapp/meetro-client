@@ -58,8 +58,10 @@ test("known active project statuses have homeowner-safe next-step copy", () => {
 test("Home project entry uses canonical zero, one, and many routing", () => {
   assert.match(homeSource, /function openHomeownerProject\(request = \{\}\)/);
   assert.match(homeSource, /getConversationEntryForRequest\(request\)/);
+  assert.match(homeSource, /getCanonicalConversationActionTarget\(decision/);
   assert.match(homeSource, /stageHomeownerCanonicalConversation\(decision, request\)/);
-  assert.match(homeSource, /setPage\("conversationThread"\)/);
+  assert.match(homeSource, /setPage\(target\.route\)/);
+  assert.doesNotMatch(homeSource, /setPage\("conversationThread"\)/);
   assert.match(homeSource, /setPage\("messagesInbox"\)/);
   assert.match(homeSource, /openRequestFromHome\(request\)/);
   assert.doesNotMatch(homeSource, /openWorkConversationForRequest/);

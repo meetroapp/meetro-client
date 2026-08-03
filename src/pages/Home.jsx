@@ -15,6 +15,9 @@ import {
   stageHomeownerCanonicalConversation,
 } from "../utils/homeownerConversationEntry";
 import {
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
+import {
   REQUEST_COLLECTION_STATUS,
   resolveHomeownerRequestCollection,
 } from "../utils/requestLifecycleState";
@@ -612,9 +615,20 @@ function Home({ setPage }) {
     if (
       decision.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
     ) {
-      const context = stageHomeownerCanonicalConversation(decision, request);
-      if (context) {
-        setPage("conversationThread");
+      const target = getCanonicalConversationActionTarget(decision, {
+        returnPage: "home",
+        preferCommunicationCenterShell: true,
+      });
+      if (target.ok) {
+        const context = stageHomeownerCanonicalConversation(decision, request);
+        if (context) {
+          setPage(target.route);
+          return;
+        }
+      }
+
+      if (!target.ok) {
+        openRequestFromHome(request);
         return;
       }
     }

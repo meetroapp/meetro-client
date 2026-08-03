@@ -18,6 +18,7 @@ const readSource = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const routingSource = readSource("src/utils/conversationActionRouting.js");
+const homeSource = readSource("src/pages/Home.jsx");
 const myRequestsSource = readSource("src/pages/MyRequests.jsx");
 const projectDetailsSource = readSource("src/pages/ProjectDetails.jsx");
 const completedJobDetailsSource = readSource(
@@ -124,6 +125,67 @@ test("standard project, quote, and invoice actions resolve the exact related thr
   );
 });
 
+test("Home My Projects Continue Conversation produces a restorable canonical route", () => {
+  const target = getCanonicalConversationActionTarget(
+    {
+      requestId: 12,
+      request_id: 12,
+      relationshipId: 333,
+      projectId: 444,
+      jobId: 555,
+      conversationId: "91",
+    },
+    {
+      returnPage: "home",
+      preferCommunicationCenterShell: true,
+    }
+  );
+  const route = parseCanonicalConversationRoute(`#${target.route}`);
+
+  assert.equal(target.ok, true);
+  assert.equal(target.conversationId, 91);
+  assert.equal(route.valid, true);
+  assert.equal(route.conversationId, 91);
+  assert.notEqual(route.conversationId, 12);
+  assert.notEqual(route.conversationId, 333);
+  assert.notEqual(route.conversationId, 444);
+  assert.notEqual(route.conversationId, 555);
+  assert.equal(route.returnPage, "home");
+  assert.equal(route.shell, CANONICAL_CONVERSATION_COMMUNICATION_SHELL);
+  assert.equal(
+    target.route,
+    "conversationThread?conversationId=91&returnPage=home&shell=communicationCenter"
+  );
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(route, desktopSnapshot()),
+    true
+  );
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(route, phoneSnapshot()),
+    false
+  );
+});
+
+test("Home My Projects missing canonical identity fails without bare conversation navigation", () => {
+  const target = getCanonicalConversationActionTarget(
+    {
+      requestId: 91,
+      request_id: 91,
+      relationshipId: 91,
+      projectId: 91,
+      jobId: 91,
+    },
+    {
+      returnPage: "home",
+      preferCommunicationCenterShell: true,
+    }
+  );
+
+  assert.equal(target.ok, false);
+  assert.equal(target.route, "");
+  assert.equal(target.reason, "missing_canonical_conversation_id");
+});
+
 test("request-like and unsafe identities fail closed", () => {
   for (const record of [
     { requestId: 91 },
@@ -162,6 +224,18 @@ test("history review requires a preserved canonical conversation and does not cr
 });
 
 test("outside conversation actions enter canonical routes with Communication Center shell eligibility", () => {
+  assert.match(
+    homeSource,
+    /getCanonicalConversationActionTarget\(decision,\s*\{[\s\S]*returnPage:\s*"home"[\s\S]*preferCommunicationCenterShell:\s*true/
+  );
+  assert.match(
+    homeSource,
+    /setPage\(target\.route\)/
+  );
+  assert.doesNotMatch(
+    homeSource,
+    /setPage\("conversationThread"\)/
+  );
   assert.match(
     myRequestsSource,
     /preferCommunicationCenterShell:\s*true/

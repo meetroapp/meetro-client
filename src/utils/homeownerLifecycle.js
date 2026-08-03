@@ -426,7 +426,9 @@ export function getHomeownerWorkflowPresentation(request = {}, language = "en") 
   else if (hasProposal) key = "proposal";
   else if (hasTimelineType(request, (type) => type.includes("evaluation"))) key = "evaluation";
   else if (hasSchedule) key = "visit";
-  else key = lifecycle.key === "communication" ? "request" : lifecycle.key;
+  else key = ["communication", "waiting"].includes(lifecycle.key)
+    ? "request"
+    : lifecycle.key;
 
   const strings = copy[language === "es" ? "es" : "en"][key] || copy.en.request;
   const amount =
