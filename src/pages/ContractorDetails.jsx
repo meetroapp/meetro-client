@@ -20,6 +20,8 @@ import { getBusinessVerificationProjection } from "../utils/businessVerification
 import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 
+const PORTFOLIO_PREVIEW_MAX_IMAGES = 5;
+
 function ContractorDetails({ setPage, currentPage }) {
   const [profile, setProfile] = useState(null);
   const [reviews, setReviews] = useState([]);
@@ -248,6 +250,12 @@ function ContractorDetails({ setPage, currentPage }) {
     }
 
     return project?.image_url ? [project.image_url] : [];
+  }
+
+  function scrollToPortfolioGallery() {
+    document
+      .getElementById("contractor-details-project-gallery")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function fetchContractor() {
@@ -590,6 +598,32 @@ function ContractorDetails({ setPage, currentPage }) {
     }
   );
   const publicPortfolioProjects = portfolioProof.projects;
+  const portfolioPreviewProjectByUrl = new Map();
+
+  publicPortfolioProjects.forEach((project) => {
+    getProjectImages(project).forEach((url) => {
+      if (!portfolioPreviewProjectByUrl.has(url)) {
+        portfolioPreviewProjectByUrl.set(url, project);
+      }
+    });
+  });
+
+  const portfolioPreviewImages = portfolioProof.mediaUrls
+    .slice(0, PORTFOLIO_PREVIEW_MAX_IMAGES)
+    .map((url, index) => {
+      const project = portfolioPreviewProjectByUrl.get(url);
+      const baseAlt = project?.title || profileName || t("businessProfile");
+
+      return {
+        url,
+        alt:
+          portfolioProof.mediaUrls.length > 1
+            ? `${baseAlt} ${isSpanish ? "foto" : "photo"} ${index + 1}`
+            : baseAlt,
+      };
+    });
+  const hasMorePortfolioPreviewImages =
+    portfolioProof.mediaUrls.length > PORTFOLIO_PREVIEW_MAX_IMAGES;
   const allowedForHomeownerContext = isProfileAllowedForHomeownerContext(profile);
 
   if (!allowedForHomeownerContext) {
@@ -776,13 +810,30 @@ function ContractorDetails({ setPage, currentPage }) {
           {isSpanish ? "Vista previa del trabajo" : "Portfolio preview"}
         </h2>
 
-        {portfolioProof.featuredProject?.image_url ? (
-          <div style={portfolioCoverWrap}>
-            <img
-              src={portfolioProof.featuredProject.image_url}
-              alt={portfolioProof.featuredProject.title || profileName}
-              style={portfolioCoverImage}
-            />
+        {portfolioPreviewImages.length > 0 ? (
+          <div style={portfolioPreviewStack}>
+            <div style={portfolioPreviewGrid}>
+              {portfolioPreviewImages.map((image) => (
+                <div key={image.url} style={portfolioPreviewThumbFrame}>
+                  <img
+                    src={image.url}
+                    alt={image.alt}
+                    loading="lazy"
+                    style={portfolioPreviewThumbImage}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {hasMorePortfolioPreviewImages && (
+              <button
+                type="button"
+                style={portfolioPreviewMoreButton}
+                onClick={scrollToPortfolioGallery}
+              >
+                {isSpanish ? "Ver más fotos" : "View more photos"}
+              </button>
+            )}
           </div>
         ) : (
           <div className="meetro-visual-empty-state" style={mediaPlaceholder}>
@@ -845,7 +896,11 @@ function ContractorDetails({ setPage, currentPage }) {
         </div>
       </div>
 
-      <div className="meetro-visual-surface" style={cardStyle}>
+      <div
+        id="contractor-details-project-gallery"
+        className="meetro-visual-surface"
+        style={cardStyle}
+      >
         <h2 style={sectionTitle}>{t("projectGallery")}</h2>
 
         {publicPortfolioProjects.length === 0 && (
@@ -1591,6 +1646,42 @@ const publicGalleryImage = {
   scrollSnapAlign: "start",
 };
 
+const portfolioPreviewStack = {
+  display: "grid",
+  gap: "16px",
+  minWidth: 0,
+};
+
+const portfolioPreviewGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(132px, 148px))",
+  gap: "12px",
+  alignItems: "start",
+  justifyContent: "start",
+  maxWidth: "100%",
+  overflow: "hidden",
+};
+
+const portfolioPreviewThumbFrame = {
+  position: "relative",
+  width: "100%",
+  aspectRatio: "4 / 3",
+  borderRadius: "18px",
+  overflow: "hidden",
+  background: "#f1f5f9",
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-soft)",
+  boxSizing: "border-box",
+};
+
+const portfolioPreviewThumbImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "center",
+  display: "block",
+};
+
 const portfolioCard = {
   background: "var(--meetro-surface-paper)",
   borderRadius: "22px",
@@ -1658,6 +1749,12 @@ const portfolioOpenButton = {
   fontSize: "13px",
   cursor: "pointer",
   marginTop: "14px",
+};
+
+const portfolioPreviewMoreButton = {
+  ...portfolioOpenButton,
+  justifySelf: "center",
+  marginTop: 0,
 };
 
 const innerCard = {
