@@ -13,6 +13,7 @@ import {
   normalizeCanonicalAlertDestination,
   normalizeCanonicalAlertId,
 } from "../src/utils/canonicalAlert.js";
+import { getAlertPresentation } from "../src/utils/alertPresentation.js";
 
 const NOW = "2026-08-04T12:00:00.000Z";
 
@@ -266,6 +267,38 @@ test("typed destinations accept exact canonical identities and reject navigation
   }), null);
 });
 
+test("destination failure is nonfatal while core alert validation remains strict", () => {
+  for (const destination of [
+    { type: "conversation" },
+    { type: "unsupported", requestId: 91 },
+    { type: "conversation", conversationId: 91, route: "conversationThread" },
+  ]) {
+    const normalized = normalizeCanonicalAlert(canonicalAlertFixture({ destination }));
+    assert.ok(normalized);
+    assert.equal(normalized.destination, null);
+    assert.equal(
+      getAlertPresentation(normalized, "en").destinationKey,
+      "alertCenterDestinationUnavailable"
+    );
+  }
+
+  for (const overrides of [
+    { id: "bad" },
+    { category: "invented" },
+    { priority: "urgent" },
+    { payload: { invalid: Number.POSITIVE_INFINITY } },
+    { availableAt: "invalid" },
+    {
+      state: {
+        ...canonicalAlertFixture().state,
+        lifecycle: "invented",
+      },
+    },
+  ]) {
+    assert.equal(normalizeCanonicalAlert(canonicalAlertFixture(overrides)), null);
+  }
+});
+
 test("safe payload is copied but never used to infer a destination", () => {
   const payload = { conversationId: 999, nested: { unreadCount: 2 } };
   const normalized = normalizeCanonicalAlert(canonicalAlertFixture({ payload }));
@@ -310,6 +343,45 @@ test("list normalization preserves server order, duplicates, and opaque cursor e
 
   assert.deepEqual(normalized.alerts.map(({ id }) => id), ["102", "101", "101"]);
   assert.equal(normalized.pagination.nextCursor, cursor);
+});
+
+test("list normalization retains malformed destinations in exact order", () => {
+  const first = canonicalAlertFixture({ id: "201" });
+  const unavailable = canonicalAlertFixture({
+    id: "202",
+    destination: {
+      type: "conversation",
+      conversationId: 91,
+      route: "conversationThread",
+    },
+  });
+  const unsupported = canonicalAlertFixture({
+    id: "204",
+    destination: { type: "future_destination", requestId: 91 },
+  });
+  const last = canonicalAlertFixture({ id: "203" });
+  const normalized = normalizeAlertListResponse({
+    success: true,
+    code: "ALERTS_RETRIEVED",
+    alerts: [first, unavailable, unsupported, last, last],
+    pagination: { limit: 25, hasMore: false, nextCursor: null },
+  });
+
+  assert.deepEqual(normalized.alerts.map(({ id }) => id), [
+    "201",
+    "202",
+    "204",
+    "203",
+    "203",
+  ]);
+  assert.deepEqual(normalized.alerts[0].destination, first.destination);
+  assert.equal(normalized.alerts[1].destination, null);
+  assert.equal(normalized.alerts[2].destination, null);
+  assert.deepEqual(normalized.alerts[3].destination, last.destination);
+  assert.equal(
+    getAlertPresentation(normalized.alerts[1], "en").destinationKey,
+    "alertCenterDestinationUnavailable"
+  );
 });
 
 test("invalid list and pagination responses fail closed", () => {

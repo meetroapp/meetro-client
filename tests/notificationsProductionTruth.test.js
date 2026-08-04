@@ -40,9 +40,10 @@ function createStorage(entries = {}) {
   };
 }
 
-test("Notifications route renders a truthful unavailable state without local registries", () => {
-  assert.match(notificationsSource, /notificationsUnavailable/);
-  assert.match(notificationsSource, /notification-truth-workspace/);
+test("Notifications route renders the canonical Alert API-backed center without local registries", () => {
+  assert.match(notificationsSource, /utils\/alertApi/);
+  assert.match(notificationsSource, /fetchAlerts/);
+  assert.match(notificationsSource, /alert-center-workspace/);
   assert.doesNotMatch(notificationsSource, /utils\/(?:meetroNotifications|notifications)/);
   assert.doesNotMatch(notificationsSource, /notificationCenter/);
   assert.doesNotMatch(notificationsSource, /notificationsEmptyTitle|markAllNotificationsRead/);
@@ -90,9 +91,9 @@ test("notification badges can only resolve to zero while delivery is unavailable
   assert.equal(getLegacyUnreadCount("professional"), 0);
 });
 
-test("truthful unavailable notification copy is localized in all supported languages", () => {
-  assert.match(languageSource, /Notifications are not available yet\./);
-  assert.match(languageSource, /Las notificaciones aún no están disponibles\./);
-  assert.match(languageSource, /Les notifications ne sont pas encore disponibles\./);
-  assert.match(languageSource, /As notificações ainda não estão disponíveis\./);
+test("canonical Alert Center copy is localized in all supported languages", () => {
+  assert.match(languageSource, /You have no alerts requiring attention\./);
+  assert.match(languageSource, /No tienes alertas que requieran atención\./);
+  assert.match(languageSource, /Vous n’avez aucune alerte nécessitant votre attention\./);
+  assert.match(languageSource, /Você não tem alertas que exigem atenção\./);
 });

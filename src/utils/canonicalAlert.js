@@ -250,7 +250,6 @@ export function normalizeCanonicalAlert(value) {
     !titleKey ||
     !messageKey ||
     !payload.valid ||
-    !destination ||
     !state ||
     !availableAt ||
     !createdAt ||
