@@ -22,6 +22,7 @@ import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
+  getAlertConversationActionTarget,
   getAlertCenterView,
   getAlertErrorKey,
   getAlertPresentation,
@@ -36,8 +37,12 @@ function AlertCard({
   pendingOperation,
   onDismiss,
   onMarkRead,
+  onOpenConversation,
 }) {
   const presentation = getAlertPresentation(alert, language);
+  const conversationTarget = getAlertConversationActionTarget(
+    alert.destination
+  );
   const canMarkRead = canMarkCanonicalAlertRead(alert);
   const canDismiss = canAttemptCanonicalAlertDismiss(alert);
   const isPending = Boolean(pendingOperation);
@@ -71,7 +76,9 @@ function AlertCard({
           <span>{presentation.unreadCountText}</span>
         )}
         {presentation.timestamp && <time dateTime={alert.availableAt}>{presentation.timestamp}</time>}
-        <span>{t(presentation.destinationKey, language)}</span>
+        {!conversationTarget.ok && (
+          <span>{t(presentation.destinationKey, language)}</span>
+        )}
       </div>
 
       {alert.priority === "critical" && alert.state.lifecycle === "active" && (
@@ -86,8 +93,17 @@ function AlertCard({
         </p>
       )}
 
-      {(canMarkRead || canDismiss) && (
+      {(conversationTarget.ok || canMarkRead || canDismiss) && (
         <div className="alert-center-card__actions">
+          {conversationTarget.ok && (
+            <button
+              type="button"
+              className="alert-center-button alert-center-button--primary"
+              onClick={() => onOpenConversation(conversationTarget.route)}
+            >
+              {t("continueConversation", language)}
+            </button>
+          )}
           {canMarkRead && (
             <button
               type="button"
@@ -410,6 +426,7 @@ function Notifications({ setPage }) {
                     pendingOperation={pendingMutations[alert.id]}
                     onDismiss={(item) => runAlertMutation(item, "dismiss")}
                     onMarkRead={(item) => runAlertMutation(item, "read")}
+                    onOpenConversation={(route) => setPage(route)}
                   />
                 ))}
               </div>

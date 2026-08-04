@@ -7,6 +7,9 @@ import {
   formatLocaleTime,
 } from "./localeFormat.js";
 import { normalizeCanonicalAlertDestination } from "./canonicalAlert.js";
+import {
+  getCanonicalConversationActionTarget,
+} from "./conversationActionRouting.js";
 
 export const DEFAULT_ALERT_CENTER_VIEW = "attention";
 export const ALERT_CENTER_PAGE_SIZE = 25;
@@ -166,6 +169,17 @@ export function canAttemptCanonicalAlertDismiss(alert) {
 export function isSupportedAlertDestination(destination) {
   const normalized = normalizeCanonicalAlertDestination(destination);
   return Boolean(normalized && SUPPORTED_DESTINATIONS.has(normalized.type));
+}
+
+export function getAlertConversationActionTarget(destination) {
+  const normalized = normalizeCanonicalAlertDestination(destination);
+  const conversationDestination =
+    normalized?.type === "conversation" ? normalized : {};
+
+  return getCanonicalConversationActionTarget(conversationDestination, {
+    returnPage: "notifications",
+    preferCommunicationCenterShell: true,
+  });
 }
 
 export function getAlertErrorKey(error, operation = "load") {

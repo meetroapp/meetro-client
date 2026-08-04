@@ -462,6 +462,11 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /preferSplitPane: isSplitPane && \(!savedHistory \|\| isEmergencyCanonicalThread\)/);
   assert.match(messagesSource, /forceRoute: !isSplitPane && !isEmergencyCanonicalThread/);
   assert.match(messagesSource, /function openConversation\(quote, options = \{\}\)/);
+  assert.match(messagesSource, /getCanonicalConversationActionTarget\(quote, \{/);
+  assert.match(messagesSource, /returnPage: "messagesInbox"/);
+  assert.match(messagesSource, /if \(claimsCanonicalConversation && !canonicalTarget\.ok\) \{\n\s+return;/);
+  assert.match(messagesSource, /setActiveSplitCanonicalConversationId\(canonicalConversationId\)/);
+  assert.match(messagesSource, /setPage\(canonicalTarget\.route\)/);
   assert.match(messagesSource, /const conversation = prepareConversation\(quote, \{ updateList: false \}\);/);
   assert.doesNotMatch(messagesSource, /setPage\("conversationThread"\);\n\n\s+window\.setTimeout\(\(\) => \{\n\s+prepareConversation/);
   assert.match(

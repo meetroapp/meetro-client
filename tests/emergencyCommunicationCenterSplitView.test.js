@@ -178,7 +178,7 @@ test("existing adaptive layout signal controls the three-column workspace", () =
 test("Emergency row selection retains the left list and activates the embedded thread", () => {
   assert.match(
     inboxSource,
-    /if \(canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId\(String\(canonicalEmergencyId\)\)[\s\S]*buildCanonicalConversationRoute/
+    /getCanonicalConversationActionTarget\(quote,[\s\S]*canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId\(String\(canonicalConversationId\)\)[\s\S]*setPage\(canonicalTarget\.route\)/
   );
   assert.match(
     inboxSource,
@@ -188,16 +188,16 @@ test("Emergency row selection retains the left list and activates the embedded t
 
 test("desktop Emergency click never sets standalone conversationThread", () => {
   const canonicalEmergencyBlock = openConversationSource.match(
-    /if \(canonicalEmergencyId\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*const conversation/s
+    /if \(\s*canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)\s*\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*const conversation/s
   );
 
   assert.match(
     openConversationSource,
-    /if \(canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId/
+    /canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId/
   );
   assert.match(
     openConversationSource,
-    /if \(canonicalEmergencyId\)[\s\S]*setPage\("messagesInbox"\)/
+    /canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setPage\("messagesInbox"\)/
   );
   assert.ok(
     !canonicalEmergencyBlock ||
@@ -210,7 +210,7 @@ test("desktop Emergency click never sets standalone conversationThread", () => {
   );
   assert.match(
     openConversationSource,
-    /safeSetStorage\("activeConversationId", String\(canonicalEmergencyId\)\)/
+    /safeSetStorage\("activeConversationId", String\(canonicalConversationId\)\)/
   );
 });
 
@@ -436,7 +436,7 @@ test("Communication Center containment and account-mode scoping remain in place"
 
     assert.match(
       openConversationSource,
-      /setActiveSplitCanonicalConversationId\(canonicalEmergencyId\);/
+      /setActiveSplitCanonicalConversationId\(canonicalConversationId\);/
     );
 
     assert.match(

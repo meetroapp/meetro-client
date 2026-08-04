@@ -18,6 +18,8 @@ const readSource = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const routingSource = readSource("src/utils/conversationActionRouting.js");
+const messagesInboxSource = readSource("src/pages/MessagesInbox.jsx");
+const notificationsSource = readSource("src/pages/Notifications.jsx");
 const homeSource = readSource("src/pages/Home.jsx");
 const myRequestsSource = readSource("src/pages/MyRequests.jsx");
 const projectDetailsSource = readSource("src/pages/ProjectDetails.jsx");
@@ -42,6 +44,69 @@ test("canonical conversation action routing is presentation-only and route-helpe
   assert.doesNotMatch(
     routingSource,
     /authFetch|fetch\s*\(|localStorage|sessionStorage|setInterval|setTimeout|setPage/
+  );
+});
+
+test("Communication Center ordinary canonical records use exact canonical identity across layouts", () => {
+  for (const record of [
+    {
+      threadType: "canonical_conversation",
+      conversationId: 91,
+      requestId: 701,
+      relationshipId: 801,
+    },
+    {
+      threadType: "canonical_conversation",
+      conversation_id: "92",
+      requestId: 702,
+      relationshipId: 802,
+      accountMode: "business",
+    },
+  ]) {
+    const target = getCanonicalConversationActionTarget(record, {
+      returnPage: "messagesInbox",
+    });
+    const route = parseCanonicalConversationRoute(`#${target.route}`);
+
+    assert.equal(target.ok, true);
+    assert.equal(route.valid, true);
+    assert.equal(route.conversationId, target.conversationId);
+    assert.equal(route.returnPage, "messagesInbox");
+    assert.equal(
+      shouldUseCommunicationCenterConversationRoute(route, desktopSnapshot()),
+      true
+    );
+    assert.equal(
+      shouldUseCommunicationCenterConversationRoute(route, phoneSnapshot()),
+      false
+    );
+    assert.notEqual(route.conversationId, record.requestId);
+    assert.notEqual(route.conversationId, record.relationshipId);
+  }
+
+  assert.match(
+    messagesInboxSource,
+    /getCanonicalConversationActionTarget\(quote,\s*\{\s*returnPage: "messagesInbox"/
+  );
+  assert.match(
+    messagesInboxSource,
+    /setActiveSplitCanonicalConversationId\(canonicalConversationId\)/
+  );
+  assert.match(messagesInboxSource, /setPage\(canonicalTarget\.route\)/);
+});
+
+test("Communication Center and Alert Center share one canonical route target contract", () => {
+  assert.match(
+    messagesInboxSource,
+    /from "\.\.\/utils\/conversationActionRouting"/
+  );
+  assert.match(
+    notificationsSource,
+    /getAlertConversationActionTarget/
+  );
+  assert.doesNotMatch(
+    notificationsSource,
+    /conversationThread\?conversationId=|window\.location|location\.hash/
   );
 });
 

@@ -38,13 +38,15 @@ import {
   getConversationParticipantIdentity,
 } from "../utils/conversationIdentity";
 import {
-  buildCanonicalConversationRoute,
   CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
   CONVERSATION_THREAD_TYPES,
   normalizeCanonicalConversationId,
   getOpportunityThreadIdentity,
   parseCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
+import {
+  getCanonicalConversationActionTarget,
+} from "../utils/conversationActionRouting";
 import {
   createRelationshipLayerModel,
   isInactiveImportedContact,
@@ -1162,31 +1164,46 @@ function MessagesInbox({ setPage, currentPage }) {
 
     const canonicalEmergencyId = getCanonicalEmergencyConversationId(quote);
     const isEmergencySource = isEmergencyConversationType(quote);
+    const claimsCanonicalConversation =
+      quote.threadType === CONVERSATION_THREAD_TYPES.CANONICAL ||
+      quote.conversation_type === CONVERSATION_THREAD_TYPES.CANONICAL ||
+      Object.hasOwn(quote, "canonicalConversationId") ||
+      Object.hasOwn(quote, "canonical_conversation_id");
+    const canonicalTarget = getCanonicalConversationActionTarget(quote, {
+      returnPage: "messagesInbox",
+    });
 
-    if (canonicalEmergencyId) {
-      setQuotes((current) =>
-        current.map((item) =>
-          String(item.id) === String(quote.id)
-            ? { ...item, unread: false }
-            : item
-        )
-      );
-      setActiveSplitConversationId(String(canonicalEmergencyId));
-      setActiveSplitCanonicalConversationId(canonicalEmergencyId);
-      safeSetStorage("activeConversationId", String(canonicalEmergencyId));
-      safeSetStorage("conversationReturnPage", "messagesInbox");
+    if (claimsCanonicalConversation && !canonicalTarget.ok) {
+      return;
+    }
+
+    if (
+      canonicalTarget.ok &&
+      (claimsCanonicalConversation || canonicalEmergencyId)
+    ) {
+      const canonicalConversationId = canonicalTarget.conversationId;
+
+      if (canonicalEmergencyId) {
+        setQuotes((current) =>
+          current.map((item) =>
+            String(item.id) === String(quote.id)
+              ? { ...item, unread: false }
+              : item
+          )
+        );
+        safeSetStorage("activeConversationId", String(canonicalConversationId));
+        safeSetStorage("conversationReturnPage", "messagesInbox");
+      }
+
+      setActiveSplitConversationId(String(canonicalConversationId));
+      setActiveSplitCanonicalConversationId(canonicalConversationId);
 
       if (isSplitPane) {
         setPage("messagesInbox");
         return;
       }
 
-      setPage(
-        buildCanonicalConversationRoute(
-          canonicalEmergencyId,
-          "messagesInbox"
-        )
-      );
+      setPage(canonicalTarget.route);
       return;
     }
 

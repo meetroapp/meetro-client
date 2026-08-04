@@ -10,6 +10,10 @@ import {
   normalizeAlertListResponse,
 } from "../src/utils/canonicalAlert.js";
 import {
+  CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+  parseCanonicalConversationRoute,
+} from "../src/utils/canonicalConversationMessaging.js";
+import {
   ALERT_CENTER_PAGE_SIZE,
   ALERT_CENTER_VIEWS,
   DEFAULT_ALERT_CENTER_VIEW,
@@ -17,6 +21,7 @@ import {
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
   getAlertErrorKey,
+  getAlertConversationActionTarget,
   getAlertPresentation,
   getAlertPreview,
   getAlertUnreadCount,
@@ -240,6 +245,71 @@ test("destination presentation validates canonical identity and production norma
   assert.equal(response.alerts[1].destination, null);
   assert.equal(
     getAlertPresentation(response.alerts[1], "en").destinationKey,
+    "alertCenterDestinationUnavailable"
+  );
+});
+
+test("canonical conversation destination produces the exact governed Alert return route", () => {
+  const target = getAlertConversationActionTarget({
+    type: "conversation",
+    conversationId: 91,
+  });
+  const route = parseCanonicalConversationRoute(`#${target.route}`);
+
+  assert.equal(target.ok, true);
+  assert.equal(target.conversationId, 91);
+  assert.equal(
+    target.route,
+    "conversationThread?conversationId=91&returnPage=notifications&shell=communicationCenter"
+  );
+  assert.equal(route.valid, true);
+  assert.equal(route.conversationId, 91);
+  assert.equal(route.returnPage, "notifications");
+  assert.equal(route.shell, CANONICAL_CONVERSATION_COMMUNICATION_SHELL);
+  assert.match(notificationsSource, /t\("continueConversation", language\)/);
+  assert.match(
+    notificationsSource,
+    /onOpenConversation\(conversationTarget\.route\)/
+  );
+});
+
+test("Alert conversation actions reject malformed, inferred, and non-conversation destinations", () => {
+  const rejected = [
+    null,
+    {},
+    { type: "conversation" },
+    { type: "conversation", conversationId: 0 },
+    { type: "conversation", conversationId: -1 },
+    { type: "conversation", conversationId: 1.5 },
+    { type: "conversation", conversationId: Number.MAX_SAFE_INTEGER + 1 },
+    { type: "conversation", conversationId: "91" },
+    { type: "conversation", conversationId: [] },
+    { type: "conversation", conversationId: {} },
+    { type: "conversation", requestId: 91 },
+    { type: "conversation", sourceEntityId: 91 },
+    { type: "request", requestId: 91 },
+    { type: "notifications" },
+    { type: "conversation", conversationId: 91, route: "conversationThread" },
+    { type: "conversation", conversationId: 91, hash: "#conversationThread" },
+    { type: "conversation", conversationId: 91, url: "https://example.com" },
+    { type: "conversation", conversationId: 91, href: "/messages" },
+    { type: "conversation", conversationId: 91, pathname: "/messages" },
+  ];
+
+  for (const destination of rejected) {
+    const target = getAlertConversationActionTarget(destination);
+    assert.equal(target.ok, false);
+    assert.equal(target.route, "");
+  }
+
+  assert.equal(
+    getAlertPresentation(alertFixture({ destination: { type: "notifications" } }), "en")
+      .destinationKey,
+    "alertCenterDestinationLater"
+  );
+  assert.equal(
+    getAlertPresentation(alertFixture({ destination: null }), "en")
+      .destinationKey,
     "alertCenterDestinationUnavailable"
   );
 });

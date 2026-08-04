@@ -61,12 +61,19 @@ test("alert read, dismiss, and read-all never mutate conversation read state", (
   assert.doesNotMatch(combinedSource, /resolveConversation|resolvedAt\s*=|readAt\s*=/);
 });
 
-test("the page neither constructs nor follows alert destinations", () => {
-  assert.doesNotMatch(notificationsSource, /window\.location|location\.hash|history\.|navigate\(|setPage\s*\(/);
-  assert.doesNotMatch(notificationsSource, /conversationId|requestId|emergencyRequestId|evaluationId|businessProfileId|reviewId/);
+test("only governed canonical conversation destinations may navigate", () => {
+  assert.doesNotMatch(notificationsSource, /window\.location|location\.hash|history\.|navigate\(/);
+  assert.doesNotMatch(notificationsSource, /requestId|emergencyRequestId|relationshipId|sourceEntityId|evaluationId|businessProfileId|reviewId/);
+  assert.match(notificationsSource, /getAlertConversationActionTarget/);
+  assert.match(notificationsSource, /onOpenConversation\(conversationTarget\.route\)/);
+  assert.match(notificationsSource, /onOpenConversation=\{\(route\) => setPage\(route\)\}/);
+  assert.doesNotMatch(notificationsSource, /setPage\("conversationThread"\)|conversationThread\?conversationId=/);
   assert.match(notificationsSource, /destinationKey/);
   assert.match(presentationSource, /alertCenterDestinationLater/);
   assert.match(presentationSource, /alertCenterDestinationUnavailable/);
+  assert.match(presentationSource, /normalized\?\.type === "conversation"/);
+  assert.match(presentationSource, /returnPage: "notifications"/);
+  assert.match(presentationSource, /preferCommunicationCenterShell: true/);
 });
 
 test("recipient identity, alert counts, and canonical ordering remain backend-owned", () => {
