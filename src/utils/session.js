@@ -57,6 +57,101 @@ const normalizedProfessionalRoles = new Set(
   professionalRoles.map((role) => String(role).toLowerCase())
 );
 
+const authenticatedIdentitySubscribers = new Set();
+let authenticatedIdentityGeneration = 0;
+let authenticatedIdentitySnapshot = Object.freeze({
+  status: "unresolved",
+  userId: null,
+  sessionGeneration: authenticatedIdentityGeneration,
+});
+
+function normalizeAuthenticatedUserId(user = {}) {
+  if (!user || typeof user !== "object" || Array.isArray(user)) return null;
+
+  const identityKeys = ["id", "user_id", "userId"];
+  for (const key of identityKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(user, key);
+    if (!descriptor || !("value" in descriptor)) continue;
+
+    const value = descriptor.value;
+    if (Number.isSafeInteger(value) && value > 0) return String(value);
+    if (
+      typeof value === "string" &&
+      value === value.trim() &&
+      /^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$/.test(value)
+    ) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function notifyAuthenticatedIdentitySubscribers() {
+  authenticatedIdentitySubscribers.forEach((listener) => {
+    try {
+      listener(authenticatedIdentitySnapshot);
+    } catch {
+      // One consumer cannot prevent synchronous session isolation for others.
+    }
+  });
+}
+
+function publishAuthenticatedIdentityFromUser(user) {
+  const userId = normalizeAuthenticatedUserId(user);
+  if (!userId) {
+    clearAuthenticatedIdentity();
+    return authenticatedIdentitySnapshot;
+  }
+
+  if (
+    authenticatedIdentitySnapshot.status === "authenticated" &&
+    authenticatedIdentitySnapshot.userId === userId
+  ) {
+    return authenticatedIdentitySnapshot;
+  }
+
+  authenticatedIdentityGeneration += 1;
+  authenticatedIdentitySnapshot = Object.freeze({
+    status: "authenticated",
+    userId,
+    sessionGeneration: authenticatedIdentityGeneration,
+  });
+  notifyAuthenticatedIdentitySubscribers();
+  return authenticatedIdentitySnapshot;
+}
+
+export function getAuthenticatedIdentitySnapshot() {
+  return authenticatedIdentitySnapshot;
+}
+
+export function subscribeAuthenticatedIdentity(listener) {
+  if (typeof listener !== "function") return () => {};
+
+  authenticatedIdentitySubscribers.add(listener);
+  let subscribed = true;
+  return () => {
+    if (!subscribed) return;
+    subscribed = false;
+    authenticatedIdentitySubscribers.delete(listener);
+  };
+}
+
+export function clearAuthenticatedIdentity() {
+  if (authenticatedIdentitySnapshot.status === "unauthenticated") {
+    return authenticatedIdentitySnapshot;
+  }
+
+  authenticatedIdentityGeneration += 1;
+  authenticatedIdentitySnapshot = Object.freeze({
+    status: "unauthenticated",
+    userId: null,
+    sessionGeneration: authenticatedIdentityGeneration,
+  });
+  notifyAuthenticatedIdentitySubscribers();
+  return authenticatedIdentitySnapshot;
+}
+
 function safeReadStoredUser() {
   if (typeof localStorage === "undefined") return {};
   try {
@@ -324,6 +419,8 @@ export function saveMeetroSession(data = {}, fallbackEmail = "") {
 
   localStorage.removeItem("pendingLoginData");
 
+  publishAuthenticatedIdentityFromUser(user);
+
   return {
     user,
     authenticatedIdentity: nextIdentity,
@@ -420,11 +517,13 @@ export function getAccountModeForPage(page = "", fallbackMode = "personal") {
 
 export function restoreAuthenticatedSessionFromStorage() {
   if (typeof localStorage === "undefined") {
+    clearAuthenticatedIdentity();
     return { authenticated: false, repaired: false, isProfessional: false };
   }
 
   const token = localStorage.getItem("token") || "";
   if (!token) {
+    clearAuthenticatedIdentity();
     return { authenticated: false, repaired: false, isProfessional: false };
   }
 
@@ -552,6 +651,8 @@ export function restoreAuthenticatedSessionFromStorage() {
     localStorage.removeItem(LEGACY_ACCOUNT_MODE_PREFERENCE_KEY);
     repaired = true;
   }
+
+  publishAuthenticatedIdentityFromUser(user);
 
   return {
     authenticated: true,
