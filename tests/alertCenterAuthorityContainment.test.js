@@ -33,7 +33,7 @@ test("Alert Center has no legacy notification or direct transport authority", ()
   assert.match(presentationSource, /normalizeCanonicalAlertDestination/);
 });
 
-test("Alert Center creates no browser persistence, polling, or global coordinator", () => {
+test("Alert Center creates no browser persistence, polling, or coordinator ownership", () => {
   for (const forbidden of [
     /localStorage/,
     /sessionStorage/,
@@ -44,11 +44,13 @@ test("Alert Center creates no browser persistence, polling, or global coordinato
     /addEventListener/,
     /visibilitychange/,
     /storage event/i,
-    /subscribe/,
-    /coordinator/i,
+    /subscribeAlertCounts/,
+    /setAlertCountIdentity/,
+    /resetAlertCounts/,
   ]) {
     assert.doesNotMatch(combinedSource, forbidden);
   }
+  assert.match(notificationsSource, /refreshAlertCounts/);
 });
 
 test("alert read, dismiss, and read-all never mutate conversation read state", () => {

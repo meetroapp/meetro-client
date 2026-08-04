@@ -3616,3 +3616,41 @@ button {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
   }
 }
+
+/* Canonical Alert count badge — navigation presentation only. */
+.alert-navigation-badge {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  box-sizing: border-box;
+  background: #8b1e3f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.alert-navigation-badge--mobile,
+.alert-navigation-badge--sidebar {
+  top: -5px;
+  right: -8px;
+}
+
+@media (max-width: 480px) {
+  .bottom-nav-item--alerts {
+    min-width: 44px !important;
+  }
+
+  .alert-navigation-badge--mobile {
+    right: -7px;
+  }
+}

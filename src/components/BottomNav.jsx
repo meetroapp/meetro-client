@@ -8,16 +8,35 @@ import {
   saveNotifications,
 } from "../utils/notifications";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
-import { getAccountModeForPage } from "../utils/session";
+import {
+  getAccountModeForPage,
+  getAuthenticatedIdentitySnapshot,
+  subscribeAuthenticatedIdentity,
+} from "../utils/session";
 import {
   getConversationMetrics,
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
 import { glassActionMenu } from "../styles/liquidGlass";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  getAlertCountSnapshot,
+  resetAlertCounts,
+  setAlertCountIdentity,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
 import MeetroIcon from "./MeetroIcon";
 
 const EmbeddedProfile = lazy(() => import("../pages/Profile"));
+
+function getAuthenticatedAlertCountIdentity(
+  snapshot = getAuthenticatedIdentitySnapshot()
+) {
+  return snapshot?.status === "authenticated" &&
+    typeof snapshot.userId === "string"
+    ? snapshot.userId
+    : "";
+}
 
 function getUnreadMessageCount() {
   if (!canReadLegacyWorkflowStorage()) return 0;
@@ -51,76 +70,6 @@ function hasUnreadEmergencyConversation() {
   }
 }
 
-function getWorkCenterAlertDestination() {
-  const notifications = getNotifications().filter(
-    (notice) =>
-      !notice.read &&
-      (notice.targetRole === "professional" || notice.targetRole === "all")
-  );
-
-  let quoteHistory = [];
-  if (!canReadLegacyWorkflowStorage()) return { tab: "pending" };
-  try {
-    quoteHistory = JSON.parse(localStorage.getItem("workCenterQuoteHistory") || "[]");
-  } catch {
-    quoteHistory = [];
-  }
-
-  const hasAcceptedQuote = Array.isArray(quoteHistory) &&
-    quoteHistory.some(
-      (quote) =>
-        !quote.movedToActiveAt &&
-        ["accepted", "approved", "quote_approved"].includes(
-          String(quote.status || quote.quoteStatus || "").toLowerCase()
-        )
-    );
-
-  if (
-    hasAcceptedQuote ||
-    notifications.some((notice) => notice.type === "quote_accepted")
-  ) {
-    return { tab: "quotes", quoteStatusFilter: "accepted" };
-  }
-
-  if (
-    notifications.some((notice) =>
-      ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
-        notice.type
-      )
-    )
-  ) {
-    return { tab: "schedule" };
-  }
-
-  if (
-    notifications.some((notice) =>
-      ["completion_pending", "closure_pending", "completion_confirmed"].includes(
-        notice.type
-      )
-    )
-  ) {
-    return { tab: "completed" };
-  }
-
-  if (
-    notifications.some((notice) =>
-      ["active_work_update", "materials_update", "work_update"].includes(notice.type)
-    )
-  ) {
-    return { tab: "active" };
-  }
-
-  if (
-    notifications.some((notice) =>
-      ["new_lead", "new_opportunity", "quote_request"].includes(notice.type)
-    )
-  ) {
-    return { tab: "pending" };
-  }
-
-  return { tab: "pending" };
-}
-
 function getAcceptedQuoteReadyCount() {
   try {
     return getProfessionalWorkMetrics().quoteResponseAlertCount;
@@ -152,6 +101,11 @@ function getActiveEmergencyAlertCount() {
 
 function BottomNav({ setPage, currentPage = "" }) {
   const language = useLanguage();
+  const [authenticatedIdentitySnapshot, setAuthenticatedIdentitySnapshot] =
+    useState(getAuthenticatedIdentitySnapshot);
+  const alertCountIdentity = getAuthenticatedAlertCountIdentity(
+    authenticatedIdentitySnapshot
+  );
   const [activeMode, setActiveMode] = useState(
     getAccountModeForPage(
       currentPage,
@@ -165,7 +119,14 @@ function BottomNav({ setPage, currentPage = "" }) {
     top: 96,
     left: 224,
   });
+  const [alertCountSnapshot, setAlertCountSnapshot] = useState(
+    getAlertCountSnapshot
+  );
   const navTouchStartRef = useRef({ x: 0, y: 0, moved: false });
+
+  useEffect(() => {
+    return subscribeAuthenticatedIdentity(setAuthenticatedIdentitySnapshot);
+  }, []);
 
   useEffect(() => {
     const syncNav = () => {
@@ -184,6 +145,11 @@ function BottomNav({ setPage, currentPage = "" }) {
     window.addEventListener("storage", syncNav);
     window.addEventListener("meetroNotificationsUpdated", syncNav);
     window.addEventListener("meetro-messages-updated", syncNav);
+    const handleAuthExpired = () => {
+      resetAlertCounts();
+      syncNav();
+    };
+    window.addEventListener("meetroAuthExpired", handleAuthExpired);
 
     return () => {
       window.removeEventListener("languageChanged", syncNav);
@@ -192,8 +158,15 @@ function BottomNav({ setPage, currentPage = "" }) {
       window.removeEventListener("storage", syncNav);
       window.removeEventListener("meetroNotificationsUpdated", syncNav);
       window.removeEventListener("meetro-messages-updated", syncNav);
+      window.removeEventListener("meetroAuthExpired", handleAuthExpired);
     };
   }, [currentPage]);
+
+  useEffect(() => {
+    setAlertCountIdentity(alertCountIdentity);
+    const unsubscribe = subscribeAlertCounts(setAlertCountSnapshot);
+    return unsubscribe;
+  }, [alertCountIdentity]);
 
   useEffect(() => {
     let showListener;
@@ -238,7 +211,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         hideListener = await Keyboard.addListener("keyboardWillHide", () => {
           setKeyboardOpen(false);
         });
-      } catch (error) {
+      } catch {
         // Browser fallback only.
       }
     };
@@ -295,6 +268,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationHistory", language),
     },
     {
+      page: "notifications",
+      aliases: ["notifications"],
+      icon: "notifications",
+      label: t("navigationAlerts", language),
+      sub: t("navigationAlertsSubtitle", language),
+    },
+    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
@@ -347,6 +327,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationHistory", language),
     },
     {
+      page: "notifications",
+      aliases: ["notifications"],
+      icon: "notifications",
+      label: t("navigationAlerts", language),
+      sub: t("navigationAlertsSubtitle", language),
+    },
+    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
@@ -397,6 +384,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "discover",
       label: t("navigationCommunity", language),
       sub: t("navigationDiscover", language),
+    },
+    {
+      page: "notifications",
+      aliases: ["notifications"],
+      icon: "notifications",
+      label: t("navigationAlerts", language),
+      sub: t("navigationAlertsSubtitle", language),
     },
     {
       page: "profile",
@@ -472,6 +466,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationDiscover", language),
     },
     {
+      page: "notifications",
+      aliases: ["notifications"],
+      icon: "notifications",
+      label: t("navigationAlerts", language),
+      sub: t("navigationAlertsSubtitle", language),
+    },
+    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
@@ -481,14 +482,25 @@ function BottomNav({ setPage, currentPage = "" }) {
   ];
 
   useEffect(() => {
-    setKeyboardOpen(false);
-    setActiveMode(
-      getAccountModeForPage(
-        currentPage,
-        localStorage.getItem("activeAccountMode") || "personal"
-      )
-    );
-    setProfileContextCardOpen(false);
+    let active = true;
+    const run = () => {
+      if (!active) return;
+      setKeyboardOpen(false);
+      setActiveMode(
+        getAccountModeForPage(
+          currentPage,
+          localStorage.getItem("activeAccountMode") || "personal"
+        )
+      );
+      setProfileContextCardOpen(false);
+    };
+
+    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    else Promise.resolve().then(run);
+
+    return () => {
+      active = false;
+    };
   }, [currentPage]);
 
   useEffect(() => {
@@ -520,6 +532,13 @@ function BottomNav({ setPage, currentPage = "" }) {
         )
       : 0;
 
+  const canonicalAlertUnreadCount =
+    alertCountSnapshot.identity === alertCountIdentity &&
+    Number.isSafeInteger(alertCountSnapshot.response?.counts?.unread) &&
+    alertCountSnapshot.response.counts.unread >= 0
+      ? alertCountSnapshot.response.counts.unread
+      : null;
+
   void notificationTick;
   const isLandscapeCompact =
     typeof window !== "undefined" &&
@@ -531,13 +550,34 @@ function BottomNav({ setPage, currentPage = "" }) {
     (item.page === "businessLeads" && normalizedPage === "businessLeads");
 
   const getItemUnreadCount = (item) =>
-    item.page === "contractorDashboard"
+    item.page === "notifications"
+      ? canonicalAlertUnreadCount
+      : item.page === "contractorDashboard"
       ? operationsAlertCount
       : item.aliases?.some((alias) =>
           ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
         )
       ? getUnreadMessageCount()
       : 0;
+
+  const getItemAccessibleLabel = (item, unread) => {
+    if (item.page !== "notifications" || !Number.isSafeInteger(unread) || unread < 1) {
+      return `${item.label}. ${item.sub}`;
+    }
+    if (unread > 99) {
+      return t("navigationAlertsUnreadOverflow", language);
+    }
+    return t(
+      unread === 1
+        ? "navigationAlertsUnreadSingular"
+        : "navigationAlertsUnreadPlural",
+      language,
+      { count: unread }
+    );
+  };
+
+  const getItemBadgeText = (item, unread) =>
+    item.page === "notifications" && unread > 99 ? "99+" : String(unread);
 
   const handleNavPress = (item, variant = "bottom", event) => {
     if (item.page === "home") {
@@ -605,6 +645,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       isNavItemActive(item) ||
       (variant === "sidebar" && item.page === "profile" && profileContextCardOpen);
     const unread = getItemUnreadCount(item);
+    const badgeText = getItemBadgeText(item, unread);
     const isCenterAction = activeMode === "business" && item.center;
 
     if (variant === "sidebar") {
@@ -616,7 +657,7 @@ function BottomNav({ setPage, currentPage = "" }) {
           aria-current={active ? "page" : undefined}
           aria-haspopup={item.page === "profile" ? "dialog" : undefined}
           aria-expanded={item.page === "profile" ? profileContextCardOpen : undefined}
-          aria-label={`${item.label}. ${item.sub}`}
+          aria-label={getItemAccessibleLabel(item, unread)}
           title={`${item.label} — ${item.sub}`}
           onClick={(event) => handleNavPress(item, "sidebar", event)}
           style={{
@@ -639,7 +680,15 @@ function BottomNav({ setPage, currentPage = "" }) {
               decorative
               style={active ? activeIconText : iconText}
             />
-            {unread > 0 && <span style={sidebarBadge}>{unread}</span>}
+            {unread > 0 && (
+              item.page === "notifications" ? (
+                <span className="alert-navigation-badge alert-navigation-badge--sidebar" aria-hidden="true">
+                  {badgeText}
+                </span>
+              ) : (
+                <span style={sidebarBadge}>{unread}</span>
+              )
+            )}
           </span>
 
           <span style={sidebarLabelStack}>
@@ -658,9 +707,9 @@ function BottomNav({ setPage, currentPage = "" }) {
       <button
         key={item.page}
         type="button"
-        className={`bottom-nav-item${active ? " active" : ""}`}
+        className={`bottom-nav-item${item.page === "notifications" ? " bottom-nav-item--alerts" : ""}${active ? " active" : ""}`}
         aria-current={active ? "page" : undefined}
-        aria-label={`${item.label}. ${item.sub}`}
+        aria-label={getItemAccessibleLabel(item, unread)}
         onPointerDown={(event) => {
           navTouchStartRef.current = {
             x: event.clientX || 0,
@@ -719,7 +768,15 @@ function BottomNav({ setPage, currentPage = "" }) {
             style={active ? activeIconText : iconText}
           />
 
-          {unread > 0 && <div style={badge}>{unread}</div>}
+          {unread > 0 && (
+            item.page === "notifications" ? (
+              <span className="alert-navigation-badge alert-navigation-badge--mobile" aria-hidden="true">
+                {badgeText}
+              </span>
+            ) : (
+              <div style={badge}>{unread}</div>
+            )
+          )}
         </div>
 
         <span
@@ -1250,7 +1307,7 @@ const navDock = {
   left: 0,
   right: 0,
   bottom: 0,
-  width: "100%",
+  width: "auto",
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",

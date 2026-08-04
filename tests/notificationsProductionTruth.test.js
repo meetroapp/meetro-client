@@ -83,8 +83,10 @@ test("both legacy notification stores ignore stale records and reject browser-lo
   }
 });
 
-test("notification badges can only resolve to zero while delivery is unavailable", () => {
-  assert.match(bottomNavSource, /getUnreadNotificationCount/);
+test("legacy notification stores remain unavailable while the global badge uses canonical Alert counts", () => {
+  assert.match(bottomNavSource, /subscribeAlertCounts/);
+  assert.match(bottomNavSource, /alertCountSnapshot\.response\.counts\.unread/);
+  assert.match(bottomNavSource, /item\.page === "notifications"/);
   assert.equal(getMeetroUnreadCount("homeowner"), 0);
   assert.equal(getMeetroUnreadCount("professional"), 0);
   assert.equal(getLegacyUnreadCount("homeowner"), 0);

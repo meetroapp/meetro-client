@@ -17,6 +17,7 @@ import {
   createAlertCenterInitialState,
   isCurrentAlertMutationCompletion,
 } from "../utils/alertCenterController";
+import { refreshAlertCounts } from "../utils/alertCountCoordinator";
 import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
@@ -196,6 +197,7 @@ function Notifications({ setPage }) {
       if (response.alert.id !== alert.id) {
         throw new Error("Alert mutation identity mismatch.");
       }
+      void refreshAlertCounts();
       if (completionIsCurrent()) {
         await controller.refresh();
       }
@@ -238,6 +240,7 @@ function Notifications({ setPage }) {
 
     try {
       await markAllAlertsRead({ setPage });
+      void refreshAlertCounts();
       if (completionIsCurrent()) {
         await controller.refresh();
       }

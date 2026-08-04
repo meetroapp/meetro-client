@@ -67,7 +67,7 @@ test("adaptive desktop navigation reuses the existing role-based destinations", 
     bottomNavSource.indexOf("useEffect(() => {\n    setKeyboardOpen")
   );
 
-  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "discover", "profile"]) {
+  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "notifications", "discover", "profile"]) {
     assert.match(personalDesktopBlock, new RegExp(`page: "${page}"`));
   }
 
@@ -79,14 +79,17 @@ test("adaptive desktop navigation reuses the existing role-based destinations", 
     "assetCenter",
     "customerRelationshipsCenter",
     "discover",
+    "notifications",
     "profile",
   ]) {
     assert.match(businessDesktopBlock, new RegExp(`page: "${page}"`));
   }
 
   assert.match(personalDesktopBlock, /label: t\("navigationCommunication", language\)/);
+  assert.match(personalDesktopBlock, /label: t\("navigationAlerts", language\)/);
   assert.match(personalDesktopBlock, /label: "Meetro Moments"/);
   assert.match(businessDesktopBlock, /label: t\("navigationCommunication", language\)/);
+  assert.match(businessDesktopBlock, /label: t\("navigationAlerts", language\)/);
   assert.match(businessDesktopBlock, /label: "Meetro Moments"/);
   assert.doesNotMatch(businessDesktopBlock, /page: "businessLeads"/);
   assert.doesNotMatch(businessDesktopBlock, /page: "upload"/);
@@ -120,7 +123,7 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
     bottomNavSource.indexOf("const personalDesktopNavItems = [")
   );
 
-  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "profile"]) {
+  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "notifications", "profile"]) {
     assert.match(personalMobileBlock, new RegExp(`page: "${page}"`));
   }
 
@@ -129,12 +132,13 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
     'label: t\\("navigationWorkCenter", language\\)',
     'label: t\\("navigationChat", language\\)',
     'label: t\\("navigationMoments", language\\)',
+    'label: t\\("navigationAlerts", language\\)',
     'label: t\\("navigationProfile", language\\)',
   ]) {
     assert.match(personalMobileBlock, new RegExp(label));
   }
 
-  for (const page of ["businessDashboard", "contractorDashboard", "messagesInbox", "meetroMoments", "profile"]) {
+  for (const page of ["businessDashboard", "contractorDashboard", "messagesInbox", "meetroMoments", "notifications", "profile"]) {
     assert.match(businessMobileBlock, new RegExp(`page: "${page}"`));
   }
 

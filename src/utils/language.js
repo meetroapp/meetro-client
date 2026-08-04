@@ -8579,6 +8579,11 @@ Object.entries(notificationCenterLabels).forEach(([language, labels]) => {
 
 const alertCenterLabels = {
   en: {
+    navigationAlerts: "Alerts",
+    navigationAlertsSubtitle: "Verified updates",
+    navigationAlertsUnreadSingular: "Alerts, {count} unread",
+    navigationAlertsUnreadPlural: "Alerts, {count} unread",
+    navigationAlertsUnreadOverflow: "Alerts, more than 99 unread",
     alertCenterEyebrow: "Communication Center",
     alertCenterTitle: "Alerts",
     alertCenterSubtitle: "Verified updates that may need your attention.",
@@ -8648,6 +8653,11 @@ const alertCenterLabels = {
     "alerts.communication.newMessage.message": "You have a new conversation message.",
   },
   es: {
+    navigationAlerts: "Alertas",
+    navigationAlertsSubtitle: "Actualizaciones verificadas",
+    navigationAlertsUnreadSingular: "Alertas, {count} sin leer",
+    navigationAlertsUnreadPlural: "Alertas, {count} sin leer",
+    navigationAlertsUnreadOverflow: "Alertas, más de 99 sin leer",
     alertCenterEyebrow: "Centro de Comunicación",
     alertCenterTitle: "Alertas",
     alertCenterSubtitle: "Actualizaciones verificadas que pueden requerir tu atención.",
@@ -8717,6 +8727,11 @@ const alertCenterLabels = {
     "alerts.communication.newMessage.message": "Tienes un nuevo mensaje en una conversación.",
   },
   fr: {
+    navigationAlerts: "Alertes",
+    navigationAlertsSubtitle: "Mises à jour vérifiées",
+    navigationAlertsUnreadSingular: "Alertes, {count} non lue",
+    navigationAlertsUnreadPlural: "Alertes, {count} non lues",
+    navigationAlertsUnreadOverflow: "Alertes, plus de 99 non lues",
     alertCenterEyebrow: "Centre de communication",
     alertCenterTitle: "Alertes",
     alertCenterSubtitle: "Mises à jour vérifiées pouvant nécessiter votre attention.",
@@ -8786,6 +8801,11 @@ const alertCenterLabels = {
     "alerts.communication.newMessage.message": "Vous avez un nouveau message de conversation.",
   },
   "pt-BR": {
+    navigationAlerts: "Alertas",
+    navigationAlertsSubtitle: "Atualizações verificadas",
+    navigationAlertsUnreadSingular: "Alertas, {count} não lido",
+    navigationAlertsUnreadPlural: "Alertas, {count} não lidos",
+    navigationAlertsUnreadOverflow: "Alertas, mais de 99 não lidos",
     alertCenterEyebrow: "Central de Comunicação",
     alertCenterTitle: "Alertas",
     alertCenterSubtitle: "Atualizações verificadas que podem exigir sua atenção.",
