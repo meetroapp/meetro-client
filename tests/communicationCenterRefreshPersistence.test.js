@@ -27,6 +27,12 @@ const splitCloseSource = messagesSource.slice(
   messagesSource.indexOf("function getCanonicalEmergencyConversationId")
 );
 
+test("MessagesInbox has no executable reference to the removed canonical identity helper", () => {
+  assert.doesNotMatch(messagesSource, /claimsCanonicalConversationIdentity/);
+  assert.doesNotMatch(messagesSource, /function claimsCanonicalConversationIdentity/);
+  assert.match(messagesSource, /function getConversationRecordProvenance\(record = \{\}\)/);
+});
+
 function getRecordProvenance(record = {}) {
   const canonicalTarget = getCanonicalConversationActionTarget(record, {
     returnPage: "messagesInbox",

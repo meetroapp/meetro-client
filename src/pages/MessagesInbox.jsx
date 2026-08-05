@@ -1215,20 +1215,21 @@ function MessagesInbox({ setPage, currentPage }) {
 
     const canonicalEmergencyId = getCanonicalEmergencyConversationId(quote);
     const isEmergencySource = isEmergencyConversationType(quote);
-    const claimsCanonicalConversation =
-      claimsCanonicalConversationIdentity(quote);
+    const conversationProvenance = getConversationRecordProvenance(quote);
+    const isCanonicalConversation =
+      conversationProvenance.type === "canonical";
     const canonicalTarget = getCanonicalConversationActionTarget(quote, {
       returnPage: "messagesInbox",
       preferCommunicationCenterShell: isSplitPane,
     });
 
-    if (claimsCanonicalConversation && !canonicalTarget.ok) {
+    if (isCanonicalConversation && !canonicalTarget.ok) {
       return;
     }
 
     if (
       canonicalTarget.ok &&
-      (claimsCanonicalConversation || canonicalEmergencyId)
+      (isCanonicalConversation || canonicalEmergencyId)
     ) {
       const canonicalConversationId = canonicalTarget.conversationId;
 
@@ -1253,6 +1254,10 @@ function MessagesInbox({ setPage, currentPage }) {
       }
 
       setPage(canonicalTarget.route);
+      return;
+    }
+
+    if (conversationProvenance.type === "unknown") {
       return;
     }
 

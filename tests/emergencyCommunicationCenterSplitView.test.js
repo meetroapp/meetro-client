@@ -178,7 +178,7 @@ test("existing adaptive layout signal controls the three-column workspace", () =
 test("Emergency row selection retains the left list and activates the embedded thread", () => {
   assert.match(
     inboxSource,
-    /getCanonicalConversationActionTarget\(quote,[\s\S]*canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId\(String\(canonicalConversationId\)\)[\s\S]*setPage\(canonicalTarget\.route\)/
+    /getConversationRecordProvenance\(quote\)[\s\S]*getCanonicalConversationActionTarget\(quote,[\s\S]*canonicalTarget\.ok\s*&&\s*\(isCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId\(String\(canonicalConversationId\)\)[\s\S]*setPage\(canonicalTarget\.route\)/
   );
   assert.match(
     inboxSource,
@@ -188,12 +188,12 @@ test("Emergency row selection retains the left list and activates the embedded t
 
 test("desktop Emergency click preserves canonical identity in the split-shell route", () => {
   const canonicalEmergencyBlock = openConversationSource.match(
-    /if \(\s*canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)\s*\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*const conversation/s
+    /if \(\s*canonicalTarget\.ok\s*&&\s*\(isCanonicalConversation \|\| canonicalEmergencyId\)\s*\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*if \(conversationProvenance\.type === "unknown"\)/s
   );
 
   assert.match(
     openConversationSource,
-    /canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId/
+    /canonicalTarget\.ok\s*&&\s*\(isCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setActiveSplitConversationId/
   );
   assert.match(
     openConversationSource,
