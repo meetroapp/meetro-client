@@ -369,6 +369,57 @@ function safeRemoveStorage(key) {
   }
 }
 
+function getConversationRecordProvenance(record = {}) {
+  const canonicalTarget = getCanonicalConversationActionTarget(record, {
+    returnPage: "messagesInbox",
+  });
+
+  if (canonicalTarget.ok) {
+    return {
+      type: "canonical",
+      conversationId: canonicalTarget.conversationId,
+    };
+  }
+
+  const threadType = String(record.threadType || "").trim();
+  const conversationType = String(record.conversation_type || "").trim();
+
+  if (
+    threadType === CONVERSATION_THREAD_TYPES.LEGACY_QUOTE_REQUEST ||
+    conversationType === CONVERSATION_THREAD_TYPES.LEGACY_QUOTE_REQUEST ||
+    conversationType === "standard"
+  ) {
+    return {
+      type: "legacy",
+      conversationId: null,
+    };
+  }
+
+  return {
+    type: "unknown",
+    conversationId: null,
+  };
+}
+
+function getActiveSplitSelectionId(
+  record = {},
+  canonicalConversationId = null,
+  legacyConversationId = ""
+) {
+  const provenance = getConversationRecordProvenance(record);
+
+  if (canonicalConversationId) {
+    return provenance.type === "canonical" &&
+      String(provenance.conversationId) === String(canonicalConversationId)
+      ? String(provenance.conversationId)
+      : "";
+  }
+
+  return provenance.type === "legacy"
+    ? String(legacyConversationId || "")
+    : "";
+}
+
 function shouldBlockMessagesForConnection(state = {}) {
   if (state.connected) return false;
 
@@ -572,7 +623,7 @@ function MessagesInbox({ setPage, currentPage }) {
     routedConversationId || localStorage.getItem("activeConversationId") || ""
   );
   const [
-    activeSplitCanonicalConversationId,
+    selectedSplitCanonicalConversationId,
     setActiveSplitCanonicalConversationId,
   ] = useState(routedConversationId || null);
   const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
@@ -1165,12 +1216,10 @@ function MessagesInbox({ setPage, currentPage }) {
     const canonicalEmergencyId = getCanonicalEmergencyConversationId(quote);
     const isEmergencySource = isEmergencyConversationType(quote);
     const claimsCanonicalConversation =
-      quote.threadType === CONVERSATION_THREAD_TYPES.CANONICAL ||
-      quote.conversation_type === CONVERSATION_THREAD_TYPES.CANONICAL ||
-      Object.hasOwn(quote, "canonicalConversationId") ||
-      Object.hasOwn(quote, "canonical_conversation_id");
+      claimsCanonicalConversationIdentity(quote);
     const canonicalTarget = getCanonicalConversationActionTarget(quote, {
       returnPage: "messagesInbox",
+      preferCommunicationCenterShell: isSplitPane,
     });
 
     if (claimsCanonicalConversation && !canonicalTarget.ok) {
@@ -1199,7 +1248,7 @@ function MessagesInbox({ setPage, currentPage }) {
       setActiveSplitCanonicalConversationId(canonicalConversationId);
 
       if (isSplitPane) {
-        setPage("messagesInbox");
+        setPage(canonicalTarget.route);
         return;
       }
 
@@ -1807,23 +1856,35 @@ function MessagesInbox({ setPage, currentPage }) {
     language
   );
   const emptyCopy = getEmptyMessageCopy();
-  const listedActiveSplitConversation = searchedVisibleQuotes.find(
-    (quote) => String(quote.id) === String(activeSplitConversationId)
-  ) || liveIdentityQuotes.find((quote) => {
+  const activeSplitCanonicalConversationId =
+    routedConversationId ||
+    (canonicalRouteContext.valid
+      ? selectedSplitCanonicalConversationId
+      : null);
+  const isActiveSplitConversation = (quote = {}) => {
     const conversation = normalizeConversationForOpen(quote);
-    return conversation && String(conversation.id) === String(activeSplitConversationId);
-  });
-  const routedSplitConversation =
-    routedConversationId &&
-    routedConversationId === String(activeSplitConversationId)
-      ? {
-          id: routedConversationId,
-          conversationId: canonicalRouteContext.conversationId,
-          conversation_id: canonicalRouteContext.conversationId,
-          threadType: CONVERSATION_THREAD_TYPES.CANONICAL,
-          conversation_type: CONVERSATION_THREAD_TYPES.CANONICAL,
-        }
-      : null;
+    if (!conversation) return false;
+
+    const selectedId = getActiveSplitSelectionId(
+      conversation,
+      activeSplitCanonicalConversationId,
+      activeSplitConversationId
+    );
+
+    return Boolean(selectedId) && String(conversation.id) === selectedId;
+  };
+  const listedActiveSplitConversation =
+    searchedVisibleQuotes.find(isActiveSplitConversation) ||
+    liveIdentityQuotes.find(isActiveSplitConversation);
+  const routedSplitConversation = routedConversationId
+    ? {
+        id: routedConversationId,
+        conversationId: canonicalRouteContext.conversationId,
+        conversation_id: canonicalRouteContext.conversationId,
+        threadType: CONVERSATION_THREAD_TYPES.CANONICAL,
+        conversation_type: CONVERSATION_THREAD_TYPES.CANONICAL,
+      }
+    : null;
   const activeSplitConversation =
     listedActiveSplitConversation || routedSplitConversation;
   const activeWorkspaceConversation = activeSplitConversation
@@ -1832,7 +1893,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const activeEmergencyContextMatchesConversation = Boolean(
     activeEmergencyContext?.detail?.type === "emergency" &&
       String(activeEmergencyContext.conversationId) ===
-        String(activeSplitConversationId)
+        String(activeSplitCanonicalConversationId)
   );
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
@@ -3074,7 +3135,7 @@ function MessagesInbox({ setPage, currentPage }) {
           ...conversationRow,
           ...(conversation.unread ? unreadConversationRow : {}),
           ...(isEmergencyRow ? emergencyConversationRow : {}),
-          ...(isSplitPane && String(activeSplitConversationId) === String(conversation.id)
+          ...(isSplitPane && isActiveSplitConversation(conversation)
             ? activeConversationRow
             : {}),
         }}
@@ -5421,7 +5482,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   ...((counts.unread || 0) > 0 ? unreadConversationRow : {}),
                   ...(hasEmergencyConversation ? emergencyConversationRow : {}),
                   ...(isSplitPane &&
-                  String(activeSplitConversationId) === String(primaryConversation.id)
+                  isActiveSplitConversation(primaryConversation)
                     ? activeConversationRow
                     : {}),
                   ...(inactiveImportedContact &&

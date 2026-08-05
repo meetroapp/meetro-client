@@ -186,7 +186,7 @@ test("Emergency row selection retains the left list and activates the embedded t
   );
 });
 
-test("desktop Emergency click never sets standalone conversationThread", () => {
+test("desktop Emergency click preserves canonical identity in the split-shell route", () => {
   const canonicalEmergencyBlock = openConversationSource.match(
     /if \(\s*canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)\s*\)[\s\S]*?\n\s*return;\n\s*}\n\n\s*const conversation/s
   );
@@ -197,16 +197,21 @@ test("desktop Emergency click never sets standalone conversationThread", () => {
   );
   assert.match(
     openConversationSource,
-    /canonicalTarget\.ok\s*&&\s*\(claimsCanonicalConversation \|\| canonicalEmergencyId\)[\s\S]*setPage\("messagesInbox"\)/
+    /getCanonicalConversationActionTarget\(quote, \{[\s\S]*preferCommunicationCenterShell: isSplitPane/
   );
   assert.ok(
     !canonicalEmergencyBlock ||
       !canonicalEmergencyBlock[0].includes('setPage("conversationThread")'),
     "canonical Emergency open branch does not write conversationThread"
   );
+  assert.ok(
+    !canonicalEmergencyBlock ||
+      !canonicalEmergencyBlock[0].includes('setPage("messagesInbox")'),
+    "canonical Emergency open branch does not discard its conversation id"
+  );
   assert.match(
     openConversationSource,
-    /if \(isSplitPane\)[\s\S]*setPage\("messagesInbox"\)/
+    /if \(isSplitPane\)[\s\S]*setPage\(canonicalTarget\.route\)/
   );
   assert.match(
     openConversationSource,

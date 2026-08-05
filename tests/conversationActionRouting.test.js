@@ -90,9 +90,16 @@ test("Communication Center ordinary canonical records use exact canonical identi
   );
   assert.match(
     messagesInboxSource,
+    /returnPage: "messagesInbox",\s*preferCommunicationCenterShell: isSplitPane/
+  );
+  assert.match(
+    messagesInboxSource,
     /setActiveSplitCanonicalConversationId\(canonicalConversationId\)/
   );
-  assert.match(messagesInboxSource, /setPage\(canonicalTarget\.route\)/);
+  assert.match(
+    messagesInboxSource,
+    /if \(isSplitPane\) \{\s*setPage\(canonicalTarget\.route\);/
+  );
 });
 
 test("Communication Center and Alert Center share one canonical route target contract", () => {
