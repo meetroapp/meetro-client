@@ -90,11 +90,21 @@ function classifyStatus(status) {
   return CONVERSATION_READ_API_ERROR_KINDS.SERVER;
 }
 
-function invalidInput() {
+function invalidConversationId() {
   return new ConversationReadApiError({
     status: 400,
     code: "INVALID_CONVERSATION_ID",
     message: "A valid conversation ID is required.",
+    kind: CONVERSATION_READ_API_ERROR_KINDS.VALIDATION,
+    retryable: false,
+  });
+}
+
+function invalidLastReadMessageId() {
+  return new ConversationReadApiError({
+    status: 400,
+    code: "INVALID_LAST_READ_MESSAGE_ID",
+    message: "A valid visible message ID is required.",
     kind: CONVERSATION_READ_API_ERROR_KINDS.VALIDATION,
     retryable: false,
   });
@@ -162,7 +172,6 @@ function normalizeOptions(value) {
 }
 
 function normalizeReadMessageId(value) {
-  if (value === null) return { valid: true, value: null };
   return Number.isSafeInteger(value) && value > 0
     ? { valid: true, value }
     : { valid: false, value: null };
@@ -184,7 +193,8 @@ function normalizeIsoTimestamp(value) {
 
 export function normalizeCanonicalConversationReadResponse(
   data,
-  requestedConversationId
+  requestedConversationId,
+  requestedLastReadMessageId
 ) {
   if (!isPlainObject(data)) return null;
   if (data.success !== true) return null;
@@ -192,6 +202,16 @@ export function normalizeCanonicalConversationReadResponse(
 
   const conversationId = normalizeCanonicalConversationId(data.conversationId);
   if (!conversationId || conversationId !== requestedConversationId) {
+    return null;
+  }
+
+  const acknowledgedMessageId = normalizeReadMessageId(
+    data.acknowledgedMessageId
+  );
+  if (
+    !acknowledgedMessageId.valid ||
+    acknowledgedMessageId.value !== requestedLastReadMessageId
+  ) {
     return null;
   }
 
@@ -204,6 +224,7 @@ export function normalizeCanonicalConversationReadResponse(
 
   return {
     conversationId,
+    acknowledgedMessageId: acknowledgedMessageId.value,
     readState: {
       lastReadMessageId: lastReadMessageId.value,
       lastReadAt: lastReadAt.value,
@@ -213,11 +234,16 @@ export function normalizeCanonicalConversationReadResponse(
 
 export async function markCanonicalConversationRead(
   conversationId,
+  lastReadMessageId,
   options
 ) {
   const normalizedConversationId =
     normalizeCanonicalConversationId(conversationId);
-  if (!normalizedConversationId) throw invalidInput();
+  if (!normalizedConversationId) throw invalidConversationId();
+
+  const normalizedLastReadMessageId =
+    normalizeCanonicalConversationId(lastReadMessageId);
+  if (!normalizedLastReadMessageId) throw invalidLastReadMessageId();
 
   const { setPage, authFetchImpl } = normalizeOptions(options);
   if (typeof authFetchImpl !== "function") {
@@ -234,7 +260,16 @@ export async function markCanonicalConversationRead(
   try {
     result = await authFetchImpl(
       `/conversations/${normalizedConversationId}/read`,
-      { method: "POST", cache: "no-store" },
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lastReadMessageId: normalizedLastReadMessageId,
+        }),
+      },
       setPage
     );
   } catch {
@@ -248,7 +283,8 @@ export async function markCanonicalConversationRead(
 
   const normalized = normalizeCanonicalConversationReadResponse(
     data,
-    normalizedConversationId
+    normalizedConversationId,
+    normalizedLastReadMessageId
   );
   if (!normalized) throw malformedResponse();
 

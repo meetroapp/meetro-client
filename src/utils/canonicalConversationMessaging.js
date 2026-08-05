@@ -278,6 +278,427 @@ export function normalizeCanonicalMessageCollection(
   return messages.every(Boolean) ? messages : null;
 }
 
+function normalizeCanonicalMessagePagination(pagination) {
+  if (
+    !pagination ||
+    typeof pagination !== "object" ||
+    Array.isArray(pagination) ||
+    typeof pagination.hasMore !== "boolean"
+  ) {
+    return null;
+  }
+
+  return { hasMore: pagination.hasMore };
+}
+
+export function getCanonicalVisibleMessageWatermark(conversationId, messages) {
+  if (!Array.isArray(messages)) return null;
+  if (messages.length === 0) return null;
+
+  const backendMessageIds = [];
+  const uniqueMessageIds = new Set();
+
+  for (const message of messages) {
+    const messageId = normalizeCanonicalConversationId(message?.backendId);
+
+    if (!messageId || uniqueMessageIds.has(messageId)) return null;
+    uniqueMessageIds.add(messageId);
+    backendMessageIds.push(messageId);
+  }
+
+  return `${conversationId}:${Math.max(...backendMessageIds)}`;
+}
+
+export function getCanonicalVisibleMessageBoundary(conversationId, messages) {
+  const routeId = normalizeCanonicalConversationId(conversationId);
+  if (!routeId || !Array.isArray(messages) || messages.length === 0) {
+    return null;
+  }
+
+  const backendMessageIds = [];
+  const uniqueMessageIds = new Set();
+
+  for (const message of messages) {
+    const messageId = normalizeCanonicalConversationId(message?.backendId);
+
+    if (!messageId || uniqueMessageIds.has(messageId)) return null;
+    uniqueMessageIds.add(messageId);
+    backendMessageIds.push(messageId);
+  }
+
+  const lastVisibleMessageId = Math.max(...backendMessageIds);
+
+  return {
+    conversationId: routeId,
+    lastVisibleMessageId,
+    watermark: `${routeId}:${lastVisibleMessageId}`,
+  };
+}
+
+export function buildCanonicalConversationReadSnapshot({
+  threadType,
+  routeConversationId,
+  messageConversationId,
+  routeGeneration,
+  hydrationGeneration,
+  messages,
+  pagination,
+} = {}) {
+  const routeId = normalizeCanonicalConversationId(routeConversationId);
+  const messageId = normalizeCanonicalConversationId(messageConversationId);
+  const normalizedPagination = normalizeCanonicalMessagePagination(pagination);
+
+  if (
+    threadType !== CONVERSATION_THREAD_TYPES.CANONICAL ||
+    !routeId ||
+    messageId !== routeId ||
+    !Number.isSafeInteger(routeGeneration) ||
+    routeGeneration < 1 ||
+    !Number.isSafeInteger(hydrationGeneration) ||
+    hydrationGeneration < 1 ||
+    !normalizedPagination ||
+    normalizedPagination.hasMore !== false
+  ) {
+    return null;
+  }
+
+  const boundary = getCanonicalVisibleMessageBoundary(routeId, messages);
+  if (!boundary) return null;
+
+  return {
+    conversationId: routeId,
+    routeGeneration,
+    hydrationGeneration,
+    lastVisibleMessageId: boundary.lastVisibleMessageId,
+    watermark: boundary.watermark,
+    pagination: normalizedPagination,
+  };
+}
+
+export function getCanonicalConversationReadCandidate({
+  threadType,
+  routeConversationId,
+  detailConversationId,
+  routeGeneration,
+  hydrationGeneration,
+  messagesPhase,
+  visibleMessages,
+  snapshot,
+} = {}) {
+  const routeId = normalizeCanonicalConversationId(routeConversationId);
+  const detailId = normalizeCanonicalConversationId(detailConversationId);
+
+  if (
+    threadType !== CONVERSATION_THREAD_TYPES.CANONICAL ||
+    !routeId ||
+    detailId !== routeId ||
+    !Number.isSafeInteger(hydrationGeneration) ||
+    hydrationGeneration < 1 ||
+    messagesPhase !== "ready" ||
+    !snapshot ||
+    snapshot.conversationId !== routeId ||
+    snapshot.routeGeneration !== routeGeneration ||
+    snapshot.hydrationGeneration !== hydrationGeneration ||
+    snapshot.pagination?.hasMore !== false
+  ) {
+    return null;
+  }
+
+  const boundary = getCanonicalVisibleMessageBoundary(
+    routeId,
+    visibleMessages
+  );
+  if (
+    !boundary ||
+    boundary.watermark !== snapshot.watermark ||
+    boundary.lastVisibleMessageId !== snapshot.lastVisibleMessageId
+  ) {
+    return null;
+  }
+
+  return {
+    conversationId: routeId,
+    routeGeneration,
+    hydrationGeneration,
+    lastVisibleMessageId: boundary.lastVisibleMessageId,
+    watermark: boundary.watermark,
+  };
+}
+
+export function createCanonicalConversationReadAttemptState(
+  routeGeneration = 0,
+  hydrationGeneration = 0
+) {
+  return {
+    routeGeneration:
+      Number.isSafeInteger(routeGeneration) && routeGeneration >= 0
+        ? routeGeneration
+        : 0,
+    hydrationGeneration:
+      Number.isSafeInteger(hydrationGeneration) && hydrationGeneration >= 0
+        ? hydrationGeneration
+        : 0,
+    attemptedWatermark: null,
+    inFlightWatermark: null,
+    inFlightHydrationGeneration: null,
+    confirmedWatermark: null,
+    scheduledWatermark: null,
+  };
+}
+
+export function canScheduleCanonicalConversationReadAttempt(state, candidate) {
+  return Boolean(
+    state &&
+      candidate &&
+      state.routeGeneration === candidate.routeGeneration &&
+      state.hydrationGeneration === candidate.hydrationGeneration &&
+      Number.isSafeInteger(candidate.lastVisibleMessageId) &&
+      candidate.lastVisibleMessageId > 0 &&
+      typeof candidate.watermark === "string" &&
+      candidate.watermark &&
+      !state.scheduledWatermark &&
+      !state.inFlightWatermark &&
+      state.attemptedWatermark !== candidate.watermark &&
+      state.confirmedWatermark !== candidate.watermark
+  );
+}
+
+export function beginCanonicalConversationReadAttempt(state, candidate) {
+  if (
+    !state ||
+    !candidate ||
+    state.routeGeneration !== candidate.routeGeneration ||
+    state.hydrationGeneration !== candidate.hydrationGeneration ||
+    !Number.isSafeInteger(candidate.lastVisibleMessageId) ||
+    candidate.lastVisibleMessageId <= 0 ||
+    typeof candidate.watermark !== "string" ||
+    !candidate.watermark ||
+    state.inFlightWatermark ||
+    state.attemptedWatermark === candidate.watermark ||
+    state.confirmedWatermark === candidate.watermark
+  ) {
+    return { started: false, state };
+  }
+
+  return {
+    started: true,
+    state: {
+      ...state,
+      attemptedWatermark: candidate.watermark,
+      inFlightWatermark: candidate.watermark,
+      inFlightHydrationGeneration: candidate.hydrationGeneration,
+    },
+  };
+}
+
+export function settleCanonicalConversationReadAttempt(
+  state,
+  { routeGeneration, hydrationGeneration, watermark, succeeded } = {}
+) {
+  if (
+    !state ||
+    state.routeGeneration !== routeGeneration ||
+    state.inFlightWatermark !== watermark
+  ) {
+    return state;
+  }
+
+  const exactHydration =
+    state.inFlightHydrationGeneration === hydrationGeneration &&
+    state.hydrationGeneration === hydrationGeneration;
+
+  return {
+    ...state,
+    inFlightWatermark: null,
+    inFlightHydrationGeneration: null,
+    confirmedWatermark:
+      succeeded && exactHydration ? watermark : state.confirmedWatermark,
+  };
+}
+
+const SUPPORTED_LEGACY_CONVERSATION_TYPES = new Set([
+  CONVERSATION_THREAD_TYPES.LEGACY_QUOTE_REQUEST,
+  "standard",
+  "hiring",
+  "hiring_application",
+  "job_inquiry",
+  "applicant_message",
+]);
+
+export function isSupportedLegacyConversationThread({
+  conversationId,
+  threadType,
+  record,
+} = {}) {
+  const normalizedConversationId = String(conversationId ?? "").trim();
+  const normalizedThreadType = String(threadType ?? "").trim();
+  const recordId = String(record?.id ?? record?.conversationId ?? "").trim();
+  const recordThreadType = String(record?.threadType ?? "").trim();
+  const recordConversationType = String(record?.conversation_type ?? "").trim();
+  const explicitRecordType = recordThreadType || recordConversationType;
+
+  return Boolean(
+    normalizedConversationId &&
+      recordId === normalizedConversationId &&
+      SUPPORTED_LEGACY_CONVERSATION_TYPES.has(normalizedThreadType) &&
+      SUPPORTED_LEGACY_CONVERSATION_TYPES.has(explicitRecordType) &&
+      normalizedThreadType === explicitRecordType
+  );
+}
+
+export function createCanonicalConversationReadCoordinator({
+  scheduleFrame,
+  cancelFrame,
+  markRead,
+  refreshCounts,
+  isCurrent,
+} = {}) {
+  if (
+    typeof scheduleFrame !== "function" ||
+    typeof cancelFrame !== "function" ||
+    typeof markRead !== "function" ||
+    typeof refreshCounts !== "function" ||
+    typeof isCurrent !== "function"
+  ) {
+    throw new TypeError("Canonical conversation read coordinator dependencies are required.");
+  }
+
+  let state = createCanonicalConversationReadAttemptState();
+  let scheduledFrame = null;
+
+  const clearScheduledState = (candidate) => {
+    if (
+      state.routeGeneration === candidate.routeGeneration &&
+      state.hydrationGeneration === candidate.hydrationGeneration &&
+      state.scheduledWatermark === candidate.watermark
+    ) {
+      state = { ...state, scheduledWatermark: null };
+    }
+  };
+
+  const cancelScheduled = (candidate = null) => {
+    if (
+      !scheduledFrame ||
+      (candidate &&
+        (scheduledFrame.candidate.routeGeneration !== candidate.routeGeneration ||
+          scheduledFrame.candidate.hydrationGeneration !==
+            candidate.hydrationGeneration ||
+          scheduledFrame.candidate.watermark !== candidate.watermark))
+    ) {
+      return false;
+    }
+
+    const pending = scheduledFrame;
+    scheduledFrame = null;
+    cancelFrame(pending.frameId);
+    clearScheduledState(pending.candidate);
+    return true;
+  };
+
+  const reset = (routeGeneration = 0, hydrationGeneration = 0) => {
+    cancelScheduled();
+    state = createCanonicalConversationReadAttemptState(
+      routeGeneration,
+      hydrationGeneration
+    );
+  };
+
+  const invalidateHydration = (routeGeneration, hydrationGeneration) => {
+    cancelScheduled();
+    if (
+      Number.isSafeInteger(routeGeneration) &&
+      routeGeneration >= 0 &&
+      Number.isSafeInteger(hydrationGeneration) &&
+      hydrationGeneration >= 0
+    ) {
+      state = {
+        ...state,
+        routeGeneration,
+        hydrationGeneration,
+        scheduledWatermark: null,
+      };
+    }
+  };
+
+  const schedule = (candidate) => {
+    if (!canScheduleCanonicalConversationReadAttempt(state, candidate)) {
+      return false;
+    }
+
+    state = { ...state, scheduledWatermark: candidate.watermark };
+
+    let frameId;
+    try {
+      frameId = scheduleFrame(async () => {
+        if (
+          !scheduledFrame ||
+          scheduledFrame.frameId !== frameId ||
+          scheduledFrame.candidate.routeGeneration !== candidate.routeGeneration ||
+          scheduledFrame.candidate.hydrationGeneration !==
+            candidate.hydrationGeneration ||
+          scheduledFrame.candidate.watermark !== candidate.watermark
+        ) {
+          return;
+        }
+
+        scheduledFrame = null;
+        clearScheduledState(candidate);
+        if (!isCurrent(candidate)) return;
+
+        const attempt = beginCanonicalConversationReadAttempt(state, candidate);
+        state = attempt.state;
+        if (!attempt.started) return;
+
+        let succeeded;
+        try {
+          const result = await markRead(
+            candidate.conversationId,
+            candidate.lastVisibleMessageId
+          );
+          succeeded =
+            normalizeCanonicalConversationId(result?.conversationId) ===
+              candidate.conversationId &&
+            normalizeCanonicalConversationId(result?.acknowledgedMessageId) ===
+              candidate.lastVisibleMessageId;
+        } catch {
+          succeeded = false;
+        }
+
+        const stillCurrent = isCurrent(candidate);
+
+        state = settleCanonicalConversationReadAttempt(state, {
+          routeGeneration: candidate.routeGeneration,
+          hydrationGeneration: candidate.hydrationGeneration,
+          watermark: candidate.watermark,
+          succeeded: succeeded && stillCurrent,
+        });
+
+        if (succeeded && stillCurrent) {
+          try {
+            await refreshCounts();
+          } catch {
+            // Alert-count refresh failure does not change confirmed read authority.
+          }
+        }
+      });
+    } catch {
+      clearScheduledState(candidate);
+      return false;
+    }
+
+    scheduledFrame = { candidate, frameId };
+    return true;
+  };
+
+  return {
+    cancelScheduled,
+    getState: () => ({ ...state }),
+    invalidateHydration,
+    reset,
+    schedule,
+  };
+}
+
 export function validateCanonicalMessageText(value) {
   if (typeof value !== "string") {
     return { valid: false, code: "MESSAGE_TEXT_REQUIRED", text: "" };

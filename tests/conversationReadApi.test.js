@@ -16,6 +16,7 @@ function successBody(overrides = {}) {
     success: true,
     code: "CONVERSATION_MARKED_READ",
     conversationId: 91,
+    acknowledgedMessageId: 205,
     readState: {
       lastReadMessageId: 205,
       lastReadAt: VALID_TIMESTAMP,
@@ -73,17 +74,47 @@ test("canonical conversation read rejects invalid conversation identifiers befor
   assert.equal(transport.calls.length, 0);
 });
 
-test("canonical conversation read posts to the exact endpoint without identity body or query metadata", async () => {
+test("canonical conversation read rejects invalid visible message identifiers before transport", async () => {
+  const transport = createTransport();
+  for (const value of [
+    undefined,
+    null,
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    "205",
+    "message-205",
+    {},
+    [],
+  ]) {
+    await assert.rejects(
+      markCanonicalConversationRead(91, value, {
+        authFetchImpl: transport.authFetchImpl,
+      }),
+      (error) =>
+        error instanceof ConversationReadApiError &&
+        error.status === 400 &&
+        error.code === "INVALID_LAST_READ_MESSAGE_ID" &&
+        error.kind === CONVERSATION_READ_API_ERROR_KINDS.VALIDATION &&
+        error.retryable === false
+    );
+  }
+  assert.equal(transport.calls.length, 0);
+});
+
+test("canonical conversation read posts the exact visible message boundary", async () => {
   const setPage = () => {};
   const transport = createTransport([successResponse()]);
 
-  const result = await markCanonicalConversationRead(91, {
+  const result = await markCanonicalConversationRead(91, 205, {
     setPage,
     authFetchImpl: transport.authFetchImpl,
   });
 
   assert.deepEqual(result, {
     conversationId: 91,
+    acknowledgedMessageId: 205,
     readState: {
       lastReadMessageId: 205,
       lastReadAt: VALID_TIMESTAMP,
@@ -92,10 +123,20 @@ test("canonical conversation read posts to the exact endpoint without identity b
   assert.equal(transport.calls.length, 1);
   assert.deepEqual(transport.calls[0], {
     endpoint: "/conversations/91/read",
-    options: { method: "POST", cache: "no-store" },
+    options: {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ lastReadMessageId: 205 }),
+    },
     setPage,
   });
-  assert.equal(Object.hasOwn(transport.calls[0].options, "body"), false);
+  assert.deepEqual(
+    Object.keys(JSON.parse(transport.calls[0].options.body)),
+    ["lastReadMessageId"]
+  );
   assert.equal(transport.calls[0].endpoint.includes("?"), false);
 });
 
@@ -110,7 +151,7 @@ test("canonical conversation read rejects caller-owned identity options before t
   ]) {
     const transport = createTransport([successResponse()]);
     await assert.rejects(
-      markCanonicalConversationRead(91, {
+      markCanonicalConversationRead(91, 205, {
         authFetchImpl: transport.authFetchImpl,
         [key]: "client-owned",
       }),
@@ -124,44 +165,24 @@ test("canonical conversation read rejects caller-owned identity options before t
   }
 });
 
-test("canonical conversation read accepts nullable backend read-state values", async () => {
-  const nullMessage = createTransport([
-    successResponse(successBody({
-      readState: {
-        lastReadMessageId: null,
-        lastReadAt: VALID_TIMESTAMP,
-      },
-    })),
-  ]);
-  assert.deepEqual(
-    await markCanonicalConversationRead(91, {
-      authFetchImpl: nullMessage.authFetchImpl,
-    }),
-    {
-      conversationId: 91,
-      readState: {
-        lastReadMessageId: null,
-        lastReadAt: VALID_TIMESTAMP,
-      },
-    }
-  );
-
+test("canonical conversation read accepts monotonic stored state and nullable timestamp", async () => {
   const nullTimestamp = createTransport([
     successResponse(successBody({
       readState: {
-        lastReadMessageId: 205,
+        lastReadMessageId: 209,
         lastReadAt: null,
       },
     })),
   ]);
   assert.deepEqual(
-    await markCanonicalConversationRead(91, {
+    await markCanonicalConversationRead(91, 205, {
       authFetchImpl: nullTimestamp.authFetchImpl,
     }),
     {
       conversationId: 91,
+      acknowledgedMessageId: 205,
       readState: {
-        lastReadMessageId: 205,
+        lastReadMessageId: 209,
         lastReadAt: null,
       },
     }
@@ -179,8 +200,16 @@ test("canonical conversation read rejects malformed successful responses", async
     successBody({ conversationId: undefined }),
     successBody({ conversationId: "91" }),
     successBody({ conversationId: 92 }),
+    successBody({ acknowledgedMessageId: undefined }),
+    successBody({ acknowledgedMessageId: null }),
+    successBody({ acknowledgedMessageId: 0 }),
+    successBody({ acknowledgedMessageId: "205" }),
+    successBody({ acknowledgedMessageId: 206 }),
     successBody({ readState: undefined }),
     successBody({ readState: [] }),
+    successBody({
+      readState: { lastReadMessageId: null, lastReadAt: VALID_TIMESTAMP },
+    }),
     successBody({
       readState: { lastReadMessageId: 0, lastReadAt: VALID_TIMESTAMP },
     }),
@@ -201,7 +230,7 @@ test("canonical conversation read rejects malformed successful responses", async
   for (const body of malformedResponses) {
     const transport = createTransport([successResponse(body)]);
     await assert.rejects(
-      markCanonicalConversationRead(91, {
+      markCanonicalConversationRead(91, 205, {
         authFetchImpl: transport.authFetchImpl,
       }),
       (error) =>
@@ -222,7 +251,7 @@ test("canonical conversation read normalizer does not fabricate read state", () 
       success: true,
       code: "CONVERSATION_MARKED_READ",
       conversationId: 91,
-    }, 91),
+    }, 91, 205),
     null
   );
 });
@@ -273,7 +302,7 @@ test("canonical conversation read preserves normalized backend failures", async 
   for (const [status, body, kind, retryable] of failures) {
     const transport = createTransport([failureResponse(status, body)]);
     await assert.rejects(
-      markCanonicalConversationRead(91, {
+      markCanonicalConversationRead(91, 205, {
         authFetchImpl: transport.authFetchImpl,
       }),
       (error) => {
@@ -292,7 +321,7 @@ test("canonical conversation read preserves normalized backend failures", async 
 test("canonical conversation read normalizes network failure without exposing transport detail", async () => {
   const transport = createTransport([new Error("private bearer token detail")]);
   await assert.rejects(
-    markCanonicalConversationRead(91, {
+    markCanonicalConversationRead(91, 205, {
       authFetchImpl: transport.authFetchImpl,
     }),
     (error) => {

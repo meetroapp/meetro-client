@@ -11,7 +11,11 @@ import { authFetch } from "../utils/authFetch";
 import {
   CANONICAL_MESSAGE_MAX_LENGTH,
   CONVERSATION_THREAD_TYPES,
+  buildCanonicalConversationReadSnapshot,
   buildCanonicalMessagePayload,
+  createCanonicalConversationReadCoordinator,
+  getCanonicalConversationReadCandidate,
+  isSupportedLegacyConversationThread,
   normalizeCanonicalConversationDetail,
   normalizeCanonicalConversationId,
   normalizeCanonicalMessage,
@@ -19,6 +23,8 @@ import {
   parseCanonicalConversationRoute,
   validateCanonicalMessageText,
 } from "../utils/canonicalConversationMessaging";
+import { markCanonicalConversationRead } from "../utils/conversationReadApi";
+import { refreshAlertCounts } from "../utils/alertCountCoordinator";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
@@ -627,6 +633,27 @@ const MessageItem = memo(({ message }) => {
   );
 });
 
+function resolveSupportedLegacyConversationRecord({
+  conversationId,
+  isCanonicalThread,
+  threadType,
+}) {
+  if (isCanonicalThread) return null;
+
+  const selectedId = String(conversationId);
+  const selectedItem = getConversationRegistry().find(
+    (item) => String(item.id) === selectedId
+  );
+
+  return isSupportedLegacyConversationThread({
+    conversationId,
+    threadType,
+    record: selectedItem,
+  })
+    ? selectedItem
+    : null;
+}
+
 
 function ConversationThreadInner({
   setPage,
@@ -693,6 +720,7 @@ function ConversationThreadInner({
   const [canonicalSendErrorKey, setCanonicalSendErrorKey] = useState("");
   const [canonicalSendPending, setCanonicalSendPending] = useState(false);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
+  const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
   const [canonicalDispatchPending, setCanonicalDispatchPending] =
     useState(false);
   const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
@@ -711,6 +739,41 @@ function ConversationThreadInner({
   const canonicalConversationIdentityRef = useRef(null);
   const canonicalConfirmedDetailRef = useRef(false);
   const canonicalConfirmedMessagesRef = useRef(false);
+  const canonicalReadMountedRef = useRef(false);
+  const canonicalReadRouteGenerationRef = useRef(0);
+  const canonicalReadHydrationGenerationRef = useRef(0);
+  const canonicalReadCoordinatorRef = useRef(null);
+
+  useEffect(() => {
+    canonicalReadMountedRef.current = true;
+    canonicalReadCoordinatorRef.current =
+      createCanonicalConversationReadCoordinator({
+        scheduleFrame: (callback) => window.requestAnimationFrame(callback),
+        cancelFrame: (frameId) => window.cancelAnimationFrame(frameId),
+        markRead: (conversationId, lastVisibleMessageId) =>
+          markCanonicalConversationRead(conversationId, lastVisibleMessageId),
+        refreshCounts: () => refreshAlertCounts(),
+        isCurrent: (candidate) =>
+          canonicalReadMountedRef.current &&
+          canonicalReadRouteGenerationRef.current ===
+            candidate.routeGeneration &&
+          canonicalReadHydrationGenerationRef.current ===
+            candidate.hydrationGeneration &&
+          canonicalConversationIdentityRef.current ===
+            candidate.conversationId,
+      });
+
+    return () => {
+      canonicalReadMountedRef.current = false;
+      canonicalReadRouteGenerationRef.current += 1;
+      canonicalReadHydrationGenerationRef.current += 1;
+      canonicalReadCoordinatorRef.current?.reset(
+        canonicalReadRouteGenerationRef.current,
+        canonicalReadHydrationGenerationRef.current
+      );
+      canonicalReadCoordinatorRef.current = null;
+    };
+  }, []);
 
   const getLocalizedMessageField = useCallback(
     (message, field) => {
@@ -810,12 +873,12 @@ function ConversationThreadInner({
   const legacyWorkflowStorageEnabled =
     canReadLegacyWorkflowStorage();
   const rawStoredConversationType =
-    localStorage.getItem("meetroConversationType") || "standard";
+    localStorage.getItem("meetroConversationType") || "";
   const storedConversationType =
     rawStoredConversationType === "emergency" &&
     !legacyWorkflowStorageEnabled
       ? "standard"
-      : rawStoredConversationType;
+      : rawStoredConversationType || "standard";
   const conversationType = Boolean(canonicalConversationId)
     ? CONVERSATION_THREAD_TYPES.CANONICAL
     : storedConversationType === CONVERSATION_THREAD_TYPES.CANONICAL
@@ -2834,11 +2897,27 @@ useEffect(() => {
             "professional"
               ? "business"
               : "homeowner";
+          const hydrationGeneration =
+            canonicalReadHydrationGenerationRef.current + 1;
+          canonicalReadHydrationGenerationRef.current = hydrationGeneration;
+          canonicalReadCoordinatorRef.current?.invalidateHydration(
+            canonicalReadRouteGenerationRef.current,
+            hydrationGeneration
+          );
+          if (!cancelled) {
+            setCanonicalReadSnapshot(null);
+          }
           const messageResult = await authFetch(
             `/conversations/${canonicalConversationId}/messages`,
             {},
             setPage
           );
+          if (
+            hydrationGeneration !==
+            canonicalReadHydrationGenerationRef.current
+          ) {
+            return;
+          }
           const canonicalMessages = messageResult?.response?.ok
             ? normalizeCanonicalMessageCollection(
                 messageResult.data,
@@ -2863,23 +2942,26 @@ useEffect(() => {
 
           if (!cancelled) {
             canonicalConfirmedMessagesRef.current = true;
-            setMessages(
-              canonicalMessages.map((message) => ({
+            const visibleCanonicalMessages = canonicalMessages.map(
+              (message) => ({
                 ...message,
                 time: formatMessageTime(message.createdAt),
-              }))
+              })
             );
+            const readSnapshot = buildCanonicalConversationReadSnapshot({
+              threadType: conversationType,
+              routeConversationId: canonicalConversationId,
+              messageConversationId: messageResult.data.conversationId,
+              routeGeneration: canonicalReadRouteGenerationRef.current,
+              hydrationGeneration,
+              messages: visibleCanonicalMessages,
+              pagination: messageResult.data.pagination,
+            });
+
+            setMessages(visibleCanonicalMessages);
+            setCanonicalReadSnapshot(readSnapshot);
             setCanonicalMessagesPhase("ready");
             setCanonicalLoadErrorKey("");
-            try {
-              markConversationRead(
-                conversationId,
-                {},
-                detailViewerRole
-              );
-            } catch {
-              // Read-state bookkeeping must never interrupt the visible thread.
-            }
           }
         } catch (error) {
           console.error("Failed to load canonical conversation", error);
@@ -2947,10 +3029,22 @@ useEffect(() => {
             auditShadowTimeline(merged, "backend-message");
             setMessages(merged);
             writeLocalConversationValue(JSON.stringify(merged));
-            try {
-              markConversationRead(conversationId, {}, currentViewerRole);
-            } catch {
-              // Read-state bookkeeping must never interrupt the visible thread.
+            const supportedLegacyRecord =
+              resolveSupportedLegacyConversationRecord({
+                conversationId,
+                isCanonicalThread,
+                threadType: rawStoredConversationType,
+              });
+            if (supportedLegacyRecord) {
+              try {
+                markConversationRead(
+                  conversationId,
+                  supportedLegacyRecord,
+                  currentViewerRole
+                );
+              } catch {
+                // Read-state bookkeeping must never interrupt the visible thread.
+              }
             }
             return;
           }
@@ -2971,10 +3065,22 @@ useEffect(() => {
         }
       }
 
-      try {
-        markConversationRead(conversationId, {}, currentViewerRole);
-      } catch {
-        // Read receipts and inbox refreshes must never block the active thread.
+      const supportedLegacyRecord =
+        resolveSupportedLegacyConversationRecord({
+          conversationId,
+          isCanonicalThread,
+          threadType: rawStoredConversationType,
+        });
+      if (supportedLegacyRecord) {
+        try {
+          markConversationRead(
+            conversationId,
+            supportedLegacyRecord,
+            currentViewerRole
+          );
+        } catch {
+          // Read receipts and inbox refreshes must never block the active thread.
+        }
       }
     };
 
@@ -2987,12 +3093,30 @@ useEffect(() => {
           canonicalConversationId;
 
       if (isCanonicalThread) {
+        if (canonicalRouteChanged) {
+          canonicalReadRouteGenerationRef.current += 1;
+          canonicalReadHydrationGenerationRef.current += 1;
+          canonicalReadCoordinatorRef.current.reset(
+            canonicalReadRouteGenerationRef.current,
+            canonicalReadHydrationGenerationRef.current
+          );
+          setCanonicalReadSnapshot(null);
+        }
         canonicalConversationIdentityRef.current =
           canonicalConversationId;
       } else {
+        if (canonicalConversationIdentityRef.current !== null) {
+          canonicalReadRouteGenerationRef.current += 1;
+          canonicalReadHydrationGenerationRef.current += 1;
+          canonicalReadCoordinatorRef.current.reset(
+            canonicalReadRouteGenerationRef.current,
+            canonicalReadHydrationGenerationRef.current
+          );
+        }
         canonicalConversationIdentityRef.current = null;
         canonicalConfirmedDetailRef.current = false;
         canonicalConfirmedMessagesRef.current = false;
+        setCanonicalReadSnapshot(null);
       }
 
       if (canonicalRouteChanged) {
@@ -3068,20 +3192,61 @@ useEffect(() => {
     isHiringThread,
     isCanonicalThread,
     isCanonicalEmergencyThread,
+    conversationType,
     canonicalConversationId,
     canonicalReloadKey,
     allowLegacyQuoteMessageFetch,
+    rawStoredConversationType,
   ]);
 
   useEffect(() => {
-    const registry = getConversationRegistry();
-    const selectedId = String(conversationId);
-    const selectedItem = registry.find(
-      (item) => String(item.id) === selectedId
-    );
+    const routeGeneration = canonicalReadRouteGenerationRef.current;
+    const hydrationGeneration = canonicalReadHydrationGenerationRef.current;
+    const candidate = getCanonicalConversationReadCandidate({
+      threadType: conversationType,
+      routeConversationId: canonicalConversationId,
+      detailConversationId: canonicalConversationDetail?.conversationId,
+      routeGeneration,
+      hydrationGeneration,
+      messagesPhase: canonicalMessagesPhase,
+      visibleMessages: messages,
+      snapshot: canonicalReadSnapshot,
+    });
 
-    markConversationRead(conversationId, selectedItem || {}, currentViewerRole);
-  }, [conversationId]);
+    if (!candidate) return undefined;
+
+    const scheduled = canonicalReadCoordinatorRef.current?.schedule(candidate);
+    if (!scheduled) return undefined;
+
+    return () => {
+      canonicalReadCoordinatorRef.current?.cancelScheduled(candidate);
+    };
+  }, [
+    canonicalConversationDetail?.conversationId,
+    canonicalConversationId,
+    canonicalMessagesPhase,
+    canonicalReadSnapshot,
+    conversationType,
+    messages,
+  ]);
+
+  useEffect(() => {
+    if (isCanonicalThread) return;
+
+    const selectedItem = resolveSupportedLegacyConversationRecord({
+      conversationId,
+      isCanonicalThread,
+      threadType: rawStoredConversationType,
+    });
+    if (!selectedItem) return;
+
+    markConversationRead(conversationId, selectedItem, currentViewerRole);
+  }, [
+    conversationId,
+    currentViewerRole,
+    isCanonicalThread,
+    rawStoredConversationType,
+  ]);
 
   useEffect(() => {
     if (isCanonicalThread) return;
@@ -3276,26 +3441,38 @@ useEffect(() => {
       return nextMessages;
     });
 
+    const supportedLegacyRecord = resolveSupportedLegacyConversationRecord({
+      conversationId,
+      isCanonicalThread,
+      threadType: rawStoredConversationType,
+    });
     try {
-      markConversationRead(conversationId, {}, currentViewerRole);
-      markConversationUnreadForRecipient(conversationId, currentViewerRole, {
-        project_title:
-          activeHeaderProject ||
-          "Conversation",
-        project_description:
-          messageWithRole.title ||
-          messageWithRole.text ||
-          "New message",
-        homeowner_email:
-          (isHiringThread ? hiringParticipantName : resolvedCustomerIdentity.name) ||
-          "Contact",
-        conversation_type: conversationType || "standard",
-        positionTitle: isHiringThread ? hiringPositionTitle : "",
-        applicantName: isHiringThread ? hiringParticipantName : "",
-        businessName: isHiringThread ? hiringBusinessName : "",
-        source: isHiringThread ? "hiring_message" : "",
-        saved_to_history: false,
-      });
+      if (supportedLegacyRecord) {
+        markConversationRead(
+          conversationId,
+          supportedLegacyRecord,
+          currentViewerRole
+        );
+        markConversationUnreadForRecipient(conversationId, currentViewerRole, {
+          project_title:
+            activeHeaderProject ||
+            "Conversation",
+          project_description:
+            messageWithRole.title ||
+            messageWithRole.text ||
+            "New message",
+          homeowner_email:
+            (isHiringThread
+              ? hiringParticipantName
+              : resolvedCustomerIdentity.name) || "Contact",
+          conversation_type: conversationType || "standard",
+          positionTitle: isHiringThread ? hiringPositionTitle : "",
+          applicantName: isHiringThread ? hiringParticipantName : "",
+          businessName: isHiringThread ? hiringBusinessName : "",
+          source: isHiringThread ? "hiring_message" : "",
+          saved_to_history: false,
+        });
+      }
     } catch (error) {
       console.warn("Conversation registry update failed; message remains visible", error);
     }
