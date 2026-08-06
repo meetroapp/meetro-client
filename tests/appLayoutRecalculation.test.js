@@ -267,7 +267,11 @@ test("app-wide desktop surfaces consume the shared coordinator and CSS shell", (
   assert.match(conversationSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
   assert.match(conversationSource, /appLayoutMetrics\.layoutWidth > appLayoutMetrics\.layoutHeight/);
   assert.doesNotMatch(conversationSource, /matchMedia\("\(orientation: landscape\)"\)/);
-  assert.match(messagesSource, /const \[messageSection, setMessageSectionState\] = useState/);
+  assert.match(messagesSource, /useReducer\(\s*communicationWorkspaceReducer/);
+  assert.match(
+    messagesSource,
+    /const messageSection =\s*routeDerivedWorkspace \|\| communicationWorkspaceState\.activeWorkspace/
+  );
   assert.match(messagesSource, /const \[activeSplitConversationId, setActiveSplitConversationId\] = useState/);
   assert.doesNotMatch(appLayoutSource, /(?:reload|location\.(?:assign|replace))/);
   assert.doesNotMatch(appLayoutSource, /localStorage\.(?:clear|removeItem)/);

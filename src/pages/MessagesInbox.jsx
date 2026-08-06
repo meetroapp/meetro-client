@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { getCommunicationLayout } from "../utils/communicationLayout";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
@@ -47,6 +47,17 @@ import {
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
+import {
+  COMMUNICATION_SELECTION_KINDS,
+  COMMUNICATION_WORKSPACE_ACTIONS,
+  communicationWorkspaceReducer,
+  createCommunicationWorkspaceState,
+  getCommunicationWorkspaceForConversation,
+  getCommunicationWorkspaceMemory,
+  isCommunicationRecordEligibleForWorkspace,
+  planCommunicationWorkspaceTransition,
+  resolveCommunicationEmergencyContext,
+} from "../utils/communicationWorkspaceState";
 import {
   createRelationshipLayerModel,
   isInactiveImportedContact,
@@ -618,19 +629,63 @@ function MessagesInbox({ setPage, currentPage }) {
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
+  const emergencyContextAccountModeRef = useRef(activeAccountMode);
   const [compactContextOpen, setCompactContextOpen] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
-    routedConversationId || localStorage.getItem("activeConversationId") || ""
+    routedConversationId || ""
   );
   const [
     selectedSplitCanonicalConversationId,
     setActiveSplitCanonicalConversationId,
   ] = useState(routedConversationId || null);
   const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [messageSection, setMessageSectionState] = useState(
-    normalizeMessageSection(localStorage.getItem("meetroMessageSection"))
-  );
+  const [communicationWorkspaceState, dispatchCommunicationWorkspace] =
+    useReducer(
+      communicationWorkspaceReducer,
+      {
+        activeWorkspace: normalizeMessageSection(
+          localStorage.getItem("meetroMessageSection")
+        ),
+      },
+      createCommunicationWorkspaceState
+    );
+  const suppressedRoutedConversationIdRef = useRef("");
+  const unsuppressedRoutedConversationId =
+    String(suppressedRoutedConversationIdRef.current) ===
+    String(routedConversationId || "")
+      ? ""
+      : routedConversationId;
+  const routedWorkspaceRecord = unsuppressedRoutedConversationId
+    ? quotes.find(
+        (record) => {
+          const provenance = getConversationRecordProvenance(record);
+
+          return (
+            provenance.type === "canonical" &&
+            provenance.conversationId === unsuppressedRoutedConversationId
+          );
+        }
+      )
+    : null;
+  const routeWorkspaceCandidate = routedWorkspaceRecord
+    ? getCommunicationWorkspaceForConversation(routedWorkspaceRecord, {
+        includeHistory: false,
+      })
+    : "";
+  const routeDerivedWorkspace = MESSAGE_SECTION_OPTIONS.some(
+    ([workspace]) => workspace === routeWorkspaceCandidate
+  )
+    ? routeWorkspaceCandidate
+    : "";
+  const activeRoutedConversationId = routeDerivedWorkspace
+    ? unsuppressedRoutedConversationId
+    : "";
+  const messageSection =
+    routeDerivedWorkspace || communicationWorkspaceState.activeWorkspace;
+  const searchQuery = getCommunicationWorkspaceMemory(
+    communicationWorkspaceState,
+    messageSection
+  ).searchQuery;
   const [activeRelationshipId, setActiveRelationshipId] = useState("");
   const [relationshipView, setRelationshipViewState] = useState(
     normalizeRelationshipView(localStorage.getItem("meetroRelationshipView"))
@@ -665,11 +720,82 @@ function MessagesInbox({ setPage, currentPage }) {
     conversationStarter || relationshipComposer?.returnToStarter
   );
 
+  const setSearchQuery = (search) => {
+    dispatchCommunicationWorkspace({
+      type: COMMUNICATION_WORKSPACE_ACTIONS.SET_SEARCH,
+      workspace: messageSection,
+      searchQuery: search,
+    });
+  };
+
+  const rememberWorkspaceSelection = (workspace, selection) => {
+    dispatchCommunicationWorkspace({
+      type: COMMUNICATION_WORKSPACE_ACTIONS.REMEMBER_SELECTION,
+      workspace,
+      selection,
+    });
+  };
+
   const setMessageSection = (section) => {
-    const nextSection = normalizeMessageSection(section);
+    const transition = planCommunicationWorkspaceTransition(
+      communicationWorkspaceState,
+      section,
+      quotes,
+      {
+        getRecordId: (record) =>
+          normalizeCanonicalConversationId(
+            record.conversationId ||
+              record.conversation_id ||
+              record.canonicalConversationId ||
+              record.id
+          ),
+        getUnreadCount: (record) => record.unread_count,
+        isCanonicalRecord: (record) =>
+          getConversationRecordProvenance(record).type === "canonical",
+        isEligible: (record) =>
+          record.archived !== true &&
+          isCommunicationRecordEligibleForWorkspace(record, section) &&
+          conversationMatchesMessageSection(record, section),
+      }
+    );
+    if (!transition.valid) return;
+
+    const nextSection = transition.activeWorkspace;
+    const workspaceChanged = nextSection !== messageSection;
+
+    if (workspaceChanged) {
+      suppressedRoutedConversationIdRef.current = String(
+        routedConversationId || ""
+      );
+      setActiveEmergencyContext(null);
+      setCompactContextOpen(false);
+
+      const restorableRecord = isSplitPane
+        ? transition.selectedRecord
+        : null;
+      const restoredTarget = restorableRecord
+        ? getCanonicalConversationActionTarget(restorableRecord, {
+            returnPage: "messagesInbox",
+            preferCommunicationCenterShell: true,
+          })
+        : null;
+
+      if (restoredTarget?.ok) {
+        setActiveSplitConversationId(String(restoredTarget.conversationId));
+        setActiveSplitCanonicalConversationId(restoredTarget.conversationId);
+        setPage(restoredTarget.route);
+      } else {
+        setActiveSplitConversationId("");
+        setActiveSplitCanonicalConversationId(null);
+        if (routedConversationId) setPage("messagesInbox");
+      }
+    }
 
     localStorage.setItem("meetroMessageSection", nextSection);
-    setMessageSectionState(nextSection);
+    dispatchCommunicationWorkspace({
+      type: COMMUNICATION_WORKSPACE_ACTIONS.ACTIVATE,
+      workspace: nextSection,
+    });
     setRelationshipViewMenuOpen(false);
     setRelationshipActionMenuOpen(false);
     setContactEntryMode("closed");
@@ -683,6 +809,15 @@ function MessagesInbox({ setPage, currentPage }) {
     localStorage.removeItem("meetroMessagesOpenSavedHistory");
     setSavedHistoryOpen(false);
   };
+
+  useEffect(() => {
+    if (
+      String(suppressedRoutedConversationIdRef.current || "") !==
+      String(routedConversationId || "")
+    ) {
+      suppressedRoutedConversationIdRef.current = "";
+    }
+  }, [routedConversationId]);
 
   const setRelationshipView = (view) => {
     const nextView = normalizeRelationshipView(view);
@@ -853,6 +988,63 @@ function MessagesInbox({ setPage, currentPage }) {
       })
     );
   }, [quotes]);
+
+  useEffect(() => {
+    const accountModeChanged =
+      emergencyContextAccountModeRef.current !== activeAccountMode;
+    emergencyContextAccountModeRef.current = activeAccountMode;
+    if (!activeEmergencyContext) return;
+
+    const selectedCanonicalConversationId =
+      activeRoutedConversationId ||
+      (routedConversationId ? null : selectedSplitCanonicalConversationId);
+    const activeRegistryConversation =
+      messageSection === "emergency" && selectedCanonicalConversationId
+        ? quotes.find((record) => {
+            const provenance = getConversationRecordProvenance(record);
+
+            return (
+              provenance.type === "canonical" &&
+              provenance.conversationId === selectedCanonicalConversationId &&
+              !isSavedChatHistoryConversation(record) &&
+              getCommunicationWorkspaceForConversation(record, {
+                includeHistory: false,
+              }) === "emergency"
+            );
+          }) || null
+        : null;
+    const retainedContext = resolveCommunicationEmergencyContext(
+      activeEmergencyContext,
+      {
+        activeWorkspace: messageSection,
+        activeConversationId: selectedCanonicalConversationId,
+        activeConversation: activeRegistryConversation,
+        getConversationId: (record) =>
+          getConversationRecordProvenance(record).conversationId,
+        isCanonicalRecord: (record) =>
+          getConversationRecordProvenance(record).type === "canonical",
+        isEligible: (record) =>
+          !isSavedChatHistoryConversation(record) &&
+          getCommunicationWorkspaceForConversation(record, {
+            includeHistory: false,
+          }) === "emergency",
+      }
+    );
+
+    if (accountModeChanged || !retainedContext) {
+      setActiveEmergencyContext((current) =>
+        current === activeEmergencyContext ? null : current
+      );
+    }
+  }, [
+    activeAccountMode,
+    activeEmergencyContext,
+    activeRoutedConversationId,
+    messageSection,
+    quotes,
+    routedConversationId,
+    selectedSplitCanonicalConversationId,
+  ]);
 
   function getRegistryConversationsForList() {
     return getConversationRegistry().map((item) => ({
@@ -1232,6 +1424,13 @@ function MessagesInbox({ setPage, currentPage }) {
       (isCanonicalConversation || canonicalEmergencyId)
     ) {
       const canonicalConversationId = canonicalTarget.conversationId;
+      rememberWorkspaceSelection(
+        options.workspace || getCommunicationWorkspaceForConversation(quote),
+        {
+          kind: COMMUNICATION_SELECTION_KINDS.CANONICAL_CONVERSATION,
+          conversationId: canonicalConversationId,
+        }
+      );
 
       if (canonicalEmergencyId) {
         setQuotes((current) =>
@@ -1263,6 +1462,15 @@ function MessagesInbox({ setPage, currentPage }) {
 
     const conversation = prepareConversation(quote, { updateList: false });
     if (!conversation) return;
+
+    rememberWorkspaceSelection(
+      options.workspace ||
+        getCommunicationWorkspaceForConversation(conversation),
+      {
+        kind: COMMUNICATION_SELECTION_KINDS.COMPATIBILITY_CONVERSATION,
+        compatibilityId: String(conversation.id),
+      }
+    );
 
     const shouldUseSplitPane =
       isSplitPane &&
@@ -1317,6 +1525,7 @@ function MessagesInbox({ setPage, currentPage }) {
     openConversation(conversation, {
       preferSplitPane: isSplitPane && (!savedHistory || isEmergencyCanonicalThread),
       forceRoute: !isSplitPane && !isEmergencyCanonicalThread,
+      workspace: savedHistory ? "history" : messageSection,
     });
   }
 
@@ -1554,13 +1763,11 @@ function MessagesInbox({ setPage, currentPage }) {
   function conversationMatchesMessageSection(quote = {}, section = "conversations") {
     if (!isRealConversationThread(quote)) return false;
     if (isSavedChatHistoryConversation(quote)) return false;
-    if (section === "emergency") return isEmergencyConversationType(quote);
-    if (section === "hiring") return isHiringConversation(quote);
-    if (section === "conversations") {
-      return !isEmergencyConversationType(quote) && !isHiringConversation(quote);
+    if (!["conversations", "hiring", "emergency"].includes(section)) {
+      return false;
     }
 
-    return false;
+    return getCommunicationWorkspaceForConversation(quote) === section;
   }
 
   function getConversationNextStep(quote) {
@@ -1781,6 +1988,23 @@ function MessagesInbox({ setPage, currentPage }) {
     };
   }
 
+  function getWorkspaceLandingText() {
+    if (messageSection === "contacts") {
+      return t("messagesNoContactsText", language);
+    }
+    if (messageSection === "hiring") {
+      return t("messagesNoHiringConversationsText", language);
+    }
+    if (messageSection === "emergency") {
+      return t("messagesNoEmergencyConversationsText", language);
+    }
+    if (messageSection === "history") {
+      return t("messagesSavedHistoryDescription", language);
+    }
+
+    return t("messagesSelectConversation", language);
+  }
+
   function reconnectMessagesAccount() {
     clearMeetroSession();
     setPage("login");
@@ -1862,10 +2086,11 @@ function MessagesInbox({ setPage, currentPage }) {
   );
   const emptyCopy = getEmptyMessageCopy();
   const activeSplitCanonicalConversationId =
-    routedConversationId ||
-    (canonicalRouteContext.valid
-      ? selectedSplitCanonicalConversationId
-      : null);
+    activeRoutedConversationId ||
+    (routedConversationId ? null : selectedSplitCanonicalConversationId);
+  const activeCompatibilityConversationId = routedConversationId
+    ? ""
+    : activeSplitConversationId;
   const isActiveSplitConversation = (quote = {}) => {
     const conversation = normalizeConversationForOpen(quote);
     if (!conversation) return false;
@@ -1873,32 +2098,43 @@ function MessagesInbox({ setPage, currentPage }) {
     const selectedId = getActiveSplitSelectionId(
       conversation,
       activeSplitCanonicalConversationId,
-      activeSplitConversationId
+      activeCompatibilityConversationId
     );
 
     return Boolean(selectedId) && String(conversation.id) === selectedId;
   };
   const listedActiveSplitConversation =
     searchedVisibleQuotes.find(isActiveSplitConversation) ||
-    liveIdentityQuotes.find(isActiveSplitConversation);
-  const routedSplitConversation = routedConversationId
-    ? {
-        id: routedConversationId,
-        conversationId: canonicalRouteContext.conversationId,
-        conversation_id: canonicalRouteContext.conversationId,
-        threadType: CONVERSATION_THREAD_TYPES.CANONICAL,
-        conversation_type: CONVERSATION_THREAD_TYPES.CANONICAL,
-      }
-    : null;
+    sectionConversationQuotes.find(isActiveSplitConversation);
+  const routedSplitConversation =
+    activeRoutedConversationId &&
+    routedWorkspaceRecord &&
+    getCommunicationWorkspaceForConversation(routedWorkspaceRecord, {
+      includeHistory: false,
+    }) === routeDerivedWorkspace
+      ? routedWorkspaceRecord
+      : null;
   const activeSplitConversation =
     listedActiveSplitConversation || routedSplitConversation;
   const activeWorkspaceConversation = activeSplitConversation
     ? normalizeConversationForOpen(activeSplitConversation)
     : null;
+  const eligibleActiveEmergencyContext =
+    activeSplitConversation && activeWorkspaceConversation
+      ? resolveCommunicationEmergencyContext(activeEmergencyContext, {
+          activeWorkspace: messageSection,
+          activeConversationId: activeSplitCanonicalConversationId,
+          activeConversation: activeSplitConversation,
+          getConversationId: (record) =>
+            getConversationRecordProvenance(record).conversationId,
+          isCanonicalRecord: (record) =>
+            getConversationRecordProvenance(record).type === "canonical",
+          isEligible: (record) =>
+            conversationMatchesMessageSection(record, "emergency"),
+        })
+      : null;
   const activeEmergencyContextMatchesConversation = Boolean(
-    activeEmergencyContext?.detail?.type === "emergency" &&
-      String(activeEmergencyContext.conversationId) ===
-        String(activeSplitCanonicalConversationId)
+    eligibleActiveEmergencyContext
   );
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
@@ -2624,6 +2860,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function openContactCard(relationship) {
     if (!relationship) return;
+    rememberWorkspaceSelection("contacts", {
+      kind: COMMUNICATION_SELECTION_KINDS.RELATIONSHIP,
+      relationshipId: String(relationship.id || ""),
+    });
     relationshipIdentityReturnScrollRef.current =
       typeof window === "undefined"
         ? 0
@@ -3221,7 +3461,7 @@ function MessagesInbox({ setPage, currentPage }) {
           data-emergency-context-panel="canonical"
         >
           <EmergencyConversationContextPanel
-            detail={activeEmergencyContext.detail}
+            detail={eligibleActiveEmergencyContext.detail}
             language={language}
           />
         </aside>
@@ -4062,18 +4302,17 @@ function MessagesInbox({ setPage, currentPage }) {
     setQuotes((current) => dedupeConversations([item, ...current]));
     if (createsContactPlaceholder) {
       if (shouldReturnToStarter) {
-        setMessageSectionState("contacts");
-        localStorage.setItem("meetroMessageSection", "contacts");
-        setConversationStarter((current) =>
-          current
-            ? {
-                ...current,
-                step: "select",
-                source: "contacts",
-                notice: `${name} was saved. Invite them to Meetro before starting a conversation.`,
-              }
-            : createEmptyConversationStarter("single")
-        );
+        const nextStarter = conversationStarter
+          ? {
+              ...conversationStarter,
+              step: "select",
+              source: "contacts",
+              notice: `${name} was saved. Invite them to Meetro before starting a conversation.`,
+            }
+          : createEmptyConversationStarter("single");
+
+        setMessageSection("contacts");
+        setConversationStarter(nextStarter);
       } else {
         setMessageSection("contacts");
         setActiveContactCardSnapshot(null);
@@ -5609,7 +5848,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 <div style={splitPlaceholderIcon} aria-hidden="true">MSG</div>
                 <h2 style={splitPlaceholderTitle}>{t("communicationCenterTitle")}</h2>
                 <p style={splitPlaceholderText}>
-                  {t("messagesSelectConversation", language)}
+                  {getWorkspaceLandingText()}
                 </p>
               </div>
             )}

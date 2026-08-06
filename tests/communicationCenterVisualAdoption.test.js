@@ -60,8 +60,10 @@ test("Communication Center preserves live conversation routing and does not intr
   assert.match(messagesSource, /function openConversationRow\(summaryOrRecord = \{\}, options = \{\}\)/);
   assert.match(messagesSource, /setPage\("conversationThread"\)/);
   assert.match(messagesSource, /searchedVisibleQuotes\.map\(\(quote\) => renderConversationRow\(quote\)\)/);
-  assert.match(messagesSource, /if \(section === "hiring"\) return isHiringConversation\(quote\)/);
-  assert.match(messagesSource, /if \(section === "emergency"\) return isEmergencyConversationType\(quote\)/);
+  assert.match(
+    messagesSource,
+    /return getCommunicationWorkspaceForConversation\(quote\) === section/
+  );
   assert.doesNotMatch(messagesSource, /setActiveAccountMode\("personal"\)|setActiveAccountMode\("business"\)/);
 });
 

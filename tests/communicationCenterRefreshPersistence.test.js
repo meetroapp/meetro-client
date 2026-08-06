@@ -65,7 +65,7 @@ function getRecordProvenance(record = {}) {
   };
 }
 
-function resolveRefreshSelection({ route, records = [], storedId = "" }) {
+function resolveRefreshSelection({ route, records = [] }) {
   const parsed = parseCanonicalConversationRoute(route);
   const routedId =
     parsed.valid &&
@@ -84,20 +84,10 @@ function resolveRefreshSelection({ route, records = [], storedId = "" }) {
       );
     });
 
-    return canonicalMatch || { id: routedId, routedOnly: true };
+    return canonicalMatch || null;
   }
 
-  const legacyMatch = records.find((record) => {
-    const provenance = getRecordProvenance(record);
-
-    return (
-      provenance.type === "legacy" &&
-      Boolean(storedId) &&
-      String(record.id) === String(storedId)
-    );
-  });
-
-  return legacyMatch || null;
+  return null;
 }
 
 test("desktop canonical selection emits the governed Communication Center shell route", () => {
@@ -166,7 +156,7 @@ test("routed canonical identity wins over stale storage and same-name relationsh
   assert.equal(selected.participantName, "Liam Molina");
   assert.match(
     splitSelectionSource,
-    /getActiveSplitSelectionId\(\s*conversation,\s*activeSplitCanonicalConversationId,\s*activeSplitConversationId/
+    /getActiveSplitSelectionId\(\s*conversation,\s*activeSplitCanonicalConversationId,\s*activeCompatibilityConversationId/
   );
 });
 
@@ -208,10 +198,10 @@ test("a routed canonical id absent from the collection cannot substitute another
     storedId: "92",
   });
 
-  assert.deepEqual(selected, { id: 91, routedOnly: true });
+  assert.equal(selected, null);
   assert.match(
     splitSelectionSource,
-    /const routedSplitConversation = routedConversationId\s*\? \{[\s\S]*id: routedConversationId/
+    /const routedSplitConversation =[\s\S]*activeRoutedConversationId &&[\s\S]*routedWorkspaceRecord &&[\s\S]*\? routedWorkspaceRecord\s*:\s*null/
   );
 });
 
@@ -282,7 +272,7 @@ test("canonical Emergency selection uses the same governed route identity", () =
   assert.equal(route.shell, CANONICAL_CONVERSATION_COMMUNICATION_SHELL);
 });
 
-test("genuine legacy records retain their isolated stored fallback", () => {
+test("bare Messages does not treat a stored legacy id as selection authority", () => {
   const selected = resolveRefreshSelection({
     route: "#messagesInbox",
     records: [
@@ -294,7 +284,7 @@ test("genuine legacy records retain their isolated stored fallback", () => {
     storedId: "relationship-chat-7",
   });
 
-  assert.equal(selected.id, "relationship-chat-7");
+  assert.equal(selected, null);
 });
 
 test("routed canonical identity globally outranks a stale explicit legacy row", () => {
@@ -335,7 +325,7 @@ test("missing routed canonical row cannot fall back to stored legacy selection",
     storedId: "legacy-92",
   });
 
-  assert.deepEqual(selected, { id: 91, routedOnly: true });
+  assert.equal(selected, null);
 });
 
 test("canonical-capable incomplete records are not implicitly legacy", () => {

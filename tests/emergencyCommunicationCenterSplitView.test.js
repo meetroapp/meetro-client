@@ -342,7 +342,7 @@ test("canonical request identity remains distinct from conversation routing iden
 test("direct canonical route recovery does not depend on selectedConversation storage", () => {
   assert.match(
     inboxSource,
-    /const routedSplitConversation =[\s\S]*canonicalRouteContext\.conversationId[\s\S]*CONVERSATION_THREAD_TYPES\.CANONICAL/
+    /const routedSplitConversation =[\s\S]*activeRoutedConversationId &&[\s\S]*routedWorkspaceRecord &&[\s\S]*getCommunicationWorkspaceForConversation\(routedWorkspaceRecord, \{[\s\S]*includeHistory: false[\s\S]*\}\) === routeDerivedWorkspace[\s\S]*\? routedWorkspaceRecord\s*:\s*null/
   );
   assert.doesNotMatch(
     appSource.slice(

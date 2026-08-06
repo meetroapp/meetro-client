@@ -453,7 +453,10 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /function renderConversationRow\(quote = \{\}, options = \{\}\)/);
   assert.match(messagesSource, /searchedVisibleQuotes\.map\(\(quote\) => renderConversationRow\(quote\)\)/);
   assert.match(messagesSource, /function conversationMatchesMessageSection\(quote = \{\}, section = "conversations"\)/);
-  assert.match(messagesSource, /if \(section === "emergency"\) return isEmergencyConversationType\(quote\)/);
+  assert.match(
+    messagesSource,
+    /return getCommunicationWorkspaceForConversation\(quote\) === section/
+  );
   assert.match(messagesSource, /function openConversationRow\(summaryOrRecord = \{\}, options = \{\}\)/);
   assert.match(messagesSource, /function stageConversationForThread\(quote = \{\}\)/);
   assert.match(messagesSource, /safeSetStorage\("selectedConversation", JSON\.stringify\(threadPayload\)\)/);
