@@ -64,8 +64,11 @@ test("Request Help preserves mobile padding and bottom navigation clearance", ()
   );
   assert.match(
     uploadSource,
-    /padding-bottom: calc\(88px \+ env\(safe-area-inset-bottom, 0px\)\) !important;/
+    /padding-bottom: calc\(168px \+ env\(safe-area-inset-bottom, 0px\)\) !important;/
   );
+  assert.match(uploadSource, /\.request-help-manual-form \{/);
+  assert.match(uploadSource, /scroll-margin-bottom: calc\(176px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(uploadSource, /const requestActionBar = \{[\s\S]*position: "relative"/);
   assert.match(uploadSource, /<BottomNav setPage=\{setPage\} currentPage="upload" \/>/);
 });
 

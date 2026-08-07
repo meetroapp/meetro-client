@@ -1032,6 +1032,8 @@ function Upload({ setPage }) {
   const draftReviewModel = buildJobRequestReviewModel(draft);
   const draftReadiness = draftReviewModel.readiness;
   const guidance = draftReadiness.nextRecommendedPrompt;
+  const hasSelectedService = Boolean(selectedServiceOptionId && selectedServiceLabel);
+  const serviceConfirmed = hasSelectedService && !serviceSuggested;
   const reviewItems = [
     {
       label: requestHelpCopy.service,
@@ -1053,9 +1055,23 @@ function Upload({ setPage }) {
   ];
   const progressItems = [
     { key: "problem", label: t("jobRequestProgressProblem", language), done: Boolean(description.trim()) },
-    { key: "service", label: t("jobRequestProgressService", language), done: Boolean(selectedServiceOptionId) },
-    { key: "address", label: t("jobRequestProgressAddress", language), done: Boolean(location.trim()) },
-    { key: "photos", label: t("jobRequestProgressPhotos", language), done: projectPhotos.length > 0, optional: true },
+    {
+      key: "service",
+      label: t(
+        selectedServiceOptionId ? "jobRequestProgressServiceSelected" : "jobRequestProgressChooseService",
+        language
+      ),
+      done: Boolean(selectedServiceOptionId),
+    },
+    {
+      key: "address",
+      label: t(
+        location.trim() ? "jobRequestProgressAddressAdded" : "jobRequestProgressAddServiceAddress",
+        language
+      ),
+      done: Boolean(location.trim()),
+    },
+    { key: "photos", label: t("jobRequestProgressPhotos", language), done: projectPhotos.length > 0 },
   ];
   const liveDraftSections = [
     {
@@ -1417,7 +1433,7 @@ function Upload({ setPage }) {
           <form
           ref={manualDetailsRef}
           id="request-details-manual-form"
-          className="meetro-visual-surface"
+          className="meetro-visual-surface request-help-manual-form"
           style={cardStyle}
           onSubmit={handleReviewRequest}
           noValidate
@@ -1485,7 +1501,7 @@ function Upload({ setPage }) {
           <h3 id="request-service-heading" style={manualSectionTitle}>
             {requestHelpCopy.service}
           </h3>
-          {selectedServiceLabel ? (
+          {hasSelectedService ? (
             <div style={selectedServiceCard}>
               <span style={selectedServiceLabelText}>
                 {serviceSuggested
@@ -1493,24 +1509,42 @@ function Upload({ setPage }) {
                   : t("jobRequestDraftReviewService", language)}
               </span>
               <strong style={selectedServiceValue}>{selectedServiceLabel}</strong>
+              {serviceSuggested && (
+                <p style={selectedServiceHelpText}>
+                  {t("jobRequestSuggestedServiceHelp", language)}
+                </p>
+              )}
+              {serviceSuggested && (
+                <button
+                  type="button"
+                  style={changeServiceButton}
+                  onClick={acceptAssistantServiceSuggestion}
+                >
+                  {t("jobRequestUseThisService", language)}
+                </button>
+              )}
               <button
                 type="button"
                 style={changeServiceButton}
                 onClick={() => setServiceSelectorOpen(true)}
               >
-                {t("change")}
+                {serviceConfirmed
+                  ? t("jobRequestChangeService", language)
+                  : t("jobRequestChooseAnother", language)}
               </button>
             </div>
           ) : (
             <div style={selectedServiceCard}>
-              <span style={selectedServiceLabelText}>{t("jobRequestSuggestedService", language)}</span>
-              <strong style={selectedServiceValue}>{t("chooseClosestMatch")}</strong>
+              <span style={selectedServiceLabelText}>{requestHelpCopy.service}</span>
+              <p style={selectedServiceHelpText}>
+                {t("jobRequestChooseServiceHelp", language)}
+              </p>
               <button
                 type="button"
                 style={changeServiceButton}
                 onClick={() => setServiceSelectorOpen(true)}
               >
-                {t("jobRequestChooseAnother", language)}
+                {t("jobRequestChooseService", language)}
               </button>
             </div>
           )}
@@ -1782,10 +1816,7 @@ function Upload({ setPage }) {
             {progressItems.map((item) => (
               <li key={item.key} style={requestProgressItem}>
                 <span aria-hidden="true">{item.done ? "✓" : "○"}</span>
-                <span>
-                  {item.label}
-                  {item.optional && !item.done ? ` (${requestHelpCopy.optional})` : ""}
-                </span>
+                <span>{item.label}</span>
               </li>
             ))}
           </ul>
@@ -1812,14 +1843,6 @@ function Upload({ setPage }) {
             }}
           >
             {t("jobRequestReviewRequest", language)}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBackToConversation}
-            style={cancelRequestButton}
-          >
-            {t("jobRequestBackToConversation", language)}
           </button>
         </div>
       </form>
@@ -1912,7 +1935,7 @@ function Upload({ setPage }) {
 
       <ServiceSelectorSheet
         open={serviceSelectorOpen}
-        title={t("chooseClosestMatch")}
+        title={t("jobRequestChooseService", language)}
         subtitle={t("requestIntelligencePlaceholder")}
         searchPlaceholder={t("searchServices")}
         options={serviceSelectorOptions}
@@ -1997,7 +2020,7 @@ const requestHelpLayoutStyles = `
     .request-help-page {
       padding-left: max(18px, env(safe-area-inset-left, 0px)) !important;
       padding-right: max(18px, env(safe-area-inset-right, 0px)) !important;
-      padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+      padding-bottom: calc(168px + env(safe-area-inset-bottom, 0px)) !important;
     }
   }
 
@@ -2011,7 +2034,7 @@ const requestHelpLayoutStyles = `
       padding-top: clamp(24px, 2.8vw, 40px) !important;
       padding-left: clamp(24px, 3vw, 48px) !important;
       padding-right: clamp(24px, 3vw, 48px) !important;
-      padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
+      padding-bottom: max(128px, env(safe-area-inset-bottom, 0px)) !important;
     }
 
     #root[data-app-layout="desktop"] .request-help-content-lane {
@@ -2038,6 +2061,11 @@ const requestHelpLayoutStyles = `
     .request-help-page button {
       max-width: 100%;
     }
+  }
+
+  .request-help-manual-form {
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+    scroll-margin-bottom: calc(176px + env(safe-area-inset-bottom, 0px));
   }
 `;
 
@@ -2558,6 +2586,15 @@ const selectedServiceLabelText = {
   fontWeight: 950,
 };
 
+const selectedServiceHelpText = {
+  gridColumn: "1 / -1",
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 800,
+};
+
 const selectedServiceValue = {
   color: "var(--meetro-color-ink)",
   fontSize: "15px",
@@ -2636,6 +2673,7 @@ const requestProgressCard = {
   display: "grid",
   gap: "8px",
   padding: "12px 13px",
+  marginBottom: "8px",
   borderRadius: "16px",
   border: "1px solid rgba(31, 77, 52, 0.16)",
   background: "rgba(240, 249, 244, 0.78)",
@@ -2653,10 +2691,11 @@ const requestProgressList = {
 const requestProgressItem = {
   display: "flex",
   gap: "8px",
-  alignItems: "center",
+  alignItems: "flex-start",
   color: "var(--meetro-color-ink)",
   fontSize: "13px",
   fontWeight: 850,
+  lineHeight: 1.35,
 };
 
 const requestReviewIntroTitle = {
@@ -2772,12 +2811,12 @@ const submissionErrorCard = {
 };
 
 const requestActionBar = {
-  position: "sticky",
-  bottom: "calc(78px + env(safe-area-inset-bottom, 0px))",
+  position: "relative",
   zIndex: 8,
   display: "grid",
   gap: "8px",
-  marginTop: "8px",
+  marginTop: "14px",
+  marginBottom: "18px",
   padding: "10px",
   borderRadius: "18px",
   border: "1px solid var(--meetro-color-line)",

@@ -206,7 +206,7 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /requestMode === "review"/);
   assert.match(uploadSource, /jobRequestBackToConversation/);
   assert.match(uploadSource, /id="request-details-manual-form"/);
-  assert.match(uploadSource, /title=\{t\("chooseClosestMatch"\)\}/);
+  assert.match(uploadSource, /title=\{t\("jobRequestChooseService", language\)\}/);
   assert.match(uploadSource, /searchPlaceholder=\{t\("searchServices"\)\}/);
   assert.match(uploadSource, /id="job-request-conversation-input"/);
   assert.match(uploadSource, /BottomNav/);
@@ -232,6 +232,11 @@ test("new Request Help drafts do not inherit prior workflow address state", () =
 test("manual editor removes pseudo-review and keeps full catalog behind Browse All", () => {
   assert.doesNotMatch(uploadSource, /requestHelpCopy\.reviewTitle/);
   assert.match(uploadSource, /jobRequestProgress/);
+  assert.match(uploadSource, /jobRequestProgressChooseService/);
+  assert.match(uploadSource, /jobRequestProgressAddServiceAddress/);
+  assert.match(uploadSource, /jobRequestProgressServiceSelected/);
+  assert.match(uploadSource, /jobRequestProgressAddressAdded/);
+  assert.doesNotMatch(uploadSource, /optional\) : ""/);
   assert.match(uploadSource, /serviceSuggestions\.map/);
   assert.match(uploadSource, /jobRequestBrowseAllServices/);
   assert.match(uploadSource, /ServiceSelectorSheet/);

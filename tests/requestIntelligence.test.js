@@ -90,7 +90,7 @@ test("request creation keeps manual override available", () => {
   assert.match(uploadSource, /jobRequestSearchServices/);
   assert.match(uploadSource, /jobRequestBrowseAllServices/);
   assert.match(uploadSource, /serviceSuggestions\.map/);
-  assert.match(uploadSource, /t\("change"\)/);
+  assert.match(uploadSource, /jobRequestChangeService/);
 });
 
 test("request intelligence labels exist in supported languages", () => {

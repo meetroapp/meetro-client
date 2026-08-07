@@ -359,11 +359,29 @@ test("request page keeps matching language problem-first and avoids category-fir
   assert.equal(t("chooseClosestMatch", "en"), "Choose closest match");
   assert.match(t("requestMatchRequired", "en"), /closest match/);
   assert.match(uploadSource, /jobRequestSuggestedService/);
-  assert.match(uploadSource, /t\("chooseClosestMatch"\)/);
+  assert.doesNotMatch(uploadSource, /t\("chooseClosestMatch"\)/);
   assert.match(uploadSource, /fieldErrors\.category/);
   assert.match(uploadSource, /\{requestHelpCopy\.matchRequired\}/);
   assert.match(uploadSource, /validateRequestHelpSubmission\(\{/);
   assert.doesNotMatch(uploadSource, /alert\(t\("selectServiceCategory"\)\)/);
+});
+
+test("manual service state uses truthful no-service suggested and confirmed language", () => {
+  assert.match(uploadSource, /const hasSelectedService = Boolean\(selectedServiceOptionId && selectedServiceLabel\)/);
+  assert.match(uploadSource, /const serviceConfirmed = hasSelectedService && !serviceSuggested/);
+  assert.match(uploadSource, /jobRequestChooseServiceHelp/);
+  assert.match(uploadSource, /jobRequestChooseService/);
+  assert.match(uploadSource, /jobRequestSuggestedServiceHelp/);
+  assert.match(uploadSource, /jobRequestUseThisService/);
+  assert.match(uploadSource, /jobRequestChangeService/);
+  assert.equal(t("jobRequestChooseService", "en"), "Choose a service");
+  assert.equal(
+    t("jobRequestChooseServiceHelp", "en"),
+    "Choose the service that best matches your request."
+  );
+  assert.equal(t("jobRequestSuggestedServiceHelp", "en"), "Based on what you described.");
+  assert.equal(t("jobRequestUseThisService", "en"), "Use this");
+  assert.equal(t("jobRequestChangeService", "en"), "Change");
 });
 
 test("request page prepares editable title and details from what the homeowner describes", () => {
@@ -386,10 +404,11 @@ test("Submit Job Request remains primary only on the Review surface", () => {
   assert.match(uploadSource, /style=\{\{\s*\.\.\.primaryButton/);
   assert.match(uploadSource, /style=\{cancelRequestButton\}/);
   assert.match(uploadSource, /const requestActionBar = \{/);
-  assert.match(uploadSource, /bottom: "calc\(78px \+ env\(safe-area-inset-bottom, 0px\)\)"/);
+  assert.match(uploadSource, /position: "relative"/);
   assert.match(uploadSource, /backdropFilter: "blur\(14px\)"/);
   assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*background: "var\(--meetro-surface-paper\)"/);
   assert.match(uploadSource, /const cancelRequestButton = \{[\s\S]*color: "var\(--meetro-color-muted\)"/);
+  assert.doesNotMatch(uploadSource, /onClick=\{handleBackToConversation\}\s*style=\{cancelRequestButton\}/);
   assert.equal(
     t("projectPostedSuccess", "en"),
     "Your request was sent. You can follow what happens next from Home."
@@ -412,6 +431,15 @@ test("Continue to Request and continuity labels exist in supported languages", (
     "requestMatchLabel",
     "chooseClosestMatch",
     "requestMatchRequired",
+    "jobRequestChooseService",
+    "jobRequestChooseServiceHelp",
+    "jobRequestSuggestedServiceHelp",
+    "jobRequestUseThisService",
+    "jobRequestChangeService",
+    "jobRequestProgressChooseService",
+    "jobRequestProgressServiceSelected",
+    "jobRequestProgressAddServiceAddress",
+    "jobRequestProgressAddressAdded",
     "requestReviewIntroTitle",
     "requestReviewIntroText",
     "jobRequestDraftGuidanceTitle",
