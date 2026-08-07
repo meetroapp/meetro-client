@@ -752,10 +752,10 @@ backToHome: "Back to Home",
 
 requestHelp: "Need Help With a Service?",
 
-newProject: "Request Service",
+newProject: "Request Help",
 
 newProjectSubtitle:
-  "Tell us what you need so the right professional can respond.",
+  "Tell Meetro what you need. We'll help organize the details before you send your request.",
 
 projectTitle: "Request Title",
 
@@ -882,7 +882,7 @@ locationExample: "City or Area",
 
 addProjectPhoto: "Add Request Photos",
 
-createPost: "Send Request",
+createPost: "Submit Job Request",
 cancelRequest: "Cancel Request",
 cancelRequestWarning: "Cancel this request? Unsaved changes will be lost.",
 
@@ -2253,10 +2253,10 @@ backToHome: "Volver al Inicio",
 
 requestHelp: "¿Necesitas Ayuda con un Servicio?",
 
-newProject: "Solicitar Servicio",
+newProject: "Solicitar ayuda",
 
 newProjectSubtitle:
-  "Cuéntanos qué necesitas para que responda el profesional adecuado.",
+  "Cuéntale a Meetro qué necesitas. Te ayudaremos a organizar los detalles antes de enviar tu solicitud.",
 
 projectTitle: "Título de la Solicitud",
 
@@ -2385,7 +2385,7 @@ locationExample: "Ciudad o Área",
 
 addProjectPhoto: "Agregar Fotos de la Solicitud",
 
-createPost: "Enviar Solicitud",
+createPost: "Enviar solicitud de trabajo",
 cancelRequest: "Cancelar solicitud",
 cancelRequestWarning: "¿Cancelar esta solicitud? Los cambios no guardados se perderán.",
 
@@ -10778,6 +10778,48 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftStatusConfirmed: "Confirmed",
     jobRequestDraftStatusNeedsReview: "Needs review",
     jobRequestDraftEdit: "Edit",
+    jobRequestConversationTitle: "Conversation",
+    jobRequestConversationWelcome:
+      "Tell me what you need help with. I'll help organize the details before you send your request.",
+    jobRequestConversationQuestion: "What do you need help with?",
+    jobRequestConversationPlaceholder:
+      "Describe what's happening, what you need repaired, or what you'd like done.",
+    jobRequestConversationSend: "Send",
+    jobRequestConversationProcessing: "Organizing your request...",
+    jobRequestConversationReviewing: "Reviewing the details you provided...",
+    jobRequestConversationUnavailable:
+      "Meetro's guided assistance isn't available right now. You can continue entering your request manually.",
+    jobRequestConversationRetryNeeded:
+      "I couldn't confirm whether that went through. You can retry this message or continue manually.",
+    jobRequestConversationConflict:
+      "That request changed while Meetro was organizing it. Retry this action or continue manually.",
+    jobRequestConversationPhotoFirst:
+      "Tell me what you'd like a professional to look at in these photos.",
+    jobRequestConversationPhotosIncluded:
+      "Thanks for adding photos. They'll be included with your request.",
+    jobRequestConversationPhotoSuggestion:
+      "If you have them, a photo of the whole area and a close-up of the issue could help professionals understand the condition.",
+    jobRequestConversationReady:
+      "I have enough information to prepare your request. You can review it now, or add anything else you'd like the professional to know.",
+    jobRequestContinueManually: "Continue Manually",
+    jobRequestRetryInterpretation: "Retry",
+    jobRequestEnterDetailsManually: "Enter Details Manually",
+    jobRequestRequestDetails: "Request Details",
+    jobRequestYourRequest: "Your Request",
+    jobRequestSuggestedService: "Suggested service",
+    jobRequestAcceptSuggestion: "Accept",
+    jobRequestChangeSuggestion: "Change",
+    jobRequestReviewRequest: "Review Request",
+    jobRequestAddMoreDetails: "Add More Details",
+    jobRequestWhatYouNeed: "What you need",
+    jobRequestWhere: "Where",
+    jobRequestTiming: "Timing",
+    jobRequestAdditionalDetails: "Additional details",
+    jobRequestMayNeedProfessionalReview:
+      "A professional can confirm the exact scope after reviewing the condition.",
+    jobRequestSubmittedTitle: "Job Request Submitted",
+    jobRequestViewMyRequest: "View My Request",
+    jobRequestReturnHome: "Return Home",
     fullServiceAddress: "Service Address",
   },
   es: {
@@ -10883,6 +10925,48 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftStatusConfirmed: "Confirmado",
     jobRequestDraftStatusNeedsReview: "Revisar",
     jobRequestDraftEdit: "Editar",
+    jobRequestConversationTitle: "Conversación",
+    jobRequestConversationWelcome:
+      "Cuéntame en qué necesitas ayuda. Te ayudaré a organizar los detalles antes de enviar tu solicitud.",
+    jobRequestConversationQuestion: "¿En qué necesitas ayuda?",
+    jobRequestConversationPlaceholder:
+      "Describe qué está pasando, qué necesitas reparar o qué te gustaría hacer.",
+    jobRequestConversationSend: "Enviar",
+    jobRequestConversationProcessing: "Organizando tu solicitud...",
+    jobRequestConversationReviewing: "Revisando los detalles que compartiste...",
+    jobRequestConversationUnavailable:
+      "La ayuda guiada de Meetro no está disponible ahora. Puedes continuar ingresando tu solicitud manualmente.",
+    jobRequestConversationRetryNeeded:
+      "No pude confirmar si eso se completó. Puedes reintentar este mensaje o continuar manualmente.",
+    jobRequestConversationConflict:
+      "La solicitud cambió mientras Meetro la organizaba. Reintenta esta acción o continúa manualmente.",
+    jobRequestConversationPhotoFirst:
+      "Dime qué quieres que un profesional revise en estas fotos.",
+    jobRequestConversationPhotosIncluded:
+      "Gracias por agregar fotos. Se incluirán con tu solicitud.",
+    jobRequestConversationPhotoSuggestion:
+      "Si las tienes, una foto del área completa y un acercamiento del problema pueden ayudar a entender la condición.",
+    jobRequestConversationReady:
+      "Tengo suficiente información para preparar tu solicitud. Puedes revisarla ahora o agregar cualquier otro detalle.",
+    jobRequestContinueManually: "Continuar manualmente",
+    jobRequestRetryInterpretation: "Reintentar",
+    jobRequestEnterDetailsManually: "Ingresar detalles manualmente",
+    jobRequestRequestDetails: "Detalles de la solicitud",
+    jobRequestYourRequest: "Tu solicitud",
+    jobRequestSuggestedService: "Servicio sugerido",
+    jobRequestAcceptSuggestion: "Aceptar",
+    jobRequestChangeSuggestion: "Cambiar",
+    jobRequestReviewRequest: "Revisar solicitud",
+    jobRequestAddMoreDetails: "Agregar más detalles",
+    jobRequestWhatYouNeed: "Lo que necesitas",
+    jobRequestWhere: "Dónde",
+    jobRequestTiming: "Horario",
+    jobRequestAdditionalDetails: "Detalles adicionales",
+    jobRequestMayNeedProfessionalReview:
+      "Un profesional puede confirmar el alcance exacto después de revisar la condición.",
+    jobRequestSubmittedTitle: "Solicitud enviada",
+    jobRequestViewMyRequest: "Ver mi solicitud",
+    jobRequestReturnHome: "Volver al inicio",
     fullServiceAddress: "Dirección del servicio",
   },
   fr: {
@@ -10988,6 +11072,48 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftStatusConfirmed: "Confirmé",
     jobRequestDraftStatusNeedsReview: "À relire",
     jobRequestDraftEdit: "Modifier",
+    jobRequestConversationTitle: "Conversation",
+    jobRequestConversationWelcome:
+      "Dites-moi l'aide dont vous avez besoin. Je vous aiderai à organiser les détails avant l'envoi.",
+    jobRequestConversationQuestion: "De quoi avez-vous besoin ?",
+    jobRequestConversationPlaceholder:
+      "Décrivez ce qui se passe, ce qui doit être réparé ou ce que vous souhaitez faire.",
+    jobRequestConversationSend: "Envoyer",
+    jobRequestConversationProcessing: "Organisation de votre demande...",
+    jobRequestConversationReviewing: "Relecture des détails fournis...",
+    jobRequestConversationUnavailable:
+      "L'aide guidée de Meetro n'est pas disponible pour le moment. Vous pouvez continuer manuellement.",
+    jobRequestConversationRetryNeeded:
+      "Je n'ai pas pu confirmer si cela a abouti. Réessayez ce message ou continuez manuellement.",
+    jobRequestConversationConflict:
+      "Cette demande a changé pendant que Meetro l'organisait. Réessayez ou continuez manuellement.",
+    jobRequestConversationPhotoFirst:
+      "Dites-moi ce que vous voulez qu'un professionnel regarde dans ces photos.",
+    jobRequestConversationPhotosIncluded:
+      "Merci pour les photos. Elles seront incluses avec votre demande.",
+    jobRequestConversationPhotoSuggestion:
+      "Si vous en avez, une photo de l'ensemble de la zone et un gros plan du problème peuvent aider.",
+    jobRequestConversationReady:
+      "J'ai assez d'informations pour préparer votre demande. Vous pouvez la relire ou ajouter d'autres détails.",
+    jobRequestContinueManually: "Continuer manuellement",
+    jobRequestRetryInterpretation: "Réessayer",
+    jobRequestEnterDetailsManually: "Saisir les détails manuellement",
+    jobRequestRequestDetails: "Détails de la demande",
+    jobRequestYourRequest: "Votre demande",
+    jobRequestSuggestedService: "Service suggéré",
+    jobRequestAcceptSuggestion: "Accepter",
+    jobRequestChangeSuggestion: "Changer",
+    jobRequestReviewRequest: "Relire la demande",
+    jobRequestAddMoreDetails: "Ajouter des détails",
+    jobRequestWhatYouNeed: "Ce dont vous avez besoin",
+    jobRequestWhere: "Où",
+    jobRequestTiming: "Moment",
+    jobRequestAdditionalDetails: "Détails supplémentaires",
+    jobRequestMayNeedProfessionalReview:
+      "Un professionnel pourra confirmer la portée exacte après examen.",
+    jobRequestSubmittedTitle: "Demande envoyée",
+    jobRequestViewMyRequest: "Voir ma demande",
+    jobRequestReturnHome: "Retour à l'accueil",
     fullServiceAddress: "Adresse du service",
   },
   "pt-BR": {
@@ -11093,6 +11219,48 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftStatusConfirmed: "Confirmado",
     jobRequestDraftStatusNeedsReview: "Revisar",
     jobRequestDraftEdit: "Editar",
+    jobRequestConversationTitle: "Conversa",
+    jobRequestConversationWelcome:
+      "Conte-me em que você precisa de ajuda. Vou organizar os detalhes antes do envio.",
+    jobRequestConversationQuestion: "Com o que você precisa de ajuda?",
+    jobRequestConversationPlaceholder:
+      "Descreva o que está acontecendo, o que precisa de reparo ou o que gostaria de fazer.",
+    jobRequestConversationSend: "Enviar",
+    jobRequestConversationProcessing: "Organizando sua solicitação...",
+    jobRequestConversationReviewing: "Revisando os detalhes informados...",
+    jobRequestConversationUnavailable:
+      "A ajuda guiada da Meetro não está disponível agora. Você pode continuar manualmente.",
+    jobRequestConversationRetryNeeded:
+      "Não consegui confirmar se isso foi concluído. Reenvie esta mensagem ou continue manualmente.",
+    jobRequestConversationConflict:
+      "A solicitação mudou enquanto a Meetro a organizava. Tente de novo ou continue manualmente.",
+    jobRequestConversationPhotoFirst:
+      "Diga o que você quer que um profissional veja nestas fotos.",
+    jobRequestConversationPhotosIncluded:
+      "Obrigado por adicionar fotos. Elas serão incluídas na solicitação.",
+    jobRequestConversationPhotoSuggestion:
+      "Se tiver, uma foto da área inteira e um close do problema podem ajudar.",
+    jobRequestConversationReady:
+      "Tenho informações suficientes para preparar sua solicitação. Você pode revisar agora ou adicionar mais detalhes.",
+    jobRequestContinueManually: "Continuar manualmente",
+    jobRequestRetryInterpretation: "Tentar novamente",
+    jobRequestEnterDetailsManually: "Inserir detalhes manualmente",
+    jobRequestRequestDetails: "Detalhes da solicitação",
+    jobRequestYourRequest: "Sua solicitação",
+    jobRequestSuggestedService: "Serviço sugerido",
+    jobRequestAcceptSuggestion: "Aceitar",
+    jobRequestChangeSuggestion: "Alterar",
+    jobRequestReviewRequest: "Revisar solicitação",
+    jobRequestAddMoreDetails: "Adicionar detalhes",
+    jobRequestWhatYouNeed: "O que você precisa",
+    jobRequestWhere: "Onde",
+    jobRequestTiming: "Horário",
+    jobRequestAdditionalDetails: "Detalhes adicionais",
+    jobRequestMayNeedProfessionalReview:
+      "Um profissional pode confirmar o escopo exato após avaliar a condição.",
+    jobRequestSubmittedTitle: "Solicitação enviada",
+    jobRequestViewMyRequest: "Ver minha solicitação",
+    jobRequestReturnHome: "Voltar ao início",
     fullServiceAddress: "Endereço do serviço",
   },
 };

@@ -8,6 +8,10 @@ export * from "./community/index.js";
 export { handleCompanionAsk } from "./companionController.js";
 export { COMPANION_ASK_ROUTE, registerCompanionRoutes } from "./companionRoutes.js";
 export {
+  createFrontendIntelligenceRuntimeRetiredError,
+  FRONTEND_INTELLIGENCE_RUNTIME_AUTHORITY,
+} from "./runtimeAuthority.js";
+export {
   createIntelligenceEngineFailure,
   createIntelligenceEngineSuccess,
   INTELLIGENCE_ENGINE_CONTRACT_VERSION,

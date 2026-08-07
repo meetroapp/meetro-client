@@ -33,15 +33,20 @@ test("Request Help uses a desktop workspace shell with one sidebar offset", () =
   );
 });
 
-test("Request Help keeps the form centered in the available workspace", () => {
+test("Request Help keeps the conversational workspace centered in the available workspace", () => {
   assert.match(uploadSource, /className="request-help-content-lane"/);
+  assert.match(uploadSource, /className="job-request-conversation-workspace"/);
   assert.match(
     uploadSource,
-    /maxWidth: "var\(--meetro-layout-form-max, 860px\)"/
+    /maxWidth: "min\(1120px, 100%\)"/
   );
   assert.match(
     uploadSource,
-    /max-width: min\(var\(--meetro-layout-form-max, 860px\), 100%\) !important;/
+    /max-width: min\(1120px, 100%\) !important;/
+  );
+  assert.match(
+    uploadSource,
+    /grid-template-columns: minmax\(0, 1\.45fr\) minmax\(300px, 0\.8fr\);/
   );
   assert.match(uploadSource, /margin-left: auto !important;/);
   assert.match(uploadSource, /margin-right: auto !important;/);

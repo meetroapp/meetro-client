@@ -30,6 +30,9 @@ import {
   COMPANION_ASK_ROUTE,
   registerCompanionRoutes,
 } from "../intelligence/companionRoutes.js";
+import {
+  FRONTEND_INTELLIGENCE_RUNTIME_AUTHORITY,
+} from "../intelligence/runtimeAuthority.js";
 
 function mockProvider(answer = "I can help using the visible request context.") {
   const calls = [];
@@ -1117,8 +1120,8 @@ test("missing OpenAI key returns normalized failure without provider details", a
   assert.equal("raw" in result, false);
 });
 
-test("Companion Controller exposes POST /api/companion/ask contract shape", async () => {
-  const { provider } = mockProvider("Controller answer");
+test("frontend Companion Controller cannot execute retired server authority", async () => {
+  const { provider, calls } = mockProvider("Controller answer");
   let statusCode = 0;
   let payload = null;
   const res = {
@@ -1132,29 +1135,24 @@ test("Companion Controller exposes POST /api/companion/ask contract shape", asyn
     },
   };
 
-  await handleCompanionAsk(
-    {
-      user: { id: "user-1" },
-      body: { question: "Explain this request", pageContext: "request_detail" },
-    },
-    res,
-    { providers: { openai: provider }, logger: null }
+  await assert.rejects(
+    handleCompanionAsk(
+      {
+        user: { id: "user-1" },
+        body: { question: "Explain this request", pageContext: "request_detail" },
+      },
+      res,
+      { providers: { openai: provider }, logger: null }
+    ),
+    (error) => error.code === "FRONTEND_INTELLIGENCE_RUNTIME_RETIRED"
   );
 
-  assert.equal(statusCode, 200);
-  assert.equal(payload.answer, "Controller answer");
-  assert.equal(payload.intent, "explanation");
-  assert.match(payload.companionSessionId, /^companion-session-/);
-  assert.equal("provider" in payload, false);
-  assert.equal("context" in payload, false);
-  assert.equal("memory" in payload, false);
-  assert.equal("knowledge" in payload, false);
-  assert.equal("capabilities" in payload, false);
-  assert.equal("workflow" in payload, false);
-  assert.equal("relationship" in payload, false);
+  assert.equal(statusCode, 0);
+  assert.equal(payload, null);
+  assert.equal(calls.length, 0);
 });
 
-test("Companion route registers POST /api/companion/ask through the Gateway controller", () => {
+test("frontend Companion route is retained as a non-routable compatibility constant", () => {
   let routePath = "";
   let routeHandler = null;
   const app = {
@@ -1164,11 +1162,25 @@ test("Companion route registers POST /api/companion/ask through the Gateway cont
     },
   };
 
-  registerCompanionRoutes(app);
+  assert.throws(
+    () => registerCompanionRoutes(app),
+    (error) => error.code === "FRONTEND_INTELLIGENCE_RUNTIME_RETIRED"
+  );
 
   assert.equal(COMPANION_ASK_ROUTE, "/api/companion/ask");
-  assert.equal(routePath, "/api/companion/ask");
-  assert.equal(typeof routeHandler, "function");
+  assert.equal(routePath, "");
+  assert.equal(routeHandler, null);
+});
+
+test("frontend Intelligence authority marker points exclusively to backend runtime", () => {
+  assert.deepEqual(FRONTEND_INTELLIGENCE_RUNTIME_AUTHORITY, {
+    status: "compatibility_reference_only",
+    canonicalRepository: "meetro-server",
+    canonicalModule: "server/intelligence",
+    canonicalRoute: "POST /api/companion/ask",
+    frontendRouteRegistrationEnabled: false,
+    removalMilestone: "post-backend-operation-migration",
+  });
 });
 
 test("Existing frontend integration does not call OpenAI directly", () => {

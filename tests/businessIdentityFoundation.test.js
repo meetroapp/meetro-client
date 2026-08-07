@@ -576,9 +576,10 @@ test("multi-select service selector has a visible finish action", () => {
   assert.match(profileSource, /statusMessage=\{saving/);
   assert.match(selectorSource, /role=\{statusIsError \? "alert" : "status"\}/);
 
+  const selectorStart = uploadSource.indexOf("<ServiceSelectorSheet");
   const uploadSelectorBlock = uploadSource.slice(
-    uploadSource.indexOf("<ServiceSelectorSheet"),
-    uploadSource.indexOf("<BottomNav")
+    selectorStart,
+    uploadSource.indexOf("<BottomNav", selectorStart)
   );
   assert.doesNotMatch(uploadSelectorBlock, /\bmultiple\b/);
   assert.match(uploadSelectorBlock, /onSelect=\{selectServiceOption\}/);

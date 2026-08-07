@@ -1,0 +1,199 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  JOB_REQUEST_DRAFT_SOURCE,
+  createJobRequestDraft,
+  updateDraftField,
+} from "../src/utils/jobRequestDraft.js";
+import {
+  JOB_REQUEST_CREATION_CONVERSATION_AUTHORITY,
+  JOB_REQUEST_INTERPRETATION_FAILURE,
+  applyHomeownerConversationText,
+  classifyInterpretationFailure,
+  createInterpretationSuccessMessages,
+  createPhotoFirstPrompt,
+  getHighestValueClarification,
+  getInterpretationFailureMessage,
+  getJobRequestInterpretLocale,
+  hasMeaningfulCreationText,
+  isAssistantSuggestedField,
+} from "../src/utils/jobRequestConversation.js";
+import { buildJobRequestInterpretRequest } from "../src/utils/jobRequestInterpret.js";
+import { t } from "../src/utils/language.js";
+
+const uploadSource = readFileSync(
+  new URL("../src/pages/Upload.jsx", import.meta.url),
+  "utf8"
+);
+const assistantSource = readFileSync(
+  new URL("../src/pages/Assistant.jsx", import.meta.url),
+  "utf8"
+);
+const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+function interpretation() {
+  return {
+    schemaVersion: 1,
+    summary: "Got it. The sink cabinet may need repair after a leak.",
+    draftPatch: { fields: [] },
+    clarifications: [
+      { question: "Has the leak already been repaired?", fieldPath: "timing.urgency" },
+      { question: "Which cabinet is affected?", fieldPath: "location.affectedArea" },
+    ],
+    warnings: [{ code: "inspection", message: "A professional may need to inspect it." }],
+    validation: {
+      status: "accepted",
+      taxonomy: "validated",
+      patchCount: 0,
+      clarificationCount: 2,
+      warningCount: 1,
+    },
+  };
+}
+
+test("creation conversation is explicitly non-canonical UI state", () => {
+  assert.deepEqual(JOB_REQUEST_CREATION_CONVERSATION_AUTHORITY, {
+    status: "non_canonical_ui_state",
+    canonicalSubmission: "explicit_submit_job_request",
+    intelligenceOperation: "job_request.interpret",
+  });
+  assert.doesNotMatch(
+    readFileSync(new URL("../src/utils/jobRequestConversation.js", import.meta.url), "utf8"),
+    /\/posts|ConversationParticipant|professional response|createRelationship/i
+  );
+});
+
+test("homeowner conversation text updates the shared draft with homeowner provenance", () => {
+  let draft = applyHomeownerConversationText(
+    createJobRequestDraft(),
+    "The cabinet under my sink is swollen."
+  );
+  assert.equal(draft.job.description, "The cabinet under my sink is swollen.");
+  assert.equal(draft.fieldMeta.job.description.provenance, JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER);
+  assert.equal(draft.fieldMeta.job.description.confirmed, true);
+
+  draft = applyHomeownerConversationText(draft, "No, the leak is still active.");
+  assert.match(draft.details.additionalNotes, /leak is still active/);
+  assert.equal(
+    draft.fieldMeta.details.additionalNotes.provenance,
+    JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER
+  );
+});
+
+test("success rendering shows one clarification and keeps additional candidates out of the log", () => {
+  const messages = createInterpretationSuccessMessages({
+    interpretation: interpretation(),
+    language: "en",
+    photosAttached: true,
+  });
+  assert.equal(getHighestValueClarification(interpretation()).question, "Has the leak already been repaired?");
+  assert.equal(messages.some((message) => /Got it/.test(message.text)), true);
+  assert.equal(messages.some((message) => /Has the leak already been repaired/.test(message.text)), true);
+  assert.equal(messages.some((message) => /Which cabinet/.test(message.text)), false);
+  assert.equal(messages.some((message) => /included with your request/.test(message.text)), true);
+});
+
+test("failure classification preserves retry and manual fallback language", () => {
+  assert.equal(
+    classifyInterpretationFailure({ classification: "ambiguous" }),
+    JOB_REQUEST_INTERPRETATION_FAILURE.AMBIGUOUS
+  );
+  assert.equal(
+    classifyInterpretationFailure({ classification: "conflict" }),
+    JOB_REQUEST_INTERPRETATION_FAILURE.CONFLICT
+  );
+  assert.equal(
+    classifyInterpretationFailure({ code: "INTELLIGENCE_PROVIDER_NOT_CONFIGURED", status: 503 }),
+    JOB_REQUEST_INTERPRETATION_FAILURE.UNAVAILABLE
+  );
+  assert.match(getInterpretationFailureMessage("ambiguous", "en"), /retry/i);
+  assert.match(getInterpretationFailureMessage("unavailable", "en"), /continue entering/i);
+});
+
+test("photo-first state prompts for text and provider context receives only photosAttached", () => {
+  const prompt = createPhotoFirstPrompt("en");
+  assert.equal(prompt.text, "Tell me what you'd like a professional to look at in these photos.");
+
+  const draft = createJobRequestDraft();
+  draft.media.photos = [
+    {
+      localPhotoId: "photo-private-id",
+      previewUrl: "https://example.test/private-photo.jpg",
+      file: { name: "private-photo.jpg" },
+    },
+  ];
+  const request = buildJobRequestInterpretRequest({
+    text: "Please look at the cabinet.",
+    draft,
+  });
+  const serialized = JSON.stringify(request);
+  assert.equal(request.context.draft.photosAttached, true);
+  assert.equal(serialized.includes("private-photo"), false);
+  assert.equal(serialized.includes("example.test"), false);
+});
+
+test("locale and assistant-suggested field helpers preserve authority semantics", () => {
+  assert.equal(getJobRequestInterpretLocale("en"), "en-US");
+  assert.equal(getJobRequestInterpretLocale("es"), "es-US");
+  assert.equal(getJobRequestInterpretLocale("fr"), "fr-FR");
+  assert.equal(getJobRequestInterpretLocale("pt-BR"), "pt-BR");
+  assert.equal(hasMeaningfulCreationText("ok"), false);
+  assert.equal(hasMeaningfulCreationText("leak"), true);
+
+  const draft = updateDraftField(createJobRequestDraft(), "service.specialty", "plumbing_repairs", {
+    source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_SUGGESTED,
+    confirmed: false,
+  });
+  assert.equal(isAssistantSuggestedField(draft, "service.specialty"), true);
+});
+
+test("Upload is the single ordinary Job Request creation workspace", () => {
+  assert.match(appSource, /page === "upload"/);
+  assert.match(assistantSource, /setPage\("upload"\)/);
+  assert.match(uploadSource, /job-request-conversation-workspace/);
+  assert.match(uploadSource, /requestJobRequestInterpretation/);
+  assert.match(uploadSource, /applyJobRequestInterpretationPatch/);
+  assert.match(uploadSource, /handleConversationSubmit/);
+  assert.match(uploadSource, /handleCreatePost/);
+  assert.match(uploadSource, /authFetch\(\s*"\/posts"/);
+  assert.match(uploadSource, /type="button"[\s\S]*jobRequestReviewRequest/);
+  assert.doesNotMatch(uploadSource, /createRelationship|Professional Response|conversationParticipants/);
+});
+
+test("new conversational labels exist in supported languages", () => {
+  const keys = [
+    "jobRequestConversationQuestion",
+    "jobRequestConversationPlaceholder",
+    "jobRequestConversationProcessing",
+    "jobRequestConversationUnavailable",
+    "jobRequestRetryInterpretation",
+    "jobRequestContinueManually",
+    "jobRequestEnterDetailsManually",
+    "jobRequestRequestDetails",
+    "jobRequestSuggestedService",
+    "jobRequestReviewRequest",
+    "jobRequestAddMoreDetails",
+    "jobRequestSubmittedTitle",
+    "jobRequestViewMyRequest",
+    "jobRequestReturnHome",
+  ];
+  for (const language of ["en", "es", "fr", "pt-BR"]) {
+    for (const key of keys) {
+      assert.notEqual(t(key, language), key);
+    }
+  }
+  assert.equal(t("newProject", "en"), "Request Help");
+  assert.equal(t("createPost", "en"), "Submit Job Request");
+});
+
+test("responsive and accessibility hooks are present for mobile, tablet, and desktop", () => {
+  assert.match(uploadSource, /@media \(max-width: 820px\)/);
+  assert.match(uploadSource, /@media \(max-width: 430px\)/);
+  assert.match(uploadSource, /role="log"/);
+  assert.match(uploadSource, /aria-live="polite"/);
+  assert.match(uploadSource, /aria-controls="request-details-manual-form"/);
+  assert.match(uploadSource, /id="job-request-conversation-input"/);
+  assert.match(uploadSource, /BottomNav/);
+});

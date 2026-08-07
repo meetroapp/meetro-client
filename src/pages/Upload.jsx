@@ -42,6 +42,7 @@ import {
   clearJobRequestDraft,
   createJobRequestDraftFromAssistantDraft,
   JOB_REQUEST_DRAFT_SOURCE,
+  JOB_REQUEST_DRAFT_UNCERTAINTY,
   readJobRequestDraft,
   removeDraftPhoto,
   reorderDraftPhotos,
@@ -61,6 +62,26 @@ import {
   uploadRequestPhotos,
   validateRequestPhotoFiles,
 } from "../utils/requestPhotoMedia";
+import {
+  applyJobRequestInterpretationPatch,
+  createJobRequestInterpretIntent,
+  markJobRequestInterpretIntentAmbiguous,
+  requestJobRequestInterpretation,
+} from "../utils/jobRequestInterpret";
+import {
+  JOB_REQUEST_INTERPRETATION_FAILURE,
+  applyHomeownerConversationText,
+  classifyInterpretationFailure,
+  createCreationAssistanceMessage,
+  createInitialCreationAssistanceMessages,
+  createInterpretationSuccessMessages,
+  createPhotoFirstPrompt,
+  getFieldUncertainty,
+  getInterpretationFailureMessage,
+  getJobRequestInterpretLocale,
+  hasMeaningfulCreationText,
+  isAssistantSuggestedField,
+} from "../utils/jobRequestConversation";
 
 function readStoredRecord(key) {
   try {
@@ -272,6 +293,7 @@ function Upload({ setPage }) {
   const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submissionError, setSubmissionError] = useState("");
+  const [submittedRequest, setSubmittedRequest] = useState(null);
   const title = draft.job.title;
   const description = draft.job.description;
   const category = draft.service.category;
@@ -285,6 +307,18 @@ function Upload({ setPage }) {
   const assistantDraftMetadata = draft.provenance.assistantDraft;
   const titleEdited = draft.fieldMeta?.job?.title?.confirmed === true;
   const descriptionEdited = draft.fieldMeta?.job?.description?.confirmed === true;
+  const conversationLogRef = useRef(null);
+  const manualDetailsRef = useRef(null);
+  const [creationMessages, setCreationMessages] = useState(() =>
+    createInitialCreationAssistanceMessages(language)
+  );
+  const [conversationText, setConversationText] = useState("");
+  const [interpretIntent, setInterpretIntent] = useState(null);
+  const [pendingInterpretText, setPendingInterpretText] = useState("");
+  const [interpretationPending, setInterpretationPending] = useState(false);
+  const [interpretationFailure, setInterpretationFailure] = useState(null);
+  const [requestDetailsExpanded, setRequestDetailsExpanded] = useState(false);
+  const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -305,6 +339,13 @@ function Upload({ setPage }) {
   useEffect(() => {
     saveJobRequestDraft(localStorage, draft);
   }, [draft]);
+
+  useEffect(() => {
+    conversationLogRef.current?.scrollTo({
+      top: conversationLogRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [creationMessages, interpretationPending]);
 
   useEffect(() => {
     return () => {
@@ -381,9 +422,13 @@ function Upload({ setPage }) {
   ];
   const selectedServiceLabel =
     serviceSelectorOptions.find((option) => option.value === selectedServiceOptionId)?.label ||
+    serviceSelectorOptions.find((option) => option.serviceSpecialty === draft.service.specialty)?.label ||
     serviceSelectorOptions.find((option) => option.requestCategory === category)?.label ||
     categories.find((item) => item.value === category)?.label ||
     "";
+  const serviceSuggested = isAssistantSuggestedField(draft, "service.specialty");
+  const titleUncertainty = getFieldUncertainty(draft, "job.title");
+  const serviceUncertainty = getFieldUncertainty(draft, "service.specialty");
 
   function handleServiceSearchChange(value) {
     setServiceSearch(value);
@@ -461,6 +506,7 @@ function Upload({ setPage }) {
   }
 
   function selectServiceOption(_value, option) {
+    if (!option) return;
     setServiceSearch(option.label);
     setDraft((current) =>
       setServiceClassification(current, {
@@ -489,6 +535,13 @@ function Upload({ setPage }) {
         })
       );
     }
+  }
+
+  function acceptAssistantServiceSuggestion() {
+    const option =
+      serviceSelectorOptions.find((item) => item.value === selectedServiceOptionId) ||
+      serviceSelectorOptions.find((item) => item.serviceSpecialty === draft.service.specialty);
+    if (option) selectServiceOption(option.value, option);
   }
 
   function getRequestPhotoErrorMessage(code) {
@@ -608,6 +661,14 @@ function Upload({ setPage }) {
         }))
       )
     );
+    if (
+      !photoFirstPromptShown &&
+      !hasMeaningfulCreationText(draft.job?.description) &&
+      creationMessages.every((message) => message.kind !== "homeowner_message")
+    ) {
+      appendCreationMessages(createPhotoFirstPrompt(language));
+      setPhotoFirstPromptShown(true);
+    }
     setPhotoError("");
   }
 
@@ -628,6 +689,139 @@ function Upload({ setPage }) {
         handleImageUpload(createPhotoInputEvent(photos.map((photo) => photo.file))),
       onError: (message) => setPhotoError(message || CAMERA_PERMISSION_MESSAGE),
     });
+  }
+
+  function focusManualDetails(target = "description") {
+    setRequestDetailsExpanded(true);
+    window.setTimeout(() => {
+      if (target === "service") {
+        serviceSearchInputRef.current?.focus();
+      } else if (target === "title") {
+        titleInputRef.current?.focus();
+      } else if (target === "location") {
+        locationInputRef.current?.focus();
+      } else {
+        descriptionInputRef.current?.focus();
+      }
+      manualDetailsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
+  }
+
+  function alignAssistantServiceSelection(nextDraft) {
+    const matchedOption = serviceSelectorOptions.find((option) =>
+      option.serviceSpecialty === nextDraft.service?.specialty ||
+      (
+        option.serviceDomain === nextDraft.service?.domain &&
+        option.requestCategory === nextDraft.service?.requestCategory
+      )
+    );
+    if (!matchedOption) return nextDraft;
+    setServiceSearch(matchedOption.label);
+    return setServiceClassification(
+      nextDraft,
+      {
+        category: matchedOption.requestCategory,
+        customCategory: "",
+        requestCategory: matchedOption.requestCategory,
+        domain: matchedOption.serviceDomain,
+        specialty: matchedOption.serviceSpecialty,
+        selectedServiceOptionId: matchedOption.value,
+        displayLabel: matchedOption.label,
+      },
+      { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
+    );
+  }
+
+  function appendCreationMessages(messages) {
+    const additions = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+    if (additions.length === 0) return;
+    setCreationMessages((current) => [...current, ...additions]);
+  }
+
+  function handleContinueManually() {
+    setInterpretationFailure(null);
+    setInterpretationPending(false);
+    focusManualDetails();
+  }
+
+  async function runInterpretation(text, { retry = false } = {}) {
+    const normalizedText = String(text || "").trim();
+    if (!hasMeaningfulCreationText(normalizedText) || interpretationPending) return;
+
+    setInterpretationPending(true);
+    setInterpretationFailure(null);
+    setPendingInterpretText(normalizedText);
+
+    let nextDraft = draft;
+    if (!retry) {
+      nextDraft = applyHomeownerConversationText(draft, normalizedText);
+      setDraft(nextDraft);
+      appendCreationMessages(
+        createCreationAssistanceMessage({
+          role: "homeowner",
+          kind: "homeowner_message",
+          text: normalizedText,
+        })
+      );
+      setConversationText("");
+    }
+
+    const nextIntent = createJobRequestInterpretIntent({
+      text: normalizedText,
+      draft: nextDraft,
+      locale: getJobRequestInterpretLocale(language),
+      previousIntent: retry ? interpretIntent : undefined,
+    });
+    setInterpretIntent(nextIntent);
+
+    try {
+      const result = await requestJobRequestInterpretation({
+        intent: nextIntent,
+        setPage,
+        authFetchImpl: authFetch,
+      });
+
+      setDraft((current) => {
+        const patched = applyJobRequestInterpretationPatch(current, result.interpretation);
+        return alignAssistantServiceSelection(patched.draft);
+      });
+      appendCreationMessages(
+        createInterpretationSuccessMessages({
+          interpretation: result.interpretation,
+          language,
+          photosAttached: selectedRequestPhotos.length > 0,
+        })
+      );
+      setInterpretIntent({
+        ...nextIntent,
+        status: "completed",
+        operationId: result.operationId,
+        replayed: result.replayed,
+      });
+      setPendingInterpretText("");
+    } catch (error) {
+      const classification = classifyInterpretationFailure(error);
+      if (classification === JOB_REQUEST_INTERPRETATION_FAILURE.AMBIGUOUS) {
+        setInterpretIntent(markJobRequestInterpretIntentAmbiguous(nextIntent));
+      } else {
+        setInterpretIntent(nextIntent);
+      }
+      setInterpretationFailure({
+        classification,
+        message: getInterpretationFailureMessage(classification, language),
+      });
+    } finally {
+      setInterpretationPending(false);
+    }
+  }
+
+  function handleConversationSubmit(event) {
+    event.preventDefault();
+    runInterpretation(conversationText);
+  }
+
+  function handleRetryInterpretation() {
+    runInterpretation(pendingInterpretText, { retry: true });
   }
 
   async function handleCreatePost(event) {
@@ -748,17 +942,19 @@ function Upload({ setPage }) {
         localStorage.removeItem("directRequestId");
         localStorage.removeItem("requestProfessionalContext");
 
-        alert(t("projectPostedSuccess"));
-
         clearSelectedRequestPhotos();
         setDraft(resetJobRequestDraft({
           initialLocation: getInitialRequestLocation(),
         }));
         clearJobRequestDraft(localStorage);
+        setCreationMessages(createInitialCreationAssistanceMessages(language));
+        setConversationText("");
+        setInterpretIntent(null);
+        setPendingInterpretText("");
+        setInterpretationFailure(null);
         setFieldErrors({});
         setSubmissionError("");
-
-        setPage("home");
+        setSubmittedRequest(canonicalPost);
       } else {
         const failureType = classifyJobRequestCreateFailure(result);
         if (failureType === "ambiguous" || failureType === "conflict") {
@@ -869,6 +1065,93 @@ function Upload({ setPage }) {
       required: false,
     },
   ];
+  const liveDraftSections = [
+    {
+      id: "need",
+      label: t("jobRequestWhatYouNeed", language),
+      values: [draftReviewModel.title, draftReviewModel.description].filter(Boolean),
+      uncertainty: titleUncertainty,
+    },
+    {
+      id: "service",
+      label: serviceSuggested
+        ? t("jobRequestSuggestedService", language)
+        : t("jobRequestDraftReviewService", language),
+      values: [selectedServiceLabel || draftReviewModel.service.specialty].filter(Boolean),
+      uncertainty: serviceUncertainty,
+    },
+    {
+      id: "where",
+      label: t("jobRequestWhere", language),
+      values: [
+        draftReviewModel.location.affectedArea,
+        draftReviewModel.location.serviceAddress,
+      ].filter(Boolean),
+    },
+    {
+      id: "timing",
+      label: t("jobRequestTiming", language),
+      values: [
+        draftReviewModel.timing.urgency,
+        draftReviewModel.timing.desiredTiming,
+        draftReviewModel.timing.availability,
+      ].filter(Boolean),
+    },
+    {
+      id: "details",
+      label: t("jobRequestAdditionalDetails", language),
+      values: [
+        draftReviewModel.details.measurements,
+        draftReviewModel.details.expectations,
+        draftReviewModel.details.additionalNotes,
+      ].filter(Boolean),
+    },
+    {
+      id: "photos",
+      label: t("jobRequestDraftReviewPhotos", language),
+      values: projectPhotos.length
+        ? [
+            language === "es"
+              ? `${projectPhotos.length} ${projectPhotos.length === 1 ? "foto" : "fotos"}`
+              : `${projectPhotos.length} ${projectPhotos.length === 1 ? "photo" : "photos"}`,
+          ]
+        : [],
+    },
+  ].filter((section) => section.values.length > 0);
+
+  if (submittedRequest) {
+    return (
+      <div
+        className="app-page request-help-page upload-page meetro-form-page meetro-visual-page"
+        style={pageWrapper}
+      >
+        <style>{requestHelpLayoutStyles}</style>
+        <section style={successPanel} aria-live="polite">
+          <span style={successMark} aria-hidden="true">✓</span>
+          <h1 style={requestPageTitle}>{t("jobRequestSubmittedTitle", language)}</h1>
+          <p style={requestPageSubtitle}>{t("projectPostedSuccess", language)}</p>
+          <div style={successActions}>
+            <button
+              type="button"
+              className="meetro-visual-primary-button"
+              style={primaryButton}
+              onClick={() => setPage("myRequests")}
+            >
+              {t("jobRequestViewMyRequest", language)}
+            </button>
+            <button
+              type="button"
+              style={cancelRequestButton}
+              onClick={() => setPage("home")}
+            >
+              {t("jobRequestReturnHome", language)}
+            </button>
+          </div>
+        </section>
+        <BottomNav setPage={setPage} currentPage="upload" />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -934,9 +1217,224 @@ function Upload({ setPage }) {
           )}
         </section>
 
+        <div className="job-request-conversation-workspace" style={conversationWorkspace}>
+          <section
+            style={conversationPanel}
+            aria-labelledby="job-request-conversation-title"
+          >
+            <div style={conversationHeader}>
+              <p style={conversationEyebrow}>{t("jobRequestConversationTitle", language)}</p>
+              <h2 id="job-request-conversation-title" style={conversationTitle}>
+                {t("jobRequestConversationQuestion", language)}
+              </h2>
+            </div>
+
+            <div
+              ref={conversationLogRef}
+              style={conversationLog}
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
+            >
+              {creationMessages.map((message) => (
+                <div
+                  key={message.id}
+                  style={{
+                    ...messageBubble,
+                    ...(message.role === "homeowner"
+                      ? homeownerMessageBubble
+                      : assistantMessageBubble),
+                  }}
+                >
+                  {message.text}
+                </div>
+              ))}
+              {draftReadiness.isReady && (
+                <div style={{ ...messageBubble, ...assistantMessageBubble }}>
+                  {t("jobRequestConversationReady", language)}
+                </div>
+              )}
+              {interpretationPending && (
+                <div role="status" aria-live="polite" style={processingState}>
+                  {t("jobRequestConversationProcessing", language)}
+                </div>
+              )}
+            </div>
+
+            {interpretationFailure && (
+              <div role="alert" style={assistantFallbackCard}>
+                <span>{interpretationFailure.message}</span>
+                <div style={fallbackActions}>
+                  {interpretationFailure.classification !==
+                    JOB_REQUEST_INTERPRETATION_FAILURE.UNAVAILABLE &&
+                    pendingInterpretText && (
+                      <button
+                        type="button"
+                        style={secondaryActionButton}
+                        onClick={handleRetryInterpretation}
+                      >
+                        {t("jobRequestRetryInterpretation", language)}
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    style={secondaryActionButton}
+                    onClick={handleContinueManually}
+                  >
+                    {t("jobRequestContinueManually", language)}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <form style={composer} onSubmit={handleConversationSubmit}>
+              <label htmlFor="job-request-conversation-input" style={srOnly}>
+                {t("jobRequestConversationQuestion", language)}
+              </label>
+              <textarea
+                id="job-request-conversation-input"
+                value={conversationText}
+                onChange={(event) => setConversationText(event.target.value)}
+                placeholder={t("jobRequestConversationPlaceholder", language)}
+                style={composerInput}
+                rows={3}
+                disabled={interpretationPending}
+              />
+              <div style={composerActions}>
+                <button
+                  type="button"
+                  style={secondaryActionButton}
+                  onClick={openRequestPhotoPicker}
+                  disabled={mediaUploadDeferred || uploading || creating}
+                  aria-label={requestHelpCopy.addPhoto}
+                  title={requestHelpCopy.addPhoto}
+                >
+                  {t("addPhotos", language)}
+                </button>
+                <button
+                  type="button"
+                  style={secondaryActionButton}
+                  onClick={() => focusManualDetails()}
+                >
+                  {t("jobRequestEnterDetailsManually", language)}
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    ...sendButton,
+                    opacity:
+                      interpretationPending ||
+                      !hasMeaningfulCreationText(conversationText)
+                        ? 0.6
+                        : 1,
+                  }}
+                  disabled={
+                    interpretationPending ||
+                    !hasMeaningfulCreationText(conversationText)
+                  }
+                >
+                  {t("jobRequestConversationSend", language)}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <aside
+            className="job-request-details-panel"
+            style={liveDraftPanel}
+            aria-labelledby="job-request-live-draft-title"
+          >
+            <div style={liveDraftHeader}>
+              <h2 id="job-request-live-draft-title" style={liveDraftTitle}>
+                {t("jobRequestYourRequest", language)}
+              </h2>
+              <button
+                type="button"
+                style={detailsToggleButton}
+                onClick={() => setRequestDetailsExpanded((current) => !current)}
+                aria-expanded={requestDetailsExpanded}
+                aria-controls="request-details-manual-form"
+              >
+                {t("jobRequestRequestDetails", language)}
+              </button>
+            </div>
+
+            {liveDraftSections.length === 0 ? (
+              <p style={emptyDraftText}>{t("jobRequestDraftGuidanceDescription", language)}</p>
+            ) : (
+              <div style={liveDraftSectionList}>
+                {liveDraftSections.map((section) => (
+                  <section key={section.id} style={liveDraftSection}>
+                    <strong style={liveDraftSectionTitle}>{section.label}</strong>
+                    {section.values.slice(0, 2).map((value) => (
+                      <p key={value} style={liveDraftValue}>{value}</p>
+                    ))}
+                    {[
+                      JOB_REQUEST_DRAFT_UNCERTAINTY.APPROXIMATE,
+                      JOB_REQUEST_DRAFT_UNCERTAINTY.UNCERTAIN,
+                      JOB_REQUEST_DRAFT_UNCERTAINTY.ASSISTANT_SUGGESTED,
+                    ].includes(section.uncertainty) && (
+                      <small style={uncertaintyText}>
+                        {t("jobRequestMayNeedProfessionalReview", language)}
+                      </small>
+                    )}
+                  </section>
+                ))}
+              </div>
+            )}
+
+            {serviceSuggested && selectedServiceLabel && (
+              <div style={suggestedServiceActions}>
+                <button
+                  type="button"
+                  style={secondaryActionButton}
+                  onClick={acceptAssistantServiceSuggestion}
+                >
+                  {t("jobRequestAcceptSuggestion", language)}
+                </button>
+                <button
+                  type="button"
+                  style={secondaryActionButton}
+                  onClick={() => {
+                    setServiceSelectorOpen(true);
+                    focusManualDetails("service");
+                  }}
+                >
+                  {t("jobRequestChangeSuggestion", language)}
+                </button>
+              </div>
+            )}
+
+            <div style={reviewActionGroup}>
+              <button
+                type="button"
+                style={{
+                  ...sendButton,
+                  opacity: draftReadiness.isReady ? 1 : 0.62,
+                }}
+                onClick={() => focusManualDetails("title")}
+              >
+                {t("jobRequestReviewRequest", language)}
+              </button>
+              <button
+                type="button"
+                style={secondaryActionButton}
+                onClick={() => focusManualDetails()}
+              >
+                {t("jobRequestAddMoreDetails", language)}
+              </button>
+            </div>
+          </aside>
+        </div>
+
         <form
+          ref={manualDetailsRef}
+          id="request-details-manual-form"
           className="meetro-visual-surface"
-          style={cardStyle}
+          style={{
+            ...cardStyle,
+            ...(requestDetailsExpanded ? {} : collapsedManualDetailsStyle),
+          }}
           onSubmit={handleCreatePost}
           noValidate
         >
@@ -1345,7 +1843,7 @@ const pageWrapper = {
     "calc(env(safe-area-inset-top) + 24px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   width: "100%",
-  maxWidth: "760px",
+  maxWidth: "1180px",
   minWidth: 0,
   margin: "0 auto",
   overflowX: "hidden",
@@ -1356,7 +1854,7 @@ const pageWrapper = {
 
 const contentLane = {
   width: "100%",
-  maxWidth: "var(--meetro-layout-form-max, 860px)",
+  maxWidth: "min(1120px, 100%)",
   minWidth: 0,
   margin: "0 auto",
   boxSizing: "border-box",
@@ -1388,11 +1886,15 @@ const requestHelpLayoutStyles = `
 
   .request-help-content-lane {
     width: 100%;
-    max-width: var(--meetro-layout-form-max, 860px);
+    max-width: min(1120px, 100%);
     min-width: 0;
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
+  }
+
+  .job-request-conversation-workspace {
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
   }
 
   .request-help-content-lane > *,
@@ -1423,9 +1925,28 @@ const requestHelpLayoutStyles = `
     }
 
     #root[data-app-layout="desktop"] .request-help-content-lane {
-      max-width: min(var(--meetro-layout-form-max, 860px), 100%) !important;
+      max-width: min(1120px, 100%) !important;
       margin-left: auto !important;
       margin-right: auto !important;
+    }
+  }
+
+  @media (max-width: 820px) {
+    .job-request-conversation-workspace {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .job-request-details-panel {
+      position: static !important;
+      max-height: none !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .request-help-page textarea,
+    .request-help-page input,
+    .request-help-page button {
+      max-width: 100%;
     }
   }
 `;
@@ -1494,6 +2015,305 @@ const preparedRequestBannerText = {
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: 700,
+};
+
+const conversationWorkspace = {
+  display: "grid",
+  gap: "14px",
+  alignItems: "start",
+  marginBottom: "14px",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const conversationPanel = {
+  display: "grid",
+  gap: "12px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "22px",
+  background: "var(--meetro-surface-paper)",
+  padding: "14px",
+  boxShadow: "var(--meetro-shadow-soft)",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const conversationHeader = {
+  display: "grid",
+  gap: "4px",
+};
+
+const conversationEyebrow = {
+  margin: 0,
+  color: "var(--meetro-color-forest)",
+  fontSize: "12px",
+  fontWeight: 950,
+};
+
+const conversationTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "22px",
+  lineHeight: 1.15,
+  letterSpacing: 0,
+};
+
+const conversationLog = {
+  display: "grid",
+  gap: "9px",
+  alignContent: "start",
+  minHeight: "220px",
+  maxHeight: "min(52dvh, 460px)",
+  overflowY: "auto",
+  padding: "4px",
+  overscrollBehavior: "contain",
+};
+
+const messageBubble = {
+  width: "fit-content",
+  maxWidth: "min(100%, 560px)",
+  borderRadius: "16px",
+  padding: "10px 12px",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+  whiteSpace: "pre-wrap",
+};
+
+const assistantMessageBubble = {
+  justifySelf: "start",
+  background: "var(--meetro-surface-warm)",
+  border: "1px solid var(--meetro-color-line)",
+  color: "var(--meetro-color-coffee)",
+};
+
+const homeownerMessageBubble = {
+  justifySelf: "end",
+  background: "var(--meetro-surface-sage)",
+  border: "1px solid rgba(31, 77, 52, 0.20)",
+  color: "var(--meetro-color-forest)",
+  fontWeight: 800,
+};
+
+const processingState = {
+  justifySelf: "start",
+  color: "var(--meetro-color-forest)",
+  fontSize: "13px",
+  fontWeight: 900,
+  padding: "4px 2px",
+};
+
+const assistantFallbackCard = {
+  display: "grid",
+  gap: "10px",
+  border: "1px solid rgba(180, 35, 24, 0.24)",
+  borderRadius: "16px",
+  background: "rgba(254, 243, 242, 0.92)",
+  color: "#912018",
+  padding: "12px",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const fallbackActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const composer = {
+  display: "grid",
+  gap: "9px",
+};
+
+const composerInput = {
+  width: "100%",
+  minHeight: "94px",
+  maxHeight: "34dvh",
+  resize: "vertical",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  fontSize: "16px",
+  lineHeight: 1.45,
+  color: "var(--meetro-color-ink)",
+  background: "var(--meetro-surface-paper)",
+  boxSizing: "border-box",
+  overflowWrap: "anywhere",
+};
+
+const composerActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  alignItems: "center",
+};
+
+const secondaryActionButton = {
+  minHeight: "44px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "14px",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  padding: "9px 12px",
+  fontSize: "13px",
+  fontWeight: 950,
+  cursor: "pointer",
+  maxWidth: "100%",
+};
+
+const sendButton = {
+  minHeight: "44px",
+  border: "none",
+  borderRadius: "14px",
+  background: "var(--meetro-gradient-community-action)",
+  color: "#fffdf8",
+  padding: "10px 14px",
+  fontSize: "14px",
+  fontWeight: 950,
+  cursor: "pointer",
+  boxShadow: "0 10px 22px rgba(31, 77, 52, 0.16)",
+  marginLeft: "auto",
+};
+
+const liveDraftPanel = {
+  position: "sticky",
+  top: "calc(env(safe-area-inset-top) + 18px)",
+  display: "grid",
+  gap: "12px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "22px",
+  background: "rgba(255, 253, 248, 0.94)",
+  padding: "14px",
+  boxShadow: "var(--meetro-shadow-soft)",
+  maxHeight: "calc(100dvh - 140px)",
+  overflowY: "auto",
+  minWidth: 0,
+};
+
+const liveDraftHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "10px",
+  alignItems: "center",
+};
+
+const liveDraftTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "18px",
+  lineHeight: 1.2,
+};
+
+const detailsToggleButton = {
+  ...secondaryActionButton,
+  minHeight: "38px",
+  padding: "7px 10px",
+};
+
+const liveDraftSectionList = {
+  display: "grid",
+  gap: "10px",
+};
+
+const liveDraftSection = {
+  display: "grid",
+  gap: "4px",
+  borderTop: "1px solid rgba(31, 77, 52, 0.10)",
+  paddingTop: "9px",
+};
+
+const liveDraftSectionTitle = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "12px",
+  fontWeight: 950,
+};
+
+const liveDraftValue = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  overflowWrap: "anywhere",
+};
+
+const emptyDraftText = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: 800,
+};
+
+const uncertaintyText = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 800,
+};
+
+const suggestedServiceActions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const reviewActionGroup = {
+  display: "grid",
+  gap: "8px",
+};
+
+const collapsedManualDetailsStyle = {
+  maxHeight: "1px",
+  overflow: "hidden",
+  paddingTop: 0,
+  paddingBottom: 0,
+  borderWidth: 0,
+  opacity: 0,
+  pointerEvents: "none",
+};
+
+const srOnly = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
+const successPanel = {
+  display: "grid",
+  gap: "14px",
+  width: "min(560px, 100%)",
+  margin: "10dvh auto 0",
+  padding: "22px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "22px",
+  background: "var(--meetro-surface-paper)",
+  boxShadow: "var(--meetro-shadow-soft)",
+  textAlign: "center",
+};
+
+const successMark = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "50%",
+  display: "grid",
+  placeItems: "center",
+  justifySelf: "center",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
+  fontSize: "26px",
+  fontWeight: 950,
+};
+
+const successActions = {
+  display: "grid",
+  gap: "8px",
 };
 
 const cardStyle = {

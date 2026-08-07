@@ -7,6 +7,10 @@ import {
 } from "./jobRequestDraft.js";
 
 export const ASSISTANT_REQUEST_DRAFT_KEY = "meetroAssistantRequestDraft";
+export const ASSISTANT_REQUEST_DRAFT_AUTHORITY = Object.freeze({
+  status: "legacy_compatibility",
+  canonicalInterpretationOperation: "job_request.interpret",
+});
 
 const LEGACY_DRAFT_KEYS = [
   "aiProjectDraft",

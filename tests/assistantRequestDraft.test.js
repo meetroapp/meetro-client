@@ -374,8 +374,8 @@ test("request page prepares editable title and details from what the homeowner d
   assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.description": e\.target\.value/);
 });
 
-test("Send Request remains primary and Cancel Request is visually secondary", () => {
-  assert.equal(t("createPost", "en"), "Send Request");
+test("Submit Job Request remains primary and Cancel Request is visually secondary", () => {
+  assert.equal(t("createPost", "en"), "Submit Job Request");
   assert.equal(t("cancelRequest", "en"), "Cancel Request");
   assert.equal(t("fullServiceAddress", "en"), "Service Address");
   assert.match(uploadSource, /style=\{\{\s*\.\.\.primaryButton/);
