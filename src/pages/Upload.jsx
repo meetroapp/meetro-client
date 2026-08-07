@@ -5,9 +5,9 @@ import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
 import {
   clearAssistantRequestDraft,
+  clearAssistantRequestDraftHandoff,
   readAssistantRequestDraft,
 } from "../utils/assistantRequestDraft";
-import { buildRequestMatchingFields } from "../utils/requestMatchingFields";
 import {
   getRequestIntelligenceServices,
   searchRequestServices,
@@ -24,17 +24,40 @@ import {
 } from "../utils/mediaDeferral";
 import { resolveWorkflowAddress } from "../utils/personalAddresses";
 import {
-  getCanonicalCreatedRequest,
   getSupportedRequestHelpServices,
   validateRequestHelpSubmission,
 } from "../utils/requestHelpSubmission";
+import {
+  classifyJobRequestCreateFailure,
+  createSubmissionIntentKey,
+  getCanonicalJobRequestPost,
+} from "../utils/jobRequestSubmissionIntent";
+import {
+  addDraftPhotos,
+  applyHomeownerInput,
+  applyAssistantSuggestion,
+  buildJobRequestDraftCanonicalPayload,
+  buildJobRequestReviewModel,
+  clearDraftSubmission,
+  clearJobRequestDraft,
+  createJobRequestDraftFromAssistantDraft,
+  JOB_REQUEST_DRAFT_SOURCE,
+  readJobRequestDraft,
+  removeDraftPhoto,
+  reorderDraftPhotos,
+  resetJobRequestDraft,
+  saveJobRequestDraft,
+  setDraftSubmissionIntent,
+  setDraftSubmissionSnapshot,
+  setDraftUploadedMedia,
+  setServiceClassification,
+} from "../utils/jobRequestDraft";
 import {
   REQUEST_PHOTO_MAX_COUNT,
   REQUEST_PHOTO_PURPOSE,
   cleanupRequestPhoto,
   createTemporaryRequestPhotoPreview,
   isRequestPhotoUploadEnabled,
-  reorderRequestPhotos,
   uploadRequestPhotos,
   validateRequestPhotoFiles,
 } from "../utils/requestPhotoMedia";
@@ -64,6 +87,46 @@ function getInitialRequestLocation() {
     requestAddress:
       selectedRequest.fullAddress || selectedRequest.address || selectedRequest.location || "",
   });
+}
+
+function isKnownRequestCategory(category) {
+  return [
+    "handyman",
+    "contractor",
+    "painting",
+    "plumbing",
+    "electrical",
+    "flooring",
+    "roofing",
+    "hvac",
+    "landscaping",
+    "lawnCare",
+    "treeService",
+    "poolService",
+    "cleaning",
+    "pressureWashing",
+    "paverSealing",
+    "junkRemoval",
+    "demolition",
+    "drywall",
+    "carpentry",
+    "doorsWindows",
+    "fencing",
+    "concrete",
+    "tile",
+    "applianceRepair",
+    "pestControl",
+    "moving",
+    "realEstate",
+    "propertyManagement",
+    "homeHealthCare",
+    "automotiveServices",
+    "carDetailing",
+    "mobileServices",
+    "mechanic",
+    "privateTransportation",
+    "other",
+  ].includes(category);
 }
 
 function buildSuggestedRequestTitle(value = "", fallback = "") {
@@ -158,37 +221,70 @@ function getRequestHelpCopy(language) {
   };
 }
 
-function Upload({ setPage, currentPage }) {
+function Upload({ setPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
+  const serviceSearchInputRef = useRef(null);
+  const titleInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
+  const locationInputRef = useRef(null);
   const submissionAttemptRef = useRef(false);
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [customCategory, setCustomCategory] = useState("");
-  const [serviceSearch, setServiceSearch] = useState("");
-  const [location, setLocation] = useState(getInitialRequestLocation);
-  const [unitNumber, setUnitNumber] = useState("");
-  const [accessNotes, setAccessNotes] = useState("");
-  const [projectPhotos, setProjectPhotos] = useState([]);
-  const [selectedRequestPhotos, setSelectedRequestPhotos] = useState([]);
+  const [initialAssistantDraft] = useState(() => readAssistantRequestDraft(localStorage));
+  const [draft, setDraft] = useState(() => {
+    const initialLocation = getInitialRequestLocation();
+    if (initialAssistantDraft) {
+      const validCategory = isKnownRequestCategory(initialAssistantDraft.category);
+      const normalizedDraft = createJobRequestDraftFromAssistantDraft(initialAssistantDraft, {
+        initialLocation,
+      });
+      return {
+        ...normalizedDraft,
+        service: {
+          ...normalizedDraft.service,
+          category: validCategory
+            ? initialAssistantDraft.category
+            : initialAssistantDraft.category
+            ? "other"
+            : "",
+          customCategory: validCategory ? "" : initialAssistantDraft.category || "",
+        },
+      };
+    }
+    return readJobRequestDraft(localStorage, {
+      initialLocation: getInitialRequestLocation(),
+    });
+  });
+  const [serviceSearch, setServiceSearch] = useState(
+    initialAssistantDraft?.suggestedServiceLabel ||
+      initialAssistantDraft?.suggestedProjectType ||
+      initialAssistantDraft?.title ||
+      ""
+  );
   const selectedRequestPhotosRef = useRef([]);
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [assistantDraftMetadata, setAssistantDraftMetadata] = useState(null);
   const [serviceSelectorOpen, setServiceSelectorOpen] = useState(false);
-  const [selectedServiceOptionId, setSelectedServiceOptionId] = useState("");
-  const [titleEdited, setTitleEdited] = useState(false);
-  const [descriptionEdited, setDescriptionEdited] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submissionError, setSubmissionError] = useState("");
+  const title = draft.job.title;
+  const description = draft.job.description;
+  const category = draft.service.category;
+  const customCategory = draft.service.customCategory;
+  const location = draft.location.serviceAddress;
+  const unitNumber = draft.location.unitNumber;
+  const accessNotes = draft.location.accessNotes;
+  const selectedServiceOptionId = draft.service.selectedServiceOptionId;
+  const selectedRequestPhotos = draft.media.photos;
+  const projectPhotos = selectedRequestPhotos.map((photo) => photo.previewUrl).filter(Boolean);
+  const assistantDraftMetadata = draft.provenance.assistantDraft;
+  const titleEdited = draft.fieldMeta?.job?.title?.confirmed === true;
+  const descriptionEdited = draft.fieldMeta?.job?.description?.confirmed === true;
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -205,6 +301,10 @@ function Upload({ setPage, currentPage }) {
   useEffect(() => {
     selectedRequestPhotosRef.current = selectedRequestPhotos;
   }, [selectedRequestPhotos]);
+
+  useEffect(() => {
+    saveJobRequestDraft(localStorage, draft);
+  }, [draft]);
 
   useEffect(() => {
     return () => {
@@ -251,27 +351,8 @@ function Upload({ setPage, currentPage }) {
   ];
 
   useEffect(() => {
-    const draft = readAssistantRequestDraft(localStorage);
-    if (!draft) return;
-
-    const validCategory = categories.some((item) => item.value === draft.category);
-
-    setTitle(draft.title || "");
-    setDescription(draft.description || "");
-    setCategory(validCategory ? draft.category : draft.category ? "other" : "");
-    setCustomCategory(validCategory ? "" : draft.category || "");
-    setServiceSearch(
-      draft.suggestedServiceLabel ||
-        draft.suggestedProjectType ||
-        draft.title ||
-        ""
-    );
-    setSelectedServiceOptionId(draft.service_specialty ? `service:${draft.service_specialty}` : "");
-    setAssistantDraftMetadata(draft);
-    setTitleEdited(Boolean(draft.title));
-    setDescriptionEdited(Boolean(draft.description));
-    clearAssistantRequestDraft(localStorage);
-  }, []);
+    if (initialAssistantDraft) clearAssistantRequestDraftHandoff(localStorage);
+  }, [initialAssistantDraft]);
 
   useEffect(() => {
     const textarea = descriptionInputRef.current;
@@ -311,51 +392,102 @@ function Upload({ setPage, currentPage }) {
       searchRequestServices(value, { translate: t, limit: 12 })
     );
     if (bestMatch?.requestCategory) {
-      setCategory(bestMatch.requestCategory);
-      setCustomCategory("");
-      setSelectedServiceOptionId(`service:${bestMatch.serviceId}`);
+      setDraft((current) =>
+        setServiceClassification(current, {
+          category: bestMatch.requestCategory,
+          customCategory: "",
+          requestCategory: bestMatch.requestCategory,
+          domain: bestMatch.domain,
+          specialty: bestMatch.serviceId,
+          selectedServiceOptionId: `service:${bestMatch.serviceId}`,
+          displayLabel: bestMatch.label,
+        }, { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false })
+      );
       setFieldErrors((current) => ({ ...current, category: undefined }));
     } else {
-      setCategory("");
-      setCustomCategory("");
-      setSelectedServiceOptionId("");
+      setDraft((current) =>
+        setServiceClassification(current, {}, {
+          source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED,
+          confirmed: false,
+        })
+      );
     }
     if (!titleEdited) {
-      setTitle(buildSuggestedRequestTitle(value, bestMatch?.label || ""));
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.title": buildSuggestedRequestTitle(value, bestMatch?.label || ""),
+        })
+      );
       setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited) {
-      setDescription(value);
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.description": value,
+        })
+      );
     }
   }
 
   function selectSuggestedService(service) {
     setServiceSearch(service.label);
-    setCategory(service.requestCategory);
-    setCustomCategory("");
-    setSelectedServiceOptionId(`service:${service.serviceId}`);
+    setDraft((current) =>
+      setServiceClassification(current, {
+        category: service.requestCategory,
+        customCategory: "",
+        requestCategory: service.requestCategory,
+        domain: service.domain,
+        specialty: service.serviceId,
+        selectedServiceOptionId: `service:${service.serviceId}`,
+        displayLabel: service.label,
+      })
+    );
     setFieldErrors((current) => ({ ...current, category: undefined }));
     if (!titleEdited) {
-      setTitle(buildSuggestedRequestTitle(service.label));
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.title": buildSuggestedRequestTitle(service.label),
+        })
+      );
       setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited && !description.trim()) {
-      setDescription(service.label);
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.description": service.label,
+        })
+      );
     }
   }
 
   function selectServiceOption(_value, option) {
     setServiceSearch(option.label);
-    setCategory(option.requestCategory);
-    setCustomCategory("");
-    setSelectedServiceOptionId(option.value);
+    setDraft((current) =>
+      setServiceClassification(current, {
+        category: option.requestCategory,
+        customCategory: "",
+        requestCategory: option.requestCategory,
+        domain: option.serviceDomain,
+        specialty: option.serviceSpecialty,
+        selectedServiceOptionId: option.value,
+        displayLabel: option.label,
+      })
+    );
     setFieldErrors((current) => ({ ...current, category: undefined }));
     if (!titleEdited) {
-      setTitle(buildSuggestedRequestTitle(option.label));
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.title": buildSuggestedRequestTitle(option.label),
+        })
+      );
       setFieldErrors((current) => ({ ...current, title: undefined }));
     }
     if (!descriptionEdited && !description.trim()) {
-      setDescription(option.label);
+      setDraft((current) =>
+        applyAssistantSuggestion(current, {
+          "job.description": option.label,
+        })
+      );
     }
   }
 
@@ -380,8 +512,23 @@ function Upload({ setPage, currentPage }) {
   function clearSelectedRequestPhotos() {
     selectedRequestPhotosRef.current.forEach((photo) => photo.revoke?.());
     selectedRequestPhotosRef.current = [];
-    setSelectedRequestPhotos([]);
-    setProjectPhotos([]);
+    setDraft((current) => ({
+      ...current,
+      media: { ...current.media, photos: [] },
+    }));
+  }
+
+  function getSubmissionIntentKey() {
+    if (!draft.submission.intentKey) {
+      const intentKey = createSubmissionIntentKey();
+      setDraft((current) => setDraftSubmissionIntent(current, intentKey));
+      return intentKey;
+    }
+    return draft.submission.intentKey;
+  }
+
+  function clearSubmissionIntent() {
+    setDraft((current) => clearDraftSubmission(current));
   }
 
   async function cleanupUploadedRequestPhotos(mediaItems = []) {
@@ -397,23 +544,13 @@ function Upload({ setPage, currentPage }) {
   }
 
   function removeSelectedRequestPhoto(indexToRemove) {
-    setSelectedRequestPhotos((current) => {
-      const removed = current[indexToRemove];
-      removed?.revoke?.();
-      const updated = current.filter((_, index) => index !== indexToRemove);
-      selectedRequestPhotosRef.current = updated;
-      setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
-      return updated;
-    });
+    const removed = selectedRequestPhotos[indexToRemove];
+    removed?.revoke?.();
+    setDraft((current) => removeDraftPhoto(current, indexToRemove));
   }
 
   function moveSelectedRequestPhoto(index, direction) {
-    setSelectedRequestPhotos((current) => {
-      const updated = reorderRequestPhotos(current, index, index + direction);
-      selectedRequestPhotosRef.current = updated;
-      setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
-      return updated;
-    });
+    setDraft((current) => reorderDraftPhotos(current, index, index + direction));
   }
 
   function getPhotoOrderLabel(direction, index) {
@@ -460,10 +597,17 @@ function Upload({ setPage, currentPage }) {
     const additions = validation.files.map((file) =>
       createTemporaryRequestPhotoPreview(file)
     );
-    const updated = [...selectedRequestPhotos, ...additions];
-    selectedRequestPhotosRef.current = updated;
-    setSelectedRequestPhotos(updated);
-    setProjectPhotos(updated.map((photo) => photo.url).filter(Boolean));
+    setDraft((current) =>
+      addDraftPhotos(
+        current,
+        additions.map((photo) => ({
+          localPhotoId: photo.id,
+          previewUrl: photo.url,
+          file: photo.file,
+          revoke: photo.revoke,
+        }))
+      )
+    );
     setPhotoError("");
   }
 
@@ -489,55 +633,17 @@ function Upload({ setPage, currentPage }) {
   async function handleCreatePost(event) {
     event?.preventDefault();
     if (submissionAttemptRef.current) return;
+    submissionAttemptRef.current = true;
+    setCreating(true);
 
     let uploadedMediaForCleanup = [];
+    let shouldCleanupUploadedMedia = false;
     try {
-      const isDirectRequest = localStorage.getItem("directRequestMode") === "true";
-      const directProfessionalName = localStorage.getItem("directRequestProfessionalName") || "";
-      const directConversationId = localStorage.getItem("directRequestProfessionalConversationId") || "";
-      const directRequestSource = localStorage.getItem("directRequestSource") || "";
-
       const selectedCategory =
         category === "other" ? customCategory.trim() || "other" : category;
       const selectedService = serviceSelectorOptions.find(
         (option) => option.value === selectedServiceOptionId
       );
-      const inferredRequestMatchingFields = buildRequestMatchingFields({
-        title: title.trim(),
-        description: description.trim(),
-        category: selectedCategory,
-        location: location.trim(),
-      });
-
-      const selectedCanonicalServiceId = selectedServiceOptionId.startsWith("service:")
-        ? selectedServiceOptionId.slice("service:".length)
-        : "";
-
-      const selectedCanonicalService = selectedCanonicalServiceId
-        ? getRequestIntelligenceServices(t).find(
-            (service) => service.serviceId === selectedCanonicalServiceId
-          )
-        : null;
-
-      const requestMatchingFields = selectedCanonicalService
-        ? {
-            ...inferredRequestMatchingFields,
-            serviceDomain:
-              selectedCanonicalService.domain ||
-              inferredRequestMatchingFields.serviceDomain,
-            service_domain:
-              selectedCanonicalService.domain ||
-              inferredRequestMatchingFields.service_domain,
-            requestCategory:
-              selectedCanonicalService.canonicalRequestCategory ||
-              selectedCanonicalService.serviceId,
-            request_category:
-              selectedCanonicalService.canonicalRequestCategory ||
-              selectedCanonicalService.serviceId,
-            serviceSpecialty: selectedCanonicalService.serviceId,
-            service_specialty: selectedCanonicalService.serviceId,
-          }
-        : inferredRequestMatchingFields;
 
       const requestValidation = validateRequestHelpSubmission({
         title,
@@ -551,108 +657,134 @@ function Upload({ setPage, currentPage }) {
 
       if (!requestValidation.ok) {
         setFieldErrors(requestValidation.errors);
+        if (!draft.submission.snapshot) {
+          clearSubmissionIntent();
+        }
+        return;
+      }
+
+      if (!draftReadiness.isReady) {
+        setSubmissionError(
+          guidance?.messageKey
+            ? t(guidance.messageKey)
+            : getRequestHelpCopy(language).failed
+        );
+        if (!draft.submission.snapshot) {
+          clearSubmissionIntent();
+        }
         return;
       }
 
       setFieldErrors({});
       setSubmissionError("");
 
-      const uploadedRequestPhotos = selectedRequestPhotos.length > 0
-        ? await uploadRequestPhotos({
-            files: selectedRequestPhotos.map((photo) => photo.file),
-            authFetchImpl: authFetch,
-            setPage,
-          })
-        : { ok: true, photos: [] };
+      const submissionIntentKey = getSubmissionIntentKey();
+      let submittedPayloadSnapshot = draft.submission.snapshot;
+      if (!submittedPayloadSnapshot) {
+        if (selectedRequestPhotos.length > 0) setUploading(true);
+        const uploadedRequestPhotos = selectedRequestPhotos.length > 0
+          ? await uploadRequestPhotos({
+              files: selectedRequestPhotos.map((photo) => photo.file),
+              authFetchImpl: authFetch,
+              setPage,
+            })
+          : { ok: true, photos: [] };
 
-      setUploading(false);
+        setUploading(false);
 
-      if (!uploadedRequestPhotos.ok) {
-        setPhotoError(getRequestPhotoErrorMessage(uploadedRequestPhotos.code));
-        return;
+        if (!uploadedRequestPhotos.ok) {
+          setPhotoError(getRequestPhotoErrorMessage(uploadedRequestPhotos.code));
+          clearSubmissionIntent();
+          return;
+        }
+
+        const requestPhotoPayload = uploadedRequestPhotos.photos.map((media, index) => ({
+          purpose: REQUEST_PHOTO_PURPOSE,
+          media,
+          display_order: index,
+        }));
+        submittedPayloadSnapshot = {
+          body: buildJobRequestDraftCanonicalPayload(draft, {
+            requestPhotoPayload,
+          }),
+          uploadedMedia: uploadedRequestPhotos.photos,
+        };
+        setDraft((current) =>
+          setDraftSubmissionSnapshot(
+            setDraftUploadedMedia(current, uploadedRequestPhotos.photos),
+            submittedPayloadSnapshot
+          )
+        );
       }
-
-      const requestPhotoPayload = uploadedRequestPhotos.photos.map((media, index) => ({
-        purpose: REQUEST_PHOTO_PURPOSE,
-        media,
-        display_order: index,
-      }));
-      uploadedMediaForCleanup = uploadedRequestPhotos.photos;
+      uploadedMediaForCleanup = submittedPayloadSnapshot.uploadedMedia;
+      shouldCleanupUploadedMedia = true;
 
       const result = await authFetch(
         "/posts",
         {
           method: "POST",
-          body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim(),
-          category: selectedCategory,
-          request_category: requestMatchingFields.requestCategory,
-          service_domain: requestMatchingFields.service_domain,
-          service_specialty: requestMatchingFields.service_specialty,
-          location: location.trim(),
-          unit_number: unitNumber.trim(),
-          access_notes: accessNotes.trim(),
-          request_photos: requestPhotoPayload,
-          post_type: isDirectRequest ? "direct_request" : "quote_request",
-          status: isDirectRequest ? "direct_pending" : "open",
-          direct_request: isDirectRequest,
-          direct_request_source: directRequestSource,
-          direct_professional_name: directProfessionalName,
-          direct_conversation_id: directConversationId,
-          }),
+          headers: {
+            "Idempotency-Key": submissionIntentKey,
+          },
+          body: JSON.stringify(submittedPayloadSnapshot.body),
         },
         setPage
       );
 
       const data = result.data || {};
-      const canonicalPost = getCanonicalCreatedRequest(result);
+      const canonicalPost = getCanonicalJobRequestPost(result);
 
       if (canonicalPost) {
         uploadedMediaForCleanup = [];
+        shouldCleanupUploadedMedia = false;
 
-        if (isDirectRequest) {
-          localStorage.removeItem("directRequestMode");
-          localStorage.removeItem("directRequestSource");
-          localStorage.removeItem("directRequestProfessionalName");
-          localStorage.removeItem("directRequestProfessionalCategory");
-          localStorage.removeItem("directRequestProfessionalConversationId");
-          localStorage.removeItem("directRequestId");
-          localStorage.removeItem("requestProfessionalContext");
-        }
+        localStorage.setItem("selectedHomeownerRequestId", String(canonicalPost.id));
+        localStorage.setItem("selectedHomeownerRequest", JSON.stringify(canonicalPost));
+        localStorage.removeItem("directRequestMode");
+        localStorage.removeItem("directRequestSource");
+        localStorage.removeItem("directRequestProfessionalName");
+        localStorage.removeItem("directRequestProfessionalCategory");
+        localStorage.removeItem("directRequestProfessionalConversationId");
+        localStorage.removeItem("directRequestId");
+        localStorage.removeItem("requestProfessionalContext");
 
-        alert(
-          isDirectRequest
-            ? (language === "es"
-                ? "Solicitud enviada directamente al profesional."
-                : "Request sent directly to this professional.")
-            : t("projectPostedSuccess")
-        );
+        alert(t("projectPostedSuccess"));
 
-        setTitle("");
-        setDescription("");
-        setCategory("");
-        setCustomCategory("");
-        setLocation("");
-        setUnitNumber("");
-        setAccessNotes("");
         clearSelectedRequestPhotos();
-        setAssistantDraftMetadata(null);
-        setTitleEdited(false);
-        setDescriptionEdited(false);
+        setDraft(resetJobRequestDraft({
+          initialLocation: getInitialRequestLocation(),
+        }));
+        clearJobRequestDraft(localStorage);
         setFieldErrors({});
         setSubmissionError("");
 
         setPage("home");
       } else {
-        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
-        uploadedMediaForCleanup = [];
-        setSubmissionError(
-          data.message || data.error || getRequestHelpCopy(language).failed
-        );
+        const failureType = classifyJobRequestCreateFailure(result);
+        if (failureType === "ambiguous" || failureType === "conflict") {
+          shouldCleanupUploadedMedia = false;
+        }
+        if (failureType === "conflict") {
+          setSubmissionError(
+            language === "es"
+              ? "Esta solicitud cambió después de un intento anterior. Revisa los detalles antes de intentarlo otra vez."
+              : "This request changed after an earlier submission attempt. Review the details before trying again."
+          );
+        } else {
+          setSubmissionError(
+            data.message || data.error || getRequestHelpCopy(language).failed
+          );
+        }
+        if (shouldCleanupUploadedMedia) {
+          await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+          clearSubmissionIntent();
+        }
       }
-    } catch {
-      await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+    } catch (error) {
+      if (classifyJobRequestCreateFailure(error) !== "ambiguous" && shouldCleanupUploadedMedia) {
+        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+        clearSubmissionIntent();
+      }
       setSubmissionError(getRequestHelpCopy(language).failed);
     } finally {
       setUploading(false);
@@ -679,17 +811,11 @@ function Upload({ setPage, currentPage }) {
       if (!confirmed) return;
     }
 
-    setTitle("");
-    setDescription("");
-    setCategory("");
-    setCustomCategory("");
-    setLocation("");
-    setUnitNumber("");
-    setAccessNotes("");
     clearSelectedRequestPhotos();
-    setAssistantDraftMetadata(null);
-    setTitleEdited(false);
-    setDescriptionEdited(false);
+    setDraft(resetJobRequestDraft({
+      initialLocation: getInitialRequestLocation(),
+    }));
+    clearJobRequestDraft(localStorage);
     setFieldErrors({});
     setSubmissionError("");
     clearAssistantRequestDraft(localStorage);
@@ -697,20 +823,46 @@ function Upload({ setPage, currentPage }) {
     setPage("home");
   }
 
+  function handleReviewEdit(target) {
+    if (target === "service") {
+      setServiceSelectorOpen(true);
+      serviceSearchInputRef.current?.focus();
+      return;
+    }
+    if (target === "title") {
+      titleInputRef.current?.focus();
+      return;
+    }
+    if (target === "description") {
+      descriptionInputRef.current?.focus();
+      return;
+    }
+    if (target === "location" || target === "access") {
+      locationInputRef.current?.focus();
+      return;
+    }
+    if (target === "photos") {
+      openRequestPhotoPicker();
+    }
+  }
+
   const requestHelpCopy = getRequestHelpCopy(language);
+  const draftReviewModel = buildJobRequestReviewModel(draft);
+  const draftReadiness = draftReviewModel.readiness;
+  const guidance = draftReadiness.nextRecommendedPrompt;
   const reviewItems = [
     {
       label: requestHelpCopy.service,
-      value: selectedServiceOptionId ? selectedServiceLabel : "",
+      value: selectedServiceOptionId ? draftReviewModel.service.label || selectedServiceLabel : "",
       required: true,
     },
-    { label: requestHelpCopy.title, value: title.trim(), required: true },
+    { label: requestHelpCopy.title, value: draftReviewModel.title, required: true },
     {
       label: requestHelpCopy.description,
-      value: description.trim(),
+      value: draftReviewModel.description,
       required: false,
     },
-    { label: requestHelpCopy.location, value: location.trim(), required: true },
+    { label: requestHelpCopy.location, value: draftReviewModel.location.serviceAddress, required: true },
     {
       label: requestHelpCopy.photos,
       value: projectPhotos.length ? String(projectPhotos.length) : "",
@@ -754,6 +906,34 @@ function Upload({ setPage, currentPage }) {
           </div>
         )}
 
+        <section
+          style={draftGuidanceCard}
+          aria-live="polite"
+          aria-label={t("jobRequestDraftGuidanceTitle")}
+        >
+          <div>
+            <strong style={draftGuidanceTitle}>
+              {draftReadiness.isReady
+                ? t("jobRequestDraftReadyTitle")
+                : t("jobRequestDraftGuidanceTitle")}
+            </strong>
+            <p style={draftGuidanceText}>
+              {guidance?.messageKey
+                ? t(guidance.messageKey)
+                : t("jobRequestDraftGuidanceReady")}
+            </p>
+          </div>
+          {draftReadiness.warnings.length > 0 && (
+            <ul style={draftWarningList}>
+              {draftReadiness.warnings.slice(0, 2).map((warning) => (
+                <li key={warning.code} style={draftWarningItem}>
+                  {t(warning.messageKey)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <form
           className="meetro-visual-surface"
           style={cardStyle}
@@ -765,6 +945,7 @@ function Upload({ setPage, currentPage }) {
         </label>
         <input
           id="request-service-search"
+          ref={serviceSearchInputRef}
           placeholder={t("requestIntelligencePlaceholder")}
           value={serviceSearch}
           onChange={(event) => handleServiceSearchChange(event.target.value)}
@@ -821,7 +1002,14 @@ function Upload({ setPage, currentPage }) {
               id="request-custom-service"
               placeholder={t("enterCustomService")}
               value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
+              onChange={(e) =>
+                setDraft((current) =>
+                  setServiceClassification(current, {
+                    ...current.service,
+                    customCategory: e.target.value,
+                  })
+                )
+              }
               style={inputStyle}
             />
           </>
@@ -841,6 +1029,34 @@ function Upload({ setPage, currentPage }) {
               </li>
             ))}
           </ul>
+          <div style={draftReviewSectionList}>
+            {draftReviewModel.sections.map((section) => (
+              <section key={section.id} style={draftReviewSection}>
+                <strong style={draftReviewSectionTitle}>{t(section.labelKey)}</strong>
+                {section.items.map((item) => (
+                  <div key={item.id} style={draftReviewRow}>
+                    <span style={draftReviewItemText}>
+                      {t(item.labelKey)}
+                      <small style={draftReviewItemMeta}>
+                        {item.missing
+                          ? t("jobRequestDraftStatusMissing")
+                          : item.confirmed
+                          ? t("jobRequestDraftStatusConfirmed")
+                          : t("jobRequestDraftStatusNeedsReview")}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      style={draftReviewEditButton}
+                      onClick={() => handleReviewEdit(item.editTarget)}
+                    >
+                      {t("jobRequestDraftEdit")}
+                    </button>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
         </div>
 
         <label htmlFor="request-title" style={fieldLabel}>
@@ -848,11 +1064,15 @@ function Upload({ setPage, currentPage }) {
         </label>
         <input
           id="request-title"
+          ref={titleInputRef}
           placeholder={t("projectTitlePlaceholder")}
           value={title}
           onChange={(e) => {
-            setTitleEdited(true);
-            setTitle(e.target.value);
+            setDraft((current) =>
+              applyHomeownerInput(current, {
+                "job.title": e.target.value,
+              })
+            );
             setFieldErrors((current) => ({ ...current, title: undefined }));
           }}
           style={inputStyle}
@@ -876,8 +1096,11 @@ function Upload({ setPage, currentPage }) {
           placeholder={t("projectDescriptionPlaceholder")}
           value={description}
           onChange={(e) => {
-            setDescriptionEdited(true);
-            setDescription(e.target.value);
+            setDraft((current) =>
+              applyHomeownerInput(current, {
+                "job.description": e.target.value,
+              })
+            );
           }}
           style={{
             ...textareaStyle,
@@ -891,10 +1114,15 @@ function Upload({ setPage, currentPage }) {
         </label>
         <input
           id="request-location"
+          ref={locationInputRef}
           placeholder={t("locationExample")}
           value={location}
           onChange={(e) => {
-            setLocation(e.target.value);
+            setDraft((current) =>
+              applyHomeownerInput(current, {
+                "location.serviceAddress": e.target.value,
+              })
+            );
             setFieldErrors((current) => ({ ...current, location: undefined }));
           }}
           style={inputStyle}
@@ -917,7 +1145,13 @@ function Upload({ setPage, currentPage }) {
           id="request-unit"
           placeholder={t("unitNumberPlaceholder")}
           value={unitNumber}
-          onChange={(e) => setUnitNumber(e.target.value)}
+          onChange={(e) =>
+            setDraft((current) =>
+              applyHomeownerInput(current, {
+                "location.unitNumber": e.target.value,
+              })
+            )
+          }
           style={inputStyle}
           maxLength={100}
         />
@@ -934,7 +1168,13 @@ function Upload({ setPage, currentPage }) {
               id="request-access-notes"
               placeholder={t("accessNotesPlaceholder")}
               value={accessNotes}
-              onChange={(e) => setAccessNotes(e.target.value)}
+              onChange={(e) =>
+                setDraft((current) =>
+                  applyHomeownerInput(current, {
+                    "location.accessNotes": e.target.value,
+                  })
+                )
+              }
               style={textareaStyle}
               maxLength={1000}
             />
@@ -1207,52 +1447,6 @@ const backButton = {
   cursor: "pointer",
 };
 
-const heroCard = {
-  background: "var(--meetro-gradient-community-hero)",
-  color: "white",
-  borderRadius: "26px",
-  padding: "24px 22px",
-  marginBottom: "14px",
-  boxShadow: "var(--meetro-shadow-lifted)",
-  maxWidth: "100%",
-  minWidth: 0,
-  overflowWrap: "anywhere",
-};
-
-const eyebrow = {
-  margin: 0,
-  opacity: 0.9,
-  fontWeight: "900",
-};
-
-const pageTitle = {
-  margin: "8px 0",
-  fontSize: "32px",
-  color: "white",
-  lineHeight: 1.05,
-};
-
-const pageSubtitle = {
-  margin: 0,
-  color: "white",
-  lineHeight: 1.45,
-  opacity: 0.95,
-  fontSize: "15px",
-};
-
-const tipCard = {
-  background: "var(--meetro-surface-paper)",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "20px",
-  padding: "14px 16px",
-  marginBottom: "14px",
-  boxShadow: "var(--meetro-shadow-soft)",
-  color: "var(--meetro-color-ink)",
-  maxWidth: "100%",
-  minWidth: 0,
-  overflowWrap: "anywhere",
-};
-
 const preparedRequestBanner = {
   position: "relative",
   background: "rgba(255, 253, 248, 0.88)",
@@ -1414,6 +1608,47 @@ const changeServiceButton = {
   whiteSpace: "nowrap",
 };
 
+const draftGuidanceCard = {
+  display: "grid",
+  gap: "8px",
+  padding: "13px 14px",
+  borderRadius: "16px",
+  border: "1px solid rgba(31, 77, 52, 0.18)",
+  background: "rgba(240, 249, 244, 0.94)",
+  color: "var(--meetro-color-coffee)",
+  marginBottom: "12px",
+};
+
+const draftGuidanceTitle = {
+  display: "block",
+  color: "var(--meetro-color-forest)",
+  fontSize: "14px",
+  fontWeight: 950,
+};
+
+const draftGuidanceText = {
+  margin: "4px 0 0",
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 750,
+};
+
+const draftWarningList = {
+  listStyle: "none",
+  display: "grid",
+  gap: "5px",
+  margin: 0,
+  padding: 0,
+};
+
+const draftWarningItem = {
+  color: "var(--meetro-color-coffee)",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 850,
+};
+
 const requestReviewIntroCard = {
   display: "grid",
   gap: "4px",
@@ -1459,6 +1694,61 @@ const requestReviewValue = {
 const requestReviewMissing = {
   color: "#b42318",
   textAlign: "right",
+};
+
+const draftReviewSectionList = {
+  display: "grid",
+  gap: "8px",
+  marginTop: "10px",
+};
+
+const draftReviewSection = {
+  display: "grid",
+  gap: "6px",
+  paddingTop: "8px",
+  borderTop: "1px solid rgba(31, 77, 52, 0.10)",
+};
+
+const draftReviewSectionTitle = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "12px",
+  fontWeight: 950,
+};
+
+const draftReviewRow = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "8px",
+  alignItems: "center",
+  minWidth: 0,
+};
+
+const draftReviewItemText = {
+  display: "grid",
+  gap: "2px",
+  color: "var(--meetro-color-ink)",
+  fontSize: "13px",
+  fontWeight: 850,
+  minWidth: 0,
+  overflowWrap: "anywhere",
+};
+
+const draftReviewItemMeta = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "11px",
+  fontWeight: 800,
+};
+
+const draftReviewEditButton = {
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-paper)",
+  color: "var(--meetro-color-forest)",
+  minHeight: "36px",
+  padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: 950,
+  cursor: "pointer",
 };
 
 const fieldErrorText = {
@@ -1517,101 +1807,6 @@ const propertyManagementFoundationNote = {
   fontSize: "13px",
   fontWeight: 700,
   lineHeight: 1.5,
-};
-
-const aiGuidanceCard = {
-  background: "var(--meetro-surface-warm)",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "20px",
-  padding: "16px",
-  margin: "4px 0 8px",
-  maxWidth: "100%",
-  minWidth: 0,
-  overflowWrap: "anywhere",
-};
-
-const aiGuidanceHeading = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "11px",
-  minWidth: 0,
-};
-
-const aiGuidanceIcon = {
-  width: "30px",
-  height: "30px",
-  flexShrink: 0,
-  display: "grid",
-  placeItems: "center",
-  borderRadius: "10px",
-  background: "var(--meetro-surface-paper)",
-  border: "1px solid var(--meetro-color-line)",
-  color: "var(--meetro-color-forest)",
-  fontSize: "15px",
-  fontWeight: 950,
-};
-
-const aiGuidanceTitle = {
-  display: "block",
-  color: "var(--meetro-color-forest)",
-  fontSize: "16px",
-  fontWeight: "900",
-  lineHeight: 1.3,
-  marginBottom: "4px",
-};
-
-const aiGuidanceText = {
-  color: "var(--meetro-color-muted)",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  margin: 0,
-  overflowWrap: "anywhere",
-};
-
-const aiGuidanceExamplesLabel = {
-  display: "block",
-  margin: "13px 0 7px",
-  color: "var(--meetro-color-wood)",
-  fontSize: "11px",
-  fontWeight: 950,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-};
-
-const aiGuidanceExamples = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "7px",
-};
-
-const aiGuidanceExample = {
-  padding: "7px 9px",
-  borderRadius: "11px",
-  background: "var(--meetro-surface-paper)",
-  border: "1px solid var(--meetro-color-line)",
-  color: "var(--meetro-color-coffee)",
-  fontSize: "12px",
-  lineHeight: 1.3,
-  fontWeight: 700,
-};
-
-const aiGuidanceNextStep = {
-  marginTop: "13px",
-  padding: "10px 11px",
-  borderRadius: "12px",
-  background: "rgba(255, 253, 248, 0.72)",
-  border: "1px solid var(--meetro-color-line)",
-  color: "var(--meetro-color-forest)",
-  fontSize: "13px",
-  lineHeight: 1.5,
-};
-
-const requestDetailsHeading = {
-  margin: "8px 0 2px",
-  color: "var(--meetro-color-ink)",
-  fontSize: "18px",
-  lineHeight: 1.3,
-  fontWeight: 950,
 };
 
 const uploadBox = {
@@ -1702,31 +1897,6 @@ const previewImage = {
   borderRadius: "22px",
   objectFit: "cover",
   border: "1px solid var(--meetro-color-line)",
-};
-
-const photoTagRow = {
-  display: "flex",
-  gap: "5px",
-  padding: "7px",
-  background: "white",
-};
-
-const photoTagButton = {
-  flex: 1,
-  border: "1px solid var(--meetro-color-line)",
-  background: "var(--meetro-surface-sage)",
-  color: "var(--meetro-color-coffee)",
-  borderRadius: "999px",
-  padding: "5px 6px",
-  fontSize: "10px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const photoTagButtonActive = {
-  background: "var(--meetro-color-forest)",
-  color: "#fffdf8",
-  border: "1px solid var(--meetro-color-forest)",
 };
 
 const removePhotoButton = {

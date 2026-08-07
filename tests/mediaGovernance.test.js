@@ -58,7 +58,9 @@ test("governed Request Help media path uses request-photo only", () => {
   assert.match(requestMedia, /\/media\/upload-signature/);
   assert.match(requestMedia, /\/media\/request-photo\/cleanup/);
   assert.match(upload, /uploadRequestPhotos/);
-  assert.match(upload, /request_photos: requestPhotoPayload/);
+  assert.match(upload, /requestPhotoPayload,/);
+  assert.match(upload, /setDraftSubmissionSnapshot\(/);
+  assert.match(upload, /setDraftUploadedMedia\(current, uploadedRequestPhotos\.photos\)/);
   assert.match(upload, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.doesNotMatch(upload, /image_url: projectPhotos|image_url: imageUrl/);
   assert.doesNotMatch(upload, /readAsDataURL|new FileReader/);

@@ -148,5 +148,5 @@ test("Request Help no longer creates a browser-authoritative request projection"
 
   assert.doesNotMatch(source, /localStorage\.setItem\(\s*["']homeownerRequests["']/);
   assert.doesNotMatch(source, /meetroHomeownerRequestsBackup/);
-  assert.match(source, /getCanonicalCreatedRequest\(result\)/);
+  assert.match(source, /getCanonicalJobRequestPost\(result\)/);
 });

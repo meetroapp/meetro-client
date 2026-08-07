@@ -91,14 +91,15 @@ test("Upload sends canonical request identity separately from display grouping",
     new URL("../src/pages/Upload.jsx", import.meta.url),
     "utf8"
   );
+  const draftSource = readFileSync(
+    new URL("../src/utils/jobRequestDraft.js", import.meta.url),
+    "utf8"
+  );
 
-  assert.match(
-    uploadSource,
-    /requestCategory:\s*selectedCanonicalService\.canonicalRequestCategory/
-  );
-  assert.match(
-    uploadSource,
-    /request_category:\s*selectedCanonicalService\.canonicalRequestCategory/
-  );
-  assert.match(uploadSource, /service_specialty: selectedCanonicalService\.serviceId/);
+  assert.match(uploadSource, /requestCategory: option\.requestCategory/);
+  assert.match(uploadSource, /domain: option\.serviceDomain/);
+  assert.match(uploadSource, /specialty: option\.serviceSpecialty/);
+  assert.match(draftSource, /requestCategory: cleanText\(draft\.service\?\.requestCategory\)/);
+  assert.match(draftSource, /service_domain: cleanText\(draft\.service\?\.domain\)/);
+  assert.match(draftSource, /service_specialty: cleanText\(draft\.service\?\.specialty\)/);
 });

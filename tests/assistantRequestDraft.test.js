@@ -166,9 +166,12 @@ test("assistant request draft saves, loads, and clears without auto-posting", ()
   assert.equal(loaded.title, "Garage opener installed");
   assert.equal(loaded.category, "doorsWindows");
   assert.equal(storage.getItem("homeownerRequests"), null);
+  assert.notEqual(storage.getItem("meetroJobRequestDraft"), null);
+  assert.equal(storage.getItem("aiProjectDraft"), null);
 
   clearAssistantRequestDraft(storage);
   assert.equal(storage.getItem(ASSISTANT_REQUEST_DRAFT_KEY), null);
+  assert.equal(storage.getItem("meetroJobRequestDraft"), null);
   assert.equal(storage.getItem("aiProjectDraft"), null);
 });
 
@@ -190,22 +193,20 @@ test("Upload consumes Ask Meetro draft and keeps request form editable before se
   assert.match(assistantSource, /saveAssistantRequestDraft\(localStorage, draft\)/);
   assert.match(assistantSource, /t\("assistantUseThisToPostProject"\)/);
   assert.match(uploadSource, /readAssistantRequestDraft\(localStorage\)/);
-  assert.match(uploadSource, /setTitle\(draft\.title \|\| ""\)/);
-  assert.match(uploadSource, /setDescription\(draft\.description \|\| ""\)/);
-  assert.match(uploadSource, /setCategory\(validCategory \? draft\.category/);
-  assert.match(uploadSource, /clearAssistantRequestDraft\(localStorage\)/);
+  assert.match(uploadSource, /createJobRequestDraftFromAssistantDraft\(initialAssistantDraft/);
+  assert.match(uploadSource, /const \[draft, setDraft\] = useState\(\(\) => \{/);
+  assert.match(uploadSource, /clearAssistantRequestDraftHandoff\(localStorage\)/);
   assert.doesNotMatch(uploadSource, /readAssistantRequestDraft[\s\S]{0,260}handleCreatePost\(/);
 });
 
 test("created request submits reviewed canonical fields without legacy local draft metadata", () => {
-  assert.match(uploadSource, /setAssistantDraftMetadata\(draft\)/);
-  assert.match(uploadSource, /request_category: requestMatchingFields\.requestCategory/);
-  assert.match(uploadSource, /service_domain: requestMatchingFields\.service_domain/);
-  assert.match(uploadSource, /service_specialty: requestMatchingFields\.service_specialty/);
+  assert.match(uploadSource, /buildJobRequestDraftCanonicalPayload\(draft/);
   assert.doesNotMatch(uploadSource, /assistantDraft: assistantDraftMetadata/);
   assert.doesNotMatch(uploadSource, /assistantSuggestedProjectType:/);
   assert.doesNotMatch(uploadSource, /assistantOriginalPrompt:/);
   assert.doesNotMatch(uploadSource, /assistantRecommendationText:/);
+  assert.doesNotMatch(uploadSource, /direct_request:/);
+  assert.doesNotMatch(uploadSource, /direct_conversation_id:/);
 });
 
 test("request form has mobile containment for generated Meetro draft content", () => {
@@ -315,6 +316,9 @@ test("request form shows an understanding-to-review transition without submissio
   assert.match(uploadSource, /requestReviewIntroText/);
   assert.match(uploadSource, /assistantDraftMetadata && \(/);
   assert.match(uploadSource, /preparedRequestOrb/);
+  assert.match(uploadSource, /jobRequestDraftGuidanceTitle/);
+  assert.match(uploadSource, /buildJobRequestReviewModel\(draft\)/);
+  assert.match(uploadSource, /handleReviewEdit\(item\.editTarget\)/);
   assert.equal(t("requestReviewIntroTitle", "en"), "Here's what Meetro understood.");
   assert.equal(t("requestReviewIntroText", "en"), "Review or edit anything before sending.");
   assert.doesNotMatch(uploadSource, /assistantPreparedRequestBannerTitle/);
@@ -343,8 +347,8 @@ test("Request Details form remains the primary editable surface", () => {
   assert.match(uploadSource, /\{t\("projectTitle"\)\} \(\{requestHelpCopy\.required\}\)/);
   assert.match(uploadSource, /\{t\("projectDescription"\)\} \(\{requestHelpCopy\.optional\}\)/);
   assert.match(uploadSource, /\{t\("fullServiceAddress"\)\} \(\{requestHelpCopy\.required\}\)/);
-  assert.match(uploadSource, /setTitleEdited\(true\);\s*setTitle\(e\.target\.value\);/);
-  assert.match(uploadSource, /setDescriptionEdited\(true\);\s*setDescription\(e\.target\.value\);/);
+  assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.title": e\.target\.value/);
+  assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.description": e\.target\.value/);
 });
 
 test("request page keeps matching language problem-first and avoids category-first validation", () => {
@@ -362,12 +366,12 @@ test("request page keeps matching language problem-first and avoids category-fir
 
 test("request page prepares editable title and details from what the homeowner describes", () => {
   assert.match(uploadSource, /function buildSuggestedRequestTitle/);
-  assert.match(uploadSource, /const \[titleEdited, setTitleEdited\] = useState\(false\)/);
-  assert.match(uploadSource, /const \[descriptionEdited, setDescriptionEdited\] = useState\(false\)/);
-  assert.match(uploadSource, /if \(!titleEdited\) \{\s*setTitle\(buildSuggestedRequestTitle/);
-  assert.match(uploadSource, /if \(!descriptionEdited\) \{\s*setDescription\(value\)/);
-  assert.match(uploadSource, /setTitleEdited\(true\)/);
-  assert.match(uploadSource, /setDescriptionEdited\(true\)/);
+  assert.match(uploadSource, /const titleEdited = draft\.fieldMeta\?\.job\?\.title\?\.confirmed === true/);
+  assert.match(uploadSource, /const descriptionEdited = draft\.fieldMeta\?\.job\?\.description\?\.confirmed === true/);
+  assert.match(uploadSource, /if \(!titleEdited\) \{\s*setDraft\(\(current\) =>\s*applyAssistantSuggestion/);
+  assert.match(uploadSource, /if \(!descriptionEdited\) \{\s*setDraft\(\(current\) =>\s*applyAssistantSuggestion/);
+  assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.title": e\.target\.value/);
+  assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.description": e\.target\.value/);
 });
 
 test("Send Request remains primary and Cancel Request is visually secondary", () => {
@@ -405,6 +409,16 @@ test("Continue to Request and continuity labels exist in supported languages", (
     "requestMatchRequired",
     "requestReviewIntroTitle",
     "requestReviewIntroText",
+    "jobRequestDraftGuidanceTitle",
+    "jobRequestDraftReadyTitle",
+    "jobRequestDraftGuidanceService",
+    "jobRequestDraftGuidanceJobTitle",
+    "jobRequestDraftGuidanceLocation",
+    "jobRequestDraftGuidanceReady",
+    "jobRequestDraftWarningServiceUnconfirmed",
+    "jobRequestDraftReviewWork",
+    "jobRequestDraftStatusNeedsReview",
+    "jobRequestDraftEdit",
     "projectPostedSuccess",
   ];
 

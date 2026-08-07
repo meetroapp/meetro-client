@@ -1,5 +1,10 @@
 import { buildRequestMatchingFields } from "./requestMatchingFields.js";
 import { classifyRequestIntent } from "./requestIntelligence.js";
+import {
+  createJobRequestDraftFromAssistantDraft,
+  saveJobRequestDraft,
+  clearJobRequestDraft,
+} from "./jobRequestDraft.js";
 
 export const ASSISTANT_REQUEST_DRAFT_KEY = "meetroAssistantRequestDraft";
 
@@ -256,7 +261,11 @@ export function normalizeAssistantRequestDraft(draft = {}) {
     description,
     category: normalizedCategory,
     suggestedProjectType,
+    requestCategory: cleanText(draft.requestCategory) || normalizedCategory,
+    service_domain: cleanText(draft.service_domain) || cleanText(draft.serviceDomain) || inferredIntent.serviceDomain,
+    service_specialty: cleanText(draft.service_specialty) || cleanText(draft.serviceSpecialty),
     serviceDomain: cleanText(draft.serviceDomain) || inferredIntent.serviceDomain,
+    serviceSpecialty: cleanText(draft.serviceSpecialty) || cleanText(draft.service_specialty),
     serviceDomainLabel: cleanText(draft.serviceDomainLabel) || inferredIntent.serviceDomainLabel,
     confidence: cleanText(draft.confidence) || inferredIntent.confidence,
     intentReason: cleanText(draft.intentReason) || inferredIntent.reason,
@@ -274,9 +283,11 @@ export function saveAssistantRequestDraft(storage, draft = {}) {
   if (!storage || !normalized) return null;
 
   storage.setItem(ASSISTANT_REQUEST_DRAFT_KEY, JSON.stringify(normalized));
-  storage.setItem("aiProjectDraft", normalized.originalPrompt || normalized.title);
-  storage.setItem("aiBusinessRecommendation", normalized.suggestedProjectType);
-  storage.setItem("aiProjectScope", normalized.recommendationText || normalized.description);
+  saveJobRequestDraft(
+    storage,
+    createJobRequestDraftFromAssistantDraft(normalized)
+  );
+  LEGACY_DRAFT_KEYS.forEach((key) => storage.removeItem(key));
 
   return normalized;
 }
@@ -311,6 +322,13 @@ export function readAssistantRequestDraft(storage) {
 }
 
 export function clearAssistantRequestDraft(storage) {
+  if (!storage) return;
+
+  clearAssistantRequestDraftHandoff(storage);
+  clearJobRequestDraft(storage);
+}
+
+export function clearAssistantRequestDraftHandoff(storage) {
   if (!storage) return;
 
   storage.removeItem(ASSISTANT_REQUEST_DRAFT_KEY);

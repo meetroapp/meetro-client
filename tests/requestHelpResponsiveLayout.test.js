@@ -69,7 +69,9 @@ test("Request Help layout keeps governed media behind the request-photo policy",
   assert.match(uploadSource, /isRequestPhotoUploadEnabled\(\)/);
   assert.match(uploadSource, /disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}/);
   assert.match(uploadSource, /uploadRequestPhotos/);
-  assert.match(uploadSource, /request_photos: requestPhotoPayload/);
+  assert.match(uploadSource, /requestPhotoPayload,/);
+  assert.match(uploadSource, /setDraftSubmissionSnapshot\(/);
+  assert.match(uploadSource, /setDraftUploadedMedia\(current, uploadedRequestPhotos\.photos\)/);
   assert.match(
     uploadSource,
     /governedUploadEnabled: requestPhotoUploadEnabled/
@@ -93,7 +95,7 @@ test("Request Help reads selected files before clearing the file input", () => {
 });
 
 test("Request Help exposes bounded photo reorder controls", () => {
-  assert.match(uploadSource, /reorderRequestPhotos/);
+  assert.match(uploadSource, /reorderDraftPhotos/);
   assert.match(uploadSource, /moveSelectedRequestPhoto\(index, -1\)/);
   assert.match(uploadSource, /moveSelectedRequestPhoto\(index, 1\)/);
   assert.match(uploadSource, /disabled=\{index === 0\}/);
@@ -116,7 +118,9 @@ test("Request Help exposes semantic labels, status messages, and mobile touch ta
 
 test("Request Help accepts only canonical backend success and blocks duplicate taps", () => {
   assert.match(uploadSource, /if \(submissionAttemptRef\.current\) return;/);
-  assert.match(uploadSource, /getCanonicalCreatedRequest\(result\)/);
+  assert.match(uploadSource, /submissionAttemptRef\.current = true;/);
+  assert.match(uploadSource, /getCanonicalJobRequestPost\(result\)/);
+  assert.match(uploadSource, /"Idempotency-Key": submissionIntentKey/);
   assert.match(uploadSource, /if \(canonicalPost\)/);
   assert.doesNotMatch(uploadSource, /data\.post\.id \|\| Date\.now\(\)/);
   assert.doesNotMatch(uploadSource, /localStorage\.setItem\(\s*["']homeownerRequests["']/);
