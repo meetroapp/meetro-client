@@ -171,6 +171,14 @@ test("new conversational labels exist in supported languages", () => {
     "jobRequestRetryInterpretation",
     "jobRequestContinueManually",
     "jobRequestEnterDetailsManually",
+    "jobRequestBackToConversation",
+    "jobRequestEnterRequestDetails",
+    "jobRequestBrowseAllServices",
+    "jobRequestSearchServices",
+    "jobRequestProgress",
+    "jobRequestWhereIsWork",
+    "jobRequestPhotosOptional",
+    "jobRequestTimingOptional",
     "jobRequestRequestDetails",
     "jobRequestSuggestedService",
     "jobRequestReviewRequest",
@@ -193,7 +201,38 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /@media \(max-width: 430px\)/);
   assert.match(uploadSource, /role="log"/);
   assert.match(uploadSource, /aria-live="polite"/);
-  assert.match(uploadSource, /aria-controls="request-details-manual-form"/);
+  assert.match(uploadSource, /requestMode === "conversation"/);
+  assert.match(uploadSource, /requestMode === "manual"/);
+  assert.match(uploadSource, /requestMode === "review"/);
+  assert.match(uploadSource, /jobRequestBackToConversation/);
+  assert.match(uploadSource, /id="request-details-manual-form"/);
+  assert.match(uploadSource, /title=\{t\("chooseClosestMatch"\)\}/);
+  assert.match(uploadSource, /searchPlaceholder=\{t\("searchServices"\)\}/);
   assert.match(uploadSource, /id="job-request-conversation-input"/);
   assert.match(uploadSource, /BottomNav/);
+});
+
+test("manual mode is reversible and preserves one shared draft boundary", () => {
+  assert.match(uploadSource, /function handleBackToConversation\(\)/);
+  assert.match(uploadSource, /setRequestMode\("conversation"\)/);
+  assert.match(uploadSource, /function handleReviewRequest\(event\)/);
+  assert.match(uploadSource, /setRequestMode\("review"\)/);
+  assert.match(uploadSource, /onSubmit=\{handleReviewRequest\}/);
+  assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
+  assert.doesNotMatch(uploadSource, /setManualDraft|manualDraft|draftCopy/);
+});
+
+test("new Request Help drafts do not inherit prior workflow address state", () => {
+  assert.match(uploadSource, /readJobRequestDraft\(localStorage, \{ initialLocation: "" \}\)/);
+  assert.match(uploadSource, /resetJobRequestDraft\(\{\s*initialLocation: "",\s*\}\)/);
+  assert.doesNotMatch(uploadSource, /getInitialRequestLocation|resolveWorkflowAddress|requestLocationDraft/);
+  assert.doesNotMatch(uploadSource, /readStoredRecord\("selectedProperty"\)|readStoredRecord\("selectedProject"\)|readStoredRecord\("selectedHomeownerRequest"\)/);
+});
+
+test("manual editor removes pseudo-review and keeps full catalog behind Browse All", () => {
+  assert.doesNotMatch(uploadSource, /requestHelpCopy\.reviewTitle/);
+  assert.match(uploadSource, /jobRequestProgress/);
+  assert.match(uploadSource, /serviceSuggestions\.map/);
+  assert.match(uploadSource, /jobRequestBrowseAllServices/);
+  assert.match(uploadSource, /ServiceSelectorSheet/);
 });

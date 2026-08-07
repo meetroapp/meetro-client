@@ -22,7 +22,6 @@ import {
   getMediaDeferredNotice,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
-import { resolveWorkflowAddress } from "../utils/personalAddresses";
 import {
   getSupportedRequestHelpServices,
   validateRequestHelpSubmission,
@@ -82,33 +81,6 @@ import {
   hasMeaningfulCreationText,
   isAssistantSuggestedField,
 } from "../utils/jobRequestConversation";
-
-function readStoredRecord(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || "null") || {};
-  } catch {
-    return {};
-  }
-}
-
-function getInitialRequestLocation() {
-  const selectedProperty = readStoredRecord("selectedProperty");
-  const selectedProject = readStoredRecord("selectedProject");
-  const selectedRequest = readStoredRecord("selectedHomeownerRequest");
-  return resolveWorkflowAddress({
-    explicitAddress: localStorage.getItem("requestLocationDraft") || "",
-    selectedPropertyAddress:
-      localStorage.getItem("selectedPropertyAddress") ||
-      selectedProperty.fullAddress ||
-      selectedProperty.address ||
-      selectedProperty.location ||
-      "",
-    projectAddress:
-      selectedProject.fullAddress || selectedProject.address || selectedProject.location || "",
-    requestAddress:
-      selectedRequest.fullAddress || selectedRequest.address || selectedRequest.location || "",
-  });
-}
 
 function isKnownRequestCategory(category) {
   return [
@@ -257,11 +229,10 @@ function Upload({ setPage }) {
 
   const [initialAssistantDraft] = useState(() => readAssistantRequestDraft(localStorage));
   const [draft, setDraft] = useState(() => {
-    const initialLocation = getInitialRequestLocation();
     if (initialAssistantDraft) {
       const validCategory = isKnownRequestCategory(initialAssistantDraft.category);
       const normalizedDraft = createJobRequestDraftFromAssistantDraft(initialAssistantDraft, {
-        initialLocation,
+        initialLocation: "",
       });
       return {
         ...normalizedDraft,
@@ -276,9 +247,7 @@ function Upload({ setPage }) {
         },
       };
     }
-    return readJobRequestDraft(localStorage, {
-      initialLocation: getInitialRequestLocation(),
-    });
+    return readJobRequestDraft(localStorage, { initialLocation: "" });
   });
   const [serviceSearch, setServiceSearch] = useState(
     initialAssistantDraft?.suggestedServiceLabel ||
@@ -317,7 +286,7 @@ function Upload({ setPage }) {
   const [pendingInterpretText, setPendingInterpretText] = useState("");
   const [interpretationPending, setInterpretationPending] = useState(false);
   const [interpretationFailure, setInterpretationFailure] = useState(null);
-  const [requestDetailsExpanded, setRequestDetailsExpanded] = useState(false);
+  const [requestMode, setRequestMode] = useState("conversation");
   const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
 
   useEffect(() => {
@@ -692,7 +661,7 @@ function Upload({ setPage }) {
   }
 
   function focusManualDetails(target = "description") {
-    setRequestDetailsExpanded(true);
+    setRequestMode("manual");
     window.setTimeout(() => {
       if (target === "service") {
         serviceSearchInputRef.current?.focus();
@@ -742,6 +711,21 @@ function Upload({ setPage }) {
     setInterpretationFailure(null);
     setInterpretationPending(false);
     focusManualDetails();
+  }
+
+  function handleBackToConversation() {
+    setRequestMode("conversation");
+    window.setTimeout(() => {
+      conversationLogRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
+  }
+
+  function handleReviewRequest(event) {
+    event?.preventDefault();
+    setRequestMode("review");
+    window.setTimeout(() => {
+      manualDetailsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
   }
 
   async function runInterpretation(text, { retry = false } = {}) {
@@ -944,11 +928,12 @@ function Upload({ setPage }) {
 
         clearSelectedRequestPhotos();
         setDraft(resetJobRequestDraft({
-          initialLocation: getInitialRequestLocation(),
+          initialLocation: "",
         }));
         clearJobRequestDraft(localStorage);
         setCreationMessages(createInitialCreationAssistanceMessages(language));
         setConversationText("");
+        setRequestMode("conversation");
         setInterpretIntent(null);
         setPendingInterpretText("");
         setInterpretationFailure(null);
@@ -1009,7 +994,7 @@ function Upload({ setPage }) {
 
     clearSelectedRequestPhotos();
     setDraft(resetJobRequestDraft({
-      initialLocation: getInitialRequestLocation(),
+      initialLocation: "",
     }));
     clearJobRequestDraft(localStorage);
     setFieldErrors({});
@@ -1020,6 +1005,7 @@ function Upload({ setPage }) {
   }
 
   function handleReviewEdit(target) {
+    setRequestMode("manual");
     if (target === "service") {
       setServiceSelectorOpen(true);
       serviceSearchInputRef.current?.focus();
@@ -1064,6 +1050,12 @@ function Upload({ setPage }) {
       value: projectPhotos.length ? String(projectPhotos.length) : "",
       required: false,
     },
+  ];
+  const progressItems = [
+    { key: "problem", label: t("jobRequestProgressProblem", language), done: Boolean(description.trim()) },
+    { key: "service", label: t("jobRequestProgressService", language), done: Boolean(selectedServiceOptionId) },
+    { key: "address", label: t("jobRequestProgressAddress", language), done: Boolean(location.trim()) },
+    { key: "photos", label: t("jobRequestProgressPhotos", language), done: projectPhotos.length > 0, optional: true },
   ];
   const liveDraftSections = [
     {
@@ -1217,11 +1209,12 @@ function Upload({ setPage }) {
           )}
         </section>
 
-        <div className="job-request-conversation-workspace" style={conversationWorkspace}>
-          <section
-            style={conversationPanel}
-            aria-labelledby="job-request-conversation-title"
-          >
+        {requestMode === "conversation" && (
+          <div className="job-request-conversation-workspace" style={conversationWorkspace}>
+            <section
+              style={conversationPanel}
+              aria-labelledby="job-request-conversation-title"
+            >
             <div style={conversationHeader}>
               <p style={conversationEyebrow}>{t("jobRequestConversationTitle", language)}</p>
               <h2 id="job-request-conversation-title" style={conversationTitle}>
@@ -1337,26 +1330,18 @@ function Upload({ setPage }) {
                 </button>
               </div>
             </form>
-          </section>
+            </section>
 
-          <aside
-            className="job-request-details-panel"
-            style={liveDraftPanel}
-            aria-labelledby="job-request-live-draft-title"
-          >
+            <aside
+              className="job-request-details-panel"
+              style={liveDraftPanel}
+              aria-labelledby="job-request-live-draft-title"
+            >
             <div style={liveDraftHeader}>
               <h2 id="job-request-live-draft-title" style={liveDraftTitle}>
                 {t("jobRequestYourRequest", language)}
               </h2>
-              <button
-                type="button"
-                style={detailsToggleButton}
-                onClick={() => setRequestDetailsExpanded((current) => !current)}
-                aria-expanded={requestDetailsExpanded}
-                aria-controls="request-details-manual-form"
-              >
-                {t("jobRequestRequestDetails", language)}
-              </button>
+              <span style={requestModePill}>{t("jobRequestConversationTitle", language)}</span>
             </div>
 
             {liveDraftSections.length === 0 ? (
@@ -1412,7 +1397,7 @@ function Upload({ setPage }) {
                   ...sendButton,
                   opacity: draftReadiness.isReady ? 1 : 0.62,
                 }}
-                onClick={() => focusManualDetails("title")}
+                onClick={handleReviewRequest}
               >
                 {t("jobRequestReviewRequest", language)}
               </button>
@@ -1424,75 +1409,162 @@ function Upload({ setPage }) {
                 {t("jobRequestAddMoreDetails", language)}
               </button>
             </div>
-          </aside>
-        </div>
-
-        <form
-          ref={manualDetailsRef}
-          id="request-details-manual-form"
-          className="meetro-visual-surface"
-          style={{
-            ...cardStyle,
-            ...(requestDetailsExpanded ? {} : collapsedManualDetailsStyle),
-          }}
-          onSubmit={handleCreatePost}
-          noValidate
-        >
-        <label htmlFor="request-service-search" style={fieldLabel}>
-          {t("requestIntelligencePrompt")} ({requestHelpCopy.required})
-        </label>
-        <input
-          id="request-service-search"
-          ref={serviceSearchInputRef}
-          placeholder={t("requestIntelligencePlaceholder")}
-          value={serviceSearch}
-          onChange={(event) => handleServiceSearchChange(event.target.value)}
-          style={inputStyle}
-          aria-invalid={Boolean(fieldErrors.category)}
-          aria-describedby={fieldErrors.category ? "request-service-error" : undefined}
-        />
-        {fieldErrors.category && (
-          <p id="request-service-error" role="alert" style={fieldErrorText}>
-            {requestHelpCopy.matchRequired}
-          </p>
-        )}
-
-        {serviceSuggestions.length > 0 && (
-          <div style={serviceSuggestionGrid}>
-            {serviceSuggestions.map((service) => (
-              <button
-                key={service.serviceId}
-                type="button"
-                style={{
-                  ...serviceSuggestionButton,
-                  ...(category === service.requestCategory
-                    ? serviceSuggestionButtonActive
-                    : {}),
-                }}
-                onClick={() => selectSuggestedService(service)}
-              >
-                {service.label}
-              </button>
-            ))}
+            </aside>
           </div>
         )}
 
-        <div style={selectedServiceCard}>
-          <span style={selectedServiceLabelText}>{t("requestMatchLabel")}</span>
-          <strong style={selectedServiceValue}>
-            {selectedServiceLabel || t("chooseClosestMatch")}
-          </strong>
-          <button
-            type="button"
-            style={changeServiceButton}
-            onClick={() => setServiceSelectorOpen(true)}
-          >
-            {category ? t("change") : t("chooseClosestMatch")}
-          </button>
+        {requestMode === "manual" && (
+          <form
+          ref={manualDetailsRef}
+          id="request-details-manual-form"
+          className="meetro-visual-surface"
+          style={cardStyle}
+          onSubmit={handleReviewRequest}
+          noValidate
+        >
+        <button type="button" style={backToConversationButton} onClick={handleBackToConversation}>
+          {t("jobRequestBackToConversation", language)}
+        </button>
+
+        <div style={manualHeader}>
+          <h2 style={manualTitle}>{t("jobRequestEnterRequestDetails", language)}</h2>
+          <p style={manualSubtitle}>{t("jobRequestEnterRequestDetailsHelp", language)}</p>
         </div>
 
+        <section style={manualSection} aria-labelledby="request-problem-heading">
+          <h3 id="request-problem-heading" style={manualSectionTitle}>
+            {t("jobRequestConversationQuestion", language)}
+          </h3>
+          <label htmlFor="request-description" style={srOnly}>
+            {t("projectDescription")}
+          </label>
+          <textarea
+            id="request-description"
+            ref={descriptionInputRef}
+            placeholder={t("projectDescriptionPlaceholder")}
+            value={description}
+            onChange={(e) => {
+              setDraft((current) =>
+                applyHomeownerInput(current, {
+                  "job.description": e.target.value,
+                })
+              );
+            }}
+            style={textareaStyle}
+            maxLength={5000}
+          />
+          <label htmlFor="request-title" style={subtleFieldLabel}>
+            {t("projectTitle")} ({requestHelpCopy.optional})
+          </label>
+          <input
+            id="request-title"
+            ref={titleInputRef}
+            placeholder={t("projectTitlePlaceholder")}
+            value={title}
+            onChange={(e) => {
+              setDraft((current) =>
+                applyHomeownerInput(current, {
+                  "job.title": e.target.value,
+                })
+              );
+              setFieldErrors((current) => ({ ...current, title: undefined }));
+            }}
+            style={compactInputStyle}
+            maxLength={160}
+            aria-invalid={Boolean(fieldErrors.title)}
+            aria-describedby={fieldErrors.title ? "request-title-error" : undefined}
+          />
+          {fieldErrors.title && (
+            <p id="request-title-error" role="alert" style={fieldErrorText}>
+              {t("enterPostTitle")}
+            </p>
+          )}
+        </section>
+
+        <section style={manualSection} aria-labelledby="request-service-heading">
+          <h3 id="request-service-heading" style={manualSectionTitle}>
+            {requestHelpCopy.service}
+          </h3>
+          {selectedServiceLabel ? (
+            <div style={selectedServiceCard}>
+              <span style={selectedServiceLabelText}>
+                {serviceSuggested
+                  ? t("jobRequestSuggestedService", language)
+                  : t("jobRequestDraftReviewService", language)}
+              </span>
+              <strong style={selectedServiceValue}>{selectedServiceLabel}</strong>
+              <button
+                type="button"
+                style={changeServiceButton}
+                onClick={() => setServiceSelectorOpen(true)}
+              >
+                {t("change")}
+              </button>
+            </div>
+          ) : (
+            <div style={selectedServiceCard}>
+              <span style={selectedServiceLabelText}>{t("jobRequestSuggestedService", language)}</span>
+              <strong style={selectedServiceValue}>{t("chooseClosestMatch")}</strong>
+              <button
+                type="button"
+                style={changeServiceButton}
+                onClick={() => setServiceSelectorOpen(true)}
+              >
+                {t("jobRequestChooseAnother", language)}
+              </button>
+            </div>
+          )}
+
+          <label htmlFor="request-service-search" style={subtleFieldLabel}>
+            {t("jobRequestSearchServices", language)}
+          </label>
+          <input
+            id="request-service-search"
+            ref={serviceSearchInputRef}
+            placeholder={t("requestIntelligencePlaceholder")}
+            value={serviceSearch}
+            onChange={(event) => handleServiceSearchChange(event.target.value)}
+            style={compactInputStyle}
+            aria-invalid={Boolean(fieldErrors.category)}
+            aria-describedby={fieldErrors.category ? "request-service-error" : undefined}
+          />
+          {fieldErrors.category && (
+            <p id="request-service-error" role="alert" style={fieldErrorText}>
+              {requestHelpCopy.matchRequired}
+            </p>
+          )}
+
+          {serviceSuggestions.length > 0 && (
+            <div style={serviceSuggestionGrid}>
+              {serviceSuggestions.map((service) => (
+                <button
+                  key={service.serviceId}
+                  type="button"
+                  style={{
+                    ...serviceSuggestionButton,
+                    ...(category === service.requestCategory
+                      ? serviceSuggestionButtonActive
+                      : {}),
+                  }}
+                  onClick={() => selectSuggestedService(service)}
+                >
+                  {service.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            style={browseAllButton}
+            onClick={() => setServiceSelectorOpen(true)}
+          >
+            {t("jobRequestBrowseAllServices", language)}
+          </button>
+        </section>
+
         {category === "other" && (
-          <>
+          <section style={manualSection}>
             <label htmlFor="request-custom-service" style={fieldLabel}>
               {t("otherService")}
             </label>
@@ -1510,176 +1582,84 @@ function Upload({ setPage }) {
               }
               style={inputStyle}
             />
-          </>
+          </section>
         )}
 
-        <div style={requestReviewIntroCard}>
-          <strong style={requestReviewIntroTitle}>
-            {requestHelpCopy.reviewTitle}
-          </strong>
-          <ul style={requestReviewList}>
-            {reviewItems.map((item) => (
-              <li key={item.label} style={requestReviewItem}>
-                <span>{item.label}</span>
-                <strong style={item.value ? requestReviewValue : requestReviewMissing}>
-                  {item.value || (item.required ? requestHelpCopy.missing : requestHelpCopy.optional)}
-                </strong>
-              </li>
-            ))}
-          </ul>
-          <div style={draftReviewSectionList}>
-            {draftReviewModel.sections.map((section) => (
-              <section key={section.id} style={draftReviewSection}>
-                <strong style={draftReviewSectionTitle}>{t(section.labelKey)}</strong>
-                {section.items.map((item) => (
-                  <div key={item.id} style={draftReviewRow}>
-                    <span style={draftReviewItemText}>
-                      {t(item.labelKey)}
-                      <small style={draftReviewItemMeta}>
-                        {item.missing
-                          ? t("jobRequestDraftStatusMissing")
-                          : item.confirmed
-                          ? t("jobRequestDraftStatusConfirmed")
-                          : t("jobRequestDraftStatusNeedsReview")}
-                      </small>
-                    </span>
-                    <button
-                      type="button"
-                      style={draftReviewEditButton}
-                      onClick={() => handleReviewEdit(item.editTarget)}
-                    >
-                      {t("jobRequestDraftEdit")}
-                    </button>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        </div>
+        <section style={manualSection} aria-labelledby="request-location-heading">
+          <h3 id="request-location-heading" style={manualSectionTitle}>
+            {t("jobRequestWhereIsWork", language)}
+          </h3>
+          <label htmlFor="request-location" style={srOnly}>
+            {t("fullServiceAddress")}
+          </label>
+          <input
+            id="request-location"
+            ref={locationInputRef}
+            placeholder={t("locationExample")}
+            value={location}
+            onChange={(e) => {
+              setDraft((current) =>
+                applyHomeownerInput(current, {
+                  "location.serviceAddress": e.target.value,
+                })
+              );
+              setFieldErrors((current) => ({ ...current, location: undefined }));
+            }}
+            style={inputStyle}
+            maxLength={500}
+            autoComplete="street-address"
+            aria-invalid={Boolean(fieldErrors.location)}
+            aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+          />
+          {fieldErrors.location && (
+            <p id="request-location-error" role="alert" style={fieldErrorText}>
+              {requestHelpCopy.locationRequired}
+            </p>
+          )}
 
-        <label htmlFor="request-title" style={fieldLabel}>
-          {t("projectTitle")} ({requestHelpCopy.required})
-        </label>
-        <input
-          id="request-title"
-          ref={titleInputRef}
-          placeholder={t("projectTitlePlaceholder")}
-          value={title}
-          onChange={(e) => {
-            setDraft((current) =>
-              applyHomeownerInput(current, {
-                "job.title": e.target.value,
-              })
-            );
-            setFieldErrors((current) => ({ ...current, title: undefined }));
-          }}
-          style={inputStyle}
-          required
-          maxLength={160}
-          aria-invalid={Boolean(fieldErrors.title)}
-          aria-describedby={fieldErrors.title ? "request-title-error" : undefined}
-        />
-        {fieldErrors.title && (
-          <p id="request-title-error" role="alert" style={fieldErrorText}>
-            {t("enterPostTitle")}
-          </p>
-        )}
+          <label htmlFor="request-unit" style={subtleFieldLabel}>
+            {t("unitNumber")} ({requestHelpCopy.optional})
+          </label>
+          <input
+            id="request-unit"
+            placeholder={t("unitNumberPlaceholder")}
+            value={unitNumber}
+            onChange={(e) =>
+              setDraft((current) =>
+                applyHomeownerInput(current, {
+                  "location.unitNumber": e.target.value,
+                })
+              )
+            }
+            style={compactInputStyle}
+            maxLength={100}
+          />
 
-        <label htmlFor="request-description" style={fieldLabel}>
-          {t("projectDescription")} ({requestHelpCopy.optional})
-        </label>
-        <textarea
-          id="request-description"
-          ref={descriptionInputRef}
-          placeholder={t("projectDescriptionPlaceholder")}
-          value={description}
-          onChange={(e) => {
-            setDraft((current) =>
-              applyHomeownerInput(current, {
-                "job.description": e.target.value,
-              })
-            );
-          }}
-          style={{
-            ...textareaStyle,
-            minHeight: assistantDraftMetadata ? "320px" : textareaStyle.minHeight,
-          }}
-          maxLength={5000}
-        />
+          <label htmlFor="request-access-notes" style={subtleFieldLabel}>
+            {t("accessNotes")} ({requestHelpCopy.optional})
+          </label>
+          <textarea
+            id="request-access-notes"
+            placeholder={t("accessNotesPlaceholder")}
+            value={accessNotes}
+            onChange={(e) =>
+              setDraft((current) =>
+                applyHomeownerInput(current, {
+                  "location.accessNotes": e.target.value,
+                })
+              )
+            }
+            style={compactTextareaStyle}
+            maxLength={1000}
+          />
+        </section>
 
-        <label htmlFor="request-location" style={fieldLabel}>
-          {t("fullServiceAddress")} ({requestHelpCopy.required})
-        </label>
-        <input
-          id="request-location"
-          ref={locationInputRef}
-          placeholder={t("locationExample")}
-          value={location}
-          onChange={(e) => {
-            setDraft((current) =>
-              applyHomeownerInput(current, {
-                "location.serviceAddress": e.target.value,
-              })
-            );
-            setFieldErrors((current) => ({ ...current, location: undefined }));
-          }}
-          style={inputStyle}
-          required
-          maxLength={500}
-          autoComplete="street-address"
-          aria-invalid={Boolean(fieldErrors.location)}
-          aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
-        />
-        {fieldErrors.location && (
-          <p id="request-location-error" role="alert" style={fieldErrorText}>
-            {requestHelpCopy.locationRequired}
-          </p>
-        )}
-
-        <label htmlFor="request-unit" style={fieldLabel}>
-          {t("unitNumber")} ({requestHelpCopy.optional})
-        </label>
-        <input
-          id="request-unit"
-          placeholder={t("unitNumberPlaceholder")}
-          value={unitNumber}
-          onChange={(e) =>
-            setDraft((current) =>
-              applyHomeownerInput(current, {
-                "location.unitNumber": e.target.value,
-              })
-            )
-          }
-          style={inputStyle}
-          maxLength={100}
-        />
-
-        {category === "propertyManagement" && (
-          <>
-            <div style={propertyManagementFoundationNote}>
-              {t("propertyManagementIntakeNote")}
-            </div>
-            <label htmlFor="request-access-notes" style={fieldLabel}>
-              {t("accessNotes")} ({requestHelpCopy.optional})
-            </label>
-            <textarea
-              id="request-access-notes"
-              placeholder={t("accessNotesPlaceholder")}
-              value={accessNotes}
-              onChange={(e) =>
-                setDraft((current) =>
-                  applyHomeownerInput(current, {
-                    "location.accessNotes": e.target.value,
-                  })
-                )
-              }
-              style={textareaStyle}
-              maxLength={1000}
-            />
-          </>
-        )}
-
-        <div className="meetro-visual-empty-state" style={uploadBox}>
+        <section style={manualSection} aria-labelledby="request-photos-heading">
+          <h3 id="request-photos-heading" style={manualSectionTitle}>
+            {t("jobRequestPhotosOptional", language)}
+          </h3>
+          <p style={manualSectionHelp}>{t("jobRequestPhotosHelp", language)}</p>
+          <div className="meetro-visual-empty-state" style={uploadBox}>
           <button
             onClick={openRequestPhotoPicker}
             style={{
@@ -1719,7 +1699,8 @@ function Upload({ setPage }) {
 
           {uploading && <p role="status" aria-live="polite" style={uploadingText}>{t("uploadingImage")}</p>}
           {photoError && <p role="alert" style={uploadingText}>{photoError}</p>}
-        </div>
+          </div>
+        </section>
 
         {projectPhotos.length > 0 && (
           <div style={previewBox}>
@@ -1786,6 +1767,30 @@ function Upload({ setPage }) {
           </div>
         )}
 
+        <section style={manualSection} aria-labelledby="request-timing-heading">
+          <h3 id="request-timing-heading" style={manualSectionTitle}>
+            {t("jobRequestTimingOptional", language)}
+          </h3>
+          <p style={manualSectionHelp}>
+            {draftReviewModel.timing.desiredTiming || draftReviewModel.timing.urgency || t("jobRequestDraftGuidanceTiming", language)}
+          </p>
+        </section>
+
+        <div style={requestProgressCard} aria-label={t("jobRequestProgress", language)}>
+          <strong style={requestReviewIntroTitle}>{t("jobRequestProgress", language)}</strong>
+          <ul style={requestProgressList}>
+            {progressItems.map((item) => (
+              <li key={item.key} style={requestProgressItem}>
+                <span aria-hidden="true">{item.done ? "✓" : "○"}</span>
+                <span>
+                  {item.label}
+                  {item.optional && !item.done ? ` (${requestHelpCopy.optional})` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {submissionError && (
           <div role="alert" aria-live="assertive" style={submissionErrorCard}>
             <strong>{t("postCreateFailed")}</strong>
@@ -1806,18 +1811,103 @@ function Upload({ setPage }) {
               cursor: creating || uploading ? "not-allowed" : "pointer",
             }}
           >
-            {creating ? t("creating") : t("createPost")}
+            {t("jobRequestReviewRequest", language)}
           </button>
 
           <button
             type="button"
-            onClick={handleCancelRequest}
+            onClick={handleBackToConversation}
             style={cancelRequestButton}
           >
-            {t("cancelRequest")}
+            {t("jobRequestBackToConversation", language)}
           </button>
         </div>
       </form>
+        )}
+
+        {requestMode === "review" && (
+          <form
+            ref={manualDetailsRef}
+            className="meetro-visual-surface"
+            style={cardStyle}
+            onSubmit={handleCreatePost}
+            noValidate
+          >
+            <div style={manualHeader}>
+              <h2 style={manualTitle}>{t("jobRequestReviewRequest", language)}</h2>
+              <p style={manualSubtitle}>{t("jobRequestDraftGuidanceReady", language)}</p>
+            </div>
+
+            <div style={requestReviewIntroCard}>
+              <ul style={requestReviewList}>
+                {reviewItems.map((item) => (
+                  <li key={item.label} style={requestReviewItem}>
+                    <span>{item.label}</span>
+                    <strong style={item.value ? requestReviewValue : requestReviewMissing}>
+                      {item.value || (item.required ? requestHelpCopy.missing : requestHelpCopy.optional)}
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+              <div style={draftReviewSectionList}>
+                {draftReviewModel.sections.map((section) => (
+                  <section key={section.id} style={draftReviewSection}>
+                    <strong style={draftReviewSectionTitle}>{t(section.labelKey)}</strong>
+                    {section.items.map((item) => (
+                      <div key={item.id} style={draftReviewRow}>
+                        <span style={draftReviewItemText}>
+                          {t(item.labelKey)}
+                          <small style={draftReviewItemMeta}>
+                            {item.missing
+                              ? t("jobRequestDraftStatusMissing")
+                              : item.confirmed
+                              ? t("jobRequestDraftStatusConfirmed")
+                              : t("jobRequestDraftStatusNeedsReview")}
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          style={draftReviewEditButton}
+                          onClick={() => handleReviewEdit(item.editTarget)}
+                        >
+                          {t("jobRequestDraftEdit")}
+                        </button>
+                      </div>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            </div>
+
+            {submissionError && (
+              <div role="alert" aria-live="assertive" style={submissionErrorCard}>
+                <strong>{t("postCreateFailed")}</strong>
+                <span>{submissionError}</span>
+              </div>
+            )}
+
+            <div style={requestActionBar}>
+              <button
+                type="submit"
+                disabled={creating || uploading}
+                className="meetro-visual-primary-button"
+                style={{
+                  ...primaryButton,
+                  background: creating || uploading
+                    ? "rgba(100, 116, 139, 0.72)"
+                    : "var(--meetro-gradient-community-action)",
+                  cursor: creating || uploading ? "not-allowed" : "pointer",
+                }}
+              >
+                {creating ? t("creating") : t("createPost")}
+              </button>
+
+              <button type="button" onClick={() => focusManualDetails("description")} style={cancelRequestButton}>
+                {t("jobRequestAddMoreDetails", language)}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <ServiceSelectorSheet
@@ -2205,10 +2295,15 @@ const liveDraftTitle = {
   lineHeight: 1.2,
 };
 
-const detailsToggleButton = {
-  ...secondaryActionButton,
-  minHeight: "38px",
+const requestModePill = {
+  border: "1px solid rgba(31, 77, 52, 0.16)",
+  borderRadius: "999px",
+  background: "var(--meetro-surface-sage)",
+  color: "var(--meetro-color-forest)",
   padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: 950,
+  whiteSpace: "nowrap",
 };
 
 const liveDraftSectionList = {
@@ -2261,16 +2356,6 @@ const suggestedServiceActions = {
 const reviewActionGroup = {
   display: "grid",
   gap: "8px",
-};
-
-const collapsedManualDetailsStyle = {
-  maxHeight: "1px",
-  overflow: "hidden",
-  paddingTop: 0,
-  paddingBottom: 0,
-  borderWidth: 0,
-  opacity: 0,
-  pointerEvents: "none",
 };
 
 const srOnly = {
@@ -2340,6 +2425,13 @@ const fieldLabel = {
   marginTop: "4px",
 };
 
+const subtleFieldLabel = {
+  ...fieldLabel,
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  marginTop: "2px",
+};
+
 const inputStyle = {
   width: "100%",
   padding: "14px 15px",
@@ -2354,6 +2446,62 @@ const inputStyle = {
   minWidth: 0,
   overflowWrap: "anywhere",
   wordBreak: "break-word",
+};
+
+const compactInputStyle = {
+  ...inputStyle,
+  padding: "12px 13px",
+  borderRadius: "14px",
+};
+
+const manualHeader = {
+  display: "grid",
+  gap: "5px",
+  marginBottom: "2px",
+};
+
+const manualTitle = {
+  margin: 0,
+  color: "var(--meetro-color-ink)",
+  fontSize: "24px",
+  lineHeight: 1.15,
+  letterSpacing: 0,
+};
+
+const manualSubtitle = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "14px",
+  lineHeight: 1.45,
+  fontWeight: 750,
+};
+
+const manualSection = {
+  display: "grid",
+  gap: "9px",
+  padding: "14px 0",
+  borderTop: "1px solid rgba(31, 77, 52, 0.10)",
+};
+
+const manualSectionTitle = {
+  margin: 0,
+  color: "var(--meetro-color-forest)",
+  fontSize: "16px",
+  lineHeight: 1.25,
+  fontWeight: 950,
+};
+
+const manualSectionHelp = {
+  margin: 0,
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 750,
+};
+
+const backToConversationButton = {
+  ...secondaryActionButton,
+  justifySelf: "start",
 };
 
 const serviceSuggestionGrid = {
@@ -2383,6 +2531,11 @@ const serviceSuggestionButtonActive = {
   background: "var(--meetro-surface-sage)",
   borderColor: "rgba(31, 77, 52, 0.28)",
   color: "var(--meetro-color-forest)",
+};
+
+const browseAllButton = {
+  ...secondaryActionButton,
+  justifySelf: "start",
 };
 
 const selectedServiceCard = {
@@ -2477,6 +2630,33 @@ const requestReviewIntroCard = {
   border: "1px solid var(--meetro-color-line)",
   background: "var(--meetro-surface-warm)",
   color: "var(--meetro-color-coffee)",
+};
+
+const requestProgressCard = {
+  display: "grid",
+  gap: "8px",
+  padding: "12px 13px",
+  borderRadius: "16px",
+  border: "1px solid rgba(31, 77, 52, 0.16)",
+  background: "rgba(240, 249, 244, 0.78)",
+  color: "var(--meetro-color-coffee)",
+};
+
+const requestProgressList = {
+  listStyle: "none",
+  display: "grid",
+  gap: "6px",
+  margin: 0,
+  padding: 0,
+};
+
+const requestProgressItem = {
+  display: "flex",
+  gap: "8px",
+  alignItems: "center",
+  color: "var(--meetro-color-ink)",
+  fontSize: "13px",
+  fontWeight: 850,
 };
 
 const requestReviewIntroTitle = {
@@ -2618,15 +2798,10 @@ const textareaStyle = {
   overflowY: "auto",
 };
 
-const propertyManagementFoundationNote = {
-  padding: "13px 14px",
-  borderRadius: "16px",
-  background: "var(--meetro-surface-sage)",
-  border: "1px solid var(--meetro-color-line)",
-  color: "var(--meetro-color-forest)",
-  fontSize: "13px",
-  fontWeight: 700,
-  lineHeight: 1.5,
+const compactTextareaStyle = {
+  ...textareaStyle,
+  minHeight: "96px",
+  maxHeight: "34dvh",
 };
 
 const uploadBox = {

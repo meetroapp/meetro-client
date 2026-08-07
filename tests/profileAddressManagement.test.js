@@ -30,11 +30,11 @@ test("address manager follows one viewport-owned accessible editor pattern", () 
   assert.match(cssSource, /overflow-y: auto/);
 });
 
-test("service requests use personal address only through fallback precedence", () => {
-  assert.match(uploadSource, /resolveWorkflowAddress\(\{/);
-  assert.match(uploadSource, /selectedPropertyAddress:/);
-  assert.match(uploadSource, /projectAddress:/);
-  assert.match(uploadSource, /requestAddress:/);
+test("new service requests do not silently reuse profile or workflow addresses", () => {
+  assert.match(uploadSource, /readJobRequestDraft\(localStorage, \{ initialLocation: "" \}\)/);
+  assert.match(uploadSource, /resetJobRequestDraft\(\{\s*initialLocation: "",\s*\}\)/);
+  assert.doesNotMatch(uploadSource, /resolveWorkflowAddress\(\{/);
+  assert.doesNotMatch(uploadSource, /selectedPropertyAddress:|projectAddress:|requestAddress:/);
 });
 
 test("professional schedule retains customer and visit address ownership", () => {

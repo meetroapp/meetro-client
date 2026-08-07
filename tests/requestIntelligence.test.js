@@ -87,7 +87,9 @@ test("request creation keeps manual override available", () => {
   assert.match(uploadSource, /selectServiceOption/);
   assert.match(uploadSource, /setServiceSelectorOpen\(true\)/);
   assert.match(uploadSource, /selectSuggestedService/);
-  assert.match(uploadSource, /requestIntelligencePrompt/);
+  assert.match(uploadSource, /jobRequestSearchServices/);
+  assert.match(uploadSource, /jobRequestBrowseAllServices/);
+  assert.match(uploadSource, /serviceSuggestions\.map/);
   assert.match(uploadSource, /t\("change"\)/);
 });
 
