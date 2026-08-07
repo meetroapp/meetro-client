@@ -11,6 +11,38 @@ import { getFormattingLocale } from "../src/utils/localeFormat.js";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
+const navigationExpressionPattern =
+  '(t\\("[^"]+"(?:,\\s*language)?\\)|"[^"]+")';
+
+function readNavigationItems(source, start, end) {
+  const block = source.slice(source.indexOf(start), source.indexOf(end));
+  const itemPattern = new RegExp(
+    `^\\s+\\{\\n\\s+page: "([^"]+)",[\\s\\S]*?` +
+      `\\n\\s+label: ${navigationExpressionPattern},` +
+      `\\n\\s+sub: ${navigationExpressionPattern},`,
+    "gm"
+  );
+
+  const items = Object.fromEntries(
+    [...block.matchAll(itemPattern)].map((match) => [
+      match[1],
+      { label: match[2], sub: match[3] },
+    ])
+  );
+
+  assert.equal(
+    Object.keys(items).length,
+    (block.match(/^\s+page: /gm) || []).length,
+    `${start} contains an unsupported navigation label shape`
+  );
+
+  return items;
+}
+
+function translationKey(expression) {
+  return /^t\("([^"]+)"(?:,\s*language)?\)$/.exec(expression)?.[1] || null;
+}
+
 test("shared navigation and interface dictionaries are complete in EN ES FR PT", () => {
   for (const language of CANONICAL_LANGUAGE_CODES) {
     const dictionary = translations[language];
@@ -24,20 +56,74 @@ test("shared navigation and interface dictionaries are complete in EN ES FR PT",
 
 test("bottom and desktop navigation use one localized semantic key set", () => {
   const source = read("src/components/BottomNav.jsx");
-  for (const key of [
-    "navigationHome",
-    "navigationWorkCenter",
-    "navigationChat",
-    "navigationMoments",
-    "navigationProfile",
-    "navigationCommunity",
-    "navigationPrimaryDesktop",
-    "navigationPrimaryMobile",
-    "navigationCloseProfileMenu",
-  ]) {
-    assert.match(source, new RegExp(`t\\(\\"${key}\\", language\\)`));
+  const navigationSets = {
+    personalMobile: readNavigationItems(
+      source,
+      "const personalMobileNavItems = [",
+      "const businessMobileNavItems = ["
+    ),
+    businessMobile: readNavigationItems(
+      source,
+      "const businessMobileNavItems = [",
+      "const personalDesktopNavItems = ["
+    ),
+    personalDesktop: readNavigationItems(
+      source,
+      "const personalDesktopNavItems = [",
+      "const businessDesktopNavItems = ["
+    ),
+    businessDesktop: readNavigationItems(
+      source,
+      "const businessDesktopNavItems = [",
+      "useEffect(() => {\n    setKeyboardOpen"
+    ),
+  };
+  const semanticPairs = [
+    ["personalMobile", "personalDesktop", "home", "navigationHome", "navigationHome"],
+    ["personalMobile", "personalDesktop", "myRequests", "navigationWorkCenter", "navigationWorkCenter"],
+    ["personalMobile", "personalDesktop", "messagesInbox", "navigationChat", "navigationCommunication"],
+    ["personalMobile", "personalDesktop", "notifications", "navigationAlerts", "navigationAlerts"],
+    ["personalMobile", "personalDesktop", "profile", "navigationProfile", "navigationProfileAccount"],
+    ["businessMobile", "businessDesktop", "businessDashboard", "navigationHome", "navigationHome"],
+    ["businessMobile", "businessDesktop", "contractorDashboard", "navigationWorkCenter", "navigationWorkCenter"],
+    ["businessMobile", "businessDesktop", "messagesInbox", "navigationChat", "navigationCommunication"],
+    ["businessMobile", "businessDesktop", "notifications", "navigationAlerts", "navigationAlerts"],
+    ["businessMobile", "businessDesktop", "profile", "navigationProfile", "navigationProfileAccount"],
+  ];
+
+  for (const [mobileSet, desktopSet, page, mobileKey, desktopKey] of semanticPairs) {
+    assert.equal(translationKey(navigationSets[mobileSet][page]?.label), mobileKey);
+    assert.equal(translationKey(navigationSets[desktopSet][page]?.label), desktopKey);
   }
-  assert.match(source, /aria-label=\{`\$\{item\.label\}\. \$\{item\.sub\}`\}/);
+
+  for (const items of Object.values(navigationSets)) {
+    for (const item of Object.values(items)) {
+      for (const expression of [item.label, item.sub]) {
+        const key = translationKey(expression);
+        if (!key) {
+          assert.equal(expression, '"Meetro Moments"');
+          continue;
+        }
+
+        for (const language of CANONICAL_LANGUAGE_CODES) {
+          assert.ok(
+            String(translations[language][key] || "").trim(),
+            `${language}:${key}`
+          );
+        }
+      }
+    }
+  }
+
+  assert.match(source, /const getItemAccessibleLabel = \(item, unread\) =>/);
+  assert.match(source, /return `\$\{item\.label\}\. \$\{item\.sub\}`/);
+  assert.equal(
+    (source.match(/aria-label=\{getItemAccessibleLabel\(item, unread\)\}/g) || [])
+      .length,
+    2
+  );
+  assert.match(source, /desktopNavItems\.map\(\(item\) => renderNavItem\(item, "sidebar"\)\)/);
+  assert.match(source, /mobileNavItems\.map\(\(item\) => renderNavItem\(item, "bottom"\)\)/);
   assert.match(source, /title=\{`\$\{item\.label\} — \$\{item\.sub\}`\}/);
   assert.doesNotMatch(source, /aria-label="Primary (desktop|mobile) navigation"/);
 });

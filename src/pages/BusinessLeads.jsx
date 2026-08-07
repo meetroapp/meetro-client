@@ -33,6 +33,10 @@ import {
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
 } from "../utils/professionalOpportunityCoordinator";
+import {
+  prepareProfessionalResponseCommand,
+  submitProfessionalResponse,
+} from "../utils/professionalResponseApi";
 
 function BusinessLeads({ setPage }) {
   const emergencyRefreshCoordinatorRef = useRef(null);
@@ -46,6 +50,8 @@ function BusinessLeads({ setPage }) {
   const [emergencyStatus, setEmergencyStatus] =
     useState("loading");
   const [emergencyResponseState, setEmergencyResponseState] =
+    useState({});
+  const [professionalResponseState, setProfessionalResponseState] =
     useState({});
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
@@ -126,6 +132,91 @@ function BusinessLeads({ setPage }) {
       await emergencyRefreshCoordinatorRef.current?.refresh({
         invalidate: true,
         trigger: "response-mutation",
+      });
+    }
+  }
+
+  function updateProfessionalResponseDraft(requestId, value) {
+    setProfessionalResponseState((current) => ({
+      ...current,
+      [requestId]: {
+        ...(current[requestId] || {}),
+        draft: value,
+        phase: "editing",
+        message: "",
+      },
+    }));
+  }
+
+  async function respondToProfessionalOpportunity(opportunity) {
+    const requestId = opportunity?.request_id || opportunity?.id;
+    const currentState = professionalResponseState[requestId] || {};
+    const command = prepareProfessionalResponseCommand(
+      currentState.command,
+      currentState.draft
+    );
+
+    if (!requestId || !command) {
+      setProfessionalResponseState((current) => ({
+        ...current,
+        [requestId]: {
+          ...currentState,
+          phase: "error",
+          message: t(
+            "professionalResponseIntroductionRequired",
+            language
+          ),
+        },
+      }));
+      return;
+    }
+
+    setProfessionalResponseState((current) => ({
+      ...current,
+      [requestId]: {
+        ...currentState,
+        command,
+        phase: "submitting",
+        message: "",
+      },
+    }));
+
+    const result = await submitProfessionalResponse(
+      {
+        requestId,
+        introductionText: command.introductionText,
+        idempotencyKey: command.idempotencyKey,
+      },
+      { setPage }
+    );
+
+    setProfessionalResponseState((current) => ({
+      ...current,
+      [requestId]: result.ok
+        ? {
+            ...current[requestId],
+            command,
+            phase: "confirmed",
+            response: result.response,
+            relationship: result.relationship,
+            message: "",
+          }
+        : {
+            ...current[requestId],
+            command,
+            phase: "error",
+            message:
+              result.message ||
+              t("professionalResponseFailed", language),
+          },
+    }));
+
+    if (result.ok) {
+      await requestProfessionalOpportunities({
+        caller: "BusinessLeads",
+        trigger: "response-mutation",
+        force: true,
+        setPage,
       });
     }
   }
@@ -460,6 +551,12 @@ function BusinessLeads({ setPage }) {
             const cardKey = conversationContext
               ? `conversation-${conversationContext.conversationId}`
               : `request-${opportunity.request_id || opportunity.id}`;
+            const requestId = opportunity.request_id || opportunity.id;
+            const responseState =
+              professionalResponseState[requestId] || {};
+            const responseConfirmed =
+              opportunity.hasResponded === true ||
+              responseState.phase === "confirmed";
 
             return (
               <article key={cardKey} style={leadCard}>
@@ -476,8 +573,62 @@ function BusinessLeads({ setPage }) {
                   >
                     {t("openConversation", language)}
                   </button>
+                ) : responseConfirmed ? (
+                  <div style={responseStatusCard} role="status">
+                    <strong>
+                      {t("professionalResponseSubmitted", language)}
+                    </strong>
+                    <span>
+                      {t("professionalResponsePendingReview", language)}
+                    </span>
+                  </div>
+                ) : opportunity.responseSubmissionAvailable ? (
+                  <div style={responseForm}>
+                    <label htmlFor={`professional-response-${requestId}`} style={responseLabel}>
+                      {t("professionalResponseIntroductionLabel", language)}
+                    </label>
+                    <textarea
+                      id={`professional-response-${requestId}`}
+                      value={responseState.draft || ""}
+                      maxLength={2000}
+                      rows={4}
+                      style={responseTextarea}
+                      disabled={responseState.phase === "submitting"}
+                      onChange={(event) =>
+                        updateProfessionalResponseDraft(
+                          requestId,
+                          event.target.value
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      style={leadActionButton}
+                      disabled={responseState.phase === "submitting"}
+                      onClick={() =>
+                        respondToProfessionalOpportunity(opportunity)
+                      }
+                    >
+                      {responseState.phase === "submitting"
+                        ? t("professionalResponseSubmitting", language)
+                        : t("professionalResponseSubmit", language)}
+                    </button>
+                    {responseState.phase === "error" && (
+                      <p style={leadError} role="alert">
+                        {responseState.message}
+                      </p>
+                    )}
+                    <p style={leadReviewNote}>
+                      {t(
+                        "professionalResponsePreselectionBoundary",
+                        language
+                      )}
+                    </p>
+                  </div>
                 ) : (
-                  <p style={leadReviewNote}>Request review only. Response and messaging are not available yet.</p>
+                  <p style={leadReviewNote}>
+                    {t("professionalResponseUnavailable", language)}
+                  </p>
                 )}
               </article>
             );
@@ -618,6 +769,41 @@ const leadList = {
 const leadCard = {
   ...unavailableCard,
   textAlign: "left",
+};
+
+const responseForm = {
+  display: "grid",
+  gap: "10px",
+  marginTop: "16px",
+  minWidth: 0,
+};
+
+const responseLabel = {
+  fontWeight: 900,
+  color: "#1f2937",
+};
+
+const responseTextarea = {
+  width: "100%",
+  maxWidth: "100%",
+  minHeight: "104px",
+  resize: "vertical",
+  boxSizing: "border-box",
+  border: "1px solid rgba(78,68,55,0.2)",
+  borderRadius: "16px",
+  padding: "13px 14px",
+  font: "inherit",
+  lineHeight: 1.45,
+};
+
+const responseStatusCard = {
+  display: "grid",
+  gap: "4px",
+  marginTop: "16px",
+  padding: "13px 14px",
+  borderRadius: "16px",
+  background: "rgba(31,77,52,0.08)",
+  color: "#1f4d34",
 };
 
 const emergencyLeadCard = {

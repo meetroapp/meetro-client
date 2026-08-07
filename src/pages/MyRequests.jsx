@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import EmergencyTimeline from "../components/EmergencyTimeline";
+import HomeownerProfessionalResponseReview from "../components/HomeownerProfessionalResponseReview";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
@@ -2063,6 +2064,12 @@ function MyRequests({ setPage }) {
                         />
                       )}
                     </div>
+
+                    <HomeownerProfessionalResponseReview
+                      requestId={requestId}
+                      language={language}
+                      setPage={setPage}
+                    />
 
                     {unsupportedWorkflow && (
                       <div style={workflowUnavailableCard}>

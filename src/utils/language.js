@@ -12416,6 +12416,18 @@ const professionalLeadTruthLanguage = {
     professionalLeadsAccessRequiredText:
       "Only professional accounts can open the Business Leads workspace.",
     professionalLeadsReviewProfile: "Review Profile",
+    professionalResponseIntroductionLabel: "Introduce your business",
+    professionalResponseSubmit: "Submit Response",
+    professionalResponseSubmitting: "Submitting response…",
+    professionalResponseSubmitted: "Response submitted",
+    professionalResponsePendingReview: "Pending homeowner review.",
+    professionalResponsePreselectionBoundary:
+      "Submitting creates a pending response only. Messaging is not available before homeowner selection.",
+    professionalResponseUnavailable:
+      "Response unavailable. Meetro could not verify canonical participation state.",
+    professionalResponseIntroductionRequired:
+      "Enter a response before submitting.",
+    professionalResponseFailed: "The response could not be submitted.",
   },
   es: {
     professionalLeadsUnavailable: "Las oportunidades profesionales aún no están disponibles.",
@@ -12428,6 +12440,18 @@ const professionalLeadTruthLanguage = {
     professionalLeadsAccessRequiredText:
       "Solo las cuentas profesionales pueden abrir el espacio de oportunidades del negocio.",
     professionalLeadsReviewProfile: "Revisar perfil",
+    professionalResponseIntroductionLabel: "Presenta tu negocio",
+    professionalResponseSubmit: "Enviar respuesta",
+    professionalResponseSubmitting: "Enviando respuesta…",
+    professionalResponseSubmitted: "Respuesta enviada",
+    professionalResponsePendingReview: "Pendiente de revisión del propietario.",
+    professionalResponsePreselectionBoundary:
+      "El envío crea solo una respuesta pendiente. Los mensajes no están disponibles antes de que el propietario seleccione a un profesional.",
+    professionalResponseUnavailable:
+      "Respuesta no disponible. Meetro no pudo verificar el estado canónico de participación.",
+    professionalResponseIntroductionRequired:
+      "Escribe una respuesta antes de enviarla.",
+    professionalResponseFailed: "No se pudo enviar la respuesta.",
   },
   fr: {
     professionalLeadsUnavailable: "Les opportunités professionnelles ne sont pas encore disponibles.",
@@ -12440,6 +12464,18 @@ const professionalLeadTruthLanguage = {
     professionalLeadsAccessRequiredText:
       "Seuls les comptes professionnels peuvent ouvrir l’espace des opportunités professionnelles.",
     professionalLeadsReviewProfile: "Examiner le profil",
+    professionalResponseIntroductionLabel: "Présentez votre entreprise",
+    professionalResponseSubmit: "Envoyer la réponse",
+    professionalResponseSubmitting: "Envoi de la réponse…",
+    professionalResponseSubmitted: "Réponse envoyée",
+    professionalResponsePendingReview: "En attente de l’examen du propriétaire.",
+    professionalResponsePreselectionBoundary:
+      "L’envoi crée uniquement une réponse en attente. La messagerie n’est pas disponible avant la sélection par le propriétaire.",
+    professionalResponseUnavailable:
+      "Réponse indisponible. Meetro n’a pas pu vérifier l’état canonique de participation.",
+    professionalResponseIntroductionRequired:
+      "Saisissez une réponse avant de l’envoyer.",
+    professionalResponseFailed: "La réponse n’a pas pu être envoyée.",
   },
   "pt-BR": {
     professionalLeadsUnavailable: "As oportunidades profissionais ainda não estão disponíveis.",
@@ -12452,6 +12488,18 @@ const professionalLeadTruthLanguage = {
     professionalLeadsAccessRequiredText:
       "Somente contas profissionais podem abrir o espaço de oportunidades do negócio.",
     professionalLeadsReviewProfile: "Revisar perfil",
+    professionalResponseIntroductionLabel: "Apresente sua empresa",
+    professionalResponseSubmit: "Enviar resposta",
+    professionalResponseSubmitting: "Enviando resposta…",
+    professionalResponseSubmitted: "Resposta enviada",
+    professionalResponsePendingReview: "Aguardando análise do morador.",
+    professionalResponsePreselectionBoundary:
+      "O envio cria apenas uma resposta pendente. As mensagens não ficam disponíveis antes da seleção pelo morador.",
+    professionalResponseUnavailable:
+      "Resposta indisponível. O Meetro não conseguiu verificar o estado canônico de participação.",
+    professionalResponseIntroductionRequired:
+      "Digite uma resposta antes de enviar.",
+    professionalResponseFailed: "Não foi possível enviar a resposta.",
   },
 };
 

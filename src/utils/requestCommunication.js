@@ -150,6 +150,23 @@ function normalizeProfessionalOpportunity(record = {}) {
   const title = String(record.title || "").trim();
   if (!id || !title) return null;
   const opportunityIdentity = getOpportunityThreadIdentity(record);
+  const responseId = normalizeCanonicalConversationId(
+    record.professional_response_id
+  );
+  const hasCanonicalResponse = Boolean(
+    record.has_responded === true &&
+      responseId &&
+      record.response_status === "submitted" &&
+      record.relationship_status === "pending" &&
+      record.response_submission_available === false
+  );
+  const responseSubmissionAvailable = Boolean(
+    record.has_responded === false &&
+      record.professional_response_id == null &&
+      record.response_status == null &&
+      record.relationship_status == null &&
+      record.response_submission_available === true
+  );
 
   return {
     ...record,
@@ -166,6 +183,14 @@ function normalizeProfessionalOpportunity(record = {}) {
     conversation_type: opportunityIdentity.threadType,
     status: record.status || "open",
     unread: false,
+    hasResponded: hasCanonicalResponse,
+    professionalResponseId: hasCanonicalResponse ? responseId : null,
+    responseStatus: hasCanonicalResponse ? "submitted" : null,
+    relationshipStatus: hasCanonicalResponse ? "pending" : null,
+    responseSubmittedAt: hasCanonicalResponse
+      ? record.submitted_at || null
+      : null,
+    responseSubmissionAvailable,
   };
 }
 

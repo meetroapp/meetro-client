@@ -251,14 +251,14 @@ test("Business Leads conditionally renders an accessible shared-route CTA", () =
   assert.match(leadsSource, /onClick=\{\(\) => openOpportunityConversation\(opportunity\)\}/);
 });
 
-test("read-only cards retain truthful text without an unconditional canonical blocker", () => {
+test("non-conversation cards expose only the canonical pending-response command", () => {
   assert.match(
     leadsSource,
-    /conversationContext \? \([\s\S]*Request review only\. Response and messaging are not available yet\./
+    /conversationContext \? \([\s\S]*opportunity\.responseSubmissionAvailable[\s\S]*professionalResponseSubmit/
   );
-  assert.doesNotMatch(
+  assert.match(
     leadsSource,
-    /<p style=\{leadReviewNote\}>Request review only[\s\S]*<\/p>\s*<\/article>/
+    /professionalResponsePreselectionBoundary/
   );
 });
 
