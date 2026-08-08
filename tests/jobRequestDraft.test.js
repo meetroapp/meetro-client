@@ -6,6 +6,7 @@ import {
   JOB_REQUEST_DRAFT_SOURCE,
   JOB_REQUEST_DRAFT_STAGE,
   JOB_REQUEST_DRAFT_UNCERTAINTY,
+  JOB_REQUEST_LOCATION_INTAKE_MODE,
   addDraftPhotos,
   applyAssistantInference,
   applyAssistantSuggestion,
@@ -22,6 +23,7 @@ import {
   serializeJobRequestDraftForRecovery,
   setDraftSubmissionIntent,
   setDraftSubmissionSnapshot,
+  setJobRequestLocationIntakeMode,
   setServiceClassification,
 } from "../src/utils/jobRequestDraft.js";
 import {
@@ -51,6 +53,9 @@ function readyDraft() {
     draftId: "draft_local_only",
     createdAt: "2026-08-07T12:00:00.000Z",
     initialLocation: "123 Palm Ave",
+    initialCity: "Fort Myers",
+    initialRegion: "FL",
+    initialPostalCode: "33901",
   });
   draft = applyHomeownerInput(draft, {
     "job.title": "Paint the lanai",
@@ -72,7 +77,7 @@ test("creates a local non-canonical draft identity with explicit version and emp
     createdAt: "2026-08-07T12:00:00.000Z",
   });
 
-  assert.equal(draft.version, 1);
+  assert.equal(draft.version, 2);
   assert.equal(draft.localDraftId, "draft_11111111-1111-4111-8111-111111111111");
   assert.equal(draft.stage, JOB_REQUEST_DRAFT_STAGE.EMPTY);
   assert.equal(draft.readiness.isReady, false);
@@ -160,6 +165,66 @@ test("recovery serialization strips raw File references and object URL authority
   assert.equal(serialized.media.photos[0].previewUrl, "");
 });
 
+test("draft version change drops legacy serialized location instead of reinterpreting it", () => {
+  const storage = createStorage({
+    [JOB_REQUEST_DRAFT_KEY]: JSON.stringify({
+      version: 1,
+      localDraftId: "draft_legacy_location",
+      location: { serviceAddress: "123 Legacy Address" },
+    }),
+  });
+
+  const recovered = readJobRequestDraft(storage);
+
+  assert.equal(recovered.version, 2);
+  assert.equal(recovered.location.serviceAddress, "");
+  assert.equal(storage.getItem(JOB_REQUEST_DRAFT_KEY), null);
+});
+
+test("draft normalizes invalid structured location mode without fabricating legacy fields", () => {
+  const storage = createStorage({
+    [JOB_REQUEST_DRAFT_KEY]: JSON.stringify({
+      version: 2,
+      localDraftId: "draft_invalid_location_mode",
+      location: {
+        intakeMode: "",
+        serviceAddress: "123 Palm Ave",
+        city: "Cape Coral",
+        region: "FL",
+        postalCode: "33990",
+        countryCode: "us",
+      },
+    }),
+  });
+
+  const recovered = readJobRequestDraft(storage);
+
+  assert.equal(recovered.location.intakeMode, JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE);
+  assert.equal(recovered.location.countryCode, "US");
+  assert.equal(Object.hasOwn(recovered.location, "location_normalization_status"), false);
+  assert.equal(Object.hasOwn(recovered.location, "discovery_area_label"), false);
+});
+
+test("address-after-selection draft clears street and unit while preserving locality", () => {
+  let draft = readyDraft();
+  draft = applyHomeownerInput(draft, {
+    "location.unitNumber": "4B",
+    "location.accessNotes": "Call from the gate",
+  });
+
+  draft = setJobRequestLocationIntakeMode(
+    draft,
+    JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+  );
+
+  assert.equal(draft.location.intakeMode, JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION);
+  assert.equal(draft.location.serviceAddress, "");
+  assert.equal(draft.location.unitNumber, "");
+  assert.equal(draft.location.city, "Fort Myers");
+  assert.equal(draft.location.accessNotes, "Call from the gate");
+  assert.equal(getJobRequestDraftReadiness(draft).isReady, true);
+});
+
 test("readiness and review model remain non-canonical", () => {
   const draft = readyDraft();
   const readiness = getJobRequestDraftReadiness(draft);
@@ -171,8 +236,24 @@ test("readiness and review model remain non-canonical", () => {
   assert.equal(review.service.specialty, "painting");
   assert.equal(review.guidance.code, "add_timing");
   assert.equal(review.sections.some((section) => section.id === "service"), true);
+  assert.equal(review.location.intakeMode, JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE);
+  assert.equal(review.sections.find((section) => section.id === "location").items[0].labelKey, "jobRequestReviewServiceLocation");
   assert.equal(Object.hasOwn(review, "post"), false);
   assert.equal(Object.hasOwn(review, "conversation"), false);
+});
+
+test("review model renders address-after-selection as a service area with later-address guidance", () => {
+  const draft = setJobRequestLocationIntakeMode(
+    readyDraft(),
+    JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+  );
+  const review = buildJobRequestReviewModel(draft);
+  const locationSection = review.sections.find((section) => section.id === "location");
+
+  assert.equal(review.location.formattedAddress, "Fort Myers, FL 33901");
+  assert.equal(locationSection.items[0].labelKey, "jobRequestReviewServiceArea");
+  assert.equal(locationSection.items[0].value, "Fort Myers, FL 33901");
+  assert.equal(locationSection.items[1].valueKey, "jobRequestReviewAddressAfterSelection");
 });
 
 test("readiness distinguishes missing, uncertain, warnings, and next guidance", () => {
@@ -229,9 +310,19 @@ test("manual and assistant paths converge on equivalent draft meaning", () => {
       },
       createdAt: "2026-08-07T12:00:00.000Z",
     }),
-    { initialLocation: "123 Palm Ave" }
+    {
+      initialLocation: "123 Palm Ave",
+      initialCity: "Fort Myers",
+      initialRegion: "FL",
+      initialPostalCode: "33901",
+    }
   );
-  let manualDraft = createJobRequestDraft({ initialLocation: "123 Palm Ave" });
+  let manualDraft = createJobRequestDraft({
+    initialLocation: "123 Palm Ave",
+    initialCity: "Fort Myers",
+    initialRegion: "FL",
+    initialPostalCode: "33901",
+  });
   manualDraft = applyHomeownerInput(manualDraft, {
     "job.title": assistantDraft.job.title,
     "job.description": assistantDraft.job.description,
@@ -261,6 +352,9 @@ test("review edit round trip updates the same draft and recomputes readiness", (
   draft = applyHomeownerInput(draft, {
     "job.title": "Replace ceiling fan",
     "location.serviceAddress": "123 Palm Ave",
+    "location.city": "Fort Myers",
+    "location.region": "FL",
+    "location.postalCode": "33901",
   });
   draft = setServiceClassification(draft, {
     category: "electrical",
@@ -291,10 +385,15 @@ test("canonical payload transform includes only backend create fields and readab
     "access_notes",
     "category",
     "description",
-    "location",
+    "location_intake_mode",
     "request_category",
     "request_photos",
+    "service_address_line1",
+    "service_city",
+    "service_country_code",
     "service_domain",
+    "service_postal_code",
+    "service_region",
     "service_specialty",
     "title",
     "unit_number",
@@ -304,6 +403,27 @@ test("canonical payload transform includes only backend create fields and readab
   assert.equal(Object.hasOwn(payload, "localDraftId"), false);
   assert.equal(Object.hasOwn(payload, "provenance"), false);
   assert.equal(Object.hasOwn(payload, "direct_request"), false);
+  assert.equal(Object.hasOwn(payload, "location"), false);
+  assert.equal(Object.hasOwn(payload, "location_normalization_status"), false);
+  assert.equal(Object.hasOwn(payload, "discovery_area_label"), false);
+});
+
+test("canonical payload for address-after-selection omits street and unit authority", () => {
+  const draft = setJobRequestLocationIntakeMode(
+    readyDraft(),
+    JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+  );
+  const payload = buildJobRequestDraftCanonicalPayload(draft);
+
+  assert.equal(payload.location_intake_mode, "address_after_selection");
+  assert.equal(payload.service_city, "Fort Myers");
+  assert.equal(payload.service_region, "FL");
+  assert.equal(payload.service_postal_code, "33901");
+  assert.equal(payload.service_country_code, "US");
+  assert.equal(Object.hasOwn(payload, "service_address_line1"), false);
+  assert.equal(Object.hasOwn(payload, "unit_number"), false);
+  assert.equal(Object.hasOwn(payload, "location_normalization_status"), false);
+  assert.equal(Object.hasOwn(payload, "discovery_area_label"), false);
 });
 
 test("submission snapshot stays immutable when draft fields change", () => {

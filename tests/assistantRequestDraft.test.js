@@ -189,13 +189,19 @@ test("assistant request draft still reads legacy Meetro draft keys", () => {
   assert.match(loaded.description, /Confirm opener model/);
 });
 
-test("Upload consumes Ask Meetro draft and keeps request form editable before sending", () => {
-  assert.match(assistantSource, /saveAssistantRequestDraft\(localStorage, draft\)/);
+test("Upload consumes a session-only Ask Meetro draft and keeps the form editable", () => {
+  assert.match(assistantSource, /saveAssistantRequestDraft\(sessionStorage, draft\)/);
   assert.match(assistantSource, /t\("assistantUseThisToPostProject"\)/);
+  assert.match(uploadSource, /readAssistantRequestDraft\(sessionStorage\)/);
   assert.match(uploadSource, /readAssistantRequestDraft\(localStorage\)/);
+  assert.match(uploadSource, /saveAssistantRequestDraft\(sessionStorage, persistentDraft\)/);
+  assert.match(uploadSource, /clearAssistantRequestDraft\(localStorage\)/);
+  assert.match(uploadSource, /readJobRequestDraft\(sessionStorage/);
+  assert.match(uploadSource, /saveJobRequestDraft\(sessionStorage, draft\)/);
+  assert.doesNotMatch(uploadSource, /saveJobRequestDraft\(localStorage/);
   assert.match(uploadSource, /createJobRequestDraftFromAssistantDraft\(initialAssistantDraft/);
   assert.match(uploadSource, /const \[draft, setDraft\] = useState\(\(\) => \{/);
-  assert.match(uploadSource, /clearAssistantRequestDraftHandoff\(localStorage\)/);
+  assert.match(uploadSource, /clearAssistantRequestDraftHandoff\(sessionStorage\)/);
   assert.doesNotMatch(uploadSource, /readAssistantRequestDraft[\s\S]{0,260}handleCreatePost\(/);
 });
 
@@ -346,7 +352,10 @@ test("Manual mode remains the focused editable surface before review", () => {
   assert.doesNotMatch(uploadSource, /<select\s*\n\s*value=\{category\}/);
   assert.match(uploadSource, /<label htmlFor="request-title" style=\{subtleFieldLabel\}>/);
   assert.match(uploadSource, /<label htmlFor="request-description" style=\{srOnly\}>/);
-  assert.match(uploadSource, /<label htmlFor="request-location" style=\{srOnly\}>/);
+  assert.match(uploadSource, /<label htmlFor="request-location" style=\{subtleFieldLabel\}>/);
+  assert.match(uploadSource, /jobRequestLocationSharingChoice/);
+  assert.match(uploadSource, /jobRequestFullAddressNow/);
+  assert.match(uploadSource, /jobRequestGeneralAreaForNow/);
   assert.match(uploadSource, /\{t\("projectTitle"\)\} \(\{requestHelpCopy\.optional\}\)/);
   assert.match(uploadSource, /jobRequestWhereIsWork/);
   assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.title": e\.target\.value/);
@@ -447,6 +456,12 @@ test("Continue to Request and continuity labels exist in supported languages", (
     "jobRequestDraftGuidanceService",
     "jobRequestDraftGuidanceJobTitle",
     "jobRequestDraftGuidanceLocation",
+    "jobRequestLocationSharingChoice",
+    "jobRequestFullAddressNow",
+    "jobRequestGeneralAreaForNow",
+    "jobRequestReviewServiceLocation",
+    "jobRequestReviewServiceArea",
+    "jobRequestReviewAddressAfterSelection",
     "jobRequestDraftGuidanceReady",
     "jobRequestDraftWarningServiceUnconfirmed",
     "jobRequestDraftReviewWork",

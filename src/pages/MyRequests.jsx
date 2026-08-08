@@ -1021,6 +1021,15 @@ function MyRequests({ setPage }) {
     title: "",
     description: "",
     location: "",
+    locationIntakeMode: "",
+    locationNormalizationStatus: "legacy_unclassified",
+    serviceAddressLine1: "",
+    serviceCity: "",
+    serviceRegion: "",
+    servicePostalCode: "",
+    serviceCountryCode: "",
+    unitNumber: "",
+    accessNotes: "",
     photos: [],
     photosChanged: false,
     photoError: "",
@@ -1273,6 +1282,16 @@ function MyRequests({ setPage }) {
       title: request.title || "",
       description: request.description || "",
       location: request.location || "",
+      locationIntakeMode: request.locationIntakeMode || "",
+      locationNormalizationStatus:
+        request.locationNormalizationStatus || "legacy_unclassified",
+      serviceAddressLine1: request.serviceAddressLine1 || "",
+      serviceCity: request.serviceCity || "",
+      serviceRegion: request.serviceRegion || "",
+      servicePostalCode: request.servicePostalCode || "",
+      serviceCountryCode: request.serviceCountryCode || "",
+      unitNumber: request.unitNumber || "",
+      accessNotes: request.accessNotes || "",
       photos: hydrateRequestEditPhotos(request),
       photosChanged: false,
       photoError: "",
@@ -1310,6 +1329,15 @@ function MyRequests({ setPage }) {
       title: "",
       description: "",
       location: "",
+      locationIntakeMode: "",
+      locationNormalizationStatus: "legacy_unclassified",
+      serviceAddressLine1: "",
+      serviceCity: "",
+      serviceRegion: "",
+      servicePostalCode: "",
+      serviceCountryCode: "",
+      unitNumber: "",
+      accessNotes: "",
       photos: [],
       photosChanged: false,
       photoError: "",
@@ -1333,8 +1361,25 @@ function MyRequests({ setPage }) {
       const body = {
         title: editForm.title.trim(),
         description: editForm.description.trim(),
-        location: editForm.location.trim(),
       };
+      if (editForm.locationNormalizationStatus === "normalized") {
+        Object.assign(body, {
+          location_intake_mode: editForm.locationIntakeMode,
+          service_city: editForm.serviceCity.trim(),
+          service_region: editForm.serviceRegion.trim(),
+          service_postal_code: editForm.servicePostalCode.trim(),
+          service_country_code: editForm.serviceCountryCode.trim(),
+          access_notes: editForm.accessNotes.trim(),
+        });
+        if (editForm.locationIntakeMode === "exact_on_file") {
+          Object.assign(body, {
+            service_address_line1: editForm.serviceAddressLine1.trim(),
+            unit_number: editForm.unitNumber.trim(),
+          });
+        }
+      } else {
+        body.location = editForm.location.trim();
+      }
 
       if (editForm.photosChanged) {
         if (mediaUploadDeferred) {
@@ -2018,17 +2063,70 @@ function MyRequests({ setPage }) {
                             style={{ ...textarea, minHeight: 110 }}
                           />
 
-                          <input
-                            value={editForm.location}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                location: event.target.value,
-                              }))
-                            }
-                            placeholder={t("myRequestsLocationPlaceholder", language)}
-                            style={input}
-                          />
+                          {editForm.locationNormalizationStatus === "normalized" ? (
+                            <div style={{ display: "grid", gap: 10 }}>
+                              {editForm.locationIntakeMode === "exact_on_file" && (
+                                <input
+                                  value={editForm.serviceAddressLine1}
+                                  onChange={(event) =>
+                                    setEditForm((current) => ({
+                                      ...current,
+                                      serviceAddressLine1: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t("streetAddress", language)}
+                                  style={input}
+                                />
+                              )}
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+                                <input
+                                  value={editForm.serviceCity}
+                                  onChange={(event) =>
+                                    setEditForm((current) => ({
+                                      ...current,
+                                      serviceCity: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t("city", language)}
+                                  style={input}
+                                />
+                                <input
+                                  value={editForm.serviceRegion}
+                                  onChange={(event) =>
+                                    setEditForm((current) => ({
+                                      ...current,
+                                      serviceRegion: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t("state", language)}
+                                  style={input}
+                                />
+                                <input
+                                  value={editForm.servicePostalCode}
+                                  onChange={(event) =>
+                                    setEditForm((current) => ({
+                                      ...current,
+                                      servicePostalCode: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t("zipCode", language)}
+                                  style={input}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <input
+                              value={editForm.location}
+                              onChange={(event) =>
+                                setEditForm((current) => ({
+                                  ...current,
+                                  location: event.target.value,
+                                }))
+                              }
+                              placeholder={t("myRequestsLocationPlaceholder", language)}
+                              style={input}
+                            />
+                          )}
                         </div>
                       ) : (
                         <p

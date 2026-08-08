@@ -31,7 +31,7 @@ test("address manager follows one viewport-owned accessible editor pattern", () 
 });
 
 test("new service requests do not silently reuse profile or workflow addresses", () => {
-  assert.match(uploadSource, /readJobRequestDraft\(localStorage, \{ initialLocation: "" \}\)/);
+  assert.match(uploadSource, /readJobRequestDraft\(sessionStorage, \{ initialLocation: "" \}\)/);
   assert.match(uploadSource, /resetJobRequestDraft\(\{\s*initialLocation: "",\s*\}\)/);
   assert.doesNotMatch(uploadSource, /resolveWorkflowAddress\(\{/);
   assert.doesNotMatch(uploadSource, /selectedPropertyAddress:|projectAddress:|requestAddress:/);

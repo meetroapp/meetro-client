@@ -10759,7 +10759,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Ready to review",
     jobRequestDraftGuidanceService: "Choose the closest service so the right professionals can see it.",
     jobRequestDraftGuidanceJobTitle: "Add a short title for the work you need.",
-    jobRequestDraftGuidanceLocation: "Add the service address before sending.",
+    jobRequestDraftGuidanceLocation: "Add where service is needed before sending.",
     jobRequestDraftGuidanceConfirmService: "Confirm the service match before sending.",
     jobRequestDraftGuidanceDescription: "Add a few details about what is happening.",
     jobRequestDraftGuidanceTiming: "Add timing if it matters for this request.",
@@ -10821,6 +10821,18 @@ const assistantRequestPreparationLabels = {
     jobRequestProgressAddressAdded: "Address added",
     jobRequestProgressPhotos: "Photos optional",
     jobRequestWhereIsWork: "Where is the work?",
+    jobRequestLocationSharingChoice: "How would you like to share the location?",
+    jobRequestLocationSharingHelp: "Choose how much location detail to include with this request.",
+    jobRequestFullAddressNow: "Add the full address now",
+    jobRequestFullAddressPrivacy:
+      "The exact address stays private while professionals review and respond.",
+    jobRequestGeneralAreaForNow: "Share the general area for now",
+    jobRequestGeneralAreaPrivacy:
+      "Provide city, state, and ZIP. You can add the exact address after selecting a professional.",
+    jobRequestReviewServiceLocation: "Service Location",
+    jobRequestReviewServiceArea: "Service Area",
+    jobRequestReviewAddressAfterSelection:
+      "Exact address will be provided after you select a professional.",
     jobRequestPhotosOptional: "Photos — optional",
     jobRequestPhotosHelp: "Photos can help professionals understand the request.",
     jobRequestTimingOptional: "Timing — optional",
@@ -10844,6 +10856,8 @@ const assistantRequestPreparationLabels = {
     jobRequestViewMyRequest: "View My Request",
     jobRequestReturnHome: "Return Home",
     fullServiceAddress: "Service Address",
+    stateRegion: "State / Region",
+    zipPostalCode: "ZIP / Postal Code",
   },
   es: {
     assistantUseThisToPostProject: "Continuar a solicitud",
@@ -10929,7 +10943,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Lista para revisar",
     jobRequestDraftGuidanceService: "Elige el servicio más cercano para que lo vean los profesionales correctos.",
     jobRequestDraftGuidanceJobTitle: "Agrega un título corto para el trabajo que necesitas.",
-    jobRequestDraftGuidanceLocation: "Agrega la dirección del servicio antes de enviar.",
+    jobRequestDraftGuidanceLocation: "Agrega dónde se necesita el servicio antes de enviar.",
     jobRequestDraftGuidanceConfirmService: "Confirma el servicio antes de enviar.",
     jobRequestDraftGuidanceDescription: "Agrega algunos detalles sobre lo que está pasando.",
     jobRequestDraftGuidanceTiming: "Agrega el horario si es importante para esta solicitud.",
@@ -10991,6 +11005,18 @@ const assistantRequestPreparationLabels = {
     jobRequestProgressAddressAdded: "Dirección agregada",
     jobRequestProgressPhotos: "Fotos opcionales",
     jobRequestWhereIsWork: "¿Dónde es el trabajo?",
+    jobRequestLocationSharingChoice: "¿Cómo quieres compartir la ubicación?",
+    jobRequestLocationSharingHelp: "Elige cuánto detalle de ubicación incluir con esta solicitud.",
+    jobRequestFullAddressNow: "Agregar la dirección completa ahora",
+    jobRequestFullAddressPrivacy:
+      "La dirección exacta permanece privada mientras los profesionales revisan y responden.",
+    jobRequestGeneralAreaForNow: "Compartir el área general por ahora",
+    jobRequestGeneralAreaPrivacy:
+      "Indica ciudad, estado y código postal. Puedes agregar la dirección exacta después de seleccionar un profesional.",
+    jobRequestReviewServiceLocation: "Ubicación del servicio",
+    jobRequestReviewServiceArea: "Área del servicio",
+    jobRequestReviewAddressAfterSelection:
+      "La dirección exacta se proporcionará después de seleccionar un profesional.",
     jobRequestPhotosOptional: "Fotos — opcional",
     jobRequestPhotosHelp: "Las fotos pueden ayudar a los profesionales a entender la solicitud.",
     jobRequestTimingOptional: "Horario — opcional",
@@ -11014,6 +11040,8 @@ const assistantRequestPreparationLabels = {
     jobRequestViewMyRequest: "Ver mi solicitud",
     jobRequestReturnHome: "Volver al inicio",
     fullServiceAddress: "Dirección del servicio",
+    stateRegion: "Estado / Región",
+    zipPostalCode: "Código postal",
   },
   fr: {
     assistantUseThisToPostProject: "Continuer vers la demande",
@@ -11099,7 +11127,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Prête à relire",
     jobRequestDraftGuidanceService: "Choisissez le service le plus proche pour atteindre les bons professionnels.",
     jobRequestDraftGuidanceJobTitle: "Ajoutez un court titre pour le travail demandé.",
-    jobRequestDraftGuidanceLocation: "Ajoutez l’adresse du service avant l’envoi.",
+    jobRequestDraftGuidanceLocation: "Ajoutez où le service est nécessaire avant l’envoi.",
     jobRequestDraftGuidanceConfirmService: "Confirmez le service avant l’envoi.",
     jobRequestDraftGuidanceDescription: "Ajoutez quelques détails sur ce qui se passe.",
     jobRequestDraftGuidanceTiming: "Ajoutez le moment souhaité si c’est important.",
@@ -11161,6 +11189,18 @@ const assistantRequestPreparationLabels = {
     jobRequestProgressAddressAdded: "Adresse ajoutée",
     jobRequestProgressPhotos: "Photos facultatives",
     jobRequestWhereIsWork: "Où se trouve le travail ?",
+    jobRequestLocationSharingChoice: "Comment souhaitez-vous partager l’emplacement ?",
+    jobRequestLocationSharingHelp: "Choisissez le niveau de détail à inclure avec cette demande.",
+    jobRequestFullAddressNow: "Ajouter l’adresse complète maintenant",
+    jobRequestFullAddressPrivacy:
+      "L’adresse exacte reste privée pendant que les professionnels examinent et répondent.",
+    jobRequestGeneralAreaForNow: "Partager la zone générale pour l’instant",
+    jobRequestGeneralAreaPrivacy:
+      "Indiquez la ville, l’état ou région, et le code postal. Vous pourrez ajouter l’adresse exacte après avoir sélectionné un professionnel.",
+    jobRequestReviewServiceLocation: "Emplacement du service",
+    jobRequestReviewServiceArea: "Zone de service",
+    jobRequestReviewAddressAfterSelection:
+      "L’adresse exacte sera fournie après la sélection d’un professionnel.",
     jobRequestPhotosOptional: "Photos — facultatif",
     jobRequestPhotosHelp: "Les photos peuvent aider les professionnels à comprendre la demande.",
     jobRequestTimingOptional: "Moment — facultatif",
@@ -11184,6 +11224,8 @@ const assistantRequestPreparationLabels = {
     jobRequestViewMyRequest: "Voir ma demande",
     jobRequestReturnHome: "Retour à l'accueil",
     fullServiceAddress: "Adresse du service",
+    stateRegion: "État / Région",
+    zipPostalCode: "Code postal",
   },
   "pt-BR": {
     assistantUseThisToPostProject: "Continuar para a solicitação",
@@ -11269,7 +11311,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Pronta para revisar",
     jobRequestDraftGuidanceService: "Escolha o serviço mais próximo para alcançar os profissionais certos.",
     jobRequestDraftGuidanceJobTitle: "Adicione um título curto para o trabalho necessário.",
-    jobRequestDraftGuidanceLocation: "Adicione o endereço do serviço antes de enviar.",
+    jobRequestDraftGuidanceLocation: "Adicione onde o serviço é necessário antes de enviar.",
     jobRequestDraftGuidanceConfirmService: "Confirme o serviço antes de enviar.",
     jobRequestDraftGuidanceDescription: "Adicione alguns detalhes sobre o que está acontecendo.",
     jobRequestDraftGuidanceTiming: "Adicione o horário se ele for importante.",
@@ -11331,6 +11373,18 @@ const assistantRequestPreparationLabels = {
     jobRequestProgressAddressAdded: "Endereço adicionado",
     jobRequestProgressPhotos: "Fotos opcionais",
     jobRequestWhereIsWork: "Onde é o trabalho?",
+    jobRequestLocationSharingChoice: "Como você quer compartilhar o local?",
+    jobRequestLocationSharingHelp: "Escolha quanto detalhe de localização incluir nesta solicitação.",
+    jobRequestFullAddressNow: "Adicionar o endereço completo agora",
+    jobRequestFullAddressPrivacy:
+      "O endereço exato permanece privado enquanto profissionais revisam e respondem.",
+    jobRequestGeneralAreaForNow: "Compartilhar a área geral por enquanto",
+    jobRequestGeneralAreaPrivacy:
+      "Informe cidade, estado e CEP. Você poderá adicionar o endereço exato depois de selecionar um profissional.",
+    jobRequestReviewServiceLocation: "Local do serviço",
+    jobRequestReviewServiceArea: "Área do serviço",
+    jobRequestReviewAddressAfterSelection:
+      "O endereço exato será fornecido depois que você selecionar um profissional.",
     jobRequestPhotosOptional: "Fotos — opcional",
     jobRequestPhotosHelp: "Fotos podem ajudar profissionais a entender a solicitação.",
     jobRequestTimingOptional: "Horário — opcional",
@@ -11354,6 +11408,8 @@ const assistantRequestPreparationLabels = {
     jobRequestViewMyRequest: "Ver minha solicitação",
     jobRequestReturnHome: "Voltar ao início",
     fullServiceAddress: "Endereço do serviço",
+    stateRegion: "Estado / Região",
+    zipPostalCode: "CEP / Código postal",
   },
 };
 

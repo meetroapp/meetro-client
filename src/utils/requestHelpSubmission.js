@@ -34,7 +34,7 @@ export function getSupportedRequestHelpServices(services = []) {
 export function validateRequestHelpSubmission({
   title = "",
   category = "",
-  location = "",
+  serviceLocation = {},
   matchingFields = {},
 } = {}) {
   const errors = {};
@@ -53,7 +53,24 @@ export function validateRequestHelpSubmission({
     errors.category = REQUEST_HELP_ERROR.MATCH_REQUIRED;
   }
 
-  if (!String(location).trim()) {
+  const intakeMode = String(serviceLocation.intakeMode || "").trim();
+  const hasLocality = [
+    serviceLocation.city,
+    serviceLocation.region,
+    serviceLocation.postalCode,
+    serviceLocation.countryCode,
+  ].every((value) => Boolean(String(value || "").trim()));
+  const exactLocationComplete =
+    intakeMode === "exact_on_file" &&
+    Boolean(String(serviceLocation.addressLine1 || "").trim()) &&
+    hasLocality;
+  const addressLaterComplete =
+    intakeMode === "address_after_selection" &&
+    hasLocality &&
+    !String(serviceLocation.addressLine1 || "").trim() &&
+    !String(serviceLocation.unitNumber || "").trim();
+
+  if (!exactLocationComplete && !addressLaterComplete) {
     errors.location = REQUEST_HELP_ERROR.LOCATION_REQUIRED;
   }
 

@@ -46,8 +46,8 @@ test("every active FR/PT gap is explicitly inventoried and EN/ES require no fall
   const audit = await auditLocalization();
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.en, []);
   assert.deepEqual(DEFERRED_TRANSLATION_KEYS.es, []);
-  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 256);
-  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 256);
+  assert.equal(DEFERRED_TRANSLATION_KEYS.fr.length, 255);
+  assert.equal(DEFERRED_TRANSLATION_KEYS["pt-BR"].length, 255);
   assert.deepEqual(audit.missingActiveByLanguage.fr, DEFERRED_TRANSLATION_KEYS.fr);
   assert.deepEqual(
     audit.missingActiveByLanguage["pt-BR"],

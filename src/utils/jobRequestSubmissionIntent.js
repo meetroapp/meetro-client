@@ -69,21 +69,32 @@ export function buildCanonicalJobRequestPayload({
   description = "",
   category = "",
   requestMatchingFields = {},
-  location = "",
-  unitNumber = "",
-  accessNotes = "",
+  serviceLocation = {},
   requestPhotoPayload = [],
 } = {}) {
-  return {
+  const intakeMode = String(serviceLocation.intakeMode || "").trim();
+  const payload = {
     title: String(title || "").trim(),
     description: String(description || "").trim(),
     category,
     request_category: requestMatchingFields.requestCategory,
     service_domain: requestMatchingFields.service_domain,
     service_specialty: requestMatchingFields.service_specialty,
-    location: String(location || "").trim(),
-    unit_number: String(unitNumber || "").trim(),
-    access_notes: String(accessNotes || "").trim(),
+    location_intake_mode: intakeMode,
+    service_city: String(serviceLocation.city || "").trim(),
+    service_region: String(serviceLocation.region || "").trim(),
+    service_postal_code: String(serviceLocation.postalCode || "").trim(),
+    service_country_code: String(serviceLocation.countryCode || "")
+      .trim()
+      .toUpperCase(),
+    access_notes: String(serviceLocation.accessNotes || "").trim(),
     request_photos: requestPhotoPayload,
   };
+
+  if (intakeMode === "exact_on_file") {
+    payload.service_address_line1 = String(serviceLocation.addressLine1 || "").trim();
+    payload.unit_number = String(serviceLocation.unitNumber || "").trim();
+  }
+
+  return payload;
 }

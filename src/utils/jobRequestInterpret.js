@@ -1,5 +1,6 @@
 import { authFetch } from "./authFetch.js";
 import {
+  JOB_REQUEST_DRAFT_VERSION,
   JOB_REQUEST_DRAFT_SOURCE,
   JOB_REQUEST_DRAFT_UNCERTAINTY,
   updateDraftField,
@@ -139,7 +140,7 @@ export function buildJobRequestInterpretRequest({ text, draft, locale = "en-US" 
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
     throw new TypeError("A Job Request draft is required for interpretation.");
   }
-  if (draft.version !== 1) {
+  if (draft.version !== JOB_REQUEST_DRAFT_VERSION) {
     throw new TypeError("The Job Request draft version is not supported for interpretation.");
   }
   const normalizedLocale = cleanBoundedText(locale, 35, { required: true });

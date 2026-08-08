@@ -102,9 +102,16 @@ test("canonical payload builder suppresses direct professional authority fields"
       service_domain: "home_services",
       service_specialty: "painting",
     },
-    location: " Cape Coral ",
-    unitNumber: " 2B ",
-    accessNotes: " Call first ",
+    serviceLocation: {
+      intakeMode: "exact_on_file",
+      addressLine1: " 123 Palm Ave ",
+      city: " Cape Coral ",
+      region: " FL ",
+      postalCode: " 33904 ",
+      countryCode: " us ",
+      unitNumber: " 2B ",
+      accessNotes: " Call first ",
+    },
     requestPhotoPayload: [{ purpose: "request-photo" }],
   });
 
@@ -115,7 +122,12 @@ test("canonical payload builder suppresses direct professional authority fields"
     request_category: "painting",
     service_domain: "home_services",
     service_specialty: "painting",
-    location: "Cape Coral",
+    location_intake_mode: "exact_on_file",
+    service_address_line1: "123 Palm Ave",
+    service_city: "Cape Coral",
+    service_region: "FL",
+    service_postal_code: "33904",
+    service_country_code: "US",
     unit_number: "2B",
     access_notes: "Call first",
     request_photos: [{ purpose: "request-photo" }],
@@ -123,4 +135,36 @@ test("canonical payload builder suppresses direct professional authority fields"
   assert.equal(Object.hasOwn(payload, "direct_request"), false);
   assert.equal(Object.hasOwn(payload, "post_type"), false);
   assert.equal(Object.hasOwn(payload, "direct_conversation_id"), false);
+  assert.equal(Object.hasOwn(payload, "location_normalization_status"), false);
+  assert.equal(Object.hasOwn(payload, "discovery_area_label"), false);
+});
+
+test("canonical payload builder omits street and unit for address-after-selection", () => {
+  const payload = buildCanonicalJobRequestPayload({
+    title: "Paint room",
+    description: "Paint the living room.",
+    category: "painting",
+    requestMatchingFields: {
+      requestCategory: "painting",
+      service_domain: "home_services",
+      service_specialty: "painting",
+    },
+    serviceLocation: {
+      intakeMode: "address_after_selection",
+      addressLine1: "123 Palm Ave",
+      city: "Cape Coral",
+      region: "FL",
+      postalCode: "33904",
+      countryCode: "us",
+      unitNumber: "2B",
+      accessNotes: "Call first",
+    },
+  });
+
+  assert.equal(payload.location_intake_mode, "address_after_selection");
+  assert.equal(payload.service_city, "Cape Coral");
+  assert.equal(payload.service_country_code, "US");
+  assert.equal(payload.access_notes, "Call first");
+  assert.equal(Object.hasOwn(payload, "service_address_line1"), false);
+  assert.equal(Object.hasOwn(payload, "unit_number"), false);
 });

@@ -11,7 +11,14 @@ import {
 const validSubmission = {
   title: "Repair a leaking kitchen faucet",
   category: "plumbing",
-  location: "123 Main Street",
+  serviceLocation: {
+    intakeMode: "exact_on_file",
+    addressLine1: "123 Main Street",
+    city: "Fort Myers",
+    region: "FL",
+    postalCode: "33901",
+    countryCode: "US",
+  },
   matchingFields: {
     service_domain: "home_services",
     service_specialty: "plumbing_repairs",
@@ -32,6 +39,53 @@ test("Request Help validates the exact server-required create fields", () => {
       location: REQUEST_HELP_ERROR.LOCATION_REQUIRED,
     },
   });
+});
+
+test("Request Help validates address-after-selection locality without street or unit", () => {
+  assert.deepEqual(
+    validateRequestHelpSubmission({
+      ...validSubmission,
+      serviceLocation: {
+        intakeMode: "address_after_selection",
+        city: "Fort Myers",
+        region: "FL",
+        postalCode: "33901",
+        countryCode: "US",
+        accessNotes: "Call first",
+      },
+    }),
+    { ok: true, errors: {} }
+  );
+
+  assert.equal(
+    validateRequestHelpSubmission({
+      ...validSubmission,
+      serviceLocation: {
+        intakeMode: "address_after_selection",
+        addressLine1: "123 Main Street",
+        city: "Fort Myers",
+        region: "FL",
+        postalCode: "33901",
+        countryCode: "US",
+      },
+    }).errors.location,
+    REQUEST_HELP_ERROR.LOCATION_REQUIRED
+  );
+
+  assert.equal(
+    validateRequestHelpSubmission({
+      ...validSubmission,
+      serviceLocation: {
+        intakeMode: "address_after_selection",
+        city: "Fort Myers",
+        region: "FL",
+        postalCode: "33901",
+        countryCode: "US",
+        unitNumber: "4B",
+      },
+    }).errors.location,
+    REQUEST_HELP_ERROR.LOCATION_REQUIRED
+  );
 });
 
 test("Request Help rejects a display category without authoritative matching metadata", () => {

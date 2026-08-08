@@ -2,7 +2,12 @@ import { buildCanonicalJobRequestPayload as buildSubmissionPayload } from "./job
 import { buildRequestMatchingFields } from "./requestMatchingFields.js";
 
 export const JOB_REQUEST_DRAFT_KEY = "meetroJobRequestDraft";
-export const JOB_REQUEST_DRAFT_VERSION = 1;
+export const JOB_REQUEST_DRAFT_VERSION = 2;
+
+export const JOB_REQUEST_LOCATION_INTAKE_MODE = Object.freeze({
+  EXACT_ON_FILE: "exact_on_file",
+  ADDRESS_AFTER_SELECTION: "address_after_selection",
+});
 
 export const JOB_REQUEST_DRAFT_STAGE = Object.freeze({
   EMPTY: "empty",
@@ -49,6 +54,16 @@ function cleanText(value = "") {
   return String(value || "").trim();
 }
 
+function normalizeCountryCode(value = "") {
+  return cleanText(value).toUpperCase() || "US";
+}
+
+function normalizeLocationIntakeMode(value = "") {
+  return Object.values(JOB_REQUEST_LOCATION_INTAKE_MODE).includes(cleanText(value))
+    ? cleanText(value)
+    : JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE;
+}
+
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -79,6 +94,9 @@ function hasMeaningfulDraftContent(draft = {}) {
     cleanText(draft.service?.category) ||
     cleanText(draft.service?.specialty) ||
     cleanText(draft.location?.serviceAddress) ||
+    cleanText(draft.location?.city) ||
+    cleanText(draft.location?.region) ||
+    cleanText(draft.location?.postalCode) ||
     cleanText(draft.location?.unitNumber) ||
     cleanText(draft.location?.accessNotes) ||
     cleanText(draft.location?.affectedArea) ||
@@ -97,6 +115,10 @@ export function createJobRequestDraft({
   createdAt = nowIso(),
   updatedAt = createdAt,
   initialLocation = "",
+  initialCity = "",
+  initialRegion = "",
+  initialPostalCode = "",
+  initialCountryCode = "US",
 } = {}) {
   const draft = {
     version: JOB_REQUEST_DRAFT_VERSION,
@@ -118,7 +140,12 @@ export function createJobRequestDraft({
       displayLabel: "",
     },
     location: {
+      intakeMode: JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE,
       serviceAddress: cleanText(initialLocation),
+      city: cleanText(initialCity),
+      region: cleanText(initialRegion),
+      postalCode: cleanText(initialPostalCode),
+      countryCode: normalizeCountryCode(initialCountryCode),
       affectedArea: "",
       unitNumber: "",
       accessNotes: "",
@@ -241,6 +268,24 @@ export function applyHomeownerInput(draft, fields = {}) {
       }),
     draft
   );
+}
+
+export function setJobRequestLocationIntakeMode(draft, intakeMode) {
+  const mode = normalizeLocationIntakeMode(intakeMode);
+  let next = updateDraftField(draft, "location.intakeMode", mode, {
+    source: JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER,
+    confirmed: true,
+    uncertainty: JOB_REQUEST_DRAFT_UNCERTAINTY.KNOWN,
+  });
+
+  if (mode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION) {
+    next = applyHomeownerInput(next, {
+      "location.serviceAddress": "",
+      "location.unitNumber": "",
+    });
+  }
+
+  return next;
 }
 
 export function applyAssistantSuggestion(draft, fields = {}) {
@@ -447,7 +492,24 @@ export function getJobRequestDraftReadiness(draft = {}) {
   if (!selectedCategory || !matchingFields.serviceDomain || !matchingFields.serviceSpecialty) {
     missing.push("service");
   }
-  if (!cleanText(draft.location?.serviceAddress)) missing.push("location");
+  const intakeMode = cleanText(draft.location?.intakeMode);
+  const exactAddressRequired =
+    intakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE;
+  const localityComplete = Boolean(
+    cleanText(draft.location?.city) &&
+    cleanText(draft.location?.region) &&
+    cleanText(draft.location?.postalCode) &&
+    cleanText(draft.location?.countryCode)
+  );
+  const locationComplete = Boolean(
+    localityComplete &&
+    (exactAddressRequired
+      ? cleanText(draft.location?.serviceAddress)
+      : intakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION &&
+        !cleanText(draft.location?.serviceAddress) &&
+        !cleanText(draft.location?.unitNumber))
+  );
+  if (!locationComplete) missing.push("location");
   const uncertainRequiredFields = [];
   if (isRequiredFieldUncertain(draft, "job.title")) uncertainRequiredFields.push("title");
   if (
@@ -457,7 +519,13 @@ export function getJobRequestDraftReadiness(draft = {}) {
   ) {
     uncertainRequiredFields.push("service");
   }
-  if (isRequiredFieldUncertain(draft, "location.serviceAddress")) {
+  if (
+    (exactAddressRequired &&
+      isRequiredFieldUncertain(draft, "location.serviceAddress")) ||
+    ["city", "region", "postalCode", "countryCode"].some((field) =>
+      isRequiredFieldUncertain(draft, `location.${field}`)
+    )
+  ) {
     uncertainRequiredFields.push("location");
   }
   const warnings = [];
@@ -595,7 +663,7 @@ export function buildJobRequestDraftCanonicalPayload(draft = {}, { requestPhotoP
     title: draft.job?.title,
     description: assembleDraftDescription(draft),
     category: selectedCategory,
-    location: draft.location?.serviceAddress,
+    location: formatJobRequestDraftServiceLocation(draft),
   });
   const requestMatchingFields = {
     ...inferred,
@@ -609,21 +677,49 @@ export function buildJobRequestDraftCanonicalPayload(draft = {}, { requestPhotoP
     description: assembleDraftDescription(draft),
     category: selectedCategory,
     requestMatchingFields,
-    location: draft.location?.serviceAddress,
-    unitNumber: draft.location?.unitNumber,
-    accessNotes: draft.location?.accessNotes,
+    serviceLocation: {
+      intakeMode: draft.location?.intakeMode,
+      addressLine1: draft.location?.serviceAddress,
+      city: draft.location?.city,
+      region: draft.location?.region,
+      postalCode: draft.location?.postalCode,
+      countryCode: draft.location?.countryCode,
+      unitNumber: draft.location?.unitNumber,
+      accessNotes: draft.location?.accessNotes,
+    },
     requestPhotoPayload: requestPhotoPayload || [],
   });
 }
 
+export function formatJobRequestDraftServiceLocation(draft = {}) {
+  const location = draft.location || {};
+  const locality = formatJobRequestDraftServiceArea(draft);
+  return [cleanText(location.serviceAddress), locality]
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function formatJobRequestDraftServiceArea(draft = {}) {
+  const location = draft.location || {};
+  return [
+    [cleanText(location.city), cleanText(location.region)].filter(Boolean).join(", "),
+    cleanText(location.postalCode),
+  ].filter(Boolean).join(" ");
+}
+
 export function buildJobRequestReviewModel(draft = {}) {
   const readiness = getJobRequestDraftReadiness(draft);
-  const item = ({ id, labelKey, value, fieldPath, required = false }) => {
+  const locationIntakeMode = normalizeLocationIntakeMode(draft.location?.intakeMode);
+  const locationValue = locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE
+    ? formatJobRequestDraftServiceLocation(draft)
+    : formatJobRequestDraftServiceArea(draft);
+  const item = ({ id, labelKey, value, valueKey = "", fieldPath, required = false }) => {
     const meta = getFieldMeta(draft, fieldPath);
     return {
       id,
       labelKey,
       value: cleanText(value),
+      valueKey,
       required,
       missing: required && !cleanText(value),
       confirmed: meta.confirmed === true,
@@ -646,6 +742,13 @@ export function buildJobRequestReviewModel(draft = {}) {
     },
     location: {
       serviceAddress: cleanText(draft.location?.serviceAddress),
+      formattedAddress: locationValue,
+      serviceArea: formatJobRequestDraftServiceArea(draft),
+      intakeMode: locationIntakeMode,
+      city: cleanText(draft.location?.city),
+      region: cleanText(draft.location?.region),
+      postalCode: cleanText(draft.location?.postalCode),
+      countryCode: cleanText(draft.location?.countryCode),
       affectedArea: cleanText(draft.location?.affectedArea),
       unitNumber: cleanText(draft.location?.unitNumber),
       accessNotes: cleanText(draft.location?.accessNotes),
@@ -699,11 +802,38 @@ export function buildJobRequestReviewModel(draft = {}) {
         items: [
           item({
             id: "location",
-            labelKey: "fullServiceAddress",
-            value: draft.location?.serviceAddress,
-            fieldPath: "location.serviceAddress",
+            labelKey:
+              locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE
+                ? "jobRequestReviewServiceLocation"
+                : "jobRequestReviewServiceArea",
+            value: locationValue,
+            fieldPath:
+              locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE
+                ? "location.serviceAddress"
+                : "location.city",
             required: true,
           }),
+          ...(locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+            ? [
+                item({
+                  id: "address_after_selection",
+                  labelKey: "jobRequestReviewAddressAfterSelection",
+                  valueKey: "jobRequestReviewAddressAfterSelection",
+                  fieldPath: "location.intakeMode",
+                }),
+              ]
+            : []),
+          ...(locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE &&
+          cleanText(draft.location?.unitNumber)
+            ? [
+                item({
+                  id: "unit",
+                  labelKey: "unitNumber",
+                  value: draft.location?.unitNumber,
+                  fieldPath: "location.unitNumber",
+                }),
+              ]
+            : []),
           item({
             id: "access",
             labelKey: "accessNotes",
@@ -846,6 +976,15 @@ export function normalizeJobRequestDraft(value = {}) {
       ...(isPlainObject(value.submission) ? value.submission : {}),
     },
   };
+  next.location = {
+    ...next.location,
+    intakeMode: normalizeLocationIntakeMode(next.location?.intakeMode),
+    countryCode: normalizeCountryCode(next.location?.countryCode),
+  };
+  if (next.location.intakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION) {
+    next.location.serviceAddress = "";
+    next.location.unitNumber = "";
+  }
   return finalizeDraft(next);
 }
 

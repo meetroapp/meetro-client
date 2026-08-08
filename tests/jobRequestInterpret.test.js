@@ -115,7 +115,7 @@ test("request builder sends only bounded text and minimized non-canonical draft 
 
 test("request builder rejects unsupported versions and non-text draft values", () => {
   const unsupported = createJobRequestDraft();
-  unsupported.version = 2;
+  unsupported.version = 1;
   assert.throws(
     () => buildJobRequestInterpretRequest({ text: "Leak", draft: unsupported }),
     /version is not supported/

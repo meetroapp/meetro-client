@@ -177,6 +177,15 @@ test("new conversational labels exist in supported languages", () => {
     "jobRequestSearchServices",
     "jobRequestProgress",
     "jobRequestWhereIsWork",
+    "jobRequestLocationSharingChoice",
+    "jobRequestLocationSharingHelp",
+    "jobRequestFullAddressNow",
+    "jobRequestFullAddressPrivacy",
+    "jobRequestGeneralAreaForNow",
+    "jobRequestGeneralAreaPrivacy",
+    "jobRequestReviewServiceLocation",
+    "jobRequestReviewServiceArea",
+    "jobRequestReviewAddressAfterSelection",
     "jobRequestPhotosOptional",
     "jobRequestTimingOptional",
     "jobRequestRequestDetails",
@@ -209,6 +218,10 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /title=\{t\("jobRequestChooseService", language\)\}/);
   assert.match(uploadSource, /searchPlaceholder=\{t\("searchServices"\)\}/);
   assert.match(uploadSource, /id="job-request-conversation-input"/);
+  assert.match(uploadSource, /type="radio"/);
+  assert.match(uploadSource, /name="request-location-intake-mode"/);
+  assert.match(uploadSource, /jobRequestLocationSharingChoice/);
+  assert.match(uploadSource, /id="request-country-code"/);
   assert.match(uploadSource, /BottomNav/);
 });
 
@@ -223,7 +236,7 @@ test("manual mode is reversible and preserves one shared draft boundary", () => 
 });
 
 test("new Request Help drafts do not inherit prior workflow address state", () => {
-  assert.match(uploadSource, /readJobRequestDraft\(localStorage, \{ initialLocation: "" \}\)/);
+  assert.match(uploadSource, /readJobRequestDraft\(sessionStorage, \{ initialLocation: "" \}\)/);
   assert.match(uploadSource, /resetJobRequestDraft\(\{\s*initialLocation: "",\s*\}\)/);
   assert.doesNotMatch(uploadSource, /getInitialRequestLocation|resolveWorkflowAddress|requestLocationDraft/);
   assert.doesNotMatch(uploadSource, /readStoredRecord\("selectedProperty"\)|readStoredRecord\("selectedProject"\)|readStoredRecord\("selectedHomeownerRequest"\)/);
@@ -236,6 +249,9 @@ test("manual editor removes pseudo-review and keeps full catalog behind Browse A
   assert.match(uploadSource, /jobRequestProgressAddServiceAddress/);
   assert.match(uploadSource, /jobRequestProgressServiceSelected/);
   assert.match(uploadSource, /jobRequestProgressAddressAdded/);
+  assert.match(uploadSource, /setJobRequestLocationIntakeMode/);
+  assert.match(uploadSource, /JOB_REQUEST_LOCATION_INTAKE_MODE\.ADDRESS_AFTER_SELECTION/);
+  assert.doesNotMatch(uploadSource, /Choose closest match/);
   assert.doesNotMatch(uploadSource, /optional\) : ""/);
   assert.match(uploadSource, /serviceSuggestions\.map/);
   assert.match(uploadSource, /jobRequestBrowseAllServices/);

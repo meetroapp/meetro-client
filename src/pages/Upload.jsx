@@ -7,6 +7,7 @@ import {
   clearAssistantRequestDraft,
   clearAssistantRequestDraftHandoff,
   readAssistantRequestDraft,
+  saveAssistantRequestDraft,
 } from "../utils/assistantRequestDraft";
 import {
   getRequestIntelligenceServices,
@@ -42,6 +43,7 @@ import {
   createJobRequestDraftFromAssistantDraft,
   JOB_REQUEST_DRAFT_SOURCE,
   JOB_REQUEST_DRAFT_UNCERTAINTY,
+  JOB_REQUEST_LOCATION_INTAKE_MODE,
   readJobRequestDraft,
   removeDraftPhoto,
   reorderDraftPhotos,
@@ -50,6 +52,7 @@ import {
   setDraftSubmissionIntent,
   setDraftSubmissionSnapshot,
   setDraftUploadedMedia,
+  setJobRequestLocationIntakeMode,
   setServiceClassification,
 } from "../utils/jobRequestDraft";
 import {
@@ -227,7 +230,19 @@ function Upload({ setPage }) {
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
 
-  const [initialAssistantDraft] = useState(() => readAssistantRequestDraft(localStorage));
+  const [initialAssistantDraft] = useState(() => {
+    const transientDraft = readAssistantRequestDraft(sessionStorage);
+    const persistentDraft = transientDraft
+      ? null
+      : readAssistantRequestDraft(localStorage);
+
+    if (persistentDraft) {
+      saveAssistantRequestDraft(sessionStorage, persistentDraft);
+    }
+    clearAssistantRequestDraft(localStorage);
+
+    return transientDraft || persistentDraft;
+  });
   const [draft, setDraft] = useState(() => {
     if (initialAssistantDraft) {
       const validCategory = isKnownRequestCategory(initialAssistantDraft.category);
@@ -247,7 +262,7 @@ function Upload({ setPage }) {
         },
       };
     }
-    return readJobRequestDraft(localStorage, { initialLocation: "" });
+    return readJobRequestDraft(sessionStorage, { initialLocation: "" });
   });
   const [serviceSearch, setServiceSearch] = useState(
     initialAssistantDraft?.suggestedServiceLabel ||
@@ -268,8 +283,17 @@ function Upload({ setPage }) {
   const category = draft.service.category;
   const customCategory = draft.service.customCategory;
   const location = draft.location.serviceAddress;
+  const locationIntakeMode = draft.location.intakeMode;
+  const serviceCity = draft.location.city;
+  const serviceRegion = draft.location.region;
+  const servicePostalCode = draft.location.postalCode;
+  const serviceCountryCode = draft.location.countryCode;
   const unitNumber = draft.location.unitNumber;
   const accessNotes = draft.location.accessNotes;
+  const isExactLocationMode =
+    locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE;
+  const isAddressLaterMode =
+    locationIntakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION;
   const selectedServiceOptionId = draft.service.selectedServiceOptionId;
   const selectedRequestPhotos = draft.media.photos;
   const projectPhotos = selectedRequestPhotos.map((photo) => photo.previewUrl).filter(Boolean);
@@ -306,7 +330,7 @@ function Upload({ setPage }) {
   }, [selectedRequestPhotos]);
 
   useEffect(() => {
-    saveJobRequestDraft(localStorage, draft);
+    saveJobRequestDraft(sessionStorage, draft);
   }, [draft]);
 
   useEffect(() => {
@@ -361,7 +385,7 @@ function Upload({ setPage }) {
   ];
 
   useEffect(() => {
-    if (initialAssistantDraft) clearAssistantRequestDraftHandoff(localStorage);
+    if (initialAssistantDraft) clearAssistantRequestDraftHandoff(sessionStorage);
   }, [initialAssistantDraft]);
 
   useEffect(() => {
@@ -720,6 +744,11 @@ function Upload({ setPage }) {
     }, 0);
   }
 
+  function handleLocationIntakeModeChange(nextMode) {
+    setDraft((current) => setJobRequestLocationIntakeMode(current, nextMode));
+    setFieldErrors((current) => ({ ...current, location: undefined }));
+  }
+
   function handleReviewRequest(event) {
     event?.preventDefault();
     setRequestMode("review");
@@ -826,7 +855,15 @@ function Upload({ setPage }) {
       const requestValidation = validateRequestHelpSubmission({
         title,
         category: selectedCategory,
-        location,
+        serviceLocation: {
+          intakeMode: locationIntakeMode,
+          addressLine1: location,
+          city: serviceCity,
+          region: serviceRegion,
+          postalCode: servicePostalCode,
+          countryCode: serviceCountryCode,
+          unitNumber: isExactLocationMode ? unitNumber : "",
+        },
         matchingFields: {
           serviceDomain: selectedService?.serviceDomain,
           serviceSpecialty: selectedService?.serviceSpecialty,
@@ -930,7 +967,7 @@ function Upload({ setPage }) {
         setDraft(resetJobRequestDraft({
           initialLocation: "",
         }));
-        clearJobRequestDraft(localStorage);
+        clearJobRequestDraft(sessionStorage);
         setCreationMessages(createInitialCreationAssistanceMessages(language));
         setConversationText("");
         setRequestMode("conversation");
@@ -982,6 +1019,10 @@ function Upload({ setPage }) {
       category ||
       customCategory ||
       location ||
+      serviceCity ||
+      serviceRegion ||
+      servicePostalCode ||
+      serviceCountryCode ||
       unitNumber ||
       accessNotes ||
       projectPhotos.length > 0;
@@ -996,10 +1037,10 @@ function Upload({ setPage }) {
     setDraft(resetJobRequestDraft({
       initialLocation: "",
     }));
-    clearJobRequestDraft(localStorage);
+    clearJobRequestDraft(sessionStorage);
     setFieldErrors({});
     setSubmissionError("");
-    clearAssistantRequestDraft(localStorage);
+    clearAssistantRequestDraft(sessionStorage);
 
     setPage("home");
   }
@@ -1046,7 +1087,7 @@ function Upload({ setPage }) {
       value: draftReviewModel.description,
       required: false,
     },
-    { label: requestHelpCopy.location, value: draftReviewModel.location.serviceAddress, required: true },
+    { label: requestHelpCopy.location, value: draftReviewModel.location.formattedAddress, required: true },
     {
       label: requestHelpCopy.photos,
       value: projectPhotos.length ? String(projectPhotos.length) : "",
@@ -1066,10 +1107,12 @@ function Upload({ setPage }) {
     {
       key: "address",
       label: t(
-        location.trim() ? "jobRequestProgressAddressAdded" : "jobRequestProgressAddServiceAddress",
+        !draftReadiness.missingRequiredFields.includes("location")
+          ? "jobRequestProgressAddressAdded"
+          : "jobRequestProgressAddServiceAddress",
         language
       ),
-      done: Boolean(location.trim()),
+      done: !draftReadiness.missingRequiredFields.includes("location"),
     },
     { key: "photos", label: t("jobRequestProgressPhotos", language), done: projectPhotos.length > 0 },
   ];
@@ -1093,7 +1136,7 @@ function Upload({ setPage }) {
       label: t("jobRequestWhere", language),
       values: [
         draftReviewModel.location.affectedArea,
-        draftReviewModel.location.serviceAddress,
+        draftReviewModel.location.formattedAddress,
       ].filter(Boolean),
     },
     {
@@ -1623,51 +1666,207 @@ function Upload({ setPage }) {
           <h3 id="request-location-heading" style={manualSectionTitle}>
             {t("jobRequestWhereIsWork", language)}
           </h3>
-          <label htmlFor="request-location" style={srOnly}>
-            {t("fullServiceAddress")}
-          </label>
-          <input
-            id="request-location"
-            ref={locationInputRef}
-            placeholder={t("locationExample")}
-            value={location}
-            onChange={(e) => {
-              setDraft((current) =>
-                applyHomeownerInput(current, {
-                  "location.serviceAddress": e.target.value,
-                })
-              );
-              setFieldErrors((current) => ({ ...current, location: undefined }));
-            }}
-            style={inputStyle}
-            maxLength={500}
-            autoComplete="street-address"
-            aria-invalid={Boolean(fieldErrors.location)}
-            aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
-          />
+          <p style={manualSectionHelp}>{t("jobRequestLocationSharingHelp", language)}</p>
+          <fieldset style={locationModeFieldset}>
+            <legend style={srOnly}>{t("jobRequestLocationSharingChoice", language)}</legend>
+            <label
+              htmlFor="request-location-mode-exact"
+              style={{
+                ...locationModeOption,
+                ...(isExactLocationMode ? locationModeOptionActive : {}),
+              }}
+            >
+              <input
+                id="request-location-mode-exact"
+                type="radio"
+                name="request-location-intake-mode"
+                value={JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE}
+                checked={isExactLocationMode}
+                onChange={() =>
+                  handleLocationIntakeModeChange(
+                    JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE
+                  )
+                }
+                style={locationModeRadio}
+              />
+              <span style={locationModeText}>
+                <strong style={locationModeTitle}>{t("jobRequestFullAddressNow", language)}</strong>
+                <small style={locationModeHelp}>
+                  {t("jobRequestFullAddressPrivacy", language)}
+                </small>
+              </span>
+            </label>
+
+            <label
+              htmlFor="request-location-mode-later"
+              style={{
+                ...locationModeOption,
+                ...(isAddressLaterMode ? locationModeOptionActive : {}),
+              }}
+            >
+              <input
+                id="request-location-mode-later"
+                type="radio"
+                name="request-location-intake-mode"
+                value={JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION}
+                checked={isAddressLaterMode}
+                onChange={() =>
+                  handleLocationIntakeModeChange(
+                    JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+                  )
+                }
+                style={locationModeRadio}
+              />
+              <span style={locationModeText}>
+                <strong style={locationModeTitle}>{t("jobRequestGeneralAreaForNow", language)}</strong>
+                <small style={locationModeHelp}>
+                  {t("jobRequestGeneralAreaPrivacy", language)}
+                </small>
+              </span>
+            </label>
+          </fieldset>
+
+          {isExactLocationMode && (
+            <>
+              <label htmlFor="request-location" style={subtleFieldLabel}>
+                {t("streetAddress", language)}
+              </label>
+              <input
+                id="request-location"
+                ref={locationInputRef}
+                placeholder={t("streetAddress", language)}
+                value={location}
+                onChange={(e) => {
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.serviceAddress": e.target.value,
+                    })
+                  );
+                  setFieldErrors((current) => ({ ...current, location: undefined }));
+                }}
+                style={inputStyle}
+                maxLength={500}
+                autoComplete="street-address"
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+              />
+            </>
+          )}
+
+          <div style={serviceLocationGrid}>
+            <label style={serviceLocationField}>
+              <span style={subtleFieldLabel}>{t("city", language)}</span>
+              <input
+                id="request-city"
+                ref={isAddressLaterMode ? locationInputRef : undefined}
+                value={serviceCity}
+                onChange={(e) => {
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.city": e.target.value,
+                    })
+                  );
+                  setFieldErrors((current) => ({ ...current, location: undefined }));
+                }}
+                style={compactInputStyle}
+                maxLength={120}
+                autoComplete="address-level2"
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+              />
+            </label>
+
+            <label style={serviceLocationField}>
+              <span style={subtleFieldLabel}>{t("stateRegion", language)}</span>
+              <input
+                id="request-region"
+                value={serviceRegion}
+                onChange={(e) => {
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.region": e.target.value,
+                    })
+                  );
+                  setFieldErrors((current) => ({ ...current, location: undefined }));
+                }}
+                style={compactInputStyle}
+                maxLength={120}
+                autoComplete="address-level1"
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+              />
+            </label>
+
+            <label style={serviceLocationField}>
+              <span style={subtleFieldLabel}>{t("zipPostalCode", language)}</span>
+              <input
+                id="request-postal-code"
+                value={servicePostalCode}
+                onChange={(e) => {
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.postalCode": e.target.value,
+                    })
+                  );
+                  setFieldErrors((current) => ({ ...current, location: undefined }));
+                }}
+                style={compactInputStyle}
+                maxLength={32}
+                autoComplete="postal-code"
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+              />
+            </label>
+
+            <label style={serviceLocationField}>
+              <span style={subtleFieldLabel}>{t("country", language)}</span>
+              <input
+                id="request-country-code"
+                value={serviceCountryCode}
+                onChange={(e) => {
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.countryCode": e.target.value.toUpperCase(),
+                    })
+                  );
+                  setFieldErrors((current) => ({ ...current, location: undefined }));
+                }}
+                style={compactInputStyle}
+                maxLength={2}
+                autoComplete="country"
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={fieldErrors.location ? "request-location-error" : undefined}
+              />
+            </label>
+          </div>
+
           {fieldErrors.location && (
             <p id="request-location-error" role="alert" style={fieldErrorText}>
               {requestHelpCopy.locationRequired}
             </p>
           )}
 
-          <label htmlFor="request-unit" style={subtleFieldLabel}>
-            {t("unitNumber")} ({requestHelpCopy.optional})
-          </label>
-          <input
-            id="request-unit"
-            placeholder={t("unitNumberPlaceholder")}
-            value={unitNumber}
-            onChange={(e) =>
-              setDraft((current) =>
-                applyHomeownerInput(current, {
-                  "location.unitNumber": e.target.value,
-                })
-              )
-            }
-            style={compactInputStyle}
-            maxLength={100}
-          />
+          {isExactLocationMode && (
+            <>
+              <label htmlFor="request-unit" style={subtleFieldLabel}>
+                {t("unitNumber")} ({requestHelpCopy.optional})
+              </label>
+              <input
+                id="request-unit"
+                placeholder={t("unitNumberPlaceholder")}
+                value={unitNumber}
+                onChange={(e) =>
+                  setDraft((current) =>
+                    applyHomeownerInput(current, {
+                      "location.unitNumber": e.target.value,
+                    })
+                  )
+                }
+                style={compactInputStyle}
+                maxLength={100}
+              />
+            </>
+          )}
 
           <label htmlFor="request-access-notes" style={subtleFieldLabel}>
             {t("accessNotes")} ({requestHelpCopy.optional})
@@ -1880,6 +2079,11 @@ function Upload({ setPage }) {
                       <div key={item.id} style={draftReviewRow}>
                         <span style={draftReviewItemText}>
                           {t(item.labelKey)}
+                          {(item.value || item.valueKey) && (
+                            <strong style={draftReviewValueText}>
+                              {item.valueKey ? t(item.valueKey, language) : item.value}
+                            </strong>
+                          )}
                           <small style={draftReviewItemMeta}>
                             {item.missing
                               ? t("jobRequestDraftStatusMissing")
@@ -2482,6 +2686,18 @@ const compactInputStyle = {
   borderRadius: "14px",
 };
 
+const serviceLocationGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
+  gap: "9px",
+};
+
+const serviceLocationField = {
+  display: "grid",
+  gap: "6px",
+  minWidth: 0,
+};
+
 const manualHeader = {
   display: "grid",
   gap: "5px",
@@ -2523,6 +2739,61 @@ const manualSectionHelp = {
   margin: 0,
   color: "var(--meetro-color-muted)",
   fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 750,
+};
+
+const locationModeFieldset = {
+  display: "grid",
+  gap: "8px",
+  margin: 0,
+  padding: 0,
+  border: 0,
+  minWidth: 0,
+};
+
+const locationModeOption = {
+  display: "grid",
+  gridTemplateColumns: "auto minmax(0, 1fr)",
+  gap: "10px",
+  alignItems: "flex-start",
+  minHeight: "56px",
+  padding: "12px",
+  border: "1px solid var(--meetro-color-line)",
+  borderRadius: "16px",
+  background: "var(--meetro-surface-paper)",
+  cursor: "pointer",
+  minWidth: 0,
+};
+
+const locationModeOptionActive = {
+  borderColor: "rgba(31, 77, 52, 0.34)",
+  background: "var(--meetro-surface-sage)",
+};
+
+const locationModeRadio = {
+  width: "18px",
+  height: "18px",
+  margin: "2px 0 0",
+  accentColor: "var(--meetro-color-forest)",
+};
+
+const locationModeText = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+};
+
+const locationModeTitle = {
+  color: "var(--meetro-color-ink)",
+  fontSize: "14px",
+  lineHeight: 1.25,
+  fontWeight: 950,
+};
+
+const locationModeHelp = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "12px",
   lineHeight: 1.4,
   fontWeight: 750,
 };
@@ -2725,9 +2996,8 @@ const requestReviewItem = {
 const requestReviewValue = {
   color: "var(--meetro-color-ink)",
   textAlign: "right",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  whiteSpace: "pre-wrap",
+  overflowWrap: "anywhere",
 };
 
 const requestReviewMissing = {
@@ -2776,6 +3046,15 @@ const draftReviewItemMeta = {
   color: "var(--meetro-color-muted)",
   fontSize: "11px",
   fontWeight: 800,
+};
+
+const draftReviewValueText = {
+  color: "var(--meetro-color-muted)",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 800,
+  whiteSpace: "pre-wrap",
+  overflowWrap: "anywhere",
 };
 
 const draftReviewEditButton = {

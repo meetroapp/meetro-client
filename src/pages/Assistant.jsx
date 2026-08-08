@@ -9,7 +9,7 @@ import {
 
 function Assistant({ setPage }) {
   const [projectText, setProjectText] = useState("");
-  const [mode, setMode] = useState("scope");
+  const [mode] = useState("scope");
   const [prepared, setPrepared] = useState(false);
   const inputRef = useRef(null);
 
@@ -25,7 +25,7 @@ function Assistant({ setPage }) {
         mode,
       });
 
-      saveAssistantRequestDraft(localStorage, draft);
+      saveAssistantRequestDraft(sessionStorage, draft);
     }
 
     setPage("upload");

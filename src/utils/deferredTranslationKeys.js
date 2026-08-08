@@ -205,7 +205,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "loadingProject",
   "loadingProjectGallery",
   "location",
-  "locationExample",
   "locationNotSet",
   "locationPending",
   "manage",
