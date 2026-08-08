@@ -69,6 +69,9 @@ test("Request Help preserves mobile padding and bottom navigation clearance", ()
   assert.match(uploadSource, /\.request-help-manual-form \{/);
   assert.match(uploadSource, /scroll-margin-bottom: calc\(176px \+ env\(safe-area-inset-bottom, 0px\)\);/);
   assert.match(uploadSource, /const requestActionBar = \{[\s\S]*position: "relative"/);
+  assert.match(uploadSource, /\.guided-request-builder \{/);
+  assert.match(uploadSource, /\.guided-workspace-card__header \{/);
+  assert.match(uploadSource, /\.guided-workspace-card__summary \{/);
   assert.match(uploadSource, /<BottomNav setPage=\{setPage\} currentPage="upload" \/>/);
 });
 
@@ -124,6 +127,16 @@ test("Request Help exposes semantic labels, status messages, and mobile touch ta
   assert.match(uploadSource, /role="alert" aria-live="assertive"/);
   assert.match(uploadSource, /const changeServiceButton = \{[\s\S]*minHeight: "44px"/);
   assert.match(uploadSource, /const removePhotoButton = \{[\s\S]*width: "44px"[\s\S]*height: "44px"/);
+});
+
+test("Guided Request Builder has tablet and mobile card guardrails", () => {
+  assert.match(uploadSource, /className="meetro-visual-surface guided-request-builder request-help-manual-form"/);
+  assert.match(uploadSource, /width: min\(820px, 100%\);/);
+  assert.match(uploadSource, /@media \(max-width: 820px\)[\s\S]*\.guided-request-builder \{[\s\S]*width: 100%;/);
+  assert.match(uploadSource, /@media \(max-width: 430px\)[\s\S]*\.guided-workspace-card \{/);
+  assert.match(uploadSource, /border-radius: 14px;/);
+  assert.match(uploadSource, /gridTemplateColumns: "repeat\(auto-fit, minmax\(min\(100%, 220px\), 1fr\)\)"/);
+  assert.match(uploadSource, /gridTemplateColumns: "repeat\(auto-fit, minmax\(min\(100%, 150px\), 1fr\)\)"/);
 });
 
 test("Request Help accepts only canonical backend success and blocks duplicate taps", () => {

@@ -323,7 +323,7 @@ test("request form shows an understanding-to-review transition without submissio
   assert.match(uploadSource, /preparedRequestOrb/);
   assert.match(uploadSource, /jobRequestDraftGuidanceTitle/);
   assert.match(uploadSource, /buildJobRequestReviewModel\(draft\)/);
-  assert.match(uploadSource, /handleReviewEdit\(item\.editTarget\)/);
+  assert.match(uploadSource, /handleReviewEdit\(section\.target\)/);
   assert.equal(t("requestReviewIntroTitle", "en"), "Here's what Meetro understood.");
   assert.equal(t("requestReviewIntroText", "en"), "Review or edit anything before sending.");
   assert.doesNotMatch(uploadSource, /assistantPreparedRequestBannerTitle/);
@@ -342,22 +342,23 @@ test("Request Details page uses one page introduction without duplicate onboardi
 
 test("Manual mode remains the focused editable surface before review", () => {
   assert.match(uploadSource, /requestMode === "manual"/);
-  assert.match(uploadSource, /onSubmit=\{handleReviewRequest\}/);
+  assert.match(uploadSource, /activeGuidedCard/);
+  assert.match(uploadSource, /GuidedWorkspaceCard/);
   assert.match(uploadSource, /jobRequestEnterRequestDetails/);
   assert.match(uploadSource, /jobRequestBackToConversation/);
   assert.match(uploadSource, /<label htmlFor="request-service-search" style=\{subtleFieldLabel\}>/);
   assert.match(uploadSource, /jobRequestSearchServices/);
   assert.match(uploadSource, /selectedServiceCard/);
   assert.match(uploadSource, /ServiceSelectorSheet/);
-  assert.doesNotMatch(uploadSource, /<select\s*\n\s*value=\{category\}/);
+  assert.match(uploadSource, /<select[\s\S]*id="job-request-category"[\s\S]*value=\{category\}/);
   assert.match(uploadSource, /<label htmlFor="request-title" style=\{subtleFieldLabel\}>/);
-  assert.match(uploadSource, /<label htmlFor="request-description" style=\{srOnly\}>/);
+  assert.match(uploadSource, /<label htmlFor="request-description" style=\{subtleFieldLabel\}>/);
   assert.match(uploadSource, /<label htmlFor="request-location" style=\{subtleFieldLabel\}>/);
   assert.match(uploadSource, /jobRequestLocationSharingChoice/);
   assert.match(uploadSource, /jobRequestFullAddressNow/);
   assert.match(uploadSource, /jobRequestGeneralAreaForNow/);
-  assert.match(uploadSource, /\{t\("projectTitle"\)\} \(\{requestHelpCopy\.optional\}\)/);
-  assert.match(uploadSource, /jobRequestWhereIsWork/);
+  assert.match(uploadSource, /\{t\("projectTitle"\)\} \(\{requestHelpCopy\.required\}\)/);
+  assert.match(uploadSource, /jobRequestCardLocation/);
   assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.title": e\.target\.value/);
   assert.match(uploadSource, /applyHomeownerInput\(current, \{\s*"job\.description": e\.target\.value/);
 });
@@ -381,7 +382,7 @@ test("manual service state uses truthful no-service suggested and confirmed lang
   assert.match(uploadSource, /jobRequestChooseServiceHelp/);
   assert.match(uploadSource, /jobRequestChooseService/);
   assert.match(uploadSource, /jobRequestSuggestedServiceHelp/);
-  assert.match(uploadSource, /jobRequestUseThisService/);
+  assert.match(uploadSource, /jobRequestAcceptSuggestion/);
   assert.match(uploadSource, /jobRequestChangeService/);
   assert.equal(t("jobRequestChooseService", "en"), "Choose a service");
   assert.equal(
@@ -389,7 +390,7 @@ test("manual service state uses truthful no-service suggested and confirmed lang
     "Choose the service that best matches your request."
   );
   assert.equal(t("jobRequestSuggestedServiceHelp", "en"), "Based on what you described.");
-  assert.equal(t("jobRequestUseThisService", "en"), "Use this");
+  assert.equal(t("jobRequestAcceptSuggestion", "en"), "Looks right");
   assert.equal(t("jobRequestChangeService", "en"), "Change");
 });
 
@@ -407,9 +408,11 @@ test("Submit Job Request remains primary only on the Review surface", () => {
   assert.equal(t("createPost", "en"), "Submit Job Request");
   assert.equal(t("cancelRequest", "en"), "Cancel Request");
   assert.equal(t("fullServiceAddress", "en"), "Service Address");
-  assert.match(uploadSource, /requestMode === "review"/);
+  assert.match(uploadSource, /id="job-request-review-card"/);
+  assert.match(uploadSource, /setActiveGuidedCard\("review"\)/);
   assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
-  assert.match(uploadSource, /onSubmit=\{handleReviewRequest\}/);
+  assert.doesNotMatch(uploadSource, /onSubmit=\{handleReviewRequest\}/);
+  assert.equal((uploadSource.match(/t\("createPost"\)/g) || []).length, 1);
   assert.match(uploadSource, /style=\{\{\s*\.\.\.primaryButton/);
   assert.match(uploadSource, /style=\{cancelRequestButton\}/);
   assert.match(uploadSource, /const requestActionBar = \{/);

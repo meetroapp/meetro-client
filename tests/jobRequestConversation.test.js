@@ -182,6 +182,28 @@ test("new conversational labels exist in supported languages", () => {
     "jobRequestBrowseAllServices",
     "jobRequestSearchServices",
     "jobRequestProgress",
+    "jobRequestProgressWork",
+    "jobRequestProgressLocation",
+    "jobRequestProgressPhotosShort",
+    "jobRequestProgressTiming",
+    "jobRequestProgressReview",
+    "jobRequestCardWork",
+    "jobRequestCardLocation",
+    "jobRequestCardPhotos",
+    "jobRequestCardTiming",
+    "jobRequestCardReview",
+    "jobRequestContinue",
+    "jobRequestPrevious",
+    "jobRequestReadyToSubmit",
+    "jobRequestNoPhotosAdded",
+    "jobRequestPhotoCount",
+    "jobRequestExactAddressNotAdded",
+    "jobRequestTimingFlexible",
+    "jobRequestTimingHelp",
+    "jobRequestTimingUrgency",
+    "jobRequestDesiredTiming",
+    "jobRequestAvailabilityNotes",
+    "jobRequestLocationPrivacyPromise",
     "jobRequestWhereIsWork",
     "jobRequestLocationSharingChoice",
     "jobRequestLocationSharingHelp",
@@ -218,7 +240,9 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /aria-live="polite"/);
   assert.match(uploadSource, /requestMode === "conversation"/);
   assert.match(uploadSource, /requestMode === "manual"/);
-  assert.match(uploadSource, /requestMode === "review"/);
+  assert.match(uploadSource, /activeGuidedCard/);
+  assert.match(uploadSource, /GuidedWorkspaceCard/);
+  assert.match(uploadSource, /aria-current=\{state === "active" \? "step" : undefined\}/);
   assert.match(uploadSource, /jobRequestBackToConversation/);
   assert.match(uploadSource, /id="request-details-manual-form"/);
   assert.match(uploadSource, /title=\{t\("jobRequestChooseService", language\)\}/);
@@ -231,6 +255,37 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /jobRequestLocationSharingChoice/);
   assert.match(uploadSource, /id="request-country-code"/);
   assert.match(uploadSource, /BottomNav/);
+});
+
+test("guided request builder uses card state without creating new draft authority", () => {
+  assert.match(uploadSource, /const \[activeGuidedCard, setActiveGuidedCard\] = useState\("work"\)/);
+  assert.match(uploadSource, /const firstIncompleteRequiredCard = !workComplete[\s\S]*\? "work"[\s\S]*: !locationComplete[\s\S]*\? "location"[\s\S]*: "review"/);
+  assert.match(uploadSource, /getGuidedCardState\("work", workComplete\)/);
+  assert.match(uploadSource, /getGuidedCardState\("location", locationComplete\)/);
+  assert.match(uploadSource, /getGuidedCardState\("photos", photosComplete\)/);
+  assert.match(uploadSource, /getGuidedCardState\("timing", timingComplete\)/);
+  assert.match(uploadSource, /getGuidedCardState\("review", reviewComplete\)/);
+  assert.match(uploadSource, /continueToCard\("location"\)/);
+  assert.match(uploadSource, /continueToCard\("photos"\)/);
+  assert.match(uploadSource, /continueToCard\("timing"\)/);
+  assert.match(uploadSource, /continueToCard\("review"\)/);
+  assert.match(uploadSource, /handleReviewEdit\(section\.target\)/);
+  assert.doesNotMatch(uploadSource, /workDetailsDraft|locationDraft|photoDraft|timingDraft/);
+});
+
+test("review card is the only final execution surface", () => {
+  const createPostPosition = uploadSource.indexOf("{creating ? t(\"creating\") : t(\"createPost\")}");
+  const reviewCardPosition = uploadSource.indexOf('id="job-request-review-card"');
+  const postFormPosition = uploadSource.indexOf("onSubmit={handleCreatePost}");
+
+  assert.notEqual(createPostPosition, -1);
+  assert.notEqual(reviewCardPosition, -1);
+  assert.notEqual(postFormPosition, -1);
+  assert.ok(reviewCardPosition < postFormPosition);
+  assert.ok(postFormPosition < createPostPosition);
+  assert.equal((uploadSource.match(/onSubmit=\{handleCreatePost\}/g) || []).length, 1);
+  assert.equal((uploadSource.match(/t\("createPost"\)/g) || []).length, 1);
+  assert.doesNotMatch(uploadSource, /handleCreatePost\(\)/);
 });
 
 test("customer-first intake keeps technical Service Type selection behind suggestion or override", () => {
@@ -258,8 +313,8 @@ test("manual mode is reversible and preserves one shared draft boundary", () => 
   assert.match(uploadSource, /function handleBackToConversation\(\)/);
   assert.match(uploadSource, /setRequestMode\("conversation"\)/);
   assert.match(uploadSource, /function handleReviewRequest\(event\)/);
-  assert.match(uploadSource, /setRequestMode\("review"\)/);
-  assert.match(uploadSource, /onSubmit=\{handleReviewRequest\}/);
+  assert.match(uploadSource, /setActiveGuidedCard\("review"\)/);
+  assert.match(uploadSource, /className="meetro-visual-surface guided-request-builder request-help-manual-form"/);
   assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
   assert.doesNotMatch(uploadSource, /setManualDraft|manualDraft|draftCopy/);
 });
@@ -274,10 +329,9 @@ test("new Request Help drafts do not inherit prior workflow address state", () =
 test("manual editor removes pseudo-review and keeps full catalog behind Browse All", () => {
   assert.doesNotMatch(uploadSource, /requestHelpCopy\.reviewTitle/);
   assert.match(uploadSource, /jobRequestProgress/);
-  assert.match(uploadSource, /jobRequestProgressChooseService/);
-  assert.match(uploadSource, /jobRequestProgressAddServiceAddress/);
-  assert.match(uploadSource, /jobRequestProgressServiceSelected/);
-  assert.match(uploadSource, /jobRequestProgressAddressAdded/);
+  assert.match(uploadSource, /jobRequestProgressWork/);
+  assert.match(uploadSource, /jobRequestProgressLocation/);
+  assert.match(uploadSource, /jobRequestProgressReview/);
   assert.match(uploadSource, /setJobRequestLocationIntakeMode/);
   assert.match(uploadSource, /JOB_REQUEST_LOCATION_INTAKE_MODE\.ADDRESS_AFTER_SELECTION/);
   assert.doesNotMatch(uploadSource, /Choose closest match/);
