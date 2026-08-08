@@ -10781,6 +10781,13 @@ const assistantRequestPreparationLabels = {
     jobRequestConversationTitle: "Conversation",
     jobRequestConversationWelcome:
       "Tell me what you need help with. I'll help organize the details before you send your request.",
+    jobRequestWhoCanHelp: "Who do you think can help?",
+    jobRequestWhoCanHelpHelp:
+      "Choose a broad category. Meetro can suggest the technical service after you describe the problem.",
+    jobRequestCategoryNotSure: "I'm not sure yet",
+    jobRequestBroadCategory: "Broad category",
+    jobRequestMeetroSuggests: "Meetro suggests",
+    jobRequestTechnicalServiceType: "Technical service type — confirm or change",
     jobRequestConversationQuestion: "What do you need help with?",
     jobRequestConversationPlaceholder:
       "Describe what's happening, what you need repaired, or what you'd like done.",
@@ -10842,8 +10849,8 @@ const assistantRequestPreparationLabels = {
     jobRequestSuggestedServiceHelp: "Based on what you described.",
     jobRequestUseThisService: "Use this",
     jobRequestChangeService: "Change",
-    jobRequestAcceptSuggestion: "Accept",
-    jobRequestChangeSuggestion: "Change",
+    jobRequestAcceptSuggestion: "Looks right",
+    jobRequestChangeSuggestion: "Choose another service",
     jobRequestReviewRequest: "Review Request",
     jobRequestAddMoreDetails: "Add More Details",
     jobRequestWhatYouNeed: "What you need",
@@ -10965,6 +10972,13 @@ const assistantRequestPreparationLabels = {
     jobRequestConversationTitle: "Conversación",
     jobRequestConversationWelcome:
       "Cuéntame en qué necesitas ayuda. Te ayudaré a organizar los detalles antes de enviar tu solicitud.",
+    jobRequestWhoCanHelp: "¿Quién crees que puede ayudarte?",
+    jobRequestWhoCanHelpHelp:
+      "Elige una categoría general. Meetro puede sugerir el servicio técnico después de que describas el problema.",
+    jobRequestCategoryNotSure: "Aún no estoy seguro",
+    jobRequestBroadCategory: "Categoría general",
+    jobRequestMeetroSuggests: "Meetro sugiere",
+    jobRequestTechnicalServiceType: "Tipo de servicio técnico — confirma o cambia",
     jobRequestConversationQuestion: "¿En qué necesitas ayuda?",
     jobRequestConversationPlaceholder:
       "Describe qué está pasando, qué necesitas reparar o qué te gustaría hacer.",
@@ -11026,8 +11040,8 @@ const assistantRequestPreparationLabels = {
     jobRequestSuggestedServiceHelp: "Según lo que describiste.",
     jobRequestUseThisService: "Usar este",
     jobRequestChangeService: "Cambiar",
-    jobRequestAcceptSuggestion: "Aceptar",
-    jobRequestChangeSuggestion: "Cambiar",
+    jobRequestAcceptSuggestion: "Se ve bien",
+    jobRequestChangeSuggestion: "Elegir otro servicio",
     jobRequestReviewRequest: "Revisar solicitud",
     jobRequestAddMoreDetails: "Agregar más detalles",
     jobRequestWhatYouNeed: "Lo que necesitas",
@@ -11149,6 +11163,13 @@ const assistantRequestPreparationLabels = {
     jobRequestConversationTitle: "Conversation",
     jobRequestConversationWelcome:
       "Dites-moi l'aide dont vous avez besoin. Je vous aiderai à organiser les détails avant l'envoi.",
+    jobRequestWhoCanHelp: "Qui pourrait vous aider, selon vous ?",
+    jobRequestWhoCanHelpHelp:
+      "Choisissez une catégorie générale. Meetro pourra suggérer le service technique après votre description du problème.",
+    jobRequestCategoryNotSure: "Je ne sais pas encore",
+    jobRequestBroadCategory: "Catégorie générale",
+    jobRequestMeetroSuggests: "Meetro suggère",
+    jobRequestTechnicalServiceType: "Type de service technique — confirmer ou modifier",
     jobRequestConversationQuestion: "De quoi avez-vous besoin ?",
     jobRequestConversationPlaceholder:
       "Décrivez ce qui se passe, ce qui doit être réparé ou ce que vous souhaitez faire.",
@@ -11210,8 +11231,8 @@ const assistantRequestPreparationLabels = {
     jobRequestSuggestedServiceHelp: "D'après ce que vous avez décrit.",
     jobRequestUseThisService: "Utiliser ceci",
     jobRequestChangeService: "Changer",
-    jobRequestAcceptSuggestion: "Accepter",
-    jobRequestChangeSuggestion: "Changer",
+    jobRequestAcceptSuggestion: "Cela convient",
+    jobRequestChangeSuggestion: "Choisir un autre service",
     jobRequestReviewRequest: "Relire la demande",
     jobRequestAddMoreDetails: "Ajouter des détails",
     jobRequestWhatYouNeed: "Ce dont vous avez besoin",
@@ -11333,6 +11354,13 @@ const assistantRequestPreparationLabels = {
     jobRequestConversationTitle: "Conversa",
     jobRequestConversationWelcome:
       "Conte-me em que você precisa de ajuda. Vou organizar os detalhes antes do envio.",
+    jobRequestWhoCanHelp: "Quem você acha que pode ajudar?",
+    jobRequestWhoCanHelpHelp:
+      "Escolha uma categoria geral. A Meetro pode sugerir o serviço técnico depois que você descrever o problema.",
+    jobRequestCategoryNotSure: "Ainda não tenho certeza",
+    jobRequestBroadCategory: "Categoria geral",
+    jobRequestMeetroSuggests: "A Meetro sugere",
+    jobRequestTechnicalServiceType: "Tipo de serviço técnico — confirme ou altere",
     jobRequestConversationQuestion: "Com o que você precisa de ajuda?",
     jobRequestConversationPlaceholder:
       "Descreva o que está acontecendo, o que precisa de reparo ou o que gostaria de fazer.",
@@ -11394,8 +11422,8 @@ const assistantRequestPreparationLabels = {
     jobRequestSuggestedServiceHelp: "Com base no que você descreveu.",
     jobRequestUseThisService: "Usar este",
     jobRequestChangeService: "Alterar",
-    jobRequestAcceptSuggestion: "Aceitar",
-    jobRequestChangeSuggestion: "Alterar",
+    jobRequestAcceptSuggestion: "Está certo",
+    jobRequestChangeSuggestion: "Escolher outro serviço",
     jobRequestReviewRequest: "Revisar solicitação",
     jobRequestAddMoreDetails: "Adicionar detalhes",
     jobRequestWhatYouNeed: "O que você precisa",

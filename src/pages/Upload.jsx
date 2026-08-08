@@ -53,6 +53,7 @@ import {
   setDraftSubmissionSnapshot,
   setDraftUploadedMedia,
   setJobRequestLocationIntakeMode,
+  setBroadRequestCategory,
   setServiceClassification,
 } from "../utils/jobRequestDraft";
 import {
@@ -416,9 +417,9 @@ function Upload({ setPage }) {
   const selectedServiceLabel =
     serviceSelectorOptions.find((option) => option.value === selectedServiceOptionId)?.label ||
     serviceSelectorOptions.find((option) => option.serviceSpecialty === draft.service.specialty)?.label ||
-    serviceSelectorOptions.find((option) => option.requestCategory === category)?.label ||
-    categories.find((item) => item.value === category)?.label ||
     "";
+  const broadCategoryLabel =
+    categories.find((item) => item.value === category)?.label || "";
   const serviceSuggested = isAssistantSuggestedField(draft, "service.specialty");
   const titleUncertainty = getFieldUncertainty(draft, "job.title");
   const serviceUncertainty = getFieldUncertainty(draft, "service.specialty");
@@ -465,6 +466,12 @@ function Upload({ setPage }) {
         })
       );
     }
+  }
+
+  function handleBroadCategoryChange(value) {
+    if (value !== draft.service.requestCategory) setServiceSearch("");
+    setDraft((current) => setBroadRequestCategory(current, value));
+    setFieldErrors((current) => ({ ...current, category: undefined }));
   }
 
   function selectSuggestedService(service) {
@@ -701,16 +708,25 @@ function Upload({ setPage }) {
   }
 
   function alignAssistantServiceSelection(nextDraft) {
-    const matchedOption = serviceSelectorOptions.find((option) =>
-      option.serviceSpecialty === nextDraft.service?.specialty ||
-      (
-        option.serviceDomain === nextDraft.service?.domain &&
-        option.requestCategory === nextDraft.service?.requestCategory
-      )
+    const suggestedSpecialty = String(nextDraft.service?.specialty || "").trim();
+    if (!suggestedSpecialty) return nextDraft;
+    const matchedOption = serviceSelectorOptions.find(
+      (option) => option.serviceSpecialty === suggestedSpecialty
     );
     if (!matchedOption) return nextDraft;
     setServiceSearch(matchedOption.label);
-    return setServiceClassification(
+    if (nextDraft.fieldMeta?.service?.specialty?.confirmed === true) {
+      return nextDraft;
+    }
+
+    const homeownerCategory =
+      nextDraft.fieldMeta?.service?.requestCategory?.confirmed === true
+        ? {
+            category: nextDraft.service.category,
+            requestCategory: nextDraft.service.requestCategory,
+          }
+        : null;
+    let alignedDraft = setServiceClassification(
       nextDraft,
       {
         category: matchedOption.requestCategory,
@@ -723,6 +739,13 @@ function Upload({ setPage }) {
       },
       { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
     );
+    if (homeownerCategory) {
+      alignedDraft = applyHomeownerInput(alignedDraft, {
+        "service.category": homeownerCategory.category,
+        "service.requestCategory": homeownerCategory.requestCategory,
+      });
+    }
+    return alignedDraft;
   }
 
   function appendCreationMessages(messages) {
@@ -1124,6 +1147,11 @@ function Upload({ setPage }) {
       uncertainty: titleUncertainty,
     },
     {
+      id: "category",
+      label: t("jobRequestBroadCategory", language),
+      values: [broadCategoryLabel].filter(Boolean),
+    },
+    {
       id: "service",
       label: serviceSuggested
         ? t("jobRequestSuggestedService", language)
@@ -1274,6 +1302,37 @@ function Upload({ setPage }) {
               style={conversationPanel}
               aria-labelledby="job-request-conversation-title"
             >
+            <section style={broadCategorySection} aria-labelledby="job-request-category-title">
+              <label
+                id="job-request-category-title"
+                htmlFor="job-request-category"
+                style={broadCategoryTitle}
+              >
+                {t("jobRequestWhoCanHelp", language)}
+              </label>
+              <p style={broadCategoryHelp}>
+                {t("jobRequestWhoCanHelpHelp", language)}
+              </p>
+              <select
+                id="job-request-category"
+                value={category}
+                onChange={(event) => handleBroadCategoryChange(event.target.value)}
+                style={broadCategorySelect}
+              >
+                <option value="">{t("jobRequestCategoryNotSure", language)}</option>
+                {categories.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              {broadCategoryLabel && (
+                <p style={broadCategorySelected}>
+                  <span>{t("jobRequestBroadCategory", language)}</span>
+                  <strong>{broadCategoryLabel}</strong>
+                </p>
+              )}
+            </section>
             <div style={conversationHeader}>
               <p style={conversationEyebrow}>{t("jobRequestConversationTitle", language)}</p>
               <h2 id="job-request-conversation-title" style={conversationTitle}>
@@ -1429,6 +1488,11 @@ function Upload({ setPage }) {
 
             {serviceSuggested && selectedServiceLabel && (
               <div style={suggestedServiceActions}>
+                <div style={suggestedServiceSummary}>
+                  <span>{t("jobRequestMeetroSuggests", language)}</span>
+                  <strong>{selectedServiceLabel}</strong>
+                  <small>{t("jobRequestTechnicalServiceType", language)}</small>
+                </div>
                 <button
                   type="button"
                   style={secondaryActionButton}
@@ -1548,7 +1612,7 @@ function Upload({ setPage }) {
             <div style={selectedServiceCard}>
               <span style={selectedServiceLabelText}>
                 {serviceSuggested
-                  ? t("jobRequestSuggestedService", language)
+                  ? t("jobRequestMeetroSuggests", language)
                   : t("jobRequestDraftReviewService", language)}
               </span>
               <strong style={selectedServiceValue}>{selectedServiceLabel}</strong>
@@ -2583,6 +2647,53 @@ const suggestedServiceActions = {
   display: "flex",
   flexWrap: "wrap",
   gap: "8px",
+};
+
+const suggestedServiceSummary = {
+  display: "grid",
+  gap: "4px",
+  width: "100%",
+  color: "#26362d",
+};
+
+const broadCategorySection = {
+  display: "grid",
+  gap: "8px",
+  padding: "18px",
+  borderBottom: "1px solid #dbe4dd",
+  background: "#f6faf7",
+};
+
+const broadCategoryTitle = {
+  color: "#173f2a",
+  fontSize: "1rem",
+  fontWeight: 800,
+};
+
+const broadCategoryHelp = {
+  margin: 0,
+  color: "#52615a",
+  lineHeight: 1.45,
+};
+
+const broadCategorySelect = {
+  width: "100%",
+  minHeight: "48px",
+  border: "1px solid #aebdb4",
+  borderRadius: "8px",
+  background: "#ffffff",
+  color: "#1f3027",
+  padding: "0 12px",
+  font: "inherit",
+};
+
+const broadCategorySelected = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "6px 10px",
+  margin: 0,
+  color: "#52615a",
+  fontSize: "0.9rem",
 };
 
 const reviewActionGroup = {

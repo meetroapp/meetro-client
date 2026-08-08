@@ -11,8 +11,10 @@ import {
   JOB_REQUEST_DRAFT_UNCERTAINTY,
   applyHomeownerInput,
   createJobRequestDraft,
+  setBroadRequestCategory,
   setDraftSubmissionIntent,
   setDraftSubmissionSnapshot,
+  setServiceClassification,
   updateDraftField,
 } from "../src/utils/jobRequestDraft.js";
 import {
@@ -178,6 +180,23 @@ test("meaningful draft context change creates a new interpretation intent", () =
   assert.equal(changed.idempotencyKey, KEY_TWO);
 });
 
+test("problem interpretation carries homeowner-selected broad category context", () => {
+  const draft = setBroadRequestCategory(createJobRequestDraft(), "plumbing");
+  const request = buildJobRequestInterpretRequest({
+    text: "My kitchen sink is leaking underneath.",
+    draft,
+  });
+  const categoryState = request.context.draft.fieldState.find(
+    ({ path }) => path === "service.requestCategory"
+  );
+
+  assert.equal(request.context.draft.service.category, "plumbing");
+  assert.equal(request.context.draft.service.requestCategory, "plumbing");
+  assert.equal(request.context.draft.service.specialty, "");
+  assert.equal(categoryState.provenance, JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER);
+  assert.equal(categoryState.confirmed, true);
+});
+
 test("request helper calls only the canonical Gateway and validates its operation result", async () => {
   const intent = createJobRequestInterpretIntent({
     text: "Leaking faucet",
@@ -279,6 +298,31 @@ test("homeowner-confirmed and homeowner-provenance values cannot be overwritten"
   );
   assert.equal(provenanceResult.draft.job.title, "Repair cabinet only");
   assert.equal(provenanceResult.rejectedFields[0].reason, "homeowner_value_protected");
+});
+
+test("a confirmed homeowner Service Type cannot be overwritten by later AI output", () => {
+  const confirmed = setServiceClassification(createJobRequestDraft(), {
+    category: "plumbing",
+    requestCategory: "plumbing",
+    domain: "home_services",
+    specialty: "plumbing_repairs",
+    selectedServiceOptionId: "service:plumbing_repairs",
+    displayLabel: "Plumbing Repairs",
+  });
+  const result = applyJobRequestInterpretationPatch(
+    confirmed,
+    interpretation([
+      proposal({
+        path: "service.specialty",
+        value: "drain_cleaning",
+        taxonomy: { validated: true, vocabulary: "request_service" },
+      }),
+    ])
+  );
+
+  assert.equal(result.draft.service.specialty, "plumbing_repairs");
+  assert.equal(result.draft.fieldMeta.service.specialty.confirmed, true);
+  assert.equal(result.rejectedFields[0].reason, "homeowner_value_protected");
 });
 
 test("an existing assistant proposal may be refined without becoming confirmed", () => {

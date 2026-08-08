@@ -23,6 +23,7 @@ import {
   serializeJobRequestDraftForRecovery,
   setDraftSubmissionIntent,
   setDraftSubmissionSnapshot,
+  setBroadRequestCategory,
   setJobRequestLocationIntakeMode,
   setServiceClassification,
 } from "../src/utils/jobRequestDraft.js";
@@ -107,6 +108,39 @@ test("assistant suggestions cannot overwrite homeowner-confirmed fields", () => 
   assert.equal(draft.fieldMeta.job.title.confirmed, true);
   assert.equal(draft.fieldMeta.job.description.source, JOB_REQUEST_DRAFT_SOURCE.ASSISTANT);
   assert.equal(draft.fieldMeta.job.description.confirmed, false);
+});
+
+test("broad category selection remains draft context without creating a Service Type", () => {
+  let draft = setBroadRequestCategory(createJobRequestDraft(), "plumbing");
+
+  assert.equal(draft.service.category, "plumbing");
+  assert.equal(draft.service.requestCategory, "plumbing");
+  assert.equal(draft.service.domain, "");
+  assert.equal(draft.service.specialty, "");
+  assert.equal(draft.service.selectedServiceOptionId, "");
+  assert.equal(draft.fieldMeta.service.category.provenance, JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER);
+  assert.equal(draft.fieldMeta.service.requestCategory.confirmed, true);
+  assert.equal(draft.readiness.isReady, false);
+
+  draft = setServiceClassification(
+    draft,
+    {
+      category: "plumbing",
+      requestCategory: "plumbing",
+      domain: "home_services",
+      specialty: "plumbing_repairs",
+      selectedServiceOptionId: "service:plumbing_repairs",
+      displayLabel: "Plumbing Repairs",
+    },
+    { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
+  );
+  draft = setBroadRequestCategory(draft, "electrical");
+
+  assert.equal(draft.service.category, "electrical");
+  assert.equal(draft.service.requestCategory, "electrical");
+  assert.equal(draft.service.domain, "");
+  assert.equal(draft.service.specialty, "");
+  assert.equal(draft.service.selectedServiceOptionId, "");
 });
 
 test("Ask Meetro save writes the shared draft and stops writing legacy AI schemas", () => {
@@ -282,6 +316,33 @@ test("readiness distinguishes missing, uncertain, warnings, and next guidance", 
 
   const confirmed = confirmDraftField(draft, "service.specialty");
   assert.equal(getJobRequestDraftReadiness(confirmed).isReady, true);
+});
+
+test("an advisory Service Type remains submission-blocking until homeowner confirmation", () => {
+  const confirmedDraft = readyDraft();
+  const advisoryDraft = setServiceClassification(
+    confirmedDraft,
+    {
+      ...confirmedDraft.service,
+      specialty: "painting",
+    },
+    { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
+  );
+
+  assert.equal(getJobRequestDraftReadiness(advisoryDraft).isReady, false);
+  assert.deepEqual(
+    getJobRequestDraftReadiness(advisoryDraft).uncertainRequiredFields,
+    ["service"]
+  );
+  assert.equal(getJobRequestDraftGuidance({ draft: advisoryDraft }).code, "confirm_service");
+
+  const acceptedDraft = setServiceClassification(advisoryDraft, advisoryDraft.service);
+  assert.equal(getJobRequestDraftReadiness(acceptedDraft).isReady, true);
+  assert.equal(
+    acceptedDraft.fieldMeta.service.specialty.provenance,
+    JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER
+  );
+  assert.equal(acceptedDraft.fieldMeta.service.specialty.confirmed, true);
 });
 
 function updateForUncertainService(draft) {

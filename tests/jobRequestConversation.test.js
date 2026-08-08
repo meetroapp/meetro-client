@@ -165,6 +165,12 @@ test("Upload is the single ordinary Job Request creation workspace", () => {
 test("new conversational labels exist in supported languages", () => {
   const keys = [
     "jobRequestConversationQuestion",
+    "jobRequestWhoCanHelp",
+    "jobRequestWhoCanHelpHelp",
+    "jobRequestCategoryNotSure",
+    "jobRequestBroadCategory",
+    "jobRequestMeetroSuggests",
+    "jobRequestTechnicalServiceType",
     "jobRequestConversationPlaceholder",
     "jobRequestConversationProcessing",
     "jobRequestConversationUnavailable",
@@ -218,11 +224,34 @@ test("responsive and accessibility hooks are present for mobile, tablet, and des
   assert.match(uploadSource, /title=\{t\("jobRequestChooseService", language\)\}/);
   assert.match(uploadSource, /searchPlaceholder=\{t\("searchServices"\)\}/);
   assert.match(uploadSource, /id="job-request-conversation-input"/);
+  assert.match(uploadSource, /htmlFor="job-request-category"/);
+  assert.match(uploadSource, /id="job-request-category"/);
   assert.match(uploadSource, /type="radio"/);
   assert.match(uploadSource, /name="request-location-intake-mode"/);
   assert.match(uploadSource, /jobRequestLocationSharingChoice/);
   assert.match(uploadSource, /id="request-country-code"/);
   assert.match(uploadSource, /BottomNav/);
+});
+
+test("customer-first intake keeps technical Service Type selection behind suggestion or override", () => {
+  const categoryPosition = uploadSource.indexOf('id="job-request-category"');
+  const problemPosition = uploadSource.indexOf('id="job-request-conversation-input"');
+  const technicalSearchPosition = uploadSource.indexOf('id="request-service-search"');
+
+  assert.notEqual(categoryPosition, -1);
+  assert.ok(categoryPosition < problemPosition);
+  assert.ok(problemPosition < technicalSearchPosition);
+  assert.match(uploadSource, /setBroadRequestCategory\(current, value\)/);
+  assert.match(uploadSource, /jobRequestMeetroSuggests/);
+  assert.match(uploadSource, /jobRequestAcceptSuggestion/);
+  assert.match(uploadSource, /jobRequestChangeSuggestion/);
+  assert.match(uploadSource, /setServiceSelectorOpen\(true\)/);
+  const manualSelectionSource = uploadSource.slice(
+    uploadSource.indexOf("function selectServiceOption"),
+    uploadSource.indexOf("function acceptAssistantServiceSuggestion")
+  );
+  assert.match(manualSelectionSource, /setServiceClassification/);
+  assert.match(manualSelectionSource, /specialty: option\.serviceSpecialty/);
 });
 
 test("manual mode is reversible and preserves one shared draft boundary", () => {

@@ -115,6 +115,8 @@ test("Request Help exposes semantic labels, status messages, and mobile touch ta
   assert.match(uploadSource, /<form[\s\S]*onSubmit=\{handleCreatePost\}/);
   assert.match(uploadSource, /<h1 style=\{requestPageTitle\}>/);
   assert.match(uploadSource, /htmlFor="request-service-search"/);
+  assert.match(uploadSource, /htmlFor="job-request-category"/);
+  assert.match(uploadSource, /const broadCategorySelect = \{[\s\S]*width: "100%"[\s\S]*minHeight: "48px"/);
   assert.match(uploadSource, /htmlFor="request-title"/);
   assert.match(uploadSource, /htmlFor="request-description"/);
   assert.match(uploadSource, /htmlFor="request-location"/);

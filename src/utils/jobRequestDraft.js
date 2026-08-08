@@ -362,6 +362,31 @@ export function setServiceClassification(
   return finalizeDraft(next);
 }
 
+export function setBroadRequestCategory(draft, requestCategory = "") {
+  const nextCategory = cleanText(requestCategory);
+  const categoryChanged = nextCategory !== cleanText(draft.service?.requestCategory);
+  let next = draft;
+
+  if (categoryChanged && cleanText(draft.service?.specialty)) {
+    next = setServiceClassification(
+      draft,
+      {
+        category: nextCategory,
+        requestCategory: nextCategory,
+      },
+      {
+        source: JOB_REQUEST_DRAFT_SOURCE.SYSTEM_DERIVED,
+        confirmed: false,
+      }
+    );
+  }
+
+  return applyHomeownerInput(next, {
+    "service.category": nextCategory,
+    "service.requestCategory": nextCategory,
+  });
+}
+
 export function addDraftPhotos(draft, photos = [], source = JOB_REQUEST_DRAFT_SOURCE.HOMEOWNER) {
   const next = cloneDraft(draft);
   const existing = next.media?.photos || [];
@@ -515,7 +540,8 @@ export function getJobRequestDraftReadiness(draft = {}) {
   if (
     isRequiredFieldUncertain(draft, "service.category") ||
     isRequiredFieldUncertain(draft, "service.domain") ||
-    isRequiredFieldUncertain(draft, "service.specialty")
+    isRequiredFieldUncertain(draft, "service.specialty") ||
+    isFieldUnconfirmed(draft, "service.specialty")
   ) {
     uncertainRequiredFields.push("service");
   }
