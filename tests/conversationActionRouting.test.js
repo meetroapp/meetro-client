@@ -287,11 +287,11 @@ test("history review requires a preserved canonical conversation and does not cr
   );
   assert.match(
     completedJobDetailsSource,
-    /Conversation history is unavailable until Meetro confirms the preserved conversation\./
+    /completedHistoryNoMutationNotice/
   );
   assert.doesNotMatch(
     completedJobDetailsSource,
-    /completedProject\?\.projectConversationId \|\|\s*requestId/
+    /getCanonicalConversationActionTarget|projectConversationId|requestId/
   );
 });
 
@@ -316,10 +316,7 @@ test("outside conversation actions enter canonical routes with Communication Cen
     projectDetailsSource,
     /setPage\(target\.route\)/
   );
-  assert.match(
-    completedJobDetailsSource,
-    /setPage\(target\.route\)/
-  );
+  assert.doesNotMatch(completedJobDetailsSource, /setPage\(target\.route\)/);
   assert.match(
     businessLeadsSource,
     /setPage\(target\.route\)/

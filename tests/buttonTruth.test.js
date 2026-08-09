@@ -35,38 +35,14 @@ test("Home legacy Emergency cards fall back to the canonical request directory",
   assert.doesNotMatch(homeSource, /setPage\("emergencyComplete"\)/);
 });
 
-test("completed job Review Conversation opens the same project conversation", () => {
-  assert.match(completedJobDetailsSource, /CONVERSATION_ACTION_STAGE\.HISTORY/);
-  assert.match(completedJobDetailsSource, /onClick=\{\(\) => openProjectConversation\("completion_review"\)\}/);
-  assert.match(completedJobDetailsSource, /getCanonicalConversationActionTarget\(/);
-  assert.match(completedJobDetailsSource, /setPage\(target\.route\)/);
-  assert.doesNotMatch(
-    completedJobDetailsSource,
-    /CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]{0,220}setPage\("messagesInbox"\)/
-  );
-});
-
-test("completion review actions stay tappable and do not treat reviews as closure approval", () => {
-  assert.match(completedJobDetailsSource, /const confirmCompletion = \(\) =>/);
-  assert.match(completedJobDetailsSource, /onClick=\{confirmCompletion\}/);
-  assert.match(completedJobDetailsSource, /const openResolveTogether = \(\) =>/);
-  assert.match(completedJobDetailsSource, /onClick=\{openResolveTogether\}/);
-  assert.match(completedJobDetailsSource, /id="completion-concern-flow"/);
-  assert.match(completedJobDetailsSource, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
-  assert.match(completedJobDetailsSource, /zIndex: 10001/);
-  assert.match(completedJobDetailsSource, /touchAction:"manipulation"/);
-  assert.doesNotMatch(
-    completedJobDetailsSource,
-    /completedProject\?\.completionApproved \|\|\s*completedProject\?\.homeownerCompletionApproved \|\|\s*completedProject\?\.reviewSubmitted/
-  );
-});
-
-test("completed job details guards malformed stored project data before rendering", () => {
-  assert.match(completedJobDetailsSource, /function safeArray\(value\)/);
+test("completed job details exposes only truthful unavailable navigation", () => {
   assert.match(completedJobDetailsSource, /normalizeCompletedJobRecord\(completedRecord\)/);
-  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.getItem\("lastCompletedProject"\)/);
-  assert.match(completedJobDetailsSource, /safeArray\(completedProject\?\.completionPhotos\)/);
-  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.getItem\("completedJobPhotos"\)/);
+  assert.match(completedJobDetailsSource, /completedJobDetailsUnavailable/);
+  assert.match(completedJobDetailsSource, /completedHistoryNoMutationNotice/);
+  assert.match(completedJobDetailsSource, /setPage\("contractorDashboard"\)/);
+  assert.match(completedJobDetailsSource, /setPage\("home"\)/);
+  assert.doesNotMatch(completedJobDetailsSource, /confirmCompletion|openResolveTogether|openProjectConversation/);
+  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.(?:getItem|setItem|removeItem)/);
 });
 
 test("emergency back and chat actions match their destination", () => {

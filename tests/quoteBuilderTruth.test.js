@@ -32,10 +32,12 @@ test("Quote Builder cannot simulate delivery or cross-user workflow state", () =
 });
 
 test("Quote Builder presents a clear unavailable state and retains truthful review", () => {
-  assert.match(quoteSource, /Quote saving and delivery are not available yet\./);
-  assert.match(
+  assert.match(quoteSource, /quoteSavingDeliveryUnavailable/);
+  assert.match(quoteSource, /quoteNotSavedDelivered/);
+  assert.match(quoteSource, /quoteDraftHelpBody/);
+  assert.doesNotMatch(
     quoteSource,
-    /You can prepare and review this quote on this page, but it is not saved or delivered to the customer\./
+    /Professional-confirmed|confirmed materials|materiales confirmados|After reviewing|Después de revisar/i
   );
   assert.doesNotMatch(quoteSource, />\s*Save Quote\s*</);
   assert.doesNotMatch(quoteSource, />\s*Send Through Meetro Chat\s*</);

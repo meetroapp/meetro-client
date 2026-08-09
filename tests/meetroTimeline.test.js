@@ -555,23 +555,18 @@ test("closure offer uses Meetro Moment language and requires closure", () => {
   assert.equal(blocked.reason, "job-closure-required");
 });
 
-test("Meetro Moment preservation uses a keepsake preview instead of a form", () => {
+test("unverified completion details cannot create a Meetro Moment", () => {
   const completedJobPath = path.join(process.cwd(), "src/pages/CompletedJobDetails.jsx");
   const utilityPath = path.join(process.cwd(), "src/utils/meetroTimeline.js");
   const completedJobSource = fs.readFileSync(completedJobPath, "utf8");
   const utilitySource = fs.readFileSync(utilityPath, "utf8");
 
-  assert.match(completedJobSource, /momentPhotoCanvas/);
-  assert.match(completedJobSource, /contentEditable/);
-  assert.match(completedJobSource, /Swipe through the photographs/);
-  assert.match(completedJobSource, /Preserve Meetro Moment/);
-  assert.match(completedJobSource, /Keep in History/);
-  assert.match(completedJobSource, /projectTitle: printedMomentTitle/);
-  assert.match(completedJobSource, /coverPhoto: selectedMomentPhoto/);
+  assert.match(completedJobSource, /completedHistoryNoMutationNotice/);
   assert.match(utilitySource, /primaryActionLabel: "Preserve Meetro Moment"/);
-  assert.doesNotMatch(completedJobSource, /timelineThankYouMessage/);
-  assert.doesNotMatch(completedJobSource, /Thank-you Message/);
-  assert.doesNotMatch(completedJobSource, /Create Meetro Moment/);
+  assert.doesNotMatch(
+    completedJobSource,
+    /createTimelineMomentFromClosedProject|Preserve Meetro Moment|Keep in History|contentEditable|localStorage\.setItem/
+  );
 });
 
 test("Timeline storage upserts by project and relationship instead of duplicating", () => {
@@ -657,8 +652,8 @@ test("Meetro Moments is reachable from Profile and does not expose a public comp
   assert.match(momentDetailsSource, /getMeetroMomentRouteId\(route\)/);
   assert.match(momentDetailsSource, /getMeetroMomentHashRoute\(momentId\)/);
   assert.match(momentRoutesSource, /\/moments\/\$\{encodeURIComponent\(cleanMomentId\)\}/);
-  assert.match(completedJobSource, /Preserve Meetro Moment/);
-  assert.match(completedJobSource, /This completed work became part of a relationship/);
+  assert.match(completedJobSource, /completedHistoryNoMutationNotice/);
+  assert.doesNotMatch(completedJobSource, /Preserve Meetro Moment|createTimelineMomentFromClosedProject/);
   assert.doesNotMatch(completedJobSource, /Meetro Timeline/);
   assert.doesNotMatch(conversationThreadSource, /Read Timeline Item/);
   assert.doesNotMatch(conversationThreadSource, /Timeline preview/);

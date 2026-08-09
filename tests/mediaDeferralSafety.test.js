@@ -86,9 +86,7 @@ test("protected media upload surfaces render a deferred state for real-user buil
     "src/pages/ContractorProfile.jsx",
     "src/pages/ProjectGallery.jsx",
     "src/pages/ConversationThread.jsx",
-    "src/pages/CompletionSheet.jsx",
     "src/pages/ContractorDashboard.jsx",
-    "src/pages/CompletedJobDetails.jsx",
   ];
 
   for (const surface of protectedSurfaces) {
@@ -156,10 +154,7 @@ test("only governed Request Help and Business Portfolio pass the shared picker b
     /governedUploadEnabled: portfolioMediaEnabled/
   );
 
-  for (const surface of [
-    "src/pages/ConversationThread.jsx",
-    "src/pages/CompletionSheet.jsx",
-  ]) {
+  for (const surface of ["src/pages/ConversationThread.jsx"]) {
     const contents = read(surface);
     assert.match(contents, /openJobPhotoPicker/);
     assert.doesNotMatch(contents, /governedUploadEnabled:\s*true/);

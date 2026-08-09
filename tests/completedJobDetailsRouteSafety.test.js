@@ -70,13 +70,13 @@ test("Moment preview returns only valid unique media", () => {
 });
 
 test("direct completed history route fails closed without browser-local authority", () => {
-  assert.match(pageSource, /if \(!completedProject\)/);
+  assert.match(pageSource, /normalizeCompletedJobRecord\(completedRecord\)/);
   assert.match(pageSource, /completedJobDetailsUnavailable/);
-  assert.match(pageSource, /returnFromUnavailableRecord/);
+  assert.match(pageSource, /completedHistoryNoMutationNotice/);
   assert.match(pageSource, /setPage\("contractorDashboard"\)/);
   assert.match(pageSource, /setPage\("home"\)/);
-  assert.doesNotMatch(pageSource, /localStorage\.getItem\("lastCompletedProject"\)/);
-  assert.doesNotMatch(pageSource, /localStorage\.getItem\("completedJob(?:Service|Type|Customer|Location|Date|Time|Amount|MaterialCost|Photos|Notes)"\)/);
+  assert.doesNotMatch(pageSource, /localStorage\.(?:getItem|setItem|removeItem)/);
+  assert.doesNotMatch(pageSource, /saveProfessionalReview|moveJobToHistory|updateProjectLifecycleState/);
 });
 
 test("completed history unavailable copy exists in every public language", () => {

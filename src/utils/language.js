@@ -13096,27 +13096,219 @@ const hiringTruthLanguage = {
 
 const completedHistoryTruthLanguage = {
   en: {
-    completedJobDetailsUnavailable: "Completed job details are not available.",
+    lifecycleUnavailableEyebrow: "Not available yet",
+    lifecycleReferenceDetails: "Reference details",
+    lifecycleLegacyReference: "Unverified reference",
+    lifecycleJobFallback: "Active job",
+    lifecycleProjectFallback: "Project",
+    returnToRequests: "Return to Requests",
+    jobUpdateUnavailableTitle: "Job updates are not available yet.",
+    jobUpdateUnavailableBody:
+      "You can review this job here, but progress updates cannot be recorded or sent from this page.",
+    jobUpdateNoDeliveryNotice:
+      "No update, completion status, or customer message will be created.",
+    changeOrderUnavailableTitle: "Change Order submission is not available yet.",
+    changeOrderUnavailableBody:
+      "Review the current request and return to your project while governed Change Orders are being prepared.",
+    changeOrderNoSubmissionNotice:
+      "No Change Order, customer message, notification, or commercial revision will be created.",
+    completionRecordingUnavailableTitle: "Completion recording is not available yet.",
+    completionRecordingUnavailableBody:
+      "Job completion, customer confirmation, and history creation cannot be recorded from this page.",
+    completionReadOnlySummaryTitle: "Completion summary",
+    completionReadOnlySummaryBody:
+      "Return to the Work Center to review the current job information. This page does not change its status.",
+    completionNoAuthorityNotice:
+      "No completion, closure, approval, customer message, or history record will be created.",
+    completedJobDetailsUnavailable: "Completed job records are not available yet.",
     completedJobDetailsUnavailableBody:
-      "This record could not be found or is no longer available.",
+      "Verified completion and closure history cannot currently be reviewed or changed from this page.",
+    completedHistoryLocalNotice:
+      "This reference is read-only and does not establish verified completion, closure, approval, or customer delivery.",
+    completedHistoryNoMutationNotice:
+      "No completion, resolution, closure, review, conversation, or history change can be made here.",
+    lifecycleDashboardActionUnavailable:
+      "Completion and closure actions are not available yet.",
+    lifecycleLegacyHistoryNotice:
+      "These device records are read-only references. They do not establish verified completion, closure, approval, or customer delivery.",
+    quoteDraftHelpTitle: "Proposal drafting help",
+    quoteDraftHelpBody:
+      "Organize the information entered on this page. Review every suggestion; nothing is saved, issued, or delivered.",
+    quoteDraftLineItems:
+      "Draft line items to review:\n- Evaluation and preparation for {scope}\n- Labor described in this draft\n- Materials to review\n- Cleanup and final review",
+    quoteDraftRecommendation:
+      "Draft wording for {scope}: review the described work, materials, labor, access, measurements, pricing, and conditions before using this preview.",
+    quoteDraftProblemContext: "Draft problem context: {problem}",
+    quoteProposalReviewHint:
+      "Turn your notes into draft wording for review. Confirm all details before using the preview.",
+    quotePricingPreviewHint:
+      "Organize materials, labor, deposit, and terms for this non-binding preview.",
+    addPricingBeforeSendingQuote: "Add pricing to complete this preview.",
+    quoteSavingDeliveryUnavailable: "Quote saving and delivery are not available yet.",
+    quoteNotSavedDelivered:
+      "You can prepare and review this quote preview, but it is not saved, issued, or delivered to the customer.",
     returnToWorkCenter: "Return to Work Center",
   },
   es: {
-    completedJobDetailsUnavailable: "Los detalles del trabajo completado no están disponibles.",
+    lifecycleUnavailableEyebrow: "Aún no disponible",
+    lifecycleReferenceDetails: "Detalles de referencia",
+    lifecycleLegacyReference: "Referencia no verificada",
+    lifecycleJobFallback: "Trabajo activo",
+    lifecycleProjectFallback: "Proyecto",
+    returnToRequests: "Volver a Solicitudes",
+    jobUpdateUnavailableTitle: "Las actualizaciones del trabajo aún no están disponibles.",
+    jobUpdateUnavailableBody:
+      "Puedes revisar este trabajo aquí, pero las actualizaciones de progreso no se pueden registrar ni enviar desde esta página.",
+    jobUpdateNoDeliveryNotice:
+      "No se creará ninguna actualización, estado de finalización ni mensaje para el cliente.",
+    changeOrderUnavailableTitle: "El envío de Órdenes de Cambio aún no está disponible.",
+    changeOrderUnavailableBody:
+      "Revisa la solicitud actual y vuelve al proyecto mientras se preparan las Órdenes de Cambio administradas.",
+    changeOrderNoSubmissionNotice:
+      "No se creará ninguna Orden de Cambio, mensaje al cliente, notificación ni revisión comercial.",
+    completionRecordingUnavailableTitle: "El registro de finalización aún no está disponible.",
+    completionRecordingUnavailableBody:
+      "La finalización del trabajo, la confirmación del cliente y la creación del historial no se pueden registrar desde esta página.",
+    completionReadOnlySummaryTitle: "Resumen de finalización",
+    completionReadOnlySummaryBody:
+      "Vuelve al Centro de Trabajo para revisar la información actual. Esta página no cambia su estado.",
+    completionNoAuthorityNotice:
+      "No se creará ninguna finalización, cierre, aprobación, mensaje al cliente ni registro de historial.",
+    completedJobDetailsUnavailable: "Los registros de trabajos completados aún no están disponibles.",
     completedJobDetailsUnavailableBody:
-      "No se pudo encontrar este registro o ya no está disponible.",
+      "El historial verificado de finalización y cierre no se puede revisar ni cambiar desde esta página.",
+    completedHistoryLocalNotice:
+      "Esta referencia es de solo lectura y no establece finalización, cierre, aprobación ni entrega al cliente verificados.",
+    completedHistoryNoMutationNotice:
+      "Aquí no se puede realizar ningún cambio de finalización, resolución, cierre, reseña, conversación o historial.",
+    lifecycleDashboardActionUnavailable:
+      "Las acciones de finalización y cierre aún no están disponibles.",
+    lifecycleLegacyHistoryNotice:
+      "Estos registros del dispositivo son referencias de solo lectura. No establecen finalización, cierre, aprobación ni entrega al cliente verificados.",
+    quoteDraftHelpTitle: "Ayuda para redactar la propuesta",
+    quoteDraftHelpBody:
+      "Organiza la información ingresada en esta página. Revisa cada sugerencia; nada se guarda, emite ni entrega.",
+    quoteDraftLineItems:
+      "Partidas preliminares para revisar:\n- Evaluación y preparación para {scope}\n- Mano de obra descrita en este borrador\n- Materiales para revisar\n- Limpieza y revisión final",
+    quoteDraftRecommendation:
+      "Texto preliminar para {scope}: revisa el trabajo descrito, los materiales, la mano de obra, el acceso, las medidas, el precio y las condiciones antes de usar esta vista previa.",
+    quoteDraftProblemContext: "Contexto preliminar del problema: {problem}",
+    quoteProposalReviewHint:
+      "Convierte tus notas en texto preliminar para revisar. Confirma todos los detalles antes de usar la vista previa.",
+    quotePricingPreviewHint:
+      "Organiza materiales, mano de obra, depósito y términos para esta vista previa no vinculante.",
+    addPricingBeforeSendingQuote: "Agrega precios para completar esta vista previa.",
+    quoteSavingDeliveryUnavailable: "Guardar y entregar cotizaciones aún no está disponible.",
+    quoteNotSavedDelivered:
+      "Puedes preparar y revisar esta vista previa, pero no se guarda, emite ni entrega al cliente.",
     returnToWorkCenter: "Volver al Centro de Trabajo",
   },
   fr: {
-    completedJobDetailsUnavailable: "Les détails du travail terminé ne sont pas disponibles.",
+    lifecycleUnavailableEyebrow: "Pas encore disponible",
+    lifecycleReferenceDetails: "Détails de référence",
+    lifecycleLegacyReference: "Référence non vérifiée",
+    lifecycleJobFallback: "Travail actif",
+    lifecycleProjectFallback: "Projet",
+    returnToRequests: "Retour aux demandes",
+    jobUpdateUnavailableTitle: "Les mises à jour du travail ne sont pas encore disponibles.",
+    jobUpdateUnavailableBody:
+      "Vous pouvez consulter ce travail ici, mais aucune mise à jour ne peut être enregistrée ou envoyée depuis cette page.",
+    jobUpdateNoDeliveryNotice:
+      "Aucune mise à jour, fin de travail ou communication client ne sera créée.",
+    changeOrderUnavailableTitle: "L’envoi d’un ordre de modification n’est pas encore disponible.",
+    changeOrderUnavailableBody:
+      "Consultez la demande actuelle et revenez au projet pendant la préparation des ordres de modification gérés.",
+    changeOrderNoSubmissionNotice:
+      "Aucun ordre de modification, message client, avis ou changement commercial ne sera créé.",
+    completionRecordingUnavailableTitle: "L’enregistrement de la fin du travail n’est pas encore disponible.",
+    completionRecordingUnavailableBody:
+      "La fin du travail, la confirmation client et la création d’un historique ne peuvent pas être enregistrées ici.",
+    completionReadOnlySummaryTitle: "Résumé de fin de travail",
+    completionReadOnlySummaryBody:
+      "Retournez au Centre de travail pour consulter les informations actuelles. Cette page ne change aucun statut.",
+    completionNoAuthorityNotice:
+      "Aucune fin, clôture, approbation, communication client ou entrée d’historique ne sera créée.",
+    completedJobDetailsUnavailable: "Les dossiers de travaux terminés ne sont pas encore disponibles.",
     completedJobDetailsUnavailableBody:
-      "Ce dossier est introuvable ou n’est plus disponible.",
+      "L’historique vérifié de fin et de clôture ne peut pas être consulté ou modifié depuis cette page.",
+    completedHistoryLocalNotice:
+      "Cette référence est en lecture seule et n’établit aucune fin, clôture, approbation ou livraison client vérifiée.",
+    completedHistoryNoMutationNotice:
+      "Aucune modification de fin, résolution, clôture, avis, conversation ou historique ne peut être effectuée ici.",
+    lifecycleDashboardActionUnavailable:
+      "Les actions de fin et de clôture ne sont pas encore disponibles.",
+    lifecycleLegacyHistoryNotice:
+      "Ces dossiers de l’appareil sont des références en lecture seule. Ils n’établissent aucune fin, clôture, approbation ou livraison client vérifiée.",
+    quoteDraftHelpTitle: "Aide à la rédaction de la proposition",
+    quoteDraftHelpBody:
+      "Organisez les informations saisies sur cette page. Vérifiez chaque suggestion; rien n’est enregistré, émis ou livré.",
+    quoteDraftLineItems:
+      "Éléments provisoires à vérifier :\n- Évaluation et préparation pour {scope}\n- Main-d’œuvre décrite dans ce brouillon\n- Matériaux à vérifier\n- Nettoyage et vérification finale",
+    quoteDraftRecommendation:
+      "Texte provisoire pour {scope} : vérifiez les travaux, les matériaux, la main-d’œuvre, l’accès, les mesures, le prix et les conditions avant d’utiliser cet aperçu.",
+    quoteDraftProblemContext: "Contexte provisoire du problème : {problem}",
+    quoteProposalReviewHint:
+      "Transformez vos notes en texte provisoire à vérifier. Confirmez tous les détails avant d’utiliser l’aperçu.",
+    quotePricingPreviewHint:
+      "Organisez les matériaux, la main-d’œuvre, l’acompte et les conditions pour cet aperçu non contraignant.",
+    addPricingBeforeSendingQuote: "Ajoutez les prix pour compléter cet aperçu.",
+    quoteSavingDeliveryUnavailable: "L’enregistrement et la livraison des devis ne sont pas encore disponibles.",
+    quoteNotSavedDelivered:
+      "Vous pouvez préparer et vérifier cet aperçu, mais il n’est ni enregistré, ni émis, ni livré au client.",
     returnToWorkCenter: "Retourner au Centre de Travail",
   },
   "pt-BR": {
-    completedJobDetailsUnavailable: "Os detalhes do trabalho concluído não estão disponíveis.",
+    lifecycleUnavailableEyebrow: "Ainda não disponível",
+    lifecycleReferenceDetails: "Detalhes de referência",
+    lifecycleLegacyReference: "Referência não verificada",
+    lifecycleJobFallback: "Trabalho ativo",
+    lifecycleProjectFallback: "Projeto",
+    returnToRequests: "Voltar às solicitações",
+    jobUpdateUnavailableTitle: "As atualizações do trabalho ainda não estão disponíveis.",
+    jobUpdateUnavailableBody:
+      "Você pode revisar este trabalho aqui, mas as atualizações de progresso não podem ser registradas nem enviadas por esta página.",
+    jobUpdateNoDeliveryNotice:
+      "Nenhuma atualização, conclusão ou mensagem ao cliente será criada.",
+    changeOrderUnavailableTitle: "O envio de Ordem de Alteração ainda não está disponível.",
+    changeOrderUnavailableBody:
+      "Revise a solicitação atual e volte ao projeto enquanto as Ordens de Alteração administradas estão sendo preparadas.",
+    changeOrderNoSubmissionNotice:
+      "Nenhuma Ordem de Alteração, mensagem ao cliente, notificação ou revisão comercial será criada.",
+    completionRecordingUnavailableTitle: "O registro de conclusão ainda não está disponível.",
+    completionRecordingUnavailableBody:
+      "A conclusão do trabalho, a confirmação do cliente e a criação de histórico não podem ser registradas nesta página.",
+    completionReadOnlySummaryTitle: "Resumo da conclusão",
+    completionReadOnlySummaryBody:
+      "Volte ao Centro de Trabalho para revisar as informações atuais. Esta página não altera o status.",
+    completionNoAuthorityNotice:
+      "Nenhuma conclusão, encerramento, aprovação, mensagem ao cliente ou registro de histórico será criado.",
+    completedJobDetailsUnavailable: "Os registros de trabalhos concluídos ainda não estão disponíveis.",
     completedJobDetailsUnavailableBody:
-      "Este registro não foi encontrado ou não está mais disponível.",
+      "O histórico verificado de conclusão e encerramento não pode ser revisado nem alterado nesta página.",
+    completedHistoryLocalNotice:
+      "Esta referência é somente leitura e não estabelece conclusão, encerramento, aprovação ou entrega ao cliente verificados.",
+    completedHistoryNoMutationNotice:
+      "Nenhuma alteração de conclusão, resolução, encerramento, avaliação, conversa ou histórico pode ser feita aqui.",
+    lifecycleDashboardActionUnavailable:
+      "As ações de conclusão e encerramento ainda não estão disponíveis.",
+    lifecycleLegacyHistoryNotice:
+      "Estes registros do dispositivo são referências somente leitura. Eles não estabelecem conclusão, encerramento, aprovação ou entrega ao cliente verificados.",
+    quoteDraftHelpTitle: "Ajuda para redigir a proposta",
+    quoteDraftHelpBody:
+      "Organize as informações inseridas nesta página. Revise cada sugestão; nada é salvo, emitido ou entregue.",
+    quoteDraftLineItems:
+      "Itens preliminares para revisar:\n- Avaliação e preparação para {scope}\n- Mão de obra descrita neste rascunho\n- Materiais para revisar\n- Limpeza e revisão final",
+    quoteDraftRecommendation:
+      "Texto preliminar para {scope}: revise o trabalho descrito, os materiais, a mão de obra, o acesso, as medidas, o preço e as condições antes de usar esta visualização.",
+    quoteDraftProblemContext: "Contexto preliminar do problema: {problem}",
+    quoteProposalReviewHint:
+      "Transforme suas anotações em texto preliminar para revisão. Confirme todos os detalhes antes de usar a visualização.",
+    quotePricingPreviewHint:
+      "Organize materiais, mão de obra, entrada e termos para esta visualização não vinculante.",
+    addPricingBeforeSendingQuote: "Adicione preços para concluir esta visualização.",
+    quoteSavingDeliveryUnavailable: "Salvar e entregar orçamentos ainda não está disponível.",
+    quoteNotSavedDelivered:
+      "Você pode preparar e revisar esta visualização, mas ela não é salva, emitida nem entregue ao cliente.",
     returnToWorkCenter: "Voltar ao Centro de Trabalho",
   },
 };

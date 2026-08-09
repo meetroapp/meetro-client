@@ -805,8 +805,8 @@ function QuoteBuilder({ setPage }) {
   );
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [aiSuggestionTarget, setAiSuggestionTarget] = useState("recommendedSolution");
+  const [draftSuggestion, setDraftSuggestion] = useState("");
+  const [draftSuggestionTarget, setDraftSuggestionTarget] = useState("recommendedSolution");
 
   const lineItemsTotal = lineItems.reduce(
     (sum, item) => sum + getEditableRowTotal(item),
@@ -861,10 +861,6 @@ function QuoteBuilder({ setPage }) {
     };
   }, []);
 
-  function generateAiDraft() {
-    runAiQuoteHelp("improve");
-  }
-
   function updateRow(setRows, rowId, field, value) {
     setRows((rows) =>
       rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row))
@@ -895,38 +891,32 @@ function QuoteBuilder({ setPage }) {
     ].filter(Boolean);
   }
 
-  function runAiQuoteHelp(action) {
+  function runQuoteDraftHelp(action) {
     const missingDetails = getMissingQuoteDetails();
     const scopeName = cleanText(projectTitle) || (isSpanish ? "este servicio" : "this service");
     const problemText = cleanText(problemFound || projectDescription);
 
     if (action === "missing") {
-      setAiSuggestionTarget("notes");
-      setAiSuggestion(
+      setDraftSuggestionTarget("notes");
+      setDraftSuggestion(
         missingDetails.length
-          ? isSpanish
-            ? `Esta cotización puede necesitar ${missingDetails.join(", ")} antes de compartirla.`
-            : `This quote may need ${missingDetails.join(", ")} before sharing.`
-          : isSpanish
-          ? "Esta cotización tiene los detalles principales. Revisa precios, alcance y términos antes de compartir."
-          : "This quote has the main details. Review pricing, scope, and terms before sharing."
+          ? `${missingDetails.join(", ")}. ${t("quoteProposalReviewHint", language)}`
+          : t("quoteProposalReviewHint", language)
       );
       return;
     }
 
     if (action === "lineItems") {
-      setAiSuggestionTarget("notes");
-      setAiSuggestion(
-        isSpanish
-          ? `Sugerencias de descripciones de partidas para revisar:\n- Evaluación y preparación para ${scopeName}\n- Mano de obra para completar el alcance aprobado\n- Materiales confirmados por el profesional\n- Limpieza y revisión final`
-          : `Line item wording to review:\n- Evaluation and preparation for ${scopeName}\n- Labor to complete the approved scope\n- Professional-confirmed materials\n- Cleanup and final review`
+      setDraftSuggestionTarget("notes");
+      setDraftSuggestion(
+        t("quoteDraftLineItems", language, { scope: scopeName })
       );
       return;
     }
 
     if (action === "terms") {
-      setAiSuggestionTarget("terms");
-      setAiSuggestion(
+      setDraftSuggestionTarget("terms");
+      setDraftSuggestion(
         isSpanish
           ? "El precio final depende de condiciones accesibles al momento del trabajo. Los cambios de alcance, materiales no incluidos o condiciones ocultas pueden requerir aprobación adicional por escrito."
           : "Final pricing depends on accessible conditions at the time of work. Scope changes, excluded materials, or hidden conditions may require additional written approval."
@@ -934,30 +924,35 @@ function QuoteBuilder({ setPage }) {
       return;
     }
 
-    setAiSuggestionTarget("recommendedSolution");
-    setAiSuggestion(
-      isSpanish
-        ? `Después de revisar ${scopeName}, recomendamos completar el alcance descrito con materiales confirmados y mano de obra profesional. ${problemText ? `El problema principal identificado fue: ${problemText}. ` : ""}Antes de comenzar, el profesional confirmará acceso, medidas y cualquier condición que afecte el trabajo.`
-        : `After reviewing ${scopeName}, we recommend completing the described scope with confirmed materials and professional labor. ${problemText ? `The main issue identified was: ${problemText}. ` : ""}Before work begins, the professional will confirm access, measurements, and any conditions that affect the job.`
+    setDraftSuggestionTarget("recommendedSolution");
+    setDraftSuggestion(
+      [
+        t("quoteDraftRecommendation", language, { scope: scopeName }),
+        problemText
+          ? t("quoteDraftProblemContext", language, { problem: problemText })
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
     );
   }
 
-  function applyAiSuggestion() {
-    if (!aiSuggestion.trim()) return;
+  function applyDraftSuggestion() {
+    if (!draftSuggestion.trim()) return;
 
-    if (aiSuggestionTarget === "terms") {
-      setTerms(aiSuggestion);
+    if (draftSuggestionTarget === "terms") {
+      setTerms(draftSuggestion);
       return;
     }
 
-    if (aiSuggestionTarget === "notes") {
+    if (draftSuggestionTarget === "notes") {
       setNotes((currentNotes) =>
-        [currentNotes, aiSuggestion].map(cleanText).filter(Boolean).join("\n\n")
+        [currentNotes, draftSuggestion].map(cleanText).filter(Boolean).join("\n\n")
       );
       return;
     }
 
-    setRecommendedSolution(aiSuggestion);
+    setRecommendedSolution(draftSuggestion);
   }
 
 
@@ -1420,9 +1415,7 @@ ${businessIdentity.businessName}`;
 	        </div>
 
         <div style={proposalCard}>
-          <p style={eyebrowDark}>
-            {isSpanish ? "Propuesta para el cliente" : "Customer Proposal"}
-          </p>
+          <p style={eyebrowDark}>{t("quoteDraftHelpTitle", language)}</p>
           <h2 style={sectionTitle}>
             {isSpanish ? "Problema encontrado" : "Problem Found"}
           </h2>
@@ -1439,11 +1432,7 @@ ${businessIdentity.businessName}`;
           <h2 style={sectionTitle}>
             {isSpanish ? "Solución recomendada" : "Recommended Solution"}
           </h2>
-          <p style={proposalHint}>
-            {isSpanish
-              ? "Transforma tus notas internas en una explicación clara para el cliente antes de enviar."
-              : "Turn your internal findings into a clear customer-ready recommendation before sending."}
-          </p>
+          <p style={proposalHint}>{t("quoteProposalReviewHint", language)}</p>
           <textarea
             style={proposalTextarea}
             value={recommendedSolution}
@@ -1539,53 +1528,47 @@ ${businessIdentity.businessName}`;
 
         <div style={card}>
           <h2 style={sectionTitle}>{isSpanish ? "Partidas, totales y vista previa" : "Line Items, Totals, and Preview"}</h2>
-          <p style={sectionHelperText}>
-            {isSpanish
-              ? "Organiza materiales, mano de obra, depósito y términos antes de compartir con el cliente."
-              : "Organize materials, labor, deposit, and terms before sharing with the customer."}
-          </p>
+          <p style={sectionHelperText}>{t("quotePricingPreviewHint", language)}</p>
 
-          <div style={aiQuoteHelpCard}>
-            <p style={eyebrowDark}>Meetro Proposal Help</p>
-            <p style={aiQuoteHelpSubtitle}>
-              Use Meetro to improve proposal wording, organize services, and check for missing details.
-            </p>
-            <div style={aiChipGrid}>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("improve")}>
+          <div style={draftHelpCard}>
+            <p style={eyebrowDark}>{t("quoteDraftHelpTitle", language)}</p>
+            <p style={draftHelpSubtitle}>{t("quoteDraftHelpBody", language)}</p>
+            <div style={draftChipGrid}>
+              <button style={draftChip} onClick={() => runQuoteDraftHelp("improve")}>
                 Improve wording
               </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("lineItems")}>
+              <button style={draftChip} onClick={() => runQuoteDraftHelp("lineItems")}>
                 Suggest line items
               </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("missing")}>
+              <button style={draftChip} onClick={() => runQuoteDraftHelp("missing")}>
                 Check missing details
               </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("friendly")}>
+              <button style={draftChip} onClick={() => runQuoteDraftHelp("friendly")}>
                 Make customer friendly
               </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("terms")}>
+              <button style={draftChip} onClick={() => runQuoteDraftHelp("terms")}>
                 Add clear terms
               </button>
             </div>
-            {aiSuggestion && (
-              <div style={aiSuggestionBox}>
+            {draftSuggestion && (
+              <div style={draftSuggestionBox}>
                 <label style={label}>
                   {isSpanish ? "Sugerencia editable" : "Editable suggestion"}
                 </label>
                 <textarea
                   style={textarea}
-                  value={aiSuggestion}
-                  onChange={(event) => setAiSuggestion(event.target.value)}
+                  value={draftSuggestion}
+                  onChange={(event) => setDraftSuggestion(event.target.value)}
                 />
                 <div style={inlineActionGrid}>
-                  <button style={secondaryActionButton} onClick={applyAiSuggestion}>
+                  <button style={secondaryActionButton} onClick={applyDraftSuggestion}>
                     {isSpanish ? "Usar sugerencia" : "Use Suggestion"}
                   </button>
                   <button
                     style={quietActionButton}
                     onClick={() => {
-                      setAiSuggestion("");
-                      setAiSuggestionTarget("recommendedSolution");
+                      setDraftSuggestion("");
+                      setDraftSuggestionTarget("recommendedSolution");
                     }}
                   >
                     {isSpanish ? "Limpiar" : "Clear"}
@@ -1984,15 +1967,9 @@ ${businessIdentity.businessName}`;
                 {isSpanish ? "Disponibilidad" : "Availability"}
               </p>
               <h3 style={deliveryTitle}>
-                {isSpanish
-                  ? "Guardar y entregar cotizaciones aún no está disponible."
-                  : "Quote saving and delivery are not available yet."}
+                {t("quoteSavingDeliveryUnavailable", language)}
               </h3>
-              <p style={deliveryText}>
-                {isSpanish
-                  ? "Puedes preparar y revisar esta cotización en esta página, pero no se guarda ni se entrega al cliente."
-                  : "You can prepare and review this quote on this page, but it is not saved or delivered to the customer."}
-              </p>
+              <p style={deliveryText}>{t("quoteNotSavedDelivered", language)}</p>
             </div>
           </div>
         </div>
@@ -2396,19 +2373,7 @@ const textarea = {
   resize: "vertical",
 };
 
-const aiButton = {
-  width: "100%",
-  border: "none",
-  background: "#eef2ff",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-  marginBottom: "10px",
-};
-
-const aiQuoteHelpCard = {
+const draftHelpCard = {
   display: "grid",
   gap: "10px",
   padding: "16px",
@@ -2420,7 +2385,7 @@ const aiQuoteHelpCard = {
   boxSizing: "border-box",
 };
 
-const aiQuoteHelpSubtitle = {
+const draftHelpSubtitle = {
   margin: 0,
   color: "#475569",
   fontSize: "14px",
@@ -2428,14 +2393,14 @@ const aiQuoteHelpSubtitle = {
   fontWeight: "750",
 };
 
-const aiChipGrid = {
+const draftChipGrid = {
   display: "flex",
   flexWrap: "wrap",
   gap: "8px",
   maxWidth: "100%",
 };
 
-const aiChip = {
+const draftChip = {
   border: "1px solid rgba(31,77,52,0.2)",
   background: "#ffffff",
   color: "var(--meetro-color-forest, #1f4d34)",
@@ -2446,7 +2411,7 @@ const aiChip = {
   fontSize: "13px",
 };
 
-const aiSuggestionBox = {
+const draftSuggestionBox = {
   display: "grid",
   gap: "8px",
   maxWidth: "100%",

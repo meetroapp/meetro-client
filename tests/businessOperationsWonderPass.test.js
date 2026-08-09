@@ -64,7 +64,7 @@ test("Business Operations primary actions use forest operational styling", () =>
   });
 
   assert.match(sources.quote, /var\(--meetro-color-forest/);
-  assert.match(sources.quote, /Quote saving and delivery are not available yet\./);
+  assert.match(sources.quote, /quoteSavingDeliveryUnavailable/);
   assert.match(sources.invoice, /var\(--meetro-color-forest/);
   assert.match(sources.invoice, /Invoice saving and delivery are not available yet\./);
 });

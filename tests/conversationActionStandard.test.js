@@ -76,15 +76,13 @@ test("active Emergency, Project, Quote, and Invoice actions continue the relatio
   assert.equal(t("openProjectConversation", "en"), "Continue Conversation");
 });
 
-test("completed Emergency, Job History, and closed Project actions review history", () => {
-  assert.match(
-    completedJobSource,
-    /CONVERSATION_ACTION_STAGE\.HISTORY/
-  );
+test("completed Emergency retains history action while unverified Job History stays unavailable", () => {
   assert.match(
     emergencyCompletionSource,
     /CONVERSATION_ACTION_STAGE\.HISTORY/
   );
+  assert.match(completedJobSource, /completedHistoryNoMutationNotice/);
+  assert.doesNotMatch(completedJobSource, /CONVERSATION_ACTION_STAGE|openProjectConversation/);
   assert.equal(
     getConversationActionLabel(CONVERSATION_ACTION_STAGE.HISTORY, "es"),
     "Revisar conversación"

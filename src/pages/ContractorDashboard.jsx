@@ -43,10 +43,7 @@ import {
 } from "../utils/workCenter";
 import { markConversationUnreadForRecipient } from "../utils/conversationUnread";
 import { getProjectIdentity } from "../utils/projectIdentity";
-import {
-  moveJobToHistory,
-  updateProjectLifecycleState,
-} from "../utils/projectLifecycleSync";
+import { updateProjectLifecycleState } from "../utils/projectLifecycleSync";
 import {
   appendProjectTimelineEvent,
   linkQuoteToProject,
@@ -77,10 +74,7 @@ import {
   hasPaymentOrDepositEvidence,
 } from "../utils/evaluationWorkflowGates";
 import { normalizeEvaluationFindingsPayload } from "../utils/findingsEngineRegistry";
-import {
-  buildClosureRecord,
-  evaluateWorkCenterClosureReadiness,
-} from "../utils/completionClosureValidation";
+import { evaluateWorkCenterClosureReadiness } from "../utils/completionClosureValidation";
 import { setActiveAccountMode } from "../utils/session";
 import { createWorkCenterJobListPresentation } from "../utils/workCenterJobListPresentation";
 import { getEvaluationPanelMode } from "../utils/evaluationPanelMode";
@@ -113,7 +107,6 @@ import {
   createWorkflowDependencyIdentifiedEvent,
   getWorkflowDependencyHistory,
 } from "../utils/workflowDependencyHistory";
-import { upsertUnifiedClosedJob } from "../utils/unifiedJobHistory";
 
 function createBlankScheduleForm(overrides = {}) {
   return {
@@ -6495,14 +6488,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       return {
         statusLabel: translate("wcFilterInProgress", activeLanguage),
         nextStep: translate("workCenterRecordCompletionWhenReady", activeLanguage),
-        actionLabel: translate("workCenterRecordCompletion", activeLanguage),
-        onAction: () => {
-          saveActiveJobContext(job);
-          localStorage.setItem("completionService", job.service || job.title || translate("scheduledWork"));
-          localStorage.setItem("completionLocation", job.location || job.address || "");
-          localStorage.setItem("completionSource", job.source || "active_work");
-          setPage("completionSheet");
-        },
+        actionLabel: translate("lifecycleDashboardActionUnavailable", activeLanguage),
+        onAction: () => setPage("completionSheet"),
       };
     }
 
@@ -6520,10 +6507,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         statusLabel: translate("workCenterReceiptCreated", activeLanguage),
         nextStep: translate("workCenterReviewClosureBeforeMovingThisToHistory", activeLanguage),
         actionLabel: translate("openClosureCenterAction", activeLanguage),
-        onAction: () => {
-          setOperationalActiveWorkStatus(job, "closed");
-          openWorkTab("completed");
-        },
+        onAction: showLifecycleAuthorityUnavailable,
       };
     }
 
@@ -6621,16 +6605,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
     }
 
     openWorkTab("pending");
-  }
-
-  function saveCompletedJobContext(job) {
-    localStorage.setItem("completedJobType", job[0]);
-    localStorage.setItem("completedJobService", job[1]);
-    localStorage.setItem("completedJobCustomer", job[2]);
-    localStorage.setItem("completedJobLocation", job[3]);
-    localStorage.setItem("completedJobDate", job[4]);
-    localStorage.setItem("completedJobTime", job[5]);
-    localStorage.setItem("completedJobAmount", job[6]);
   }
 
   const workCenterTodayKey = new Date().toISOString().slice(0, 10);
@@ -7150,8 +7124,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     },
     working: {
       statusLabel: translate("working", activeLanguage),
-      nextStep: translate("workCenterFinishTheJobWhenReady", activeLanguage),
-      primaryButton: getWorkCenterPrimaryCtaLabel("complete_work", activeLanguage),
+      nextStep: translate("lifecycleDashboardActionUnavailable", activeLanguage),
+      primaryButton: translate("lifecycleDashboardActionUnavailable", activeLanguage),
       customerNotification:
         translate("workCenterWorkIsNowInProgress", activeLanguage),
       timelineEntry: translate("workCenterWorkStarted", activeLanguage),
@@ -7186,8 +7160,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     },
     receipt_sent: {
       statusLabel: translate("workCenterInvoiceReceiptSent", activeLanguage),
-      nextStep: translate("workCenterReviewClosure", activeLanguage),
-      primaryButton: getWorkCenterPrimaryCtaLabel("close_job", activeLanguage),
+      nextStep: translate("lifecycleDashboardActionUnavailable", activeLanguage),
+      primaryButton: translate("lifecycleDashboardActionUnavailable", activeLanguage),
       customerNotification:
         translate("workCenterInvoiceReceiptHasBeenSent", activeLanguage),
       timelineEntry: translate("workCenterReceiptSent", activeLanguage),
@@ -8015,243 +7989,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
       job.history?.acceptedQuote?.amount;
     const quoteTotal = quote ? getQuoteTotalAmount(quote) : 0;
     return Number(historyTotal || quoteTotal || 0);
-  };
-
-  const buildClosedJobHistoryRecord = (job = {}) => {
-    const scopedQuotes = getScopedJobQuotes(job);
-    const scopedSchedules = getScopedJobSchedules(job);
-    const scopedActiveRecords = getScopedJobActiveRecords(job);
-    const scopedHistoryRecords = getScopedJobHistoryRecords(job);
-    const sortedSchedules = [...scopedSchedules].sort(
-      (first, second) => getScheduleWorkflowRank(second) - getScheduleWorkflowRank(first)
-    );
-    const workAppointment =
-      sortedSchedules.find(
-        (schedule) =>
-          String(schedule.appointmentType || "").toLowerCase() === "work" ||
-          Boolean(schedule.workAppointmentId) ||
-          getScheduleWorkflowRank(schedule) >= 45
-      ) || null;
-    const evaluationVisit =
-      sortedSchedules.find(
-        (schedule) =>
-          String(schedule.appointmentType || "").toLowerCase() === "evaluation" ||
-          Boolean(schedule.evaluationVisitId) ||
-          hasEvaluationForAppointment(schedule)
-      ) || null;
-    const schedule = workAppointment || sortedSchedules[0] || job.schedule || job.history?.schedule || {};
-    const quote = scopedQuotes[0] || job.quote || job.history?.quote || job.history?.proposal || {};
-    const activeRecord = scopedActiveRecords[0] || job.active || job.history?.activeWork || null;
-    const previousHistory = scopedHistoryRecords[0] || job.history || {};
-    const closedAt = new Date().toISOString();
-    const hydratedJob = {
-      ...job,
-      schedule,
-      quote,
-      active: activeRecord,
-      history: previousHistory,
-    };
-    const closureRecord =
-      schedule.closureRecord ||
-      previousHistory.closureRecord ||
-      buildClosureRecord({
-        job: hydratedJob,
-        reviewedAt: closedAt,
-        closedAt,
-        notes: schedule.closureNotes || previousHistory.closureNotes || "",
-      });
-
-    return {
-      ...previousHistory,
-      id:
-        previousHistory.id ||
-        job.id ||
-        schedule.id ||
-        schedule.scheduleId ||
-        quote.scheduleId ||
-        quote.requestId ||
-        quote.quoteId ||
-        `closed-job-${Date.now()}`,
-      type: "closed_job",
-      source: "job_workspace",
-      status: "closed",
-      finalStatus: "Closed",
-      closureStatus: "closed",
-      closedAt,
-      closeDate: closedAt,
-      customerName: job.customer || getWorkCenterJobCustomer(schedule) || getWorkCenterJobCustomer(quote),
-      customer: job.customer || getWorkCenterJobCustomer(schedule) || getWorkCenterJobCustomer(quote),
-      address: job.address || getWorkCenterJobAddress(schedule) || getWorkCenterJobAddress(quote),
-      title: job.title || getWorkCenterJobTitle(schedule) || getWorkCenterJobTitle(quote),
-      jobTitle: job.title || getWorkCenterJobTitle(schedule) || getWorkCenterJobTitle(quote),
-      requestId: job.requestId || schedule.requestId || quote.requestId || "",
-      conversationId: job.conversationId || schedule.conversationId || quote.conversationId || "",
-      scheduleId: schedule.id || schedule.scheduleId || quote.scheduleId || "",
-      visitId: schedule.visitId || schedule.id || "",
-      quoteId: quote.quoteId || quote.id || "",
-      schedule,
-      visitSchedule: schedule,
-      schedules: sortedSchedules,
-      evaluationVisit,
-      workAppointment,
-      quote,
-      proposal: quote,
-      activeWork: activeRecord,
-      request: job.request || previousHistory.request || null,
-      evaluation: schedule.evaluation || previousHistory.evaluation || {},
-      evaluationNotes:
-        schedule.evaluationNotes ||
-        schedule.evaluation?.notes ||
-        previousHistory.evaluationNotes ||
-        "",
-      workItems: getWorkCenterJobWorkItems(hydratedJob),
-      photos: [
-        ...getWorkCenterJobPhotos(hydratedJob),
-        ...(Array.isArray(schedule.completionPhotos) ? schedule.completionPhotos : []),
-        ...(Array.isArray(previousHistory.completionPhotos)
-          ? previousHistory.completionPhotos
-          : []),
-      ],
-      measurements: getWorkCenterJobWorkItems(hydratedJob).flatMap((workItem) =>
-        Array.isArray(workItem.measurements) ? workItem.measurements : []
-      ),
-      materials: getWorkCenterJobMaterials(hydratedJob),
-      payments: {
-        paymentStatus: quote.paymentStatus || schedule.paymentStatus || "",
-        paymentReceivedAt:
-          quote.paymentReceivedAt ||
-          quote.depositPaidAt ||
-          quote.paidAt ||
-          schedule.paymentReceivedAt ||
-          "",
-        depositPaidAt: quote.depositPaidAt || "",
-      },
-      invoice: {
-        invoiceStatus: schedule.invoiceStatus || quote.invoiceStatus || "sent",
-        invoiceCreatedAt: schedule.invoiceCreatedAt || quote.invoiceCreatedAt || "",
-        invoiceSentAt: schedule.invoiceSentAt || quote.invoiceSentAt || "",
-        receipt: schedule.receipt || previousHistory.receipt || {},
-      },
-      completion: {
-        completedAt: schedule.completedAt || previousHistory.completedAt || "",
-        notes:
-          schedule.completionNotes ||
-          previousHistory.completionNotes ||
-          previousHistory.notes ||
-          "",
-        photos:
-          schedule.completionPhotos ||
-          previousHistory.completionPhotos ||
-          [],
-      },
-      closureNotes:
-        schedule.closureNotes ||
-        previousHistory.closureNotes ||
-        (translate("workCenterJobClosedAndSavedToHistory", activeLanguage)),
-      closureRecord,
-      closureObligations:
-        schedule.closureObligations ||
-        previousHistory.closureObligations ||
-        closureRecord.obligations ||
-        [],
-      closureAuthorized:
-        schedule.closureAuthorized ??
-        previousHistory.closureAuthorized ??
-        closureRecord.closureAuthorized,
-      closureReviewedAt:
-        schedule.closureReviewedAt ||
-        previousHistory.closureReviewedAt ||
-        closureRecord.reviewedAt ||
-        "",
-      finalTotal: getWorkCenterJobFinalTotal(hydratedJob),
-      revenue: getWorkCenterJobFinalTotal(hydratedJob),
-      timeline: getWorkCenterJobTimeline({
-        ...hydratedJob,
-        history: { ...previousHistory, closedAt, closureStatus: "closed" },
-      }),
-      fullJob: {
-        ...hydratedJob,
-        closedAt,
-        closureStatus: "closed",
-      },
-    };
-  };
-
-  const saveClosedJobToHistory = (job = {}) => {
-    const closedRecord = buildClosedJobHistoryRecord(job);
-    const savedHistory = readMeetroArray("completedProjects");
-    localStorage.setItem(
-      "completedProjects",
-      JSON.stringify(upsertUnifiedClosedJob(savedHistory, closedRecord))
-    );
-
-    moveJobToHistory(closedRecord, {
-      ...closedRecord,
-      conversationId: closedRecord.conversationId,
-      title: closedRecord.title,
-      service: closedRecord.title,
-      customerName: closedRecord.customerName,
-      closedAt: closedRecord.closedAt,
-      closeDate: closedRecord.closeDate,
-      lastMessage:
-        translate("workCenterJobClosedAndSavedToHistory", activeLanguage),
-    });
-
-    if (job.schedule?.id || job.schedule?.scheduleId) {
-      updateWorkCenterJobScheduleRecord(job, {
-        status: "closed",
-        workStatus: "closed",
-        jobStage: "closed",
-        closureStatus: "closed",
-        closedAt: closedRecord.closedAt,
-        closeDate: closedRecord.closeDate,
-      });
-    }
-
-    if (job.quote?.quoteId || job.quote?.id) {
-      updateWorkCenterJobQuoteRecord(job, {
-        closureStatus: "closed",
-        jobClosedAt: closedRecord.closedAt,
-        scheduleId: closedRecord.scheduleId || job.quote?.scheduleId || "",
-        visitId: closedRecord.visitId || job.quote?.visitId || "",
-      });
-    }
-
-    if (
-      activeWorkSnapshot &&
-      Object.keys(activeWorkSnapshot).length > 0 &&
-      jobMatchesScopedRecord(job, activeWorkSnapshot)
-    ) {
-      localStorage.removeItem("activeWorkSnapshot");
-      localStorage.removeItem("activeWorkStatus");
-    }
-
-    if (
-      activeJobSnapshot &&
-      Object.keys(activeJobSnapshot).length > 0 &&
-      jobMatchesScopedRecord(job, activeJobSnapshot)
-    ) {
-      localStorage.removeItem("activeJobSnapshot");
-      localStorage.removeItem("activeJobStatus");
-    }
-
-    window.dispatchEvent(new Event("storage"));
-    window.dispatchEvent(new Event("meetroJobRecordUpdated"));
-    setRefreshKey((key) => key + 1);
-    setSelectedJobDetailView("");
-    setIsJobHistoryMode(true);
-    setJobMenuTab("history");
-    setSelectedWorkCenterJob({
-      ...job,
-      status: "closed",
-      closureStatus: "closed",
-      closedAt: closedRecord.closedAt,
-      history: closedRecord,
-      schedule: closedRecord.schedule,
-      quote: closedRecord.quote,
-      active: closedRecord.activeWork,
-    });
-    return closedRecord;
   };
 
   const workCenterJobs = (() => {
@@ -9535,22 +9272,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return paymentRecord;
   };
 
-  const openCompletionFormForWorkCenterJob = (job = {}) => {
-    localStorage.setItem("completionService", job.title || translate("scheduledWork"));
-    localStorage.setItem("completionLocation", job.address || "");
-    localStorage.setItem("completionCustomer", job.customer || "");
-    localStorage.setItem("workCenterReturnCustomer", job.customer || "");
-    localStorage.setItem("completionSource", "work_center_job");
-    localStorage.setItem(
-      "completionScheduleId",
-      job.schedule?.id || job.schedule?.scheduleId || ""
-    );
-    localStorage.setItem(
-      "activeConversationId",
-      job.conversationId || job.schedule?.conversationId || job.quote?.conversationId || ""
-    );
-    setPage("completionSheet");
-  };
+  const openCompletionFormForWorkCenterJob = () => setPage("completionSheet");
 
   const openReceiptBuilderForWorkCenterJob = (job = {}) => {
     const conversationId =
@@ -9649,69 +9371,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return updatedRecord;
   };
 
+  function showLifecycleAuthorityUnavailable() {
+    setShowCloseJobForm(false);
+    setJobActionToast({
+      type: "error",
+      message: translate("lifecycleDashboardActionUnavailable", activeLanguage),
+    });
+  }
+
   const openCloseJobConfirmationForWorkCenterJob = () => {
-    setShowApprovalConfirmFlow(false);
-    setShowPaymentForm(false);
-    setShowWorkAppointmentForm(false);
-    setShowProposalSendFlow(false);
-    setShowReceiptSendFlow(false);
-    setClosureDraft(createDefaultClosureDraft());
-    setShowCloseJobForm(true);
+    showLifecycleAuthorityUnavailable();
   };
 
-  const confirmCloseWorkCenterJob = (job = {}, options = {}) => {
-    const closureReadiness = evaluateWorkCenterClosureReadiness(job);
-
-    if (!closureReadiness.closureReady && !options.allowDependencyOverride) {
-      setJobActionToast({
-        type: "error",
-        message:
-          translate("workCenterClosureBlockedOutstandingObligationsMustBeSatisfiedBeforeClosingThisJob", activeLanguage),
-      });
-      return null;
-    }
-
-    if (!closureDraft.confirmMoveToHistory) {
-      setJobActionToast({
-        type: "error",
-        message:
-          translate("workCenterConfirmMovingThisJobToHistory", activeLanguage),
-      });
-      return null;
-    }
-
-    const now = new Date().toISOString();
-    const closureRecord = buildClosureRecord({
-      job,
-      reviewedAt: now,
-      closedAt: now,
-      notes: closureDraft.notes,
-    });
-
-    const updatedRecord = updateWorkCenterJobScheduleRecord(job, {
-      ...buildJobTimelinePatch(job, "closed"),
-      status: "closed",
-      workStatus: "closed",
-      jobStage: "closed",
-      closureStatus: "closed",
-      closureNotes: closureDraft.notes,
-      closureRecord,
-      closureObligations: closureRecord.obligations,
-      closureAuthorized: closureRecord.closureAuthorized,
-      closureReviewedAt: closureRecord.reviewedAt,
-      closedAt: now,
-    });
-    if (!updatedRecord) {
-      showJobActionErrorToast();
-      return null;
-    }
-    const updatedJob = { ...job, schedule: updatedRecord };
-    const customerUpdate = createCustomerWorkflowUpdate(updatedJob, "closed");
-    const closedRecord = saveClosedJobToHistory(updatedJob);
-    setShowCloseJobForm(false);
-    setClosureDraft(createDefaultClosureDraft());
-    showJobActionSavedToast("closed", customerUpdate);
-    return closedRecord;
+  const confirmCloseWorkCenterJob = () => {
+    showLifecycleAuthorityUnavailable();
+    return null;
   };
 
   const openWorkCenterJobPrimaryAction = (job = selectedWorkCenterJob) => {
@@ -11218,25 +10892,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <button
                               type="button"
                               style={startScheduleBtn}
-                              onClick={() => {
-                                const closureReadiness =
-                                  evaluateWorkCenterClosureReadiness(scopedJob);
-                                requestWorkflowDependencyAdvance(
-                                  {
-                                    ...scopedJob,
-                                    closureObligationsPending:
-                                      !closureReadiness.closureReady,
-                                    workflowStage: "closure",
-                                  },
-                                  "close_job",
-                                  () =>
-                                    confirmCloseWorkCenterJob(scopedJob, {
-                                      allowDependencyOverride: true,
-                                    })
-                                );
-                              }}
+                              onClick={confirmCloseWorkCenterJob}
                             >
-                              {translate("workCenterSaveToHistory", activeLanguage)}
+                              {translate("lifecycleDashboardActionUnavailable", activeLanguage)}
                             </button>
                             <button
                               type="button"
@@ -12449,6 +12107,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       : ui("workCenterChildHistoryEmptySummary")}
                   </p>
                 </div>
+
+                <p role="status" style={lifecycleHistoryNotice}>
+                  {translate("lifecycleLegacyHistoryNotice", activeLanguage)}
+                </p>
 
                 <div style={jobListGrid}>
                   {workCenterHistoryJobs.length > 0 ? (
@@ -14954,30 +14616,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                     <button
                       style={completeButton}
-                      onClick={() => {
-                        requestWorkflowDependencyAdvance(universalActiveWork, "complete_work", () => {
-                          localStorage.setItem(
-                            "completionService",
-                            universalActiveWork.service || translate("scheduledWork")
-                          );
-                          localStorage.setItem(
-                            "completionLocation",
-                            universalActiveWork.location || ""
-                          );
-                          localStorage.setItem(
-                            "completionSource",
-                            universalActiveWork.type || "scheduled"
-                          );
-                          localStorage.setItem(
-                            "completionScheduleId",
-                            localStorage.getItem("activeWorkScheduleId") || ""
-                          );
-
-                          setPage("completionSheet");
-                        });
-                      }}
+                      onClick={() => setPage("completionSheet")}
                     >
-                       {translate("createCompletion")}
+                       {translate("lifecycleDashboardActionUnavailable", activeLanguage)}
                     </button>
                   </div>
                 </div>
@@ -15152,6 +14793,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
             </p>
           </div>
 
+          <p role="status" style={lifecycleHistoryNotice}>
+            {translate("lifecycleLegacyHistoryNotice", activeLanguage)}
+          </p>
+
           <div style={closureReviewList}>
             {closureReviews.length === 0 ? (
               <div className="meetro-visual-empty-state" style={emptyCard}>
@@ -15239,18 +14884,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     <button
                       type="button"
                       style={closureOpenRecordButton}
-                      onClick={() => {
-                        localStorage.setItem(
-                          "lastCompletedProject",
-                          JSON.stringify(project)
-                        );
-                        localStorage.setItem(
-                          "completedJobViewMode",
-                          "business"
-                        );
-                        setWorkCenterReturn();
-                        setPage("completedJobDetails");
-                      }}
+                      onClick={() => setPage("completedJobDetails")}
                     >
                       {translate("closureCenterOpenRecord")}
                       <span aria-hidden="true">›</span>
@@ -22008,6 +21642,20 @@ const closureReviewDescription = {
   maxWidth: "100%",
   overflowWrap: "break-word",
   wordBreak: "normal",
+};
+
+const lifecycleHistoryNotice = {
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto 16px",
+  padding: "12px",
+  border: "1px solid #fed7aa",
+  borderRadius: "8px",
+  background: "#fff7ed",
+  color: "#7c2d12",
+  fontSize: "14px",
+  lineHeight: 1.5,
+  boxSizing: "border-box",
 };
 
 const closureReviewList = {
