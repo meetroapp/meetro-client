@@ -60,6 +60,10 @@ import {
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
 import { formatLocaleDate } from "../utils/localeFormat";
+import {
+  getParticipantRoleLabelKey,
+  normalizeRequestLifecycleFoundation,
+} from "../utils/requestLifecycleFoundation";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -870,6 +874,107 @@ function EmergencyRequestCard({
         )}
       </div>
     </article>
+  );
+}
+
+function RequestLifecycleFoundation({ request, language, setPage }) {
+  const requestId = request?.requestId || request?.id;
+  const contractVersion = Number(request?.lifecycleContractVersion || 1);
+  const [status, setStatus] = useState(
+    contractVersion === 2 ? "loading" : "idle"
+  );
+  const [foundation, setFoundation] = useState(null);
+
+  useEffect(() => {
+    if (contractVersion !== 2 || !requestId) return undefined;
+    let active = true;
+
+    void authFetch(
+      `/posts/${encodeURIComponent(requestId)}/lifecycle`,
+      { cache: "no-store" },
+      setPage
+    ).then((result) => {
+      if (!active) return;
+      const normalized = result?.response?.ok
+        ? normalizeRequestLifecycleFoundation(result.data)
+        : null;
+      setFoundation(normalized);
+      setStatus(normalized ? "ready" : "unavailable");
+    }).catch(() => {
+      if (!active) return;
+      setFoundation(null);
+      setStatus("unavailable");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [contractVersion, requestId, setPage]);
+
+  if (contractVersion !== 2 || status === "idle" || status === "loading") {
+    return null;
+  }
+
+  if (status === "unavailable" || !foundation) {
+    return (
+      <p role="status" style={lifecycleUnavailableText}>
+        {t("lifecycleHistoryUnavailable", language)}
+      </p>
+    );
+  }
+
+  return (
+    <section style={lifecycleFoundationSection}>
+      <strong style={lifecycleFoundationTitle}>
+        {t("reportedConcernHistory", language)}
+      </strong>
+      <div style={lifecycleConcernList}>
+        {foundation.reportedConcerns.map((concern) => (
+          <div key={concern.id} style={lifecycleConcernItem}>
+            <span style={lifecycleItemLabel}>
+              {t("originallyReported", language)}
+            </span>
+            <p style={lifecycleConcernText}>{concern.originalText}</p>
+            {concern.clarifications.length > 0 && (
+              <div style={lifecycleClarificationList}>
+                <span style={lifecycleItemLabel}>
+                  {t("concernClarifications", language)}
+                </span>
+                {concern.clarifications.map((clarification) => (
+                  <p key={clarification.id} style={lifecycleClarificationText}>
+                    {clarification.text}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {foundation.participants.length > 0 && (
+        <div style={lifecycleParticipantSection}>
+          <strong style={lifecycleFoundationTitle}>
+            {t("knownJobParticipants", language)}
+          </strong>
+          <div style={lifecycleParticipantList}>
+            {foundation.participants.map((participant) => (
+              <div key={participant.id} style={lifecycleParticipantRow}>
+                <span>
+                  {participant.displayName || t("lifecycleParticipant", language)}
+                </span>
+                <span style={lifecycleParticipantRole}>
+                  {participant.roles
+                    .map((role) => getParticipantRoleLabelKey(role))
+                    .filter(Boolean)
+                    .map((key) => t(key, language))
+                    .join(", ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -2141,6 +2246,12 @@ function MyRequests({ setPage }) {
                         </p>
                       )}
 
+                      <RequestLifecycleFoundation
+                        request={request}
+                        language={language}
+                        setPage={setPage}
+                      />
+
                       {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
                         <EditPhotoManager
                           photos={editForm.photos}
@@ -3011,6 +3122,98 @@ const requestCard = {
   minWidth: 0,
   overflow: "hidden",
   boxSizing: "border-box",
+};
+
+const lifecycleFoundationSection = {
+  borderTop: "1px solid var(--meetro-color-line)",
+  marginTop: "14px",
+  paddingTop: "14px",
+  display: "grid",
+  gap: "10px",
+};
+
+const lifecycleFoundationTitle = {
+  color: "var(--meetro-color-ink)",
+  fontSize: "14px",
+  lineHeight: 1.35,
+  fontWeight: 900,
+};
+
+const lifecycleConcernList = {
+  display: "grid",
+  gap: "10px",
+};
+
+const lifecycleConcernItem = {
+  minWidth: 0,
+};
+
+const lifecycleItemLabel = {
+  display: "block",
+  color: "var(--meetro-color-muted)",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: 800,
+};
+
+const lifecycleConcernText = {
+  margin: "3px 0 0",
+  color: "var(--meetro-color-ink)",
+  fontSize: "14px",
+  lineHeight: 1.5,
+  overflowWrap: "anywhere",
+};
+
+const lifecycleClarificationList = {
+  marginTop: "8px",
+  paddingLeft: "12px",
+  borderLeft: "2px solid var(--meetro-color-line)",
+};
+
+const lifecycleClarificationText = {
+  margin: "3px 0 0",
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+};
+
+const lifecycleParticipantSection = {
+  borderTop: "1px solid var(--meetro-color-line)",
+  paddingTop: "10px",
+};
+
+const lifecycleParticipantList = {
+  display: "grid",
+  gap: "6px",
+  marginTop: "7px",
+};
+
+const lifecycleParticipantRow = {
+  minWidth: 0,
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "4px 12px",
+  color: "var(--meetro-color-ink)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: 800,
+};
+
+const lifecycleParticipantRole = {
+  color: "var(--meetro-color-muted)",
+  fontWeight: 700,
+};
+
+const lifecycleUnavailableText = {
+  margin: "12px 0 0",
+  borderTop: "1px solid var(--meetro-color-line)",
+  paddingTop: "12px",
+  color: "var(--meetro-color-muted)",
+  fontSize: "13px",
+  lineHeight: 1.45,
 };
 
 const selectedRequestCard = {

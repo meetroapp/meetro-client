@@ -26,11 +26,13 @@ test("authenticated backend posts normalize as active homeowner requests", () =>
       { secure_url: "https://res.cloudinary.com/example/image/upload/photo-2.jpg", display_order: 0 },
       { secure_url: "https://res.cloudinary.com/example/image/upload/photo-1.jpg", display_order: 1 },
     ],
+    lifecycle_contract_version: 2,
   };
 
   const normalized = normalizeAuthenticatedHomeownerPost(source);
   assert.equal(normalized.requestId, 5);
   assert.equal(normalized.status, "open");
+  assert.equal(normalized.lifecycleContractVersion, 2);
   assert.deepEqual(normalized.request_photos.map((photo) => photo.display_order), [0, 1]);
   assert.deepEqual(normalized.photos, source.request_photos.map((photo) => photo.secure_url));
   assert.notEqual(normalized.request_photos, source.request_photos);
