@@ -85,7 +85,10 @@ export function normalizeTwoFactorFailure({ status = 0, data = {}, networkError 
     combined.includes("login_expired") ||
     combined.includes("token_expired") ||
     combined.includes("challenge_invalid") ||
+    combined.includes("invalid_challenge") ||
     combined.includes("challenge_expired") ||
+    combined.includes("challenge_not_found") ||
+    combined.includes("challenge_context_required") ||
     combined.includes("session_timed_out")
   ) {
     return TWO_FACTOR_FAILURE.SESSION_EXPIRED;
@@ -208,6 +211,79 @@ export async function verifyTwoFactorCode({
     return {
       ok: false,
       failure: normalizeTwoFactorFailure({ networkError: true }),
+      error,
+      payload,
+    };
+  }
+}
+
+export async function requestTwoFactorCode({
+  apiUrl,
+  email,
+  pendingData = {},
+  session = {},
+  fetchImpl = fetch,
+} = {}) {
+  const context = buildTwoFactorPayload({
+    email,
+    pendingData,
+    session,
+  });
+  const payload = {
+    email: context.email,
+    challengeId: context.challengeId,
+  };
+
+  if (!payload.email || !payload.challengeId) {
+    return {
+      ok: false,
+      failure: TWO_FACTOR_FAILURE.SESSION_EXPIRED,
+      payload,
+    };
+  }
+
+  try {
+    const response = await fetchImpl(
+      `${apiUrl}${REQUEST_TWO_FACTOR_ENDPOINT}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await readJsonSafely(response);
+    const retryAfterSeconds = Math.max(
+      0,
+      Number(data.retryAfterSeconds || 0) || 0
+    );
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        failure: normalizeTwoFactorFailure({
+          status: response.status,
+          data,
+        }),
+        status: response.status,
+        retryAfterSeconds,
+        data,
+        payload,
+      };
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      retryAfterSeconds: retryAfterSeconds || 60,
+      data,
+      payload,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      failure: TWO_FACTOR_FAILURE.NETWORK_PROBLEM,
       error,
       payload,
     };
