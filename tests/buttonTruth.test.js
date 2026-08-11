@@ -58,7 +58,7 @@ test("Work Center opportunity and emergency labels match their handlers", () => 
   assert.match(contractorDashboardSource, /\{translate\("openEmergencyChat"\)\}/);
 });
 
-test("Work Center landing copy stays responsibility-first and avoids duplicate count summaries", () => {
+test("Work Center landing copy stays responsibility-first and labels legacy domains read-only", () => {
   assert.equal(
     t("workCenterPurposeStatement", "en"),
     "See what needs attention, what happens next, and where each customer relationship moves forward."
@@ -69,12 +69,12 @@ test("Work Center landing copy stays responsibility-first and avoids duplicate c
   );
   assert.match(contractorDashboardSource, /workCenterProfessionalPerspectiveLine/);
   assert.match(contractorDashboardSource, /workCenterNewRequestsThatNeedADecision/);
-  assert.match(contractorDashboardSource, /workCenterAcceptedWorkThatStillNeedsAction/);
-  assert.match(contractorDashboardSource, /workCenterUpcomingVisitsAndAppointments/);
-  assert.match(contractorDashboardSource, /workCenterProposalsThatNeedReviewOrResponse/);
-  assert.match(contractorDashboardSource, /workCenterOnSiteWorkThatNeedsAnUpdate/);
-  assert.match(contractorDashboardSource, /workCenterClosedJobsAndSavedRecords/);
-  assert.match(contractorDashboardSource, /workCenterPaymentsBalancesAndClosedJobs/);
+  assert.match(contractorDashboardSource, /Canonical jobs with read-only legacy compatibility records/);
+  assert.match(contractorDashboardSource, /Browser-stored appointment references \(read-only\)/);
+  assert.match(contractorDashboardSource, /Browser-stored quote references \(read-only\)/);
+  assert.match(contractorDashboardSource, /Browser-stored active-work references \(read-only\)/);
+  assert.match(contractorDashboardSource, /Legacy history references \(read-only\)/);
+  assert.match(contractorDashboardSource, /Legacy commercial references without payment authority/);
   assert.doesNotMatch(
     contractorDashboardSource,
     /workCenterDashboardSummary[\s\S]{0,260}newOpportunity/

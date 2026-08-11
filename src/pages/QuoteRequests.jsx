@@ -20,10 +20,10 @@ function QuoteRequests({ setPage, currentPage }) {
     sendFailed: isSpanish ? "No se pudo enviar el mensaje." : "Failed to send message",
     serverError: isSpanish ? "Error del servidor." : "Server error",
     cancelQuickReply: isSpanish ? "Cancelar respuesta rápida" : "Cancel Quick Reply",
-    quickReply: isSpanish ? "Respuesta rápida" : pageText.quickReply,
+    quickReply: isSpanish ? "Respuesta rápida" : "Quick Reply",
     replyPlaceholder: isSpanish ? "Escribe tu respuesta..." : "Write your reply...",
     sending: isSpanish ? "Enviando..." : "Sending...",
-    sendReply: isSpanish ? "Enviar respuesta" : pageText.sendReply,
+    sendReply: isSpanish ? "Enviar respuesta" : "Send Reply",
   };
 
 

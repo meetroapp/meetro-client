@@ -9,9 +9,10 @@ import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
+import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
-import { formatLocaleCurrency, formatLocaleDate, formatLocaleNumber, getFormattingLocale } from "../utils/localeFormat";
+import { formatLocaleCurrency, formatLocaleDate, getFormattingLocale } from "../utils/localeFormat";
 import {
   CAMERA_PERMISSION_MESSAGE,
   createPhotoInputEvent,
@@ -108,6 +109,10 @@ import {
   isCanonicalWorkCenterEntry,
   mergeCanonicalWorkCenterEntries,
 } from "../utils/workCenterCanonicalHydration";
+import {
+  buildLegacyWorkCenterReferences,
+  isLegacyWorkCenterCommandSurfaceContained,
+} from "../utils/workCenterLegacyAuthority";
 import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
@@ -8187,8 +8192,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "current",
       icon: "currentJobs",
       title: translate("workCenterCurrentJobsTitle", activeLanguage),
-      purpose:
-        translate("workCenterAcceptedWorkThatStillNeedsAction", activeLanguage),
+      purpose: "Canonical jobs with read-only legacy compatibility records",
       meta: translate("workCenterActiveCount", activeLanguage, { count: workCenterActiveJobs.length }),
       actionLabel: translate("continueWork", activeLanguage),
       tone: "#f8fafc",
@@ -8199,10 +8203,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "schedule",
       icon: "schedule",
       title: translate("workCenterScheduleTitle", activeLanguage),
-      purpose:
-        translate("workCenterUpcomingVisitsAndAppointments", activeLanguage),
+      purpose: "Browser-stored appointment references (read-only)",
       meta: translate("workCenterUpcomingCount", activeLanguage, { count: upcomingScheduleCount }),
-      actionLabel: translate("assistantActionOpenSchedule", activeLanguage),
+      actionLabel: "View references",
       tone: "#eff6ff",
       accent: "#2563eb",
       onClick: () => openWorkTab("schedule"),
@@ -8211,10 +8214,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "quotes",
       icon: "quote",
       title: translate("workCenterQuotesTitle", activeLanguage),
-      purpose:
-        translate("workCenterProposalsThatNeedReviewOrResponse", activeLanguage),
+      purpose: "Browser-stored quote references (read-only)",
       meta: translate("workCenterRecordsCount", activeLanguage, { count: quoteHistory.length }),
-      actionLabel: translate("openQuotesAction", activeLanguage),
+      actionLabel: "View references",
       tone: "#f5f3ff",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkTab("quotes"),
@@ -8223,10 +8225,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "activeWork",
       icon: "activeWork",
       title: translate("workCenterActiveWorkTitle", activeLanguage),
-      purpose:
-        translate("workCenterOnSiteWorkThatNeedsAnUpdate", activeLanguage),
+      purpose: "Browser-stored active-work references (read-only)",
       meta: translate("workCenterActiveCount", activeLanguage, { count: activeJobs.length }),
-      actionLabel: translate("openActiveWorkAction", activeLanguage),
+      actionLabel: "View references",
       tone: "#ecfdf5",
       accent: "#16a34a",
       onClick: () => openWorkTab("active"),
@@ -8235,10 +8236,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "history",
       icon: "jobHistory",
       title: translate("workCenterHistoryTitle", activeLanguage),
-      purpose:
-        translate("workCenterClosedJobsAndSavedRecords", activeLanguage),
+      purpose: "Legacy history references (read-only)",
       meta: translate("workCenterClosedCount", activeLanguage, { count: workCenterHistoryJobs.length }),
-      actionLabel: translate("openHistoryAction", activeLanguage),
+      actionLabel: "View references",
       tone: "var(--meetro-surface-sage, #eef4ea)",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkCenterJobsPage("history"),
@@ -8247,13 +8247,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "revenue",
       icon: "revenue",
       title: translate("workCenterRevenueTitle", activeLanguage),
-      purpose:
-        translate("workCenterPaymentsBalancesAndClosedJobs", activeLanguage),
-      meta:
-        totalJobRevenue > 0
-          ? `$${formatLocaleNumber(totalJobRevenue, {}, activeLanguage)}`
-          : translate("workCenterReadyToReview", activeLanguage),
-      actionLabel: translate("workCenterReviewRevenue", activeLanguage),
+      purpose: "Legacy commercial references without payment authority",
+      meta: "Read-only",
+      actionLabel: "View references",
       tone: "#ecfdf5",
       accent: "#059669",
       onClick: () => openWorkTab("revenue"),
@@ -10025,6 +10021,33 @@ function ContractorDashboard({ setPage, language = "en" }) {
       if (activeTab === "materials") return sectionItem.key === "active";
       return sectionItem.key === activeTab;
     }) || workCenterSections[0];
+  const isLegacyCommandSurfaceContained =
+    isLegacyWorkCenterCommandSurfaceContained(activeTab);
+  const legacySurfaceTitle =
+    {
+      schedule: "Schedule",
+      quotes: "Quotes",
+      active: "Active Work",
+      completed: "Completed Work",
+      materials: "Materials",
+      records: "Records",
+      revenue: "Revenue",
+    }[activeTab] || "Work Center";
+  const legacySurfaceSourceRecords = (() => {
+    if (!isLegacyCommandSurfaceContained) return [];
+    if (activeTab === "schedule") return readMeetroArray("meetro_business_schedule");
+    if (activeTab === "quotes" || activeTab === "revenue") return quoteHistory;
+    if (activeTab === "active") return activeJobs;
+    if (activeTab === "materials") return readMeetroArray("meetroMaterialsWorkflow");
+    if (activeTab === "completed" || activeTab === "records") {
+      return workCenterHistoryJobs;
+    }
+    return [];
+  })();
+  const legacySurfaceReferences = buildLegacyWorkCenterReferences(
+    activeTab,
+    legacySurfaceSourceRecords
+  );
   const compactWorkCenterChildTabs = [
     "pending",
     "quotes",
@@ -10150,7 +10173,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       {renderWorkflowDependencyPrompt()}
       {!isCompactWorkCenterChildPageOpen && (
         <div style={topBar}>
-          {!isWorkCenterSectionOpen && (
+          {!isWorkCenterSectionOpen && !selectedWorkCenterJob && (
             <FloatingBackButton onClick={() => setPage("businessDashboard")} />
           )}
 
@@ -10324,6 +10347,25 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 active: scopedActiveRecords[0] || selectedWorkCenterJob.active || null,
                 history: primaryScopedHistory,
               };
+              if (!isCanonicalReadOnlyJob) {
+                return (
+                  <LegacyWorkCenterReadOnlyPanel
+                    title={isJobHistoryMode ? "Legacy Job History" : "Legacy Job Reference"}
+                    records={buildLegacyWorkCenterReferences("job", [scopedJob])}
+                    onBack={() => {
+                      setSelectedJobDetailView("");
+                      setSelectedWorkCenterJob(null);
+                      const returnTab = isJobHistoryMode ? "jobHistory" : "currentJobs";
+                      setActiveTab(returnTab);
+                      setJobMenuTab(isJobHistoryMode ? "history" : "current");
+                      setIsJobHistoryMode(false);
+                      setIsWorkCenterSectionOpen(true);
+                      localStorage.setItem("meetroWorkCenterTab", returnTab);
+                      localStorage.setItem("activeWorkCenterTab", returnTab);
+                    }}
+                  />
+                );
+              }
               const historyEvaluation = getHistoryEvaluation(scopedJob);
               const historyFindings = getHistoryFindings(scopedJob);
               const historyServiceRecommendations =
@@ -12385,7 +12427,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             statusLabel: "Review",
                             nextStepLabel: "View canonical details",
                           }
-                        : getWorkCenterJobListPresentation(job);
+                        : {
+                            statusLabel: "Legacy reference",
+                            nextStepLabel: "Read-only compatibility record",
+                          };
 
                       return (
                         <button
@@ -12394,10 +12439,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           className="meetro-visual-surface"
                           style={jobListCard}
                           onClick={() => {
-                            if (!isCanonicalReadOnlyJob) {
-                              openWorkCenterRelationshipConversation(job, "currentJobs");
-                              return;
-                            }
                             setSelectedJobDetailView("");
                             setIsJobHistoryMode(false);
                             setIsWorkCenterSectionOpen(false);
@@ -12416,22 +12457,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               {translate("myRequestsNextStep", activeLanguage)}:{" "}
                               {jobListPresentation.nextStepLabel}
                             </span>
-                            {!isCanonicalReadOnlyJob && (
-                              <span style={jobProgressChecklist} aria-label={translate("workCenterJobProgress", activeLanguage)}>
-                                {getWorkCenterJobProgressItems(job).map((item) => (
-                                  <span
-                                    key={item.label}
-                                    style={{
-                                      ...jobProgressItem,
-                                      ...(item.done ? jobProgressItemDone : {}),
-                                    }}
-                                  >
-                                    <span aria-hidden="true">{item.done ? "✓" : "•"}</span>
-                                    {item.label}
-                                  </span>
-                                ))}
-                              </span>
-                            )}
                           </span>
                           <span style={jobListAction}>
                             {translate("workCenterJobDetails", activeLanguage)}
@@ -12490,22 +12515,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                            </span>
 	                          )}
 	                          <span style={jobListStatus}>
-	                            {translate("workCenterFinalStatus", activeLanguage)}:{" "}
-	                            {translate("stateClosed", activeLanguage)}
+	                            Read-only legacy reference
 	                          </span>
 	                          <span style={jobListNextStep}>
-	                            {translate("workCenterFinalTotal", activeLanguage)}:{" "}
-	                            ${getWorkCenterJobFinalTotal(job).toFixed(2)}
-	                          </span>
-	                          <span style={jobListMeta}>
-	                            {translate("workCenterCloseDate", activeLanguage)}:{" "}
-	                            {job.history?.closeDate || job.history?.closedAt || job.schedule?.closedAt
-	                              ? new Date(
-	                                  job.history?.closeDate ||
-	                                    job.history?.closedAt ||
-	                                    job.schedule?.closedAt
-	                                ).toLocaleDateString()
-	                              : "—"}
+	                            Canonical History remains unavailable
 	                          </span>
 	                        </span>
                         <span style={jobListAction}>
@@ -12522,7 +12535,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               </>
             )}
           </section>
-        ) : activeTab === "schedule" ? (
+        ) : activeTab === "schedule" && !isLegacyCommandSurfaceContained ? (
           <div ref={dynamicSectionRef} style={scheduleOpenedPage}>
             <button
               style={workCenterBackButton}
@@ -12540,7 +12553,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 : ui("workCenterChildScheduleEmptySummary")}
             </p>
           </div>
-        ) : ["pending", "quotes", "active", "revenue", "completed"].includes(activeTab) ? null : (
+        ) : [
+            "pending",
+            "quotes",
+            "active",
+            "revenue",
+            "completed",
+            "materials",
+            "records",
+            "schedule",
+          ].includes(activeTab) ? null : (
           <section
             ref={dynamicSectionRef}
             className="meetro-visual-surface"
@@ -12657,7 +12679,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {isWorkCenterSectionOpen && (
         <>
-      {["materials", "records"].includes(activeTab) && (() => {
+      {isLegacyCommandSurfaceContained && (
+        <LegacyWorkCenterReadOnlyPanel
+          title={legacySurfaceTitle}
+          records={legacySurfaceReferences}
+          onBack={returnToWorkCenterDashboard}
+        />
+      )}
+      {!isLegacyCommandSurfaceContained &&
+        ["materials", "records"].includes(activeTab) && (() => {
         const activeContext = getActiveWorkContext();
 
         if (!activeContext.id && !activeContext.service) return null;
@@ -12693,7 +12723,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         );
       })()}
 
-      {activeTab === "schedule" && (
+      {activeTab === "schedule" && !isLegacyCommandSurfaceContained && (
         <div style={scheduleContentSection}>
           <div style={scheduleCompactHeader}>
             <div>
@@ -14208,107 +14238,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
           if (!pendingWorkStatus) return null;
 
           return (
-            <div style={pendingReviewCard}>
-              <div style={pendingReviewTop}>
-                <div style={pendingReviewIcon}>REV</div>
-
-                <div>
-                  <strong style={pendingReviewTitle}>
-                    {translate("pendingOperationalReview", activeLanguage)}
-                  </strong>
-
-                  <p style={pendingReviewMeta}>
-                    {pendingWorkService || (translate("workCenterScheduledJob", activeLanguage))}
-                  </p>
-
-                  {pendingWorkLocation && (
-                    <p style={pendingReviewLocation}>
-                       {pendingWorkLocation}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div style={pendingReviewNotice}>
-                {translate("pendingDecisionWarning")}
-              </div>
-
-              <div style={pendingReviewActions}>
-                {pendingWorkConversationId && (
-                  <button
-                    style={pendingSecondaryButton}
-                    onClick={() => {
-                      localStorage.setItem("activeConversationId", pendingWorkConversationId);
-                      localStorage.setItem("meetroConversationType", "standard");
-                      setPage("conversationThread");
-                    }}
-                  >
-                     {translate("assistantActionOpenConversation", activeLanguage)}
-                  </button>
-                )}
-
-                <button
-                  style={pendingSecondaryButton}
-                  onClick={() => {
-                    localStorage.setItem("meetroCommandTool", "quotes");
-                    openWorkTab("quotes");
-                  }}
-                >
-                   {translate("quoteAfterEvaluation")}
-                </button>
-
-                <button
-                  style={pendingPrimaryButton}
-                  onClick={() => {
-                    localStorage.setItem("activeWorkStatus", "started");
-                    localStorage.setItem("activeWorkType", localStorage.getItem("pendingWorkType") || "scheduled");
-                    localStorage.setItem("activeWorkSource", localStorage.getItem("pendingWorkSource") || "pending");
-                    const pendingProjectId =
-                      localStorage.getItem("pendingWorkRequestId") ||
-                      localStorage.getItem("pendingWorkScheduleId") ||
-                      pendingWorkConversationId ||
-                      `pending-${Date.now()}`;
-
-                    saveActiveWorkSnapshot({
-                      requestId: pendingProjectId,
-                      conversationId: pendingWorkConversationId,
-                      status: "started",
-                      service: pendingWorkService,
-                      location: pendingWorkLocation,
-                      type: localStorage.getItem("pendingWorkType") || "scheduled",
-                      source: localStorage.getItem("pendingWorkSource") || "pending",
-                    });
-
-                    localStorage.setItem("activeWorkService", pendingWorkService);
-                    localStorage.setItem("activeWorkLocation", pendingWorkLocation);
-                    localStorage.setItem("activeWorkConversationId", pendingWorkConversationId);
-                    localStorage.setItem("activeWorkRequestId", pendingProjectId);
-                    localStorage.setItem("activeWorkType", localStorage.getItem("pendingWorkType") || "scheduled");
-                    localStorage.setItem("activeWorkSource", localStorage.getItem("pendingWorkSource") || "pending");
-                    saveActiveJobSnapshot({
-                      id: pendingProjectId,
-                      jobId: pendingProjectId,
-                      conversationId: pendingWorkConversationId,
-                      service: pendingWorkService,
-                      location: pendingWorkLocation,
-                      status: "started",
-                    });
-
-                    localStorage.setItem("activeJobService", pendingWorkService);
-                    localStorage.setItem("activeJobLocation", pendingWorkLocation);
-                    localStorage.setItem("activeJobStatus", "started");
-
-                    localStorage.removeItem("pendingWorkStatus");
-                    localStorage.removeItem("pendingWorkReason");
-
-                    openWorkTab("active");
-                    setRefreshKey((prev) => prev + 1);
-                  }}
-                >
-                   {translate("moveToActiveJob")}
-                </button>
-              </div>
-            </div>
+            <LegacyWorkCenterReadOnlyPanel
+              compact
+              title="Pending Work"
+              records={buildLegacyWorkCenterReferences("pending", [
+                {
+                  id: pendingWorkConversationId || "pending-work-reference",
+                  title:
+                    pendingWorkService ||
+                    translate("workCenterScheduledJob", activeLanguage),
+                  location: pendingWorkLocation,
+                  reason: pendingWorkReason,
+                },
+              ])}
+            />
           );
         })()}
 
@@ -14445,7 +14388,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       </div>
       )}
 
-      {activeTab === "active" && (
+      {activeTab === "active" && !isLegacyCommandSurfaceContained && (
         <div style={section}>
           <button
             style={workCenterBackButton}
@@ -15095,7 +15038,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </div>
       )}
 
-      {activeTab === "completed" && (
+      {activeTab === "completed" && !isLegacyCommandSurfaceContained && (
         <div style={closureCenterSection}>
           <button
             style={workCenterBackButton}
@@ -15248,7 +15191,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </div>
       )}
 
-      {activeTab === "quotes" && (
+      {activeTab === "quotes" && !isLegacyCommandSurfaceContained && (
         <div style={section}>
           <button
             style={workCenterBackButton}
@@ -15832,23 +15775,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <p>{quoteViewTarget.notes || "—"}</p>
             </div>
 
-	            {!quoteViewTarget.readOnlyHistory && (
-	              <div style={quoteViewActions}>
-	                <button
-	                  style={quoteViewPrimaryButton}
-	                  onClick={() => {
-	                    localStorage.setItem("selectedQuoteForEdit", JSON.stringify(quoteViewTarget));
-	                    localStorage.setItem("quoteBuilderReturnPage", "workCenter");
-	                    localStorage.setItem("meetroWorkCenterTab", "quotes");
-	                    localStorage.setItem("activeWorkCenterTab", "quotes");
-	                    setQuoteViewTarget(null);
-	                    setPage("quoteBuilder");
-	                  }}
-	                >
-	                   {translate("edit", activeLanguage)}
-	                </button>
-	              </div>
-	            )}
+	            <p role="status" style={jobWorkspaceDisclosureText}>
+	              Legacy quote preview is read-only and cannot update canonical Quote truth.
+	            </p>
 	          </div>
 	        </div>
 	      )}
@@ -15913,7 +15842,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	        </div>
 	      )}
 
-	      {activeTab === "materials" && (
+	      {activeTab === "materials" && !isLegacyCommandSurfaceContained && (
         <div style={materialsPageShell}>
           <div style={materialsHero}>
             <div style={materialsHeroIcon}>MAT</div>
@@ -16614,7 +16543,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </div>
       )}
 
-      {activeTab === "records" && (
+      {activeTab === "records" && !isLegacyCommandSurfaceContained && (
         <div style={section}>
           <h2 style={sectionTitle}>
             {translate("relationshipHistoryTitle")}
@@ -16910,7 +16839,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </div>
       )}
 
-      {activeTab === "revenue" && (
+      {activeTab === "revenue" && !isLegacyCommandSurfaceContained && (
         <div ref={dynamicSectionRef} style={section}>
           <button
             style={workCenterBackButton}
