@@ -8,6 +8,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
+import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, formatLocaleNumber, getFormattingLocale } from "../utils/localeFormat";
@@ -10630,6 +10631,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           setPage={setPage}
                         />
                         <CanonicalWorkstreamsPanel
+                          record={{
+                            ...selectedWorkCenterJob,
+                            lifecycleVerified: true,
+                            lifecycleContractVersion: 2,
+                            jobId:
+                              workCenterLifecycleProjection.projection.job?.id ||
+                              null,
+                          }}
+                          setPage={setPage}
+                        />
+                        <CanonicalQuotesPanel
                           record={{
                             ...selectedWorkCenterJob,
                             lifecycleVerified: true,
