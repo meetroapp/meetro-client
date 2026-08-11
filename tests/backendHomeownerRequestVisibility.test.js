@@ -52,6 +52,10 @@ test("Home and My Requests share authenticated backend post truth", () => {
   assert.doesNotMatch(myRequestsSource, /isRequestOwnedByAuthenticatedUser\(post/);
   assert.match(
     myRequestsSource,
-    /const isExpanded = requestId === activeExpandedRequestId/
+    /const selectedRequest = isDetailView[\s\S]*resolveHomeownerRequestById\(requests, selectedRequestId\)/
+  );
+  assert.match(
+    myRequestsSource,
+    /const showsDedicatedDetail =[\s\S]*isDetailView && requestId === selectedRequestId/
   );
 });

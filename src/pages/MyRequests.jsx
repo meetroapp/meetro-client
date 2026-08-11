@@ -67,9 +67,7 @@ import {
 import {
   getHomeownerRequestCardId,
   normalizeHomeownerRequestCardId,
-  reconcileExpandedHomeownerRequestId,
   resolveHomeownerRequestById,
-  toggleExpandedHomeownerRequestId,
 } from "../utils/homeownerRequestCardIdentity";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
@@ -985,8 +983,9 @@ function RequestLifecycleFoundation({ request, language, setPage }) {
   );
 }
 
-function MyRequests({ setPage }) {
+function MyRequests({ setPage, view = "list" }) {
   const language = getLanguage();
+  const isDetailView = view === "detail";
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
@@ -1122,7 +1121,7 @@ function MyRequests({ setPage }) {
 
   void recoveryTick;
 
-  const [expandedRequestId, setExpandedRequestId] = useState(() =>
+  const [selectedRequestId, setSelectedRequestId] = useState(() =>
     normalizeHomeownerRequestCardId(
       localStorage.getItem("selectedHomeownerRequestId")
     )
@@ -1181,25 +1180,16 @@ function MyRequests({ setPage }) {
     minutesSinceAccepted !== null &&
     minutesSinceAccepted > freeCancelWindowMinutes;
 
-  // Expansion must never move another request into the selected card's position.
+  // Preserve canonical collection order on the compact Work Center.
   const sortedRequests = [...requests];
-  const activeExpandedRequestId = reconcileExpandedHomeownerRequestId(
-    requests,
-    expandedRequestId
-  );
-
-  useEffect(() => {
-    if (activeExpandedRequestId === expandedRequestId) return undefined;
-
-    const timeoutId = window.setTimeout(() => {
-      setExpandedRequestId(activeExpandedRequestId);
-      if (!activeExpandedRequestId) {
-        localStorage.removeItem("selectedHomeownerRequestId");
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [activeExpandedRequestId, expandedRequestId]);
+  const selectedRequest = isDetailView
+    ? resolveHomeownerRequestById(requests, selectedRequestId)
+    : null;
+  const visibleRequests = isDetailView
+    ? selectedRequest
+      ? [selectedRequest]
+      : []
+    : sortedRequests;
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
     if (!canReadLegacyWorkflowStorage()) return false;
@@ -1434,23 +1424,8 @@ function MyRequests({ setPage }) {
       return;
     }
 
-    const selectedRequest = resolveHomeownerRequestById(
-      requests,
-      expandedRequestId
-    );
-
-    if (
-      !selectedRequest ||
-      ["completed", "cancelled"].includes(selectedRequest.status)
-    ) {
-      return;
-    }
-
     localStorage.removeItem("meetroOpenHomeownerRequestEdit");
-    const timeoutId = window.setTimeout(() => startEdit(selectedRequest), 0);
-    return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedRequestId, requests]);
+  }, []);
 
   function clearEditPhotoSession() {
     revokeLocalRequestEditPhotoPreviews(editForm.photos);
@@ -1787,37 +1762,56 @@ function MyRequests({ setPage }) {
 
   return (
     <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
-      <button style={backButton} onClick={goBackFromRequests}>
-        {t("myRequestsBack", language)}
+      <button
+        style={backButton}
+        onClick={
+          isDetailView ? () => setPage("myRequests") : goBackFromRequests
+        }
+      >
+        {isDetailView
+          ? language === "es"
+            ? "Volver al Centro de Trabajo"
+            : "Back to Work Center"
+          : t("myRequestsBack", language)}
       </button>
 
       <div style={header}>
         <h1 style={title}>
-          {t("myRequestsTitle", language)}
+          {isDetailView
+            ? language === "es"
+              ? "Detalles de la Solicitud"
+              : "Request Details"
+            : t("myRequestsTitle", language)}
         </h1>
 
         <p style={subtitle}>
-          {t("myRequestsSubtitle", language)}
+          {isDetailView
+            ? language === "es"
+              ? "Consulta el historial, los participantes, las fotos y las respuestas profesionales."
+              : "Review the request history, participants, photos, and professional responses."
+            : t("myRequestsSubtitle", language)}
         </p>
       </div>
 
-      <section
-        className="meetro-visual-hero"
-        style={workCenterPerspectiveCard}
-        aria-label={t("myRequestsPerspectiveTitle", language)}
-      >
-        <span style={workCenterPerspectiveEyebrow}>
-          {t("myRequestsPerspectiveEyebrow", language)}
-        </span>
-        <strong style={workCenterPerspectiveTitle}>
-          {t("myRequestsPerspectiveTitle", language)}
-        </strong>
-        <p style={workCenterPerspectiveText}>
-          {t("myRequestsPerspectiveText", language)}
-        </p>
-      </section>
+      {!isDetailView && (
+        <section
+          className="meetro-visual-hero"
+          style={workCenterPerspectiveCard}
+          aria-label={t("myRequestsPerspectiveTitle", language)}
+        >
+          <span style={workCenterPerspectiveEyebrow}>
+            {t("myRequestsPerspectiveEyebrow", language)}
+          </span>
+          <strong style={workCenterPerspectiveTitle}>
+            {t("myRequestsPerspectiveTitle", language)}
+          </strong>
+          <p style={workCenterPerspectiveText}>
+            {t("myRequestsPerspectiveText", language)}
+          </p>
+        </section>
+      )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.LOADING && (
         <section
           style={emergencyRequestSection}
@@ -1843,7 +1837,7 @@ function MyRequests({ setPage }) {
         </section>
       )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.UNAVAILABLE && (
         <section
           style={emergencyRequestSection}
@@ -1880,7 +1874,7 @@ function MyRequests({ setPage }) {
         </section>
       )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.READY &&
         emergencyRequests.length > 0 && (
           <section
@@ -1957,7 +1951,35 @@ function MyRequests({ setPage }) {
             Try Again
           </button>
         </div>
-      ) : sortedRequests.length === 0 ? (
+      ) : isDetailView && !selectedRequest ? (
+        <div
+          className="meetro-visual-empty-state"
+          style={emptyCard}
+          role="alert"
+          data-homeowner-request-detail-unavailable="true"
+        >
+          <div style={emptyIcon}>REQ</div>
+          <h2>
+            {language === "es"
+              ? "Solicitud no disponible"
+              : "Request unavailable"}
+          </h2>
+          <p>
+            {language === "es"
+              ? "No pudimos encontrar esta solicitud. Vuelve al Centro de Trabajo y selecciónala otra vez."
+              : "Meetro could not find this request. Return to Work Center and choose it again."}
+          </p>
+          <button
+            className="meetro-visual-primary-button"
+            style={primaryButton}
+            onClick={() => setPage("myRequests")}
+          >
+            {language === "es"
+              ? "Volver al Centro de Trabajo"
+              : "Back to Work Center"}
+          </button>
+        </div>
+      ) : !isDetailView && sortedRequests.length === 0 ? (
         <div className="meetro-visual-empty-state" style={emptyCard}>
           <div style={emptyIcon}>REQ</div>
 
@@ -1972,15 +1994,24 @@ function MyRequests({ setPage }) {
           </button>
         </div>
       ) : (
-        <div className="meetro-responsive-grid meetro-grid-2" style={list}>
-          {sortedRequests.map((request) => {
+        <div
+          className={
+            isDetailView
+              ? "meetro-request-detail"
+              : "meetro-responsive-grid meetro-grid-2"
+          }
+          style={isDetailView ? requestDetailLayout : list}
+          data-homeowner-request-detail-view={isDetailView ? "true" : undefined}
+        >
+          {visibleRequests.map((request) => {
             const requestId = getHomeownerRequestCardId(request);
-            const isExpanded = requestId === activeExpandedRequestId;
+            const showsDedicatedDetail =
+              isDetailView && requestId === selectedRequestId;
             const requestTitle =
               request.title ||
               request.category ||
               t("myRequestsServiceRequest", language);
-            const detailPanelId = `homeowner-request-details-${encodeURIComponent(
+            const requestDetailContentId = `homeowner-request-details-${encodeURIComponent(
               requestId
             )}`;
             const truthfulRequest = getTruthfulWorkflowRequest(request);
@@ -1996,13 +2027,16 @@ function MyRequests({ setPage }) {
 
             return (
               <div
-                className={`meetro-visual-surface${isExpanded ? " meetro-selected-card" : ""}`}
+                className="meetro-visual-surface"
                 style={{
                   ...requestCard,
-                  ...(isExpanded ? selectedRequestCard : {}),
+                  ...(isDetailView ? dedicatedRequestDetail : {}),
                 }}
                 key={requestId}
                 data-homeowner-request-id={requestId}
+                data-homeowner-request-detail-id={
+                  isDetailView ? requestId : undefined
+                }
               >
                 <div
                   style={{
@@ -2023,9 +2057,11 @@ function MyRequests({ setPage }) {
                       <div style={cardPillRow}>
                         <span style={statusPill}>{lifecycle.stageLabel}</span>
 
-                        {isExpanded && (
+                        {isDetailView && (
                           <span style={selectedPill}>
-                            {t("myRequestsSelected", language)}
+                            {language === "es"
+                              ? "Solicitud seleccionada"
+                              : "Selected request"}
                           </span>
                         )}
                       </div>
@@ -2106,57 +2142,46 @@ function MyRequests({ setPage }) {
                   </div>
                   )}
 
-                  <button
-                    type="button"
-                    style={{
-                      marginTop: 2,
-                      width: "100%",
-                      border: "1px solid rgba(99, 102, 241, 0.18)",
-                      background: isExpanded ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
-                      color: "var(--meetro-color-charcoal, #172317)",
-                      borderRadius: 16,
-                      padding: "12px 14px",
-                      fontWeight: 900,
-                      fontSize: 14,
-                    }}
-                    aria-expanded={isExpanded}
-                    aria-controls={detailPanelId}
-                    aria-label={`${
-                      isExpanded ? "Hide details" : "Review details"
-                    } for ${requestTitle}`}
-                    onClick={() => {
-                      const nextExpandedRequestId =
-                        toggleExpandedHomeownerRequestId(
-                          activeExpandedRequestId,
-                          requestId
-                        );
-                      setExpandedRequestId(nextExpandedRequestId);
-
-                      if (!nextExpandedRequestId) {
-                        localStorage.removeItem("selectedHomeownerRequestId");
-                      } else {
+                  {!isDetailView && (
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: 2,
+                        width: "100%",
+                        border: "1px solid rgba(99, 102, 241, 0.18)",
+                        background: "#ffffff",
+                        color: "var(--meetro-color-charcoal, #172317)",
+                        borderRadius: 16,
+                        padding: "12px 14px",
+                        fontWeight: 900,
+                        fontSize: 14,
+                      }}
+                      aria-label={
+                        language === "es"
+                          ? `Ver detalles de ${requestTitle}`
+                          : `Review details for ${requestTitle}`
+                      }
+                      onClick={() => {
+                        setSelectedRequestId(requestId);
                         localStorage.setItem(
                           "selectedHomeownerRequestId",
-                          nextExpandedRequestId
+                          requestId
                         );
-                      }
-                    }}
-                  >
-                    {isExpanded
-                      ? language === "es"
-                        ? "Ocultar detalles"
-                        : "Hide Details"
-                      : language === "es"
-                      ? "Ver detalles"
-                      : "Review Details"}
-                  </button>
+                        setPage("homeownerRequestDetails");
+                      }}
+                    >
+                      {language === "es"
+                        ? "Ver detalles"
+                        : "Review Details"}
+                    </button>
+                  )}
                 </div>
 
-                {isExpanded && (
+                {showsDedicatedDetail && (
                   <div
-                    id={detailPanelId}
+                    id={requestDetailContentId}
                     data-homeowner-request-details-id={requestId}
-                    style={expandedRequestDetails}
+                    style={requestDetailContent}
                   >
                     <HomeownerWorkflowHub
                       request={truthfulRequest}
@@ -2730,43 +2755,55 @@ function MyRequests({ setPage }) {
                 ) : (
                   <div style={actionRow}>
                     {!["completed", "cancelled"].includes(request.status) && (
-                      <button
-                        style={secondaryButton}
-                        onClick={() => {
-                          localStorage.setItem("selectedHomeownerRequestId", requestId);
+                      request.status === "accepted" ? (
+                        <button
+                          style={secondaryButton}
+                          onClick={() => {
+                            localStorage.setItem(
+                              "selectedHomeownerRequestId",
+                              requestId
+                            );
 
-                          localStorage.setItem(
-                            "selectedChangeOrderRequest",
-                            JSON.stringify(request)
-                          );
+                            localStorage.setItem(
+                              "selectedChangeOrderRequest",
+                              JSON.stringify(request)
+                            );
 
-                          localStorage.setItem(
-                            "selectedHomeownerRequest",
-                            JSON.stringify(request)
-                          );
+                            localStorage.setItem(
+                              "selectedHomeownerRequest",
+                              JSON.stringify(request)
+                            );
 
-                          localStorage.setItem(
-                            "selectedHomeownerRequestId",
-                            requestId
-                          );
+                            localStorage.setItem(
+                              "selectedHomeownerRequestId",
+                              requestId
+                            );
 
-                          if (request.status === "accepted") {
                             setPage("changeOrderRequest");
-                            return;
-                          }
-
-                          startEdit(request);
-                          return;
-                        }}
-                      >
-                        {request.status === "accepted"
-                          ? language === "es"
+                          }}
+                        >
+                          {language === "es"
                             ? "Solicitar Cambio"
-                            : "Request Service Change"
-                          : language === "es"
-                          ? "Editar Solicitud"
-                          : "Edit Request"}
-                      </button>
+                            : "Request Service Change"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          style={disabledSecondaryButton}
+                          disabled
+                          aria-disabled="true"
+                          title={
+                            language === "es"
+                              ? "La edición de solicitudes aún no está disponible."
+                              : "Request editing is not available yet."
+                          }
+                          onClick={() => startEdit(request)}
+                        >
+                          {language === "es"
+                            ? "Editar Solicitud no disponible"
+                            : "Edit Request unavailable"}
+                        </button>
+                      )
                     )}
 
                     {request.status === "completed" ? (
@@ -3161,7 +3198,14 @@ const list = {
   overflowX: "hidden",
 };
 
-const expandedRequestDetails = {
+const requestDetailLayout = {
+  width: "100%",
+  maxWidth: "760px",
+  margin: "0 auto",
+  minWidth: 0,
+};
+
+const requestDetailContent = {
   minWidth: 0,
 };
 
@@ -3175,6 +3219,11 @@ const requestCard = {
   minWidth: 0,
   overflow: "hidden",
   boxSizing: "border-box",
+};
+
+const dedicatedRequestDetail = {
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const lifecycleFoundationSection = {
@@ -3267,11 +3316,6 @@ const lifecycleUnavailableText = {
   color: "var(--meetro-color-muted)",
   fontSize: "13px",
   lineHeight: 1.45,
-};
-
-const selectedRequestCard = {
-  border: "2px solid var(--meetro-color-forest)",
-  boxShadow: "0 18px 42px rgba(20,53,31,.14)",
 };
 
 const workflowHubCard = {
@@ -4069,6 +4113,14 @@ const secondaryButton = {
   padding: "13px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const disabledSecondaryButton = {
+  ...secondaryButton,
+  background: "var(--meetro-surface-warm)",
+  color: "var(--meetro-color-muted)",
+  cursor: "not-allowed",
+  opacity: 0.8,
 };
 
 

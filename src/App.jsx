@@ -981,6 +981,17 @@ if (page === "myRequests") {
   return withStartupChrome(withAssistantLayer(<MyRequests setPage={setPage} />, page, setPage), updateNotice);
 }
 
+if (page === "homeownerRequestDetails") {
+  return withStartupChrome(
+    withAssistantLayer(
+      <MyRequests setPage={setPage} view="detail" />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
+}
+
 if (page === "assistant") {
   return withStartupChrome(withGuideLayer(<Assistant setPage={setPage} />, page, setPage), updateNotice);
 }

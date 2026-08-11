@@ -4,13 +4,15 @@ import test from "node:test";
 
 import {
   getHomeownerRequestCardId,
-  reconcileExpandedHomeownerRequestId,
   resolveHomeownerRequestById,
-  toggleExpandedHomeownerRequestId,
 } from "../src/utils/homeownerRequestCardIdentity.js";
 
 const myRequestsSource = readFileSync(
   new URL("../src/pages/MyRequests.jsx", import.meta.url),
+  "utf8"
+);
+const appSource = readFileSync(
+  new URL("../src/App.jsx", import.meta.url),
   "utf8"
 );
 
@@ -20,72 +22,54 @@ const requests = [
   { requestId: "request-c", title: "Roof Repair", detail: "C detail" },
 ];
 
-function expansionState(records, expandedRequestId) {
-  return records.map((request) => ({
-    requestId: getHomeownerRequestCardId(request),
-    expanded: getHomeownerRequestCardId(request) === expandedRequestId,
-  }));
-}
-
-test("expansion is isolated to the selected canonical request identity", () => {
-  const expandedRequestId = toggleExpandedHomeownerRequestId(null, "request-b");
-
-  assert.deepEqual(expansionState(requests, expandedRequestId), [
-    { requestId: "request-a", expanded: false },
-    { requestId: "request-b", expanded: true },
-    { requestId: "request-c", expanded: false },
-  ]);
-  assert.equal(resolveHomeownerRequestById(requests, expandedRequestId).detail, "B detail");
-});
-
-test("sequential Review Details selection never transfers details between cards", () => {
-  let expandedRequestId = toggleExpandedHomeownerRequestId(null, "request-a");
-  assert.equal(resolveHomeownerRequestById(requests, expandedRequestId).detail, "A detail");
-
-  expandedRequestId = toggleExpandedHomeownerRequestId(
-    expandedRequestId,
-    "request-b"
-  );
-  assert.equal(resolveHomeownerRequestById(requests, expandedRequestId).detail, "B detail");
-  assert.equal(expansionState(requests, expandedRequestId)[0].expanded, false);
-});
-
-test("duplicate titles and list insertion preserve canonical expansion identity", () => {
-  const expandedRequestId = "request-b";
+test("duplicate titles resolve independently by canonical request ID", () => {
+  const selectedRequestId = "request-b";
   const updatedRequests = [
     { requestId: "request-a2", title: "Plumbing Repair", detail: "A2 detail" },
     ...requests,
   ];
 
-  assert.equal(
-    reconcileExpandedHomeownerRequestId(updatedRequests, expandedRequestId),
-    "request-b"
-  );
-  assert.equal(resolveHomeownerRequestById(updatedRequests, expandedRequestId).detail, "B detail");
+  assert.equal(resolveHomeownerRequestById(updatedRequests, selectedRequestId).detail, "B detail");
+  assert.equal(resolveHomeownerRequestById(updatedRequests, "request-a").detail, "A detail");
+  assert.equal(resolveHomeownerRequestById(updatedRequests, "missing"), null);
   assert.deepEqual(
     updatedRequests.map(getHomeownerRequestCardId),
     ["request-a2", "request-a", "request-b", "request-c"]
   );
 });
 
-test("expansion resets when its canonical request disappears", () => {
-  assert.equal(
-    reconcileExpandedHomeownerRequestId(
-      requests.filter((request) => request.requestId !== "request-b"),
-      "request-b"
-    ),
-    null
-  );
-});
-
-test("Homeowner Work Center binds keys, details, ARIA state, and grid height by request ID", () => {
-  assert.match(myRequestsSource, /const \[expandedRequestId, setExpandedRequestId\] = useState/);
+test("Homeowner Work Center routes compact cards to a dedicated canonical detail view", () => {
+  assert.match(myRequestsSource, /const \[selectedRequestId, setSelectedRequestId\] = useState/);
   assert.match(myRequestsSource, /key=\{requestId\}/);
   assert.doesNotMatch(myRequestsSource, /key=\{requestId \|\| request\.createdAt\}/);
-  assert.match(myRequestsSource, /aria-expanded=\{isExpanded\}/);
-  assert.match(myRequestsSource, /aria-controls=\{detailPanelId\}/);
-  assert.match(myRequestsSource, /data-homeowner-request-details-id=\{requestId\}/);
+  assert.doesNotMatch(myRequestsSource, /aria-expanded/);
+  assert.match(myRequestsSource, /setSelectedRequestId\(requestId\)/);
+  assert.match(myRequestsSource, /localStorage\.setItem\(\s*"selectedHomeownerRequestId",\s*requestId/);
+  assert.match(myRequestsSource, /setPage\("homeownerRequestDetails"\)/);
+  assert.match(appSource, /page === "homeownerRequestDetails"/);
+  assert.match(appSource, /<MyRequests setPage=\{setPage\} view="detail" \/>/);
+  assert.match(myRequestsSource, /resolveHomeownerRequestById\(requests, selectedRequestId\)/);
+  assert.match(myRequestsSource, /data-homeowner-request-detail-unavailable="true"/);
   assert.match(myRequestsSource, /const sortedRequests = \[\.\.\.requests\];/);
   assert.doesNotMatch(myRequestsSource, /sortedRequests = \[\.\.\.requests\]\.sort/);
   assert.match(myRequestsSource, /const list = \{[\s\S]*alignItems: "start"/);
+});
+
+test("ordinary cards remain compact while full sections render only in detail mode", () => {
+  assert.match(myRequestsSource, /\{!isDetailView && \(\s*<button[\s\S]*Review Details/);
+  assert.match(myRequestsSource, /\{showsDedicatedDetail && \(\s*<div[\s\S]*data-homeowner-request-details-id/);
+  assert.match(myRequestsSource, /const showsDedicatedDetail =[\s\S]*isDetailView && requestId === selectedRequestId/);
+  assert.match(myRequestsSource, /<HomeownerWorkflowHub/);
+  assert.match(myRequestsSource, /<RequestLifecycleFoundation/);
+  assert.match(myRequestsSource, /<PhotoStrip/);
+  assert.match(myRequestsSource, /<HomeownerProfessionalResponseReview/);
+});
+
+test("detail navigation, edit containment, cancellation, and Emergency routes stay explicit", () => {
+  assert.match(myRequestsSource, /isDetailView \? \(\) => setPage\("myRequests"\)/);
+  assert.match(myRequestsSource, /Edit Request unavailable/);
+  assert.match(myRequestsSource, /disabled\s+aria-disabled="true"/);
+  assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(pendingCancelId\)\}\/cancel`/);
+  assert.match(myRequestsSource, /buildEmergencyRequestRoute\(/);
+  assert.match(myRequestsSource, /!isDetailView && emergencyRequestStatus/);
 });
