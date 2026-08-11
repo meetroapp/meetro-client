@@ -8,6 +8,7 @@ import {
   saveCanonicalEvaluationDraft,
 } from "../utils/evaluationAuthorityController.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
+import CanonicalFindingsPanel from "./CanonicalFindingsPanel.jsx";
 
 const EMPTY_FORM = Object.freeze({
   observations: "",
@@ -180,7 +181,8 @@ export default function CanonicalJobEvaluation({
   }
 
   return (
-    <section style={styles.section} aria-labelledby="canonical-job-evaluation-title">
+    <>
+      <section style={styles.section} aria-labelledby="canonical-job-evaluation-title">
       <div style={styles.header}>
         <div>
           <span style={styles.eyebrow}>Canonical professional authority</span>
@@ -323,7 +325,15 @@ export default function CanonicalJobEvaluation({
           </div>
         </div>
       )}
-    </section>
+      </section>
+      <CanonicalFindingsPanel
+        enabled={
+          environmentEnabled && sourceContext?.type === "ordinary_job"
+        }
+        evaluation={evaluation}
+        setPage={setPage}
+      />
+    </>
   );
 }
 
