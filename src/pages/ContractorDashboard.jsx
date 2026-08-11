@@ -7,6 +7,7 @@ import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
+import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, formatLocaleNumber, getFormattingLocale } from "../utils/localeFormat";
@@ -10606,27 +10607,40 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   {isCanonicalReadOnlyJob &&
                     workCenterLifecycleProjection.status === "ready" &&
                     workCenterLifecycleProjection.projection && (
-                      <CanonicalJobEvaluation
-                        record={{
-                          ...selectedWorkCenterJob,
-                          lifecycleVerified: true,
-                          lifecycleContractVersion: 2,
-                          jobId:
-                            workCenterLifecycleProjection.projection.job?.id ||
-                            null,
-                          postId:
-                            workCenterLifecycleProjection.projection.requestId ||
-                            workCenterLifecycleProjection.postId,
-                          requestId:
-                            workCenterLifecycleProjection.projection.requestId ||
-                            workCenterLifecycleProjection.postId,
-                        }}
-                        customerConcern={
-                          workCenterLifecycleProjection.projection.customerConcern
-                            ?.originalText || ""
-                        }
-                        setPage={setPage}
-                      />
+                      <>
+                        <CanonicalJobEvaluation
+                          record={{
+                            ...selectedWorkCenterJob,
+                            lifecycleVerified: true,
+                            lifecycleContractVersion: 2,
+                            jobId:
+                              workCenterLifecycleProjection.projection.job?.id ||
+                              null,
+                            postId:
+                              workCenterLifecycleProjection.projection.requestId ||
+                              workCenterLifecycleProjection.postId,
+                            requestId:
+                              workCenterLifecycleProjection.projection.requestId ||
+                              workCenterLifecycleProjection.postId,
+                          }}
+                          customerConcern={
+                            workCenterLifecycleProjection.projection.customerConcern
+                              ?.originalText || ""
+                          }
+                          setPage={setPage}
+                        />
+                        <CanonicalWorkstreamsPanel
+                          record={{
+                            ...selectedWorkCenterJob,
+                            lifecycleVerified: true,
+                            lifecycleContractVersion: 2,
+                            jobId:
+                              workCenterLifecycleProjection.projection.job?.id ||
+                              null,
+                          }}
+                          setPage={setPage}
+                        />
+                      </>
                     )}
 
                   {!isCanonicalReadOnlyJob && (
