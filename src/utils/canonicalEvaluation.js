@@ -219,10 +219,29 @@ export function getCanonicalEvaluationSourceContext(record = {}) {
   const relationshipId = positiveInteger(
     record.relationshipId ?? schedule.relationshipId
   );
-  if (!emergencyRequestId) return null;
+  if (emergencyRequestId) {
+    return {
+      type: "emergency_request",
+      emergencyRequestId,
+      relationshipId,
+    };
+  }
+
+  const jobId = canonicalUuid(record.jobId ?? record.job?.id);
+  const requestId = positiveInteger(
+    record.postId ?? record.requestId ?? record.job?.requestId
+  );
+  const isConfirmedOrdinaryJob =
+    record.source === "CANONICAL_BACKEND_READ" &&
+    record.readOnly === true &&
+    record.lifecycleVerified === true &&
+    positiveInteger(record.lifecycleContractVersion) === 2;
+  if (!isConfirmedOrdinaryJob || !jobId || !requestId) return null;
+
   return {
-    type: "emergency_request",
-    emergencyRequestId,
+    type: "ordinary_job",
+    jobId,
+    requestId,
     relationshipId,
   };
 }
@@ -319,6 +338,51 @@ export function buildCanonicalEvaluationContent(form = {}) {
     relevantConditions: conditions.slice(0, 50),
     supportingMediaReferences: [],
     internalNotes,
+  };
+}
+
+export function buildOrdinaryCanonicalEvaluationContent(
+  form = {},
+  existingContent = null
+) {
+  const existing = isPlainObject(existingContent) ? existingContent : {};
+  return {
+    serviceType:
+      boundedText(existing.serviceType, 120, { nullable: true }) ?? null,
+    evaluationContext:
+      boundedText(existing.evaluationContext, 120, { nullable: true }) ||
+      "ordinary_job",
+    templateKey:
+      boundedText(existing.templateKey, 160, { nullable: true }) ?? null,
+    observations: String(form.observations || "").trim().slice(0, 5000),
+    measurements: Array.isArray(existing.measurements)
+      ? existing.measurements.map((measurement) => ({ ...measurement }))
+      : [],
+    findings: [],
+    diagnosisSummary: String(form.diagnosisSummary || "")
+      .trim()
+      .slice(0, 5000),
+    limitations: String(form.limitations || "").trim().slice(0, 5000),
+    scopeRecommendations: [],
+    relevantConditions: Array.isArray(existing.relevantConditions)
+      ? [...existing.relevantConditions]
+      : [],
+    supportingMediaReferences: [],
+    internalNotes: String(form.internalNotes || "").trim().slice(0, 5000),
+  };
+}
+
+export function ordinaryCanonicalEvaluationContentToForm(evaluation) {
+  const canonical = validateCanonicalEvaluationProjection(evaluation);
+  if (!canonical || canonical.aggregate.sourceContext.type !== "ordinary_job") {
+    return null;
+  }
+  const content = canonical.evaluation.content;
+  return {
+    observations: content.observations,
+    diagnosisSummary: content.diagnosisSummary,
+    limitations: content.limitations,
+    internalNotes: content.internalNotes,
   };
 }
 

@@ -1,13 +1,16 @@
 import {
   buildCanonicalEvaluationContent,
+  buildOrdinaryCanonicalEvaluationContent,
   getCanonicalEvaluationSourceContext,
 } from "./canonicalEvaluation.js";
 import {
   EvaluationApiError,
   completeEvaluation,
   createEvaluation,
+  createOrdinaryJobEvaluation,
   createEvaluationIdempotencyKey,
   listEvaluationsForEmergencyRequest,
+  listEvaluationsForJob,
   updateEvaluationDraft,
 } from "./evaluationApi.js";
 
@@ -32,10 +35,16 @@ function requireCanonicalContext(record) {
 
 export async function loadCanonicalEvaluationForRecord({ record, setPage }) {
   const sourceContext = requireCanonicalContext(record);
-  const evaluations = await listEvaluationsForEmergencyRequest({
-    emergencyRequestId: sourceContext.emergencyRequestId,
-    setPage,
-  });
+  const evaluations =
+    sourceContext.type === "ordinary_job"
+      ? await listEvaluationsForJob({
+          jobId: sourceContext.jobId,
+          setPage,
+        })
+      : await listEvaluationsForEmergencyRequest({
+          emergencyRequestId: sourceContext.emergencyRequestId,
+          setPage,
+        });
   return evaluations[0] || null;
 }
 
@@ -54,17 +63,31 @@ export async function saveCanonicalEvaluationDraft({
       message: "Supporting Evaluation media is not available for canonical saving yet.",
     });
   }
-  const content = buildCanonicalEvaluationContent(form);
   const confirmed =
     currentEvaluation ||
     (await loadCanonicalEvaluationForRecord({ record, setPage }));
+  const content =
+    sourceContext.type === "ordinary_job"
+      ? buildOrdinaryCanonicalEvaluationContent(
+          form,
+          confirmed?.evaluation?.content
+        )
+      : buildCanonicalEvaluationContent(form);
   if (!confirmed) {
-    return createEvaluation({
-      sourceContext,
-      content,
-      idempotencyKey: createIdempotencyKey("create"),
-      setPage,
-    });
+    const idempotencyKey = createIdempotencyKey("create");
+    return sourceContext.type === "ordinary_job"
+      ? createOrdinaryJobEvaluation({
+          jobId: sourceContext.jobId,
+          content,
+          idempotencyKey,
+          setPage,
+        })
+      : createEvaluation({
+          sourceContext,
+          content,
+          idempotencyKey,
+          setPage,
+        });
   }
   if (confirmed.evaluation.status !== "draft") {
     throw new EvaluationApiError({

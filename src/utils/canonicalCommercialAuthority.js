@@ -79,6 +79,25 @@ function normalizeSourceContext(value) {
     return { type: value.type, requestId, relationshipId };
   }
 
+  if (value.type === "ordinary_job") {
+    const jobId = canonicalUuid(value.jobId);
+    const requestId = positiveInteger(value.requestId);
+    const allowed = new Set([
+      "type",
+      "jobId",
+      "requestId",
+      "relationshipId",
+    ]);
+    if (
+      !jobId ||
+      !requestId ||
+      Object.keys(value).some((key) => !allowed.has(key))
+    ) {
+      return null;
+    }
+    return { type: value.type, jobId, requestId, relationshipId };
+  }
+
   if (value.type === "emergency_request") {
     const emergencyRequestId = positiveInteger(value.emergencyRequestId);
     const allowed = new Set(["type", "emergencyRequestId", "relationshipId"]);

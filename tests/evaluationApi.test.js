@@ -5,12 +5,17 @@ import {
   EvaluationApiError,
   completeEvaluation,
   createEvaluation,
+  createOrdinaryJobEvaluation,
   createEvaluationIdempotencyKey,
   getEvaluation,
   listEvaluationsForEmergencyRequest,
+  listEvaluationsForJob,
   updateEvaluationDraft,
 } from "../src/utils/evaluationApi.js";
-import { canonicalEvaluationFixture } from "./canonicalEvaluation.test.js";
+import {
+  canonicalEvaluationFixture,
+  ordinaryCanonicalEvaluationFixture,
+} from "./canonicalEvaluation.test.js";
 
 function installBrowser({ responses }) {
   const calls = [];
@@ -104,6 +109,36 @@ test("get and list reconstruct backend truth without unsupported calls", async (
     assert.match(browser.calls[0].url, /\/evaluations\/11111111-/);
     assert.match(browser.calls[1].url, /\/emergency-requests\/91\/evaluations$/);
     assert.ok(browser.calls.every((call) => call.options.method === "GET"));
+  } finally {
+    browser.restore();
+  }
+});
+
+test("ordinary Job create and list use the existing job-scoped canonical routes", async () => {
+  const fixture = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const jobId = fixture.aggregate.sourceContext.jobId;
+  const browser = installBrowser({ responses: [
+    { status: 201, body: { success: true, ...fixture } },
+    { status: 200, body: { success: true, evaluations: [fixture] } },
+  ] });
+  try {
+    await createOrdinaryJobEvaluation({
+      jobId,
+      content: fixture.evaluation.content,
+      idempotencyKey: "ordinary-create-key",
+    });
+    const evaluations = await listEvaluationsForJob({ jobId });
+
+    assert.equal(evaluations.length, 1);
+    assert.match(browser.calls[0].url, new RegExp(`/jobs/${jobId}/evaluations$`));
+    assert.equal(browser.calls[0].options.method, "POST");
+    assert.deepEqual(JSON.parse(browser.calls[0].options.body), {
+      content: fixture.evaluation.content,
+      expectedVersion: 0,
+    });
+    assert.equal(Object.hasOwn(JSON.parse(browser.calls[0].options.body), "sourceContext"), false);
+    assert.equal(browser.calls[1].options.method, "GET");
+    assert.match(browser.calls[1].url, new RegExp(`/jobs/${jobId}/evaluations$`));
   } finally {
     browser.restore();
   }

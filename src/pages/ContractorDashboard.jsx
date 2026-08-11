@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
+import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, formatLocaleNumber, getFormattingLocale } from "../utils/localeFormat";
@@ -1821,9 +1822,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   function canonicalEvaluationContextKey(record) {
     const context = getCanonicalEvaluationSourceContext(record);
-    return context
-      ? `${context.type}:${context.emergencyRequestId}`
-      : "";
+    if (!context) return "";
+    return context.type === "ordinary_job"
+      ? `${context.type}:${context.jobId}`
+      : `${context.type}:${context.emergencyRequestId}`;
   }
 
   async function hydrateCanonicalEvaluation(record) {
@@ -10600,6 +10602,32 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         </div>
                       )}
                   </section>
+
+                  {isCanonicalReadOnlyJob &&
+                    workCenterLifecycleProjection.status === "ready" &&
+                    workCenterLifecycleProjection.projection && (
+                      <CanonicalJobEvaluation
+                        record={{
+                          ...selectedWorkCenterJob,
+                          lifecycleVerified: true,
+                          lifecycleContractVersion: 2,
+                          jobId:
+                            workCenterLifecycleProjection.projection.job?.id ||
+                            null,
+                          postId:
+                            workCenterLifecycleProjection.projection.requestId ||
+                            workCenterLifecycleProjection.postId,
+                          requestId:
+                            workCenterLifecycleProjection.projection.requestId ||
+                            workCenterLifecycleProjection.postId,
+                        }}
+                        customerConcern={
+                          workCenterLifecycleProjection.projection.customerConcern
+                            ?.originalText || ""
+                        }
+                        setPage={setPage}
+                      />
+                    )}
 
                   {!isCanonicalReadOnlyJob && (
                     <div

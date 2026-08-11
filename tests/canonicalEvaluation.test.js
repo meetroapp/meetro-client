@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   buildCanonicalEvaluationRoute,
   buildCanonicalEvaluationContent,
+  buildOrdinaryCanonicalEvaluationContent,
   canonicalEvaluationContentToForm,
   getCanonicalEvaluationSourceContext,
+  ordinaryCanonicalEvaluationContentToForm,
   parseCanonicalEvaluationRoute,
   validateCanonicalEvaluationProjection,
 } from "../src/utils/canonicalEvaluation.js";
@@ -78,6 +80,32 @@ export function canonicalEvaluationFixture(overrides = {}) {
   };
 }
 
+export function ordinaryCanonicalEvaluationFixture(overrides = {}) {
+  return canonicalEvaluationFixture({
+    ...overrides,
+    aggregate: {
+      sourceContext: {
+        type: "ordinary_job",
+        jobId: "66666666-6666-4666-8666-666666666666",
+        requestId: 41,
+        relationshipId: 72,
+      },
+      ...(overrides.aggregate || {}),
+    },
+    evaluation: {
+      ...(overrides.evaluation || {}),
+      content: {
+        evaluationContext: "ordinary_job",
+        observations: "Visible water damage is present around the cabinet base.",
+        findings: [],
+        diagnosisSummary: "Material damage extent requires further evaluation.",
+        scopeRecommendations: [],
+        ...overrides.evaluation?.content,
+      },
+    },
+  });
+}
+
 test("strict Evaluation projection accepts only backend-confirmed Authorization Engine truth", () => {
   const canonical = validateCanonicalEvaluationProjection(canonicalEvaluationFixture());
   assert.equal(canonical.aggregate.type, "evaluation");
@@ -103,7 +131,7 @@ test("malformed identity, timestamps, content, status, and capabilities fail clo
   }
 });
 
-test("source selection accepts only canonical Emergency identity and an optional server-validated relationship", () => {
+test("source selection preserves Emergency and accepts only confirmed ordinary Job identity", () => {
   assert.deepEqual(
     getCanonicalEvaluationSourceContext({ emergencyRequestId: 91, relationshipId: 72 }),
     { type: "emergency_request", emergencyRequestId: 91, relationshipId: 72 }
@@ -112,8 +140,61 @@ test("source selection accepts only canonical Emergency identity and an optional
     getCanonicalEvaluationSourceContext({ emergencyRequestId: 91 }),
     { type: "emergency_request", emergencyRequestId: 91, relationshipId: null }
   );
+  assert.deepEqual(
+    getCanonicalEvaluationSourceContext({
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      jobId: "66666666-6666-4666-8666-666666666666",
+      postId: 41,
+      relationshipId: 72,
+    }),
+    {
+      type: "ordinary_job",
+      jobId: "66666666-6666-4666-8666-666666666666",
+      requestId: 41,
+      relationshipId: 72,
+    }
+  );
   assert.equal(getCanonicalEvaluationSourceContext({ requestId: 91, relationshipId: 72 }), null);
+  assert.equal(
+    getCanonicalEvaluationSourceContext({
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      postId: 41,
+    }),
+    null
+  );
   assert.equal(getCanonicalEvaluationSourceContext({ projectId: "project-browser" }), null);
+});
+
+test("ordinary Evaluation content cannot overwrite Customer Concern or activate downstream domains", () => {
+  const content = buildOrdinaryCanonicalEvaluationContent({
+    observations: "Professional observations.",
+    diagnosisSummary: "Professional assessment.",
+    limitations: "Cabinet wall remained closed.",
+    internalNotes: "Synthetic QA only.",
+    customerConcern: "Browser attempt to replace customer truth.",
+    findings: [{ summary: "Not authorized." }],
+    scopeRecommendations: ["Not authorized."],
+  });
+  assert.equal(content.observations, "Professional observations.");
+  assert.equal(Object.hasOwn(content, "customerConcern"), false);
+  assert.deepEqual(content.findings, []);
+  assert.deepEqual(content.scopeRecommendations, []);
+
+  const canonical = validateCanonicalEvaluationProjection(
+    ordinaryCanonicalEvaluationFixture()
+  );
+  assert.equal(canonical.aggregate.sourceContext.type, "ordinary_job");
+  assert.equal(canonical.aggregate.sourceContext.requestId, 41);
+  assert.equal(
+    ordinaryCanonicalEvaluationContentToForm(canonical).observations,
+    "Visible water damage is present around the cabinet base."
+  );
 });
 
 test("canonical Evaluation routes are refresh-safe and reject malformed source identity", () => {
