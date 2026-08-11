@@ -64,6 +64,13 @@ import {
   getParticipantRoleLabelKey,
   normalizeRequestLifecycleFoundation,
 } from "../utils/requestLifecycleFoundation";
+import {
+  getHomeownerRequestCardId,
+  normalizeHomeownerRequestCardId,
+  reconcileExpandedHomeownerRequestId,
+  resolveHomeownerRequestById,
+  toggleExpandedHomeownerRequestId,
+} from "../utils/homeownerRequestCardIdentity";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -1115,7 +1122,11 @@ function MyRequests({ setPage }) {
 
   void recoveryTick;
 
-  const selectedId = localStorage.getItem("selectedHomeownerRequestId");
+  const [expandedRequestId, setExpandedRequestId] = useState(() =>
+    normalizeHomeownerRequestCardId(
+      localStorage.getItem("selectedHomeownerRequestId")
+    )
+  );
   const [previewImage, setPreviewImage] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [revisionQuoteId, setRevisionQuoteId] = useState(null);
@@ -1170,11 +1181,25 @@ function MyRequests({ setPage }) {
     minutesSinceAccepted !== null &&
     minutesSinceAccepted > freeCancelWindowMinutes;
 
-  const sortedRequests = [...requests].sort((a, b) => {
-    const aSelected = String(a.requestId || a.id) === String(selectedId) ? 1 : 0;
-    const bSelected = String(b.requestId || b.id) === String(selectedId) ? 1 : 0;
-    return bSelected - aSelected;
-  });
+  // Expansion must never move another request into the selected card's position.
+  const sortedRequests = [...requests];
+  const activeExpandedRequestId = reconcileExpandedHomeownerRequestId(
+    requests,
+    expandedRequestId
+  );
+
+  useEffect(() => {
+    if (activeExpandedRequestId === expandedRequestId) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setExpandedRequestId(activeExpandedRequestId);
+      if (!activeExpandedRequestId) {
+        localStorage.removeItem("selectedHomeownerRequestId");
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeExpandedRequestId, expandedRequestId]);
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
     if (!canReadLegacyWorkflowStorage()) return false;
@@ -1409,9 +1434,9 @@ function MyRequests({ setPage }) {
       return;
     }
 
-    const selectedRequest = requests.find(
-      (request) =>
-        String(request.requestId || request.id) === String(selectedId)
+    const selectedRequest = resolveHomeownerRequestById(
+      requests,
+      expandedRequestId
     );
 
     if (
@@ -1425,7 +1450,7 @@ function MyRequests({ setPage }) {
     const timeoutId = window.setTimeout(() => startEdit(selectedRequest), 0);
     return () => window.clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requests, selectedId]);
+  }, [expandedRequestId, requests]);
 
   function clearEditPhotoSession() {
     revokeLocalRequestEditPhotoPreviews(editForm.photos);
@@ -1949,8 +1974,15 @@ function MyRequests({ setPage }) {
       ) : (
         <div className="meetro-responsive-grid meetro-grid-2" style={list}>
           {sortedRequests.map((request) => {
-            const requestId = request.requestId || request.id;
-            const isSelected = String(requestId) === String(selectedId);
+            const requestId = getHomeownerRequestCardId(request);
+            const isExpanded = requestId === activeExpandedRequestId;
+            const requestTitle =
+              request.title ||
+              request.category ||
+              t("myRequestsServiceRequest", language);
+            const detailPanelId = `homeowner-request-details-${encodeURIComponent(
+              requestId
+            )}`;
             const truthfulRequest = getTruthfulWorkflowRequest(request);
             const unsupportedWorkflow = truthfulRequest !== request;
             const unavailableCopy = getApprovalSchedulingUnavailableCopy(language);
@@ -1964,12 +1996,13 @@ function MyRequests({ setPage }) {
 
             return (
               <div
-                className={`meetro-visual-surface${isSelected ? " meetro-selected-card" : ""}`}
+                className={`meetro-visual-surface${isExpanded ? " meetro-selected-card" : ""}`}
                 style={{
                   ...requestCard,
-                  ...(isSelected ? selectedRequestCard : {}),
+                  ...(isExpanded ? selectedRequestCard : {}),
                 }}
-                key={requestId || request.createdAt}
+                key={requestId}
+                data-homeowner-request-id={requestId}
               >
                 <div
                   style={{
@@ -1990,7 +2023,7 @@ function MyRequests({ setPage }) {
                       <div style={cardPillRow}>
                         <span style={statusPill}>{lifecycle.stageLabel}</span>
 
-                        {isSelected && (
+                        {isExpanded && (
                           <span style={selectedPill}>
                             {t("myRequestsSelected", language)}
                           </span>
@@ -2005,9 +2038,7 @@ function MyRequests({ setPage }) {
                           color: "#111827",
                         }}
                       >
-                        {request.title ||
-                          request.category ||
-                          t("myRequestsServiceRequest", language)}
+                        {requestTitle}
                       </h3>
 
                       <p
@@ -2081,24 +2112,37 @@ function MyRequests({ setPage }) {
                       marginTop: 2,
                       width: "100%",
                       border: "1px solid rgba(99, 102, 241, 0.18)",
-                      background: isSelected ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
+                      background: isExpanded ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
                       color: "var(--meetro-color-charcoal, #172317)",
                       borderRadius: 16,
                       padding: "12px 14px",
                       fontWeight: 900,
                       fontSize: 14,
                     }}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailPanelId}
+                    aria-label={`${
+                      isExpanded ? "Hide details" : "Review details"
+                    } for ${requestTitle}`}
                     onClick={() => {
-                      if (isSelected) {
+                      const nextExpandedRequestId =
+                        toggleExpandedHomeownerRequestId(
+                          activeExpandedRequestId,
+                          requestId
+                        );
+                      setExpandedRequestId(nextExpandedRequestId);
+
+                      if (!nextExpandedRequestId) {
                         localStorage.removeItem("selectedHomeownerRequestId");
                       } else {
-                        localStorage.setItem("selectedHomeownerRequestId", requestId);
+                        localStorage.setItem(
+                          "selectedHomeownerRequestId",
+                          nextExpandedRequestId
+                        );
                       }
-
-                      setRecoveryTick((value) => value + 1);
                     }}
                   >
-                    {isSelected
+                    {isExpanded
                       ? language === "es"
                         ? "Ocultar detalles"
                         : "Hide Details"
@@ -2108,8 +2152,12 @@ function MyRequests({ setPage }) {
                   </button>
                 </div>
 
-                {isSelected && (
-                  <>
+                {isExpanded && (
+                  <div
+                    id={detailPanelId}
+                    data-homeowner-request-details-id={requestId}
+                    style={expandedRequestDetails}
+                  >
                     <HomeownerWorkflowHub
                       request={truthfulRequest}
                       language={language}
@@ -2784,7 +2832,7 @@ function MyRequests({ setPage }) {
                     )}
                   </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             );
@@ -3108,8 +3156,13 @@ const list = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
   gap: "16px",
+  alignItems: "start",
   minWidth: 0,
   overflowX: "hidden",
+};
+
+const expandedRequestDetails = {
+  minWidth: 0,
 };
 
 const requestCard = {

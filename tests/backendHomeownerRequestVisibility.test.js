@@ -52,6 +52,6 @@ test("Home and My Requests share authenticated backend post truth", () => {
   assert.doesNotMatch(myRequestsSource, /isRequestOwnedByAuthenticatedUser\(post/);
   assert.match(
     myRequestsSource,
-    /const isSelected = String\(requestId\) === String\(selectedId\)/
+    /const isExpanded = requestId === activeExpandedRequestId/
   );
 });
