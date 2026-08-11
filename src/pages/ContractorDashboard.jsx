@@ -97,6 +97,15 @@ import {
   saveCanonicalEvaluationDraft,
 } from "../utils/evaluationAuthorityController";
 import {
+  fetchWorkCenterLifecycleProjection,
+  getWorkCenterLifecycleProjectionTarget,
+} from "../utils/workCenterLifecycleProjection";
+import {
+  fetchCanonicalWorkCenterEntries,
+  isCanonicalWorkCenterEntry,
+  mergeCanonicalWorkCenterEntries,
+} from "../utils/workCenterCanonicalHydration";
+import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
   shouldWarnBeforeAction,
@@ -340,6 +349,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
     Boolean(canonicalEvaluationRouteRecordRef.current)
   );
   const canonicalEvaluationContextRef = useRef("");
+  const [workCenterLifecycleProjection, setWorkCenterLifecycleProjection] =
+    useState({
+      status: "idle",
+      reason: "",
+      httpStatus: 0,
+      postId: null,
+      projection: null,
+    });
+  const workCenterLifecycleContextRef = useRef("");
+  const [canonicalWorkCenterHydration, setCanonicalWorkCenterHydration] =
+    useState({
+      status: "loading",
+      reason: "",
+      entries: [],
+    });
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
   const [jobReportTarget, setJobReportTarget] = useState(null);
@@ -584,6 +608,90 @@ function ContractorDashboard({ setPage, language = "en" }) {
       active = false;
     };
   }, [setPage]);
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchCanonicalWorkCenterEntries({ setPage }).then((result) => {
+      if (active) setCanonicalWorkCenterHydration(result);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [setPage]);
+
+  useEffect(() => {
+    if (!selectedWorkCenterJob) {
+      workCenterLifecycleContextRef.current = "";
+      Promise.resolve().then(() => {
+        if (workCenterLifecycleContextRef.current !== "") return;
+        setWorkCenterLifecycleProjection({
+          status: "idle",
+          reason: "",
+          httpStatus: 0,
+          postId: null,
+          projection: null,
+        });
+      });
+      return undefined;
+    }
+
+    const target = getWorkCenterLifecycleProjectionTarget(selectedWorkCenterJob);
+    const contextKey = `${selectedWorkCenterJob.id || ""}:${target.postId || ""}:${
+      target.reason || "ready"
+    }`;
+    workCenterLifecycleContextRef.current = contextKey;
+
+    if (!target.available) {
+      Promise.resolve().then(() => {
+        if (workCenterLifecycleContextRef.current !== contextKey) return;
+        setWorkCenterLifecycleProjection({
+          status: "unavailable",
+          reason: target.reason,
+          httpStatus: 0,
+          postId: null,
+          projection: null,
+        });
+      });
+      return undefined;
+    }
+
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active || workCenterLifecycleContextRef.current !== contextKey) return;
+      setWorkCenterLifecycleProjection({
+        status: "loading",
+        reason: "",
+        httpStatus: 0,
+        postId: target.postId,
+        projection: null,
+      });
+    });
+
+    void fetchWorkCenterLifecycleProjection({
+      record: selectedWorkCenterJob,
+      setPage,
+    })
+      .then((result) => {
+        if (!active || workCenterLifecycleContextRef.current !== contextKey) return;
+        setWorkCenterLifecycleProjection(result);
+      })
+      .catch(() => {
+        if (!active || workCenterLifecycleContextRef.current !== contextKey) return;
+        setWorkCenterLifecycleProjection({
+          status: "error",
+          reason: "NETWORK_ERROR",
+          httpStatus: 0,
+          postId: target.postId,
+          projection: null,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedWorkCenterJob, setPage]);
 
   useEffect(() => {
     if (!workflowDependencyPrompt?.dependency) return;
@@ -6837,6 +6945,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
     record.title ||
     translate("scheduledVisit");
 
+  const getCanonicalLifecycleUnavailableText = (state = {}) => {
+    if (state.status === "loading") {
+      return "Loading canonical lifecycle evidence.";
+    }
+    if (state.reason === "unsupported_legacy_record") {
+      return "Canonical lifecycle evidence is not available for this legacy record.";
+    }
+    if (state.reason === "missing_post_id") {
+      return "Canonical lifecycle evidence is unavailable because this Work Center record has no lifecycle-v2 request identity.";
+    }
+    if (state.httpStatus === 401 || state.httpStatus === 403) {
+      return "Canonical lifecycle evidence is unavailable for this account.";
+    }
+    if (state.httpStatus === 404) {
+      return "Canonical lifecycle evidence was not found for this request.";
+    }
+    if (state.status === "error") {
+      return "Canonical lifecycle evidence could not be loaded.";
+    }
+    return translate("lifecycleHistoryUnavailable", activeLanguage);
+  };
+
   const getWorkCenterJobKey = (record = {}) =>
     String(
       record.requestId ||
@@ -7991,7 +8121,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return Number(historyTotal || quoteTotal || 0);
   };
 
-  const workCenterJobs = (() => {
+  const legacyWorkCenterJobs = (() => {
     const jobs = new Map();
     pendingProjectRequests.forEach((record) => mergeWorkCenterJob(jobs, record, "request"));
 
@@ -8020,6 +8150,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
       return String(secondDate).localeCompare(String(firstDate));
     });
   })();
+
+  const workCenterJobs = mergeCanonicalWorkCenterEntries(
+    legacyWorkCenterJobs,
+    canonicalWorkCenterHydration.entries
+  );
 
   const workCenterActiveJobs = workCenterJobs.filter(
     (job) => getWorkCenterJobStage(job) !== "closed"
@@ -9390,6 +9525,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const openWorkCenterJobPrimaryAction = (job = selectedWorkCenterJob) => {
     if (!job) return;
+    if (isCanonicalWorkCenterEntry(job)) {
+      showLifecycleAuthorityUnavailable();
+      return;
+    }
     const stage = getSarahJobStateKey(job);
 
     if (stage === "lead") {
@@ -10154,11 +10293,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
             )}
 
             {selectedWorkCenterJob ? (() => {
-              const scopedQuotes = getScopedJobQuotes(selectedWorkCenterJob);
-              const scopedSchedules = getScopedJobSchedules(selectedWorkCenterJob);
-              const scopedActiveRecords = getScopedJobActiveRecords(selectedWorkCenterJob);
-              const scopedHistoryRecords = getScopedJobHistoryRecords(selectedWorkCenterJob);
-              const scopedAlerts = getScopedJobAlerts(selectedWorkCenterJob);
+              const isCanonicalReadOnlyJob =
+                isCanonicalWorkCenterEntry(selectedWorkCenterJob);
+              const scopedQuotes = isCanonicalReadOnlyJob
+                ? []
+                : getScopedJobQuotes(selectedWorkCenterJob);
+              const scopedSchedules = isCanonicalReadOnlyJob
+                ? []
+                : getScopedJobSchedules(selectedWorkCenterJob);
+              const scopedActiveRecords = isCanonicalReadOnlyJob
+                ? []
+                : getScopedJobActiveRecords(selectedWorkCenterJob);
+              const scopedHistoryRecords = isCanonicalReadOnlyJob
+                ? []
+                : getScopedJobHistoryRecords(selectedWorkCenterJob);
+              const scopedAlerts = isCanonicalReadOnlyJob
+                ? []
+                : getScopedJobAlerts(selectedWorkCenterJob);
               const primaryScopedQuote = scopedQuotes[0] || selectedWorkCenterJob.quote || null;
               const primaryScopedSchedule = scopedSchedules[0] || selectedWorkCenterJob.schedule || null;
               const primaryScopedHistory = scopedHistoryRecords[0] || selectedWorkCenterJob.history || null;
@@ -10180,13 +10331,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
               const visibleExternalManualActions = isProposalSentState
                 ? []
                 : externalManualActions;
-              const jobStatusTone = workflowState.tone;
-              const jobDisplayStatus = isJobHistoryMode
-                ? translate("stateClosed", activeLanguage)
-                : workflowState.statusLabel;
-              const jobDisplayNextStep = isJobHistoryMode
-                ? translate("workCenterReviewTheFullJobHistory", activeLanguage)
-                : workflowState.nextActionLabel;
+              const jobStatusTone = isCanonicalReadOnlyJob
+                ? {
+                    background: "#f8fafc",
+                    color: "#334155",
+                    border: "#cbd5e1",
+                  }
+                : workflowState.tone;
+              const jobDisplayStatus = isCanonicalReadOnlyJob
+                ? "Review"
+                : isJobHistoryMode
+                  ? translate("stateClosed", activeLanguage)
+                  : workflowState.statusLabel;
+              const jobDisplayNextStep = isCanonicalReadOnlyJob
+                ? "Review canonical lifecycle details"
+                : isJobHistoryMode
+                  ? translate("workCenterReviewTheFullJobHistory", activeLanguage)
+                  : workflowState.nextActionLabel;
               const persistentContextCustomer =
                 selectedWorkCenterJob.customer ||
                 scopedJob.customer ||
@@ -10225,6 +10386,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                  primaryScopedQuote?.depositPaidAt
 	              );
               const handleWorkflowPrimaryAction = () => {
+                if (isCanonicalReadOnlyJob) {
+                  showLifecycleAuthorityUnavailable();
+                  return;
+                }
                 if (workflowState.primaryActionType === "open_conversation") {
                   if (scopedJob.conversationId) {
                     localStorage.setItem("activeConversationId", scopedJob.conversationId);
@@ -10324,14 +10489,127 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      ...jobDynamicFocusArea,
-                      ...jobWorkflowCurrentStepCard,
-                      background: `linear-gradient(135deg, ${jobStatusTone.background}, #ffffff)`,
-                      borderColor: jobStatusTone.border,
-                    }}
+                  <section
+                    style={workCenterCanonicalLifecycleSection}
+                    aria-label="Canonical lifecycle evidence"
+                    aria-live="polite"
                   >
+                    <div style={workCenterCanonicalLifecycleHeader}>
+                      <div>
+                        <span style={jobWorkflowStepLabel}>Canonical backend read</span>
+                        <h3 style={workCenterCanonicalLifecycleTitle}>
+                          {translate("reportedConcernHistory", activeLanguage)}
+                        </h3>
+                      </div>
+                      <span style={workCenterCanonicalLifecycleBadge}>
+                        {workCenterLifecycleProjection.status === "ready"
+                          ? "Confirmed"
+                          : workCenterLifecycleProjection.status === "loading"
+                            ? "Loading"
+                            : "Unavailable"}
+                      </span>
+                    </div>
+
+                    {workCenterLifecycleProjection.status === "loading" && (
+                      <p role="status" style={workCenterCanonicalLifecycleNotice}>
+                        {getCanonicalLifecycleUnavailableText(
+                          workCenterLifecycleProjection
+                        )}
+                      </p>
+                    )}
+
+                    {workCenterLifecycleProjection.status !== "loading" &&
+                      workCenterLifecycleProjection.status !== "ready" && (
+                        <p role="status" style={workCenterCanonicalLifecycleNotice}>
+                          {getCanonicalLifecycleUnavailableText(
+                            workCenterLifecycleProjection
+                          )}
+                        </p>
+                      )}
+
+                    {workCenterLifecycleProjection.status === "ready" &&
+                      workCenterLifecycleProjection.projection && (
+                        <div style={workCenterCanonicalLifecycleGrid}>
+                          <div style={workCenterCanonicalLifecycleCard}>
+                            <strong style={workCenterCanonicalLifecycleLabel}>
+                              {translate("workCenterJob", activeLanguage)}
+                            </strong>
+                            <span style={workCenterCanonicalLifecycleValue}>
+                              {workCenterLifecycleProjection.projection.job?.present
+                                ? "Lifecycle-v2 Job confirmed"
+                                : translate("lifecycleHistoryUnavailable", activeLanguage)}
+                            </span>
+                          </div>
+
+                          <div style={workCenterCanonicalLifecycleCard}>
+                            <strong style={workCenterCanonicalLifecycleLabel}>
+                              Customer Concern
+                            </strong>
+                            <span style={workCenterCanonicalConcernText}>
+                              {workCenterLifecycleProjection.projection.customerConcern
+                                ?.originalText ||
+                                translate("lifecycleHistoryUnavailable", activeLanguage)}
+                            </span>
+                            {workCenterLifecycleProjection.projection.customerConcern
+                              ?.clarifications?.length > 0 && (
+                              <ul style={workCenterCanonicalClarificationList}>
+                                {workCenterLifecycleProjection.projection.customerConcern.clarifications.map(
+                                  (clarification) => (
+                                    <li key={clarification.id}>
+                                      {clarification.text}
+                                    </li>
+                                  )
+                                )}
+                              </ul>
+                            )}
+                          </div>
+
+                          <div style={workCenterCanonicalLifecycleCard}>
+                            <strong style={workCenterCanonicalLifecycleLabel}>
+                              {translate("knownJobParticipants", activeLanguage)}
+                            </strong>
+                            {workCenterLifecycleProjection.projection.participants.length > 0 ? (
+                              <ul style={workCenterCanonicalParticipantList}>
+                                {workCenterLifecycleProjection.projection.participants.map(
+                                  (participant, index) => (
+                                    <li
+                                      key={`${participant.displayName || "participant"}-${index}`}
+                                      style={workCenterCanonicalParticipantItem}
+                                    >
+                                      <span>
+                                        {participant.displayName ||
+                                          translate("lifecycleParticipant", activeLanguage)}
+                                      </span>
+                                      <span style={workCenterCanonicalParticipantRoles}>
+                                        {participant.roles
+                                          .map((role) =>
+                                            role.labelKey
+                                              ? translate(role.labelKey, activeLanguage)
+                                              : role.role
+                                          )
+                                          .join(", ") || "—"}
+                                      </span>
+                                    </li>
+                                  )
+                                )}
+                              </ul>
+                            ) : (
+                              <span style={workCenterCanonicalLifecycleValue}>—</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                  </section>
+
+                  {!isCanonicalReadOnlyJob && (
+                    <div
+                      style={{
+                        ...jobDynamicFocusArea,
+                        ...jobWorkflowCurrentStepCard,
+                        background: `linear-gradient(135deg, ${jobStatusTone.background}, #ffffff)`,
+                        borderColor: jobStatusTone.border,
+                      }}
+                    >
                     <span style={{ ...jobWorkflowStepLabel, color: jobStatusTone.color }}>
                       {translate("wcCurrentStatus", activeLanguage)}
                     </span>
@@ -10906,9 +11184,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </div>
                         </div>
                       )}
-	                  </div>
+	                    </div>
+                  )}
 
-                  {!isJobHistoryMode && (
+                  {!isCanonicalReadOnlyJob && !isJobHistoryMode && (
                     <p style={jobWorkflowGpsHint}>
                       {translate("workCenterMeetroShowsOnlyTheCurrentStepRecordsStaySavedBehindThisJob", activeLanguage)}
                     </p>
@@ -11227,7 +11506,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                  </div>
 	                )}
 
-	                {!isJobHistoryMode && (
+	                {!isCanonicalReadOnlyJob && !isJobHistoryMode && (
 	                <details
                     style={jobSupportingSlimDisclosure}
                     defaultOpen={supportingRecordsDefaultOpen}
@@ -11301,7 +11580,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                </details>
 	                )}
 
-	                {!isJobHistoryMode && selectedJobDetailView && (
+	                {!isCanonicalReadOnlyJob && !isJobHistoryMode && selectedJobDetailView && (
 	                  <div ref={jobScopedDetailRef} style={jobScopedDetailPanel}>
                     <div style={jobScopedDetailHeader}>
                       <strong>
@@ -12045,7 +12324,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <div style={jobListGrid}>
                   {workCenterActiveJobs.length > 0 ? (
                     workCenterActiveJobs.map((job) => {
-                      const jobListPresentation = getWorkCenterJobListPresentation(job);
+                      const isCanonicalReadOnlyJob =
+                        isCanonicalWorkCenterEntry(job);
+                      const jobListPresentation = isCanonicalReadOnlyJob
+                        ? {
+                            statusLabel: "Review",
+                            nextStepLabel: "View canonical details",
+                          }
+                        : getWorkCenterJobListPresentation(job);
 
                       return (
                         <button
@@ -12053,11 +12339,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           type="button"
                           className="meetro-visual-surface"
                           style={jobListCard}
-                          onClick={() => openWorkCenterRelationshipConversation(job, "currentJobs")}
+                          onClick={() => {
+                            if (!isCanonicalReadOnlyJob) {
+                              openWorkCenterRelationshipConversation(job, "currentJobs");
+                              return;
+                            }
+                            setSelectedJobDetailView("");
+                            setIsJobHistoryMode(false);
+                            setIsWorkCenterSectionOpen(false);
+                            setSelectedWorkCenterJob(job);
+                          }}
                         >
                           <span style={jobListCardMain}>
                             <strong style={jobListCustomer}>{job.customer}</strong>
-                            <span style={jobListMeta}>{job.address}</span>
+                            {job.address && <span style={jobListMeta}>{job.address}</span>}
                             <span style={jobListMeta}>{job.title}</span>
                             <span style={jobListStatus}>
                               {translate("homeStatus", activeLanguage)}:{" "}
@@ -12067,20 +12362,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               {translate("myRequestsNextStep", activeLanguage)}:{" "}
                               {jobListPresentation.nextStepLabel}
                             </span>
-                            <span style={jobProgressChecklist} aria-label={translate("workCenterJobProgress", activeLanguage)}>
-                              {getWorkCenterJobProgressItems(job).map((item) => (
-                                <span
-                                  key={item.label}
-                                  style={{
-                                    ...jobProgressItem,
-                                    ...(item.done ? jobProgressItemDone : {}),
-                                  }}
-                                >
-                                  <span aria-hidden="true">{item.done ? "✓" : "•"}</span>
-                                  {item.label}
-                                </span>
-                              ))}
-                            </span>
+                            {!isCanonicalReadOnlyJob && (
+                              <span style={jobProgressChecklist} aria-label={translate("workCenterJobProgress", activeLanguage)}>
+                                {getWorkCenterJobProgressItems(job).map((item) => (
+                                  <span
+                                    key={item.label}
+                                    style={{
+                                      ...jobProgressItem,
+                                      ...(item.done ? jobProgressItemDone : {}),
+                                    }}
+                                  >
+                                    <span aria-hidden="true">{item.done ? "✓" : "•"}</span>
+                                    {item.label}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </span>
                           <span style={jobListAction}>
                             {translate("workCenterJobDetails", activeLanguage)}
@@ -19638,6 +19935,129 @@ const jobPersistentContextAction = {
 
 const jobDynamicFocusArea = {
   scrollMarginTop: "calc(env(safe-area-inset-top, 0px) + 16px)",
+};
+
+const workCenterCanonicalLifecycleSection = {
+  display: "grid",
+  gap: "12px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(15, 23, 42, 0.12)",
+  background: "#ffffff",
+  color: "#0f172a",
+  minWidth: 0,
+};
+
+const workCenterCanonicalLifecycleHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "10px",
+  flexWrap: "wrap",
+  minWidth: 0,
+};
+
+const workCenterCanonicalLifecycleTitle = {
+  margin: "4px 0 0",
+  color: "#0f172a",
+  fontSize: "16px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+};
+
+const workCenterCanonicalLifecycleBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: "999px",
+  border: "1px solid rgba(31, 77, 52, 0.18)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  padding: "6px 10px",
+  fontSize: "11px",
+  fontWeight: "950",
+  whiteSpace: "nowrap",
+};
+
+const workCenterCanonicalLifecycleNotice = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "800",
+};
+
+const workCenterCanonicalLifecycleGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))",
+  gap: "10px",
+  minWidth: 0,
+};
+
+const workCenterCanonicalLifecycleCard = {
+  display: "grid",
+  gap: "7px",
+  alignContent: "start",
+  padding: "12px",
+  borderRadius: "14px",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  minWidth: 0,
+};
+
+const workCenterCanonicalLifecycleLabel = {
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "950",
+};
+
+const workCenterCanonicalLifecycleValue = {
+  color: "#0f172a",
+  fontSize: "13px",
+  lineHeight: 1.35,
+  fontWeight: "850",
+  overflowWrap: "anywhere",
+};
+
+const workCenterCanonicalConcernText = {
+  ...workCenterCanonicalLifecycleValue,
+  fontWeight: "900",
+};
+
+const workCenterCanonicalClarificationList = {
+  display: "grid",
+  gap: "6px",
+  margin: "4px 0 0",
+  padding: "0 0 0 18px",
+  color: "#475569",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "800",
+  overflowWrap: "anywhere",
+};
+
+const workCenterCanonicalParticipantList = {
+  display: "grid",
+  gap: "7px",
+  margin: 0,
+  padding: 0,
+  listStyle: "none",
+  minWidth: 0,
+};
+
+const workCenterCanonicalParticipantItem = {
+  display: "grid",
+  gap: "3px",
+  color: "#0f172a",
+  fontSize: "13px",
+  lineHeight: 1.3,
+  fontWeight: "900",
+  overflowWrap: "anywhere",
+};
+
+const workCenterCanonicalParticipantRoles = {
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "800",
 };
 
 const jobWorkflowServiceSummary = {

@@ -46,7 +46,10 @@ export function normalizeRequestLifecycleFoundation(payload = {}) {
     contractVersion,
     legacy: lifecycle.legacy === true || contractVersion !== 2,
     job: lifecycle.job && typeof lifecycle.job === "object"
-      ? { id: String(lifecycle.job.id || "") }
+      ? {
+          id: String(lifecycle.job.id || ""),
+          requestRelationshipId: lifecycle.job.requestRelationshipId,
+        }
       : null,
     reportedConcerns,
     participants,
