@@ -41,10 +41,10 @@ const publicProjectCardImageStyle = sourceBetween(
   "const portfolioCoverImage = {",
   "const portfolioPhotoBadge = {"
 );
-const ownerShowcasedProjectsBlock = sourceBetween(
+const ownerPortfolioProjectsBlock = sourceBetween(
   projectGallerySource,
-  "<h2 style={galleryTitle}>{t(\"showcasedProjects\")}</h2>",
-  "<section style={proofGrid}>"
+  'id="portfolio-projects-heading"',
+  "<aside style={reviewSeparationCard}>"
 );
 const ownerProjectCardMediaFrame = sourceBetween(
   projectGallerySource,
@@ -79,10 +79,10 @@ test("public lower Business Portfolio cards use bounded aspect-ratio media", () 
   assert.match(publicProjectCardImageStyle, /objectPosition: "center"/);
 });
 
-test("owner Showcased Projects cards use the same bounded media contract", () => {
-  assert.match(ownerShowcasedProjectsBlock, /const coverImage = projectImages\[0\];/);
-  assert.match(ownerShowcasedProjectsBlock, /style=\{coverImageWrap\}/);
-  assert.match(ownerShowcasedProjectsBlock, /style=\{coverImageStyle\}/);
+test("owner Portfolio project cards use the same bounded media contract", () => {
+  assert.match(ownerPortfolioProjectsBlock, /const coverImage = projectImages\[0\];/);
+  assert.match(ownerPortfolioProjectsBlock, /style=\{coverImageWrap\}/);
+  assert.match(ownerPortfolioProjectsBlock, /style=\{coverImageStyle\}/);
   assert.match(ownerProjectCardMediaFrame, /width: "min\(320px, calc\(100% - 36px\)\)"/);
   assert.match(ownerProjectCardMediaFrame, /aspectRatio: "16 \/ 9"/);
   assert.match(ownerProjectCardMediaFrame, /overflow: "hidden"/);
@@ -103,14 +103,15 @@ test("project details and actions remain directly attached to project card media
   assert.match(publicProjectGalleryBlock, /t\("viewPortfolioWork"\)/);
 
   assert.match(
-    ownerShowcasedProjectsBlock,
+    ownerPortfolioProjectsBlock,
     /style=\{coverImageStyle\}[\s\S]*<div style=\{projectContent\}>/
   );
-  assert.match(ownerShowcasedProjectsBlock, /style=\{photoCountBadge\}/);
-  assert.match(ownerShowcasedProjectsBlock, /openPortfolioProjectEditor\(project\)/);
-  assert.match(ownerShowcasedProjectsBlock, /toggleProjectSpotlight\(project.id\)/);
-  assert.match(ownerShowcasedProjectsBlock, /t\("editPortfolio"\)/);
-  assert.match(ownerShowcasedProjectsBlock, /t\("useInSpotlight"\)/);
+  assert.match(ownerPortfolioProjectsBlock, /style=\{photoCountBadge\}/);
+  assert.match(ownerPortfolioProjectsBlock, /openPortfolioProjectEditor\(project\)/);
+  assert.match(ownerPortfolioProjectsBlock, /setFeaturedProject\(project, true\)/);
+  assert.match(ownerPortfolioProjectsBlock, /isPortfolioActionAllowed\(project, "canEdit"\)/);
+  assert.match(ownerPortfolioProjectsBlock, /Feature Project/);
+  assert.doesNotMatch(ownerPortfolioProjectsBlock, /Spotlight/);
 });
 
 test("project card media correction does not introduce portfolio authority", () => {
@@ -118,7 +119,7 @@ test("project card media correction does not introduce portfolio authority", () 
     publicProjectGalleryBlock,
     publicProjectCardMediaFrame,
     publicProjectCardImageStyle,
-    ownerShowcasedProjectsBlock,
+    ownerPortfolioProjectsBlock,
     ownerProjectCardMediaFrame,
     ownerProjectCardImageStyle,
   ]) {

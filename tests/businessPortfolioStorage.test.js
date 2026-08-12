@@ -319,9 +319,8 @@ test("reads shared portfolio buckets with source labels for Spotlight", () => {
   ]);
 });
 
-test("portfolio public surfaces use the shared proof projection", () => {
+test("public portfolio surfaces use the shared proof projection while the owner workspace uses canonical authority", () => {
   const files = [
-    "src/pages/ProjectGallery.jsx",
     "src/pages/ContractorDetails.jsx",
     "src/pages/Home.jsx",
   ];
@@ -330,4 +329,9 @@ test("portfolio public surfaces use the shared proof projection", () => {
     const source = fs.readFileSync(file, "utf8");
     assert.match(source, /getBusinessPortfolioProofProjection/);
   });
+
+  const ownerSource = fs.readFileSync("src/pages/ProjectGallery.jsx", "utf8");
+  assert.doesNotMatch(ownerSource, /getBusinessPortfolioProofProjection/);
+  assert.match(ownerSource, /getCanonicalPortfolioCounts/);
+  assert.match(ownerSource, /\/my-contractor-projects/);
 });

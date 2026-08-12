@@ -20,8 +20,10 @@ test("Project Gallery does not publish or cache projects through localStorage", 
   assert.doesNotMatch(gallery, /persistBusinessPortfolioProjects/);
   assert.doesNotMatch(gallery, /persistPortfolioForSpotlight/);
   assert.doesNotMatch(gallery, /persistBusinessProfileShareRecord/);
-  assert.match(gallery, /function toggleProjectSpotlight\(\) \{\s*setPhotoError/);
-  assert.match(gallery, /function viewPublicPortfolio\(\) \{\s*setPhotoError/);
+  assert.doesNotMatch(gallery, /toggleProjectSpotlight|viewPublicPortfolio/);
+  assert.match(gallery, /isPortfolioActionAllowed/);
+  assert.match(gallery, /\/my-contractor-projects/);
+  assert.doesNotMatch(gallery, /readBusinessPortfolioStorage|readAllBusinessPortfolioItems/);
 });
 
 test("Business Profile proof does not read browser-local portfolio records", () => {

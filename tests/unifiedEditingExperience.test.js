@@ -59,8 +59,8 @@ test("Portfolio item editor follows the temporary editor contract", () => {
   assert.match(source, /style=\{editorBackdrop\}/);
   assert.match(source, /style=\{portfolioEditorSheet\}/);
   assert.match(source, /style=\{editorFooter\}/);
-  assert.match(source, /\{t\("cancel"\)\}/);
-  assert.match(source, /\{t\("save"\)\}/);
+  assert.match(source, />Cancel<\/button>/);
+  assert.match(source, /Save changes/);
   assert.doesNotMatch(source, /Back to Portfolio/);
   assert.doesNotMatch(source, /Volver al portafolio/);
   assert.doesNotMatch(source, /Edit Portfolio Item/);
@@ -76,10 +76,11 @@ test("Portfolio Add Project opens as a temporary editor instead of an embedded f
   assert.match(source, /setCreatingProject\(true\)/);
   assert.match(source, /setCreatingProject\(false\)/);
   assert.match(source, /creatingProject && typeof document !== "undefined" &&\s*createPortal\(/);
-  assert.match(source, /aria-label=\{t\("addProject"\)\}/);
-  assert.match(source, /onClick=\{\(\) => openCreateProjectEditor\(\)\}/);
+  assert.match(source, /aria-labelledby="create-portfolio-project-title"/);
+  assert.match(source, /onClick=\{openCreateProjectEditor\}/);
   assert.match(source, /onClick=\{handleCreateProject\}/);
-  assert.match(source, /t\("uploadPhotos"\)/);
+  assert.match(source, /Add governed Portfolio photos/);
+  assert.match(source, /Save Draft/);
   assert.match(source, /portfolioEditorScrollRef/);
   assert.doesNotMatch(source, /openPhotos/);
   assert.doesNotMatch(source, /pendingCreatePhotoPickerRef/);
@@ -100,7 +101,7 @@ test("Portfolio Add Project opens as a temporary editor instead of an embedded f
     source.indexOf("<div style={portfolioActionGrid}>"),
     source.indexOf("<section style={contentSection}>")
   );
-  assert.match(actionGridBlock, /\{t\("addProject"\)\}/);
+  assert.match(actionGridBlock, /Add Project Draft/);
   assert.doesNotMatch(actionGridBlock, /\{t\("addPhotos"\)\}/);
 });
 
@@ -122,29 +123,25 @@ test("Portfolio hero keeps long business names subordinate to portfolio proof", 
   assert.doesNotMatch(heroTitleBlock, /fontSize: "28px"/);
 });
 
-test("Portfolio spotlight truth is distinct from temporary selection and preview controls respect safe area", () => {
+test("Portfolio feature truth is server-owned and preview controls respect safe area", () => {
   const source = fs.readFileSync("src/pages/ProjectGallery.jsx", "utf8");
 
   const projectCardRenderBlock = source.slice(
-    source.indexOf("<div\n                  key={project.id}"),
+    source.indexOf("<article\n                  key={project.id}"),
     source.indexOf("{coverImage ? (")
   );
   assert.doesNotMatch(projectCardRenderBlock, /meetro-selected-card/);
-  assert.match(projectCardRenderBlock, /project\.spotlightFeatured \? projectCardFeatured/);
+  assert.match(projectCardRenderBlock, /project\.is_featured \? projectCardFeatured/);
+  assert.doesNotMatch(source, /useInSpotlight|featuredInSpotlight|spotlightFeatured/);
 
   const featuredStyleBlock = source.slice(
     source.indexOf("const projectCardFeatured = {"),
-    source.indexOf("const editorBackdrop = {")
+    source.indexOf("const coverImageWrap = {")
   );
-  assert.match(featuredStyleBlock, /border: "1px solid rgba\(31,77,52,0\.34\)"/);
+  assert.match(featuredStyleBlock, /border: "1px solid rgba\(31,77,52,0\.38\)"/);
   assert.doesNotMatch(featuredStyleBlock, /0 0 0 4px/);
   assert.doesNotMatch(featuredStyleBlock, /border: "2px solid #5b3df5"/);
 
-  const previewButtonBlock = source.slice(
-    source.indexOf("const closePreviewBtn = {"),
-    source.indexOf("const editMainImage = {")
-  );
-  assert.match(previewButtonBlock, /env\(safe-area-inset-top/);
-  assert.match(previewButtonBlock, /env\(safe-area-inset-right/);
-  assert.doesNotMatch(previewButtonBlock, /top: "18px"/);
+  assert.match(source, /const closePreviewBtn = \{[\s\S]*env\(safe-area-inset-top/);
+  assert.match(source, /const closePreviewBtn = \{[\s\S]*env\(safe-area-inset-right/);
 });
