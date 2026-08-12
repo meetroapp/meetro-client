@@ -640,9 +640,7 @@ function ContractorDetails({ setPage, currentPage }) {
         ) : (
           <div className="meetro-visual-empty-state" style={mediaPlaceholder}>
             <span style={mediaPlaceholderIcon}>▻</span>
-            <strong>
-              {isSpanish ? "Medios próximamente" : "Media coming soon"}
-            </strong>
+            <strong>{t("noProjectPhotos")}</strong>
             <p>
               {isSpanish
                 ? "Fotos o videos del portafolio aparecerán aquí cuando estén disponibles."
@@ -703,10 +701,16 @@ function ContractorDetails({ setPage, currentPage }) {
         className="meetro-visual-surface"
         style={cardStyle}
       >
-        <h2 style={sectionTitle}>{t("projectGallery")}</h2>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Portafolio del negocio" : "Business Portfolio"}
+        </h2>
 
         {publicPortfolioProjects.length === 0 && (
-          <p style={mutedText}>{t("noProjectPhotos")}</p>
+          <p style={mutedText}>
+            {isSpanish
+              ? "Este negocio aún no ha publicado proyectos en su portafolio."
+              : "This business has not published any Portfolio projects yet."}
+          </p>
         )}
 
         {publicPortfolioProjects.length > 0 && (

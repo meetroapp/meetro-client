@@ -21,9 +21,6 @@ import {
   REQUEST_COLLECTION_STATUS,
   resolveHomeownerRequestCollection,
 } from "../utils/requestLifecycleState";
-import {
-  getBusinessPortfolioProjectImages,
-} from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
 import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
@@ -69,6 +66,11 @@ import {
   getSpotlightRequestContexts,
   isNoContextSpotlightSafeBusiness,
 } from "../utils/localSpotlightVisibility";
+import { fetchCanonicalSpotlightBusinesses } from "../utils/spotlightPortfolioDirectory";
+import {
+  getSpotlightBusinessIdentity,
+  getSpotlightPresentationIdentity,
+} from "../utils/spotlightSlideshowState";
 
 const HOMEOWNER_CONVERSATION_LOAD_STATUS = Object.freeze({
   LOADING: "loading",
@@ -194,7 +196,8 @@ function Home({ setPage }) {
   const [myProjectsTab, setMyProjectsTab] = useState("active");
   const [detailsRequest, setDetailsRequest] = useState(null);
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
-  const [spotlightPortfolioRefresh, setSpotlightPortfolioRefresh] = useState(0);
+  const [canonicalSpotlightBusinesses, setCanonicalSpotlightBusinesses] =
+    useState(null);
   const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
   const [backendRequestStatus, setBackendRequestStatus] = useState(
     REQUEST_COLLECTION_STATUS.LOADING
@@ -656,12 +659,12 @@ function Home({ setPage }) {
     }
   }
 
-  const spotlightBusinesses = getLocalSpotlightBusinesses();
+  const spotlightBusinesses = canonicalSpotlightBusinesses || [];
   const spotlightContexts = getSpotlightRequestContexts([], []);
   const matchedSpotlightBusinesses = getEligibleSpotlightBusinesses(
     spotlightBusinesses,
     spotlightContexts
-  );
+  ).filter((business) => getSpotlightBusinessIdentity(business?.id));
   const spotlightDebugSummary = buildLocalServicesSpotlightDebugSummary(
     spotlightBusinesses,
     spotlightContexts,
@@ -672,19 +675,25 @@ function Home({ setPage }) {
   useEffect(() => {
     if (!showSpotlightDebug) return;
     console.info("[Meetro Spotlight Debug]", spotlightDebugSummary);
-  }, [showSpotlightDebug, spotlightDebugSummary.debugKey]);
+  }, [showSpotlightDebug, spotlightDebugSummary]);
 
   useEffect(() => {
-    hydrateSpotlightPortfolioProjects(matchedSpotlightBusinesses, () =>
-      setSpotlightPortfolioRefresh((currentValue) => currentValue + 1)
-    );
-  }, [
-    matchedSpotlightBusinesses
-      .map((business) => getSpotlightContractorId(business))
-      .filter(Boolean)
-      .join("|"),
-    spotlightPortfolioRefresh,
-  ]);
+    const controller = new AbortController();
+    let active = true;
+
+    fetchCanonicalSpotlightBusinesses({
+      apiUrl: API_URL,
+      signal: controller.signal,
+    }).then((result) => {
+      if (!active || !result) return;
+      setCanonicalSpotlightBusinesses(result.records || []);
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
 
   const activeEmergencyInfo = getHomeActiveEmergencyInfo(language);
 
@@ -1059,7 +1068,7 @@ function Home({ setPage }) {
           <div style={spotlightRow} aria-label={t("homeLocalServicesSpotlight", language)}>
             {matchedSpotlightBusinesses.map((business) => (
               <SpotlightCard
-                key={business.id || business.name || business.business_name}
+                key={getSpotlightBusinessIdentity(business.id)}
                 business={business}
                 language={language}
                 onViewProfile={() => {
@@ -1072,6 +1081,10 @@ function Home({ setPage }) {
                 }}
               />
             ))}
+          </div>
+        ) : canonicalSpotlightBusinesses === null ? (
+          <div style={spotlightEmptyCard} role="status">
+            {t("communityDirectoryLoadingTitle", language)}
           </div>
         ) : (
           <div style={spotlightEmptyCard}>
@@ -1321,100 +1334,6 @@ function getHomeActiveEmergencyInfo(language = "en") {
       : t("viewEmergencyProgress", language),
     isCompletedReview,
   };
-}
-
-function getLocalSpotlightBusinesses() {
-  return [];
-}
-
-function getSpotlightContractorId(business = {}) {
-  return String(
-    business.contractorId ||
-      business.contractor_id ||
-      business.businessId ||
-      business.business_id ||
-      business.id ||
-      ""
-  ).trim();
-}
-
-function hasSpotlightProjectPhotos(business = {}) {
-  const projectBuckets = [
-    ...(Array.isArray(business.businessPortfolio) ? business.businessPortfolio : []),
-    ...(Array.isArray(business.business_portfolio) ? business.business_portfolio : []),
-    ...(Array.isArray(business.projects) ? business.projects : []),
-    ...(Array.isArray(business.projectGallery) ? business.projectGallery : []),
-    ...(Array.isArray(business.project_gallery) ? business.project_gallery : []),
-  ];
-
-  return projectBuckets.some(
-    (project) => getBusinessPortfolioProjectImages(project).length > 0
-  );
-}
-
-function getSpotlightPortfolioFetchCache() {
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem("meetroSpotlightPortfolioFetchCache") || "{}"
-    );
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function setSpotlightPortfolioFetchCache(cache = {}) {
-  try {
-    localStorage.setItem(
-      "meetroSpotlightPortfolioFetchCache",
-      JSON.stringify(cache)
-    );
-  } catch {}
-}
-
-async function hydrateSpotlightPortfolioProjects(
-  businesses = [],
-  onPortfolioHydrated = () => {}
-) {
-  if (!Array.isArray(businesses) || businesses.length === 0) return;
-
-  const cache = getSpotlightPortfolioFetchCache();
-  const now = Date.now();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const businessesToFetch = businesses.filter((business) => {
-    const contractorId = getSpotlightContractorId(business);
-    if (!contractorId || hasSpotlightProjectPhotos(business)) return false;
-
-    const cachedAt = Number(cache[contractorId] || 0);
-    return !cachedAt || now - cachedAt > oneDayMs;
-  });
-
-  if (businessesToFetch.length === 0) return;
-
-  await Promise.all(
-    businessesToFetch.map(async (business) => {
-      const contractorId = getSpotlightContractorId(business);
-      cache[contractorId] = now;
-      setSpotlightPortfolioFetchCache(cache);
-
-      try {
-        const response = await fetch(
-          `${API_URL}/contractor-projects/${encodeURIComponent(contractorId)}`
-        );
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const projects = Array.isArray(data?.projects) ? data.projects : [];
-        if (projects.length === 0) return;
-
-        if (projects.length > 0) onPortfolioHydrated();
-      } catch (error) {
-        if (localStorage.getItem("meetroSpotlightDebug") === "true") {
-          console.warn("[Meetro Spotlight Portfolio Fetch]", error);
-        }
-      }
-    })
-  );
 }
 
 function buildLocalServicesSpotlightDebugSummary(
@@ -1670,8 +1589,14 @@ function SpotlightCard({ business, language, onViewProfile }) {
     identity.description || t("homeSpotlightFallbackDescription", language);
   const portfolioProof = getBusinessPortfolioProofProjection(business, {
     translate: (key) => t(key, language),
+    reviews: [],
+    useStorageFallback: false,
   });
   const featuredProject = portfolioProof.featuredProject;
+  const presentationId = getSpotlightPresentationIdentity(
+    business.id,
+    featuredProject?.id
+  );
   const featuredProjectTitle =
     featuredProject?.title ||
     featuredProject?.name ||
@@ -1741,6 +1666,8 @@ function SpotlightCard({ business, language, onViewProfile }) {
     <article style={spotlightCard}>
       <div style={spotlightHero}>
         <SpotlightSlideshow
+          key={presentationId}
+          presentationId={presentationId}
           images={mediaUrls}
           alt={storyTitle}
           photoCountLabel={photoCountLabel}
@@ -2818,6 +2745,7 @@ const spotlightRow = {
   maxWidth: "100%",
   minWidth: 0,
   display: "flex",
+  alignItems: "flex-start",
   gap: "14px",
   overflowX: "auto",
   overflowY: "hidden",
@@ -2935,6 +2863,7 @@ const spotlightCard = {
 
 const spotlightHero = {
   position: "relative",
+  height: "320px",
   minHeight: "320px",
   overflow: "hidden",
   background: "#111827",

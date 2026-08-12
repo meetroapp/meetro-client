@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  getNextSpotlightSlideshowIndex,
-  getPreviousSpotlightSlideshowIndex,
+  createSpotlightSlideshowPosition,
+  getSpotlightSlideshowPositionIndex,
   getSpotlightSlideshowState,
+  moveSpotlightSlideshowPosition,
   normalizeSpotlightSlideshowImages,
 } from "../utils/spotlightSlideshowState";
 
 function SpotlightSlideshow({
+  presentationId = "",
   images = [],
-  intervalMs = 4000,
   alt = "",
   className = "",
   photoCountLabel = "",
@@ -20,42 +21,43 @@ function SpotlightSlideshow({
     () => normalizeSpotlightSlideshowImages(images),
     [images]
   );
-  const imageKey = normalizedImages.join("|");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const imageKey = JSON.stringify(normalizedImages);
+  const [position, setPosition] = useState(() =>
+    createSpotlightSlideshowPosition({ presentationId, imageKey })
+  );
+  const activeIndex = getSpotlightSlideshowPositionIndex(position, {
+    presentationId,
+    imageKey,
+    imageCount: normalizedImages.length,
+  });
   const slideshowState = getSpotlightSlideshowState(
     normalizedImages,
     activeIndex
   );
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [imageKey]);
-
-  useEffect(() => {
-    if (normalizedImages.length < 2) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      setActiveIndex((currentIndex) =>
-        getNextSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
-      );
-    }, intervalMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [imageKey, intervalMs, normalizedImages.length]);
-
   function showPrevious(event) {
     event.preventDefault();
     event.stopPropagation();
-    setActiveIndex((currentIndex) =>
-      getPreviousSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
+    setPosition((currentPosition) =>
+      moveSpotlightSlideshowPosition(currentPosition, {
+        presentationId,
+        imageKey,
+        imageCount: normalizedImages.length,
+        direction: "previous",
+      })
     );
   }
 
   function showNext(event) {
     event.preventDefault();
     event.stopPropagation();
-    setActiveIndex((currentIndex) =>
-      getNextSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
+    setPosition((currentPosition) =>
+      moveSpotlightSlideshowPosition(currentPosition, {
+        presentationId,
+        imageKey,
+        imageCount: normalizedImages.length,
+        direction: "next",
+      })
     );
   }
 

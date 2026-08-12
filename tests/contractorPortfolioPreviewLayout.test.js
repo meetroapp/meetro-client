@@ -100,7 +100,7 @@ test("view more photos remains centered and targets the existing gallery section
   assert.match(previewRenderBlock, /View more photos/);
   assert.match(
     contractorDetailsSource,
-    /id="contractor-details-project-gallery"[\s\S]*<h2 style=\{sectionTitle\}>\{t\("projectGallery"\)\}<\/h2>/
+    /id="contractor-details-project-gallery"[\s\S]*Business Portfolio/
   );
   assert.match(contractorDetailsSource, /justifySelf: "center"/);
 });

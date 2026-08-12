@@ -8,10 +8,15 @@ function read(path) {
 
 test("Spotlight does not hydrate public media from browser-local portfolio state", () => {
   const home = read("src/pages/Home.jsx");
+  const canonicalDirectory = read("src/utils/spotlightPortfolioDirectory.js");
 
-  assert.match(home, /function getLocalSpotlightBusinesses\(\) \{\s*return \[\];\s*\}/);
+  assert.match(home, /fetchCanonicalSpotlightBusinesses/);
+  assert.match(canonicalDirectory, /fetchDiscoverDirectory/);
+  assert.match(canonicalDirectory, /\/contractor-projects\/\$\{encodeURIComponent\(/);
   assert.doesNotMatch(home, /readAllBusinessPortfolioItems/);
   assert.doesNotMatch(home, /persistBusinessPortfolioProjects/);
+  assert.doesNotMatch(home, /meetroSpotlightPortfolioFetchCache/);
+  assert.doesNotMatch(canonicalDirectory, /localStorage|sessionStorage|my-contractor-projects/);
 });
 
 test("Project Gallery does not publish or cache projects through localStorage", () => {
