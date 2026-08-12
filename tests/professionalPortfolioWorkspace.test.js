@@ -36,7 +36,7 @@ test("all lifecycle and feature controls are gated by server action booleans", (
   assert.match(authority, /project\?\.actions\?\.\[action\] === true/);
 });
 
-test("new projects are saved as private Drafts without immediate-public claims", () => {
+test("Add Project saves a private Draft without immediate-public claims", () => {
   const createBlock = sourceBetween(
     workspace,
     "async function handleCreateProject()",
@@ -47,7 +47,9 @@ test("new projects are saved as private Drafts without immediate-public claims",
   assert.match(createBlock, /publication_state === PORTFOLIO_PUBLICATION_STATE\.DRAFT/);
   assert.match(createBlock, /It is not public until you review and publish it/);
   assert.doesNotMatch(createBlock, /PUBLISHED|public immediately/);
-  assert.match(workspace, /Saving creates a private Draft\. It does not publish the project\./);
+  assert.match(workspace, /Your new project starts as a private Draft\. Only you can see it until you publish it\./);
+  assert.match(workspace, />Add Project<|\/> Add Project/);
+  assert.doesNotMatch(workspace, /Add Project Draft|Add first Draft/);
 });
 
 test("existing project mutations carry expected version and conflicts reload canonical truth", () => {
@@ -74,7 +76,7 @@ test("publication and published edits submit fresh certified privacy confirmatio
     workspace,
     /setEditDescription\(event\.target\.value\);\s*setPublishedEditPrivacyConfirmed\(false\)/
   );
-  assert.match(workspace, /Published changes require fresh privacy confirmation/);
+  assert.match(workspace, /confirm the privacy checklist again before saving changes to a published project/);
   for (const requiredCopy of [
     "customer identity",
     "exact customer or property address",
@@ -87,7 +89,7 @@ test("publication and published edits submit fresh certified privacy confirmatio
     assert.match(workspace, new RegExp(requiredCopy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(workspace, /disabled=\{busy \|\| !privacyConfirmed\}/);
-  assert.match(workspace, /Success is shown only after server confirmation/);
+  assert.match(workspace, /You will see it in your Portfolio as soon as publishing is complete/);
 });
 
 test("archive is a preserving lifecycle command and no permanent delete exists", () => {
@@ -97,7 +99,7 @@ test("archive is a preserving lifecycle command and no permanent delete exists",
     "async function setFeaturedProject(project, featured)"
   );
   assert.match(archiveBlock, /\/archive/);
-  assert.match(archiveBlock, /preserving the project record and its media/);
+  assert.match(archiveBlock, /keeping the project and its photos in your records/);
   assert.doesNotMatch(archiveBlock, /cleanupBusinessPortfolioMedia|delete|DELETE/);
   assert.doesNotMatch(workspace, /Delete Project|Permanently Delete/);
 });
@@ -122,7 +124,7 @@ test("project order persists through the server with accessible non-drag control
   assert.match(reorderBlock, /PORTFOLIO_PROJECTS_REORDERED/);
   assert.match(workspace, /aria-label=\{`Move \$\{project\.title \|\| "project"\} earlier`\}/);
   assert.match(workspace, /aria-label=\{`Move \$\{project\.title \|\| "project"\} later`\}/);
-  assert.match(workspace, /Project order saved and reconciled with the server/);
+  assert.match(workspace, /Project order saved\./);
   assert.doesNotMatch(reorderBlock, /setProjects\(/);
 });
 
@@ -139,15 +141,21 @@ test("governed media rules and canonical image order remain intact", () => {
 
 test("business reviews and completed-job promotion remain separate", () => {
   assert.match(workspace, /Business reviews stay business-level/);
-  assert.match(workspace, /Reviews are not repeated as project ratings/);
+  assert.match(workspace, /They are not copied onto individual projects as/);
+  assert.match(workspace, /project ratings/);
   assert.doesNotMatch(workspace, /mostRecentReview|reviewStorage|projectRating|project_rating/);
   assert.doesNotMatch(workspace, /addPhotosFromCompletedJobs|completed job/i);
 });
 
 test("workspace and dialogs preserve responsive and accessible containment", () => {
+  const presentation = readFileSync(
+    "src/components/PortfolioProjectPresentation.jsx",
+    "utf8"
+  );
   assert.match(workspace, /className="app-page meetro-responsive-page"/);
-  assert.match(workspace, /maxWidth: "1120px"/);
+  assert.match(workspace, /maxWidth: "1180px"/);
   assert.match(workspace, /overflowX: "hidden"/);
+  assert.match(presentation, /gridTemplateColumns: "repeat\(auto-fill, minmax\(min\(100%, 390px\), 1fr\)\)"/);
   assert.match(workspace, /width: "min\(100%, 680px\)"/);
   assert.match(workspace, /maxWidth: "100%"/);
   assert.match(workspace, /aria-modal="true"/);
@@ -156,4 +164,68 @@ test("workspace and dialogs preserve responsive and accessible containment", () 
   assert.match(workspace, /aria-labelledby="publish-portfolio-project-title"/);
   assert.match(workspace, /aria-live="polite"/);
   assert.match(workspace, /minHeight: "44px"/);
+});
+
+test("owner-facing Portfolio language is natural and free of engineering presentation copy", () => {
+  for (const expectedCopy of [
+    "Proof of Work",
+    "Business Portfolio",
+    "Your Portfolio",
+    "See how customers experience the proof of work",
+    "This is the proof of work customers can currently see",
+    "Manage private work, published proof, photos, and project order",
+  ]) {
+    assert.match(workspace, new RegExp(expectedCopy));
+  }
+
+  for (const removedCopy of [
+    "Manage canonical project evidence",
+    "Canonical owner workspace",
+    "Canonical Portfolio summary",
+    "Portfolio server",
+    "canonical owner authority",
+    "No canonical projects yet",
+    "Add governed Portfolio photos",
+    "governed media before the server can authorize publication",
+  ]) {
+    assert.doesNotMatch(workspace, new RegExp(removedCopy));
+  }
+});
+
+test("owner cards are compact, opaque, two-column-ready, and media-led", () => {
+  const presentation = readFileSync(
+    "src/components/PortfolioProjectPresentation.jsx",
+    "utf8"
+  );
+  const projectGridStyle = sourceBetween(
+    presentation,
+    "const projectGrid = {",
+    "const projectCard = {"
+  );
+  const projectCardStyle = sourceBetween(
+    presentation,
+    "const projectCard = {",
+    "const cardMediaGroup ="
+  );
+  const descriptionStyle = sourceBetween(
+    presentation,
+    "const projectDescription = {",
+    "const projectTrustContext ="
+  );
+
+  assert.match(projectGridStyle, /display: "grid"/);
+  assert.match(projectGridStyle, /repeat\(auto-fill, minmax\(min\(100%, 390px\), 1fr\)\)/);
+  assert.match(projectGridStyle, /gap: "18px"/);
+  assert.match(projectCardStyle, /rgba\(255,253,248,0\.99\)/);
+  assert.doesNotMatch(projectCardStyle, /backdropFilter/);
+  assert.match(descriptionStyle, /WebkitLineClamp: 3/);
+  assert.match(descriptionStyle, /overflow: "hidden"/);
+  assert.match(workspace, /const statLabel = \{[^}]*whiteSpace: "nowrap"/);
+});
+
+test("Liquid Glass is limited to subtle supporting surfaces", () => {
+  assert.match(workspace, /backdropFilter: "blur\(8px\)"/);
+  assert.match(workspace, /backdropFilter: "blur\(12px\)"/);
+  assert.doesNotMatch(workspace, /backdropFilter: "blur\((?:2[0-9]|[3-9][0-9])px\)"/);
+  assert.doesNotMatch(workspace, /parallax|@keyframes|animation:/i);
 });

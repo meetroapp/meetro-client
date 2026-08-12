@@ -22,6 +22,10 @@ const projectGallerySource = readFileSync(
   new URL("../src/pages/ProjectGallery.jsx", import.meta.url),
   "utf8"
 );
+const portfolioPresentationSource = readFileSync(
+  new URL("../src/components/PortfolioProjectPresentation.jsx", import.meta.url),
+  "utf8"
+);
 const contractorProfileSource = readFileSync(
   new URL("../src/pages/ContractorProfile.jsx", import.meta.url),
   "utf8"
@@ -166,12 +170,11 @@ test("tablet and phone containment remain governed by existing mobile rules", ()
 });
 
 test("portfolio project media rules stay bounded and are not reverted", () => {
-  assert.match(contractorDetailsSource, /width: "min\(320px, calc\(100% - 32px\)\)"/);
-  assert.match(contractorDetailsSource, /aspectRatio: "16 \/ 9"/);
-  assert.match(projectGallerySource, /width: "min\(320px, calc\(100% - 36px\)\)"/);
-  assert.match(projectGallerySource, /aspectRatio: "16 \/ 9"/);
-  assert.doesNotMatch(contractorDetailsSource, /const portfolioCoverWrap = \{[\s\S]*height: "180px"/);
-  assert.doesNotMatch(projectGallerySource, /const coverImageWrap = \{[\s\S]*height: "250px"/);
+  assert.match(contractorDetailsSource, /PortfolioProjectCard/);
+  assert.match(projectGallerySource, /PortfolioProjectCard/);
+  assert.match(portfolioPresentationSource, /width: "100%"/);
+  assert.match(portfolioPresentationSource, /aspectRatio: "16 \/ 9"/);
+  assert.doesNotMatch(portfolioPresentationSource, /const cardMediaFrame = \{[\s\S]*height: "(?:180|250)px"/);
 });
 
 test("workspace width governance does not add state, route, or viewport polling authority", () => {

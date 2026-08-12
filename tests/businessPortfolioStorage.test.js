@@ -43,6 +43,22 @@ test("normalizes Business Portfolio project images from image_urls", () => {
   );
 });
 
+test("owner presentation preserves canonical portfolio_media order before compatibility fields", () => {
+  assert.deepEqual(
+    getBusinessPortfolioProjectImages({
+      portfolio_media: [
+        { secure_url: "https://example.com/canonical-1.jpg", display_order: 0 },
+        { secure_url: "https://example.com/canonical-2.jpg", display_order: 1 },
+      ],
+      image_urls: ["https://example.com/stale-compatibility.jpg"],
+    }),
+    [
+      "https://example.com/canonical-1.jpg",
+      "https://example.com/canonical-2.jpg",
+    ]
+  );
+});
+
 test("normalizes portfolio projects with contractor identity", () => {
   const projects = normalizeBusinessPortfolioProjects(
     {
@@ -319,16 +335,15 @@ test("reads shared portfolio buckets with source labels for Spotlight", () => {
   ]);
 });
 
-test("public portfolio surfaces use the shared proof projection while the owner workspace uses canonical authority", () => {
-  const files = [
-    "src/pages/ContractorDetails.jsx",
-    "src/pages/Home.jsx",
-  ];
+test("Portfolio surfaces separate canonical API presentation from legacy proof projection", () => {
+  const publicSource = fs.readFileSync("src/pages/ContractorDetails.jsx", "utf8");
+  assert.match(publicSource, /`\$\{API_URL\}\/contractor-projects\/\$\{contractorId\}`/);
+  assert.match(publicSource, /setProjects\(apiProjects\)/);
+  assert.match(publicSource, /PortfolioProjectCard/);
+  assert.doesNotMatch(publicSource, /getBusinessPortfolioProofProjection|mergeProjects|localGallery/);
 
-  files.forEach((file) => {
-    const source = fs.readFileSync(file, "utf8");
-    assert.match(source, /getBusinessPortfolioProofProjection/);
-  });
+  const discoverySource = fs.readFileSync("src/pages/Home.jsx", "utf8");
+  assert.match(discoverySource, /getBusinessPortfolioProofProjection/);
 
   const ownerSource = fs.readFileSync("src/pages/ProjectGallery.jsx", "utf8");
   assert.doesNotMatch(ownerSource, /getBusinessPortfolioProofProjection/);

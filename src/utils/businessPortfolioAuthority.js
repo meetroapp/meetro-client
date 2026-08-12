@@ -28,12 +28,12 @@ export function getPortfolioStatePresentation(project = {}, language = "en") {
   const translations = {
     en: {
       legacy: {
-        label: "Legacy review required",
-        detail: "Review this existing project before adopting it as a Draft or archiving it.",
+        label: "Previous Portfolio Project",
+        detail: "Review this older project before moving it to Draft or archiving it.",
       },
       draft: {
         label: "Draft",
-        detail: "Private to your workspace until you explicitly publish it.",
+        detail: "Private — only you can see this project until you publish it.",
       },
       published: {
         label: "Published",
@@ -41,17 +41,17 @@ export function getPortfolioStatePresentation(project = {}, language = "en") {
       },
       archived: {
         label: "Archived",
-        detail: "Removed from public presentation while the project record is preserved.",
+        detail: "No longer shown in your public Portfolio.",
       },
     },
     es: {
       legacy: {
-        label: "Revisión de legado requerida",
-        detail: "Revisa este proyecto existente antes de adoptarlo como borrador o archivarlo.",
+        label: "Proyecto anterior del portafolio",
+        detail: "Revisa este proyecto anterior antes de pasarlo a borrador o archivarlo.",
       },
       draft: {
         label: "Borrador",
-        detail: "Privado en tu espacio hasta que lo publiques de forma explícita.",
+        detail: "Privado: solo tú puedes verlo hasta que lo publiques.",
       },
       published: {
         label: "Publicado",
@@ -59,17 +59,17 @@ export function getPortfolioStatePresentation(project = {}, language = "en") {
       },
       archived: {
         label: "Archivado",
-        detail: "Fuera de la vista pública, con el registro del proyecto preservado.",
+        detail: "Ya no aparece en tu portafolio público.",
       },
     },
     fr: {
       legacy: {
-        label: "Examen de l’ancien projet requis",
-        detail: "Examinez ce projet avant de l’adopter comme brouillon ou de l’archiver.",
+        label: "Projet précédent du portfolio",
+        detail: "Examinez cet ancien projet avant de le passer en brouillon ou de l’archiver.",
       },
       draft: {
         label: "Brouillon",
-        detail: "Privé dans votre espace jusqu’à sa publication explicite.",
+        detail: "Privé : vous seul pouvez le voir jusqu’à sa publication.",
       },
       published: {
         label: "Publié",
@@ -77,17 +77,17 @@ export function getPortfolioStatePresentation(project = {}, language = "en") {
       },
       archived: {
         label: "Archivé",
-        detail: "Retiré de la présentation publique, mais le projet est conservé.",
+        detail: "N’apparaît plus dans votre portfolio public.",
       },
     },
     pt: {
       legacy: {
-        label: "Revisão de legado necessária",
-        detail: "Revise este projeto antes de adotá-lo como rascunho ou arquivá-lo.",
+        label: "Projeto anterior do portfólio",
+        detail: "Revise este projeto antigo antes de movê-lo para rascunho ou arquivá-lo.",
       },
       draft: {
         label: "Rascunho",
-        detail: "Privado no seu espaço até que você o publique explicitamente.",
+        detail: "Privado: somente você pode vê-lo até a publicação.",
       },
       published: {
         label: "Publicado",
@@ -95,7 +95,7 @@ export function getPortfolioStatePresentation(project = {}, language = "en") {
       },
       archived: {
         label: "Arquivado",
-        detail: "Removido da apresentação pública, mantendo o registro do projeto.",
+        detail: "Não aparece mais no seu portfólio público.",
       },
     },
   };

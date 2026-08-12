@@ -3,6 +3,12 @@ import { createPortal } from "react-dom";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
+import {
+  PortfolioProjectCard,
+  PortfolioProjectGrid,
+  PortfolioProjectView,
+} from "../components/PortfolioProjectPresentation";
+import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import {
   createExpectedVersionPayload,
@@ -17,9 +23,6 @@ import {
   PORTFOLIO_PUBLICATION_STATE,
 } from "../utils/businessPortfolioAuthority";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
-import {
-  getBusinessPortfolioProjectImages,
-} from "../utils/businessPortfolioStorage";
 import {
   CAMERA_PERMISSION_MESSAGE,
   openJobPhotoPicker,
@@ -66,6 +69,10 @@ function ProjectGallery({ setPage }) {
   const [loadError, setLoadError] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState(null);
   const [pendingOperation, setPendingOperation] = useState("");
+  const [workspaceMode, setWorkspaceMode] = useState("portfolio");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [projectViewReturnMode, setProjectViewReturnMode] = useState("portfolio");
+  const [businessReviewStats, setBusinessReviewStats] = useState(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -139,6 +146,30 @@ function ProjectGallery({ setPage }) {
     return projectsResult.data.projects;
   }
 
+  async function fetchBusinessReviewStats(contractorId) {
+    if (!contractorId) {
+      setBusinessReviewStats(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/reviews/${contractorId}`, {
+        cache: "no-store",
+      });
+      const data = await response.json();
+      const reviewCount = Number(data?.stats?.total_reviews || 0);
+      const averageRating = Number(data?.stats?.average_rating || 0);
+
+      setBusinessReviewStats(
+        reviewCount > 0 && averageRating > 0
+          ? { reviewCount, averageRating }
+          : null
+      );
+    } catch {
+      setBusinessReviewStats(null);
+    }
+  }
+
   async function fetchMyProfileAndProjects({ initial = false } = {}) {
     if (initial) setLoading(true);
     setLoadError("");
@@ -153,12 +184,16 @@ function ProjectGallery({ setPage }) {
       const nextProfile = profileResult?.data?.profile || null;
       setProfile(nextProfile);
       if (nextProfile) {
-        await fetchCanonicalProjects();
+        await Promise.all([
+          fetchCanonicalProjects(),
+          fetchBusinessReviewStats(nextProfile.id),
+        ]);
       } else {
         setProjects([]);
+        setBusinessReviewStats(null);
       }
     } catch {
-      setLoadError("Your canonical Portfolio could not be loaded. No local copy is being shown.");
+      setLoadError("Your Portfolio could not be loaded. Try again to see your latest projects.");
     } finally {
       if (initial) setLoading(false);
     }
@@ -172,15 +207,15 @@ function ProjectGallery({ setPage }) {
       await fetchCanonicalProjects();
       setWorkspaceNotice({
         type: "warning",
-        text: "This project changed on the server. The latest Portfolio is shown; review it before trying again.",
+        text: "This project was updated elsewhere. The latest version is shown; review it before trying again.",
       });
     } catch {
       setLoadError(
-        "The Portfolio changed, but the canonical owner list could not be reloaded. Retry the canonical load before another action."
+        "Your Portfolio changed, but the project list could not be refreshed. Try again before making another change."
       );
       setWorkspaceNotice({
         type: "error",
-        text: "This project changed on the server, and the latest Portfolio could not be reloaded. Try refreshing before editing.",
+        text: "This project was updated elsewhere, but the latest version could not be loaded. Refresh before editing.",
       });
     }
   }
@@ -214,7 +249,7 @@ function ProjectGallery({ setPage }) {
       ) {
         setWorkspaceNotice({
           type: "error",
-          text: result?.data?.message || "The server did not accept this Portfolio action.",
+          text: result?.data?.message || "This Portfolio change could not be saved.",
         });
         return null;
       }
@@ -224,21 +259,21 @@ function ProjectGallery({ setPage }) {
         setWorkspaceNotice({ type: "success", text: successMessage });
       } catch {
         setLoadError(
-          "The Portfolio changed, but the canonical owner list could not be reloaded. Retry the canonical load before another action."
+          "Your Portfolio changed, but the project list could not be refreshed. Try again before making another change."
         );
         setWorkspaceNotice({
           type: "warning",
-          text: `${successMessage} The server confirmed the action, but the owner list could not be reloaded; refresh before continuing.`,
+          text: `${successMessage} The project list could not be refreshed; reload the page before continuing.`,
         });
       }
       return result.data;
     } catch {
       setLoadError(
-        "The Portfolio action outcome could not be confirmed. Retry the canonical load before another action."
+        "The result of this Portfolio change is unclear. Refresh the page before trying another change."
       );
       setWorkspaceNotice({
         type: "error",
-        text: "The Portfolio action could not be confirmed by the server. No success was recorded.",
+        text: "This Portfolio change could not be confirmed. Refresh the page and try again.",
       });
       return null;
     } finally {
@@ -378,7 +413,7 @@ function ProjectGallery({ setPage }) {
         );
         setWorkspaceNotice({
           type: "error",
-          text: result?.data?.message || "The server did not accept this Portfolio change.",
+          text: result?.data?.message || "This Portfolio change could not be saved.",
         });
         return null;
       }
@@ -391,7 +426,7 @@ function ProjectGallery({ setPage }) {
       );
       setWorkspaceNotice({
         type: "error",
-        text: "The Portfolio change could not be confirmed. No success was recorded.",
+        text: "This Portfolio change could not be confirmed. Refresh the page and try again.",
       });
       return null;
     } finally {
@@ -425,15 +460,15 @@ function ProjectGallery({ setPage }) {
         type: stateIsDraft ? "success" : "warning",
         text: stateIsDraft
           ? "Draft created. It is not public until you review and publish it."
-          : "The project was saved, but its state differs from the expected Draft contract. Review the canonical state before continuing.",
+          : "The project was saved with an unexpected status. Refresh and review it before continuing.",
       });
     } catch {
       setLoadError(
-        "The project was created, but the canonical owner list could not be reloaded. Retry the canonical load before another action."
+        "The project was created, but the project list could not be refreshed. Reload the page before making another change."
       );
       setWorkspaceNotice({
         type: "warning",
-        text: "The server confirmed project creation, but the owner list could not be reloaded. Refresh before continuing.",
+        text: "The project was created, but the project list could not be refreshed. Reload before continuing.",
       });
     }
   }
@@ -442,7 +477,7 @@ function ProjectGallery({ setPage }) {
     if (!editingProject || !isPortfolioActionAllowed(editingProject, "canEdit")) return;
     const expectedVersion = createExpectedVersionPayload(editingProject);
     if (!expectedVersion) {
-      setWorkspaceNotice({ type: "error", text: "The canonical project version is unavailable." });
+      setWorkspaceNotice({ type: "error", text: "This project is out of date. Refresh your Portfolio and try again." });
       return;
     }
     const published =
@@ -450,7 +485,7 @@ function ProjectGallery({ setPage }) {
     if (published && !publishedEditPrivacyConfirmed) {
       setWorkspaceNotice({
         type: "warning",
-        text: "Published changes require a fresh privacy confirmation for the exact updated content.",
+        text: "Review and confirm the privacy checklist again before saving changes to a published project.",
       });
       return;
     }
@@ -478,15 +513,15 @@ function ProjectGallery({ setPage }) {
         type: "success",
         text: published
           ? "Published project updated after fresh privacy confirmation."
-          : "Draft changes saved to the canonical Portfolio.",
+          : "Draft changes saved to your Portfolio.",
       });
     } catch {
       setLoadError(
-        "The project was updated, but the canonical owner list could not be reloaded. Retry the canonical load before another action."
+        "The project was updated, but the project list could not be refreshed. Reload the page before making another change."
       );
       setWorkspaceNotice({
         type: "warning",
-        text: "The server confirmed the edit, but the owner list could not be reloaded. Refresh before continuing.",
+        text: "The project was updated, but the project list could not be refreshed. Reload before continuing.",
       });
     }
   }
@@ -536,7 +571,7 @@ function ProjectGallery({ setPage }) {
       endpoint: `/contractor-projects/${project.id}/legacy-adoption`,
       body: { ...expectedVersion, target_state: PORTFOLIO_PUBLICATION_STATE.DRAFT },
       expectedCode: "PORTFOLIO_LEGACY_ADOPTED_AS_DRAFT",
-      successMessage: "Legacy project adopted as a private Draft. It has not been published.",
+      successMessage: "Previous project moved to Draft. It remains private until you publish it.",
     });
   }
 
@@ -563,7 +598,7 @@ function ProjectGallery({ setPage }) {
         privacy_confirmation: createPortfolioPrivacyConfirmation(),
       },
       expectedCode: "PORTFOLIO_PROJECT_PUBLISHED",
-      successMessage: "Project published after server confirmation.",
+      successMessage: "Project published and now visible in your public Portfolio.",
     });
     if (result) {
       setPublishingProject(null);
@@ -574,7 +609,7 @@ function ProjectGallery({ setPage }) {
   async function archiveProject(project) {
     if (!isPortfolioActionAllowed(project, "canArchive")) return;
     const confirmed = window.confirm(
-      "Archive Project? This removes it from public Portfolio presentation while preserving the project record and its media."
+      "Archive Project? This removes it from your public Portfolio while keeping the project and its photos in your records."
     );
     if (!confirmed) return;
     const expectedVersion = createExpectedVersionPayload(project);
@@ -584,7 +619,7 @@ function ProjectGallery({ setPage }) {
       endpoint: `/contractor-projects/${project.id}/archive`,
       body: expectedVersion,
       expectedCode: "PORTFOLIO_PROJECT_ARCHIVED",
-      successMessage: "Project archived. Its record and media remain preserved.",
+      successMessage: "Project archived. It is no longer shown in your public Portfolio.",
     });
   }
 
@@ -601,8 +636,8 @@ function ProjectGallery({ setPage }) {
         ? "PORTFOLIO_PROJECT_FEATURED"
         : "PORTFOLIO_PROJECT_UNFEATURED",
       successMessage: featured
-        ? "Featured project updated by the Portfolio server."
-        : "Featured designation removed by the Portfolio server.",
+        ? "This project is now featured in your Portfolio."
+        : "This project is no longer featured in your Portfolio.",
     });
   }
 
@@ -617,8 +652,31 @@ function ProjectGallery({ setPage }) {
       method: "PUT",
       body: payload,
       expectedCode: "PORTFOLIO_PROJECTS_REORDERED",
-      successMessage: "Project order saved and reconciled with the server.",
+      successMessage: "Project order saved.",
     });
+  }
+
+  function returnToBusinessWorkspace() {
+    if (isBusinessToolsReturn) {
+      localStorage.removeItem("meetroSharedPageReturn");
+      setPage("businessCommandCenter");
+      return;
+    }
+    setPage("businessDashboard");
+  }
+
+  function openProjectView(projectId, returnMode = workspaceMode) {
+    const exactProject = projects.find(
+      (project) => String(project.id) === String(projectId)
+    );
+    if (!exactProject) return;
+    setProjectViewReturnMode(returnMode);
+    setSelectedProjectId(String(exactProject.id));
+  }
+
+  function openPortfolioManagement() {
+    setSelectedProjectId("");
+    setWorkspaceMode("management");
   }
 
   if (loading) return <LoadingScreen text={t("loadingProjectGallery")} />;
@@ -631,30 +689,64 @@ function ProjectGallery({ setPage }) {
   const businessName = businessIdentity.businessName || t("portfolio");
   const counts = getCanonicalPortfolioCounts(projects);
   const reorderableProjects = getReorderablePortfolioProjects(projects);
+  const publishedProjects = projects.filter(
+    (project) =>
+      project.publication_state === PORTFOLIO_PUBLICATION_STATE.PUBLISHED &&
+      project.migration_review_required !== true
+  );
+  const selectedProject = projects.find(
+    (project) => String(project.id) === String(selectedProjectId)
+  );
+  const selectedProjectState = selectedProject
+    ? getPortfolioStatePresentation(selectedProject, language)
+    : null;
+
+  if (profile && selectedProject) {
+    return (
+      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+        <PortfolioProjectView
+          project={selectedProject}
+          businessName={businessName}
+          trustContext={businessReviewStats}
+          visibilityContext={selectedProjectState?.detail || ""}
+          onBack={() => {
+            setSelectedProjectId("");
+            setWorkspaceMode(projectViewReturnMode);
+          }}
+          onManage={openPortfolioManagement}
+        />
+        <BottomNav setPage={setPage} currentPage="projectGallery" />
+      </div>
+    );
+  }
 
   return (
     <div className="app-page meetro-responsive-page" style={pageWrapper}>
       <button
         type="button"
         onClick={() => {
-          if (isBusinessToolsReturn) {
-            localStorage.removeItem("meetroSharedPageReturn");
-            setPage("businessCommandCenter");
+          if (workspaceMode === "management") {
+            setWorkspaceMode("portfolio");
             return;
           }
-          setPage("businessDashboard");
+          returnToBusinessWorkspace();
         }}
         style={backButton}
       >
-        ← {isBusinessToolsReturn ? t("backToBusinessTools") : t("backToDashboard")}
+        ← {workspaceMode === "management"
+          ? "Back to Portfolio"
+          : isBusinessToolsReturn
+          ? t("backToBusinessTools")
+          : t("backToDashboard")}
       </button>
 
       <header style={compactHeader}>
         <div style={compactKicker}>Proof of Work</div>
         <h1 style={compactTitle}>Business Portfolio</h1>
         <p style={compactSubtitle}>
-          Manage canonical project evidence for {businessName}. Drafts stay private until you
-          explicitly publish them.
+          {workspaceMode === "management"
+            ? "Create, organize, and publish the projects you want customers to see."
+            : `See how customers experience the proof of work from ${businessName}.`}
         </p>
       </header>
 
@@ -664,187 +756,185 @@ function ProjectGallery({ setPage }) {
         <div role="alert" style={{ ...noticeCard, ...errorNotice }}>
           {loadError}
           <button type="button" style={noticeButton} onClick={() => fetchMyProfileAndProjects()}>
-            Retry canonical load
+            Try again
           </button>
         </div>
       )}
 
       {profile && (
         <>
-          <section style={heroCard} aria-label="Canonical Portfolio summary">
-            <div style={heroTopRow}>
-              <div style={heroIdentityBlock}>
-                <div style={heroBadge}>
-                  <MeetroIcon name="portfolio" size={16} decorative /> Canonical owner workspace
+          {workspaceMode === "portfolio" ? (
+            <>
+              <section style={ownerPreviewHero} aria-label="Your public Portfolio preview">
+                <div style={ownerPreviewCopy}>
+                  <div style={heroBadge}>
+                    <MeetroIcon name="portfolio" size={16} decorative /> Your Portfolio
+                  </div>
+                  <h2 style={heroTitle}>{businessName}</h2>
+                  <p style={heroSubtitle}>
+                    This is the proof of work customers can currently see. Use Edit Portfolio to
+                    manage Drafts, published projects, photos, and project order.
+                  </p>
                 </div>
-                <h2 style={heroTitle}>{businessName}</h2>
-              </div>
-              <div style={heroProofStack}>
-                <strong>{counts.total}</strong>
-                <span>projects</span>
-              </div>
-            </div>
-            <p style={heroSubtitle}>
-              Lifecycle, publication, feature selection, ordering, and edit authority come from
-              the Portfolio server.
-            </p>
-            <div style={statsGrid}>
-              <div style={statCard}><strong style={statNumber}>{counts.legacy}</strong><span style={statLabel}>Review</span></div>
-              <div style={statCard}><strong style={statNumber}>{counts.draft}</strong><span style={statLabel}>Draft</span></div>
-              <div style={statCard}><strong style={statNumber}>{counts.published}</strong><span style={statLabel}>Published</span></div>
-              <div style={statCard}><strong style={statNumber}>{counts.archived}</strong><span style={statLabel}>Archived</span></div>
-            </div>
-          </section>
+                <button type="button" style={editPortfolioButton} onClick={openPortfolioManagement}>
+                  Edit Portfolio
+                </button>
+              </section>
 
-          <div style={portfolioActionGrid}>
-            <button
-              type="button"
-              style={primaryActionButton}
-              onClick={openCreateProjectEditor}
-              disabled={busy}
-            >
-              <MeetroIcon name="addProject" size={16} decorative /> Add Project Draft
-            </button>
-          </div>
+              <section style={contentSection} aria-labelledby="portfolio-projects-heading">
+                <div style={projectsHeader}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 id="portfolio-projects-heading" style={galleryTitle}>Portfolio Projects</h2>
+                    <p style={sectionSubtitle}>The same proof of work customers see.</p>
+                  </div>
+                  <div style={projectCount}>{publishedProjects.length} published</div>
+                </div>
 
-          <section style={contentSection} aria-labelledby="portfolio-projects-heading">
-            <div style={projectsHeader}>
-              <div style={{ minWidth: 0 }}>
-                <h2 id="portfolio-projects-heading" style={galleryTitle}>Portfolio Projects</h2>
-                <p style={sectionSubtitle}>Each state and available action reflects canonical owner authority.</p>
-              </div>
-              <div style={projectCount}>{projects.length} total</div>
-            </div>
+                {publishedProjects.length === 0 ? (
+                  <div style={emptyProjectsCard}>
+                    <MeetroIcon name="portfolio" size={32} decorative />
+                    <h3>No published projects yet</h3>
+                    <p style={emptyProjectsText}>
+                      Open Edit Portfolio to prepare a Draft or publish existing work.
+                    </p>
+                  </div>
+                ) : (
+                  <PortfolioProjectGrid ariaLabel="Published Portfolio projects">
+                    {publishedProjects.map((project) => (
+                      <PortfolioProjectCard
+                        key={project.id}
+                        project={project}
+                        businessName={businessName}
+                        trustContext={businessReviewStats}
+                        onView={(projectId) => openProjectView(projectId, "portfolio")}
+                      />
+                    ))}
+                  </PortfolioProjectGrid>
+                )}
+              </section>
+            </>
+          ) : (
+            <>
+              <section style={heroCard} aria-label="Portfolio management summary">
+                <div style={heroTopRow}>
+                  <div style={heroIdentityBlock}>
+                    <div style={heroBadge}>
+                      <MeetroIcon name="portfolio" size={16} decorative /> Edit Portfolio
+                    </div>
+                    <h2 style={heroTitle}>{businessName}</h2>
+                  </div>
+                  <div style={heroProofStack}>
+                    <strong>{counts.total}</strong>
+                    <span>projects</span>
+                  </div>
+                </div>
+                <p style={heroSubtitle}>
+                  Manage private work, published proof, photos, and project order.
+                </p>
+                <div style={statsGrid}>
+                  <div style={statCard}><strong style={statNumber}>{counts.legacy}</strong><span style={statLabel}>Review</span></div>
+                  <div style={statCard}><strong style={statNumber}>{counts.draft}</strong><span style={statLabel}>Drafts</span></div>
+                  <div style={statCard}><strong style={statNumber}>{counts.published}</strong><span style={statLabel}>Published</span></div>
+                  <div style={statCard}><strong style={statNumber}>{counts.archived}</strong><span style={statLabel}>Archived</span></div>
+                </div>
+              </section>
 
-            {projects.length === 0 && (
-              <div style={emptyProjectsCard}>
-                <MeetroIcon name="portfolio" size={32} decorative />
-                <h3>No canonical projects yet</h3>
-                <p style={emptyProjectsText}>Create a Draft to begin documenting proof of work.</p>
-                <button type="button" style={primaryButton} onClick={openCreateProjectEditor}>
-                  Add first Draft
+              <div style={portfolioActionGrid}>
+                <button type="button" style={primaryActionButton} onClick={openCreateProjectEditor} disabled={busy}>
+                  <MeetroIcon name="addProject" size={16} decorative /> Add Project
                 </button>
               </div>
-            )}
 
-            {projects.map((project) => {
-              const projectImages = getBusinessPortfolioProjectImages(project);
-              const coverImage = projectImages[0];
-              const state = getPortfolioStatePresentation(project, language);
-              const reorderIndex = reorderableProjects.findIndex(
-                (candidate) => String(candidate.id) === String(project.id)
-              );
-              const legacyMedia = project.portfolio_media?.some(
-                (media) => media?.lifecycle_state === "legacy"
-              );
-
-              return (
-                <article
-                  key={project.id}
-                  style={{
-                    ...projectCard,
-                    ...(project.is_featured ? projectCardFeatured : {}),
-                  }}
-                >
-                  {coverImage ? (
-                    <div style={coverImageWrap}>
-                      <img src={coverImage} alt={project.title || "Portfolio project"} style={coverImageStyle} />
-                      {projectImages.length > 1 && (
-                        <span style={photoCountBadge}>
-                          <MeetroIcon name="photoCount" size={14} decorative />
-                          {projectImages.length} photos
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={missingProjectImage}>
-                      <MeetroIcon name="photoCount" size={24} decorative />
-                      No project photos yet
-                    </div>
-                  )}
-
-                  <div style={projectContent}>
-                    <div style={projectMetaRow}>
-                      <span style={{ ...statePill, ...statePillByKey[state.key] }}>{state.label}</span>
-                      {project.is_featured && <span style={featuredPill}>Featured project</span>}
-                    </div>
-                    <h3 style={projectTitle}>{project.title || "Untitled project"}</h3>
-                    <p style={projectDescriptionStyle}>{project.description || "No description yet."}</p>
-                    <p style={stateDetail}>{state.detail}</p>
-                    {legacyMedia && (
-                      <p style={legacyMediaNotice}>
-                        Existing legacy media requires review and is not represented as publication-eligible.
-                      </p>
-                    )}
-                    <div style={projectButtonRow} aria-label={`Actions for ${project.title || "project"}`}>
-                      {isPortfolioActionAllowed(project, "canAdoptAsDraft") && (
-                        <button type="button" style={primaryCompactButton} disabled={busy} onClick={() => adoptLegacyAsDraft(project)}>
-                          Adopt as Draft
-                        </button>
-                      )}
-                      {isPortfolioActionAllowed(project, "canEdit") && (
-                        <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => openPortfolioProjectEditor(project)}>
-                          Edit Project
-                        </button>
-                      )}
-                      {isPortfolioActionAllowed(project, "canPublish") && (
-                        <button type="button" style={primaryCompactButton} disabled={busy} onClick={() => openPublishConfirmation(project)}>
-                          Publish Project
-                        </button>
-                      )}
-                      {isPortfolioActionAllowed(project, "canFeature") && (
-                        <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => setFeaturedProject(project, true)}>
-                          Feature Project
-                        </button>
-                      )}
-                      {isPortfolioActionAllowed(project, "canUnfeature") && (
-                        <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => setFeaturedProject(project, false)}>
-                          Remove Featured Project
-                        </button>
-                      )}
-                      {isPortfolioActionAllowed(project, "canArchive") && (
-                        <button type="button" style={archiveCompactButton} disabled={busy} onClick={() => archiveProject(project)}>
-                          Archive Project
-                        </button>
-                      )}
-                    </div>
-                    {isPortfolioActionAllowed(project, "canReorder") && reorderableProjects.length > 1 && (
-                      <div style={reorderRow} aria-label={`Display order for ${project.title || "project"}`}>
-                        <span>Display order {reorderIndex + 1}</span>
-                        <div style={reorderButtons}>
-                          <button
-                            type="button"
-                            style={orderButton}
-                            disabled={busy || reorderIndex === 0}
-                            onClick={() => reorderProject(project, "earlier")}
-                            aria-label={`Move ${project.title || "project"} earlier`}
-                          >
-                            ↑ Earlier
-                          </button>
-                          <button
-                            type="button"
-                            style={orderButton}
-                            disabled={busy || reorderIndex === reorderableProjects.length - 1}
-                            onClick={() => reorderProject(project, "later")}
-                            aria-label={`Move ${project.title || "project"} later`}
-                          >
-                            ↓ Later
-                          </button>
-                        </div>
-                      </div>
-                    )}
+              <section style={contentSection} aria-labelledby="portfolio-management-heading">
+                <div style={projectsHeader}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 id="portfolio-management-heading" style={galleryTitle}>Manage Portfolio</h2>
+                    <p style={sectionSubtitle}>Create, edit, publish, organize, and archive your work.</p>
                   </div>
-                </article>
-              );
-            })}
-          </section>
+                  <div style={projectCount}>{projects.length} total</div>
+                </div>
+
+                {projects.length === 0 ? (
+                  <div style={emptyProjectsCard}>
+                    <MeetroIcon name="portfolio" size={32} decorative />
+                    <h3>No Portfolio projects yet</h3>
+                    <p style={emptyProjectsText}>Add your first project to start showcasing your work.</p>
+                    <button type="button" style={primaryButton} onClick={openCreateProjectEditor}>Add Project</button>
+                  </div>
+                ) : (
+                  <PortfolioProjectGrid ariaLabel="Portfolio management projects">
+                    {projects.map((project) => {
+                      const state = getPortfolioStatePresentation(project, language);
+                      const reorderIndex = reorderableProjects.findIndex(
+                        (candidate) => String(candidate.id) === String(project.id)
+                      );
+                      const legacyMedia = project.portfolio_media?.some(
+                        (media) => media?.lifecycle_state === "legacy"
+                      );
+
+                      return (
+                        <PortfolioProjectCard
+                          key={project.id}
+                          project={project}
+                          businessName={businessName}
+                          trustContext={businessReviewStats}
+                          status={{
+                            label: state.label,
+                            style: statePillByKey[state.key],
+                            secondaryLabel: project.is_featured ? "Featured project" : "",
+                          }}
+                          onView={(projectId) => openProjectView(projectId, "management")}
+                          managementContent={(
+                            <>
+                              <p style={stateDetail}>{state.detail}</p>
+                              {legacyMedia && (
+                                <p style={legacyMediaNotice}>
+                                  Some older photos need your review before this project can be published.
+                                </p>
+                              )}
+                              <div style={projectButtonRow} aria-label={`Management actions for ${project.title || "project"}`}>
+                                {isPortfolioActionAllowed(project, "canAdoptAsDraft") && (
+                                  <button type="button" style={primaryCompactButton} disabled={busy} onClick={() => adoptLegacyAsDraft(project)}>Move to Draft</button>
+                                )}
+                                {isPortfolioActionAllowed(project, "canEdit") && (
+                                  <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => openPortfolioProjectEditor(project)}>Edit Project</button>
+                                )}
+                                {isPortfolioActionAllowed(project, "canPublish") && (
+                                  <button type="button" style={primaryCompactButton} disabled={busy} onClick={() => openPublishConfirmation(project)}>Publish Project</button>
+                                )}
+                                {isPortfolioActionAllowed(project, "canFeature") && (
+                                  <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => setFeaturedProject(project, true)}>Feature Project</button>
+                                )}
+                                {isPortfolioActionAllowed(project, "canUnfeature") && (
+                                  <button type="button" style={secondaryCompactButton} disabled={busy} onClick={() => setFeaturedProject(project, false)}>Remove Featured Project</button>
+                                )}
+                                {isPortfolioActionAllowed(project, "canArchive") && (
+                                  <button type="button" style={archiveCompactButton} disabled={busy} onClick={() => archiveProject(project)}>Archive Project</button>
+                                )}
+                              </div>
+                              {isPortfolioActionAllowed(project, "canReorder") && reorderableProjects.length > 1 && (
+                                <div style={reorderRow} aria-label={`Display order for ${project.title || "project"}`}>
+                                  <span>Display order {reorderIndex + 1}</span>
+                                  <div style={reorderButtons}>
+                                    <button type="button" style={orderButton} disabled={busy || reorderIndex === 0} onClick={() => reorderProject(project, "earlier")} aria-label={`Move ${project.title || "project"} earlier`}>↑ Earlier</button>
+                                    <button type="button" style={orderButton} disabled={busy || reorderIndex === reorderableProjects.length - 1} onClick={() => reorderProject(project, "later")} aria-label={`Move ${project.title || "project"} later`}>↓ Later</button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        />
+                      );
+                    })}
+                  </PortfolioProjectGrid>
+                )}
+              </section>
+            </>
+          )}
 
           <aside style={reviewSeparationCard}>
             <h2 style={compactSectionTitle}>Business reviews stay business-level</h2>
-            <p style={emptyProjectsText}>
-              Reviews are not repeated as project ratings. Project-specific ratings remain unavailable
-              until a canonical project, job, and review relationship exists.
-            </p>
+            <p style={emptyProjectsText}>Reviews describe your business overall. They are not copied onto individual projects as project ratings.</p>
           </aside>
         </>
       )}
@@ -874,9 +964,9 @@ function ProjectGallery({ setPage }) {
             <div style={editorHandle} aria-hidden="true" />
             <div style={editorHeader}>
               <div style={{ minWidth: 0 }}>
-                <h1 id="create-portfolio-project-title" style={editPageTitle}>Add Project Draft</h1>
+                <h1 id="create-portfolio-project-title" style={editPageTitle}>Add Project</h1>
                 <p id="create-portfolio-project-detail" style={editPageSubtitle}>
-                  Saving creates a private Draft. It does not publish the project.
+                  Your new project starts as a private Draft. Only you can see it until you publish it.
                 </p>
               </div>
               <button type="button" style={editorHeaderCancel} onClick={closeCreateProjectEditor} autoFocus>Cancel</button>
@@ -915,7 +1005,7 @@ function ProjectGallery({ setPage }) {
                   onClick={openProjectPhotoPicker}
                   disabled={mediaUploadDeferred || busy}
                   style={mediaUploadDeferred ? { ...uploadButton, ...disabledUploadButton } : uploadButton}
-                  aria-label="Add governed Portfolio photos"
+                  aria-label="Add Portfolio photos"
                 >+</button>
                 <h3>{mediaUploadDeferred ? mediaDeferredCopy.title : `${images.length} of 12 photos`}</h3>
                 <p style={uploadText}>
@@ -953,7 +1043,7 @@ function ProjectGallery({ setPage }) {
                 <h1 id="edit-portfolio-project-title" style={editPageTitle}>Edit Project</h1>
                 <p id="edit-portfolio-project-detail" style={editPageSubtitle}>
                   {editingProject.publication_state === PORTFOLIO_PUBLICATION_STATE.PUBLISHED
-                    ? "Published changes require fresh privacy confirmation for the exact updated content."
+                    ? "Review the privacy checklist again before saving changes to this published project."
                     : "Changes remain private while this project is a Draft."}
                 </p>
               </div>
@@ -1002,7 +1092,7 @@ function ProjectGallery({ setPage }) {
                   />
                 </>
               ) : (
-                <div style={emptyEditPhotos}>No photos attached. A project needs governed media before the server can authorize publication.</div>
+                <div style={emptyEditPhotos}>No photos attached. Add at least one photo before publishing this project.</div>
               )}
               <label style={fieldLabel} htmlFor="editPortfolioProjectTitle">Project title</label>
               <input
@@ -1031,7 +1121,7 @@ function ProjectGallery({ setPage }) {
                   checked={publishedEditPrivacyConfirmed}
                   onChange={setPublishedEditPrivacyConfirmed}
                   inputId="published-edit-privacy-confirmation"
-                  lead="I freshly confirm that the exact updated public content excludes:"
+                  lead="I reviewed the changes and confirm this published content excludes:"
                 />
               )}
             </div>
@@ -1065,7 +1155,7 @@ function ProjectGallery({ setPage }) {
             <h1 id="publish-portfolio-project-title" style={editPageTitle}>Publish Project</h1>
             <p id="publish-portfolio-project-detail" style={editPageSubtitle}>
               Publishing makes “{publishingProject.title}” visible to homeowners and public viewers.
-              Success is shown only after server confirmation.
+              You will see it in your Portfolio as soon as publishing is complete.
             </p>
             <div style={dialogNoticeSlot}><WorkspaceNotice notice={workspaceNotice} /></div>
             <PrivacyConfirmationControl
@@ -1194,79 +1284,70 @@ function PrivacyConfirmationControl({ checked, onChange, inputId, lead }) {
 }
 
 const pageWrapper = {
-  background: "#f5f5f7",
+  background: "radial-gradient(circle at top right, rgba(238,244,234,0.94), transparent 38%), #fbf7ef",
   minHeight: "100vh",
   padding: "calc(env(safe-area-inset-top) + 64px) max(18px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   width: "100%",
-  maxWidth: "1120px",
+  maxWidth: "1180px",
   margin: "0 auto",
   overflowX: "hidden",
 };
-const backButton = { border: "none", background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))", color: "var(--meetro-color-forest, #1f4d34)", padding: "12px 18px", minHeight: "44px", borderRadius: "18px", fontWeight: 800, marginBottom: "20px", cursor: "pointer" };
+const backButton = { border: "1px solid rgba(31,77,52,0.14)", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: "var(--meetro-color-forest, #1f4d34)", padding: "12px 18px", minHeight: "44px", borderRadius: "18px", fontWeight: 800, marginBottom: "20px", cursor: "pointer", boxShadow: "0 8px 20px rgba(31,77,52,0.06)" };
 const compactHeader = { marginBottom: "16px", minWidth: 0 };
 const compactKicker = { color: "var(--meetro-color-coffee, #4a3428)", fontSize: "12px", fontWeight: 950, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "6px" };
 const compactTitle = { margin: 0, color: "#111827", fontSize: "clamp(30px, 8vw, 42px)", lineHeight: 1.05, fontWeight: 950, overflowWrap: "break-word" };
-const compactSubtitle = { margin: "10px 0 0", color: "#64748b", fontSize: "16px", lineHeight: 1.5, maxWidth: "72ch" };
+const compactSubtitle = { margin: "10px 0 0", color: "#5d665f", fontSize: "16px", lineHeight: 1.55, maxWidth: "74ch" };
 const noticeCard = { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#14532d", borderRadius: "18px", padding: "14px 16px", marginBottom: "16px", lineHeight: 1.45, fontWeight: 750 };
 const warningNotice = { background: "#fffbeb", borderColor: "#fde68a", color: "#78350f" };
 const errorNotice = { background: "#fef2f2", borderColor: "#fecaca", color: "#991b1b" };
 const noticeButton = { border: "1px solid currentColor", background: "white", color: "inherit", borderRadius: "12px", padding: "9px 12px", minHeight: "44px", fontWeight: 850, cursor: "pointer" };
-const heroCard = { background: "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f) 0%, var(--meetro-color-forest, #1f4d34) 62%, var(--meetro-color-coffee, #4a3428) 100%)", borderRadius: "28px", padding: "clamp(20px, 5vw, 28px)", color: "white", marginBottom: "24px", boxShadow: "0 16px 38px rgba(15,23,42,0.22)", minWidth: 0 };
+const heroCard = { background: "linear-gradient(135deg, var(--meetro-color-forest-deep, #14351f) 0%, var(--meetro-color-forest, #1f4d34) 72%, #3a5a40 100%)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "28px", padding: "clamp(20px, 5vw, 28px)", color: "white", marginBottom: "24px", boxShadow: "0 18px 40px rgba(20,53,31,0.2), inset 0 1px 0 rgba(255,255,255,0.12)", minWidth: 0 };
+const ownerPreviewHero = { ...heroCard, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "20px", flexWrap: "wrap" };
+const ownerPreviewCopy = { display: "grid", gap: "10px", minWidth: 0, flex: "1 1 420px" };
+const editPortfolioButton = { minHeight: "48px", border: "1px solid rgba(255,255,255,0.46)", borderRadius: "16px", background: "rgba(255,255,255,0.94)", color: "var(--meetro-color-forest, #1f4d34)", padding: "12px 18px", fontSize: "15px", fontWeight: 950, cursor: "pointer", boxShadow: "0 10px 24px rgba(15,23,42,0.14)" };
 const heroTopRow = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "14px", minWidth: 0, flexWrap: "wrap" };
 const heroIdentityBlock = { minWidth: 0, flex: "1 1 220px", display: "grid", gap: "10px" };
-const heroProofStack = { flex: "0 0 auto", minWidth: "82px", background: "rgba(255,255,255,0.12)", borderRadius: "18px", padding: "13px 12px", textAlign: "center", display: "grid", gap: "4px" };
-const heroBadge = { background: "white", color: "var(--meetro-color-forest, #1f4d34)", display: "inline-flex", alignItems: "center", gap: "7px", padding: "8px 14px", borderRadius: "999px", fontWeight: 800, width: "fit-content", maxWidth: "100%", boxSizing: "border-box" };
+const heroProofStack = { flex: "0 0 auto", minWidth: "82px", background: "rgba(255,255,255,0.13)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.16)", borderRadius: "18px", padding: "13px 12px", textAlign: "center", display: "grid", gap: "4px" };
+const heroBadge = { background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.72)", color: "var(--meetro-color-forest, #1f4d34)", display: "inline-flex", alignItems: "center", gap: "7px", padding: "8px 14px", borderRadius: "999px", fontWeight: 800, width: "fit-content", maxWidth: "100%", boxSizing: "border-box", boxShadow: "0 6px 16px rgba(15,23,42,0.08)" };
 const heroTitle = { fontSize: "clamp(21px, 6vw, 28px)", margin: 0, lineHeight: 1.12, color: "white", overflowWrap: "break-word", minWidth: 0 };
 const heroSubtitle = { color: "rgba(255,255,255,0.82)", margin: "18px 0 0", lineHeight: 1.55, maxWidth: "68ch" };
-const statsGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(92px, 1fr))", gap: "10px", marginTop: "22px" };
-const statCard = { background: "rgba(255,255,255,0.10)", borderRadius: "18px", padding: "12px 8px", textAlign: "center", display: "grid", gap: "4px" };
+const statsGrid = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px", marginTop: "22px" };
+const statCard = { background: "rgba(255,255,255,0.11)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: "18px", padding: "12px 8px", textAlign: "center", display: "grid", gap: "4px" };
 const statNumber = { fontSize: "23px", fontWeight: 900 };
-const statLabel = { opacity: 0.84, fontSize: "12px" };
+const statLabel = { opacity: 0.84, fontSize: "11px", whiteSpace: "nowrap" };
 const portfolioActionGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "10px", marginBottom: "24px" };
 const primaryActionButton = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", border: "none", background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))", color: "white", padding: "14px 16px", minHeight: "48px", borderRadius: "18px", fontWeight: 900, cursor: "pointer" };
 const contentSection = { marginBottom: "24px" };
 const projectsHeader = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "18px", minWidth: 0 };
 const galleryTitle = { fontSize: "clamp(26px, 7vw, 34px)", margin: 0, overflowWrap: "break-word" };
-const sectionSubtitle = { margin: "6px 0 0", color: "#64748b", lineHeight: 1.45 };
-const projectCount = { background: "var(--meetro-surface-sage, rgba(238,244,234,0.9))", color: "var(--meetro-color-forest, #1f4d34)", padding: "10px 14px", borderRadius: "999px", fontWeight: 800, whiteSpace: "nowrap" };
-const emptyProjectsCard = { background: "white", borderRadius: "28px", padding: "40px 24px", textAlign: "center", border: "1px solid #e2e8f0" };
+const sectionSubtitle = { margin: "6px 0 0", color: "#5d665f", lineHeight: 1.45 };
+const projectCount = { background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", border: "1px solid rgba(31,77,52,0.14)", color: "var(--meetro-color-forest, #1f4d34)", padding: "10px 14px", borderRadius: "999px", fontWeight: 800, whiteSpace: "nowrap", boxShadow: "0 8px 20px rgba(31,77,52,0.05)" };
+const emptyProjectsCard = { background: "rgba(255,253,248,0.98)", borderRadius: "28px", padding: "40px 24px", textAlign: "center", border: "1px solid rgba(74,52,40,0.12)", boxShadow: "0 12px 30px rgba(74,52,40,0.06)" };
 const emptyProjectsText = { color: "#5f6b7a", lineHeight: 1.6 };
 const primaryButton = { width: "100%", padding: "14px 16px", minHeight: "48px", border: "none", borderRadius: "18px", background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))", color: "white", fontWeight: 850, fontSize: "16px", marginTop: "14px", cursor: "pointer" };
-const projectCard = { background: "white", borderRadius: "28px", overflow: "hidden", marginBottom: "22px", border: "1px solid #e2e8f0", boxShadow: "0 12px 30px rgba(0,0,0,0.06)", minWidth: 0 };
-const projectCardFeatured = { border: "1px solid rgba(31,77,52,0.38)", boxShadow: "0 14px 34px rgba(31,77,52,0.13)" };
-const coverImageWrap = { position: "relative", width: "min(320px, calc(100% - 36px))", aspectRatio: "16 / 9", margin: "18px 18px 0", overflow: "hidden", borderRadius: "22px", background: "#f1f5f9", boxSizing: "border-box" };
-const coverImageStyle = { width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" };
-const photoCountBadge = { position: "absolute", right: "12px", bottom: "12px", display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(15,23,42,0.76)", color: "white", padding: "8px 12px", borderRadius: "999px", fontSize: "12px", fontWeight: 900 };
-const missingProjectImage = { minHeight: "150px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", padding: "24px", background: "#f8fafc", color: "#64748b", fontWeight: 800, textAlign: "center" };
-const projectContent = { padding: "20px", minWidth: 0 };
-const projectMetaRow = { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" };
-const statePill = { display: "inline-flex", padding: "7px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 900, border: "1px solid transparent" };
 const statePillByKey = { legacy: { background: "#fffbeb", color: "#92400e", borderColor: "#fde68a" }, draft: { background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" }, published: { background: "#ecfdf5", color: "#166534", borderColor: "#bbf7d0" }, archived: { background: "#f1f5f9", color: "#475569", borderColor: "#cbd5e1" } };
-const featuredPill = { ...statePill, background: "var(--meetro-surface-sage, #eef4ea)", color: "var(--meetro-color-forest, #1f4d34)", borderColor: "rgba(31,77,52,0.22)" };
-const projectTitle = { fontSize: "24px", margin: "0 0 10px", overflowWrap: "break-word" };
-const projectDescriptionStyle = { color: "#4b5563", lineHeight: 1.7, whiteSpace: "pre-wrap", overflowWrap: "break-word" };
 const stateDetail = { color: "#475569", lineHeight: 1.5, fontSize: "14px", margin: "12px 0" };
 const legacyMediaNotice = { background: "#fffbeb", color: "#78350f", padding: "12px", borderRadius: "14px", lineHeight: 1.45, fontSize: "14px" };
-const projectButtonRow = { display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap", marginTop: "16px" };
+const projectButtonRow = { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "auto", paddingTop: "14px" };
 const compactButtonBase = { minHeight: "44px", borderRadius: "999px", padding: "10px 15px", fontWeight: 850, fontSize: "13px", cursor: "pointer" };
 const primaryCompactButton = { ...compactButtonBase, border: "1px solid var(--meetro-color-forest, #1f4d34)", background: "var(--meetro-color-forest, #1f4d34)", color: "white" };
-const secondaryCompactButton = { ...compactButtonBase, border: "1px solid rgba(31,77,52,0.24)", background: "white", color: "var(--meetro-color-forest, #1f4d34)" };
+const secondaryCompactButton = { ...compactButtonBase, border: "1px solid rgba(31,77,52,0.2)", background: "rgba(255,255,255,0.84)", backdropFilter: "blur(6px)", color: "var(--meetro-color-forest, #1f4d34)" };
 const archiveCompactButton = { ...compactButtonBase, border: "1px solid #cbd5e1", background: "#f8fafc", color: "#475569" };
 const reorderRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #e2e8f0", color: "#475569", fontSize: "13px", fontWeight: 800 };
 const reorderButtons = { display: "flex", gap: "8px", flexWrap: "wrap" };
-const orderButton = { minHeight: "44px", border: "1px solid #cbd5e1", background: "white", color: "#334155", borderRadius: "12px", padding: "9px 12px", fontWeight: 800, cursor: "pointer" };
-const reviewSeparationCard = { background: "white", borderRadius: "24px", padding: "20px", border: "1px solid #e2e8f0", marginBottom: "24px" };
+const orderButton = { minHeight: "44px", border: "1px solid rgba(31,77,52,0.16)", background: "rgba(255,255,255,0.84)", backdropFilter: "blur(6px)", color: "#334155", borderRadius: "12px", padding: "9px 12px", fontWeight: 800, cursor: "pointer" };
+const reviewSeparationCard = { background: "rgba(255,253,248,0.98)", borderRadius: "24px", padding: "20px", border: "1px solid rgba(74,52,40,0.12)", boxShadow: "0 10px 24px rgba(74,52,40,0.05)", marginBottom: "24px" };
 const compactSectionTitle = { margin: "0 0 10px", fontSize: "20px", fontWeight: 950, color: "#111827" };
 const editorBackdrop = { position: "fixed", inset: 0, zIndex: 1300, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.34)", padding: "calc(env(safe-area-inset-top) + 10px) max(10px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom) + 10px) max(10px, env(safe-area-inset-left, 0px))", boxSizing: "border-box", overflow: "hidden" };
-const portfolioEditorSheet = { width: "min(100%, 680px)", maxWidth: "100%", maxHeight: "min(90dvh, 780px)", minWidth: 0, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr) auto", gap: "10px", background: "white", border: "1px solid rgba(31,77,52,0.14)", borderRadius: "24px", padding: "10px 14px 14px", boxShadow: "0 24px 70px rgba(15,23,42,0.22)", boxSizing: "border-box", overflow: "hidden" };
+const portfolioEditorSheet = { width: "min(100%, 680px)", maxWidth: "100%", maxHeight: "min(90dvh, 780px)", minWidth: 0, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr) auto", gap: "10px", background: "rgba(255,253,248,0.97)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.72)", borderRadius: "24px", padding: "10px 14px 14px", boxShadow: "0 24px 70px rgba(15,23,42,0.22), inset 0 1px 0 rgba(255,255,255,0.84)", boxSizing: "border-box", overflow: "hidden" };
 const privacyDialog = { ...portfolioEditorSheet, maxHeight: "min(90dvh, 720px)", padding: "20px" };
 const dialogNoticeSlot = { minHeight: 0 };
 const editorHandle = { justifySelf: "center", width: "48px", height: "5px", borderRadius: "999px", background: "rgba(100,116,139,0.24)" };
 const editorHeader = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", minWidth: 0 };
 const editorHeaderCancel = { border: "1px solid rgba(148,163,184,0.36)", borderRadius: "999px", background: "white", color: "#475569", padding: "9px 12px", minHeight: "44px", fontSize: "13px", fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap" };
 const portfolioEditorBody = { overflowY: "auto", overscrollBehavior: "contain", minHeight: 0, paddingRight: "2px", WebkitOverflowScrolling: "touch" };
-const editorFooter = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr)", gap: "10px", paddingTop: "10px", borderTop: "1px solid rgba(226,232,240,0.86)", background: "white", boxSizing: "border-box" };
+const editorFooter = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr)", gap: "10px", paddingTop: "10px", borderTop: "1px solid rgba(74,52,40,0.12)", background: "rgba(255,253,248,0.94)", boxSizing: "border-box" };
 const editorCancelButton = { minWidth: 0, minHeight: "48px", border: "1px solid rgba(148,163,184,0.4)", borderRadius: "16px", background: "white", color: "#475569", padding: "12px 14px", fontSize: "14px", fontWeight: 900, cursor: "pointer" };
 const editorSaveButton = { minWidth: 0, minHeight: "48px", border: "1px solid rgba(31,77,52,0.42)", borderRadius: "16px", background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))", color: "white", padding: "12px 14px", fontSize: "14px", fontWeight: 950, cursor: "pointer" };
 const editPageTitle = { margin: 0, fontSize: "22px", fontWeight: 950, color: "#111827", overflowWrap: "break-word" };

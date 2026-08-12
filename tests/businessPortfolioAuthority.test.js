@@ -45,13 +45,13 @@ test("owner actions are granted only by exact server action booleans", () => {
   assert.equal(isPortfolioActionAllowed(source, "unknownAction"), false);
 });
 
-test("professional state labels preserve canonical lifecycle meaning", () => {
+test("professional state labels explain project status in owner language", () => {
   assert.equal(
     getPortfolioStatePresentation(project({
       publication_state: null,
       migration_review_required: true,
     })).label,
-    "Legacy review required"
+    "Previous Portfolio Project"
   );
   assert.equal(getPortfolioStatePresentation(project()).label, "Draft");
   assert.equal(

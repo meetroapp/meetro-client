@@ -214,7 +214,6 @@ const DEFERRED_FR_PT_KEYS = Object.freeze([
   "uploadLogo",
   "uploading",
   "verified",
-  "viewPortfolioWork",
   "voiceResponseUnavailable",
   "writeReview",
   "yes",
