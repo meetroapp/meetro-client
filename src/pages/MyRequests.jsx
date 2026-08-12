@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import EmergencyTimeline from "../components/EmergencyTimeline";
 import HomeownerProfessionalResponseReview from "../components/HomeownerProfessionalResponseReview";
+import HomeownerRequestModificationPanel from "../components/HomeownerRequestModificationPanel";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
@@ -11,28 +12,11 @@ import {
   resolveHomeownerRequestCollection,
 } from "../utils/requestLifecycleState";
 import {
-  getMediaDeferredCopy,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import {
-  REQUEST_PHOTO_MAX_COUNT,
-  cleanupRequestPhoto,
-  createTemporaryRequestPhotoPreview,
   isRequestPhotoUploadEnabled,
-  uploadRequestPhotos,
-  validateRequestPhotoFiles,
 } from "../utils/requestPhotoMedia";
-import {
-  REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
-  buildRequestPhotoReplacementPayload,
-  createLocalRequestPhotoItem,
-  getPendingLocalRequestPhotoItems,
-  getRequestPhotoPreviewUrl,
-  hydrateRequestEditPhotos,
-  removeRequestEditPhotoAt,
-  reorderRequestEditPhotos,
-  revokeLocalRequestEditPhotoPreviews,
-} from "../utils/requestEditPhotoState";
 import {
   getHomeownerLifecycleStage,
   getAuthoritativeHomeownerRequestCounts,
@@ -60,10 +44,6 @@ import {
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
 import { formatLocaleDate } from "../utils/localeFormat";
-import {
-  getParticipantRoleLabelKey,
-  normalizeRequestLifecycleFoundation,
-} from "../utils/requestLifecycleFoundation";
 import {
   getHomeownerRequestCardId,
   normalizeHomeownerRequestCardId,
@@ -168,64 +148,6 @@ function getApprovalSchedulingUnavailableCopy(language) {
   };
 }
 
-function getRequestEditPhotoErrorMessage(code, language) {
-  if (code === "REQUEST_PHOTO_FORMAT_INVALID") {
-    return t("invalidProfileImageFormat", language);
-  }
-  if (code === "REQUEST_PHOTO_TOO_LARGE") {
-    return t("profileImageTooLarge", language);
-  }
-  if (code === "REQUEST_PHOTO_COUNT_EXCEEDED") {
-    return language === "es"
-      ? `Agrega hasta ${REQUEST_PHOTO_MAX_COUNT} fotos por solicitud.`
-      : `Add up to ${REQUEST_PHOTO_MAX_COUNT} photos per request.`;
-  }
-  if (code === "REQUEST_PHOTO_UPLOAD_FAILED") {
-    return t("uploadError", language);
-  }
-  if (code === "REQUEST_EDIT_PHOTO_METADATA_REQUIRED") {
-    return language === "es"
-      ? "No se pudo confirmar la información gobernada de estas fotos. Vuelve a seleccionar las fotos e inténtalo otra vez."
-      : "Meetro could not confirm governed metadata for these photos. Re-select the photos and try again.";
-  }
-  if (code === REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED) {
-    return language === "es"
-      ? "Esta solicitud incluye fotos antiguas que se pueden ver, pero no se pueden preservar mediante la edición gobernada. Elimina esas fotos y agrégalas otra vez antes de guardar cambios de fotos."
-      : "This request includes older photos that can be viewed, but cannot be preserved through governed photo editing. Remove those photos and add them again before saving photo changes.";
-  }
-  return t("uploadFailed", language);
-}
-
-function getRequestEditCleanupWarning(language) {
-  return language === "es"
-    ? "La solicitud no se guardó. Meetro intentó limpiar las fotos nuevas cargadas durante este intento, pero algunas pueden requerir limpieza más tarde."
-    : "The request was not saved. Meetro tried to clean up the new photos uploaded during this attempt, but some may need later cleanup.";
-}
-
-function getRequestEditPhotoOrderLabel(language, direction, index) {
-  const position = index + 1;
-  const labels = {
-    es:
-      direction < 0
-        ? `Mover foto ${position} a la izquierda`
-        : `Mover foto ${position} a la derecha`,
-    fr:
-      direction < 0
-        ? `Deplacer la photo ${position} vers la gauche`
-        : `Deplacer la photo ${position} vers la droite`,
-    pt:
-      direction < 0
-        ? `Mover foto ${position} para a esquerda`
-        : `Mover foto ${position} para a direita`,
-  };
-  return (
-    labels[language] ||
-    (direction < 0
-      ? `Move photo ${position} left`
-      : `Move photo ${position} right`)
-  );
-}
-
 function PhotoStrip({ request, onPreview, language }) {
   const photos = [
     ...(Array.isArray(request.request_photos)
@@ -288,178 +210,6 @@ function PhotoStrip({ request, onPreview, language }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function EditPhotoManager({
-  photos,
-  uploading,
-  onUpload,
-  onRemove,
-  onMove,
-  onPreview,
-  language,
-  mediaUploadDeferred = false,
-  photoError = "",
-  cleanupWarning = "",
-}) {
-  const mediaDeferredCopy = getMediaDeferredCopy(language);
-  const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
-  const getPhotoLabel = (index) =>
-    language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
-  const addDisabled =
-    uploading ||
-    mediaUploadDeferred ||
-    photos.length >= REQUEST_PHOTO_MAX_COUNT;
-
-  return (
-    <div style={editPhotoManager}>
-      <div style={swipeGalleryHeader}>
-        <strong>
-          {language === "es"
-            ? `${t("projectPhotos")} (${photos.length})`
-            : `${t("projectPhotos")} (${photos.length})`}
-        </strong>
-
-        <button
-          type="button"
-          style={{
-            ...addPhotoButton,
-            ...(addDisabled ? disabledAddPhotoButton : {}),
-          }}
-          onClick={() => {
-            if (!addDisabled) {
-              document.getElementById("editPhotoInput")?.click();
-            }
-          }}
-          disabled={addDisabled}
-        >
-          {mediaUploadDeferred
-            ? mediaDeferredCopy.title
-            : uploading
-            ? t("uploading")
-            : photos.length >= REQUEST_PHOTO_MAX_COUNT
-            ? language === "es"
-              ? "Máximo de fotos"
-              : "Photo limit"
-            : t("addPhotos")}
-        </button>
-      </div>
-
-      <input
-        id="editPhotoInput"
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        multiple
-        disabled={addDisabled}
-        onChange={onUpload}
-        style={{ display: "none" }}
-      />
-
-      {photoError && (
-        <p role="alert" aria-live="assertive" style={uploadingText}>
-          {photoError}
-        </p>
-      )}
-
-      {cleanupWarning && (
-        <p role="status" aria-live="polite" style={editPhotoCleanupWarning}>
-          {cleanupWarning}
-        </p>
-      )}
-
-      {photos.length === 0 ? (
-        <div style={galleryEmpty}>
-          <div style={galleryEmptyIcon}>IMG</div>
-          <strong>{t("noPhotosYet")}</strong>
-          <span>{mediaUploadDeferred ? mediaDeferredCopy.detail : t("addPhotosHelp")}</span>
-        </div>
-      ) : (
-        <div style={swipeGalleryRow}>
-          {photos.map((photo, index) => {
-            const previewUrl = getRequestPhotoPreviewUrl(photo);
-            return (
-              <div key={photo.id || previewUrl || index} style={editPhotoCard}>
-                <button
-                  type="button"
-                  style={editPhotoPreviewButton}
-                  onClick={() => previewUrl && onPreview(previewUrl)}
-                >
-                  <img src={previewUrl} alt="" style={swipePhotoImage} />
-                </button>
-
-                <button
-                  type="button"
-                  style={deletePhotoButton}
-                  onClick={() => onRemove(index)}
-                  aria-label={
-                    language === "es"
-                      ? `Eliminar foto ${index + 1}`
-                      : `Remove photo ${index + 1}`
-                  }
-                  title={
-                    language === "es"
-                      ? `Eliminar foto ${index + 1}`
-                      : `Remove photo ${index + 1}`
-                  }
-                >
-                  ×
-                </button>
-
-                <div style={editPhotoOrderControls}>
-                  <button
-                    type="button"
-                    onClick={() => onMove(index, -1)}
-                    disabled={index === 0}
-                    aria-label={getRequestEditPhotoOrderLabel(language, -1, index)}
-                    title={getRequestEditPhotoOrderLabel(language, -1, index)}
-                    style={{
-                      ...editPhotoOrderButton,
-                      ...(index === 0 ? editPhotoOrderButtonDisabled : {}),
-                    }}
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMove(index, 1)}
-                    disabled={index === photos.length - 1}
-                    aria-label={getRequestEditPhotoOrderLabel(language, 1, index)}
-                    title={getRequestEditPhotoOrderLabel(language, 1, index)}
-                    style={{
-                      ...editPhotoOrderButton,
-                      ...(index === photos.length - 1
-                        ? editPhotoOrderButtonDisabled
-                        : {}),
-                    }}
-                  >
-                    →
-                  </button>
-                </div>
-
-                <span style={swipePhotoOverlay}>
-                  {index === 0 ? mainPhotoLabel : getPhotoLabel(index)}
-                </span>
-
-                {photo.displayOnly && (
-                  <span style={legacyPhotoBadge}>
-                    {language === "es" ? "Antigua" : "Older photo"}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {photos.some((photo) => photo?.displayOnly) && (
-        <p role="note" style={legacyPhotoWarning}>
-          {language === "es"
-            ? "Esta foto antigua se puede ver, pero no se puede preservar mediante la edición gobernada. Elimínala y agrégala otra vez antes de guardar cambios de fotos."
-            : "This older photo can be viewed, but it cannot be preserved through governed photo editing. Remove it and add it again before saving photo changes."}
-        </p>
-      )}
     </div>
   );
 }
@@ -882,107 +632,6 @@ function EmergencyRequestCard({
   );
 }
 
-function RequestLifecycleFoundation({ request, language, setPage }) {
-  const requestId = request?.requestId || request?.id;
-  const contractVersion = Number(request?.lifecycleContractVersion || 1);
-  const [status, setStatus] = useState(
-    contractVersion === 2 ? "loading" : "idle"
-  );
-  const [foundation, setFoundation] = useState(null);
-
-  useEffect(() => {
-    if (contractVersion !== 2 || !requestId) return undefined;
-    let active = true;
-
-    void authFetch(
-      `/posts/${encodeURIComponent(requestId)}/lifecycle`,
-      { cache: "no-store" },
-      setPage
-    ).then((result) => {
-      if (!active) return;
-      const normalized = result?.response?.ok
-        ? normalizeRequestLifecycleFoundation(result.data)
-        : null;
-      setFoundation(normalized);
-      setStatus(normalized ? "ready" : "unavailable");
-    }).catch(() => {
-      if (!active) return;
-      setFoundation(null);
-      setStatus("unavailable");
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [contractVersion, requestId, setPage]);
-
-  if (contractVersion !== 2 || status === "idle" || status === "loading") {
-    return null;
-  }
-
-  if (status === "unavailable" || !foundation) {
-    return (
-      <p role="status" style={lifecycleUnavailableText}>
-        {t("lifecycleHistoryUnavailable", language)}
-      </p>
-    );
-  }
-
-  return (
-    <section style={lifecycleFoundationSection}>
-      <strong style={lifecycleFoundationTitle}>
-        {t("reportedConcernHistory", language)}
-      </strong>
-      <div style={lifecycleConcernList}>
-        {foundation.reportedConcerns.map((concern) => (
-          <div key={concern.id} style={lifecycleConcernItem}>
-            <span style={lifecycleItemLabel}>
-              {t("originallyReported", language)}
-            </span>
-            <p style={lifecycleConcernText}>{concern.originalText}</p>
-            {concern.clarifications.length > 0 && (
-              <div style={lifecycleClarificationList}>
-                <span style={lifecycleItemLabel}>
-                  {t("concernClarifications", language)}
-                </span>
-                {concern.clarifications.map((clarification) => (
-                  <p key={clarification.id} style={lifecycleClarificationText}>
-                    {clarification.text}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {foundation.participants.length > 0 && (
-        <div style={lifecycleParticipantSection}>
-          <strong style={lifecycleFoundationTitle}>
-            {t("knownJobParticipants", language)}
-          </strong>
-          <div style={lifecycleParticipantList}>
-            {foundation.participants.map((participant) => (
-              <div key={participant.id} style={lifecycleParticipantRow}>
-                <span>
-                  {participant.displayName || t("lifecycleParticipant", language)}
-                </span>
-                <span style={lifecycleParticipantRole}>
-                  {participant.roles
-                    .map((role) => getParticipantRoleLabelKey(role))
-                    .filter(Boolean)
-                    .map((key) => t(key, language))
-                    .join(", ")}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function MyRequests({ setPage, view = "list" }) {
   const language = getLanguage();
   const isDetailView = view === "detail";
@@ -1127,31 +776,10 @@ function MyRequests({ setPage, view = "list" }) {
     )
   );
   const [previewImage, setPreviewImage] = useState(null);
-  const [editingId, setEditingId] = useState(null);
   const [revisionQuoteId, setRevisionQuoteId] = useState(null);
   const [revisionText, setRevisionText] = useState("");
   const [pendingCancelId, setPendingCancelId] = useState(null);
   const [cancellationCheckAt, setCancellationCheckAt] = useState(null);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    description: "",
-    location: "",
-    locationIntakeMode: "",
-    locationNormalizationStatus: "legacy_unclassified",
-    serviceAddressLine1: "",
-    serviceCity: "",
-    serviceRegion: "",
-    servicePostalCode: "",
-    serviceCountryCode: "",
-    unitNumber: "",
-    accessNotes: "",
-    photos: [],
-    photosChanged: false,
-    photoError: "",
-    cleanupWarning: "",
-  });
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const editPhotoSessionUploadsRef = useRef([]);
 
   const pendingCancelRequest = pendingCancelId
     ? requests.find(
@@ -1373,317 +1001,6 @@ function MyRequests({ setPage, view = "list" }) {
     openRequestConversation(projectRecord, workflow.quote || {});
   }
 
-  async function cleanupUploadedEditRequestPhotos(mediaItems = []) {
-    if (!mediaItems.length) return true;
-    try {
-      const results = await Promise.all(
-        mediaItems.map((media) =>
-          cleanupRequestPhoto({
-            media,
-            authFetchImpl: authFetch,
-            setPage,
-          })
-        )
-      );
-      return results.every(Boolean);
-    } catch {
-      return false;
-    }
-  }
-
-  function startEdit(request) {
-    revokeLocalRequestEditPhotoPreviews(editForm.photos);
-    if (editPhotoSessionUploadsRef.current.length > 0) {
-      void cleanupUploadedEditRequestPhotos(editPhotoSessionUploadsRef.current);
-      editPhotoSessionUploadsRef.current = [];
-    }
-    setEditingId(request.requestId || request.id);
-    setEditForm({
-      title: request.title || "",
-      description: request.description || "",
-      location: request.location || "",
-      locationIntakeMode: request.locationIntakeMode || "",
-      locationNormalizationStatus:
-        request.locationNormalizationStatus || "legacy_unclassified",
-      serviceAddressLine1: request.serviceAddressLine1 || "",
-      serviceCity: request.serviceCity || "",
-      serviceRegion: request.serviceRegion || "",
-      servicePostalCode: request.servicePostalCode || "",
-      serviceCountryCode: request.serviceCountryCode || "",
-      unitNumber: request.unitNumber || "",
-      accessNotes: request.accessNotes || "",
-      photos: hydrateRequestEditPhotos(request),
-      photosChanged: false,
-      photoError: "",
-      cleanupWarning: "",
-    });
-  }
-
-  useEffect(() => {
-    if (localStorage.getItem("meetroOpenHomeownerRequestEdit") !== "true") {
-      return;
-    }
-
-    localStorage.removeItem("meetroOpenHomeownerRequestEdit");
-  }, []);
-
-  function clearEditPhotoSession() {
-    revokeLocalRequestEditPhotoPreviews(editForm.photos);
-    editPhotoSessionUploadsRef.current = [];
-    setEditForm({
-      title: "",
-      description: "",
-      location: "",
-      locationIntakeMode: "",
-      locationNormalizationStatus: "legacy_unclassified",
-      serviceAddressLine1: "",
-      serviceCity: "",
-      serviceRegion: "",
-      servicePostalCode: "",
-      serviceCountryCode: "",
-      unitNumber: "",
-      accessNotes: "",
-      photos: [],
-      photosChanged: false,
-      photoError: "",
-      cleanupWarning: "",
-    });
-  }
-
-  async function saveEdit(requestId) {
-    if (canReadLegacyWorkflowStorage()) return;
-    setRequestMutationStatus("pending");
-    setRequestMutationError("");
-    setEditForm((current) => ({
-      ...current,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-
-    let uploadedMediaForCleanup = [];
-
-    try {
-      const body = {
-        title: editForm.title.trim(),
-        description: editForm.description.trim(),
-      };
-      if (editForm.locationNormalizationStatus === "normalized") {
-        Object.assign(body, {
-          location_intake_mode: editForm.locationIntakeMode,
-          service_city: editForm.serviceCity.trim(),
-          service_region: editForm.serviceRegion.trim(),
-          service_postal_code: editForm.servicePostalCode.trim(),
-          service_country_code: editForm.serviceCountryCode.trim(),
-          access_notes: editForm.accessNotes.trim(),
-        });
-        if (editForm.locationIntakeMode === "exact_on_file") {
-          Object.assign(body, {
-            service_address_line1: editForm.serviceAddressLine1.trim(),
-            unit_number: editForm.unitNumber.trim(),
-          });
-        }
-      } else {
-        body.location = editForm.location.trim();
-      }
-
-      if (editForm.photosChanged) {
-        if (mediaUploadDeferred) {
-          const copy = getMediaDeferredCopy(language);
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: copy.detail,
-          }));
-          return;
-        }
-
-        if (editForm.photos.some((photo) => photo?.displayOnly)) {
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: getRequestEditPhotoErrorMessage(
-              REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
-              language
-            ),
-          }));
-          return;
-        }
-
-        const pendingLocalPhotos = getPendingLocalRequestPhotoItems(editForm.photos);
-        const uploadedMediaByItemId = new Map();
-
-        if (pendingLocalPhotos.length > 0) {
-          setUploadingPhotos(true);
-          const uploadedRequestPhotos = await uploadRequestPhotos({
-            files: pendingLocalPhotos.map((photo) => photo.file),
-            authFetchImpl: authFetch,
-            setPage,
-          });
-
-          if (!uploadedRequestPhotos.ok) {
-            setRequestMutationStatus("failed");
-            setEditForm((current) => ({
-              ...current,
-              photoError: getRequestEditPhotoErrorMessage(
-                uploadedRequestPhotos.code,
-                language
-              ),
-            }));
-            return;
-          }
-
-          uploadedMediaForCleanup = uploadedRequestPhotos.photos;
-          editPhotoSessionUploadsRef.current = uploadedMediaForCleanup;
-          pendingLocalPhotos.forEach((photo, index) => {
-            uploadedMediaByItemId.set(photo.id, uploadedMediaForCleanup[index]);
-          });
-        }
-
-        const replacement = buildRequestPhotoReplacementPayload(editForm.photos, {
-          uploadedMediaByItemId,
-        });
-
-        if (!replacement.ok) {
-          const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-            uploadedMediaForCleanup
-          );
-          editPhotoSessionUploadsRef.current = [];
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: getRequestEditPhotoErrorMessage(replacement.code, language),
-            cleanupWarning: cleanupSucceeded
-              ? ""
-              : getRequestEditCleanupWarning(language),
-          }));
-          return;
-        }
-
-        body.request_photos = replacement.request_photos;
-      }
-
-      const result = await authFetch(
-        `/posts/${encodeURIComponent(requestId)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(body),
-        },
-        setPage
-      );
-      if (!result?.response?.ok || !result.data?.post) {
-        const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-          uploadedMediaForCleanup
-        );
-        editPhotoSessionUploadsRef.current = [];
-        setRequestMutationStatus("failed");
-        setRequestMutationError(result?.data?.message || "The request could not be updated.");
-        setEditForm((current) => ({
-          ...current,
-          cleanupWarning: cleanupSucceeded
-            ? ""
-            : getRequestEditCleanupWarning(language),
-        }));
-        return;
-      }
-      setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
-      setRequestMutationStatus("confirmed");
-      setEditingId(null);
-      clearEditPhotoSession();
-    } catch {
-      const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-        uploadedMediaForCleanup
-      );
-      editPhotoSessionUploadsRef.current = [];
-      setRequestMutationStatus("failed");
-      setRequestMutationError("The request could not be updated. Try again.");
-      setEditForm((current) => ({
-        ...current,
-        cleanupWarning: cleanupSucceeded
-          ? ""
-          : getRequestEditCleanupWarning(language),
-      }));
-    } finally {
-      setUploadingPhotos(false);
-    }
-  }
-
-  function handleEditPhotoUpload(event) {
-    const files = Array.from(event.target.files || []);
-    event.target.value = "";
-
-    if (mediaUploadDeferred) {
-      const copy = getMediaDeferredCopy(language);
-      setEditForm((current) => ({
-        ...current,
-        photoError: copy.detail,
-      }));
-      addNotification({ title: copy.title, message: copy.detail, type: "media" });
-      return;
-    }
-
-    const validation = validateRequestPhotoFiles(files, {
-      existingCount: editForm.photos.length,
-    });
-    if (!validation.ok) {
-      setEditForm((current) => ({
-        ...current,
-        photoError: getRequestEditPhotoErrorMessage(validation.code, language),
-      }));
-      return;
-    }
-
-    const additions = validation.files.map((file) =>
-      createLocalRequestPhotoItem(createTemporaryRequestPhotoPreview(file))
-    );
-    setEditForm((current) => ({
-      ...current,
-      photos: [...current.photos, ...additions],
-      photosChanged: true,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-  }
-
-  function removeEditPhoto(indexToRemove) {
-    setEditForm((current) => {
-      const removed = current.photos[indexToRemove];
-      if (!removed) return current;
-      if (removed.kind === "local") removed.revoke?.();
-      return {
-        ...current,
-        photos: removeRequestEditPhotoAt(current.photos, indexToRemove),
-        photosChanged: true,
-        photoError: "",
-        cleanupWarning: "",
-      };
-    });
-  }
-
-  function moveEditPhoto(index, direction) {
-    setEditForm((current) => ({
-      ...current,
-      photos: reorderRequestEditPhotos(current.photos, index, direction),
-      photosChanged: true,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-  }
-
-  async function cancelEdit() {
-    const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-      editPhotoSessionUploadsRef.current
-    );
-    if (!cleanupSucceeded) {
-      addNotification({
-        title: language === "es" ? "Limpieza pendiente" : "Cleanup pending",
-        message: getRequestEditCleanupWarning(language),
-        type: "media",
-      });
-    }
-    setEditingId(null);
-    clearEditPhotoSession();
-  }
-
   function requestCancelProject(requestId) {
     setCancellationCheckAt(Date.now());
     setPendingCancelId(requestId);
@@ -1707,7 +1024,6 @@ function MyRequests({ setPage, view = "list" }) {
       }
       setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
       setRequestMutationStatus("confirmed");
-      setEditingId(null);
       setPendingCancelId(null);
       setCancellationCheckAt(null);
     } catch {
@@ -2022,6 +1338,8 @@ function MyRequests({ setPage, view = "list" }) {
             const hasQuoteReview =
               Array.isArray(truthfulRequest.quotesReceived) &&
               truthfulRequest.quotesReceived.length > 0;
+            const conversationAvailable =
+              getCanonicalConversationActionTarget(request).ok;
 
             const authoritativeCounts = getAuthoritativeHomeownerRequestCounts(request);
 
@@ -2215,137 +1533,41 @@ function MyRequests({ setPage, view = "list" }) {
                         {t("myRequestsDetails", language)}
                       </h3>
 
-                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-                          <input
-                            value={editForm.title}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder={t("myRequestsTitlePlaceholder", language)}
-                            style={input}
-                          />
+                      <p
+                        style={{
+                          margin: "0 0 12px",
+                          color: "#64748b",
+                          fontSize: 14,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {request.description || t("myRequestsNoDetails", language)}
+                      </p>
 
-                          <textarea
-                            value={editForm.description}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                description: event.target.value,
-                              }))
-                            }
-                            placeholder={t("myRequestsDetailsPlaceholder", language)}
-                            style={{ ...textarea, minHeight: 110 }}
-                          />
-
-                          {editForm.locationNormalizationStatus === "normalized" ? (
-                            <div style={{ display: "grid", gap: 10 }}>
-                              {editForm.locationIntakeMode === "exact_on_file" && (
-                                <input
-                                  value={editForm.serviceAddressLine1}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceAddressLine1: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("streetAddress", language)}
-                                  style={input}
-                                />
-                              )}
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-                                <input
-                                  value={editForm.serviceCity}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceCity: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("city", language)}
-                                  style={input}
-                                />
-                                <input
-                                  value={editForm.serviceRegion}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceRegion: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("state", language)}
-                                  style={input}
-                                />
-                                <input
-                                  value={editForm.servicePostalCode}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      servicePostalCode: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("zipCode", language)}
-                                  style={input}
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <input
-                              value={editForm.location}
-                              onChange={(event) =>
-                                setEditForm((current) => ({
-                                  ...current,
-                                  location: event.target.value,
-                                }))
-                              }
-                              placeholder={t("myRequestsLocationPlaceholder", language)}
-                              style={input}
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <p
-                          style={{
-                            margin: "0 0 12px",
-                            color: "#64748b",
-                            fontSize: 14,
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {request.description || t("myRequestsNoDetails", language)}
-                        </p>
-                      )}
-
-                      <RequestLifecycleFoundation
+                      <PhotoStrip
                         request={request}
+                        onPreview={setPreviewImage}
                         language={language}
-                        setPage={setPage}
                       />
-
-                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
-                        <EditPhotoManager
-                          photos={editForm.photos}
-                          uploading={uploadingPhotos}
-                          onUpload={handleEditPhotoUpload}
-                          onRemove={removeEditPhoto}
-                          onMove={moveEditPhoto}
-                          onPreview={setPreviewImage}
-                          language={language}
-                          mediaUploadDeferred={mediaUploadDeferred}
-                          photoError={editForm.photoError}
-                          cleanupWarning={editForm.cleanupWarning}
-                        />
-                      ) : (
-                        <PhotoStrip
-                          request={request}
-                          onPreview={setPreviewImage}
-                          language={language}
-                        />
-                      )}
                     </div>
+
+                    <HomeownerRequestModificationPanel
+                      request={request}
+                      language={language}
+                      setPage={setPage}
+                      mediaUploadDeferred={mediaUploadDeferred}
+                      conversationAvailable={conversationAvailable}
+                      onOpenConversation={() => openRequestConversation(request)}
+                      onPreview={setPreviewImage}
+                      onRequestChanged={(post) =>
+                        setBackendRequests((records) =>
+                          replaceCanonicalRequest(records, post)
+                        )
+                      }
+                      onCanonicalRefresh={() =>
+                        setRequestReloadKey((value) => value + 1)
+                      }
+                    />
 
                     <HomeownerProfessionalResponseReview
                       requestId={requestId}
@@ -2735,77 +1957,7 @@ function MyRequests({ setPage, view = "list" }) {
                   </div>
                 )}
 
-                {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
                   <div style={actionRow}>
-                    <button
-                      style={primaryButton}
-                      onClick={() => saveEdit(requestId)}
-                      disabled={requestMutationStatus === "pending"}
-                    >
-                      {t("myRequestsSaveChanges", language)}
-                    </button>
-
-                    <button
-                      style={secondaryButton}
-                      onClick={cancelEdit}
-                    >
-                      {t("myRequestsCancelEdit", language)}
-                    </button>
-                  </div>
-                ) : (
-                  <div style={actionRow}>
-                    {!["completed", "cancelled"].includes(request.status) && (
-                      request.status === "accepted" ? (
-                        <button
-                          style={secondaryButton}
-                          onClick={() => {
-                            localStorage.setItem(
-                              "selectedHomeownerRequestId",
-                              requestId
-                            );
-
-                            localStorage.setItem(
-                              "selectedChangeOrderRequest",
-                              JSON.stringify(request)
-                            );
-
-                            localStorage.setItem(
-                              "selectedHomeownerRequest",
-                              JSON.stringify(request)
-                            );
-
-                            localStorage.setItem(
-                              "selectedHomeownerRequestId",
-                              requestId
-                            );
-
-                            setPage("changeOrderRequest");
-                          }}
-                        >
-                          {language === "es"
-                            ? "Solicitar Cambio"
-                            : "Request Service Change"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          style={disabledSecondaryButton}
-                          disabled
-                          aria-disabled="true"
-                          title={
-                            language === "es"
-                              ? "La edición de solicitudes aún no está disponible."
-                              : "Request editing is not available yet."
-                          }
-                          onClick={() => startEdit(request)}
-                        >
-                          {language === "es"
-                            ? "Editar Solicitud no disponible"
-                            : "Edit Request unavailable"}
-                        </button>
-                      )
-                    )}
-
                     {request.status === "completed" ? (
                       <>
                         {request.needsReview && (
@@ -2868,7 +2020,6 @@ function MyRequests({ setPage, view = "list" }) {
                       )
                     )}
                   </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -3224,98 +2375,6 @@ const requestCard = {
 const dedicatedRequestDetail = {
   border: "1px solid var(--meetro-color-line)",
   boxShadow: "var(--meetro-shadow-lifted)",
-};
-
-const lifecycleFoundationSection = {
-  borderTop: "1px solid var(--meetro-color-line)",
-  marginTop: "14px",
-  paddingTop: "14px",
-  display: "grid",
-  gap: "10px",
-};
-
-const lifecycleFoundationTitle = {
-  color: "var(--meetro-color-ink)",
-  fontSize: "14px",
-  lineHeight: 1.35,
-  fontWeight: 900,
-};
-
-const lifecycleConcernList = {
-  display: "grid",
-  gap: "10px",
-};
-
-const lifecycleConcernItem = {
-  minWidth: 0,
-};
-
-const lifecycleItemLabel = {
-  display: "block",
-  color: "var(--meetro-color-muted)",
-  fontSize: "12px",
-  lineHeight: 1.35,
-  fontWeight: 800,
-};
-
-const lifecycleConcernText = {
-  margin: "3px 0 0",
-  color: "var(--meetro-color-ink)",
-  fontSize: "14px",
-  lineHeight: 1.5,
-  overflowWrap: "anywhere",
-};
-
-const lifecycleClarificationList = {
-  marginTop: "8px",
-  paddingLeft: "12px",
-  borderLeft: "2px solid var(--meetro-color-line)",
-};
-
-const lifecycleClarificationText = {
-  margin: "3px 0 0",
-  color: "var(--meetro-color-muted)",
-  fontSize: "13px",
-  lineHeight: 1.45,
-  overflowWrap: "anywhere",
-};
-
-const lifecycleParticipantSection = {
-  borderTop: "1px solid var(--meetro-color-line)",
-  paddingTop: "10px",
-};
-
-const lifecycleParticipantList = {
-  display: "grid",
-  gap: "6px",
-  marginTop: "7px",
-};
-
-const lifecycleParticipantRow = {
-  minWidth: 0,
-  display: "flex",
-  alignItems: "baseline",
-  justifyContent: "space-between",
-  flexWrap: "wrap",
-  gap: "4px 12px",
-  color: "var(--meetro-color-ink)",
-  fontSize: "13px",
-  lineHeight: 1.4,
-  fontWeight: 800,
-};
-
-const lifecycleParticipantRole = {
-  color: "var(--meetro-color-muted)",
-  fontWeight: 700,
-};
-
-const lifecycleUnavailableText = {
-  margin: "12px 0 0",
-  borderTop: "1px solid var(--meetro-color-line)",
-  paddingTop: "12px",
-  color: "var(--meetro-color-muted)",
-  fontSize: "13px",
-  lineHeight: 1.45,
 };
 
 const workflowHubCard = {
@@ -3867,31 +2926,6 @@ const cancelRevisionButton = {
   cursor: "pointer",
 };
 
-const input = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  borderRadius: 14,
-  padding: "12px 14px",
-  fontSize: 14,
-  color: "#111827",
-  background: "#ffffff",
-  outline: "none",
-};
-
-const textarea = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  borderRadius: 14,
-  padding: "12px 14px",
-  fontSize: 14,
-  color: "#111827",
-  background: "#ffffff",
-  outline: "none",
-  resize: "vertical",
-};
-
 const actionRow = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -3971,130 +3005,6 @@ const cancelledRequestNotice = {
   boxSizing: "border-box",
 };
 
-const editPhotoManager = {
-  display: "grid",
-  gap: "12px",
-};
-
-const uploadingText = {
-  margin: 0,
-  color: "#b45309",
-  fontSize: "13px",
-  fontWeight: "800",
-};
-
-const editPhotoCleanupWarning = {
-  margin: 0,
-  color: "#92400e",
-  fontSize: "13px",
-  lineHeight: 1.45,
-};
-
-const addPhotoButton = {
-  border: "none",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  padding: "9px 12px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const disabledAddPhotoButton = {
-  background: "#e2e8f0",
-  color: "#64748b",
-  cursor: "not-allowed",
-};
-
-const editPhotoCard = {
-  position: "relative",
-  width: "140px",
-  height: "150px",
-  borderRadius: "18px",
-  overflow: "hidden",
-  flex: "0 0 auto",
-  scrollSnapAlign: "start",
-  background: "#111827",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
-};
-
-const editPhotoPreviewButton = {
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  cursor: "pointer",
-};
-
-const deletePhotoButton = {
-  position: "absolute",
-  top: "8px",
-  right: "8px",
-  width: "30px",
-  height: "30px",
-  borderRadius: "50%",
-  border: "none",
-  background: "rgba(239,68,68,0.95)",
-  color: "white",
-  fontSize: "20px",
-  fontWeight: "900",
-  cursor: "pointer",
-  zIndex: 2,
-};
-
-const editPhotoOrderControls = {
-  position: "absolute",
-  left: "8px",
-  bottom: "8px",
-  display: "flex",
-  gap: "6px",
-  zIndex: 2,
-};
-
-const editPhotoOrderButton = {
-  width: "34px",
-  height: "34px",
-  borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.64)",
-  background: "rgba(15,23,42,0.72)",
-  color: "white",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const editPhotoOrderButtonDisabled = {
-  opacity: 0.4,
-  cursor: "not-allowed",
-};
-
-const legacyPhotoBadge = {
-  position: "absolute",
-  left: "8px",
-  top: "8px",
-  zIndex: 3,
-  borderRadius: "999px",
-  padding: "4px 8px",
-  background: "rgba(251, 191, 36, 0.94)",
-  color: "#78350f",
-  fontSize: "10px",
-  fontWeight: "950",
-  letterSpacing: "0.02em",
-};
-
-const legacyPhotoWarning = {
-  margin: 0,
-  padding: "10px 12px",
-  borderRadius: "14px",
-  border: "1px solid rgba(251, 191, 36, 0.42)",
-  background: "#fffbeb",
-  color: "#92400e",
-  fontSize: "13px",
-  fontWeight: "800",
-  lineHeight: 1.45,
-};
-
 const primaryButton = {
   border: "none",
   background: "var(--meetro-gradient-community-action)",
@@ -4104,25 +3014,6 @@ const primaryButton = {
   fontWeight: "900",
   cursor: "pointer",
 };
-
-const secondaryButton = {
-  width: "100%",
-  border: "1px solid #e5e7eb",
-  background: "white",
-  borderRadius: "16px",
-  padding: "13px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const disabledSecondaryButton = {
-  ...secondaryButton,
-  background: "var(--meetro-surface-warm)",
-  color: "var(--meetro-color-muted)",
-  cursor: "not-allowed",
-  opacity: 0.8,
-};
-
 
 const confirmOverlay = {
   position: "fixed",

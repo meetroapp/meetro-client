@@ -61,15 +61,25 @@ test("malformed lifecycle data fails closed without inventing concern or partici
   assert.deepEqual(normalized.participants[0].roles, []);
 });
 
-test("My Requests loads lifecycle only for backend-declared v2 and exposes no mutation controls", () => {
-  const source = readFileSync(
+test("My Requests loads lifecycle only for backend-declared v2 and delegates governed mutation controls", () => {
+  const myRequestsSource = readFileSync(
     new URL("../src/pages/MyRequests.jsx", import.meta.url),
     "utf8"
   );
-  assert.match(source, /contractVersion !== 2/);
-  assert.match(source, /\/posts\/\$\{encodeURIComponent\(requestId\)\}\/lifecycle/);
-  assert.match(source, /reportedConcernHistory/);
-  assert.match(source, /knownJobParticipants/);
+  const panelSource = readFileSync(
+    new URL("../src/components/HomeownerRequestModificationPanel.jsx", import.meta.url),
+    "utf8"
+  );
+  const apiSource = readFileSync(
+    new URL("../src/utils/homeownerRequestModificationApi.js", import.meta.url),
+    "utf8"
+  );
+  const source = `${myRequestsSource}\n${panelSource}\n${apiSource}`;
+  assert.match(panelSource, /contractVersion !== 2/);
+  assert.match(apiSource, /\/posts\/\$\{encodeURIComponent\(normalizedRequestId\)\}\/lifecycle/);
+  assert.match(panelSource, /reportedConcernHistory/);
+  assert.match(panelSource, /knownJobParticipants/);
+  assert.match(apiSource, /expected_version/);
   assert.doesNotMatch(source, /reported-concerns[^"'`]*\/(?:update|delete)|assign-role|create-grant/i);
 });
 

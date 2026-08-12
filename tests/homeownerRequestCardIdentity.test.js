@@ -15,6 +15,10 @@ const appSource = readFileSync(
   new URL("../src/App.jsx", import.meta.url),
   "utf8"
 );
+const modificationPanelSource = readFileSync(
+  new URL("../src/components/HomeownerRequestModificationPanel.jsx", import.meta.url),
+  "utf8"
+);
 
 const requests = [
   { requestId: "request-a", title: "Plumbing Repair", detail: "A detail" },
@@ -60,15 +64,16 @@ test("ordinary cards remain compact while full sections render only in detail mo
   assert.match(myRequestsSource, /\{showsDedicatedDetail && \(\s*<div[\s\S]*data-homeowner-request-details-id/);
   assert.match(myRequestsSource, /const showsDedicatedDetail =[\s\S]*isDetailView && requestId === selectedRequestId/);
   assert.match(myRequestsSource, /<HomeownerWorkflowHub/);
-  assert.match(myRequestsSource, /<RequestLifecycleFoundation/);
+  assert.match(myRequestsSource, /<HomeownerRequestModificationPanel/);
   assert.match(myRequestsSource, /<PhotoStrip/);
   assert.match(myRequestsSource, /<HomeownerProfessionalResponseReview/);
 });
 
 test("detail navigation, edit containment, cancellation, and Emergency routes stay explicit", () => {
   assert.match(myRequestsSource, /isDetailView \? \(\) => setPage\("myRequests"\)/);
-  assert.match(myRequestsSource, /Edit Request unavailable/);
-  assert.match(myRequestsSource, /disabled\s+aria-disabled="true"/);
+  assert.match(modificationPanelSource, /actions\.editRequest/);
+  assert.match(modificationPanelSource, /data-homeowner-modification-state=\{loadState\}/);
+  assert.doesNotMatch(myRequestsSource, /Edit Request unavailable/);
   assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(pendingCancelId\)\}\/cancel`/);
   assert.match(myRequestsSource, /buildEmergencyRequestRoute\(/);
   assert.match(myRequestsSource, /!isDetailView && emergencyRequestStatus/);

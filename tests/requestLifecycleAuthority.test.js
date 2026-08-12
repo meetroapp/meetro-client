@@ -14,6 +14,10 @@ import {
 
 const homeSource = readFileSync(new URL("../src/pages/Home.jsx", import.meta.url), "utf8");
 const myRequestsSource = readFileSync(new URL("../src/pages/MyRequests.jsx", import.meta.url), "utf8");
+const requestModificationApiSource = readFileSync(
+  new URL("../src/utils/homeownerRequestModificationApi.js", import.meta.url),
+  "utf8"
+);
 const messagesSource = readFileSync(new URL("../src/pages/MessagesInbox.jsx", import.meta.url), "utf8");
 const threadSource = readFileSync(new URL("../src/pages/ConversationThread.jsx", import.meta.url), "utf8");
 const businessLeadsSource = readFileSync(new URL("../src/pages/BusinessLeads.jsx", import.meta.url), "utf8");
@@ -205,7 +209,10 @@ test("Home cards and details share the canonical conversation decision", () => {
 test("request surfaces render unavailable states and owner mutations without local authority", () => {
   assert.match(homeSource, /REQUEST_COLLECTION_STATUS\.UNAVAILABLE/);
   assert.match(homeSource, /Requests unavailable/);
-  assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(requestId\)\}`/);
+  assert.match(
+    requestModificationApiSource,
+    /`\/posts\/\$\{encodeURIComponent\(normalizedRequestId\)\}`/
+  );
   assert.match(myRequestsSource, /`\/posts\/\$\{encodeURIComponent\(pendingCancelId\)\}\/cancel`/);
   assert.match(myRequestsSource, /Request not changed/);
   assert.match(
