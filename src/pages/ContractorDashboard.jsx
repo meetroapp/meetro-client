@@ -104,6 +104,7 @@ import {
   fetchWorkCenterLifecycleProjection,
   getWorkCenterLifecycleProjectionTarget,
 } from "../utils/workCenterLifecycleProjection";
+import { hasCanonicalLiveJobAction } from "../utils/canonicalLiveJobProjection";
 import {
   fetchCanonicalWorkCenterEntries,
   isCanonicalWorkCenterEntry,
@@ -10371,6 +10372,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
               const historyServiceRecommendations =
                 getHistoryServiceRecommendations(scopedJob);
               const workflowState = resolveCustomerJobWorkflowState(scopedJob);
+              const canonicalLiveJob =
+                isCanonicalReadOnlyJob &&
+                workCenterLifecycleProjection.status === "ready"
+                  ? workCenterLifecycleProjection.projection?.liveJob || null
+                  : null;
               const supportingLinks = getCustomerJobSupportingLinks(scopedJob, workflowState);
               const externalManualActions = getExternalCustomerManualActions(scopedJob, workflowState);
               const isProposalSentState = workflowState.stateKey === "proposal_sent";
@@ -10385,15 +10391,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   }
                 : workflowState.tone;
               const jobDisplayStatus = isCanonicalReadOnlyJob
-                ? "Review"
+                ? canonicalLiveJob?.stage.label || "Current status unavailable"
                 : isJobHistoryMode
                   ? translate("stateClosed", activeLanguage)
                   : workflowState.statusLabel;
               const jobDisplayNextStep = isCanonicalReadOnlyJob
-                ? "Review canonical lifecycle details"
+                ? canonicalLiveJob?.nextAction.label ||
+                  "The current next step could not be loaded."
                 : isJobHistoryMode
                   ? translate("workCenterReviewTheFullJobHistory", activeLanguage)
                   : workflowState.nextActionLabel;
+              const jobDisplayResponsibility = isCanonicalReadOnlyJob
+                ? canonicalLiveJob?.responsibility.label || "Unavailable"
+                : "";
+              const jobDisplayBlocker = isCanonicalReadOnlyJob
+                ? canonicalLiveJob?.blocker?.label || ""
+                : "";
               const persistentContextCustomer =
                 selectedWorkCenterJob.customer ||
                 scopedJob.customer ||
@@ -10511,13 +10524,36 @@ function ContractorDashboard({ setPage, language = "en" }) {
                       </span>
                       <div style={jobPersistentContextNext}>
                         <span style={jobPersistentContextNextLabel}>
-                          {translate("workCenterNextResponsibility", activeLanguage)}
+                          {isCanonicalReadOnlyJob
+                            ? "Next step"
+                            : translate("workCenterNextResponsibility", activeLanguage)}
                         </span>
                         <strong style={jobPersistentContextNextText}>
                           {jobDisplayNextStep}
                         </strong>
+                        {isCanonicalReadOnlyJob && (
+                          <>
+                            <span style={jobPersistentContextNextLabel}>
+                              Who acts next
+                            </span>
+                            <strong style={jobPersistentContextNextText}>
+                              {jobDisplayResponsibility}
+                            </strong>
+                            {jobDisplayBlocker && (
+                              <span role="status" style={jobPersistentContextBlocker}>
+                                {jobDisplayBlocker}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </div>
-                      {!isJobHistoryMode && scopedJob.conversationId && (
+                      {!isJobHistoryMode &&
+                        scopedJob.conversationId &&
+                        (!isCanonicalReadOnlyJob ||
+                          hasCanonicalLiveJobAction(
+                            canonicalLiveJob,
+                            "MESSAGE_CUSTOMER"
+                          )) && (
                         <button
                           type="button"
                           style={jobPersistentContextAction}
@@ -10670,6 +10706,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             workCenterLifecycleProjection.projection.customerConcern
                               ?.originalText || ""
                           }
+                          availableActions={canonicalLiveJob?.availableActions || []}
                           setPage={setPage}
                         />
                         <CanonicalWorkstreamsPanel
@@ -12424,8 +12461,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         isCanonicalWorkCenterEntry(job);
                       const jobListPresentation = isCanonicalReadOnlyJob
                         ? {
-                            statusLabel: "Review",
-                            nextStepLabel: "View canonical details",
+                            statusLabel:
+                              job.liveJob?.stage?.label ||
+                              "Current status unavailable",
+                            nextStepLabel:
+                              job.liveJob?.nextAction?.label ||
+                              "Open the Job to refresh its next step",
                           }
                         : {
                             statusLabel: "Legacy reference",
@@ -19901,6 +19942,19 @@ const jobPersistentContextNextText = {
   fontSize: "15px",
   lineHeight: 1.25,
   fontWeight: "950",
+  overflowWrap: "anywhere",
+};
+
+const jobPersistentContextBlocker = {
+  marginTop: "4px",
+  padding: "8px 10px",
+  borderRadius: "10px",
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "750",
+  lineHeight: 1.4,
   overflowWrap: "anywhere",
 };
 

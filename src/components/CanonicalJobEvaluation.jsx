@@ -57,6 +57,7 @@ function canonicalRecord({ jobId, requestId, relationshipId }) {
 export default function CanonicalJobEvaluation({
   record = {},
   customerConcern = "",
+  availableActions = [],
   setPage,
 }) {
   const sourceContext = getCanonicalEvaluationSourceContext(record);
@@ -124,7 +125,16 @@ export default function CanonicalJobEvaluation({
 
   const evaluation = loadState.evaluation;
   const isDraft = evaluation?.evaluation?.status === "draft";
-  const canEdit = evaluation?.evaluation?.capabilities?.canEditDraft === true;
+  const actionCodes = new Set(
+    (Array.isArray(availableActions) ? availableActions : [])
+      .map((action) => String(action?.code || ""))
+      .filter(Boolean)
+  );
+  const canStart = actionCodes.has("START_EVALUATION");
+  const canEdit =
+    actionCodes.has("EDIT_EVALUATION") &&
+    evaluation?.evaluation?.capabilities?.canEditDraft === true;
+  const editingAllowed = evaluation ? canEdit : canStart;
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -143,6 +153,13 @@ export default function CanonicalJobEvaluation({
   }
 
   async function saveEvaluation() {
+    if (!editingAllowed) {
+      setLoadState((current) => ({
+        ...current,
+        error: "Evaluation editing is not available for the current Job stage.",
+      }));
+      return;
+    }
     if (!form.observations.trim()) {
       setLoadState((current) => ({
         ...current,
@@ -222,9 +239,11 @@ export default function CanonicalJobEvaluation({
       {loadState.status === "ready" && !evaluation && !editing && (
         <div style={styles.emptyState}>
           <p style={styles.message}>No canonical Evaluation has been saved for this Job.</p>
-          <button type="button" style={styles.primaryButton} onClick={beginEditing}>
-            Start Evaluation
-          </button>
+          {canStart && (
+            <button type="button" style={styles.primaryButton} onClick={beginEditing}>
+              Start Evaluation
+            </button>
+          )}
         </div>
       )}
 
@@ -266,7 +285,7 @@ export default function CanonicalJobEvaluation({
         </div>
       )}
 
-      {editing && (
+      {editing && editingAllowed && (
         <div style={styles.form}>
           <label style={styles.label}>
             Professional observations

@@ -5,6 +5,7 @@ import {
   normalizeCanonicalConversationId,
 } from "./canonicalConversationMessaging.js";
 import { fetchCanonicalConversations } from "./requestCommunication.js";
+import { fetchCanonicalLiveJobProjection } from "./canonicalLiveJobProjection.js";
 
 export const CANONICAL_WORK_CENTER_AUTHORITY = "CANONICAL_BACKEND_READ";
 
@@ -286,9 +287,31 @@ export async function fetchCanonicalWorkCenterEntries({
           result.data,
           conversationId
         );
-        return detail
+        const entry = detail
           ? normalizeCanonicalWorkCenterEntry({ summary, detail })
           : null;
+        if (!entry?.jobId) return entry;
+        let liveJobResult;
+        try {
+          liveJobResult = await fetchCanonicalLiveJobProjection({
+            jobId: entry.jobId,
+            setPage,
+            authFetchImpl,
+          });
+        } catch {
+          liveJobResult = {
+            status: "error",
+            reason: "LIVE_JOB_NETWORK_ERROR",
+            projection: null,
+          };
+        }
+        return {
+          ...entry,
+          liveJob:
+            liveJobResult.status === "ready" ? liveJobResult.projection : null,
+          liveJobStatus: liveJobResult.status,
+          liveJobUnavailableReason: liveJobResult.reason,
+        };
       } catch {
         return null;
       }

@@ -197,6 +197,158 @@ test("staging discovery resolves request identity through authorized conversatio
   assert.equal(calls.every((call) => call.options.cache === "no-store"), true);
 });
 
+test("canonical list hydration uses server-owned live state when exact Job identity is available", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    if (endpoint === "/conversations?perspective=professional") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          conversations: [{
+            conversation_id: 340,
+            source: { type: "request" },
+            request_title: canonicalSummary.project_title,
+            display: { name: "Liam Molina" },
+            status: { value: "active", archived: false },
+            permissions: { canSendMessages: true },
+          }],
+        },
+      };
+    }
+    if (endpoint === "/conversations/340") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          conversation: { id: 340, type: "request", status: "active" },
+          participants: { homeowner: { displayName: "Liam Molina" } },
+          relationship: {
+            id: 72,
+            requestId: 41,
+            title: canonicalSummary.project_title,
+            lifecycleContractVersion: 2,
+            jobId: "11111111-1111-4111-8111-111111111111",
+          },
+          permissions: { canRead: true, canSendMessages: true },
+        },
+      };
+    }
+    assert.equal(
+      endpoint,
+      "/jobs/11111111-1111-4111-8111-111111111111/live-state"
+    );
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        liveJob: {
+          jobId: "11111111-1111-4111-8111-111111111111",
+          requestId: 41,
+          relationshipId: 72,
+          contractVersion: 1,
+          stage: { code: "EVALUATION_NEEDED", label: "Evaluation needed" },
+          responsibility: { code: "PROFESSIONAL", label: "Professional" },
+          blocker: {
+            code: "EVALUATION_NOT_RECORDED",
+            label: "An evaluation has not been recorded yet.",
+          },
+          nextAction: {
+            code: "START_OR_CONTINUE_EVALUATION",
+            label: "Review or continue the evaluation",
+            description: "Record what you observed before moving forward.",
+          },
+          availableActions: [
+            { code: "VIEW_CONCERN", label: "View customer concern" },
+            { code: "MESSAGE_CUSTOMER", label: "Message customer" },
+            { code: "START_EVALUATION", label: "Start evaluation" },
+          ],
+          reasonCodes: ["NO_EVALUATION_PRESENT"],
+          freshness: {
+            derivedAt: "2026-08-12T12:00:00.000Z",
+            jobCreatedAt: "2026-08-10T12:00:00.000Z",
+            evaluationVersion: 0,
+            findingVersion: 0,
+            recommendationVersion: 0,
+            quoteVersion: 0,
+            workstreamVersion: 0,
+            activityVersion: 0,
+            obligationVersion: 0,
+            evaluationCount: 0,
+            findingCount: 0,
+            recommendationCount: 0,
+            quoteCount: 0,
+            workstreamCount: 0,
+            activityCount: 0,
+            obligationCount: 0,
+          },
+        },
+      },
+    };
+  };
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: STAGING_API_URL,
+    authFetchImpl,
+  });
+  assert.equal(result.status, "ready");
+  assert.equal(result.entries[0].liveJob.stage.code, "EVALUATION_NEEDED");
+  assert.equal(result.entries[0].liveJobStatus, "ready");
+  assert.deepEqual(calls.map((call) => call.endpoint), [
+    "/conversations?perspective=professional",
+    "/conversations/340",
+    "/jobs/11111111-1111-4111-8111-111111111111/live-state",
+  ]);
+});
+
+test("live-state failure retains the canonical Job with truthful unavailable state", async () => {
+  const authFetchImpl = async (endpoint) => {
+    if (endpoint === "/conversations?perspective=professional") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          conversations: [{
+            conversation_id: 340,
+            source: { type: "request" },
+            request_title: canonicalSummary.project_title,
+            display: { name: "Liam Molina" },
+            status: { value: "active", archived: false },
+            permissions: { canSendMessages: true },
+          }],
+        },
+      };
+    }
+    if (endpoint === "/conversations/340") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          conversation: { id: 340, type: "request", status: "active" },
+          participants: { homeowner: { displayName: "Liam Molina" } },
+          relationship: {
+            id: 72,
+            requestId: 41,
+            title: canonicalSummary.project_title,
+            lifecycleContractVersion: 2,
+            jobId: "11111111-1111-4111-8111-111111111111",
+          },
+          permissions: { canRead: true, canSendMessages: true },
+        },
+      };
+    }
+    throw new Error("live state unavailable");
+  };
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: STAGING_API_URL,
+    authFetchImpl,
+  });
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].liveJob, null);
+  assert.equal(result.entries[0].liveJobStatus, "error");
+  assert.equal(result.entries[0].liveJobUnavailableReason, "LIVE_JOB_NETWORK_ERROR");
+});
+
 test("production containment fails closed without issuing discovery calls", async () => {
   let callCount = 0;
   const result = await fetchCanonicalWorkCenterEntries({

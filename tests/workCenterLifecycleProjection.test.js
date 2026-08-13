@@ -49,12 +49,66 @@ function lifecyclePayload(overrides = {}) {
   };
 }
 
+function liveJobPayload(overrides = {}) {
+  return {
+    success: true,
+    liveJob: {
+      jobId: "11111111-1111-4111-8111-111111111111",
+      requestId: 41,
+      relationshipId: 72,
+      contractVersion: 1,
+      stage: { code: "EVALUATION_NEEDED", label: "Evaluation needed" },
+      responsibility: { code: "PROFESSIONAL", label: "Professional" },
+      blocker: {
+        code: "EVALUATION_NOT_RECORDED",
+        label: "An evaluation has not been recorded yet.",
+      },
+      nextAction: {
+        code: "START_OR_CONTINUE_EVALUATION",
+        label: "Review or continue the evaluation",
+        description: "Record what you observed before moving forward.",
+      },
+      availableActions: [
+        { code: "VIEW_CONCERN", label: "View customer concern" },
+        { code: "MESSAGE_CUSTOMER", label: "Message customer" },
+        { code: "START_EVALUATION", label: "Start evaluation" },
+      ],
+      reasonCodes: ["NO_EVALUATION_PRESENT"],
+      freshness: {
+        derivedAt: "2026-08-12T12:00:00.000Z",
+        jobCreatedAt: "2026-08-10T12:00:00.000Z",
+        evaluationVersion: 0,
+        findingVersion: 0,
+        recommendationVersion: 0,
+        quoteVersion: 0,
+        workstreamVersion: 0,
+        activityVersion: 0,
+        obligationVersion: 0,
+        evaluationCount: 0,
+        findingCount: 0,
+        recommendationCount: 0,
+        quoteCount: 0,
+        workstreamCount: 0,
+        activityCount: 0,
+        obligationCount: 0,
+      },
+      ...overrides,
+    },
+  };
+}
+
 test("adapter calls the exact lifecycle endpoint and normalizes job, concern, and participants", async () => {
   const calls = [];
   const result = await fetchWorkCenterLifecycleProjection({
     record: { lifecycleContractVersion: 2, requestId: 41 },
     authFetchImpl: async (endpoint, options) => {
       calls.push({ endpoint, options });
+      if (endpoint.includes("/live-state")) {
+        return {
+          response: { ok: true, status: 200 },
+          data: liveJobPayload(),
+        };
+      }
       return {
         response: { ok: true, status: 200 },
         data: lifecyclePayload(),
@@ -63,8 +117,14 @@ test("adapter calls the exact lifecycle endpoint and normalizes job, concern, an
   });
 
   assert.equal(result.status, "ready");
-  assert.equal(calls[0].endpoint, "/posts/41/lifecycle");
-  assert.equal(calls[0].options.cache, "no-store");
+  assert.deepEqual(
+    calls.map((call) => call.endpoint),
+    [
+      "/posts/41/lifecycle",
+      "/jobs/11111111-1111-4111-8111-111111111111/live-state",
+    ]
+  );
+  assert.equal(calls.every((call) => call.options.cache === "no-store"), true);
   assert.equal(result.projection.authoritySource, "CANONICAL_BACKEND_READ");
   assert.equal(result.projection.job.present, true);
   assert.equal(result.projection.job.id, "11111111-1111-4111-8111-111111111111");
@@ -77,6 +137,28 @@ test("adapter calls the exact lifecycle endpoint and normalizes job, concern, an
     result.projection.participants.map((participant) => participant.roles[0].labelKey),
     ["lifecycleRoleCustomerRepresentative", "lifecycleRolePrimaryProfessional"]
   );
+  assert.equal(result.projection.liveJob.stage.code, "EVALUATION_NEEDED");
+  assert.equal(result.projection.liveJob.nextAction.code, "START_OR_CONTINUE_EVALUATION");
+});
+
+test("live Job authorization or validation failure removes the full live projection", async () => {
+  const result = await fetchWorkCenterLifecycleProjection({
+    record: { lifecycleContractVersion: 2, requestId: 41 },
+    authFetchImpl: async (endpoint) => {
+      if (endpoint === "/posts/41/lifecycle") {
+        return { response: { ok: true, status: 200 }, data: lifecyclePayload() };
+      }
+      return {
+        response: { ok: false, status: 403 },
+        data: { code: "LIVE_JOB_READ_AUTHORITY_REQUIRED" },
+      };
+    },
+  });
+
+  assert.equal(result.status, "error");
+  assert.equal(result.httpStatus, 403);
+  assert.equal(result.reason, "LIVE_JOB_READ_AUTHORITY_REQUIRED");
+  assert.equal(result.projection, null);
 });
 
 test("adapter propagates auth and backend errors without local fallback truth", async () => {
@@ -161,6 +243,10 @@ test("ContractorDashboard wires a read-only canonical lifecycle section without 
   );
 
   assert.match(source, /fetchWorkCenterLifecycleProjection/);
+  assert.match(source, /canonicalLiveJob\?\.stage\.label/);
+  assert.match(source, /canonicalLiveJob\?\.nextAction\.label/);
+  assert.match(source, /canonicalLiveJob\?\.responsibility\.label/);
+  assert.match(source, /hasCanonicalLiveJobAction/);
   assert.match(source, /workCenterCanonicalLifecycleSection/);
   assert.match(source, /reportedConcernHistory/);
   assert.match(source, /knownJobParticipants/);

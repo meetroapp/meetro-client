@@ -4,6 +4,7 @@ import {
   normalizeRequestLifecycleFoundation,
 } from "./requestLifecycleFoundation.js";
 import { isCanonicalWorkCenterEntry } from "./workCenterCanonicalHydration.js";
+import { fetchCanonicalLiveJobProjection } from "./canonicalLiveJobProjection.js";
 
 const UNAVAILABLE_REASONS = Object.freeze({
   LEGACY: "unsupported_legacy_record",
@@ -183,11 +184,42 @@ export async function fetchWorkCenterLifecycleProjection({
     };
   }
 
+  const liveJobResult = await fetchCanonicalLiveJobProjection({
+    jobId: projection.job?.id,
+    setPage,
+    authFetchImpl,
+  });
+  if (liveJobResult.status !== "ready" || !liveJobResult.projection) {
+    return {
+      status: liveJobResult.status,
+      reason: liveJobResult.reason,
+      httpStatus: liveJobResult.httpStatus || 0,
+      postId: target.postId,
+      projection: null,
+    };
+  }
+
+  if (
+    liveJobResult.projection.requestId !== projection.requestId ||
+    liveJobResult.projection.relationshipId !== projection.job?.requestRelationshipId
+  ) {
+    return {
+      status: "unavailable",
+      reason: "LIVE_JOB_IDENTITY_MISMATCH",
+      httpStatus: 0,
+      postId: target.postId,
+      projection: null,
+    };
+  }
+
   return {
     status: "ready",
     reason: "",
     postId: target.postId,
-    projection,
+    projection: {
+      ...projection,
+      liveJob: liveJobResult.projection,
+    },
   };
 }
 
