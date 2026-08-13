@@ -562,9 +562,11 @@ test("bounded Quote panels expose commercial reads and no command authority", ()
     "utf8"
   );
 
-  assert.match(sourceText, /No canonical quote issued yet/);
+  assert.match(sourceText, /No quotes issued yet/);
   assert.match(sourceText, /Quote status and customer decision remain separate/);
-  assert.match(sourceText, /No payment, deposit, or scheduling authority/);
+  assert.match(sourceText, /Payment and scheduling are handled separately/);
+  assert.match(sourceText, /Quote version/);
+  assert.doesNotMatch(sourceText, /Canonical version|Server total|Server line total/);
   assert.match(sourceText, /Separate proposal · not included in this total/);
   assert.match(dashboard, /CanonicalQuotesPanel/);
   assert.doesNotMatch(validator, /\.reduce\(|materialsSubtotalMinor\s*\+\s*laborServiceSubtotalMinor/);

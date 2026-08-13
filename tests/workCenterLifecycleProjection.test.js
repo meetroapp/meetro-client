@@ -251,8 +251,28 @@ test("ContractorDashboard wires a read-only canonical lifecycle section without 
   assert.match(source, /reportedConcernHistory/);
   assert.match(source, /knownJobParticipants/);
   assert.match(source, /aria-live="polite"/);
+  assert.match(source, /Job details/);
+  assert.match(source, /Job record connected/);
+  assert.doesNotMatch(source, /Canonical backend read/);
   assert.doesNotMatch(
     source,
     /reported-concerns[^"'`]*\/(?:update|delete)|assign-role|create-grant|\/quotes\/\$\{[^}]+}\/issue/
   );
+});
+
+test("Professional Work Center uses business-facing category and participant language", () => {
+  const language = readFileSync(
+    new URL("../src/utils/language.js", import.meta.url),
+    "utf8"
+  );
+  const workflowLanguage = readFileSync(
+    new URL("../src/utils/dailyWorkflowLanguage.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(language, /workCenterCurrentJobsTitle: "Active Work"/);
+  assert.match(language, /lifecycleRoleCustomerRepresentative: "Customer"/);
+  assert.match(language, /lifecycleRolePrimaryProfessional: "Lead Professional"/);
+  assert.match(workflowLanguage, /\["workCenterCurrentJob", "Job Overview"/);
+  assert.match(workflowLanguage, /\["workCenterBackToJobs", "Back to Active Work"/);
 });

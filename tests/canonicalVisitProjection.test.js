@@ -564,10 +564,18 @@ test("presentation language keeps Visit completion separate from lifecycle compl
     "utf8"
   );
   assert.match(componentSource, /Visit attendance recorded/);
-  assert.match(componentSource, /Evaluation, approved scope, Workstream, and Job completion remain unchanged/);
+  assert.match(componentSource, /Plan visit timing and keep the customer informed/);
+  assert.match(componentSource, /Schedule Evaluation/);
+  assert.match(componentSource, /Schedule Work/);
+  assert.match(componentSource, /Ready to schedule/);
   assert.match(componentSource, /Waiting for the customer to confirm or request a schedule change/);
   assert.match(componentSource, /Customer requested a schedule change/);
-  assert.match(componentSource, /Current canonical Visit truth has been reloaded; no command was retried/);
+  assert.match(componentSource, /latest visit details were reloaded; no change was retried/);
+  assert.doesNotMatch(componentSource, /Canonical Visit authority|Activate Visit Scheduling/);
+  assert.doesNotMatch(
+    componentSource,
+    /Evaluation, Quote scope or decision, Workstream progress, Invoice, or Job completion/
+  );
   assert.match(componentSource, /setReloadVersion\(\(current\) => current \+ 1\)/);
   for (const label of [
     "Pending customer confirmation",

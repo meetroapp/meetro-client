@@ -5,14 +5,14 @@ import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanoni
 import CanonicalWorkstreamCard from "./CanonicalWorkstreamCard.jsx";
 
 function workstreamErrorMessage(error) {
-  if (error?.status === 401) return "Sign in is required to read Workstreams.";
+  if (error?.status === 401) return "Sign in is required to view the work plan.";
   if (error?.status === 403) {
-    return "Workstream read authority is unavailable for this account.";
+    return "The work plan is unavailable for this account.";
   }
   if (error?.status === 404) {
-    return "Canonical Workstreams are unavailable for this Job.";
+    return "The work plan is unavailable for this job.";
   }
-  return error?.message || "Canonical Workstreams could not be loaded.";
+  return error?.message || "The work plan could not be loaded.";
 }
 
 function canonicalRecord(jobId) {
@@ -81,19 +81,19 @@ export default function CanonicalWorkstreamsPanel({ record = {}, setPage }) {
     <section style={styles.section} aria-labelledby="canonical-workstreams-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Canonical read-only lifecycle truth</span>
-          <h3 id="canonical-workstreams-title" style={styles.title}>Workstreams</h3>
+          <span style={styles.eyebrow}>Approved work</span>
+          <h3 id="canonical-workstreams-title" style={styles.title}>Work Plan</h3>
         </div>
-        <span style={styles.readOnly}>Read-only</span>
+        <span style={styles.readOnly}>Job record</span>
       </div>
       {state.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Workstreams.</p>
+        <p role="status" style={styles.message}>Loading work plan.</p>
       )}
       {state.status === "error" && (
         <p role="alert" style={styles.error}>{state.error}</p>
       )}
       {state.status === "ready" && state.workstreams.length === 0 && (
-        <p style={styles.message}>No workstreams recorded</p>
+        <p style={styles.message}>No work items added yet</p>
       )}
       {state.status === "ready" && state.workstreams.length > 0 && (
         <div style={styles.list}>

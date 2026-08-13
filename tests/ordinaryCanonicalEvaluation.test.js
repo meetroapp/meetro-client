@@ -197,7 +197,7 @@ test("bounded component keeps concern read-only and exposes no deferred commands
   );
 
   assert.match(componentSource, /Customer Concern/);
-  assert.match(componentSource, /Read-only customer truth/);
+  assert.match(componentSource, /Customer-provided details/);
   assert.match(componentSource, /Start Evaluation/);
   assert.match(componentSource, /Save Evaluation/);
   assert.doesNotMatch(componentSource, /localStorage|sessionStorage/);

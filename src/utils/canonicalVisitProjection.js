@@ -48,7 +48,7 @@ export class CanonicalVisitError extends Error {
   constructor({
     status = 500,
     code = "CANONICAL_VISIT_FAILED",
-    message = "Canonical Visit authority is unavailable.",
+    message = "Visit scheduling is unavailable.",
   } = {}) {
     super(message);
     this.name = "CanonicalVisitError";

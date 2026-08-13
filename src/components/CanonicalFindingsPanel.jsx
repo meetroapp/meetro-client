@@ -8,9 +8,9 @@ function findingErrorMessage(error) {
     return "Finding read authority is unavailable for this account.";
   }
   if (error?.status === 404) {
-    return "Canonical Findings are unavailable for this Evaluation.";
+    return "Findings are unavailable for this evaluation.";
   }
-  return error?.message || "Canonical Findings could not be loaded.";
+  return error?.message || "Findings could not be loaded.";
 }
 
 function FindingEvidence({ finding }) {
@@ -93,21 +93,21 @@ export default function CanonicalFindingsPanel({
     <section style={styles.section} aria-labelledby="canonical-findings-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Canonical read-only lifecycle truth</span>
+          <span style={styles.eyebrow}>Job assessment</span>
           <h3 id="canonical-findings-title" style={styles.title}>
             Findings
           </h3>
         </div>
-        <span style={styles.readOnly}>Read-only</span>
+        <span style={styles.readOnly}>Professional record</span>
       </div>
       {state.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Findings.</p>
+        <p role="status" style={styles.message}>Loading findings.</p>
       )}
       {state.status === "error" && (
         <p role="alert" style={styles.error}>{state.error}</p>
       )}
       {state.status === "ready" && state.findings.length === 0 && (
-        <p style={styles.message}>No findings recorded</p>
+        <p style={styles.message}>No findings added yet</p>
       )}
       {state.status === "ready" && state.findings.length > 0 && (
         <div style={styles.findingsList}>

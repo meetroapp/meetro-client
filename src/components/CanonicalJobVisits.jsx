@@ -17,9 +17,9 @@ const STATE_LABELS = Object.freeze({
 });
 
 const AUTHORITY_LABELS = Object.freeze({
-  AVAILABLE: "Available to activate",
-  ACTIVE: "Active",
-  UNAVAILABLE: "Unavailable",
+  AVAILABLE: "Ready to schedule",
+  ACTIVE: "Scheduling active",
+  UNAVAILABLE: "Not available",
 });
 
 const EVENT_LABELS = Object.freeze({
@@ -163,7 +163,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
           evaluation: null,
           approvedWork: [],
           quoteDecisionSummary: { pending: 0, declined: 0 },
-          error: "Canonical Visit scheduling is unavailable for this Job.",
+          error: "Visit scheduling is unavailable for this job.",
         });
       });
       return () => {
@@ -233,8 +233,8 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
       });
       setNotice(
         subject.purpose === "EVALUATION"
-          ? "Evaluation Visit authority activated."
-          : "Approved Work Visit authority activated."
+          ? "Evaluation visit scheduling is ready."
+          : "Work scheduling is ready."
       );
       reload();
     } catch (error) {
@@ -282,7 +282,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     } catch (error) {
       if (error?.code === "STALE_VISIT_VERSION") {
         setCommandError(
-          "This Visit changed elsewhere. Current canonical Visit truth has been reloaded; no command was retried."
+          "This visit changed elsewhere. The latest visit details were reloaded; no change was retried."
         );
         reload();
       } else {
@@ -306,13 +306,13 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
         setPage,
       });
       setNotice(
-        "Visit attendance recorded. Evaluation, approved scope, Workstream, and Job completion remain unchanged."
+        "Visit attendance recorded."
       );
       reload();
     } catch (error) {
       if (error?.code === "STALE_VISIT_VERSION") {
         setCommandError(
-          "This Visit changed elsewhere. Current canonical Visit truth has been reloaded; no command was retried."
+          "This visit changed elsewhere. The latest visit details were reloaded; no change was retried."
         );
         reload();
       } else {
@@ -329,22 +329,20 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     <section style={styles.section} aria-labelledby="canonical-job-visits-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Canonical Visit authority</span>
+          <span style={styles.eyebrow}>Visit planning</span>
           <h3 id="canonical-job-visits-title" style={styles.title}>
             Visits
           </h3>
         </div>
-        <span style={styles.readOnly}>Job-scoped</span>
+        <span style={styles.readOnly}>For this job</span>
       </div>
 
       <p style={styles.boundaryNote}>
-        Visit scheduling governs timing and attendance only. It does not change
-        Evaluation, Quote scope or decision, Workstream progress, Invoice, or Job
-        completion.
+        Plan visit timing and keep the customer informed.
       </p>
 
       {workspace.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Visit truth.</p>
+        <p role="status" style={styles.message}>Loading visit schedule.</p>
       )}
       {workspace.status !== "loading" && workspace.error && (
         <p role="alert" style={styles.error}>{workspace.error}</p>
@@ -354,17 +352,16 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
 
       {workspace.status === "ready" && subjects.length === 0 && (
         <div style={styles.emptyState}>
-          <strong>No Visit authority is available yet.</strong>
+          <strong>Scheduling is not available yet.</strong>
           <span>
-            Evaluation scheduling requires a canonical Evaluation. Approved Work
-            scheduling requires an exact issued Quote with an approved customer
-            decision and separate professional activation.
+            Add an evaluation before scheduling an evaluation visit. Work can be
+            scheduled after the customer approves an issued quote.
           </span>
           {workspace.quoteDecisionSummary.pending > 0 && (
-            <span>Issued Quote decision pending — Approved Work scheduling remains unavailable.</span>
+            <span>Waiting for the customer’s quote decision before work can be scheduled.</span>
           )}
           {workspace.quoteDecisionSummary.declined > 0 && (
-            <span>Declined Quote decisions do not authorize Approved Work scheduling.</span>
+            <span>Work cannot be scheduled from a declined quote.</span>
           )}
         </div>
       )}
@@ -381,12 +378,12 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                     <span style={styles.subjectType}>
                       {subject.purpose === "EVALUATION"
                         ? "Evaluation Visit"
-                        : "Approved Work Visit"}
+                        : "Approved Work"}
                     </span>
                     <strong style={styles.subjectTitle}>
                       {subject.purpose === "EVALUATION"
-                        ? "Evaluation scheduling"
-                        : `Approved Quote v${authority?.issuedQuoteVersion || subject.quote?.currentVersion || "—"}`}
+                        ? "Evaluation Visit"
+                        : "Work scheduling"}
                     </strong>
                   </div>
                   <span style={styles.stateBadge}>
@@ -405,14 +402,13 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                     {authority.state === "AVAILABLE" && (
                       <p style={styles.message}>
                         {authority.actions.canActivate === true
-                          ? "Canonical authority is available but has not been activated. No Visit is scheduled."
-                          : "Canonical authority is not fully active. Scheduling remains unavailable and no Visit is inferred."}
+                          ? "This job is ready for scheduling. No visit has been scheduled yet."
+                          : "Scheduling is not available yet. No visit has been added."}
                       </p>
                     )}
                     {authority.state === "UNAVAILABLE" && (
                       <p style={styles.message}>
-                        Evaluation Visit activation is no longer available for this
-                        Evaluation state.
+                        Scheduling is not available for this evaluation.
                       </p>
                     )}
                     <div style={styles.actionRow}>
@@ -424,8 +420,10 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                           onClick={() => activate(subject)}
                         >
                           {runningKey === `${key}:activate`
-                            ? "Activating…"
-                            : "Activate Visit Scheduling"}
+                            ? "Preparing schedule…"
+                            : subject.purpose === "EVALUATION"
+                              ? "Schedule Evaluation"
+                              : "Schedule Work"}
                         </button>
                       )}
                       {authority.actions.canPropose === true && (
@@ -443,7 +441,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                 )}
 
                 {authority?.state === "ACTIVE" && subject.visits.length === 0 && (
-                  <p style={styles.message}>No canonical Visits have been proposed yet.</p>
+                  <p style={styles.message}>No visits have been proposed yet.</p>
                 )}
 
                 {subject.visits.length > 0 && (
@@ -629,7 +627,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                         style={editor.mode === "cancel" ? styles.dangerButton : styles.primaryButton}
                         disabled={Boolean(runningKey)}
                       >
-                        {runningKey ? "Saving…" : "Save canonical Visit change"}
+                        {runningKey ? "Saving…" : "Save Visit"}
                       </button>
                       <button
                         type="button"

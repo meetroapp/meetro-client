@@ -110,12 +110,12 @@ export default function CanonicalWorkstreamCard({ jobId, workstream, setPage }) 
     <article style={styles.workstream}>
       <div style={styles.header}>
         <div style={styles.headingGroup}>
-          <span style={styles.sequence}>Workstream {workstream.sequence}</span>
+          <span style={styles.sequence}>Work Item {workstream.sequence}</span>
           <h4 style={styles.title}>{workstream.title}</h4>
         </div>
         <span style={styles.state}>{workstream.state}</span>
       </div>
-      <span style={styles.version}>Canonical version {workstream.currentVersion}</span>
+      <span style={styles.version}>Plan version {workstream.currentVersion}</span>
       <CompletionEligibility jobId={jobId} workstream={workstream} setPage={setPage} />
       <div style={styles.detailGrid}>
         <CanonicalActivitiesPanel

@@ -12,12 +12,12 @@ function canonicalRecord(jobId) {
 }
 
 function quoteErrorMessage(error) {
-  if (error?.status === 401) return "Sign in is required to read Quote detail.";
+  if (error?.status === 401) return "Sign in is required to view quote details.";
   if (error?.status === 403) {
-    return "Quote read authority is unavailable for this account.";
+    return "Quote details are unavailable for this account.";
   }
-  if (error?.status === 404) return "Canonical Quote detail is unavailable.";
-  return error?.message || "Canonical Quote detail could not be loaded.";
+  if (error?.status === 404) return "Quote details are unavailable.";
+  return error?.message || "Quote details could not be loaded.";
 }
 
 function formatMinorAmount(amountMinor, currency) {
@@ -59,10 +59,10 @@ function SourceReference({ source }) {
 
 function ScopeItem({ item, currency }) {
   const inclusionLabel = item.includedInTotal
-    ? "Included in server total"
+    ? "Included in quote total"
     : item.scopeSemantic === "SEPARATE_PROPOSAL"
       ? "Separate proposal · not included in this total"
-      : "Excluded from server total";
+      : "Excluded from quote total";
   return (
     <article style={styles.scopeItem}>
       <div style={styles.scopeHeader}>
@@ -79,7 +79,7 @@ function ScopeItem({ item, currency }) {
       <div style={styles.amountRow}>
         <span>Quantity {item.quantity}</span>
         <span>Unit {formatMinorAmount(item.unitAmountMinor, currency)}</span>
-        <strong>Server line total {formatMinorAmount(item.lineTotalMinor, currency)}</strong>
+        <strong>Line total {formatMinorAmount(item.lineTotalMinor, currency)}</strong>
       </div>
       <SourceReference source={item.source} />
     </article>
@@ -141,7 +141,7 @@ export default function CanonicalQuoteCard({ jobId, quote, depth = 0, setPage })
 
       <div style={styles.summaryGrid}>
         <div style={styles.summaryField}>
-          <span style={styles.label}>Server total</span>
+          <span style={styles.label}>Quote total</span>
           <strong>{formatMinorAmount(detail.totalMinor, detail.currency)}</strong>
         </div>
         <div style={styles.summaryField}>
@@ -149,14 +149,14 @@ export default function CanonicalQuoteCard({ jobId, quote, depth = 0, setPage })
           <strong>{decision}</strong>
         </div>
         <div style={styles.summaryField}>
-          <span style={styles.label}>Canonical version</span>
+          <span style={styles.label}>Quote version</span>
           <strong>{detail.currentVersion}</strong>
         </div>
       </div>
 
       <div style={styles.boundary}>
         <span>Quote status and customer decision remain separate.</span>
-        <strong>No payment, deposit, or scheduling authority.</strong>
+        <strong>Payment and scheduling are handled separately.</strong>
       </div>
 
       {detail.issuedAt && (
@@ -179,7 +179,7 @@ export default function CanonicalQuoteCard({ jobId, quote, depth = 0, setPage })
       )}
 
       {state.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Quote detail.</p>
+        <p role="status" style={styles.message}>Loading quote details.</p>
       )}
       {state.status === "error" && (
         <p role="alert" style={styles.error}>{state.error}</p>

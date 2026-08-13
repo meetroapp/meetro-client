@@ -8,14 +8,14 @@ import {
 import { getCanonicalQuoteJobContext } from "./canonicalQuoteRead.js";
 
 function visitErrorMessage(error) {
-  if (error?.status === 401) return "Sign in is required to read Visit scheduling.";
+  if (error?.status === 401) return "Sign in is required to view visit scheduling.";
   if (error?.status === 403) {
-    return "Visit authority is not available for this professional account.";
+    return "Visit scheduling is not available for this professional account.";
   }
   if (error?.status === 404) {
-    return "Canonical Visit authority is not available for this Job subject.";
+    return "Visit scheduling is not available for this job.";
   }
-  return error?.message || "Canonical Visit scheduling could not be loaded.";
+  return error?.message || "Visit scheduling could not be loaded.";
 }
 
 async function loadVisitDetails({
@@ -121,7 +121,7 @@ export async function loadCanonicalVisitWorkspace({
       evaluation: null,
       approvedWork: [],
       quoteDecisionSummary: { pending: 0, declined: 0 },
-      error: "Canonical Visit scheduling is unavailable for this Job.",
+      error: "Visit scheduling is unavailable for this job.",
     };
   }
   const loadEvaluation =
@@ -194,7 +194,7 @@ export async function loadCanonicalVisitWorkspace({
       quoteDecisionSummary,
       error:
         evaluationResult.status === "rejected" || quoteResult.status === "rejected"
-          ? "Some canonical Visit subjects could not be loaded."
+          ? "Some visit scheduling details could not be loaded."
           : "",
     };
   } catch (error) {

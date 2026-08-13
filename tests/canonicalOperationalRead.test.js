@@ -437,7 +437,9 @@ test("bounded operational panels expose read truth and no mutation authority", (
     "utf8"
   );
 
-  assert.match(source, /No workstreams recorded/);
+  assert.match(source, /Work Plan/);
+  assert.match(source, /No work items added yet/);
+  assert.match(source, /Work Item \{workstream\.sequence\}/);
   assert.match(source, /No activities recorded/);
   assert.match(source, /No obligations recorded/);
   assert.match(source, /Temporary intervention/);

@@ -30,7 +30,7 @@ function evaluationErrorMessage(error) {
     return "Evaluation authority is not available for this professional account.";
   }
   if (error?.status === 404) {
-    return "Canonical Evaluation is unavailable for this Job.";
+    return "Evaluation is unavailable for this job.";
   }
   if (error?.code === "STALE_EVALUATION_VERSION") {
     return "This Evaluation changed elsewhere. Reopen the Job to load the current version.";
@@ -38,7 +38,7 @@ function evaluationErrorMessage(error) {
   if (error?.code === "EVALUATION_COMPLETED") {
     return "This completed Evaluation is read-only.";
   }
-  return error?.message || "Canonical Evaluation could not be loaded.";
+  return error?.message || "Evaluation could not be loaded.";
 }
 
 function canonicalRecord({ jobId, requestId, relationshipId }) {
@@ -85,7 +85,7 @@ export default function CanonicalJobEvaluation({
         setLoadState({
           status: "unavailable",
           evaluation: null,
-          error: "Canonical Evaluation is unavailable for this Job.",
+          error: "Evaluation is unavailable for this job.",
         });
       });
       return () => {
@@ -185,9 +185,7 @@ export default function CanonicalJobEvaluation({
       setLoadState({ status: "ready", evaluation: confirmed, error: "" });
       setForm(formForEvaluation(confirmed));
       setEditing(false);
-      setNotice(
-        `Evaluation saved at canonical version ${confirmed.aggregate.version}.`
-      );
+      setNotice("Evaluation saved.");
     } catch (error) {
       setLoadState((current) => ({
         ...current,
@@ -202,7 +200,7 @@ export default function CanonicalJobEvaluation({
       <section style={styles.section} aria-labelledby="canonical-job-evaluation-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Canonical professional authority</span>
+          <span style={styles.eyebrow}>Evaluation</span>
           <h3 id="canonical-job-evaluation-title" style={styles.title}>
             Professional Evaluation
           </h3>
@@ -222,12 +220,12 @@ export default function CanonicalJobEvaluation({
 
       <div style={styles.concern} aria-label="Customer Concern read-only">
         <span style={styles.fieldLabel}>Customer Concern</span>
-        <strong style={styles.readOnlyLabel}>Read-only customer truth</strong>
+        <strong style={styles.readOnlyLabel}>Customer-provided details</strong>
         <p style={styles.concernText}>{customerConcern || "Unavailable"}</p>
       </div>
 
       {loadState.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Evaluation.</p>
+        <p role="status" style={styles.message}>Loading evaluation.</p>
       )}
 
       {loadState.error && (
@@ -238,7 +236,7 @@ export default function CanonicalJobEvaluation({
 
       {loadState.status === "ready" && !evaluation && !editing && (
         <div style={styles.emptyState}>
-          <p style={styles.message}>No canonical Evaluation has been saved for this Job.</p>
+          <p style={styles.message}>No evaluation has been added yet.</p>
           {canStart && (
             <button type="button" style={styles.primaryButton} onClick={beginEditing}>
               Start Evaluation

@@ -7029,22 +7029,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   const getCanonicalLifecycleUnavailableText = (state = {}) => {
     if (state.status === "loading") {
-      return "Loading canonical lifecycle evidence.";
+      return "Loading job details.";
     }
     if (state.reason === "unsupported_legacy_record") {
-      return "Canonical lifecycle evidence is not available for this legacy record.";
+      return "Job details are not available for this older record.";
     }
     if (state.reason === "missing_post_id") {
-      return "Canonical lifecycle evidence is unavailable because this Work Center record has no lifecycle-v2 request identity.";
+      return "Job details are unavailable because this record is not connected to a current request.";
     }
     if (state.httpStatus === 401 || state.httpStatus === 403) {
-      return "Canonical lifecycle evidence is unavailable for this account.";
+      return "Job details are unavailable for this account.";
     }
     if (state.httpStatus === 404) {
-      return "Canonical lifecycle evidence was not found for this request.";
+      return "Job details were not found for this request.";
     }
     if (state.status === "error") {
-      return "Canonical lifecycle evidence could not be loaded.";
+      return "Job details could not be loaded.";
     }
     return translate("lifecycleHistoryUnavailable", activeLanguage);
   };
@@ -8265,7 +8265,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "current",
       icon: "currentJobs",
       title: translate("workCenterCurrentJobsTitle", activeLanguage),
-      purpose: "Canonical jobs with read-only legacy compatibility records",
+      purpose: "Current jobs with compatible older records",
       meta: translate("workCenterActiveCount", activeLanguage, { count: workCenterActiveJobs.length }),
       actionLabel: translate("continueWork", activeLanguage),
       tone: "#f8fafc",
@@ -10645,12 +10645,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
                   <section
                     style={workCenterCanonicalLifecycleSection}
-                    aria-label="Canonical lifecycle evidence"
+                    aria-label="Job details"
                     aria-live="polite"
                   >
                     <div style={workCenterCanonicalLifecycleHeader}>
                       <div>
-                        <span style={jobWorkflowStepLabel}>Canonical backend read</span>
+                        <span style={jobWorkflowStepLabel}>Job details</span>
                         <h3 style={workCenterCanonicalLifecycleTitle}>
                           {translate("reportedConcernHistory", activeLanguage)}
                         </h3>
@@ -10690,7 +10690,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             </strong>
                             <span style={workCenterCanonicalLifecycleValue}>
                               {workCenterLifecycleProjection.projection.job?.present
-                                ? "Lifecycle-v2 Job confirmed"
+                                ? "Job record connected"
                                 : translate("lifecycleHistoryUnavailable", activeLanguage)}
                             </span>
                           </div>

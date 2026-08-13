@@ -23,9 +23,9 @@ function quoteErrorMessage(error) {
     return "Quote read authority is unavailable for this account.";
   }
   if (error?.status === 404) {
-    return "Canonical Quotes are unavailable for this Job.";
+    return "Quotes are unavailable for this job.";
   }
-  return error?.message || "Canonical Quotes could not be loaded.";
+  return error?.message || "Quotes could not be loaded.";
 }
 
 export default function CanonicalQuotesPanel({ record = {}, setPage }) {
@@ -81,19 +81,19 @@ export default function CanonicalQuotesPanel({ record = {}, setPage }) {
     <section style={styles.section} aria-labelledby="canonical-quotes-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Canonical commercial read truth</span>
+          <span style={styles.eyebrow}>Customer pricing</span>
           <h3 id="canonical-quotes-title" style={styles.title}>Quotes</h3>
         </div>
-        <span style={styles.readOnly}>Read-only</span>
+        <span style={styles.readOnly}>Quote history</span>
       </div>
       {state.status === "loading" && (
-        <p role="status" style={styles.message}>Loading canonical Quotes.</p>
+        <p role="status" style={styles.message}>Loading quotes.</p>
       )}
       {state.status === "error" && (
         <p role="alert" style={styles.error}>{state.error}</p>
       )}
       {state.status === "ready" && state.quotes.length === 0 && (
-        <p style={styles.message}>No canonical quote issued yet</p>
+        <p style={styles.message}>No quotes issued yet</p>
       )}
       {state.status === "ready" && lineage.length > 0 && (
         <div style={styles.list}>
