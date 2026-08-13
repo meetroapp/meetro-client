@@ -7,6 +7,7 @@ import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
+import CanonicalJobVisits from "../components/CanonicalJobVisits";
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
@@ -10758,6 +10759,23 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     workCenterLifecycleProjection.status === "ready" &&
                     workCenterLifecycleProjection.projection && (
                       <>
+                        <CanonicalJobVisits
+                          record={{
+                            ...selectedWorkCenterJob,
+                            lifecycleVerified: true,
+                            lifecycleContractVersion: 2,
+                            jobId:
+                              workCenterLifecycleProjection.projection.job?.id ||
+                              null,
+                            postId:
+                              workCenterLifecycleProjection.projection.requestId ||
+                              workCenterLifecycleProjection.postId,
+                            requestId:
+                              workCenterLifecycleProjection.projection.requestId ||
+                              workCenterLifecycleProjection.postId,
+                          }}
+                          setPage={setPage}
+                        />
                         <CanonicalJobEvaluation
                           record={{
                             ...selectedWorkCenterJob,
