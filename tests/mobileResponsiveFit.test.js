@@ -20,7 +20,8 @@ test("mobile app shell prevents page-level horizontal overflow", () => {
   assert.match(indexCssSource, /html,\s*body,\s*#root[\s\S]*overflow-x: hidden;/);
   assert.match(indexCssSource, /body[\s\S]*-webkit-text-size-adjust: 100%;/);
   assert.match(indexCssSource, /@media \(max-width: 1099px\)/);
-  assert.match(indexCssSource, /--meetro-mobile-bottom-nav-clearance: calc\(96px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(indexCssSource, /--meetro-bottom-nav-height: calc\(74px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(indexCssSource, /--meetro-mobile-bottom-nav-clearance: calc\(var\(--meetro-bottom-nav-height\) \+ 24px\);/);
   assert.match(indexCssSource, /\.app-page,[\s\S]*\.meetro-mobile-fit-page[\s\S]*width: 100% !important;[\s\S]*max-width: 100% !important;[\s\S]*min-width: 0 !important;[\s\S]*overflow-x: hidden !important;/);
   assert.match(indexCssSource, /\.app-page \*,[\s\S]*\.meetro-mobile-fit-page \*[\s\S]*min-width: 0;/);
 });

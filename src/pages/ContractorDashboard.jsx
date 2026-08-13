@@ -111,6 +111,13 @@ import {
   mergeCanonicalWorkCenterEntries,
 } from "../utils/workCenterCanonicalHydration";
 import {
+  getCanonicalCurrentJobIdentityKey,
+  getCurrentJobListPresentation,
+  hydrateCurrentJobListEntries,
+  prepareCurrentJobListHydration,
+  replaceCurrentJobListEntry,
+} from "../utils/workCenterCurrentJobListHydration";
+import {
   buildLegacyWorkCenterReferences,
   isLegacyWorkCenterCommandSurfaceContained,
 } from "../utils/workCenterLegacyAuthority";
@@ -373,6 +380,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       reason: "",
       entries: [],
     });
+  const canonicalWorkCenterCollectionRef = useRef(0);
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
   const [jobReportTarget, setJobReportTarget] = useState(null);
@@ -620,10 +628,73 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
   useEffect(() => {
     let active = true;
+    const collectionRevision = canonicalWorkCenterCollectionRef.current + 1;
+    canonicalWorkCenterCollectionRef.current = collectionRevision;
 
-    void fetchCanonicalWorkCenterEntries({ setPage }).then((result) => {
-      if (active) setCanonicalWorkCenterHydration(result);
-    });
+    void fetchCanonicalWorkCenterEntries({ setPage })
+      .then(async (result) => {
+        if (
+          !active ||
+          canonicalWorkCenterCollectionRef.current !== collectionRevision
+        ) {
+          return;
+        }
+
+        if (result.status !== "ready") {
+          setCanonicalWorkCenterHydration(result);
+          return;
+        }
+
+        const loadingEntries = prepareCurrentJobListHydration(result.entries);
+        setCanonicalWorkCenterHydration({
+          status: "loading",
+          reason: "",
+          entries: loadingEntries,
+        });
+
+        const hydratedEntries = await hydrateCurrentJobListEntries({
+          entries: loadingEntries,
+          setPage,
+          onEntryHydrated(hydratedEntry) {
+            if (
+              !active ||
+              canonicalWorkCenterCollectionRef.current !== collectionRevision
+            ) {
+              return;
+            }
+            setCanonicalWorkCenterHydration((current) => ({
+              ...current,
+              entries: replaceCurrentJobListEntry(
+                current.entries,
+                hydratedEntry
+              ),
+            }));
+          },
+        });
+
+        if (
+          active &&
+          canonicalWorkCenterCollectionRef.current === collectionRevision
+        ) {
+          setCanonicalWorkCenterHydration({
+            status: "ready",
+            reason: "",
+            entries: hydratedEntries,
+          });
+        }
+      })
+      .catch(() => {
+        if (
+          active &&
+          canonicalWorkCenterCollectionRef.current === collectionRevision
+        ) {
+          setCanonicalWorkCenterHydration({
+            status: "error",
+            reason: "CURRENT_JOB_LIST_HYDRATION_FAILED",
+            entries: [],
+          });
+        }
+      });
 
     return () => {
       active = false;
@@ -12459,25 +12530,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     workCenterActiveJobs.map((job) => {
                       const isCanonicalReadOnlyJob =
                         isCanonicalWorkCenterEntry(job);
-                      const jobListPresentation = isCanonicalReadOnlyJob
-                        ? {
-                            statusLabel:
-                              job.liveJob?.stage?.label ||
-                              "Current status unavailable",
-                            nextStepLabel:
-                              job.liveJob?.nextAction?.label ||
-                              "Open the Job to refresh its next step",
-                          }
-                        : {
-                            statusLabel: "Legacy reference",
-                            nextStepLabel: "Read-only compatibility record",
-                          };
+                      const jobListPresentation =
+                        getCurrentJobListPresentation(job);
 
                       return (
                         <button
-                          key={job.id}
+                          key={
+                            getCanonicalCurrentJobIdentityKey(job) || job.id
+                          }
                           type="button"
-                          className="meetro-visual-surface"
+                          className="meetro-visual-surface meetro-current-job-list-card"
                           style={jobListCard}
                           onClick={() => {
                             setSelectedJobDetailView("");
@@ -12498,6 +12560,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               {translate("myRequestsNextStep", activeLanguage)}:{" "}
                               {jobListPresentation.nextStepLabel}
                             </span>
+                            {jobListPresentation.responsibilityLabel && (
+                              <span style={jobListMeta}>
+                                Who acts next:{" "}
+                                {jobListPresentation.responsibilityLabel}
+                              </span>
+                            )}
+                            {jobListPresentation.blockerLabel && (
+                              <span role="status" style={jobListMeta}>
+                                {jobListPresentation.blockerLabel}
+                              </span>
+                            )}
                           </span>
                           <span style={jobListAction}>
                             {translate("workCenterJobDetails", activeLanguage)}

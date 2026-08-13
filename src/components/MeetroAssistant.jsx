@@ -2445,6 +2445,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
   const [, setViewportRevision] = useState(0);
+  const [externalKeyboardOpen, setExternalKeyboardOpen] = useState(false);
   const [activeAccountMode, setActiveAccountMode] = useState(
     () => localStorage.getItem("activeAccountMode") || "personal"
   );
@@ -2779,6 +2780,62 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       window.visualViewport?.removeEventListener("scroll", handleViewportChange);
     };
   }, [launcherBottomClearance]);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const isEditableTarget = (target) => {
+      const tagName = String(target?.tagName || "").toLowerCase();
+      return (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        Boolean(target?.isContentEditable)
+      );
+    };
+
+    const syncExternalKeyboardState = () => {
+      const activeElement = document.activeElement;
+      const assistantOwnsFocus = Boolean(
+        activeElement?.closest?.(".meetro-assistant-presence")
+      );
+      setExternalKeyboardOpen(
+        isEditableTarget(activeElement) && !assistantOwnsFocus
+      );
+    };
+
+    const scheduleExternalKeyboardState = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        syncExternalKeyboardState();
+      });
+    };
+
+    document.addEventListener("focusin", scheduleExternalKeyboardState, true);
+    document.addEventListener("focusout", scheduleExternalKeyboardState, true);
+    window.visualViewport?.addEventListener(
+      "resize",
+      scheduleExternalKeyboardState
+    );
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      document.removeEventListener(
+        "focusin",
+        scheduleExternalKeyboardState,
+        true
+      );
+      document.removeEventListener(
+        "focusout",
+        scheduleExternalKeyboardState,
+        true
+      );
+      window.visualViewport?.removeEventListener(
+        "resize",
+        scheduleExternalKeyboardState
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -3710,7 +3767,16 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     enterCompanionConversation();
   }
 
-  const launcherPositionStyle = launcherPosition
+  const compactWorkCenterSafeDock =
+    !appLayoutMetrics.desktopMode && currentPage === "contractorDashboard";
+  const launcherPositionStyle = compactWorkCenterSafeDock
+    ? {
+        right: `max(${launcherEdgeMargin}px, env(safe-area-inset-right, 0px))`,
+        bottom: launcherPosition ? "auto" : launcherFallbackBottom,
+        left: "auto",
+        top: launcherPosition ? `${launcherPosition.y}px` : "auto",
+      }
+    : launcherPosition
     ? {
         left: `${launcherPosition.x}px`,
         top: `${launcherPosition.y}px`,
@@ -3734,9 +3800,13 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   return (
     <>
+      {!externalKeyboardOpen && (
       <button
         className="meetro-assistant-launcher"
         data-position-mode="draggable"
+        data-containment-mode={
+          compactWorkCenterSafeDock ? "compact-work-center-safe-rail" : "free"
+        }
         type="button"
         aria-label={t("companionLauncherLabel", language)}
         onPointerDown={handleLauncherPointerDown}
@@ -3756,8 +3826,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         <span style={assistantButtonText}>{t("assistantCompanionAskMeetro", language)}</span>
         <span style={assistantPresenceDot} aria-hidden="true" />
       </button>
+      )}
 
-      {wakeOpen && !open && (
+      {wakeOpen && !open && !externalKeyboardOpen && (
         <section
           style={getAssistantWakeBubbleStyle({
             launcherPosition,

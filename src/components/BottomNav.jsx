@@ -188,7 +188,9 @@ function BottomNav({ setPage, currentPage = "" }) {
     };
 
     const handleFocusOut = () => {
-      setTimeout(() => setKeyboardOpen(false), 220);
+      setTimeout(() => {
+        setKeyboardOpen(isEditableTarget(document.activeElement));
+      }, 220);
     };
 
     const handleViewportResize = () => {
@@ -196,9 +198,12 @@ function BottomNav({ setPage, currentPage = "" }) {
 
       const heightDifference =
         window.innerHeight - window.visualViewport.height;
+      const editableFocused = isEditableTarget(document.activeElement);
 
-      if (heightDifference > 100) {
+      if (editableFocused && heightDifference > 80) {
         setKeyboardOpen(true);
+      } else if (!editableFocused) {
+        setKeyboardOpen(false);
       }
     };
 
@@ -230,6 +235,24 @@ function BottomNav({ setPage, currentPage = "" }) {
       hideListener?.remove?.();
     };
   }, []);
+
+  useEffect(() => {
+    const root = document.getElementById("root");
+    if (!root) return undefined;
+
+    root.dataset.appKeyboard = keyboardOpen ? "open" : "closed";
+    root.style.setProperty(
+      "--meetro-bottom-nav-height",
+      keyboardOpen
+        ? "0px"
+        : "calc(74px + env(safe-area-inset-bottom, 0px))"
+    );
+
+    return () => {
+      delete root.dataset.appKeyboard;
+      root.style.removeProperty("--meetro-bottom-nav-height");
+    };
+  }, [keyboardOpen]);
 
   const personalMobileNavItems = [
     {
@@ -839,19 +862,22 @@ function BottomNav({ setPage, currentPage = "" }) {
       )}
 
       {!keyboardOpen && (
-        <div
-          className="bottom-nav-dock"
-          data-language={language}
-          style={navDock}
-          role="navigation"
-          aria-label={t("navigationPrimaryMobile", language)}
-        >
-          <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
-            <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
-              {mobileNavItems.map((item) => renderNavItem(item, "bottom"))}
+        <>
+          <div className="bottom-nav-content-spacer" aria-hidden="true" />
+          <div
+            className="bottom-nav-dock"
+            data-language={language}
+            style={navDock}
+            role="navigation"
+            aria-label={t("navigationPrimaryMobile", language)}
+          >
+            <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
+              <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
+                {mobileNavItems.map((item) => renderNavItem(item, "bottom"))}
+              </div>
             </div>
           </div>
-      </div>
+        </>
       )}
     </>
   );
@@ -925,10 +951,12 @@ const adaptiveNavigationStyles = `
     display: none;
   }
 
+  #root[data-app-layout="tablet"] .desktop-sidebar,
   #root[data-app-layout="desktop"] .desktop-sidebar {
       display: flex;
   }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-backdrop,
   #root[data-app-layout="desktop"] .desktop-profile-context-backdrop {
       position: fixed;
       inset: 0;
@@ -942,14 +970,22 @@ const adaptiveNavigationStyles = `
       cursor: default;
   }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-card,
   #root[data-app-layout="desktop"] .desktop-profile-context-card {
       display: block;
   }
 
+  #root[data-app-layout="tablet"] .bottom-nav-content-spacer,
+  #root[data-app-layout="desktop"] .bottom-nav-content-spacer,
+  #root[data-app-layout="tablet"] .bottom-nav-dock,
   #root[data-app-layout="desktop"] .bottom-nav-dock {
       display: none !important;
   }
 
+  #root[data-app-layout="tablet"] .app-page,
+  #root[data-app-layout="tablet"] .page-shell,
+  #root[data-app-layout="tablet"] .business-dashboard,
+  #root[data-app-layout="tablet"] .contractor-dashboard,
   #root[data-app-layout="desktop"] .app-page,
   #root[data-app-layout="desktop"] .page-shell,
   #root[data-app-layout="desktop"] .business-dashboard,
@@ -965,38 +1001,47 @@ const adaptiveNavigationStyles = `
       padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
   }
 
+  #root[data-app-layout="tablet"] .meetro-responsive-page,
   #root[data-app-layout="desktop"] .meetro-responsive-page {
       --meetro-page-max-width: var(--meetro-layout-content-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-readable-page,
   #root[data-app-layout="desktop"] .meetro-readable-page {
       --meetro-page-max-width: var(--meetro-layout-readable-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-form-page,
   #root[data-app-layout="desktop"] .meetro-form-page {
       --meetro-page-max-width: var(--meetro-layout-form-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-wide-page,
   #root[data-app-layout="desktop"] .meetro-wide-page {
       --meetro-page-max-width: var(--meetro-layout-wide-max);
   }
 
+  #root[data-app-layout="tablet"] .messages-inbox-page,
+  #root[data-app-layout="tablet"] .messages-relationship-identity-page,
   #root[data-app-layout="desktop"] .messages-inbox-page,
   #root[data-app-layout="desktop"] .messages-relationship-identity-page {
       --meetro-page-resolved-max-width: var(--meetro-page-available-width);
       --meetro-page-inline-extra: 0px;
   }
 
+  #root[data-app-layout="tablet"] .desktop-sidebar-item:focus-visible,
   #root[data-app-layout="desktop"] .desktop-sidebar-item:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-card button:focus-visible,
   #root[data-app-layout="desktop"] .desktop-profile-context-card button:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
+  #root[data-app-layout="tablet"] .desktop-profile-card-scroll .profile-embedded-content,
   #root[data-app-layout="desktop"] .desktop-profile-card-scroll .profile-embedded-content {
       max-width: none !important;
       margin-left: 0 !important;

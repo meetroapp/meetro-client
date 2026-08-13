@@ -99,7 +99,7 @@ function Conversation({ setPage, currentPage }) {
     <div
       style={{
         background: "#f5f5f7",
-        minHeight: "100vh",
+        minHeight: "var(--meetro-safe-vh, 100dvh)",
         display: "flex",
         justifyContent: "center",
         fontFamily: "Arial",
@@ -109,7 +109,8 @@ function Conversation({ setPage, currentPage }) {
         style={{
           width: "100%",
           maxWidth: "430px",
-          paddingBottom: "150px",
+          paddingBottom:
+            "calc(var(--meetro-mobile-bottom-nav-clearance, 96px) + 54px)",
         }}
       >
         <div
@@ -158,7 +159,7 @@ function Conversation({ setPage, currentPage }) {
         <div
           style={{
             position: "fixed",
-            bottom: "72px",
+            bottom: "var(--meetro-bottom-nav-height, 72px)",
             left: "50%",
             transform: "translateX(-50%)",
             width: "100%",

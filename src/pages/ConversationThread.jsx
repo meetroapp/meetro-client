@@ -7961,9 +7961,9 @@ const animations = `
 `;
 
 const page = {
-  height: "100dvh",
-  minHeight: "100dvh",
-  maxHeight: "100dvh",
+  height: "var(--meetro-safe-vh, 100dvh)",
+  minHeight: "var(--meetro-safe-vh, 100dvh)",
+  maxHeight: "var(--meetro-safe-vh, 100dvh)",
   width: "100%",
   maxWidth: "100vw",
   minWidth: 0,

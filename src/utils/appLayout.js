@@ -2,6 +2,7 @@ export const APP_DESKTOP_SIDEBAR_MAX_WIDTH = 284;
 export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 220;
 export const APP_DESKTOP_WORKSPACE_MIN_WIDTH = 740;
 export const APP_DESKTOP_SHELL_GUTTER_BUDGET = 76;
+export const APP_TABLET_LAYOUT_MIN_WIDTH = 768;
 export const APP_DESKTOP_LAYOUT_MIN_WIDTH =
   APP_DESKTOP_SIDEBAR_MAX_WIDTH +
   APP_DESKTOP_WORKSPACE_MIN_WIDTH +
@@ -23,13 +24,28 @@ function cssPixels(value) {
 
 export function getAppSidebarWidth(layoutWidth) {
   const width = Math.max(0, finite(layoutWidth));
-  if (width < APP_DESKTOP_LAYOUT_MIN_WIDTH) return 0;
+  if (width < APP_TABLET_LAYOUT_MIN_WIDTH) return 0;
   if (width >= 1180) return APP_DESKTOP_SIDEBAR_MAX_WIDTH;
+
+  const compactTabletSidebarWidth = 188;
+  const interpolationRange = 1180 - APP_TABLET_LAYOUT_MIN_WIDTH;
+  const progress = (width - APP_TABLET_LAYOUT_MIN_WIDTH) / interpolationRange;
 
   return Math.min(
     APP_DESKTOP_SIDEBAR_MAX_WIDTH,
-    Math.max(APP_DESKTOP_SIDEBAR_MIN_WIDTH, width * 0.27)
+    Math.max(
+      compactTabletSidebarWidth,
+      compactTabletSidebarWidth +
+        progress * (APP_DESKTOP_SIDEBAR_MAX_WIDTH - compactTabletSidebarWidth)
+    )
   );
+}
+
+export function getAppLayoutMode(layoutWidth) {
+  const width = Math.max(0, finite(layoutWidth));
+  if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH) return "desktop";
+  if (width >= APP_TABLET_LAYOUT_MIN_WIDTH) return "tablet";
+  return "mobile";
 }
 
 function readSafeAreaInsets({ windowObject, documentObject } = {}) {
@@ -101,6 +117,10 @@ export function getAppLayoutSnapshot({
     0,
     finite(windowObject?.visualViewport?.offsetTop)
   );
+  const visualBottomGap = Math.max(
+    0,
+    layoutHeight - visualHeight - visualOffsetTop
+  );
   const isNative = Boolean(capacitor?.isNativePlatform?.());
   const platform = String(capacitor?.getPlatform?.() || (isNative ? "native" : "web"));
   const sidebarWidth = getAppSidebarWidth(layoutWidth);
@@ -114,11 +134,12 @@ export function getAppLayoutSnapshot({
     visualHeight,
     visualOffsetLeft,
     visualOffsetTop,
+    visualBottomGap,
     isNative,
     platform,
     sidebarWidth,
     contentWidth: Math.max(0, layoutWidth - sidebarWidth),
-    layoutMode: layoutWidth >= APP_DESKTOP_LAYOUT_MIN_WIDTH ? "desktop" : "mobile",
+    layoutMode: getAppLayoutMode(layoutWidth),
   });
 }
 
@@ -135,7 +156,7 @@ export function getDesktopContentMetrics({
     capacitor,
   });
   const safeArea = safeAreaInsets || readSafeAreaInsets({ windowObject, documentObject });
-  const sidebarWidth = snapshot.layoutMode === "desktop"
+  const sidebarWidth = snapshot.layoutMode !== "mobile"
     ? Math.max(
         0,
         finite(
@@ -174,8 +195,7 @@ export function getDesktopContentMetrics({
     safeAreaLeft: safeArea.left,
     desktopMode: snapshot.layoutMode === "desktop",
     mobileMode: snapshot.layoutMode === "mobile",
-    tabletMode:
-      snapshot.layoutMode === "desktop" && snapshot.layoutWidth < 1180,
+    tabletMode: snapshot.layoutMode === "tablet",
   });
 }
 
@@ -187,6 +207,7 @@ function metricsSignature(metrics) {
     metrics.visualHeight,
     metrics.visualOffsetLeft,
     metrics.visualOffsetTop,
+    metrics.visualBottomGap,
     metrics.sidebarWidth,
     metrics.contentWidth,
     metrics.contentHeight,
@@ -235,6 +256,10 @@ export function applyAppLayoutDiagnostics(root, snapshot) {
     snapshot.visualOffsetLeft || 0,
     snapshot.visualOffsetTop || 0,
   ].map((value) => Math.round(value)).join(" ");
+  root.dataset.appVisualHeight = String(Math.round(snapshot.visualHeight));
+  root.dataset.appVisualBottomGap = String(
+    Math.round(snapshot.visualBottomGap || 0)
+  );
   root.dataset.appPlatform = snapshot.platform;
   root.dataset.appNative = String(snapshot.isNative);
   root.dataset.appSidebarWidth = String(Math.round(snapshot.sidebarWidth));
@@ -253,6 +278,26 @@ export function applyAppLayoutDiagnostics(root, snapshot) {
   root.style.setProperty(
     "--meetro-available-content-height",
     `${Math.max(0, snapshot.contentHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-height",
+    `${Math.max(0, snapshot.visualHeight || snapshot.layoutHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-offset-top",
+    `${Math.max(0, snapshot.visualOffsetTop || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-bottom-gap",
+    `${Math.max(0, snapshot.visualBottomGap || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-safe-vh",
+    `${Math.max(0, snapshot.visualHeight || snapshot.layoutHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-sidebar-width",
+    `${Math.max(0, snapshot.sidebarWidth)}px`
   );
 }
 

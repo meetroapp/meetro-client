@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   APP_DESKTOP_LAYOUT_MIN_WIDTH,
+  APP_TABLET_LAYOUT_MIN_WIDTH,
   getAppLayoutSnapshot,
 } from "../src/utils/appLayout.js";
 
@@ -38,14 +39,15 @@ function environment(width, visualWidth = width, native = false) {
   };
 }
 
-test("stable app layout width selects desktop for full-screen iPad", () => {
+test("stable app layout width selects phone tablet and desktop capability tiers", () => {
+  assert.equal(APP_TABLET_LAYOUT_MIN_WIDTH, 768);
   assert.equal(APP_DESKTOP_LAYOUT_MIN_WIDTH, 1100);
-  assert.equal(getAppLayoutSnapshot(environment(768)).layoutMode, "mobile");
-  assert.equal(getAppLayoutSnapshot(environment(834)).layoutMode, "mobile");
-  assert.equal(getAppLayoutSnapshot(environment(900)).layoutMode, "mobile");
-  assert.equal(getAppLayoutSnapshot(environment(1023)).layoutMode, "mobile");
-  assert.equal(getAppLayoutSnapshot(environment(1024)).layoutMode, "mobile");
-  assert.equal(getAppLayoutSnapshot(environment(1099)).layoutMode, "mobile");
+  assert.equal(getAppLayoutSnapshot(environment(768)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(834)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(900)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(1023)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(1024)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(1099)).layoutMode, "tablet");
   assert.equal(getAppLayoutSnapshot(environment(1100)).layoutMode, "desktop");
   assert.equal(getAppLayoutSnapshot(environment(1440)).layoutMode, "desktop");
   assert.equal(getAppLayoutSnapshot(environment(390)).layoutMode, "mobile");
@@ -82,13 +84,15 @@ test("app shell receives diagnostics before render and maintains them", () => {
   assert.match(appLayoutSource, /visualViewport\?\.addEventListener\?\.\("scroll", schedule\)/);
 });
 
-test("desktop navigation follows app layout mode on iPad", () => {
+test("workspace navigation replaces the phone dock at tablet and desktop widths", () => {
   assert.match(navSource, /\.desktop-sidebar \{\n\s+display: none;/);
+  assert.match(navSource, /#root\[data-app-layout="tablet"\] \.desktop-sidebar/);
   assert.match(navSource, /#root\[data-app-layout="desktop"\] \.desktop-sidebar/);
+  assert.match(navSource, /#root\[data-app-layout="tablet"\] \.bottom-nav-dock/);
   assert.match(navSource, /#root\[data-app-layout="desktop"\] \.bottom-nav-dock/);
   assert.match(navSource, /#root\[data-app-layout="desktop"\] \.bottom-nav-dock \{\n\s+display: none !important;/);
   assert.doesNotMatch(navSource, /min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/);
-  assert.match(cssSource, /#root\[data-app-layout="desktop"\][\s\S]*--meetro-sidebar-width/);
+  assert.match(cssSource, /#root\[data-app-layout="tablet"\],[\s\S]*--meetro-sidebar-width/);
   assert.match(cssSource, /@media \(max-width: 1099px\)/);
 });
 
@@ -99,6 +103,12 @@ test("major application areas use desktop structure at iPad width", () => {
   assert.match(profileSource, /#root\[data-app-layout="desktop"\] \.app-page\.business-profile-page/);
   assert.match(companionSource, /data-companion-layout=\{companionLayoutMode\}/);
   assert.doesNotMatch(messagesSource, /pointer: fine/);
+});
+
+test("layout selection never depends on a device family or user agent", () => {
+  assert.doesNotMatch(appLayoutSource, /iPad|iPhone|Android|navigator\.userAgent|maxTouchPoints/);
+  assert.equal(getAppLayoutSnapshot(environment(844, 844, true)).layoutMode, "tablet");
+  assert.equal(getAppLayoutSnapshot(environment(844, 844, false)).layoutMode, "tablet");
 });
 
 test("iOS target and viewport support native iPad presentation", () => {

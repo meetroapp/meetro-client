@@ -76,7 +76,7 @@ test("assistant launcher uses two-stage wake before opening", () => {
 
 test("orb launcher opens compact Lantern card before expanded workspace", () => {
   assert.match(assistantSource, /if \(launcherAction === "wake"\) \{\s*setWakeOpen\(true\);/);
-  assert.match(assistantSource, /wakeOpen && !open && \(/);
+  assert.match(assistantSource, /wakeOpen && !open && !externalKeyboardOpen && \(/);
   assert.match(assistantSource, /compactCompanionTitle/);
   assert.match(assistantSource, /compactCompanionMessage/);
   assert.doesNotMatch(assistantSource, /<p style=\{assistantWakePrompt\}>\{wakeContent\.prompt\}<\/p>/);

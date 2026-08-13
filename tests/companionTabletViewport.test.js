@@ -17,6 +17,22 @@ const stylesSource = readFileSync(
   "utf8"
 );
 
+function extractCssBlock(source, marker) {
+  const start = source.indexOf(marker);
+  assert.ok(start >= 0, `Missing CSS block: ${marker}`);
+  const openingBrace = source.indexOf("{", start);
+  let depth = 0;
+
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] !== "}") continue;
+    depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+
+  assert.fail(`Unclosed CSS block: ${marker}`);
+}
+
 function assertContained(placement) {
   assert.ok(placement.left >= placement.bounds.left);
   assert.ok(placement.top >= placement.bounds.top);
@@ -35,9 +51,9 @@ test("iPad portrait shifts a right-edge launcher panel fully inward", () => {
     preferredWidth: getCompanionPreferredPanelWidth(768),
   });
 
-  assert.equal(placement.layoutMode, "mobile");
+  assert.equal(placement.layoutMode, "tablet");
   assert.equal(placement.horizontalPlacement, "left");
-  assert.equal(placement.width, 388);
+  assert.equal(placement.width, 520);
   assertContained(placement);
 });
 
@@ -115,13 +131,13 @@ test("panel dimensions never exceed narrow mobile viewport", () => {
 
 test("layout mode uses usable width rather than touch or user agent", () => {
   assert.equal(getCompanionLayoutMode(390), "mobile");
-  assert.equal(getCompanionLayoutMode(768), "mobile");
-  assert.equal(getCompanionLayoutMode(1024), "mobile");
+  assert.equal(getCompanionLayoutMode(768), "tablet");
+  assert.equal(getCompanionLayoutMode(1024), "tablet");
   assert.equal(getCompanionLayoutMode(1100), "desktop");
   assert.equal(getCompanionLayoutMode(1440), "desktop");
   assert.equal(getCompanionPreferredPanelWidth(390), 388);
-  assert.equal(getCompanionPreferredPanelWidth(768), 388);
-  assert.equal(getCompanionPreferredPanelWidth(1024), 388);
+  assert.equal(getCompanionPreferredPanelWidth(768), 520);
+  assert.equal(getCompanionPreferredPanelWidth(1024), 520);
   assert.equal(getCompanionPreferredPanelWidth(1100), 720);
   assert.equal(getCompanionPreferredPanelWidth(1440), 388);
 });
@@ -138,11 +154,18 @@ test("expanded placement leaves saved launcher coordinates untouched", () => {
 });
 
 test("iPad CSS uses desktop-style floating hierarchy without pointer detection", () => {
-  assert.match(stylesSource, /@media \(min-width: 1100px\) and \(max-width: 1179px\)/);
-  assert.match(stylesSource, /@media \(min-width: 1100px\) and \(max-width: 1179px\) \{[\s\S]*background: transparent !important/);
-  assert.match(stylesSource, /@media \(min-width: 1100px\) and \(max-width: 1179px\) \{[\s\S]*\.meetro-assistant-sheet[\s\S]*border-radius: 28px !important/);
-  assert.match(stylesSource, /@media \(min-width: 1100px\) and \(max-width: 1179px\) \{[\s\S]*overflow-y: auto !important/);
-  assert.doesNotMatch(stylesSource, /@media \(min-width: 1100px\) and \(max-width: 1179px\) \{[\s\S]*data-companion-section[\s\S]*display:\s*none/);
+  const tabletAssistantCss = extractCssBlock(
+    stylesSource,
+    "@media (min-width: 768px) and (max-width: 1179px)"
+  );
+  assert.match(tabletAssistantCss, /background: transparent !important/);
+  assert.match(tabletAssistantCss, /\.meetro-assistant-sheet[\s\S]*border-radius: 28px !important/);
+  assert.match(tabletAssistantCss, /overflow-y: auto !important/);
+  assert.doesNotMatch(tabletAssistantCss, /data-companion-section[\s\S]*display:\s*none/);
+  assert.doesNotMatch(
+    tabletAssistantCss,
+    /\.meetro-assistant-presence \{[^}]*width: 100% !important/
+  );
   assert.doesNotMatch(stylesSource, /iPad|Macintosh|navigator\.userAgent/);
 });
 
