@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import EmergencyTimeline from "../components/EmergencyTimeline";
 import HomeownerProfessionalResponseReview from "../components/HomeownerProfessionalResponseReview";
@@ -49,6 +49,7 @@ import {
   normalizeHomeownerRequestCardId,
   resolveHomeownerRequestById,
 } from "../utils/homeownerRequestCardIdentity";
+import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -647,6 +648,8 @@ function MyRequests({ setPage, view = "list" }) {
   const [requestReloadKey, setRequestReloadKey] = useState(0);
   const [requestMutationStatus, setRequestMutationStatus] = useState("idle");
   const [requestMutationError, setRequestMutationError] = useState("");
+  const [customerQuoteDiscovery, setCustomerQuoteDiscovery] = useState(null);
+  const customerQuoteDiscoveryEpochRef = useRef(0);
   const [emergencyRequests, setEmergencyRequests] = useState([]);
   const [
     emergencyRequestStatus,
@@ -654,6 +657,53 @@ function MyRequests({ setPage, view = "list" }) {
   ] = useState(REQUEST_COLLECTION_STATUS.LOADING);
   const [emergencyReloadKey, setEmergencyReloadKey] =
     useState(0);
+
+  const handleCanonicalLifecycleLoaded = useCallback(
+    ({ requestId, lifecycle }) => {
+      const jobId = String(lifecycle?.job?.id || "").trim();
+      if (!requestId || !jobId) {
+        setCustomerQuoteDiscovery({
+          status: "unavailable",
+          requestId: requestId || null,
+          jobId: null,
+          quotes: null,
+          errorCode: "CUSTOMER_JOB_ID_UNAVAILABLE",
+        });
+        return;
+      }
+
+      const epoch = ++customerQuoteDiscoveryEpochRef.current;
+      setCustomerQuoteDiscovery({
+        status: "loading",
+        requestId,
+        jobId,
+        quotes: null,
+        errorCode: "",
+      });
+      void fetchCustomerJobQuotes({ jobId, setPage })
+        .then((quotes) => {
+          if (epoch !== customerQuoteDiscoveryEpochRef.current) return;
+          setCustomerQuoteDiscovery({
+            status: "confirmed",
+            requestId,
+            jobId,
+            quotes,
+            errorCode: "",
+          });
+        })
+        .catch((error) => {
+          if (epoch !== customerQuoteDiscoveryEpochRef.current) return;
+          setCustomerQuoteDiscovery({
+            status: "unavailable",
+            requestId,
+            jobId,
+            quotes: null,
+            errorCode: String(error?.code || "CUSTOMER_JOB_QUOTES_FAILED"),
+          });
+        });
+    },
+    [setPage]
+  );
 
   function readRequestArray(key) {
     try {
@@ -1499,6 +1549,54 @@ function MyRequests({ setPage, view = "list" }) {
                   <div
                     id={requestDetailContentId}
                     data-homeowner-request-details-id={requestId}
+                    data-customer-job-quotes-status={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.status
+                        : "idle"
+                    }
+                    data-customer-job-id={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.jobId || ""
+                        : ""
+                    }
+                    data-customer-quotes-count={
+                      String(customerQuoteDiscovery?.requestId) ===
+                        String(requestId) &&
+                      customerQuoteDiscovery?.status === "confirmed"
+                        ? customerQuoteDiscovery.quotes.quotes.length
+                        : ""
+                    }
+                    data-customer-quotes-summary={
+                      String(customerQuoteDiscovery?.requestId) ===
+                        String(requestId) &&
+                      customerQuoteDiscovery?.status === "confirmed"
+                        ? JSON.stringify(
+                            customerQuoteDiscovery.quotes.quotes.map(
+                              ({
+                                quoteId,
+                                businessStatus,
+                                lineageLabel,
+                                customerDecision,
+                                actions,
+                              }) => ({
+                                quoteId,
+                                businessStatus,
+                                lineageLabel,
+                                customerDecision,
+                                actions,
+                              })
+                            )
+                          )
+                        : ""
+                    }
+                    data-customer-quotes-error={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.errorCode || ""
+                        : ""
+                    }
                     style={requestDetailContent}
                   >
                     <HomeownerWorkflowHub
@@ -1566,6 +1664,9 @@ function MyRequests({ setPage, view = "list" }) {
                       }
                       onCanonicalRefresh={() =>
                         setRequestReloadKey((value) => value + 1)
+                      }
+                      onCanonicalLifecycleLoaded={
+                        handleCanonicalLifecycleLoaded
                       }
                     />
 

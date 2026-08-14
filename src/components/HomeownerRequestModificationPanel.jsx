@@ -140,6 +140,7 @@ export default function HomeownerRequestModificationPanel({
   mediaUploadDeferred = false,
   onRequestChanged,
   onCanonicalRefresh,
+  onCanonicalLifecycleLoaded,
   onOpenConversation,
   conversationAvailable = false,
   onPreview,
@@ -178,12 +179,23 @@ export default function HomeownerRequestModificationPanel({
       setLifecycle(result.lifecycle);
       setAuthority(result.authority);
       setLoadState("ready");
+      onCanonicalLifecycleLoaded?.({
+        requestId,
+        lifecycle: result.lifecycle,
+        authority: result.authority,
+      });
     });
 
     return () => {
       active = false;
     };
-  }, [contractVersion, requestId, refreshKey, setPage]);
+  }, [
+    contractVersion,
+    onCanonicalLifecycleLoaded,
+    requestId,
+    refreshKey,
+    setPage,
+  ]);
 
   function refreshLifecycle() {
     setLoadState("loading");
