@@ -8,6 +8,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
 import CanonicalJobVisits from "../components/CanonicalJobVisits";
+import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWorkspace";
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
@@ -106,6 +107,11 @@ import {
   getWorkCenterLifecycleProjectionTarget,
 } from "../utils/workCenterLifecycleProjection";
 import { hasCanonicalLiveJobAction } from "../utils/canonicalLiveJobProjection";
+import {
+  createProfessionalScheduleSourceState,
+  fetchProfessionalSchedule,
+  reduceProfessionalScheduleSourceState,
+} from "../utils/professionalScheduleProjection";
 import {
   fetchCanonicalWorkCenterEntries,
   isCanonicalWorkCenterEntry,
@@ -381,6 +387,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
       reason: "",
       entries: [],
     });
+  const [professionalScheduleSource, setProfessionalScheduleSource] = useState(() =>
+    reduceProfessionalScheduleSourceState(
+      createProfessionalScheduleSourceState(),
+      { type: "load" }
+    )
+  );
+  const [professionalScheduleRefreshKey, setProfessionalScheduleRefreshKey] = useState(0);
   const canonicalWorkCenterCollectionRef = useRef(0);
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
@@ -408,6 +421,53 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [workflowDependencyPrompt, setWorkflowDependencyPrompt] = useState(null);
   const workflowDependencyDialogRef = useRef(null);
   const workflowDependencyReturnFocusRef = useRef(null);
+
+  useEffect(() => {
+    let current = true;
+    fetchProfessionalSchedule({ view: "active", limit: 50, setPage })
+      .then((schedule) => {
+        if (!current) return;
+        setProfessionalScheduleSource((state) =>
+          reduceProfessionalScheduleSourceState(state, {
+            type: "success",
+            schedule,
+          })
+        );
+      })
+      .catch((error) => {
+        if (!current) return;
+        setProfessionalScheduleSource((state) =>
+          reduceProfessionalScheduleSourceState(state, {
+            type: "failure",
+            message: error?.message,
+          })
+        );
+      });
+    return () => {
+      current = false;
+    };
+  }, [professionalScheduleRefreshKey, setPage]);
+
+  useEffect(() => {
+    function handleJobScheduleChanged(event) {
+      if (event?.detail?.source === "professional-schedule") return;
+      setProfessionalScheduleSource((state) =>
+        reduceProfessionalScheduleSourceState(state, { type: "load" })
+      );
+      setProfessionalScheduleRefreshKey((current) => current + 1);
+    }
+
+    window.addEventListener(
+      "meetro-canonical-visit-changed",
+      handleJobScheduleChanged
+    );
+    return () => {
+      window.removeEventListener(
+        "meetro-canonical-visit-changed",
+        handleJobScheduleChanged
+      );
+    };
+  }, []);
 
   const [materialsDraft, setMaterialsDraft] = useState("");
   const [materialsAiSuggestion, setMaterialsAiSuggestion] = useState("");
@@ -6797,18 +6857,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
     openWorkTab("pending");
   }
 
-  const workCenterTodayKey = new Date().toISOString().slice(0, 10);
   const opportunitiesCount =
     professionalWorkMetrics.newLeadCount + (hasPendingRequest ? 1 : 0);
   const hasNewWorkCenterOpportunities =
     opportunitiesCount > 0 && opportunitiesCount > viewedOpportunityCount;
-  const upcomingScheduleCount = professionalWorkMetrics.scheduleItems.filter((item) => {
-    const status = String(item?.status || "").toLowerCase();
-    const isFinished = ["completed", "cancelled", "canceled"].includes(status);
-    const isUpcoming = !item?.date || item.date >= workCenterTodayKey;
-
-    return !isFinished && isUpcoming;
-  }).length;
+  const serverScheduleSummary = professionalScheduleSource.confirmed?.summary;
+  const upcomingScheduleCount = serverScheduleSummary?.upcoming ?? 0;
   const quoteAttentionCount =
     professionalWorkMetrics.pendingQuoteCount +
     professionalWorkMetrics.quoteResponseAlertCount;
@@ -6969,12 +7023,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
           title: selectedService,
         }
       : null);
-  const firstScheduleItem =
-    missionTodayAction ||
-    missionSchedule.find((item) => {
-      const status = String(item?.status || "").toLowerCase();
-      return !["completed", "cancelled", "canceled"].includes(status);
-    });
   const firstActiveWorkItem =
     activeJobs[0] ||
     (missionHasCurrentWork
@@ -8279,7 +8327,26 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterScheduleTitle", activeLanguage),
       purpose:
         translate("workCenterUpcomingVisitsAndAppointments", activeLanguage),
-      meta: translate("workCenterUpcomingCount", activeLanguage, { count: upcomingScheduleCount }),
+      meta:
+        professionalScheduleSource.status === "loading"
+          ? translate("appLoadingMeetro", activeLanguage)
+          : professionalScheduleSource.status === "error"
+            ? translate("stateUnavailable", activeLanguage)
+            : [
+                translate("professionalScheduleReadyCount", activeLanguage, {
+                  count: serverScheduleSummary?.readyToSchedule ?? 0,
+                }),
+                translate("professionalScheduleWaitingCount", activeLanguage, {
+                  count: serverScheduleSummary?.waitingOnCustomer ?? 0,
+                }),
+                translate("professionalScheduleChangeCount", activeLanguage, {
+                  count: serverScheduleSummary?.changeRequested ?? 0,
+                }),
+                translate("professionalScheduleUpcomingCount", activeLanguage, {
+                  count: serverScheduleSummary?.upcoming ?? 0,
+                }),
+              ].join(" · "),
+      scheduleSourceStatus: professionalScheduleSource.status,
       actionLabel: translate("workCenterViewSchedule", activeLanguage),
       tone: "#eff6ff",
       accent: "#2563eb",
@@ -9929,34 +9996,24 @@ function ContractorDashboard({ setPage, language = "en" }) {
       key: "schedule",
       icon: "schedule",
       title: translate("workCenterScheduleTitle"),
-      customer: dashboardCustomerLabel(
-        firstScheduleItem,
-        translate("workCenterScheduledCustomer", activeLanguage)
-      ),
+      customer: translate("workCenterScheduledCustomer", activeLanguage),
       status:
-        scheduleResponseNotifications.length > 0
-          ? translate("workCenterCustomerResponded", activeLanguage)
-          : upcomingScheduleCount > 0
-          ? translate("workCenterVisitScheduled2", activeLanguage)
-          : translate("workCenterNoUpcomingVisits", activeLanguage),
+        professionalScheduleSource.status === "loading"
+          ? translate("professionalScheduleLoading", activeLanguage)
+          : professionalScheduleSource.status === "error"
+            ? translate("professionalScheduleUnavailable", activeLanguage)
+            : translate("professionalScheduleUpcomingCount", activeLanguage, {
+                count: serverScheduleSummary?.upcoming ?? 0,
+              }),
       nextStep:
-        scheduleResponseNotifications.length > 0
-          ? translate("workCenterReviewResponse", activeLanguage)
-          : upcomingScheduleCount > 0
-          ? translate("workCenterPerformVisit", activeLanguage)
-          : translate("workCenterAddVisit", activeLanguage),
-      primaryAction:
-        upcomingScheduleCount > 0 || scheduleResponseNotifications.length > 0
-          ? translate("assistantActionOpenSchedule", activeLanguage)
-          : translate("workCenterAddVisit2", activeLanguage),
-      badge:
-        scheduleResponseNotifications.length > 0
-          ? translate("workCenterResponseCount", activeLanguage, { count: scheduleResponseNotifications.length })
-          : compactCountBadge(
-              upcomingScheduleCount,
-              "workCenterBadgeUpcoming"
-            ),
-      isPriority: scheduleResponseNotifications.length > 0,
+        professionalScheduleSource.status === "confirmed"
+          ? translate("workCenterViewSchedule", activeLanguage)
+          : translate("professionalScheduleRetry", activeLanguage),
+      primaryAction: translate("workCenterViewSchedule", activeLanguage),
+      badge: translate("professionalScheduleReadyCount", activeLanguage, {
+        count: serverScheduleSummary?.readyToSchedule ?? 0,
+      }),
+      isPriority: (serverScheduleSummary?.changeRequested ?? 0) > 0,
       tone: "#eff6ff",
       accent: "#2563eb",
     },
@@ -10100,8 +10157,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       if (activeTab === "materials") return sectionItem.key === "active";
       return sectionItem.key === activeTab;
     }) || workCenterSections[0];
+  const isCanonicalScheduleSurface = activeTab === "schedule";
   const isLegacyCommandSurfaceContained =
-    isLegacyWorkCenterCommandSurfaceContained(activeTab);
+    !isCanonicalScheduleSurface && isLegacyWorkCenterCommandSurfaceContained(activeTab);
+  const legacyScheduleCompatibilityEnabled = false;
   const legacySurfaceTitle =
     {
       schedule: "Schedule",
@@ -10352,6 +10411,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 <button
                   key={card.key}
                   type="button"
+                  data-schedule-source-state={
+                    card.key === "schedule" ? card.scheduleSourceStatus : undefined
+                  }
                   className={`meetro-visual-surface work-center-navigation-card${
                     isWorkCenterSectionOpen && activeTab === card.key
                       ? " meetro-selected-card"
@@ -12686,9 +12748,24 @@ function ContractorDashboard({ setPage, language = "en" }) {
               {ui("workCenterScheduleTitle")}
             </h2>
             <p style={workCenterChildSummary}>
-              {upcomingScheduleCount > 0
-                ? `${upcomingScheduleCount} ${ui("workCenterChildScheduleSummary")}`
-                : ui("workCenterChildScheduleEmptySummary")}
+              {professionalScheduleSource.status === "loading"
+                ? translate("professionalScheduleLoading", activeLanguage)
+                : professionalScheduleSource.status === "error"
+                  ? translate("professionalScheduleUnavailable", activeLanguage)
+                  : [
+                      translate("professionalScheduleReadyCount", activeLanguage, {
+                        count: serverScheduleSummary?.readyToSchedule ?? 0,
+                      }),
+                      translate("professionalScheduleWaitingCount", activeLanguage, {
+                        count: serverScheduleSummary?.waitingOnCustomer ?? 0,
+                      }),
+                      translate("professionalScheduleChangeCount", activeLanguage, {
+                        count: serverScheduleSummary?.changeRequested ?? 0,
+                      }),
+                      translate("professionalScheduleUpcomingCount", activeLanguage, {
+                        count: serverScheduleSummary?.upcoming ?? 0,
+                      }),
+                    ].join(" · ")}
             </p>
           </div>
         ) : [
@@ -12862,6 +12939,42 @@ function ContractorDashboard({ setPage, language = "en" }) {
       })()}
 
       {activeTab === "schedule" && !isLegacyCommandSurfaceContained && (
+        <div style={scheduleContentSection}>
+          <ProfessionalScheduleWorkspace
+            sourceState={professionalScheduleSource}
+            language={activeLanguage}
+            setPage={setPage}
+            onConfirmed={(schedule) => {
+              setProfessionalScheduleSource((state) =>
+                reduceProfessionalScheduleSourceState(state, {
+                  type: "success",
+                  schedule,
+                })
+              );
+            }}
+            onRetry={() => {
+              setProfessionalScheduleSource((state) =>
+                reduceProfessionalScheduleSourceState(state, { type: "load" })
+              );
+              setProfessionalScheduleRefreshKey((current) => current + 1);
+            }}
+            onViewJob={(jobId) => {
+              const exactJob = workCenterJobs.find(
+                (job) => String(job?.jobId || "") === String(jobId || "")
+              );
+              if (!exactJob) return;
+              setSelectedJobDetailView("");
+              setIsJobHistoryMode(false);
+              setIsWorkCenterSectionOpen(false);
+              setSelectedWorkCenterJob(exactJob);
+            }}
+          />
+        </div>
+      )}
+
+      {legacyScheduleCompatibilityEnabled &&
+        activeTab === "schedule" &&
+        !isLegacyCommandSurfaceContained && (
         <div style={scheduleContentSection}>
           <div style={scheduleCompactHeader}>
             <div>

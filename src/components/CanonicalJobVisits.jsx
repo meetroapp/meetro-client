@@ -120,6 +120,12 @@ function subjectKey(subject) {
   return `${subject.purpose}:${subject.subjectId}`;
 }
 
+function notifyCanonicalVisitChanged(jobId, visitId = null) {
+  window.dispatchEvent(new CustomEvent("meetro-canonical-visit-changed", {
+    detail: { jobId, visitId, source: "job-overview" },
+  }));
+}
+
 export default function CanonicalJobVisits({ record = {}, setPage }) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const jobId = String(record.jobId || "").trim();
@@ -196,6 +202,24 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     };
   }, [environmentEnabled, jobId, relationshipId, reloadVersion, requestId, setPage]);
 
+  useEffect(() => {
+    function handleCanonicalVisitChanged(event) {
+      if (String(event?.detail?.jobId || "") !== jobId) return;
+      setReloadVersion((current) => current + 1);
+    }
+
+    window.addEventListener(
+      "meetro-canonical-visit-changed",
+      handleCanonicalVisitChanged
+    );
+    return () => {
+      window.removeEventListener(
+        "meetro-canonical-visit-changed",
+        handleCanonicalVisitChanged
+      );
+    };
+  }, [jobId]);
+
   const subjects = useMemo(
     () => [workspace.evaluation, ...(workspace.approvedWork || [])].filter(Boolean),
     [workspace.approvedWork, workspace.evaluation]
@@ -237,6 +261,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
           : "Work scheduling is ready."
       );
       reload();
+      notifyCanonicalVisitChanged(jobId);
     } catch (error) {
       setCommandError(getCanonicalVisitErrorMessage(error));
     } finally {
@@ -279,6 +304,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
       );
       setEditor(null);
       reload();
+      notifyCanonicalVisitChanged(jobId, editor.visit?.id || null);
     } catch (error) {
       if (error?.code === "STALE_VISIT_VERSION") {
         setCommandError(
@@ -309,6 +335,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
         "Visit attendance recorded."
       );
       reload();
+      notifyCanonicalVisitChanged(jobId, visit.id);
     } catch (error) {
       if (error?.code === "STALE_VISIT_VERSION") {
         setCommandError(

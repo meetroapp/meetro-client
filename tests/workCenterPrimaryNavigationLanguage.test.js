@@ -61,7 +61,11 @@ test("primary Work Center card counts and destinations remain unchanged", () => 
   assert.match(cards.opportunities, /openWorkTab\("pending"\)/);
   assert.match(cards.current, /workCenterActiveJobs\.length/);
   assert.match(cards.current, /openWorkCenterJobsPage\("current"\)/);
-  assert.match(cards.schedule, /upcomingScheduleCount/);
+  assert.match(cards.schedule, /serverScheduleSummary/);
+  assert.match(cards.schedule, /professionalScheduleReadyCount/);
+  assert.match(cards.schedule, /professionalScheduleWaitingCount/);
+  assert.match(cards.schedule, /professionalScheduleChangeCount/);
+  assert.match(cards.schedule, /professionalScheduleUpcomingCount/);
   assert.match(cards.schedule, /openWorkTab\("schedule"\)/);
   assert.match(cards.quotes, /quoteHistory\.length/);
   assert.match(cards.quotes, /openWorkTab\("quotes"\)/);

@@ -4,6 +4,7 @@ import { messagesWorkflowLanguage } from "./messagesWorkflowLanguage.js";
 import { conversationWorkflowLanguage } from "./conversationWorkflowLanguage.js";
 import { coreRouteParityLanguage } from "./coreRouteParityLanguage.js";
 import { dailyWorkflowLanguage } from "./dailyWorkflowLanguage.js";
+import { professionalScheduleLanguage } from "./professionalScheduleLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -14014,6 +14015,10 @@ Object.entries(coreRouteParityLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(dailyWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(professionalScheduleLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
