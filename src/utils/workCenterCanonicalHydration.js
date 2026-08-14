@@ -169,6 +169,7 @@ export function normalizeCanonicalWorkCenterEntry({
     jobId,
     relationshipId,
     conversationId,
+    conversationCanSend: detail.permissions?.canSendMessages === true,
     customer: firstText(
       getHomeownerDisplayName(detail.participants),
       summary.customerName,

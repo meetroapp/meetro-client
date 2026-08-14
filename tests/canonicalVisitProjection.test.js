@@ -265,6 +265,17 @@ test("Visit DTO is allowlisted and drops actor identity and sentinel fields", ()
   });
 });
 
+test("canonical Visit DTO and immutable history preserve a nullable end time", () => {
+  const current = visit({ scheduledEndAt: null });
+  const normalized = normalizeCanonicalVisit(current, { jobId: ids.job });
+  const detail = normalizeCanonicalVisit(
+    { ...current, history: history(current) },
+    { jobId: ids.job, detail: true }
+  );
+  assert.equal(normalized.scheduledEndAt, null);
+  assert.equal(detail.history.versions[0].scheduledEndAt, null);
+});
+
 test("Visit lifecycle vocabulary remains bounded and RESCHEDULED is rejected", () => {
   for (const state of ["PROPOSED", "SCHEDULED", "CANCELLED", "COMPLETED"]) {
     assert.ok(normalizeCanonicalVisit(visit({ state }), { jobId: ids.job }));
@@ -402,6 +413,35 @@ test("propose commands include only canonical subject, schedule, and empty optio
     workstreamIds: [],
     approvedQuoteDecisionId: ids.decision,
   });
+});
+
+test("Evaluation propose sends the certified nullable end-time contract", async () => {
+  let requestBody;
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "propose",
+    purpose: "EVALUATION",
+    evaluationId: ids.evaluation,
+    schedule: {
+      scheduledStartAt: startAt,
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    },
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl: async (_endpoint, options) => {
+      requestBody = JSON.parse(options.body);
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          visit: visit({ scheduledEndAt: null }),
+        },
+      };
+    },
+  });
+  assert.equal(requestBody.scheduledEndAt, null);
+  assert.equal(requestBody.timeZone, "America/New_York");
 });
 
 test("version commands send exact current version and never silently retry", async () => {

@@ -4,11 +4,20 @@ import {
   runCanonicalVisitCommand,
 } from "../utils/canonicalVisitProjection.js";
 import {
+  buildProfessionalScheduleCommandSchedule,
   fetchProfessionalSchedule,
+  formatProfessionalScheduleTimeZone,
   groupProfessionalSchedule,
-  wallTimeToInstant,
+  resolveProfessionalScheduleTimeZone,
 } from "../utils/professionalScheduleProjection.js";
 import { prepareProfessionalSchedulingOpportunity } from "../utils/professionalScheduleCommands.js";
+import {
+  buildCanonicalScheduleEmailUrl,
+  isCanonicalScheduleShareable,
+  resolveCanonicalScheduleConversationTarget,
+  sendCanonicalScheduleInMeetro,
+  shareCanonicalScheduleExternally,
+} from "../utils/canonicalScheduleShare.js";
 import { t } from "../utils/language.js";
 
 function tomorrow() {
@@ -35,19 +44,22 @@ function wallPart(value, timeZone, part) {
 }
 
 function defaultForm(visit = null) {
-  const timeZone = visit?.timeZone ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  let deviceTimeZone;
+  try {
+    deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    deviceTimeZone = null;
+  }
+  const timeZone = resolveProfessionalScheduleTimeZone({
+    visitTimeZone: visit?.timeZone,
+    deviceTimeZone,
+  });
   const start = visit?.scheduledStartAt || null;
   const end = visit?.scheduledEndAt || null;
   return {
     date: wallPart(start, timeZone, "date") || tomorrow(),
     startTime: wallPart(start, timeZone, "time") || "09:00",
-    endTime:
-      wallPart(
-        end || (start ? new Date(Date.parse(start) + 60 * 60_000) : null),
-        timeZone,
-        "time"
-      ) || "10:00",
+    endTime: wallPart(end, timeZone, "time") || "",
     timeZone,
     locationMode: visit?.locationMode || "JOB_SERVICE_LOCATION",
   };
@@ -101,8 +113,18 @@ function locationText(item, language) {
     t("professionalScheduleCustomerLocation", language);
 }
 
-function ScheduleCard({ item, language, running, onAction, onViewJob }) {
+function ScheduleCard({
+  item,
+  language,
+  running,
+  onAction,
+  onShare,
+  onViewJob,
+  conversationTarget,
+  shareTruthCurrent,
+}) {
   const visit = item.kind === "visit";
+  const shareable = shareTruthCurrent && isCanonicalScheduleShareable(item);
   return (
     <article style={styles.card} data-schedule-identity={visit ? item.id : `${item.purpose}:${item.evaluationId || item.approvedQuoteDecisionId}`}>
       <div style={styles.cardHeader}>
@@ -164,6 +186,21 @@ function ScheduleCard({ item, language, running, onAction, onViewJob }) {
             {t("professionalScheduleViewJob", language)}
           </button>
         )}
+        {shareable && conversationTarget && (
+          <button type="button" style={styles.secondaryButton} disabled={running} onClick={() => onShare("meetro", item, conversationTarget)}>
+            {t("professionalScheduleSendInMeetro", language)}
+          </button>
+        )}
+        {shareable && (
+          <button type="button" style={styles.secondaryButton} disabled={running} onClick={() => onShare("external", item)}>
+            {t("professionalScheduleShare", language)}
+          </button>
+        )}
+        {shareable && (
+          <button type="button" style={styles.secondaryButton} disabled={running} onClick={() => onShare("email", item)}>
+            {t("professionalScheduleEmail", language)}
+          </button>
+        )}
       </div>
     </article>
   );
@@ -174,8 +211,10 @@ export default function ProfessionalScheduleWorkspace({
   language = "en",
   setPage,
   onConfirmed,
+  onOpenConversation,
   onRetry,
   onViewJob,
+  workCenterJobs = [],
 } = {}) {
   const confirmed = sourceState?.confirmed;
   const [history, setHistory] = useState(null);
@@ -184,6 +223,7 @@ export default function ProfessionalScheduleWorkspace({
   const [editor, setEditor] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [running, setRunning] = useState(false);
+  const [blockedShareSignature, setBlockedShareSignature] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const workspaceRef = useRef(null);
@@ -283,22 +323,63 @@ export default function ProfessionalScheduleWorkspace({
     openEditor("complete", item);
   }
 
+  async function shareSchedule(mode, item, conversationTarget = null) {
+    setRunning(true);
+    setError("");
+    setNotice("");
+    try {
+      if (mode === "meetro") {
+        const message = await sendCanonicalScheduleInMeetro({
+          visit: item,
+          conversationTarget,
+          language,
+          setPage,
+        });
+        if (!message) throw new Error("schedule-share-failed");
+        setNotice(t("professionalScheduleSentInMeetro", language));
+        onOpenConversation?.(conversationTarget);
+        return;
+      }
+      if (mode === "email") {
+        const emailUrl = buildCanonicalScheduleEmailUrl(item, { language });
+        if (!emailUrl) throw new Error("schedule-share-unavailable");
+        window.location.assign(emailUrl);
+        return;
+      }
+      const result = await shareCanonicalScheduleExternally({
+        visit: item,
+        language,
+      });
+      if (!result.ok) throw new Error("schedule-share-unavailable");
+      setNotice(t(
+        result.method === "copy"
+          ? "professionalScheduleCopied"
+          : "professionalScheduleShared",
+        language
+      ));
+    } catch (shareError) {
+      void shareError;
+      setError(t("professionalScheduleShareFailed", language));
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function submitEditor(event) {
     event.preventDefault();
     if (!editor) return;
-    const start = wallTimeToInstant({
+    const item = editor.item;
+    const schedule = buildProfessionalScheduleCommandSchedule({
+      purpose: item.purpose,
       date: form.date,
-      time: form.startTime,
+      startTime: form.startTime,
+      endTime: form.endTime,
       timeZone: form.timeZone,
-    });
-    const end = wallTimeToInstant({
-      date: form.date,
-      time: form.endTime,
-      timeZone: form.timeZone,
+      locationMode: form.locationMode,
     });
     if (
       !["cancel", "complete"].includes(editor.mode) &&
-      (!start || !end || Date.parse(end) <= Date.parse(start))
+      !schedule
     ) {
       setError(t("professionalScheduleInvalidTime", language));
       return;
@@ -307,7 +388,6 @@ export default function ProfessionalScheduleWorkspace({
     setError("");
     setNotice("");
     try {
-      const item = editor.item;
       await runCanonicalVisitCommand({
         jobId: item.jobId,
         command: editor.mode,
@@ -318,14 +398,14 @@ export default function ProfessionalScheduleWorkspace({
           item.purpose === "APPROVED_WORK"
             ? item.approvedQuoteDecisionId || item.approvedQuoteDecisionEvidence?.decisionId
             : null,
-        schedule: ["cancel", "complete"].includes(editor.mode) ? null : {
-          scheduledStartAt: start,
-          scheduledEndAt: end,
-          timeZone: form.timeZone,
-          locationMode: form.locationMode,
-        },
+        schedule: ["cancel", "complete"].includes(editor.mode)
+          ? null
+          : schedule,
         setPage,
       });
+      if (item.kind === "visit") {
+        setBlockedShareSignature(`${item.id}:${item.currentVersion}`);
+      }
       await readActive();
       setHistory(null);
       setHistoryStatus("idle");
@@ -394,6 +474,11 @@ export default function ProfessionalScheduleWorkspace({
     },
   ];
   const activeCount = confirmed.opportunities.length + confirmed.visits.length;
+  const editorShowsEndTime = editor?.item?.purpose === "APPROVED_WORK";
+  const editorTimeZoneLabel = editor
+    ? formatProfessionalScheduleTimeZone(form.timeZone, language) ||
+      t("professionalScheduleLocalTime", language)
+    : "";
 
   return (
     <section
@@ -442,7 +527,10 @@ export default function ProfessionalScheduleWorkspace({
                   language={language}
                   running={running}
                   onAction={runVisitAction}
+                  onShare={shareSchedule}
                   onViewJob={onViewJob}
+                  conversationTarget={resolveCanonicalScheduleConversationTarget(item, workCenterJobs)}
+                  shareTruthCurrent={blockedShareSignature !== `${item.id}:${item.currentVersion}`}
                 />
               ))}
             </div>
@@ -464,7 +552,17 @@ export default function ProfessionalScheduleWorkspace({
               )}
               <div style={styles.grid}>
                 {history.visits.map((item) => (
-                  <ScheduleCard key={item.id} item={item} language={language} running={running} onAction={runVisitAction} onViewJob={onViewJob} />
+                  <ScheduleCard
+                    key={item.id}
+                    item={item}
+                    language={language}
+                    running={running}
+                    onAction={runVisitAction}
+                    onShare={shareSchedule}
+                    onViewJob={onViewJob}
+                    conversationTarget={resolveCanonicalScheduleConversationTarget(item, workCenterJobs)}
+                    shareTruthCurrent={blockedShareSignature !== `${item.id}:${item.currentVersion}`}
+                  />
                 ))}
               </div>
               {history.page.hasMore && (
@@ -488,48 +586,56 @@ export default function ProfessionalScheduleWorkspace({
                     ? t("professionalScheduleCancel", language)
                     : editor.mode === "complete"
                       ? t("professionalScheduleComplete", language)
-                      : purposeLabel(editor.item, language)}
+                      : t(
+                          editor.item.purpose === "EVALUATION"
+                            ? "professionalScheduleScheduleEvaluation"
+                            : "professionalScheduleScheduleWork",
+                          language
+                        )}
               </h3>
               <button type="button" style={styles.secondaryButton} onClick={closeEditor}>
                 {t("professionalScheduleCancelEdit", language)}
               </button>
             </div>
             {!["cancel", "complete"].includes(editor.mode) && (
-              <div style={styles.formGrid}>
-                <label style={styles.label}>
-                  {t("professionalScheduleDate", language)}
-                  <input style={styles.input} type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} required />
-                </label>
-                <label style={styles.label}>
-                  {t("professionalScheduleStartTime", language)}
-                  <input style={styles.input} type="time" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} required />
-                </label>
-                <label style={styles.label}>
-                  {t("professionalScheduleEndTime", language)}
-                  <input style={styles.input} type="time" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} required />
-                </label>
-                <label style={styles.label}>
-                  {t("professionalScheduleTimeZone", language)}
-                  <input
-                    style={styles.input}
-                    type="text"
-                    value={form.timeZone}
-                    onChange={(event) => setForm((current) => ({
-                      ...current,
-                      timeZone: event.target.value,
-                    }))}
-                    autoComplete="off"
-                    required
-                  />
-                </label>
-                <label style={styles.label}>
-                  {t("professionalScheduleLocation", language)}
-                  <select style={styles.input} value={form.locationMode} onChange={(event) => setForm((current) => ({ ...current, locationMode: event.target.value }))}>
-                    <option value="JOB_SERVICE_LOCATION">{t("professionalScheduleCustomerLocation", language)}</option>
-                    <option value="REMOTE">{t("professionalScheduleRemote", language)}</option>
-                  </select>
-                </label>
-              </div>
+              <>
+                <p style={styles.editorContext}>
+                  {editor.item.customer.displayName} · {editor.item.job.title}
+                </p>
+                <div style={styles.formGrid}>
+                  <label style={styles.label}>
+                    {t("professionalScheduleDate", language)}
+                    <input style={styles.input} type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} required />
+                  </label>
+                  <label style={styles.label}>
+                    {t(
+                      editor.item.purpose === "EVALUATION"
+                        ? "professionalScheduleArrivalTime"
+                        : "professionalScheduleStartTime",
+                      language
+                    )}
+                    <input style={styles.input} type="time" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} required />
+                  </label>
+                  {editorShowsEndTime && (
+                    <label style={styles.label}>
+                      {t("professionalScheduleEndTimeOptional", language)}
+                      <input style={styles.input} type="time" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} />
+                    </label>
+                  )}
+                  <label style={styles.label}>
+                    {t("professionalScheduleLocation", language)}
+                    <select style={styles.input} value={form.locationMode} onChange={(event) => setForm((current) => ({ ...current, locationMode: event.target.value }))} required>
+                      <option value="JOB_SERVICE_LOCATION">{t("professionalScheduleCustomerLocation", language)}</option>
+                      <option value="REMOTE">{t("professionalScheduleRemote", language)}</option>
+                    </select>
+                  </label>
+                </div>
+                <p style={styles.timeZoneNote}>
+                  {t("professionalScheduleTimeZoneDisplay", language, {
+                    timeZone: editorTimeZoneLabel,
+                  })}
+                </p>
+              </>
             )}
             <button type="submit" style={styles.primaryButton} disabled={running}>
               {running ? t("professionalScheduleSaving", language) : editor.mode === "cancel"
@@ -575,7 +681,9 @@ const styles = {
   overlay: { position: "fixed", inset: 0, zIndex: 10020, background: "rgba(18,30,20,.48)", display: "grid", placeItems: "center", padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))", overflowY: "auto" },
   editor: { width: "min(620px, 100%)", maxHeight: "min(88dvh, 760px)", overflowY: "auto", borderRadius: 20, background: "#fff", padding: 20, display: "grid", gap: 18, boxShadow: "0 24px 64px rgba(15,30,18,.24)" },
   editorHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  editorContext: { margin: 0, color: "#445246", fontWeight: 700, overflowWrap: "anywhere" },
   formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14 },
   label: { display: "grid", gap: 6, color: "#253b28", fontWeight: 700 },
   input: { width: "100%", minHeight: 44, boxSizing: "border-box", border: "1px solid #b9c9ba", borderRadius: 10, padding: "9px 11px", background: "#fff", font: "inherit" },
+  timeZoneNote: { margin: 0, color: "#536055", fontSize: 13 },
 };

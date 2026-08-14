@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildProfessionalScheduleCommandSchedule,
   fetchProfessionalSchedule,
+  formatProfessionalScheduleTimeZone,
   normalizeProfessionalSchedule,
   createProfessionalScheduleSourceState,
   reduceProfessionalScheduleSourceState,
+  resolveProfessionalScheduleTimeZone,
   wallTimeToInstant,
 } from "../src/utils/professionalScheduleProjection.js";
 
@@ -95,6 +98,15 @@ test("normalizer allowlists server Schedule truth and drops raw/private fields",
   assert.equal("canDelete" in schedule.opportunities[0].actions, false);
 });
 
+test("Schedule read preserves Evaluation arrival truth without an invented end", () => {
+  const response = payload();
+  response.schedule.visits[0].scheduledEndAt = null;
+  response.schedule.visits[0].arrivalNote = "unsupported local metadata";
+  const schedule = normalizeProfessionalSchedule(response);
+  assert.equal(schedule.visits[0].scheduledEndAt, null);
+  assert.equal("arrivalNote" in schedule.visits[0], false);
+});
+
 test("authenticated transport uses the one bounded global endpoint and preserves opaque cursor", async () => {
   const calls = [];
   const schedule = await fetchProfessionalSchedule({
@@ -176,4 +188,94 @@ test("wall-clock Schedule input becomes an explicit instant in the selected IANA
     }),
     null
   );
+});
+
+test("Evaluation requires arrival truth but never fabricates an end time", () => {
+  assert.deepEqual(
+    buildProfessionalScheduleCommandSchedule({
+      purpose: "EVALUATION",
+      date: "2026-08-20",
+      startTime: "09:30",
+      endTime: "10:30",
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    }),
+    {
+      scheduledStartAt: "2026-08-20T13:30:00.000Z",
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    }
+  );
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule({
+      purpose: "EVALUATION",
+      date: "",
+      startTime: "09:30",
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    }),
+    null
+  );
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule({
+      purpose: "EVALUATION",
+      date: "2026-08-20",
+      startTime: "",
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    }),
+    null
+  );
+});
+
+test("Approved Work accepts an omitted end and validates a provided optional end", () => {
+  const base = {
+    purpose: "APPROVED_WORK",
+    date: "2026-08-20",
+    startTime: "09:30",
+    timeZone: "America/New_York",
+    locationMode: "REMOTE",
+  };
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule(base).scheduledEndAt,
+    null
+  );
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule({ ...base, endTime: "11:00" })
+      .scheduledEndAt,
+    "2026-08-20T15:00:00.000Z"
+  );
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule({ ...base, endTime: "08:00" }),
+    null
+  );
+  assert.equal(
+    buildProfessionalScheduleCommandSchedule({ ...base, locationMode: "" }),
+    null
+  );
+});
+
+test("timezone resolves automatically, stays canonical, and renders business language", () => {
+  assert.equal(
+    resolveProfessionalScheduleTimeZone({
+      visitTimeZone: "America/New_York",
+      jobTimeZone: "America/Chicago",
+      deviceTimeZone: "America/Los_Angeles",
+    }),
+    "America/New_York"
+  );
+  assert.equal(
+    resolveProfessionalScheduleTimeZone({
+      jobTimeZone: "invalid-zone",
+      businessTimeZone: "America/Chicago",
+      deviceTimeZone: "America/Los_Angeles",
+    }),
+    "America/Chicago"
+  );
+  assert.match(
+    formatProfessionalScheduleTimeZone("America/New_York", "en"),
+    /Eastern Time/
+  );
+  assert.equal(formatProfessionalScheduleTimeZone("invalid-zone", "en"), "");
 });

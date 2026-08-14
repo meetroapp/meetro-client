@@ -469,4 +469,88 @@ export function wallTimeToInstant({ date, time, timeZone } = {}) {
   }
 }
 
+export function buildProfessionalScheduleCommandSchedule({
+  purpose,
+  date,
+  startTime,
+  endTime = "",
+  timeZone,
+  locationMode,
+} = {}) {
+  if (!PURPOSES.includes(purpose) || !LOCATION_MODES.includes(locationMode)) {
+    return null;
+  }
+  const scheduledStartAt = wallTimeToInstant({
+    date,
+    time: startTime,
+    timeZone,
+  });
+  const hasOptionalEnd =
+    purpose === "APPROVED_WORK" && Boolean(String(endTime || "").trim());
+  const scheduledEndAt = hasOptionalEnd
+    ? wallTimeToInstant({ date, time: endTime, timeZone })
+    : null;
+  if (
+    !scheduledStartAt ||
+    (hasOptionalEnd &&
+      (!scheduledEndAt ||
+        Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt)))
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    scheduledStartAt,
+    scheduledEndAt,
+    timeZone: validScheduleTimeZone(timeZone),
+    locationMode,
+  });
+}
+
+function validScheduleTimeZone(value) {
+  const normalized = text(value, 100);
+  if (!normalized) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized }).format();
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveProfessionalScheduleTimeZone({
+  visitTimeZone = null,
+  jobTimeZone = null,
+  businessTimeZone = null,
+  deviceTimeZone = null,
+} = {}) {
+  for (const candidate of [
+    visitTimeZone,
+    jobTimeZone,
+    businessTimeZone,
+    deviceTimeZone,
+    "UTC",
+  ]) {
+    const resolved = validScheduleTimeZone(candidate);
+    if (resolved) return resolved;
+  }
+  return "UTC";
+}
+
+export function formatProfessionalScheduleTimeZone(
+  timeZone,
+  language = "en"
+) {
+  const canonical = validScheduleTimeZone(timeZone);
+  if (!canonical) return "";
+  try {
+    const parts = new Intl.DateTimeFormat(language, {
+      timeZone: canonical,
+      timeZoneName: "longGeneric",
+    }).formatToParts(new Date("2026-01-15T12:00:00.000Z"));
+    return parts.find((part) => part.type === "timeZoneName")?.value || "";
+  } catch {
+    return "";
+  }
+}
+
 export const PROFESSIONAL_SCHEDULE_SEMANTIC_STATES = SEMANTIC_STATES;

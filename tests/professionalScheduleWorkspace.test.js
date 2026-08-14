@@ -75,6 +75,18 @@ test("workspace source keeps authority checks, exact identities, safe-area conta
   assert.match(source, /item\.actions\.canReschedule/);
   assert.match(source, /item\.actions\.canCancel/);
   assert.match(source, /item\.actions\.canComplete/);
+  assert.match(source, /isCanonicalScheduleShareable\(item\)/);
+  assert.match(source, /setBlockedShareSignature\(`\$\{item\.id\}:\$\{item\.currentVersion\}`\);[\s\S]*await readActive\(\)/);
+  assert.match(source, /resolveCanonicalScheduleConversationTarget\(item, workCenterJobs\)/);
+  assert.match(source, /professionalScheduleSendInMeetro/);
+  assert.match(source, /professionalScheduleShare/);
+  assert.match(source, /onOpenConversation\?\.\(conversationTarget\)/);
+  assert.match(source, /professionalScheduleArrivalTime/);
+  assert.match(source, /professionalScheduleEndTimeOptional/);
+  assert.match(source, /editorShowsEndTime/);
+  assert.match(source, /buildProfessionalScheduleCommandSchedule/);
+  assert.doesNotMatch(source, /value=\{form\.timeZone\}/);
+  assert.doesNotMatch(source, /professionalScheduleArrivalNote/);
   assert.match(source, /data-schedule-identity/);
   assert.match(source, /env\(safe-area-inset-bottom\)/);
   assert.match(source, /88dvh/);

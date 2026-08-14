@@ -411,6 +411,7 @@ const rows = [
   ["workCenterBackToJobs", "Back to Active Work", "Volver al trabajo activo", "Retour au travail actif", "Voltar ao trabalho ativo"],
   ["workCenterPersistentWorkContext", "Job overview", "Resumen del trabajo", "Vue d’ensemble du travail", "Visão geral do trabalho"],
   ["workCenterCurrentJob", "Job Overview", "Resumen del trabajo", "Vue d’ensemble du travail", "Visão geral do trabalho"],
+  ["workCenterCommunicationUnavailable", "Customer conversation is unavailable.", "La conversación con el cliente no está disponible.", "La conversation avec le client n’est pas disponible.", "A conversa com o cliente não está disponível."],
   ["workCenterNextResponsibility", "Next Responsibility", "Siguiente responsabilidad", "Responsabilité suivante", "Próxima responsabilidade"],
   ["workCenterExternalCustomerResponse", "External Customer Response", "Respuesta externa", "Réponse du client externe", "Resposta do cliente externo"],
   ["workCenterCustomerResponse", "Customer Response", "Respuesta del cliente", "Réponse du client", "Resposta do cliente"],

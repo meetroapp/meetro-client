@@ -95,12 +95,14 @@ function canonicalTimeZone(value) {
 function normalizeSchedule(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const scheduledStartAt = canonicalTimestamp(value.scheduledStartAt);
-  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt);
+  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt, {
+    nullable: true,
+  });
   const timeZone = canonicalTimeZone(value.timeZone);
   if (
     !scheduledStartAt ||
-    !scheduledEndAt ||
-    Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt) ||
+    (value.scheduledEndAt != null && !scheduledEndAt) ||
+    (scheduledEndAt && Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt)) ||
     !timeZone ||
     !VISIT_LOCATION_MODES.includes(value.locationMode)
   ) {
@@ -145,7 +147,9 @@ function normalizeVisitVersion(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const version = positiveInteger(value.version);
   const scheduledStartAt = canonicalTimestamp(value.scheduledStartAt);
-  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt);
+  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt, {
+    nullable: true,
+  });
   const timeZone = canonicalTimeZone(value.timeZone);
   const cancellationReason = boundedText(value.cancellationReason, 2000, {
     nullable: true,
@@ -158,8 +162,8 @@ function normalizeVisitVersion(value) {
     !version ||
     !VISIT_STATES.includes(value.state) ||
     !scheduledStartAt ||
-    !scheduledEndAt ||
-    Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt) ||
+    (value.scheduledEndAt != null && !scheduledEndAt) ||
+    (scheduledEndAt && Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt)) ||
     !timeZone ||
     !VISIT_LOCATION_MODES.includes(value.locationMode) ||
     (value.cancellationReason != null && !cancellationReason) ||
@@ -240,7 +244,9 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
   const normalizedJobId = canonicalUuid(value.jobId);
   const currentVersion = positiveInteger(value.currentVersion);
   const scheduledStartAt = canonicalTimestamp(value.scheduledStartAt);
-  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt);
+  const scheduledEndAt = canonicalTimestamp(value.scheduledEndAt, {
+    nullable: true,
+  });
   const timeZone = canonicalTimeZone(value.timeZone);
   const cancellationReason = boundedText(value.cancellationReason, 2000, {
     nullable: true,
@@ -269,8 +275,8 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     !VISIT_STATES.includes(value.state) ||
     !currentVersion ||
     !scheduledStartAt ||
-    !scheduledEndAt ||
-    Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt) ||
+    (value.scheduledEndAt != null && !scheduledEndAt) ||
+    (scheduledEndAt && Date.parse(scheduledEndAt) <= Date.parse(scheduledStartAt)) ||
     !timeZone ||
     !VISIT_LOCATION_MODES.includes(value.locationMode) ||
     (value.cancellationReason != null && !cancellationReason) ||

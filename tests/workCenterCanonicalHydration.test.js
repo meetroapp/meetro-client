@@ -48,6 +48,7 @@ test("canonical professional work hydration preserves stable identity and proven
   assert.equal(entry.jobId, "11111111-1111-4111-8111-111111111111");
   assert.equal(entry.relationshipId, 72);
   assert.equal(entry.conversationId, 340);
+  assert.equal(entry.conversationCanSend, false);
   assert.equal(entry.source, CANONICAL_WORK_CENTER_AUTHORITY);
   assert.equal(entry.readOnly, true);
   assert.deepEqual(entry.commandAuthority, []);
@@ -189,6 +190,7 @@ test("staging discovery resolves request identity through authorized conversatio
   assert.equal(result.status, "ready");
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].postId, 41);
+  assert.equal(result.entries[0].conversationCanSend, true);
   assert.equal(result.entries[0].lifecycleContractVersion, null);
   assert.deepEqual(
     calls.map((call) => call.endpoint),

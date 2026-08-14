@@ -118,6 +118,9 @@ import {
   mergeCanonicalWorkCenterEntries,
 } from "../utils/workCenterCanonicalHydration";
 import {
+  getCanonicalWorkCenterConversationActionTarget,
+} from "../utils/conversationActionRouting";
+import {
   getCanonicalCurrentJobIdentityKey,
   getCurrentJobListPresentation,
   hydrateCurrentJobListEntries,
@@ -6597,6 +6600,22 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return true;
   }
 
+  function openCanonicalWorkCenterConversation(record = {}, returnSection = "job") {
+    const target = getCanonicalWorkCenterConversationActionTarget(record);
+
+    if (!target.ok) {
+      setJobActionToast({
+        type: "error",
+        message: translate("workCenterCommunicationUnavailable", activeLanguage),
+      });
+      return false;
+    }
+
+    localStorage.setItem("conversationReturnSection", returnSection);
+    setPage(target.route);
+    return true;
+  }
+
   function openActiveWorkProject(job = {}) {
     const conversationId = getRelationshipConversationId(job);
     saveActiveJobContext({
@@ -10517,6 +10536,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 workCenterLifecycleProjection.status === "ready"
                   ? workCenterLifecycleProjection.projection?.liveJob || null
                   : null;
+              const canMessageCanonicalCustomer =
+                !isJobHistoryMode &&
+                hasCanonicalLiveJobAction(
+                  canonicalLiveJob,
+                  "MESSAGE_CUSTOMER"
+                );
+              const canonicalJobConversationTarget =
+                getCanonicalWorkCenterConversationActionTarget({
+                  conversationId: scopedJob.conversationId,
+                });
               const supportingLinks = getCustomerJobSupportingLinks(scopedJob, workflowState);
               const externalManualActions = getExternalCustomerManualActions(scopedJob, workflowState);
               const isProposalSentState = workflowState.stateKey === "proposal_sent";
@@ -10687,26 +10716,29 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </>
                         )}
                       </div>
-                      {!isJobHistoryMode &&
-                        scopedJob.conversationId &&
-                        (!isCanonicalReadOnlyJob ||
-                          hasCanonicalLiveJobAction(
-                            canonicalLiveJob,
-                            "MESSAGE_CUSTOMER"
-                          )) && (
+                      {canMessageCanonicalCustomer && (
                         <button
                           type="button"
                           style={jobPersistentContextAction}
-                          onClick={() => {
-                            localStorage.setItem("activeConversationId", scopedJob.conversationId);
-                            localStorage.setItem("conversationReturnPage", "workCenter");
-                            localStorage.setItem("conversationReturnSection", "job");
-                            localStorage.setItem("meetroConversationType", "standard");
-                            setPage("conversationThread");
-                          }}
+                          disabled={!canonicalJobConversationTarget.ok}
+                          onClick={() =>
+                            openCanonicalWorkCenterConversation(
+                              { conversationId: scopedJob.conversationId },
+                              "currentJobs"
+                            )
+                          }
                         >
                           {translate("relationshipMessage", activeLanguage)}
                         </button>
+                      )}
+                      {canMessageCanonicalCustomer &&
+                        !canonicalJobConversationTarget.ok && (
+                        <span role="status" style={jobPersistentContextBlocker}>
+                          {translate(
+                            "workCenterCommunicationUnavailable",
+                            activeLanguage
+                          )}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -12944,6 +12976,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
             sourceState={professionalScheduleSource}
             language={activeLanguage}
             setPage={setPage}
+            workCenterJobs={workCenterJobs}
+            onOpenConversation={(target) =>
+              openCanonicalWorkCenterConversation(target, "schedule")
+            }
             onConfirmed={(schedule) => {
               setProfessionalScheduleSource((state) =>
                 reduceProfessionalScheduleSourceState(state, {

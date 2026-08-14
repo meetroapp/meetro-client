@@ -12,6 +12,7 @@ import {
 import {
   getCanonicalConversationActionId,
   getCanonicalConversationActionTarget,
+  getCanonicalWorkCenterConversationActionTarget,
 } from "../src/utils/conversationActionRouting.js";
 
 const readSource = (path) =>
@@ -29,6 +30,7 @@ const completedJobDetailsSource = readSource(
 const businessLeadsSource = readSource("src/pages/BusinessLeads.jsx");
 const quoteBuilderSource = readSource("src/pages/QuoteBuilder.jsx");
 const invoiceBuilderSource = readSource("src/pages/InvoiceBuilder.jsx");
+const contractorDashboardSource = readSource("src/pages/ContractorDashboard.jsx");
 
 function desktopSnapshot() {
   return { layoutMode: "desktop", contentWidth: 1200 };
@@ -37,6 +39,65 @@ function desktopSnapshot() {
 function phoneSnapshot() {
   return { layoutMode: "mobile", contentWidth: 390 };
 }
+
+test("Job Overview Message uses one exact canonical identity across adaptive Communication Center layouts", () => {
+  const target = getCanonicalWorkCenterConversationActionTarget({
+    conversationId: 340,
+    jobId: 901,
+    requestId: 41,
+    customerId: 72,
+  });
+  const route = parseCanonicalConversationRoute(`#${target.route}`);
+
+  assert.equal(target.ok, true);
+  assert.equal(target.conversationId, 340);
+  assert.equal(route.returnPage, "workCenter");
+  assert.equal(route.shell, CANONICAL_CONVERSATION_COMMUNICATION_SHELL);
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(route, desktopSnapshot()),
+    true
+  );
+  assert.equal(
+    shouldUseCommunicationCenterConversationRoute(route, phoneSnapshot()),
+    false
+  );
+  assert.notEqual(route.conversationId, 901);
+  assert.notEqual(route.conversationId, 41);
+  assert.notEqual(route.conversationId, 72);
+});
+
+test("Job Overview cannot substitute Job, Request, customer, or stale selection identity", () => {
+  for (const record of [
+    { jobId: 340 },
+    { requestId: 340 },
+    { customerId: 340 },
+    { id: 340 },
+    { selectedConversation: { id: 340 } },
+    { conversation_id: 340 },
+  ]) {
+    assert.equal(
+      getCanonicalWorkCenterConversationActionTarget(record).ok,
+      false
+    );
+  }
+
+  const start = contractorDashboardSource.indexOf(
+    "function openCanonicalWorkCenterConversation("
+  );
+  const end = contractorDashboardSource.indexOf(
+    "function openActiveWorkProject(",
+    start
+  );
+  const canonicalOpenBlock = contractorDashboardSource.slice(start, end);
+  assert.match(canonicalOpenBlock, /getCanonicalWorkCenterConversationActionTarget/);
+  assert.match(canonicalOpenBlock, /conversationReturnSection/);
+  assert.doesNotMatch(
+    canonicalOpenBlock,
+    /activeConversationId|selectedConversation|selectedPostId|requestId|customerId|authFetch|createConversation/
+  );
+  assert.match(contractorDashboardSource, /disabled=\{!canonicalJobConversationTarget\.ok\}/);
+  assert.match(contractorDashboardSource, /workCenterCommunicationUnavailable/);
+});
 
 test("canonical conversation action routing is presentation-only and route-helper based", () => {
   assert.match(routingSource, /buildCanonicalConversationRoute/);
