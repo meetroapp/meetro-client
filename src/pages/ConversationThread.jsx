@@ -7035,6 +7035,7 @@ const handleImageUpload = (event) => {
               {quickReplies.slice(0, 4).map((reply) => (
                 <button
                   key={reply}
+                  className="conversation-quick-reply"
                   style={{
                     ...quickBtn,
                     ...(isEmergencyThread ? emergencyQuickBtn : {}),
@@ -7908,6 +7909,11 @@ const animations = `
 
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+.conversation-quick-reply:focus-visible {
+  outline: 3px solid var(--meetro-color-forest, #1f4d34);
+  outline-offset: 2px;
+}
 
 @media (max-width: 520px) {
   .meetro-message-enter {
@@ -10217,20 +10223,22 @@ const emergencyQuickBtn = {
 
 const quickBtn = {
   flexShrink: 0,
-  minHeight: "24px",
+  minHeight: "44px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   lineHeight: "1.18",
   border: "1px solid #e7eaf2",
   background: "#ffffff",
   color: "#111827",
   borderRadius: "999px",
-  padding: "6px 9px",
+  padding: "7px 10px",
   fontSize: "10px",
   fontWeight: "800",
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
   textAlign: "center",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
 };
 
 const replyComposer = {
