@@ -8326,7 +8326,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       purpose:
         translate("workCenterUpcomingVisitsAndAppointments", activeLanguage),
       meta: translate("workCenterUpcomingCount", activeLanguage, { count: upcomingScheduleCount }),
-      actionLabel: translate("assistantActionOpenSchedule", activeLanguage),
+      actionLabel: translate("workCenterViewSchedule", activeLanguage),
       tone: "#eff6ff",
       accent: "#2563eb",
       onClick: () => openWorkTab("schedule"),
@@ -8338,7 +8338,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       purpose:
         translate("workCenterProposalsThatNeedReviewOrResponse", activeLanguage),
       meta: translate("workCenterRecordsCount", activeLanguage, { count: quoteHistory.length }),
-      actionLabel: translate("openQuotesAction", activeLanguage),
+      actionLabel: translate("workCenterViewQuotes", activeLanguage),
       tone: "#f5f3ff",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkTab("quotes"),
@@ -8350,7 +8350,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       purpose:
         translate("workCenterOnSiteWorkThatNeedsAnUpdate", activeLanguage),
       meta: translate("workCenterActiveCount", activeLanguage, { count: activeJobs.length }),
-      actionLabel: translate("openActiveWorkAction", activeLanguage),
+      actionLabel: translate("workCenterViewActiveWork", activeLanguage),
       tone: "#ecfdf5",
       accent: "#16a34a",
       onClick: () => openWorkTab("active"),
@@ -8362,7 +8362,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       purpose:
         translate("workCenterClosedJobsAndSavedRecords", activeLanguage),
       meta: translate("workCenterClosedCount", activeLanguage, { count: workCenterHistoryJobs.length }),
-      actionLabel: translate("openHistoryAction", activeLanguage),
+      actionLabel: translate("workCenterViewJobHistory", activeLanguage),
       tone: "var(--meetro-surface-sage, #eef4ea)",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkCenterJobsPage("history"),
@@ -8377,7 +8377,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         totalJobRevenue > 0
           ? `$${formatLocaleNumber(totalJobRevenue, {}, activeLanguage)}`
           : translate("workCenterReadyToReview", activeLanguage),
-      actionLabel: translate("workCenterReviewRevenue", activeLanguage),
+      actionLabel: translate("workCenterViewRevenue", activeLanguage),
       tone: "#ecfdf5",
       accent: "#059669",
       onClick: () => openWorkTab("revenue"),
