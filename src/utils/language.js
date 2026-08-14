@@ -4338,13 +4338,13 @@ const highTrafficParityLabels = {
     wcRevenueNote: "Operational summary of revenue, closed jobs, and open quotes.",
     activeJobs: "Active Jobs",
     workCenterPurposeStatement:
-      "See what needs attention, what happens next, and where each customer relationship moves forward.",
+      "See what needs your attention and what to do next.",
     workCenterProfessionalPerspectiveLine:
       "Customer work stays connected through requests, evaluations, quotes, schedule, active jobs, completion, and history.",
-    workCenterQuotesTitle: "Quotes / Proposals",
+    workCenterQuotesTitle: "Quotes & Approvals",
     workCenterActiveWorkTitle: "Active Work",
     workCenterRevenueTitle: "Revenue",
-    workCenterCurrentJobsTitle: "Active Work",
+    workCenterCurrentJobsTitle: "Current Jobs",
     workCenterScheduleTitle: "Schedule",
     workCenterHistoryTitle: "Job History",
     workCenterOpportunitiesTitle: "Opportunities",
@@ -4764,10 +4764,10 @@ const highTrafficParityLabels = {
     wcRevenueNote: "Resumen operativo de ingresos, trabajos cerrados y cotizaciones abiertas.",
     activeJobs: "Trabajos activos",
     workCenterPurposeStatement:
-      "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes.",
+      "Ve qué necesita tu atención y qué hacer después.",
     workCenterProfessionalPerspectiveLine:
       "El trabajo con clientes se mantiene conectado entre solicitudes, evaluaciones, cotizaciones, agenda, trabajos activos, finalización e historial.",
-    workCenterQuotesTitle: "Cotizaciones / Propuestas",
+    workCenterQuotesTitle: "Cotizaciones y aprobaciones",
     workCenterActiveWorkTitle: "Trabajo activo",
     workCenterRevenueTitle: "Ingresos",
     workCenterCurrentJobsTitle: "Trabajos actuales",
@@ -5192,10 +5192,10 @@ const highTrafficParityLabels = {
     activeJobs: "Travaux actifs",
     workCenterDashboardTitle: "Centre de travail",
     workCenterPurposeStatement:
-      "Voyez ce qui demande de l’attention, ce qui vient ensuite et comment chaque relation client avance.",
+      "Voyez ce qui demande votre attention et quoi faire ensuite.",
     workCenterProfessionalPerspectiveLine:
       "Le travail client reste connecté entre demandes, évaluations, devis, planning, travaux actifs, achèvement et historique.",
-    workCenterQuotesTitle: "Devis / propositions",
+    workCenterQuotesTitle: "Devis et approbations",
     workCenterActiveWorkTitle: "Travail actif",
     workCenterRevenueTitle: "Revenus",
     workCenterCurrentJobsTitle: "Travaux en cours",
@@ -5643,10 +5643,10 @@ const highTrafficParityLabels = {
     activeJobs: "Trabalhos ativos",
     workCenterDashboardTitle: "Work Center",
     workCenterPurposeStatement:
-      "Veja o que precisa de atenção, o que vem a seguir e como cada relacionamento com cliente avança.",
+      "Veja o que precisa da sua atenção e o que fazer a seguir.",
     workCenterProfessionalPerspectiveLine:
       "O trabalho com clientes permanece conectado entre solicitações, avaliações, orçamentos, agenda, trabalhos ativos, conclusão e histórico.",
-    workCenterQuotesTitle: "Orçamentos / Propostas",
+    workCenterQuotesTitle: "Orçamentos e aprovações",
     workCenterActiveWorkTitle: "Trabalho ativo",
     workCenterRevenueTitle: "Receita",
     workCenterCurrentJobsTitle: "Trabalhos atuais",

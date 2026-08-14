@@ -270,9 +270,9 @@ test("Professional Work Center uses business-facing category and participant lan
     "utf8"
   );
 
-  assert.match(language, /workCenterCurrentJobsTitle: "Active Work"/);
+  assert.match(language, /workCenterCurrentJobsTitle: "Current Jobs"/);
   assert.match(language, /lifecycleRoleCustomerRepresentative: "Customer"/);
   assert.match(language, /lifecycleRolePrimaryProfessional: "Lead Professional"/);
   assert.match(workflowLanguage, /\["workCenterCurrentJob", "Job Overview"/);
-  assert.match(workflowLanguage, /\["workCenterBackToJobs", "Back to Active Work"/);
+  assert.match(workflowLanguage, /\["workCenterBackToJobs", "Back to Current Jobs"/);
 });

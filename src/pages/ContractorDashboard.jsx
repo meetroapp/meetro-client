@@ -12,6 +12,7 @@ import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWor
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
+import WorkCenterBackButton from "../components/WorkCenterBackButton";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, getFormattingLocale } from "../utils/localeFormat";
@@ -8322,7 +8323,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         translate("workCenterNewRequestsThatNeedADecision", activeLanguage),
       meta: translate("workCenterNewCount", activeLanguage, { count: opportunitiesCount }),
       actionLabel:
-        translate("viewOpportunities"),
+        translate("workCenterReview", activeLanguage),
       tone: "#fff7ed",
       accent: "#ea580c",
       alert: hasNewWorkCenterOpportunities,
@@ -8335,7 +8336,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       purpose:
         translate("workCenterAcceptedWorkThatStillNeedsAction", activeLanguage),
       meta: translate("workCenterActiveCount", activeLanguage, { count: workCenterActiveJobs.length }),
-      actionLabel: translate("continueWork", activeLanguage),
+      actionLabel: translate("workCenterContinue", activeLanguage),
       tone: "#f8fafc",
       accent: "#334155",
       onClick: () => openWorkCenterJobsPage("current"),
@@ -8382,18 +8383,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
       tone: "#f5f3ff",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkTab("quotes"),
-    },
-    {
-      key: "activeWork",
-      icon: "activeWork",
-      title: translate("workCenterActiveWorkTitle", activeLanguage),
-      purpose:
-        translate("workCenterOnSiteWorkThatNeedsAnUpdate", activeLanguage),
-      meta: translate("workCenterActiveCount", activeLanguage, { count: activeJobs.length }),
-      actionLabel: translate("workCenterViewActiveWork", activeLanguage),
-      tone: "#ecfdf5",
-      accent: "#16a34a",
-      onClick: () => openWorkTab("active"),
     },
     {
       key: "history",
@@ -10364,16 +10353,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
           <section className="work-center-dashboard" style={workCenterDashboard}>
             <div className="work-center-dashboard-hero meetro-visual-hero" style={workCenterDashboardIntro}>
               <span style={workCenterDashboardEyebrow}>
-                {translate("workCenterHeaderEyebrow")}
+                {translate("workCenterHeaderEyebrow", activeLanguage)}
               </span>
               <h2 style={workCenterDashboardTitle}>
-                {translate("workCenterDashboardTitle")}
+                {translate("workCenterDashboardTitle", activeLanguage)}
               </h2>
               <p style={workCenterDashboardPurpose}>
-                {translate("workCenterPurposeStatement")}
-              </p>
-              <p style={workCenterDashboardPerspective}>
-                {translate("workCenterProfessionalPerspectiveLine")}
+                {translate("workCenterPurposeStatement", activeLanguage)}
               </p>
               {isPropertyManagementBusiness && (
                 <p style={propertyManagementWorkCenterFoundationNote}>
@@ -10512,6 +10498,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   <LegacyWorkCenterReadOnlyPanel
                     title={isJobHistoryMode ? "Legacy Job History" : "Legacy Job Reference"}
                     records={buildLegacyWorkCenterReferences("job", [scopedJob])}
+                    backLabel={isJobHistoryMode
+                      ? translate("workCenterBackToHistory", activeLanguage)
+                      : translate("workCenterBackToJobs", activeLanguage)}
                     onBack={() => {
                       setSelectedJobDetailView("");
                       setSelectedWorkCenterJob(null);
@@ -10637,9 +10626,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
               return (
               <div className="meetro-visual-surface" style={jobWorkspacePanel}>
-                <button
-                  type="button"
-                  style={workCenterBackButton}
+                <WorkCenterBackButton
 	                  onClick={() => {
 	                    setSelectedJobDetailView("");
 	                    setSelectedWorkCenterJob(null);
@@ -10651,12 +10638,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                    localStorage.setItem("meetroWorkCenterTab", returnTab);
 	                    localStorage.setItem("activeWorkCenterTab", returnTab);
 	                  }}
-                >
-                  <span aria-hidden="true">‹</span>
-                  {isJobHistoryMode
+                  label={isJobHistoryMode
                     ? translate("workCenterBackToHistory", activeLanguage)
                     : translate("workCenterBackToJobs", activeLanguage)}
-                </button>
+                />
 
                 <div style={jobWorkflowFirstHero}>
                   <div
@@ -12621,13 +12606,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   }
             }
           >
-            <button
-              style={workCenterBackButton}
+            <WorkCenterBackButton
+              label={translate("backToWorkCenter", activeLanguage)}
               onClick={returnToWorkCenterDashboard}
-            >
-              <span aria-hidden="true">‹</span>
-              {translate("backToWorkCenter")}
-            </button>
+            />
 
             {activeTab === "currentJobs" ? (
               <>
@@ -12769,13 +12751,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
           </section>
         ) : activeTab === "schedule" && !isLegacyCommandSurfaceContained ? (
           <div ref={dynamicSectionRef} style={scheduleOpenedPage}>
-            <button
-              style={workCenterBackButton}
+            <WorkCenterBackButton
+              label={translate("backToWorkCenter", activeLanguage)}
               onClick={returnToWorkCenterDashboard}
-            >
-              <span aria-hidden="true">‹</span>
-              {translate("backToWorkCenter")}
-            </button>
+            />
             <h2 style={workCenterChildTitle}>
               {ui("workCenterScheduleTitle")}
             </h2>
@@ -12818,13 +12797,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
               borderColor: `${activeSection.accent}2f`,
             }}
           >
-            <button
-              style={workCenterBackButton}
+            <WorkCenterBackButton
+              label={translate("backToWorkCenter", activeLanguage)}
               onClick={returnToWorkCenterDashboard}
-            >
-              <span aria-hidden="true">‹</span>
-              {translate("backToWorkCenter")}
-            </button>
+            />
 
             <div style={workCenterOpenedSectionHeading}>
               <span
@@ -12930,6 +12906,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         <LegacyWorkCenterReadOnlyPanel
           title={legacySurfaceTitle}
           records={legacySurfaceReferences}
+          backLabel={translate("backToWorkCenter", activeLanguage)}
           onBack={returnToWorkCenterDashboard}
         />
       )}
@@ -13132,14 +13109,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
             return (
             <div style={visitDetailPage}>
-              <button
-                type="button"
-                style={workCenterBackButton}
+              <WorkCenterBackButton
+                label={translate("workCenterBackToSchedule", activeLanguage)}
                 onClick={() => setEvaluationTarget(null)}
-              >
-                <span aria-hidden="true">‹</span>
-                {translate("workCenterBackToSchedule", activeLanguage)}
-              </button>
+              />
 
               <div style={jobWorkspaceHero}>
                 <div style={jobWorkspaceHeaderRow}>
@@ -14494,13 +14467,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
       {activeTab === "pending" && (
       <div style={section}>
         <div ref={dynamicSectionRef} style={opportunitiesCompactHeader}>
-          <button
-            style={workCenterBackButton}
+          <WorkCenterBackButton
+            label={translate("backToWorkCenter", activeLanguage)}
             onClick={returnToWorkCenterDashboard}
-          >
-            <span aria-hidden="true">‹</span>
-            {translate("backToWorkCenter")}
-          </button>
+          />
           <h2 style={opportunitiesCompactTitle}>
             {translate("workCenterOpportunitiesTitle")}
           </h2>
@@ -14677,13 +14647,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {activeTab === "active" && !isLegacyCommandSurfaceContained && (
         <div style={section}>
-          <button
-            style={workCenterBackButton}
+          <WorkCenterBackButton
+            label={translate("backToWorkCenter", activeLanguage)}
             onClick={returnToWorkCenterDashboard}
-          >
-            <span aria-hidden="true">‹</span>
-            {translate("backToWorkCenter")}
-          </button>
+          />
 
           <div style={workCenterChildHeader}>
               <h2 style={workCenterChildTitle}>
@@ -15327,13 +15294,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {activeTab === "completed" && !isLegacyCommandSurfaceContained && (
         <div style={closureCenterSection}>
-          <button
-            style={workCenterBackButton}
+          <WorkCenterBackButton
+            label={translate("backToWorkCenter", activeLanguage)}
             onClick={returnToWorkCenterDashboard}
-          >
-            <span aria-hidden="true">‹</span>
-            {translate("backToWorkCenter")}
-          </button>
+          />
 
           <div style={workCenterChildHeader}>
             <h2 style={workCenterChildTitle}>
@@ -15480,13 +15444,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {activeTab === "quotes" && !isLegacyCommandSurfaceContained && (
         <div style={section}>
-          <button
-            style={workCenterBackButton}
+          <WorkCenterBackButton
+            label={translate("backToWorkCenter", activeLanguage)}
             onClick={returnToWorkCenterDashboard}
-          >
-            <span aria-hidden="true">‹</span>
-            {translate("backToWorkCenter")}
-          </button>
+          />
 
           <div style={workCenterChildHeader}>
               <h2 style={workCenterChildTitle}>
@@ -17128,13 +17089,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {activeTab === "revenue" && !isLegacyCommandSurfaceContained && (
         <div ref={dynamicSectionRef} style={section}>
-          <button
-            style={workCenterBackButton}
+          <WorkCenterBackButton
+            label={translate("backToWorkCenter", activeLanguage)}
             onClick={returnToWorkCenterDashboard}
-          >
-            <span aria-hidden="true">‹</span>
-            {translate("backToWorkCenter")}
-          </button>
+          />
 
           <div style={workCenterChildHeader}>
             <h2 style={workCenterChildTitle}>
@@ -18254,15 +18212,6 @@ const workCenterDashboardPurpose = {
   color: "rgba(255,253,248,0.82)",
 };
 
-const workCenterDashboardPerspective = {
-  margin: "8px 0 0",
-  maxWidth: "640px",
-  fontSize: "13px",
-  lineHeight: 1.4,
-  fontWeight: 800,
-  color: "var(--meetro-color-sage)",
-};
-
 const workCenterDashboardSummary = {
   margin: "8px 0 0",
   color: "rgba(255,253,248,0.82)",
@@ -18660,26 +18609,6 @@ const workCenterOpenedSection = {
 
 const scheduleOpenedPage = {
   margin: "12px 0 6px",
-};
-
-const workCenterBackButton = {
-  border: "none",
-  background: "var(--meetro-surface-warm)",
-  color: "var(--meetro-color-forest)",
-  borderRadius: "999px",
-  padding: "9px 13px",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "7px",
-  fontSize: "13px",
-  fontWeight: 900,
-  cursor: "pointer",
-  marginBottom: "10px",
-  maxWidth: "100%",
-  minWidth: 0,
-  boxSizing: "border-box",
-  whiteSpace: "normal",
-  overflowWrap: "break-word",
 };
 
 const opportunitiesCompactHeader = {

@@ -2002,6 +2002,11 @@ h6 {
   outline-offset: 3px;
 }
 
+.work-center-back-control:focus-visible {
+  outline: 3px solid rgba(31, 77, 52, 0.38);
+  outline-offset: 3px;
+}
+
 .meetro-visual-hero {
   background: var(--meetro-gradient-community-hero);
   color: #fffdf8;

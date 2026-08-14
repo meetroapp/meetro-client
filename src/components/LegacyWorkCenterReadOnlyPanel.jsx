@@ -1,7 +1,10 @@
+import WorkCenterBackButton from "./WorkCenterBackButton";
+
 function LegacyWorkCenterReadOnlyPanel({
   title,
   records = [],
   onBack,
+  backLabel = "Back to Work Center",
   compact = false,
 }) {
   return (
@@ -11,10 +14,7 @@ function LegacyWorkCenterReadOnlyPanel({
       aria-label={`${title} read-only compatibility records`}
     >
       {!compact && (
-        <button type="button" style={backButton} onClick={onBack}>
-          <span aria-hidden="true">&#8249;</span>
-          Back to Work Center
-        </button>
+        <WorkCenterBackButton label={backLabel} onClick={onBack} />
       )}
 
       <div style={header}>
@@ -58,20 +58,6 @@ const panel = {
   background: "#ffffff",
 };
 const compactPanel = { ...panel, padding: "16px", marginBottom: "16px" };
-const backButton = {
-  minHeight: "42px",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "8px",
-  marginBottom: "18px",
-  padding: "8px 12px",
-  border: "1px solid #d9e1d5",
-  borderRadius: "8px",
-  background: "#ffffff",
-  color: "#1f4d34",
-  fontWeight: 800,
-  cursor: "pointer",
-};
 const header = {
   display: "flex",
   alignItems: "flex-start",

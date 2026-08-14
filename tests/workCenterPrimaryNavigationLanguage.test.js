@@ -26,34 +26,45 @@ const cards = {
   opportunities: cardSource("opportunities", "current"),
   current: cardSource("current", "schedule"),
   schedule: cardSource("schedule", "quotes"),
-  quotes: cardSource("quotes", "activeWork"),
-  activeWork: cardSource("activeWork", "history"),
+  quotes: cardSource("quotes", "history"),
   history: cardSource("history", "revenue"),
   revenue: cardSource("revenue"),
 };
 
 test("primary Work Center cards use the approved business-facing language", () => {
   assert.equal(t("workCenterOpportunitiesTitle", "en"), "Opportunities");
-  assert.equal(t("workCenterNewRequestsThatNeedADecision", "en"), "New customer requests that need your attention.");
-  assert.equal(t("viewOpportunities", "en"), "Review Opportunities");
-  assert.equal(t("workCenterCurrentJobsTitle", "en"), "Active Work");
-  assert.equal(t("workCenterAcceptedWorkThatStillNeedsAction", "en"), "Jobs you're currently managing.");
-  assert.equal(t("continueWork", "en"), "Continue Work");
+  assert.equal(t("workCenterNewRequestsThatNeedADecision", "en"), "New customer requests.");
+  assert.equal(t("workCenterReview", "en"), "Review");
+  assert.equal(t("workCenterCurrentJobsTitle", "en"), "Current Jobs");
+  assert.equal(t("workCenterCurrentJobsTitle", "es"), "Trabajos actuales");
+  assert.equal(t("workCenterCurrentJobsTitle", "fr"), "Travaux en cours");
+  assert.equal(t("workCenterCurrentJobsTitle", "pt-BR"), "Trabalhos atuais");
+  assert.equal(t("workCenterAcceptedWorkThatStillNeedsAction", "en"), "Jobs you're managing.");
+  assert.equal(t("workCenterContinue", "en"), "Continue");
   assert.equal(t("workCenterScheduleTitle", "en"), "Schedule");
-  assert.equal(t("workCenterUpcomingVisitsAndAppointments", "en"), "Upcoming appointments and scheduled work.");
+  assert.equal(t("workCenterUpcomingVisitsAndAppointments", "en"), "Visits and appointments.");
   assert.equal(t("workCenterViewSchedule", "en"), "View Schedule");
-  assert.equal(t("workCenterQuotesTitle", "en"), "Quotes / Proposals");
-  assert.equal(t("workCenterProposalsThatNeedReviewOrResponse", "en"), "Quotes and proposals you're preparing or waiting on.");
+  assert.equal(t("workCenterQuotesTitle", "en"), "Quotes & Approvals");
+  assert.equal(t("workCenterProposalsThatNeedReviewOrResponse", "en"), "Quotes waiting on action.");
   assert.equal(t("workCenterViewQuotes", "en"), "View Quotes");
-  assert.equal(t("workCenterActiveWorkTitle", "en"), "Active Work");
-  assert.equal(t("workCenterOnSiteWorkThatNeedsAnUpdate", "en"), "Jobs currently in progress.");
-  assert.equal(t("workCenterViewActiveWork", "en"), "View Active Work");
   assert.equal(t("workCenterHistoryTitle", "en"), "Job History");
-  assert.equal(t("workCenterClosedJobsAndSavedRecords", "en"), "Completed and closed jobs.");
-  assert.equal(t("workCenterViewJobHistory", "en"), "View Job History");
+  assert.equal(t("workCenterClosedJobsAndSavedRecords", "en"), "Completed jobs.");
+  assert.equal(t("workCenterViewJobHistory", "en"), "View History");
   assert.equal(t("workCenterRevenueTitle", "en"), "Revenue");
-  assert.equal(t("workCenterPaymentsBalancesAndClosedJobs", "en"), "Earnings from completed work.");
+  assert.equal(t("workCenterPaymentsBalancesAndClosedJobs", "en"), "Money from completed work.");
   assert.equal(t("workCenterViewRevenue", "en"), "View Revenue");
+});
+
+test("primary navigation exposes one canonical Current Jobs card and suppresses the legacy Active Work duplicate", () => {
+  const start = dashboardSource.indexOf("const workCenterPrimaryNavigationCards = [");
+  const primaryCards = dashboardSource.slice(
+    start,
+    dashboardSource.indexOf("const workCenterLandingAlert", start)
+  );
+  assert.match(primaryCards, /key: "current"[\s\S]*workCenterActiveJobs\.length[\s\S]*openWorkCenterJobsPage\("current"\)/);
+  assert.doesNotMatch(primaryCards, /key: "activeWork"/);
+  assert.doesNotMatch(primaryCards, /openWorkTab\("active"\)/);
+  assert.match(dashboardSource, /activeTab === "active"/);
 });
 
 test("primary Work Center card counts and destinations remain unchanged", () => {
@@ -69,8 +80,6 @@ test("primary Work Center card counts and destinations remain unchanged", () => 
   assert.match(cards.schedule, /openWorkTab\("schedule"\)/);
   assert.match(cards.quotes, /quoteHistory\.length/);
   assert.match(cards.quotes, /openWorkTab\("quotes"\)/);
-  assert.match(cards.activeWork, /activeJobs\.length/);
-  assert.match(cards.activeWork, /openWorkTab\("active"\)/);
   assert.match(cards.history, /workCenterHistoryJobs\.length/);
   assert.match(cards.history, /openWorkCenterJobsPage\("history"\)/);
   assert.match(cards.revenue, /workCenterReadyToReview/);
