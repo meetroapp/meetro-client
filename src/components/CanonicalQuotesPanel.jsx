@@ -28,7 +28,7 @@ function quoteErrorMessage(error) {
   return error?.message || "Quotes could not be loaded.";
 }
 
-export default function CanonicalQuotesPanel({ record = {}, setPage }) {
+export default function CanonicalQuotesPanel({ record = {}, setPage, focusQuoteId = "" }) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const context = getCanonicalQuoteJobContext(record);
   const jobId = context?.jobId || "";
@@ -104,6 +104,7 @@ export default function CanonicalQuotesPanel({ record = {}, setPage }) {
               quote={quote}
               depth={depth}
               setPage={setPage}
+              focused={String(quote.id) === String(focusQuoteId)}
             />
           ))}
         </div>

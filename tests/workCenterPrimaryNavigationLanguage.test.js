@@ -67,7 +67,7 @@ test("primary navigation exposes one canonical Current Jobs card and suppresses 
   assert.match(dashboardSource, /activeTab === "active"/);
 });
 
-test("primary Work Center card counts and destinations remain unchanged", () => {
+test("primary Work Center card counts use each canonical source and preserve destinations", () => {
   assert.match(cards.opportunities, /opportunitiesCount/);
   assert.match(cards.opportunities, /openWorkTab\("pending"\)/);
   assert.match(cards.current, /workCenterActiveJobs\.length/);
@@ -78,7 +78,8 @@ test("primary Work Center card counts and destinations remain unchanged", () => 
   assert.match(cards.schedule, /professionalScheduleChangeCount/);
   assert.match(cards.schedule, /professionalScheduleUpcomingCount/);
   assert.match(cards.schedule, /openWorkTab\("schedule"\)/);
-  assert.match(cards.quotes, /quoteHistory\.length/);
+  assert.match(cards.quotes, /serverQuotesTotal/);
+  assert.doesNotMatch(cards.quotes, /quoteHistory\.length/);
   assert.match(cards.quotes, /openWorkTab\("quotes"\)/);
   assert.match(cards.history, /workCenterHistoryJobs\.length/);
   assert.match(cards.history, /openWorkCenterJobsPage\("history"\)/);

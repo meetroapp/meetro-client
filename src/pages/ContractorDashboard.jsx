@@ -9,6 +9,7 @@ import FloatingBackButton from "../components/FloatingBackButton";
 import CanonicalJobEvaluation from "../components/CanonicalJobEvaluation";
 import CanonicalJobVisits from "../components/CanonicalJobVisits";
 import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWorkspace";
+import ProfessionalQuotesWorkspace from "../components/ProfessionalQuotesWorkspace";
 import CanonicalWorkstreamsPanel from "../components/CanonicalWorkstreamsPanel";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
@@ -113,6 +114,11 @@ import {
   fetchProfessionalSchedule,
   reduceProfessionalScheduleSourceState,
 } from "../utils/professionalScheduleProjection";
+import {
+  createProfessionalQuotesSourceState,
+  fetchProfessionalQuotes,
+  reduceProfessionalQuotesSourceState,
+} from "../utils/professionalQuotesProjection";
 import {
   fetchCanonicalWorkCenterEntries,
   isCanonicalWorkCenterEntry,
@@ -323,6 +329,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
   );
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
   const [selectedJobDetailView, setSelectedJobDetailView] = useState("");
+  const [selectedWorkCenterQuoteId, setSelectedWorkCenterQuoteId] = useState("");
+  const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
   const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
   const [isJobHistoryMode, setIsJobHistoryMode] = useState(false);
   const [jobMenuTab, setJobMenuTab] = useState("current");
@@ -398,6 +406,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
     )
   );
   const [professionalScheduleRefreshKey, setProfessionalScheduleRefreshKey] = useState(0);
+  const [professionalQuotesSource, setProfessionalQuotesSource] = useState(() =>
+    reduceProfessionalQuotesSourceState(
+      createProfessionalQuotesSourceState(),
+      { type: "load" }
+    )
+  );
+  const [professionalQuotesRefreshKey, setProfessionalQuotesRefreshKey] = useState(0);
   const canonicalWorkCenterCollectionRef = useRef(0);
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
@@ -425,6 +440,29 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [workflowDependencyPrompt, setWorkflowDependencyPrompt] = useState(null);
   const workflowDependencyDialogRef = useRef(null);
   const workflowDependencyReturnFocusRef = useRef(null);
+
+  useEffect(() => {
+    let current = true;
+    fetchProfessionalQuotes({ classification: "all", limit: 50, setPage })
+      .then((quotes) => {
+        if (!current) return;
+        setProfessionalQuotesSource((state) =>
+          reduceProfessionalQuotesSourceState(state, { type: "success", quotes })
+        );
+      })
+      .catch((error) => {
+        if (!current) return;
+        setProfessionalQuotesSource((state) =>
+          reduceProfessionalQuotesSourceState(state, {
+            type: "failure",
+            message: error?.message || "",
+          })
+        );
+      });
+    return () => {
+      current = false;
+    };
+  }, [professionalQuotesRefreshKey, setPage]);
 
   useEffect(() => {
     let current = true;
@@ -1537,6 +1575,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }
 
   function openWorkCenterJobsPage(mode = "current") {
+    setWorkCenterJobReturnSurface("jobs");
+    setSelectedWorkCenterQuoteId("");
     setJobMenuTab(mode);
     setIsJobHistoryMode(false);
     setHistoryActionNotice("");
@@ -1569,6 +1609,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
     localStorage.removeItem("quoteStatusFilter");
     setSelectedWorkCenterJob(null);
     setSelectedJobDetailView("");
+    setSelectedWorkCenterQuoteId("");
+    setWorkCenterJobReturnSurface("jobs");
     setIsJobHistoryMode(false);
     setJobMenuTab("current");
     setHistoryActionNotice("");
@@ -6882,6 +6924,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const hasNewWorkCenterOpportunities =
     opportunitiesCount > 0 && opportunitiesCount > viewedOpportunityCount;
   const serverScheduleSummary = professionalScheduleSource.confirmed?.summary;
+  const serverQuotesSummary = professionalQuotesSource.confirmed?.summary;
+  const serverQuotesTotal = serverQuotesSummary
+    ? serverQuotesSummary.drafts +
+      serverQuotesSummary.waitingOnCustomer +
+      serverQuotesSummary.approved +
+      serverQuotesSummary.declined
+    : 0;
   const upcomingScheduleCount = serverScheduleSummary?.upcoming ?? 0;
   const quoteAttentionCount =
     professionalWorkMetrics.pendingQuoteCount +
@@ -8378,7 +8427,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
       title: translate("workCenterQuotesTitle", activeLanguage),
       purpose:
         translate("workCenterProposalsThatNeedReviewOrResponse", activeLanguage),
-      meta: translate("workCenterRecordsCount", activeLanguage, { count: quoteHistory.length }),
+      meta:
+        professionalQuotesSource.status === "loading"
+          ? translate("appLoadingMeetro", activeLanguage)
+          : professionalQuotesSource.status === "error"
+            ? translate("stateUnavailable", activeLanguage)
+            : translate("workCenterRecordsCount", activeLanguage, {
+                count: serverQuotesTotal,
+              }),
       actionLabel: translate("workCenterViewQuotes", activeLanguage),
       tone: "#f5f3ff",
       accent: "var(--meetro-color-charcoal, #172317)",
@@ -10166,8 +10222,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
       return sectionItem.key === activeTab;
     }) || workCenterSections[0];
   const isCanonicalScheduleSurface = activeTab === "schedule";
+  const isCanonicalQuotesSurface = activeTab === "quotes";
   const isLegacyCommandSurfaceContained =
-    !isCanonicalScheduleSurface && isLegacyWorkCenterCommandSurfaceContained(activeTab);
+    !isCanonicalScheduleSurface &&
+    !isCanonicalQuotesSurface &&
+    isLegacyWorkCenterCommandSurfaceContained(activeTab);
   const legacyScheduleCompatibilityEnabled = false;
   const legacySurfaceTitle =
     {
@@ -10630,15 +10689,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                  onClick={() => {
 	                    setSelectedJobDetailView("");
 	                    setSelectedWorkCenterJob(null);
-	                    const returnTab = isJobHistoryMode ? "jobHistory" : "currentJobs";
+	                    const returnTab = workCenterJobReturnSurface === "quotes"
+	                      ? "quotes"
+	                      : isJobHistoryMode ? "jobHistory" : "currentJobs";
 	                    setActiveTab(returnTab);
 	                    setJobMenuTab(isJobHistoryMode ? "history" : "current");
 	                    setIsJobHistoryMode(false);
 	                    setIsWorkCenterSectionOpen(true);
+	                    setSelectedWorkCenterQuoteId("");
+	                    setWorkCenterJobReturnSurface("jobs");
 	                    localStorage.setItem("meetroWorkCenterTab", returnTab);
 	                    localStorage.setItem("activeWorkCenterTab", returnTab);
 	                  }}
-                  label={isJobHistoryMode
+                  label={workCenterJobReturnSurface === "quotes"
+                    ? translate("professionalQuotesBack", activeLanguage)
+                    : isJobHistoryMode
                     ? translate("workCenterBackToHistory", activeLanguage)
                     : translate("workCenterBackToJobs", activeLanguage)}
                 />
@@ -10904,6 +10969,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               null,
                           }}
                           setPage={setPage}
+                          focusQuoteId={selectedWorkCenterQuoteId}
                         />
                       </>
                     )}
@@ -12946,6 +13012,58 @@ function ContractorDashboard({ setPage, language = "en" }) {
           </div>
         );
       })()}
+
+      {activeTab === "quotes" && isCanonicalQuotesSurface && (
+        <ProfessionalQuotesWorkspace
+          sourceState={professionalQuotesSource}
+          language={activeLanguage}
+          onBack={returnToWorkCenterDashboard}
+          onRetry={() => {
+            setProfessionalQuotesSource((state) =>
+              reduceProfessionalQuotesSourceState(state, { type: "load" })
+            );
+            setProfessionalQuotesRefreshKey((current) => current + 1);
+          }}
+          onLoadMore={() => {
+            const cursor = professionalQuotesSource.confirmed?.pagination?.nextCursor;
+            if (!cursor || professionalQuotesSource.loadingMore) return;
+            setProfessionalQuotesSource((state) =>
+              reduceProfessionalQuotesSourceState(state, { type: "load-more" })
+            );
+            void fetchProfessionalQuotes({
+              classification: "all",
+              limit: 50,
+              cursor,
+              setPage,
+            })
+              .then((quotes) => {
+                setProfessionalQuotesSource((state) =>
+                  reduceProfessionalQuotesSourceState(state, { type: "append", quotes })
+                );
+              })
+              .catch((error) => {
+                setProfessionalQuotesSource((state) =>
+                  reduceProfessionalQuotesSourceState(state, {
+                    type: "failure",
+                    message: error?.message || "",
+                  })
+                );
+              });
+          }}
+          onOpenQuote={({ quoteId, jobId }) => {
+            const exactJob = workCenterJobs.find(
+              (job) => String(job?.jobId || "") === String(jobId || "")
+            );
+            if (!exactJob) return;
+            setSelectedWorkCenterQuoteId(String(quoteId || ""));
+            setWorkCenterJobReturnSurface("quotes");
+            setSelectedJobDetailView("");
+            setIsJobHistoryMode(false);
+            setIsWorkCenterSectionOpen(false);
+            setSelectedWorkCenterJob(exactJob);
+          }}
+        />
+      )}
 
       {activeTab === "schedule" && !isLegacyCommandSurfaceContained && (
         <div style={scheduleContentSection}>
@@ -15442,7 +15560,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         </div>
       )}
 
-      {activeTab === "quotes" && !isLegacyCommandSurfaceContained && (
+      {activeTab === "quotes" && !isCanonicalQuotesSurface && !isLegacyCommandSurfaceContained && (
         <div style={section}>
           <WorkCenterBackButton
             label={translate("backToWorkCenter", activeLanguage)}

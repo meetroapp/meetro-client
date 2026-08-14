@@ -21,8 +21,6 @@ const quoteRequests = read("src/pages/QuoteRequests.jsx");
 
 test("ordinary legacy command surfaces are release-contained while Pending preserves real lead and Emergency entry", () => {
   for (const surface of [
-    "schedule",
-    "quotes",
     "active",
     "completed",
     "materials",
@@ -35,6 +33,12 @@ test("ordinary legacy command surfaces are release-contained while Pending prese
       new RegExp(`activeTab === ["']${surface}["'] && !isLegacyCommandSurfaceContained`)
     );
   }
+
+  assert.equal(isLegacyWorkCenterCommandSurfaceContained("schedule"), true);
+  assert.equal(isLegacyWorkCenterCommandSurfaceContained("quotes"), true);
+  assert.match(dashboard, /activeTab === "schedule" && !isLegacyCommandSurfaceContained[\s\S]*ProfessionalScheduleWorkspace/);
+  assert.match(dashboard, /activeTab === "quotes" && isCanonicalQuotesSurface[\s\S]*ProfessionalQuotesWorkspace/);
+  assert.match(dashboard, /activeTab === "quotes" && !isCanonicalQuotesSurface && !isLegacyCommandSurfaceContained/);
 
   assert.equal(isLegacyWorkCenterCommandSurfaceContained("pending"), false);
   assert.match(dashboard, /workCenterLiveEmergencyRequest[\s\S]*acceptEmergencyRequest/);

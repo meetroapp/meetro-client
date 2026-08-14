@@ -86,7 +86,13 @@ function ScopeItem({ item, currency }) {
   );
 }
 
-export default function CanonicalQuoteCard({ jobId, quote, depth = 0, setPage }) {
+export default function CanonicalQuoteCard({
+  jobId,
+  quote,
+  depth = 0,
+  setPage,
+  focused = false,
+}) {
   const [state, setState] = useState({
     status: "loading",
     detail: null,
@@ -126,8 +132,14 @@ export default function CanonicalQuoteCard({ jobId, quote, depth = 0, setPage })
 
   return (
     <article
-      style={{ ...styles.quote, marginLeft: leftInset }}
+      style={{
+        ...styles.quote,
+        marginLeft: leftInset,
+        ...(focused ? styles.focusedQuote : {}),
+      }}
       aria-labelledby={`canonical-quote-${quote.id}`}
+      aria-current={focused ? "true" : undefined}
+      data-quote-id={quote.id}
     >
       <div style={styles.header}>
         <div style={styles.headingGroup}>
@@ -209,6 +221,11 @@ const styles = {
     padding: "18px 0 18px 14px",
     borderLeft: "3px solid #1f5132",
     borderBottom: "1px solid #cbd5e1",
+  },
+  focusedQuote: {
+    borderRadius: 12,
+    background: "#f0f7ed",
+    boxShadow: "0 0 0 2px #1f5132",
   },
   header: {
     display: "flex",
