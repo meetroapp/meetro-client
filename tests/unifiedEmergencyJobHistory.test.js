@@ -194,14 +194,19 @@ test("emergency closure action writes through the unified history pipeline", () 
   assert.match(source, /localStorage\.setItem\(\s*"completedProjects"/);
 });
 
-test("Work Center history is source-aware and remains read-only", () => {
+test("canonical Work Center history excludes browser-local Emergency closure authority", () => {
   const source = fs.readFileSync(
     new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
     "utf8"
   );
+  const canonicalHistory = fs.readFileSync(
+    new URL("../src/components/ProfessionalJobHistoryWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
 
-  assert.match(source, /job\.history\?\.sourceType === "emergency"/);
-  assert.match(source, /workCenterEmergency/);
+  assert.match(source, /<ProfessionalJobHistoryWorkspace/);
+  assert.match(source, /fetchProfessionalJobHistory/);
+  assert.doesNotMatch(canonicalHistory, /localStorage|completedProjects|sourceType === "emergency"/);
   assert.match(source, /isJobHistoryMode/);
   assert.match(source, /workCenterReviewJobReport/);
   assert.match(source, /workCenterPrintJobReport/);

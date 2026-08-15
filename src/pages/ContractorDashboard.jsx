@@ -12,6 +12,7 @@ import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWor
 import ProfessionalQuotesWorkspace from "../components/ProfessionalQuotesWorkspace";
 import ProfessionalWorkPlanOverview from "../components/ProfessionalWorkPlanOverview.jsx";
 import ProfessionalWorkPlanWorkspace from "../components/ProfessionalWorkPlanWorkspace.jsx";
+import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
 import WorkCenterBackButton from "../components/WorkCenterBackButton";
@@ -122,6 +123,8 @@ import {
 } from "../utils/professionalQuotesProjection";
 import { fetchProfessionalWorkPlanSummary } from "../utils/workPlanApi.js";
 import { getWorkPlanCopy } from "../utils/workPlanLanguage.js";
+import { fetchProfessionalJobHistory } from "../utils/jobCompletionApi.js";
+import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import {
   fetchCanonicalWorkCenterEntries,
   isCanonicalWorkCenterEntry,
@@ -424,6 +427,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
     error: "",
   });
   const [professionalWorkPlanRefreshKey, setProfessionalWorkPlanRefreshKey] = useState(0);
+  const [professionalJobHistorySource, setProfessionalJobHistorySource] = useState({
+    status: "loading",
+    history: null,
+    error: "",
+    loadingMore: false,
+  });
+  const [professionalJobHistoryRefreshKey, setProfessionalJobHistoryRefreshKey] = useState(0);
+  const [canonicalWorkCenterRefreshKey, setCanonicalWorkCenterRefreshKey] = useState(0);
   const canonicalWorkCenterCollectionRef = useRef(0);
   const [visitOutcomeTarget, setVisitOutcomeTarget] = useState(null);
   const [quoteViewTarget, setQuoteViewTarget] = useState(null);
@@ -527,6 +538,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
       current = false;
     };
   }, [professionalWorkPlanRefreshKey, setPage]);
+
+  useEffect(() => {
+    let current = true;
+    queueMicrotask(() => {
+      if (current) setProfessionalJobHistorySource({ status: "loading", history: null, error: "", loadingMore: false });
+    });
+    void fetchProfessionalJobHistory({ limit: 20, setPage })
+      .then((history) => {
+        if (current) setProfessionalJobHistorySource({ status: "ready", history, error: "", loadingMore: false });
+      })
+      .catch((error) => {
+        if (current) {
+          setProfessionalJobHistorySource({
+            status: "error",
+            history: null,
+            error: String(error?.code || "JOB_HISTORY_FAILED"),
+            loadingMore: false,
+          });
+        }
+      });
+    return () => { current = false; };
+  }, [professionalJobHistoryRefreshKey, setPage]);
 
   useEffect(() => {
     function handleJobScheduleChanged(event) {
@@ -841,7 +874,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return () => {
       active = false;
     };
-  }, [setPage]);
+  }, [canonicalWorkCenterRefreshKey, setPage]);
 
   useEffect(() => {
     if (!selectedWorkCenterJob) {
@@ -1620,6 +1653,31 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setIsJobHistoryMode(false);
     setHistoryActionNotice("");
     openWorkTab(mode === "history" ? "jobHistory" : "currentJobs");
+  }
+
+  function loadMoreProfessionalJobHistory() {
+    const cursor = professionalJobHistorySource.history?.pagination.nextCursor;
+    if (!cursor || professionalJobHistorySource.loadingMore) return;
+    setProfessionalJobHistorySource((current) => ({ ...current, loadingMore: true }));
+    void fetchProfessionalJobHistory({ limit: 20, cursor, setPage })
+      .then((nextPage) => {
+        setProfessionalJobHistorySource((current) => ({
+          status: "ready",
+          error: "",
+          loadingMore: false,
+          history: {
+            ...nextPage,
+            jobs: [...(current.history?.jobs || []), ...nextPage.jobs],
+          },
+        }));
+      })
+      .catch((error) => {
+        setProfessionalJobHistorySource((current) => ({
+          ...current,
+          loadingMore: false,
+          error: String(error?.code || "JOB_HISTORY_FAILED"),
+        }));
+      });
   }
 
   function openBusinessLeadOpportunityDetail(request = {}) {
@@ -7892,6 +7950,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   };
 
   const getWorkCenterJobStage = (job = {}) => {
+    if (job.liveJob?.stage?.code === "JOB_COMPLETED") return "closed";
     const quoteStatus = normalizeQuoteStatus(job.quote || {});
     const scheduleStatus = String(
       job.schedule?.jobStage ||
@@ -8502,9 +8561,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
       icon: "jobHistory",
       title: translate("workCenterHistoryTitle", activeLanguage),
       purpose:
-        translate("workCenterClosedJobsAndSavedRecords", activeLanguage),
-      meta: translate("workCenterClosedCount", activeLanguage, { count: workCenterHistoryJobs.length }),
-      actionLabel: translate("workCenterViewJobHistory", activeLanguage),
+        getJobCompletionCopy(activeLanguage).historyPurpose,
+      meta:
+        professionalJobHistorySource.status === "loading"
+          ? translate("appLoadingMeetro", activeLanguage)
+          : professionalJobHistorySource.status === "error"
+            ? translate("stateUnavailable", activeLanguage)
+            : translate("workCenterClosedCount", activeLanguage, {
+                count: professionalJobHistorySource.history?.totalCount ?? 0,
+              }),
+      actionLabel: getJobCompletionCopy(activeLanguage).viewHistory,
       tone: "var(--meetro-surface-sage, #eef4ea)",
       accent: "var(--meetro-color-charcoal, #172317)",
       onClick: () => openWorkCenterJobsPage("history"),
@@ -11029,6 +11095,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           onCanonicalChange={() => {
                             setWorkCenterLifecycleRefreshKey((value) => value + 1);
                             setProfessionalWorkPlanRefreshKey((value) => value + 1);
+                            setProfessionalJobHistoryRefreshKey((value) => value + 1);
+                            setCanonicalWorkCenterRefreshKey((value) => value + 1);
                           }}
                         />
                         <CanonicalQuotesPanel
@@ -12824,67 +12892,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 </div>
               </>
             ) : (
-              <>
-                <div style={workCenterChildHeader}>
-                  <h2 style={workCenterChildTitle}>
-                    {ui("workCenterHistoryTitle")}
-                  </h2>
-                  <p style={workCenterChildSummary}>
-                    {workCenterHistoryJobs.length > 0
-                      ? `${workCenterHistoryJobs.length} ${ui("workCenterChildHistorySummary")}`
-                      : ui("workCenterChildHistoryEmptySummary")}
-                  </p>
-                </div>
-
-                <p role="status" style={lifecycleHistoryNotice}>
-                  {translate("lifecycleLegacyHistoryNotice", activeLanguage)}
-                </p>
-
-                <div style={jobListGrid}>
-                  {workCenterHistoryJobs.length > 0 ? (
-                    workCenterHistoryJobs.map((job) => (
-                      <button
-                        key={`history-${job.id}`}
-                        type="button"
-                        className="meetro-visual-surface"
-                        style={jobListCard}
-                        onClick={() => {
-                          setSelectedJobDetailView("");
-                          setIsJobHistoryMode(true);
-	                          setJobMenuTab("history");
-	                          setHistoryActionNotice("");
-	                          setSelectedWorkCenterJob(job);
-	                          setIsWorkCenterSectionOpen(false);
-	                        }}
-                      >
-                        <span style={jobListCardMain}>
-                          <strong style={jobListCustomer}>{job.customer}</strong>
-	                          <span style={jobListMeta}>{job.title}</span>
-	                          <span style={jobListMeta}>{job.address}</span>
-	                          {job.history?.sourceType === "emergency" && (
-	                            <span style={jobHistorySourceLabel}>
-	                              {translate("emergency", activeLanguage)}
-	                            </span>
-	                          )}
-	                          <span style={jobListStatus}>
-	                            Read-only legacy reference
-	                          </span>
-	                          <span style={jobListNextStep}>
-	                            Canonical History remains unavailable
-	                          </span>
-	                        </span>
-                        <span style={jobListAction}>
-                          {translate("workCenterReviewJobHistory", activeLanguage)}
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="meetro-visual-empty-state" style={jobListEmpty}>
-                      {translate("workCenterClosedJobsWillAppearHere", activeLanguage)}
-                    </div>
-                  )}
-                </div>
-              </>
+              <ProfessionalJobHistoryWorkspace
+                sourceState={professionalJobHistorySource}
+                language={activeLanguage}
+                setPage={setPage}
+                onRetry={() => setProfessionalJobHistoryRefreshKey((value) => value + 1)}
+                onLoadMore={loadMoreProfessionalJobHistory}
+              />
             )}
           </section>
         ) : activeTab === "schedule" && !isLegacyCommandSurfaceContained ? (

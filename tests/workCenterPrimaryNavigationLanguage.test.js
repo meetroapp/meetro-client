@@ -81,7 +81,8 @@ test("primary Work Center card counts use each canonical source and preserve des
   assert.match(cards.quotes, /serverQuotesTotal/);
   assert.doesNotMatch(cards.quotes, /quoteHistory\.length/);
   assert.match(cards.quotes, /openWorkTab\("quotes"\)/);
-  assert.match(cards.history, /workCenterHistoryJobs\.length/);
+  assert.match(cards.history, /professionalJobHistorySource\.history\?\.totalCount/);
+  assert.doesNotMatch(cards.history, /workCenterHistoryJobs\.length/);
   assert.match(cards.history, /openWorkCenterJobsPage\("history"\)/);
   assert.match(cards.revenue, /workCenterReadyToReview/);
   assert.match(cards.revenue, /openWorkTab\("revenue"\)/);

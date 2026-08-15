@@ -8,6 +8,7 @@ import {
   updateWorkItem,
 } from "../utils/workPlanApi.js";
 import { getWorkPlanCopy } from "../utils/workPlanLanguage.js";
+import ProfessionalCompletionReview from "./ProfessionalCompletionReview.jsx";
 
 function statusLabel(status, copy) {
   const labels = {
@@ -149,6 +150,18 @@ export default function ProfessionalWorkPlanWorkspace({
           <strong>{copy.readyForCompletionReview}</strong>
           <span>{copy.readyForCompletionReviewBody}</span>
         </div>
+      )}
+
+      {summary?.readyForCompletionReview && (
+        <ProfessionalCompletionReview
+          jobId={jobId}
+          language={language}
+          setPage={setPage}
+          onCompleted={() => {
+            void loadPlan();
+            onCanonicalChange?.();
+          }}
+        />
       )}
 
       {state.status === "ready" && plan.workstreams.length === 0 && (

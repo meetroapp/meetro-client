@@ -71,6 +71,27 @@ test("normalizer accepts the bounded server contract and exact action booleans",
   assert.equal(hasCanonicalLiveJobAction(null, "MESSAGE_CUSTOMER"), false);
 });
 
+test("normalizer accepts durable Job completion and invoice handoff truth", () => {
+  const liveJob = normalizeCanonicalLiveJobProjection(payload({
+    stage: { code: "JOB_COMPLETED", label: "Work Completed" },
+    responsibility: { code: "PROFESSIONAL", label: "Professional" },
+    blocker: null,
+    nextAction: {
+      code: "READY_TO_INVOICE",
+      label: "Ready to Invoice",
+      description: "The completed Job can proceed to billing separately.",
+    },
+    availableActions: [
+      { code: "VIEW_CONCERN", label: "View customer concern" },
+      { code: "MESSAGE_CUSTOMER", label: "Message customer" },
+      { code: "VIEW_JOB_HISTORY", label: "View Job History" },
+    ],
+  }));
+  assert.equal(liveJob.stage.code, "JOB_COMPLETED");
+  assert.equal(liveJob.nextAction.code, "READY_TO_INVOICE");
+  assert.equal(hasCanonicalLiveJobAction(liveJob, "VIEW_JOB_HISTORY"), true);
+});
+
 test("unknown stages, actions, blockers, identity, and freshness fail closed", () => {
   assert.equal(
     normalizeCanonicalLiveJobProjection(payload({

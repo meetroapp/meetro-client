@@ -120,13 +120,14 @@ test("legacy-only records remain visible without canonical labels or operational
   assert.doesNotMatch(JSON.stringify(references), /CANONICAL_BACKEND_READ|paid/i);
 });
 
-test("legacy Job and History detail return before simulated workflow controls", () => {
+test("legacy Job detail remains contained while Job History uses canonical server truth", () => {
   assert.match(
     dashboard,
     /if \(!isCanonicalReadOnlyJob\) \{[\s\S]*LegacyWorkCenterReadOnlyPanel[\s\S]*returnTab[\s\S]*\}\s*const historyEvaluation/
   );
-  assert.match(dashboard, /Read-only legacy reference/);
-  assert.match(dashboard, /Canonical History remains unavailable/);
+  assert.match(dashboard, /<ProfessionalJobHistoryWorkspace/);
+  assert.match(dashboard, /professionalJobHistorySource/);
+  assert.doesNotMatch(dashboard, /Canonical History remains unavailable/);
 });
 
 test("deferred route surfaces remain unavailable and storage-mutation free", () => {
