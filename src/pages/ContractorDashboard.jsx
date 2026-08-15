@@ -392,6 +392,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       postId: null,
       projection: null,
     });
+  const [workCenterLifecycleRefreshKey, setWorkCenterLifecycleRefreshKey] =
+    useState(0);
   const workCenterLifecycleContextRef = useRef("");
   const [canonicalWorkCenterHydration, setCanonicalWorkCenterHydration] =
     useState({
@@ -874,7 +876,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     return () => {
       active = false;
     };
-  }, [selectedWorkCenterJob, setPage]);
+  }, [selectedWorkCenterJob, setPage, workCenterLifecycleRefreshKey]);
 
   useEffect(() => {
     if (!workflowDependencyPrompt?.dependency) return;
@@ -10946,7 +10948,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               ?.originalText || ""
                           }
                           availableActions={canonicalLiveJob?.availableActions || []}
+                          language={activeLanguage}
                           setPage={setPage}
+                          onCanonicalChange={() =>
+                            setWorkCenterLifecycleRefreshKey((value) => value + 1)
+                          }
+                          onPrepareQuote={() => {
+                            setWorkCenterJobReturnSurface("quotes");
+                            setSelectedWorkCenterQuoteId("");
+                            openWorkTab("quotes");
+                          }}
                         />
                         <CanonicalWorkstreamsPanel
                           record={{

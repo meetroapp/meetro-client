@@ -186,7 +186,7 @@ test("missing Job identity and backend authority errors fail without false succe
   }
 });
 
-test("bounded component keeps concern read-only and exposes no deferred commands", () => {
+test("bounded component keeps concern read-only and uses canonical EFR commands", () => {
   const componentSource = readFileSync(
     new URL("../src/components/CanonicalJobEvaluation.jsx", import.meta.url),
     "utf8"
@@ -196,14 +196,17 @@ test("bounded component keeps concern read-only and exposes no deferred commands
     "utf8"
   );
 
-  assert.match(componentSource, /Customer Concern/);
-  assert.match(componentSource, /Customer-provided details/);
-  assert.match(componentSource, /Start Evaluation/);
-  assert.match(componentSource, /Save Evaluation/);
+  assert.match(componentSource, /getEfrCopy/);
+  assert.match(componentSource, /copy\.customerConcern/);
+  assert.match(componentSource, /copy\.customerDetails/);
+  assert.match(componentSource, /copy\.startEvaluation/);
+  assert.match(componentSource, /copy\.saveEvaluation/);
+  assert.match(componentSource, /completeCanonicalEvaluationDraft/);
+  assert.match(componentSource, /CanonicalFindingsPanel/);
   assert.doesNotMatch(componentSource, /localStorage|sessionStorage/);
   assert.doesNotMatch(
     componentSource,
-    /completeCanonicalEvaluationDraft|Finding command|Recommendation command|Quote command|Schedule command|Job Update|Change Order/
+    /workflow_quote_sent|Quote command|Schedule command|Job Update|Change Order/
   );
   assert.match(
     dashboardSource,

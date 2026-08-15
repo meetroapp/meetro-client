@@ -10,8 +10,13 @@ import {
 } from "../src/utils/canonicalFindingRecommendation.js";
 import {
   CanonicalLifecycleReadError,
+  confirmCanonicalFinding,
+  createCanonicalRecommendation,
   listCanonicalFindingsForEvaluation,
   listCanonicalRecommendationsForFinding,
+  submitCanonicalFinding,
+  updateCanonicalFinding,
+  updateCanonicalRecommendation,
 } from "../src/utils/findingRecommendationApi.js";
 import {
   loadCanonicalFindingsForEvaluation,
@@ -43,6 +48,7 @@ function findingVersion(overrides = {}) {
     statement: "Water damage is visible at the cabinet base.",
     confirmationState: "PROPOSED",
     resolutionState: "OPEN",
+    customerVisible: false,
     createdByParticipantId: ids.participant,
     integrity: {
       algorithm: "sha256",
@@ -69,6 +75,7 @@ function canonicalFindingFixture(overrides = {}) {
     statement: current.statement,
     confirmationState: current.confirmationState,
     resolutionState: current.resolutionState,
+    customerVisible: current.customerVisible,
     evaluationVersion: current.evaluationVersion,
     createdAt,
     concernLinks: [
@@ -102,6 +109,7 @@ function recommendationVersion(overrides = {}) {
     evaluationVersion: 2,
     statement: "Replace the water-damaged cabinet base.",
     status: "ACTIVE",
+    customerVisible: false,
     createdAt,
     ...overrides,
   };
@@ -121,6 +129,7 @@ function recommendationFixture(overrides = {}) {
     evaluationVersion: current.evaluationVersion,
     statement: current.statement,
     status: current.status,
+    customerVisible: current.customerVisible,
     createdAt,
     versionCreatedAt: current.createdAt,
     constraints: [],
@@ -289,6 +298,135 @@ test("canonical read APIs use only exact Findings and Recommendations GET routes
   }
 });
 
+test("canonical EFR commands preserve exact identity, versions, and idempotency", async () => {
+  const proposed = canonicalFindingFixture({
+    versions: [findingVersion({ customerVisible: true })],
+  });
+  const updated = canonicalFindingFixture({
+    versions: [
+      findingVersion({ customerVisible: true }),
+      findingVersion({
+        version: 2,
+        statement: "Updated drainage observation.",
+        customerVisible: true,
+        createdAt: updatedAt,
+        integrity: { algorithm: "sha256", hash: "b".repeat(64), version: 1 },
+      }),
+    ],
+  });
+  const confirmed = canonicalFindingFixture({
+    versions: [
+      ...updated.versions,
+      findingVersion({
+        version: 3,
+        statement: "Updated drainage observation.",
+        confirmationState: "CONFIRMED",
+        customerVisible: true,
+        createdAt: "2026-08-11T16:10:00.000Z",
+        integrity: { algorithm: "sha256", hash: "c".repeat(64), version: 1 },
+      }),
+    ],
+  });
+  const recommendation = recommendationFixture({
+    customerVisible: true,
+    versions: [recommendationVersion({ customerVisible: true })],
+  });
+  const changedRecommendation = recommendationFixture({
+    customerVisible: true,
+    versions: [
+      recommendationVersion({ customerVisible: true }),
+      recommendationVersion({
+        version: 2,
+        statement: "Replace the cabinet base and inspect adjacent framing.",
+        customerVisible: true,
+        createdAt: updatedAt,
+      }),
+    ],
+  });
+  const browser = installBrowser([
+    { status: 201, body: { success: true, finding: proposed } },
+    { status: 200, body: { success: true, finding: updated } },
+    { status: 200, body: { success: true, finding: confirmed } },
+    { status: 201, body: { success: true, recommendation } },
+    { status: 200, body: { success: true, recommendation: changedRecommendation } },
+  ]);
+  try {
+    await submitCanonicalFinding({
+      evaluationId: ids.evaluation,
+      statement: proposed.statement,
+      customerVisible: true,
+      idempotencyKey: "finding-create-key",
+    });
+    await updateCanonicalFinding({
+      findingId: ids.finding,
+      expectedVersion: 1,
+      statement: updated.statement,
+      customerVisible: true,
+      idempotencyKey: "finding-update-key",
+    });
+    await confirmCanonicalFinding({
+      findingId: ids.finding,
+      expectedVersion: 2,
+      idempotencyKey: "finding-confirm-key",
+    });
+    await createCanonicalRecommendation({
+      findingId: ids.finding,
+      statement: recommendation.statement,
+      customerVisible: true,
+      idempotencyKey: "recommendation-create-key",
+    });
+    await updateCanonicalRecommendation({
+      recommendationId: ids.primary,
+      expectedVersion: 1,
+      statement: changedRecommendation.statement,
+      customerVisible: true,
+      idempotencyKey: "recommendation-update-key",
+    });
+    assert.deepEqual(
+      browser.calls.map(({ url, options }) => ({
+        url,
+        method: options.method,
+        key: options.headers["Idempotency-Key"],
+        body: JSON.parse(options.body),
+      })),
+      [
+        {
+          url: `https://athletic-rebirth-staging.up.railway.app/evaluations/${ids.evaluation}/findings`,
+          method: "POST",
+          key: "finding-create-key",
+          body: { statement: proposed.statement, customerVisible: true },
+        },
+        {
+          url: `https://athletic-rebirth-staging.up.railway.app/findings/${ids.finding}`,
+          method: "PATCH",
+          key: "finding-update-key",
+          body: { expectedVersion: 1, statement: updated.statement, customerVisible: true },
+        },
+        {
+          url: `https://athletic-rebirth-staging.up.railway.app/findings/${ids.finding}/confirm`,
+          method: "POST",
+          key: "finding-confirm-key",
+          body: { expectedVersion: 2 },
+        },
+        {
+          url: `https://athletic-rebirth-staging.up.railway.app/findings/${ids.finding}/recommendations`,
+          method: "POST",
+          key: "recommendation-create-key",
+          body: { kind: "PRIMARY", statement: recommendation.statement, customerVisible: true },
+        },
+        {
+          url: `https://athletic-rebirth-staging.up.railway.app/recommendations/${ids.primary}`,
+          method: "PATCH",
+          key: "recommendation-update-key",
+          body: { expectedVersion: 1, statement: changedRecommendation.statement, customerVisible: true },
+        },
+      ]
+    );
+  } finally {
+    browser.restore();
+  }
+});
+
 test("no Evaluation or legacy Evaluation produces no Finding request", async () => {
   const browser = installBrowser([]);
   try {
@@ -373,7 +511,7 @@ test("ordinary canonical Evaluation is the only source for the Finding read chai
   }
 });
 
-test("bounded panels expose canonical read layers and no mutation commands", () => {
+test("bounded panels expose canonical commands without browser-local authority", () => {
   const findingPanel = readFileSync(
     new URL("../src/components/CanonicalFindingsPanel.jsx", import.meta.url),
     "utf8"
@@ -391,15 +529,17 @@ test("bounded panels expose canonical read layers and no mutation commands", () 
     "utf8"
   );
 
-  assert.match(findingPanel, /Status: \{finding\.confirmationState\}/);
-  assert.match(findingPanel, /Resolution: \{finding\.resolutionState\}/);
-  assert.match(recommendationPanel, /Primary recommendation/);
-  assert.match(recommendationPanel, /Alternative recommendation/);
-  assert.match(recommendationPanel, /Not customer approval/);
+  assert.match(findingPanel, /submitCanonicalFinding/);
+  assert.match(findingPanel, /updateCanonicalFinding/);
+  assert.match(findingPanel, /confirmCanonicalFinding/);
+  assert.match(recommendationPanel, /createCanonicalRecommendation/);
+  assert.match(recommendationPanel, /updateCanonicalRecommendation/);
   assert.match(evaluationPanel, /CanonicalFindingsPanel/);
+  assert.match(evaluationPanel, /completeCanonicalEvaluationDraft/);
+  assert.match(apiSource, /Idempotency-Key/);
   assert.doesNotMatch(
     `${findingPanel}\n${recommendationPanel}\n${apiSource}`,
-    /localStorage|sessionStorage|method:\s*"(?:POST|PATCH|PUT|DELETE)"|Idempotency-Key|confirmFinding|resolveFinding|addFindingEvidence|createRecommendation|recordCustomerConstraint|transitionRecommendation|createWorkstream|createActivity|createObligation|createQuote|scheduleWork|completeWork|Job Update|Change Order/
+    /localStorage|sessionStorage|resolveFinding|createWorkstream|createActivity|createObligation|createQuote|scheduleWork|completeWork|Job Update|Change Order/
   );
 });
 

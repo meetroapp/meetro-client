@@ -1,136 +1,259 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  confirmCanonicalFinding,
+  createLifecycleCommandKey,
+  submitCanonicalFinding,
+  updateCanonicalFinding,
+} from "../utils/findingRecommendationApi.js";
 import { loadCanonicalFindingsForEvaluation } from "../utils/findingRecommendationReadController.js";
+import { getEfrCopy } from "../utils/efrLanguage.js";
 import CanonicalRecommendationsPanel from "./CanonicalRecommendationsPanel.jsx";
 
-function findingErrorMessage(error) {
-  if (error?.status === 401) return "Sign in is required to read Findings.";
-  if (error?.status === 403) {
-    return "Finding read authority is unavailable for this account.";
-  }
-  if (error?.status === 404) {
-    return "Findings are unavailable for this evaluation.";
-  }
-  return error?.message || "Findings could not be loaded.";
+function findingState(finding, copy) {
+  if (finding.resolutionState === "RESOLVED") return copy.resolved;
+  if (finding.resolutionState === "PARTIALLY_RESOLVED") return copy.partiallyResolved;
+  if (finding.resolutionState === "DEFERRED") return copy.deferred;
+  return copy.needsAttention;
 }
 
-function FindingEvidence({ finding }) {
-  if (
-    finding.concernLinks.length === 0 &&
-    finding.evidenceReferences.length === 0
-  ) {
-    return null;
-  }
-  return (
-    <div style={styles.evidence} aria-label="Finding provenance evidence">
-      {finding.concernLinks.map((link) => (
-        <span key={link.id} style={styles.evidenceItem}>
-          Concern relationship: {link.relationshipType}
-        </span>
-      ))}
-      {finding.evidenceReferences.map((reference) => (
-        <span key={reference.id} style={styles.evidenceItem}>
-          Evidence: {reference.evidenceType} · {reference.referenceNamespace}
-        </span>
-      ))}
-    </div>
-  );
+function commandError(error, copy) {
+  if (/STALE_/.test(String(error?.code || ""))) return copy.changedElsewhere;
+  return error?.message || copy.findingsUnavailable;
 }
 
 export default function CanonicalFindingsPanel({
   enabled = false,
   evaluation,
   setPage,
+  language = "en",
+  availableActions = [],
+  onPrepareQuote,
+  onCanonicalChange,
 }) {
+  const copy = getEfrCopy(language);
   const evaluationId = evaluation?.evaluation?.id || "";
+  const actionCodes = new Set(availableActions.map((action) => String(action?.code || "")));
+  const canReviewFindings = actionCodes.has("REVIEW_FINDINGS");
+  const canReviewRecommendations = actionCodes.has("REVIEW_RECOMMENDATIONS");
+  const canPrepareQuote = actionCodes.has("CREATE_QUOTE");
+  const [refresh, setRefresh] = useState(0);
   const [state, setState] = useState({
     status: "loading",
     findings: [],
     error: "",
+    notice: "",
   });
+  const [editor, setEditor] = useState(null);
+  const confirmKeys = useRef(new Map());
 
   useEffect(() => {
     let active = true;
     if (!enabled || !evaluationId) {
-      Promise.resolve().then(() => {
-        if (!active) return;
-        setState({ status: "unavailable", findings: [], error: "" });
+      queueMicrotask(() => {
+        if (active) setState({ status: "unavailable", findings: [], error: "", notice: "" });
       });
-      return () => {
-        active = false;
-      };
+      return () => { active = false; };
     }
-
-    Promise.resolve().then(() => {
-      if (!active) return;
-      setState({ status: "loading", findings: [], error: "" });
+    queueMicrotask(() => {
+      if (active) setState((current) => ({ ...current, status: "loading", error: "" }));
     });
     void loadCanonicalFindingsForEvaluation({ evaluation, setPage })
       .then((findings) => {
-        if (!active) return;
-        if (!findings) {
-          setState({ status: "unavailable", findings: [], error: "" });
-          return;
+        if (active) {
+          setState((current) => ({
+            status: findings ? "ready" : "unavailable",
+            findings: findings || [],
+            error: "",
+            notice: current.notice,
+          }));
         }
-        setState({ status: "ready", findings, error: "" });
       })
       .catch((error) => {
-        if (!active) return;
-        setState({
-          status: "error",
-          findings: [],
-          error: findingErrorMessage(error),
-        });
+        if (active) {
+          setState({
+            status: "error",
+            findings: [],
+            error: commandError(error, copy),
+            notice: "",
+          });
+        }
       });
-
-    return () => {
-      active = false;
-    };
-  }, [enabled, evaluation, evaluationId, setPage]);
+    return () => { active = false; };
+  }, [copy, enabled, evaluation, evaluationId, refresh, setPage]);
 
   if (!enabled || !evaluationId) return null;
+
+  function openEditor(finding = null) {
+    try {
+      setEditor({
+        mode: finding ? "update" : "create",
+        finding,
+        statement: finding?.statement || "",
+        customerVisible: finding?.customerVisible === true,
+        idempotencyKey: createLifecycleCommandKey(
+          finding ? "finding-update" : "finding-create"
+        ),
+        saving: false,
+      });
+      setState((current) => ({ ...current, error: "", notice: "" }));
+    } catch (error) {
+      setState((current) => ({ ...current, error: commandError(error, copy) }));
+    }
+  }
+
+  async function saveFinding() {
+    if (!editor?.statement.trim()) return;
+    setEditor((current) => ({ ...current, saving: true }));
+    setState((current) => ({ ...current, error: "", notice: "" }));
+    try {
+      if (editor.mode === "update") {
+        await updateCanonicalFinding({
+          findingId: editor.finding.id,
+          expectedVersion: editor.finding.currentVersion,
+          statement: editor.statement.trim(),
+          customerVisible: editor.customerVisible,
+          idempotencyKey: editor.idempotencyKey,
+          setPage,
+        });
+      } else {
+        await submitCanonicalFinding({
+          evaluationId,
+          statement: editor.statement.trim(),
+          customerVisible: editor.customerVisible,
+          idempotencyKey: editor.idempotencyKey,
+          setPage,
+        });
+      }
+      setEditor(null);
+      setState((current) => ({ ...current, notice: copy.saveFinding }));
+      onCanonicalChange?.();
+      setRefresh((value) => value + 1);
+    } catch (error) {
+      setEditor((current) => ({ ...current, saving: false }));
+      setState((current) => ({ ...current, error: commandError(error, copy) }));
+      if (/STALE_/.test(String(error?.code || ""))) setRefresh((value) => value + 1);
+    }
+  }
+
+  async function confirmFinding(finding) {
+    let key = confirmKeys.current.get(finding.id);
+    try {
+      key ||= createLifecycleCommandKey("finding-confirm");
+      confirmKeys.current.set(finding.id, key);
+      setState((current) => ({ ...current, status: "saving", error: "", notice: "" }));
+      await confirmCanonicalFinding({
+        findingId: finding.id,
+        expectedVersion: finding.currentVersion,
+        idempotencyKey: key,
+        setPage,
+      });
+      confirmKeys.current.delete(finding.id);
+      setState((current) => ({ ...current, notice: copy.confirmed }));
+      onCanonicalChange?.();
+      setRefresh((value) => value + 1);
+    } catch (error) {
+      setState((current) => ({ ...current, status: "ready", error: commandError(error, copy) }));
+      if (/STALE_/.test(String(error?.code || ""))) {
+        confirmKeys.current.delete(finding.id);
+        setRefresh((value) => value + 1);
+      }
+    }
+  }
 
   return (
     <section style={styles.section} aria-labelledby="canonical-findings-title">
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Job assessment</span>
-          <h3 id="canonical-findings-title" style={styles.title}>
-            Findings
-          </h3>
+          <span style={styles.eyebrow}>{copy.assessment}</span>
+          <h3 id="canonical-findings-title" style={styles.title}>{copy.whatFound}</h3>
         </div>
-        <span style={styles.readOnly}>Professional record</span>
+        {canReviewFindings && !editor && (
+          <button type="button" style={styles.primaryButton} onClick={() => openEditor()}>
+            {copy.addFinding}
+          </button>
+        )}
       </div>
-      {state.status === "loading" && (
-        <p role="status" style={styles.message}>Loading findings.</p>
-      )}
+      {state.status === "loading" && <p role="status" style={styles.message}>{copy.loadingFindings}</p>}
+      {state.error && <p role="alert" style={styles.error}>{state.error}</p>}
+      {state.notice && <p role="status" style={styles.success}>{state.notice}</p>}
       {state.status === "error" && (
-        <p role="alert" style={styles.error}>{state.error}</p>
+        <button type="button" style={styles.secondaryButton} onClick={() => setRefresh((value) => value + 1)}>
+          {copy.retry}
+        </button>
       )}
-      {state.status === "ready" && state.findings.length === 0 && (
-        <p style={styles.message}>No findings added yet</p>
+      {state.status === "ready" && state.findings.length === 0 && !editor && (
+        <p style={styles.message}>{copy.noFindings}</p>
       )}
-      {state.status === "ready" && state.findings.length > 0 && (
+      {editor && (
+        <div style={styles.editor}>
+          <label style={styles.label}>
+            {copy.findingDetails}
+            <textarea
+              style={styles.textarea}
+              maxLength={5000}
+              value={editor.statement}
+              onChange={(event) => setEditor((current) => ({ ...current, statement: event.target.value }))}
+            />
+          </label>
+          <label style={styles.checkLabel}>
+            <input
+              type="checkbox"
+              checked={editor.customerVisible}
+              onChange={(event) => setEditor((current) => ({ ...current, customerVisible: event.target.checked }))}
+            />
+            {copy.shareWithCustomer}
+          </label>
+          <div style={styles.actions}>
+            <button
+              type="button"
+              style={styles.primaryButton}
+              disabled={editor.saving || !editor.statement.trim()}
+              onClick={() => void saveFinding()}
+            >
+              {editor.saving ? copy.saving : copy.saveFinding}
+            </button>
+            <button type="button" style={styles.secondaryButton} disabled={editor.saving} onClick={() => setEditor(null)}>
+              {copy.cancel}
+            </button>
+          </div>
+        </div>
+      )}
+      {state.findings.length > 0 && (
         <div style={styles.findingsList}>
           {state.findings.map((finding, index) => (
             <article key={finding.id} style={styles.finding}>
               <div style={styles.findingHeader}>
-                <h4 style={styles.findingTitle}>Finding {index + 1}</h4>
+                <h4 style={styles.findingTitle}>{copy.finding} {index + 1}</h4>
                 <div style={styles.stateRow}>
-                  <span style={styles.confirmation}>
-                    Status: {finding.confirmationState}
-                  </span>
-                  <span style={styles.resolution}>
-                    Resolution: {finding.resolutionState}
+                  <span style={styles.state}>{findingState(finding, copy)}</span>
+                  <span style={styles.secondaryState}>
+                    {finding.confirmationState === "CONFIRMED" ? copy.confirmed : copy.proposed}
                   </span>
                 </div>
               </div>
               <p style={styles.statement}>{finding.statement}</p>
-              <div style={styles.versionRow}>
-                <span>Finding version {finding.currentVersion}</span>
-                <span>Evaluation version {finding.evaluationVersion}</span>
-              </div>
-              <FindingEvidence finding={finding} />
-              <CanonicalRecommendationsPanel finding={finding} setPage={setPage} />
+              <span style={styles.visibility}>
+                {finding.customerVisible ? copy.sharedWithCustomer : copy.professionalOnly}
+              </span>
+              {canReviewFindings && finding.confirmationState === "PROPOSED" && !editor && (
+                <div style={styles.actions}>
+                  <button type="button" style={styles.secondaryButton} onClick={() => openEditor(finding)}>
+                    {copy.update}
+                  </button>
+                  <button type="button" style={styles.primaryButton} onClick={() => void confirmFinding(finding)}>
+                    {copy.confirmFinding}
+                  </button>
+                </div>
+              )}
+              <CanonicalRecommendationsPanel
+                finding={finding}
+                setPage={setPage}
+                language={language}
+                canManage={canReviewRecommendations}
+                canPrepareQuote={canPrepareQuote}
+                onPrepareQuote={onPrepareQuote}
+                onCanonicalChange={onCanonicalChange}
+              />
             </article>
           ))}
         </div>
@@ -139,66 +262,36 @@ export default function CanonicalFindingsPanel({
   );
 }
 
+const button = {
+  minHeight: 44,
+  padding: "9px 14px",
+  borderRadius: 6,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
 const styles = {
-  section: {
-    display: "grid",
-    gap: 16,
-    padding: "16px 0",
-    borderTop: "1px solid #cbd5e1",
-    borderBottom: "1px solid #cbd5e1",
-  },
-  header: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  eyebrow: {
-    display: "block",
-    color: "#475569",
-    fontSize: 12,
-    fontWeight: 800,
-    textTransform: "uppercase",
-  },
+  section: { display: "grid", gap: 16, padding: "18px 0", borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
+  eyebrow: { display: "block", color: "#475569", fontSize: 12, fontWeight: 800 },
   title: { margin: "4px 0 0", fontSize: 20, letterSpacing: 0 },
-  readOnly: { color: "#166534", fontSize: 12, fontWeight: 800 },
   message: { margin: 0, color: "#64748b", lineHeight: 1.5 },
-  error: {
-    margin: 0,
-    padding: 10,
-    borderLeft: "3px solid #b91c1c",
-    color: "#991b1b",
-    background: "#fef2f2",
-    lineHeight: 1.5,
-  },
+  error: { margin: 0, color: "#991b1b", lineHeight: 1.5 },
+  success: { margin: 0, color: "#166534", lineHeight: 1.5 },
   findingsList: { display: "grid", gap: 18 },
-  finding: {
-    display: "grid",
-    gap: 10,
-    minWidth: 0,
-    paddingBottom: 18,
-    borderBottom: "1px solid #e2e8f0",
-  },
+  finding: { display: "grid", gap: 10, minWidth: 0, paddingBottom: 18, borderBottom: "1px solid #e2e8f0" },
   findingHeader: { display: "grid", gap: 7 },
   findingTitle: { margin: 0, fontSize: 16, letterSpacing: 0 },
   stateRow: { display: "flex", flexWrap: "wrap", gap: 10 },
-  confirmation: { color: "#1f5132", fontSize: 12, fontWeight: 800 },
-  resolution: { color: "#7c2d12", fontSize: 12, fontWeight: 800 },
+  state: { color: "#7c2d12", fontSize: 12, fontWeight: 800 },
+  secondaryState: { color: "#1f5132", fontSize: 12, fontWeight: 800 },
+  visibility: { color: "#64748b", fontSize: 12, fontWeight: 700 },
   statement: { margin: 0, lineHeight: 1.5, overflowWrap: "anywhere" },
-  versionRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    color: "#64748b",
-    fontSize: 12,
-  },
-  evidence: {
-    display: "grid",
-    gap: 4,
-    padding: "8px 0",
-    borderTop: "1px solid #e2e8f0",
-    borderBottom: "1px solid #e2e8f0",
-  },
-  evidenceItem: { color: "#475569", fontSize: 12, overflowWrap: "anywhere" },
+  editor: { display: "grid", gap: 12, padding: 12, border: "1px solid #cbd5e1", borderRadius: 8 },
+  label: { display: "grid", gap: 6, color: "#334155", fontWeight: 700 },
+  textarea: { width: "100%", minHeight: 96, boxSizing: "border-box", padding: 10, border: "1px solid #94a3b8", borderRadius: 6, font: "inherit", resize: "vertical" },
+  checkLabel: { display: "flex", alignItems: "center", gap: 9, minHeight: 44, lineHeight: 1.4 },
+  actions: { display: "flex", gap: 10, flexWrap: "wrap" },
+  primaryButton: { ...button, border: "1px solid #1f5132", color: "#ffffff", background: "#1f5132" },
+  secondaryButton: { ...button, border: "1px solid #94a3b8", color: "#334155", background: "#ffffff" },
 };

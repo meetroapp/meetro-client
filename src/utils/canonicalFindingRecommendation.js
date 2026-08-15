@@ -95,6 +95,7 @@ function normalizeFindingVersion(value) {
     "statement",
     "confirmationState",
     "resolutionState",
+    "customerVisible",
     "createdByParticipantId",
     "integrity",
     "createdAt",
@@ -112,6 +113,7 @@ function normalizeFindingVersion(value) {
     !statement ||
     !FINDING_CONFIRMATION_STATES.includes(value.confirmationState) ||
     !FINDING_RESOLUTION_STATES.includes(value.resolutionState) ||
+    typeof value.customerVisible !== "boolean" ||
     !createdByParticipantId ||
     !hasExactKeys(integrity, ["algorithm", "hash", "version"]) ||
     integrity.algorithm !== "sha256" ||
@@ -127,6 +129,7 @@ function normalizeFindingVersion(value) {
     statement,
     confirmationState: value.confirmationState,
     resolutionState: value.resolutionState,
+    customerVisible: value.customerVisible,
     createdByParticipantId,
     integrity: {
       algorithm: "sha256",
@@ -220,6 +223,7 @@ export function validateCanonicalFindingProjection(value) {
     "statement",
     "confirmationState",
     "resolutionState",
+    "customerVisible",
     "evaluationVersion",
     "createdAt",
     "versions",
@@ -259,6 +263,7 @@ export function validateCanonicalFindingProjection(value) {
     !statement ||
     !FINDING_CONFIRMATION_STATES.includes(value.confirmationState) ||
     !FINDING_RESOLUTION_STATES.includes(value.resolutionState) ||
+    typeof value.customerVisible !== "boolean" ||
     !evaluationVersion ||
     !createdAt ||
     !versions ||
@@ -279,7 +284,8 @@ export function validateCanonicalFindingProjection(value) {
     current.evaluationVersion !== evaluationVersion ||
     current.statement !== statement ||
     current.confirmationState !== value.confirmationState ||
-    current.resolutionState !== value.resolutionState
+    current.resolutionState !== value.resolutionState ||
+    current.customerVisible !== value.customerVisible
   ) {
     return null;
   }
@@ -295,6 +301,7 @@ export function validateCanonicalFindingProjection(value) {
     statement,
     confirmationState: value.confirmationState,
     resolutionState: value.resolutionState,
+    customerVisible: value.customerVisible,
     evaluationVersion,
     createdAt,
     versions,
@@ -309,6 +316,7 @@ function normalizeRecommendationVersion(value) {
     "evaluationVersion",
     "statement",
     "status",
+    "customerVisible",
     "createdAt",
   ];
   if (!hasExactKeys(value, keys)) return null;
@@ -321,11 +329,19 @@ function normalizeRecommendationVersion(value) {
     !evaluationVersion ||
     !statement ||
     !RECOMMENDATION_STATUSES.includes(value.status) ||
+    typeof value.customerVisible !== "boolean" ||
     !createdAt
   ) {
     return null;
   }
-  return { version, evaluationVersion, statement, status: value.status, createdAt };
+  return {
+    version,
+    evaluationVersion,
+    statement,
+    status: value.status,
+    customerVisible: value.customerVisible,
+    createdAt,
+  };
 }
 
 function normalizeConstraint(value) {
@@ -418,6 +434,7 @@ export function validateCanonicalRecommendationProjection(value) {
     "evaluationVersion",
     "statement",
     "status",
+    "customerVisible",
     "createdAt",
     "versionCreatedAt",
     "versions",
@@ -459,6 +476,7 @@ export function validateCanonicalRecommendationProjection(value) {
     !evaluationVersion ||
     !statement ||
     !RECOMMENDATION_STATUSES.includes(value.status) ||
+    typeof value.customerVisible !== "boolean" ||
     !createdAt ||
     !versionCreatedAt ||
     !versions ||
@@ -483,6 +501,7 @@ export function validateCanonicalRecommendationProjection(value) {
     current.evaluationVersion !== evaluationVersion ||
     current.statement !== statement ||
     current.status !== value.status ||
+    current.customerVisible !== value.customerVisible ||
     current.createdAt !== versionCreatedAt
   ) {
     return null;
@@ -498,6 +517,7 @@ export function validateCanonicalRecommendationProjection(value) {
     evaluationVersion,
     statement,
     status: value.status,
+    customerVisible: value.customerVisible,
     createdAt,
     versionCreatedAt,
     versions,
