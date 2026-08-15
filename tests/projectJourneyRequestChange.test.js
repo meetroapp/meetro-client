@@ -153,9 +153,12 @@ test("Project Journey never restores browser-local request modification authorit
   assert.doesNotMatch(projectDetailsSource, /hasApprovedQuote/);
   assert.doesNotMatch(projectDetailsSource, /Create Change Order|Update Agreement/);
   assert.doesNotMatch(handler, /title|customerName|professionalName|array/i);
-  assert.match(
+  assert.match(projectDetailsSource, /t\("projectRequestActionsChecking", language\)/);
+  assert.match(projectDetailsSource, /t\("projectRequestActionsUnavailable", language\)/);
+  assert.match(projectDetailsSource, /t\("projectContractChangeUnavailable", language\)/);
+  assert.doesNotMatch(
     projectDetailsSource,
-    /That customer action is not available here yet; the[\s\S]*original request remains unchanged\./
+    /Checking available request actions|Request changes are unavailable until|Changes to agreed work need/
   );
 });
 

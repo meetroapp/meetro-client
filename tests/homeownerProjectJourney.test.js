@@ -152,6 +152,9 @@ test("project journey edit and communication labels exist in supported languages
     "requestDetails",
     "editRequest",
     "requestChange",
+    "projectRequestActionsChecking",
+    "projectRequestActionsUnavailable",
+    "projectContractChangeUnavailable",
     "continueConversation",
     "messageProfessional",
   ];

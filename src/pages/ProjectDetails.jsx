@@ -1021,13 +1021,12 @@ if (data.post) {
                     <div style={requestDetailsActionWrap}>
                       {requestModificationState.status === "loading" && (
                         <p role="status" style={requestDetailsAuthorityNotice}>
-                          Checking available request actions…
+                          {t("projectRequestActionsChecking", language)}
                         </p>
                       )}
                       {requestModificationState.status === "unavailable" && (
                         <p role="status" style={requestDetailsAuthorityNotice}>
-                          Request changes are unavailable until Meetro confirms
-                          the current request authority.
+                          {t("projectRequestActionsUnavailable", language)}
                         </p>
                       )}
                       {requestModificationEntry.actionable && (
@@ -1048,9 +1047,7 @@ if (data.post) {
                       {requestModificationEntry.kind ===
                         HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE && (
                         <p role="status" style={requestDetailsAuthorityNotice}>
-                          Changes to agreed work need a governed contract change.
-                          That customer action is not available here yet; the
-                          original request remains unchanged.
+                          {t("projectContractChangeUnavailable", language)}
                         </p>
                       )}
                     </div>

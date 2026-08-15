@@ -5860,6 +5860,11 @@ const projectJourneyLabels = {
     requestDetails: "Request Details",
     editRequest: "Edit Request",
     requestChange: "Request Change",
+    projectRequestActionsChecking: "Checking available request actions…",
+    projectRequestActionsUnavailable:
+      "Request changes are unavailable until Meetro confirms current access.",
+    projectContractChangeUnavailable:
+      "Changes to agreed work need a contract change. That action is not available here yet; the original request remains unchanged.",
     continueConversation: "Continue Conversation",
     homeProjectNextStepLabel: "Next Step",
     requestSubmitted: "Request Submitted",
@@ -5970,6 +5975,11 @@ const projectJourneyLabels = {
     requestDetails: "Detalles de la solicitud",
     editRequest: "Editar solicitud",
     requestChange: "Solicitar cambio",
+    projectRequestActionsChecking: "Comprobando las acciones disponibles…",
+    projectRequestActionsUnavailable:
+      "Los cambios no están disponibles hasta que Meetro confirme el acceso actual.",
+    projectContractChangeUnavailable:
+      "Los cambios al trabajo acordado requieren un cambio de contrato. Esa acción aún no está disponible aquí; la solicitud original no cambia.",
     continueConversation: "Continuar conversación",
     homeProjectNextStepLabel: "Próximo paso",
     requestSubmitted: "Solicitud enviada",
@@ -6080,6 +6090,11 @@ const projectJourneyLabels = {
     requestDetails: "Détails de la demande",
     editRequest: "Modifier la demande",
     requestChange: "Demander un changement",
+    projectRequestActionsChecking: "Vérification des actions disponibles…",
+    projectRequestActionsUnavailable:
+      "Les modifications ne sont pas disponibles tant que Meetro n’a pas confirmé l’accès actuel.",
+    projectContractChangeUnavailable:
+      "Les modifications des travaux convenus nécessitent un avenant. Cette action n’est pas encore disponible ici; la demande d’origine reste inchangée.",
     continueConversation: "Continuer la conversation",
     homeProjectNextStepLabel: "Prochaine étape",
     requestSubmitted: "Demande envoyée",
@@ -6190,6 +6205,11 @@ const projectJourneyLabels = {
     requestDetails: "Detalhes da solicitação",
     editRequest: "Editar solicitação",
     requestChange: "Solicitar alteração",
+    projectRequestActionsChecking: "Verificando as ações disponíveis…",
+    projectRequestActionsUnavailable:
+      "As alterações não estão disponíveis até que o Meetro confirme o acesso atual.",
+    projectContractChangeUnavailable:
+      "Alterações no trabalho acordado exigem uma mudança contratual. Essa ação ainda não está disponível aqui; a solicitação original permanece inalterada.",
     continueConversation: "Continuar conversa",
     homeProjectNextStepLabel: "Próximo passo",
     requestSubmitted: "Solicitação enviada",
