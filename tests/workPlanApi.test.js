@@ -52,11 +52,14 @@ function professionalPlan(overrides = {}) {
       canMarkComplete: false,
       activities: [{
         id: IDS.activity,
+        workstreamId: IDS.workstream,
         activityType: "WORK_ITEM",
         statement: "Install the approved replacement.",
         status: "IN_PROGRESS",
+        customerVisible: true,
         currentVersion: 3,
         performedAt: null,
+        createdAt: NOW,
         updatedAt: NOW,
         canStart: false,
         canUpdate: true,
@@ -217,6 +220,19 @@ test("professional and customer Work Plan validators are exact and privacy-safe"
     validateProfessionalWorkPlan({
       ...professionalPlan(),
       workstreams: [{ ...professionalPlan().workstreams[0], browserComplete: true }],
+    }, { jobId: IDS.job }),
+    null
+  );
+  assert.equal(
+    validateProfessionalWorkPlan({
+      ...professionalPlan(),
+      workstreams: [{
+        ...professionalPlan().workstreams[0],
+        activities: [{
+          ...professionalPlan().workstreams[0].activities[0],
+          workstreamId: "77777777-7777-4777-8777-777777777777",
+        }],
+      }],
     }, { jobId: IDS.job }),
     null
   );

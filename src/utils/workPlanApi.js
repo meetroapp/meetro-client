@@ -109,14 +109,17 @@ function validateUpdate(value, { customer = false } = {}) {
     : normalized;
 }
 
-function validateProfessionalActivity(value) {
+function validateProfessionalActivity(value, { workstreamId } = {}) {
   const keys = [
     "id",
+    "workstreamId",
     "activityType",
     "statement",
     "status",
+    "customerVisible",
     "currentVersion",
     "performedAt",
+    "createdAt",
     "updatedAt",
     "canStart",
     "canUpdate",
@@ -129,11 +132,14 @@ function validateProfessionalActivity(value) {
   const updates = value.updates.map((item) => validateUpdate(item));
   const normalized = {
     id: uuid(value.id),
+    workstreamId: uuid(value.workstreamId),
     activityType: text(value.activityType, 80),
     statement: text(value.statement, 5000),
     status: ACTIVITY_STATUSES.has(value.status) ? value.status : "",
+    customerVisible: boolean(value.customerVisible),
     currentVersion: integer(value.currentVersion),
     performedAt: timestamp(value.performedAt, { nullable: true }),
+    createdAt: timestamp(value.createdAt),
     updatedAt: timestamp(value.updatedAt),
     canStart: boolean(value.canStart),
     canUpdate: boolean(value.canUpdate),
@@ -142,11 +148,14 @@ function validateProfessionalActivity(value) {
   };
   if (
     !normalized.id ||
+    normalized.workstreamId !== uuid(workstreamId) ||
     !normalized.activityType ||
     !normalized.statement ||
     !normalized.status ||
+    normalized.customerVisible == null ||
     !normalized.currentVersion ||
     (value.performedAt != null && !normalized.performedAt) ||
+    !normalized.createdAt ||
     !normalized.updatedAt ||
     normalized.canStart == null ||
     normalized.canUpdate == null ||
@@ -180,7 +189,9 @@ function validateProfessionalWorkstream(value) {
     value.activities.length > 200 ||
     value.blockers.length > 100
   ) return null;
-  const activities = value.activities.map(validateProfessionalActivity);
+  const activities = value.activities.map((item) =>
+    validateProfessionalActivity(item, { workstreamId: value.id })
+  );
   const blockers = value.blockers.map((item) => {
     if (!exact(item, ["id", "statement", "status"])) return null;
     const normalized = {
