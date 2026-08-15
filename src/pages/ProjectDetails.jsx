@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import CustomerQuoteReviewPanel from "../components/CustomerQuoteReviewPanel.jsx";
 import CustomerProjectAssessment from "../components/CustomerProjectAssessment.jsx";
+import CustomerWorkPlan from "../components/CustomerWorkPlan.jsx";
 import API_URL from "../api";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
@@ -877,6 +878,14 @@ if (data.post) {
 
             {!isProfessionalProject && !isBusinessLeadReviewPage && (
               <CustomerProjectAssessment
+                jobId={requestModificationState.jobId}
+                language={language}
+                setPage={setPage}
+              />
+            )}
+
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerWorkPlan
                 jobId={requestModificationState.jobId}
                 language={language}
                 setPage={setPage}

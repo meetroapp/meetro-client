@@ -168,6 +168,7 @@ export function validateCanonicalActivityProjection(value) {
     "status",
     "temporaryIntervention",
     "temporaryDetails",
+    "customerVisible",
     "performedAt",
     "currentVersion",
     "createdAt",
@@ -197,6 +198,7 @@ export function validateCanonicalActivityProjection(value) {
     !statement ||
     !ACTIVITY_STATUSES.includes(value.status) ||
     typeof value.temporaryIntervention !== "boolean" ||
+    typeof value.customerVisible !== "boolean" ||
     (value.temporaryIntervention && !temporaryDetails) ||
     (!value.temporaryIntervention && value.temporaryDetails != null) ||
     (value.performedAt != null && !performedAt) ||
@@ -217,6 +219,7 @@ export function validateCanonicalActivityProjection(value) {
     status: value.status,
     temporaryIntervention: value.temporaryIntervention,
     temporaryDetails,
+    customerVisible: value.customerVisible,
     performedAt,
     currentVersion,
     createdAt,

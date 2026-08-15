@@ -78,6 +78,7 @@ function activityFixture(overrides = {}) {
     status: "DONE",
     temporaryIntervention: false,
     temporaryDetails: null,
+    customerVisible: false,
     performedAt,
     currentVersion: 2,
     createdAt,
@@ -420,7 +421,7 @@ test("server-derived eligibility is validated without collapsing lifecycle state
   );
 });
 
-test("bounded operational panels expose read truth and no mutation authority", () => {
+test("legacy operational panels remain read-only while Work Plan owns execution", () => {
   const files = [
     "../src/components/CanonicalWorkstreamsPanel.jsx",
     "../src/components/CanonicalWorkstreamCard.jsx",
@@ -446,7 +447,8 @@ test("bounded operational panels expose read truth and no mutation authority", (
   assert.match(source, /Permanent correction and Finding resolution remain separate/);
   assert.match(source, /Lifecycle status only\. Not payment status/);
   assert.match(source, /Server-derived completion eligibility/);
-  assert.match(dashboard, /CanonicalWorkstreamsPanel/);
+  assert.match(dashboard, /ProfessionalWorkPlanWorkspace/);
+  assert.doesNotMatch(dashboard, /CanonicalWorkstreamsPanel/);
   assert.doesNotMatch(
     source,
     /localStorage|sessionStorage|method:\s*"(?:POST|PATCH|PUT|DELETE)"|Idempotency-Key|assignFindingToWorkstream|createWorkActivity|progressWorkActivity|createWorkObligation|transitionWorkObligation|resolveFinding|completeWorkstream|createQuote|scheduleWork|completeJob|Job Update|Change Order/

@@ -20,6 +20,10 @@ const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
   "utf8"
 );
+const legacyWorkCenterSource = readFileSync(
+  new URL("../src/components/LegacyWorkCenterReadOnlyPanel.jsx", import.meta.url),
+  "utf8"
+);
 
 test("Home communication action truthfully opens the existing messages route", () => {
   assert.match(homeSource, /onClick=\{\(\) => setPage\("messagesInbox"\)\}/);
@@ -61,20 +65,22 @@ test("Work Center opportunity and emergency labels match their handlers", () => 
 test("Work Center landing copy stays responsibility-first and labels legacy domains read-only", () => {
   assert.equal(
     t("workCenterPurposeStatement", "en"),
-    "See what needs attention, what happens next, and where each customer relationship moves forward."
+    "See what needs your attention and what to do next."
   );
   assert.equal(
     t("workCenterPurposeStatement", "es"),
-    "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes."
+    "Ve qué necesita tu atención y qué hacer después."
   );
-  assert.match(contractorDashboardSource, /workCenterProfessionalPerspectiveLine/);
+  assert.match(
+    contractorDashboardSource,
+    /translate\("workCenterPurposeStatement", activeLanguage\)/
+  );
   assert.match(contractorDashboardSource, /workCenterNewRequestsThatNeedADecision/);
-  assert.match(contractorDashboardSource, /Canonical jobs with read-only legacy compatibility records/);
-  assert.match(contractorDashboardSource, /Browser-stored appointment references \(read-only\)/);
-  assert.match(contractorDashboardSource, /Browser-stored quote references \(read-only\)/);
-  assert.match(contractorDashboardSource, /Browser-stored active-work references \(read-only\)/);
-  assert.match(contractorDashboardSource, /Legacy history references \(read-only\)/);
-  assert.match(contractorDashboardSource, /Legacy commercial references without payment authority/);
+  assert.match(contractorDashboardSource, /LegacyWorkCenterReadOnlyPanel/);
+  assert.match(legacyWorkCenterSource, /Read-only/);
+  assert.match(legacyWorkCenterSource, /Compatibility records/);
+  assert.match(legacyWorkCenterSource, /Browser-stored references remain visible here/);
+  assert.match(legacyWorkCenterSource, /cannot update or override canonical/);
   assert.doesNotMatch(
     contractorDashboardSource,
     /workCenterDashboardSummary[\s\S]{0,260}newOpportunity/
