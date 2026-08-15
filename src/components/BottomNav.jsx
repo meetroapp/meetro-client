@@ -19,6 +19,7 @@ import {
 } from "../utils/dashboardMetrics";
 import { glassActionMenu } from "../styles/liquidGlass";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getPrimaryNavigationOwner } from "../utils/primaryNavigationOwnership";
 import {
   getAlertCountSnapshot,
   resetAlertCounts,
@@ -545,6 +546,10 @@ function BottomNav({ setPage, currentPage = "" }) {
   const mobileNavItems = activeMode === "business" ? businessMobileNavItems : personalMobileNavItems;
   const desktopNavItems = activeMode === "business" ? businessDesktopNavItems : personalDesktopNavItems;
   const normalizedPage = currentPage || "";
+  const primaryNavigationOwner = getPrimaryNavigationOwner(
+    normalizedPage,
+    activeMode
+  );
 
   const operationsAlertCount =
     activeMode === "business"
@@ -568,6 +573,7 @@ function BottomNav({ setPage, currentPage = "" }) {
     window.matchMedia?.("(orientation: landscape) and (max-height: 500px)")?.matches;
 
   const isNavItemActive = (item) =>
+    item.page === primaryNavigationOwner ||
     item.page === normalizedPage ||
     item.aliases?.includes(normalizedPage) ||
     (item.page === "businessLeads" && normalizedPage === "businessLeads");

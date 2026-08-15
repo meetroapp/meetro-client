@@ -144,7 +144,7 @@ function getCompletionClosureUnavailableCopy(language = "en") {
   };
 }
 
-function ProjectDetails({ setPage, currentPage }) {
+function ProjectDetails({ setPage }) {
   const activeJobSnapshot = useMemo(() => getActiveJobSnapshot(), []);
 
   const [post, setPost] = useState(null);
@@ -1319,18 +1319,7 @@ if (data.post) {
           </div>
         )}
 
-        <BottomNav
-          setPage={setPage}
-          currentPage={
-            projectDetailsReturnPageValue === "businessLeads"
-              ? "businessLeads"
-              : projectDetailsReturnPageValue === "businessDashboard"
-              ? "businessDashboard"
-              : projectDetailsReturnPageValue === "contractorDashboard"
-              ? "contractorDashboard"
-              : currentPage || "discover"
-          }
-        />
+        <BottomNav setPage={setPage} currentPage="projectDetails" />
       </div>
     </div>
   );
