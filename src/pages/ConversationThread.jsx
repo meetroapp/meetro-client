@@ -40,6 +40,8 @@ import InvoiceWorkflowPresentation from "../components/workflows/presentations/I
 import MaterialsWorkflowPresentation from "../components/workflows/presentations/MaterialsWorkflowPresentation";
 import RevisedQuoteWorkflowPresentation from "../components/workflows/presentations/RevisedQuoteWorkflowPresentation";
 import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
+import ConversationQuoteCard from "../components/ConversationQuoteCard";
+import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -6283,6 +6285,34 @@ const handleImageUpload = (event) => {
             const localizedTitle = getLocalizedMessageField(msg, "title");
             const localizedSubtitle = getLocalizedMessageField(msg, "subtitle");
             const localizedText = getLocalizedMessageField(msg, "text");
+
+            if (msg.type === "quote_shared" && msg.quoteShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-quote-message-row"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                    overscrollBehavior: "contain",
+                  }}
+                >
+                  <ConversationQuoteCard
+                    quote={msg.quoteShare}
+                    language={language}
+                    canReview={currentViewerRole === "homeowner"}
+                    onReview={() => {
+                      const route = buildCustomerQuoteReviewRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
 
             const isWorkflow = isWorkflowType(msg.type);
             const workflowMessageProps = isWorkflow

@@ -1,3 +1,5 @@
+import { normalizeQuoteDeliverySnapshot } from "./quoteDeliveryApi.js";
+
 export const CONVERSATION_THREAD_TYPES = Object.freeze({
   CANONICAL: "canonical_conversation",
   LEGACY_QUOTE_REQUEST: "legacy_quote_request",
@@ -220,6 +222,38 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     return null;
   }
 
+  const contentType =
+    typeof content.type === "string" && content.type ? content.type : "text";
+  const workflowType =
+    typeof message?.workflow?.type === "string" ? message.workflow.type : "";
+  const workflowStatus =
+    typeof message?.workflow?.status === "string" ? message.workflow.status : "";
+  const isQuoteShared =
+    contentType === "quote_shared" || workflowType === "QUOTE_SHARED";
+  let quoteShare = null;
+  let reference = null;
+
+  if (isQuoteShared) {
+    const quoteId = String(message?.reference?.quoteId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    quoteShare = normalizeQuoteDeliverySnapshot(message?.workflow?.payload, {
+      quoteId,
+      jobId,
+    });
+    if (
+      contentType !== "quote_shared" ||
+      workflowType !== "QUOTE_SHARED" ||
+      workflowStatus !== "SENT" ||
+      JSON.stringify(referenceKeys) !== JSON.stringify(["jobId", "quoteId", "type"]) ||
+      message.reference.type !== "quote" ||
+      !quoteShare
+    ) return null;
+    reference = Object.freeze({ type: "quote", quoteId, jobId });
+  }
+
   const isViewer = message?.sender?.isViewer === true;
   const senderRole = isViewer
     ? viewerRole
@@ -227,27 +261,30 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     ? "homeowner"
     : "business";
 
-  return {
+  const normalized = {
     id: `canonical-message-${backendId}`,
     backendId,
-    type: typeof content.type === "string" && content.type ? content.type : "text",
+    type: contentType,
     sender: isViewer ? "me" : "them",
     senderRole,
     text: typeof content.text === "string" ? content.text : "",
     imageUrl: typeof content.imageUrl === "string" ? content.imageUrl : null,
-    workflowType:
-      typeof message?.workflow?.type === "string" ? message.workflow.type : "",
-    workflowStatus:
-      typeof message?.workflow?.status === "string" ? message.workflow.status : "",
+    workflowType,
+    workflowStatus,
     workflowPayload:
-      message?.workflow?.payload && typeof message.workflow.payload === "object"
+      quoteShare || (message?.workflow?.payload && typeof message.workflow.payload === "object"
         ? message.workflow.payload
-        : {},
+        : {}),
     status: "delivered",
     createdAt: message.createdAt || null,
     time: message.createdAt || "",
     unsent: false,
   };
+  if (quoteShare) {
+    normalized.quoteShare = quoteShare;
+    normalized.reference = reference;
+  }
+  return normalized;
 }
 
 export function normalizeCanonicalMessageCollection(

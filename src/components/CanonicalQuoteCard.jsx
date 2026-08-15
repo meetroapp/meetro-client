@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage.js";
 import { loadCanonicalQuoteDetail } from "../utils/quoteReadController.js";
+import QuoteDeliveryActions from "./QuoteDeliveryActions.jsx";
 
 function canonicalRecord(jobId) {
   return {
@@ -93,6 +95,7 @@ export default function CanonicalQuoteCard({
   setPage,
   focused = false,
 }) {
+  const language = useLanguage();
   const [state, setState] = useState({
     status: "loading",
     detail: null,
@@ -208,6 +211,15 @@ export default function CanonicalQuoteCard({
             ))}
           </div>
         </section>
+      )}
+      {state.status === "ready" && (
+        <QuoteDeliveryActions
+          quoteId={detail.id}
+          jobId={jobId}
+          quoteStatus={detail.status}
+          language={language}
+          setPage={setPage}
+        />
       )}
     </article>
   );

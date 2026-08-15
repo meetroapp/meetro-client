@@ -49,6 +49,7 @@ import ContractorProfile from "./pages/ContractorProfile";
 import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
 import ProjectDetails from "./pages/ProjectDetails";
+import CustomerQuoteReviewRoute from "./pages/CustomerQuoteReviewRoute";
 import Login from "./pages/Login";
 import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
@@ -201,6 +202,7 @@ const assistantEnabledPages = new Set([
   "upload",
   "myRequests",
   "projectDetails",
+  "customerQuoteReview",
   "conversationThread",
   "messagesInbox",
   "notifications",
@@ -1039,6 +1041,14 @@ if (page === "conversation") {
 
 if (page === "projectDetails") {
   return withStartupChrome(withAssistantLayer(<ProjectDetails setPage={setPage} />, page, setPage), updateNotice);
+}
+
+if (page === "customerQuoteReview") {
+  return withStartupChrome(withAssistantLayer(
+    <CustomerQuoteReviewRoute setPage={setPage} />,
+    page,
+    setPage
+  ), updateNotice);
 }
 
 if (page === "contractors") {

@@ -52,6 +52,7 @@ export default function CustomerQuoteReviewPanel({
   selectedQuoteId,
   onSelectQuote,
   onCloseReview,
+  closeReviewLabel,
   onDecision,
   onReload,
 }) {
@@ -192,7 +193,7 @@ export default function CustomerQuoteReviewPanel({
       {quote && selectedSummary && (
         <article style={styles.detail} aria-labelledby="customer-quote-detail-title">
           <button type="button" style={styles.backButton} onClick={onCloseReview}>
-            {t("customerQuoteCloseReview", language)}
+            {closeReviewLabel || t("customerQuoteCloseReview", language)}
           </button>
 
           <div style={styles.detailHeader}>

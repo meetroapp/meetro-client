@@ -1,0 +1,155 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  createQuoteDeliveryIdempotencyKey,
+  fetchProfessionalQuoteDelivery,
+  normalizeProfessionalQuoteDelivery,
+  normalizeQuoteDeliveryEvidence,
+  sendProfessionalQuoteInMeetro,
+} from "../src/utils/quoteDeliveryApi.js";
+
+const QUOTE_ID = "decf3f61-acd2-4756-b5fa-8d610eb9b8d0";
+const JOB_ID = "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+
+function payload(overrides = {}) {
+  return {
+    success: true,
+    code: "PROFESSIONAL_QUOTE_DELIVERY_LOADED",
+    delivery: {
+      quoteId: QUOTE_ID,
+      jobId: JOB_ID,
+      expectedIssuedVersion: 3,
+      messageType: "QUOTE_SHARED",
+      snapshot: {
+        schemaVersion: 1,
+        quoteId: QUOTE_ID,
+        jobId: JOB_ID,
+        lineageLabel: "Original",
+        businessStatus: "APPROVED",
+        totalMinor: 92000,
+        currency: "USD",
+        scopeItems: [{ description: "Replace disposal", quantity: 1, amountMinor: 92000 }],
+        conditions: ["Valid for 30 days"],
+        exclusions: [{ description: "Permit fees", quantity: 1 }],
+        issuedAt: "2026-08-14T14:00:00.000Z",
+        decidedAt: "2026-08-14T16:00:00.000Z",
+        business: { displayName: "Handyman LLC" },
+        job: { title: "Kitchen repair", service: "handyman" },
+      },
+      actions: { canSendInMeetro: true },
+      conversation: { id: 17 },
+      ...overrides,
+    },
+  };
+}
+
+function evidence(overrides = {}) {
+  return {
+    success: true,
+    code: "QUOTE_SENT_IN_MEETRO",
+    delivery: {
+      messageId: 71,
+      conversationId: 17,
+      quoteId: QUOTE_ID,
+      jobId: JOB_ID,
+      messageType: "QUOTE_SHARED",
+      state: "SENT_IN_MEETRO",
+      sentAt: "2026-08-15T12:00:00.000Z",
+      replayed: false,
+      ...overrides,
+    },
+  };
+}
+
+test("strict professional delivery projection accepts only exact customer-safe truth", () => {
+  const delivery = normalizeProfessionalQuoteDelivery(payload(), {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  });
+  assert.equal(delivery.quoteId, QUOTE_ID);
+  assert.equal(delivery.jobId, JOB_ID);
+  assert.equal(delivery.expectedIssuedVersion, 3);
+  assert.equal(delivery.canSendInMeetro, true);
+  assert.equal(delivery.conversationId, 17);
+  assert.equal(delivery.snapshot.totalMinor, 92000);
+  assert.equal(JSON.stringify(delivery).includes("materialsSubtotalMinor"), false);
+
+  const leaking = payload();
+  leaking.delivery.snapshot.scopeItems[0].materialCostMinor = 41000;
+  assert.equal(normalizeProfessionalQuoteDelivery(leaking, {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  }), null);
+  assert.equal(normalizeProfessionalQuoteDelivery(payload({ quoteId: crypto.randomUUID() }), {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  }), null);
+});
+
+test("delivery read uses exact authenticated route and fails unsafe responses closed", async () => {
+  const calls = [];
+  const delivery = await fetchProfessionalQuoteDelivery({
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return { response: { ok: true, status: 200 }, data: payload() };
+    },
+  });
+  assert.equal(delivery.source, "PROFESSIONAL_QUOTE_DELIVERY");
+  assert.deepEqual(calls, [{
+    endpoint: `/professional/quotes/${QUOTE_ID}/delivery`,
+    options: { method: "GET", cache: "no-store" },
+  }]);
+
+  await assert.rejects(() => fetchProfessionalQuoteDelivery({
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+    authFetchImpl: async () => ({
+      response: { ok: true, status: 200 },
+      data: { ...payload(), internalNotes: "private" },
+    }),
+  }), { code: "UNSAFE_PROFESSIONAL_QUOTE_DELIVERY_RESPONSE" });
+});
+
+test("send command uses exact version and caller-owned retry key without optimistic authority", async () => {
+  const delivery = normalizeProfessionalQuoteDelivery(payload(), {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  });
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return { response: { ok: true, status: 201 }, data: evidence({ replayed: calls.length > 1 }) };
+  };
+  const key = createQuoteDeliveryIdempotencyKey(() => "11111111-1111-4111-8111-111111111111");
+  const first = await sendProfessionalQuoteInMeetro({ delivery, idempotencyKey: key, authFetchImpl });
+  const replay = await sendProfessionalQuoteInMeetro({ delivery, idempotencyKey: key, authFetchImpl });
+  assert.equal(first.messageId, replay.messageId);
+  assert.equal(replay.replayed, true);
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.endpoint, `/professional/quotes/${QUOTE_ID}/send-in-meetro`);
+    assert.equal(call.options.headers["Idempotency-Key"], key);
+    assert.deepEqual(JSON.parse(call.options.body), { expectedIssuedVersion: 3 });
+  }
+});
+
+test("delivery evidence requires exact Quote, Job, Conversation and canonical state", () => {
+  const expected = { quoteId: QUOTE_ID, jobId: JOB_ID, conversationId: 17 };
+  assert.equal(normalizeQuoteDeliveryEvidence(evidence(), expected).messageId, 71);
+  assert.equal(normalizeQuoteDeliveryEvidence(evidence({ conversationId: 18 }), expected), null);
+  assert.equal(normalizeQuoteDeliveryEvidence(evidence({ state: "DELIVERED" }), expected), null);
+});
+
+test("UI retains one retry key after ambiguity, blocks concurrent taps, and hides Draft delivery", () => {
+  const source = readFileSync("src/components/QuoteDeliveryActions.jsx", "utf8");
+  assert.match(source, /if \(!pendingKeyRef\.current\)[\s\S]*createQuoteDeliveryIdempotencyKey/);
+  assert.match(source, /await sendProfessionalQuoteInMeetro[\s\S]*pendingKeyRef\.current = ""/);
+  assert.match(source, /if \(sendPendingRef\.current \|\| pending \|\| sent \|\| !delivery\.canSendInMeetro\) return/);
+  assert.match(source, /sendPendingRef\.current = true[\s\S]*finally[\s\S]*sendPendingRef\.current = false/);
+  assert.match(source, /if \(quoteStatus !== "ISSUED"\) return null/);
+  assert.doesNotMatch(source, /workflow_quote_sent|localStorage|sessionStorage/);
+});
