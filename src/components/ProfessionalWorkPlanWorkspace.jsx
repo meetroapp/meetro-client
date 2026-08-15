@@ -137,10 +137,10 @@ export default function ProfessionalWorkPlanWorkspace({
 
       {summary && (
         <div style={styles.summary} aria-label={copy.workItems}>
-          <div><strong>{summary.workItemCount}</strong><span>{copy.workItems}</span></div>
-          <div><strong>{summary.completedCount}</strong><span>{copy.completed}</span></div>
-          <div><strong>{summary.remainingCount}</strong><span>{copy.remaining}</span></div>
-          <div><strong>{summary.needsAttentionCount}</strong><span>{copy.needsAttention}</span></div>
+          <div style={styles.metric}><strong>{summary.workItemCount}</strong><span>{copy.workItems}</span></div>
+          <div style={styles.metric}><strong>{summary.completedCount}</strong><span>{copy.completed}</span></div>
+          <div style={styles.metric}><strong>{summary.remainingCount}</strong><span>{copy.remaining}</span></div>
+          <div style={styles.metric}><strong>{summary.needsAttentionCount}</strong><span>{copy.needsAttention}</span></div>
         </div>
       )}
 
@@ -403,6 +403,7 @@ const styles = {
   purpose: { margin: "7px 0 0", color: "#475569", lineHeight: 1.5 },
   progressPill: { alignSelf: "flex-start", color: "#1f5132", fontWeight: 800, fontSize: 13 },
   summary: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 1, borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
+  metric: { display: "grid", gap: 3, minWidth: 0, padding: "10px 8px", overflowWrap: "anywhere" },
   workstream: { display: "grid", gap: 16, padding: "18px 0", borderBottom: "1px solid #cbd5e1", minWidth: 0 },
   workstreamHeader: { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" },
   workstreamHeading: { display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 },

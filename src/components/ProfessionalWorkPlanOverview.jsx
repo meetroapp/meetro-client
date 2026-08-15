@@ -46,10 +46,10 @@ export default function ProfessionalWorkPlanOverview({
 
       {summary && (
         <div style={styles.metrics}>
-          <div><strong>{summary.workItemCount}</strong><span>{copy.workItems}</span></div>
-          <div><strong>{summary.completedCount}</strong><span>{copy.completed}</span></div>
-          <div><strong>{summary.remainingCount}</strong><span>{copy.remaining}</span></div>
-          <div><strong>{summary.needsAttentionCount}</strong><span>{copy.needsAttention}</span></div>
+          <div style={styles.metric}><strong>{summary.workItemCount}</strong><span>{copy.workItems}</span></div>
+          <div style={styles.metric}><strong>{summary.completedCount}</strong><span>{copy.completed}</span></div>
+          <div style={styles.metric}><strong>{summary.remainingCount}</strong><span>{copy.remaining}</span></div>
+          <div style={styles.metric}><strong>{summary.needsAttentionCount}</strong><span>{copy.needsAttention}</span></div>
         </div>
       )}
 
@@ -97,6 +97,7 @@ const styles = {
   purpose: { margin: "7px 0 0", color: "#475569" },
   count: { alignSelf: "flex-start", color: "#1f5132", fontWeight: 850 },
   metrics: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
+  metric: { display: "grid", gap: 3, minWidth: 0, padding: "10px 8px", overflowWrap: "anywhere" },
   jobs: { display: "grid", gap: 0 },
   job: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", padding: "18px 0", borderBottom: "1px solid #d7dee8", minWidth: 0 },
   jobCopy: { minWidth: 0, flex: "1 1 260px" },
