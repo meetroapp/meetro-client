@@ -79,6 +79,7 @@ import {
   isNativeContactsAvailable,
 } from "../utils/nativeContacts";
 import { resolveRelationshipIdentity } from "../utils/relationshipIdentity";
+import { captureConversationOriginContext } from "../utils/conversationOrigin";
 import {
   getPersonalProfilePhotoForRecord,
   getScopedProfilePhoto,
@@ -2475,6 +2476,12 @@ function MessagesInbox({ setPage, currentPage }) {
       return;
     }
 
+    captureConversationOriginContext({
+      sourcePage: "messagesInbox",
+      workspace: "projectDetails",
+      viewerRole: "homeowner",
+    });
+    localStorage.setItem("projectDetailsReturnPage", "conversationThread");
     setPage("projectDetails");
   }
 

@@ -15,6 +15,10 @@ const conversationThreadSource = readFileSync(
   new URL("../src/pages/ConversationThread.jsx", import.meta.url),
   "utf8"
 );
+const messagesInboxSource = readFileSync(
+  new URL("../src/pages/MessagesInbox.jsx", import.meta.url),
+  "utf8"
+);
 const appSource = readFileSync(
   new URL("../src/App.jsx", import.meta.url),
   "utf8"
@@ -65,6 +69,10 @@ test("Conversation Continue Project preserves canonical identity and return cont
     /localStorage\.setItem\("projectDetailsReturnPage", "conversationThread"\)/
   );
   assert.match(conversationThreadSource, /setPage\("projectDetails"\)/);
+  assert.match(
+    messagesInboxSource,
+    /function openWorkspaceContextDetails\(conversation = \{\}\)[\s\S]*stageConversationForThread\(conversation\)[\s\S]*captureConversationOriginContext\(\{[\s\S]*sourcePage: "messagesInbox"[\s\S]*workspace: "projectDetails"[\s\S]*viewerRole: "homeowner"[\s\S]*projectDetailsReturnPage", "conversationThread"[\s\S]*setPage\("projectDetails"\)/
+  );
   assert.match(projectDetailsSource, /restoreConversationOriginContext\(setPage\)/);
 });
 

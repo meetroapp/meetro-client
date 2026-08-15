@@ -5,6 +5,14 @@ export const HOMEOWNER_REQUEST_MODIFICATION_MODE = Object.freeze({
   READ_ONLY: "READ_ONLY",
 });
 
+export const HOMEOWNER_REQUEST_MODIFICATION_ENTRY = Object.freeze({
+  EDIT_REQUEST: "EDIT_REQUEST",
+  APPEND_INFORMATION: "APPEND_INFORMATION",
+  CONTRACT_CHANGE_UNAVAILABLE: "CONTRACT_CHANGE_UNAVAILABLE",
+  READ_ONLY: "READ_ONLY",
+  UNAVAILABLE: "UNAVAILABLE",
+});
+
 const MODES = new Set(Object.values(HOMEOWNER_REQUEST_MODIFICATION_MODE));
 
 function positiveInteger(value) {
@@ -89,5 +97,56 @@ export function getHomeownerRequestModificationActions(authority) {
     contractChangeGuidance:
       authority.actions.contractChangeGuidance === true,
     readOnly: authority.actions.readOnly === true,
+  };
+}
+
+export function getHomeownerRequestModificationEntry(authority) {
+  if (!authority) {
+    return {
+      kind: HOMEOWNER_REQUEST_MODIFICATION_ENTRY.UNAVAILABLE,
+      actionable: false,
+      route: null,
+    };
+  }
+
+  const actions = getHomeownerRequestModificationActions(authority);
+  if (
+    authority.mode === HOMEOWNER_REQUEST_MODIFICATION_MODE.EDITABLE &&
+    actions.editRequest
+  ) {
+    return {
+      kind: HOMEOWNER_REQUEST_MODIFICATION_ENTRY.EDIT_REQUEST,
+      actionable: true,
+      route: "homeownerRequestDetails",
+    };
+  }
+
+  if (
+    authority.mode === HOMEOWNER_REQUEST_MODIFICATION_MODE.APPEND_ONLY &&
+    (actions.addUpdate || actions.addPhotos)
+  ) {
+    return {
+      kind: HOMEOWNER_REQUEST_MODIFICATION_ENTRY.APPEND_INFORMATION,
+      actionable: true,
+      route: "homeownerRequestDetails",
+    };
+  }
+
+  if (
+    authority.mode ===
+    HOMEOWNER_REQUEST_MODIFICATION_MODE.CONTRACT_CHANGE_REQUIRED
+  ) {
+    return {
+      kind:
+        HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE,
+      actionable: false,
+      route: null,
+    };
+  }
+
+  return {
+    kind: HOMEOWNER_REQUEST_MODIFICATION_ENTRY.READ_ONLY,
+    actionable: false,
+    route: null,
   };
 }

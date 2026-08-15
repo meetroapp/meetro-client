@@ -34,6 +34,10 @@ import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
 import { fetchHomeownerRequestModification } from "../utils/homeownerRequestModificationApi.js";
+import {
+  HOMEOWNER_REQUEST_MODIFICATION_ENTRY,
+  getHomeownerRequestModificationEntry,
+} from "../utils/homeownerRequestModificationPolicy.js";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
 import { fetchCustomerQuoteDetail } from "../utils/customerQuoteDetailApi.js";
 import { decideCustomerQuote } from "../utils/customerQuoteDecisionApi.js";
@@ -172,6 +176,14 @@ function ProjectDetails({ setPage }) {
     errorCode: "",
   });
   const [selectedCustomerQuoteId, setSelectedCustomerQuoteId] = useState("");
+  const [requestModificationState, setRequestModificationState] = useState({
+    status: "idle",
+    requestId: null,
+    jobId: "",
+    requestRelationshipId: "",
+    authority: null,
+    errorCode: "",
+  });
   const customerQuoteAutoOpenRef = useRef(false);
 
   const activeProjectData = getSelectedActiveProject();
@@ -201,6 +213,9 @@ function ProjectDetails({ setPage }) {
   const unavailableCopy = useMemo(
     () => getCompletionClosureUnavailableCopy(language),
     [language]
+  );
+  const requestModificationEntry = getHomeownerRequestModificationEntry(
+    requestModificationState.authority
   );
 
   const memoryStats = {
@@ -298,28 +313,27 @@ function ProjectDetails({ setPage }) {
     setPage("myRequests");
   }
 
-  function openRequestEdit() {
-    if (!post) return;
-
-    const requestId = post.requestId || post.id || "";
-    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
-    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
-    localStorage.setItem("meetroOpenHomeownerRequestEdit", "true");
-    setPage("myRequests");
-  }
-
-  function hasApprovedQuote(request = {}) {
-    const status = String(request.status || "").toLowerCase();
-    const quote = request.acceptedQuote ||
-      (Array.isArray(request.quotesReceived) ? request.quotesReceived[0] : null) ||
-      {};
-    const quoteStatus = String(quote.status || quote.quoteStatus || "").toLowerCase();
-
-    return Boolean(
-      request.acceptedQuote ||
-        ["accepted", "approved", "active", "completed", "closed"].includes(status) ||
-        ["accepted", "approved"].includes(quoteStatus)
+  function openRequestModification() {
+    const requestId = Number(post?.requestId || post?.id);
+    const authorityJobId = String(
+      requestModificationState.authority?.jobId || ""
     );
+
+    if (
+      !Number.isSafeInteger(requestId) ||
+      requestId < 1 ||
+      requestModificationState.status !== "confirmed" ||
+      requestModificationState.requestId !== requestId ||
+      !requestModificationEntry.actionable ||
+      requestModificationEntry.route !== "homeownerRequestDetails" ||
+      (authorityJobId && authorityJobId !== requestModificationState.jobId)
+    ) {
+      return;
+    }
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("myRequestsReturnPage", "projectDetails");
+    setPage(requestModificationEntry.route);
   }
 
   useEffect(() => {
@@ -448,6 +462,14 @@ if (data.post) {
     const requestId = Number(post.requestId || post.id);
     if (!Number.isSafeInteger(requestId) || requestId < 1) {
       queueMicrotask(() => {
+        setRequestModificationState({
+          status: "unavailable",
+          requestId: null,
+          jobId: "",
+          requestRelationshipId: "",
+          authority: null,
+          errorCode: "CUSTOMER_REQUEST_ID_UNAVAILABLE",
+        });
         setCustomerQuoteDiscovery({
           status: "unavailable",
           requestId: null,
@@ -462,6 +484,14 @@ if (data.post) {
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
+      setRequestModificationState({
+        status: "loading",
+        requestId,
+        jobId: "",
+        requestRelationshipId: "",
+        authority: null,
+        errorCode: "",
+      });
       setCustomerQuoteDiscovery({
         status: "loading",
         requestId,
@@ -474,16 +504,56 @@ if (data.post) {
     void fetchHomeownerRequestModification({ requestId, setPage })
       .then((result) => {
         if (!active) return null;
+        const lifecycleRequestId = Number(result?.lifecycle?.requestId);
         const jobId = String(result?.lifecycle?.job?.id || "").trim();
-        if (!result?.ok || !jobId) {
-          const error = new Error("Customer Job identity is unavailable.");
-          error.code = result?.code || "CUSTOMER_JOB_ID_UNAVAILABLE";
+        const authorityJobId = String(result?.authority?.jobId || "").trim();
+        if (
+          !result?.ok ||
+          lifecycleRequestId !== requestId ||
+          (authorityJobId && authorityJobId !== jobId)
+        ) {
+          const error = new Error("Request modification authority is unavailable.");
+          error.code = result?.code || "REQUEST_MODIFICATION_IDENTITY_MISMATCH";
           throw error;
         }
-        return fetchCustomerJobQuotes({ jobId, setPage }).then((quotes) => ({
+
+        setRequestModificationState({
+          status: "confirmed",
+          requestId,
           jobId,
-          quotes,
-        }));
+          requestRelationshipId: String(
+            result.lifecycle.job?.requestRelationshipId || ""
+          ).trim(),
+          authority: result.authority,
+          errorCode: "",
+        });
+
+        if (!jobId) {
+          const error = new Error("Customer Job identity is unavailable.");
+          error.code = "CUSTOMER_JOB_ID_UNAVAILABLE";
+          setCustomerQuoteDiscovery({
+            status: "unavailable",
+            requestId,
+            jobId: null,
+            quotes: null,
+            errorCode: error.code,
+          });
+          return null;
+        }
+
+        return fetchCustomerJobQuotes({ jobId, setPage })
+          .then((quotes) => ({ jobId, quotes }))
+          .catch((error) => {
+            if (!active) return null;
+            setCustomerQuoteDiscovery({
+              status: "unavailable",
+              requestId,
+              jobId,
+              quotes: null,
+              errorCode: String(error?.code || "CUSTOMER_JOB_QUOTES_FAILED"),
+            });
+            return null;
+          });
       })
       .then((result) => {
         if (!active || !result) return;
@@ -497,6 +567,16 @@ if (data.post) {
       })
       .catch((error) => {
         if (!active) return;
+        setRequestModificationState({
+          status: "unavailable",
+          requestId,
+          jobId: "",
+          requestRelationshipId: "",
+          authority: null,
+          errorCode: String(
+            error?.code || "REQUEST_MODIFICATION_AUTHORITY_UNAVAILABLE"
+          ),
+        });
         setCustomerQuoteDiscovery({
           status: "unavailable",
           requestId,
@@ -647,6 +727,17 @@ if (data.post) {
       data-customer-quote-detail-status={customerQuoteDetail.status}
       data-customer-quote-detail-id={customerQuoteDetail.quoteId || ""}
       data-customer-quote-detail-error={customerQuoteDetail.errorCode}
+      data-request-modification-status={requestModificationState.status}
+      data-request-modification-mode={
+        requestModificationState.authority?.mode || ""
+      }
+      data-request-modification-request-id={
+        requestModificationState.requestId || ""
+      }
+      data-request-modification-job-id={requestModificationState.jobId}
+      data-request-modification-relationship-id={
+        requestModificationState.requestRelationshipId
+      }
       style={pageWrapper}
     >
       <div style={contentWrapper}>
@@ -920,23 +1011,48 @@ if (data.post) {
                     </div>
                   </div>
 
-                  {!isProfessionalProject && !isBusinessLeadReviewPage && (
+                  {!isProfessionalProject &&
+                    !isBusinessLeadReviewPage &&
+                    (requestModificationState.status === "loading" ||
+                      requestModificationState.status === "unavailable" ||
+                      requestModificationEntry.actionable ||
+                      requestModificationEntry.kind ===
+                        HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE) && (
                     <div style={requestDetailsActionWrap}>
-                      <button
-                        type="button"
-                        style={{
-                          ...requestDetailsActionButton,
-                          ...(hasApprovedQuote(post)
-                            ? requestDetailsActionButtonDisabled
-                            : {}),
-                        }}
-                        disabled={hasApprovedQuote(post)}
-                        onClick={openRequestEdit}
-                      >
-                        {hasApprovedQuote(post)
-                          ? t("requestChange", language)
-                          : t("editRequest", language)}
-                      </button>
+                      {requestModificationState.status === "loading" && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          Checking available request actions…
+                        </p>
+                      )}
+                      {requestModificationState.status === "unavailable" && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          Request changes are unavailable until Meetro confirms
+                          the current request authority.
+                        </p>
+                      )}
+                      {requestModificationEntry.actionable && (
+                        <button
+                          type="button"
+                          style={requestDetailsActionButton}
+                          data-request-modification-kind={
+                            requestModificationEntry.kind
+                          }
+                          onClick={openRequestModification}
+                        >
+                          {requestModificationEntry.kind ===
+                          HOMEOWNER_REQUEST_MODIFICATION_ENTRY.EDIT_REQUEST
+                            ? t("editRequest", language)
+                            : t("requestChange", language)}
+                        </button>
+                      )}
+                      {requestModificationEntry.kind ===
+                        HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          Changes to agreed work need a governed contract change.
+                          That customer action is not available here yet; the
+                          original request remains unchanged.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2242,6 +2358,7 @@ const requestDetailsActionWrap = {
 
 const requestDetailsActionButton = {
   width: "100%",
+  minHeight: "44px",
   border: "1px solid #ddd6fe",
   borderRadius: "15px",
   padding: "12px 14px",
@@ -2252,11 +2369,12 @@ const requestDetailsActionButton = {
   cursor: "pointer",
 };
 
-const requestDetailsActionButtonDisabled = {
-  background: "#f8fafc",
-  borderColor: "#e2e8f0",
+const requestDetailsAuthorityNotice = {
+  margin: 0,
   color: "#64748b",
-  cursor: "not-allowed",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.5,
 };
 
 const projectInformationRow = {
