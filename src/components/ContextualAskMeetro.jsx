@@ -13,6 +13,7 @@ export default function ContextualAskMeetro({
   error = "",
   notice = "",
   onRequest,
+  mediaControls,
   children,
   defaultOpen = false,
   setPage,
@@ -86,6 +87,8 @@ export default function ContextualAskMeetro({
         ))}
       </div>
 
+      {mediaControls ? <div style={styles.mediaControls}>{mediaControls}</div> : null}
+
       <label style={styles.label}>
         {copy.promptLabel}
         <textarea
@@ -134,6 +137,11 @@ const styles = {
   actionGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
   action: { minHeight: 44, padding: "0 13px", border: "1px solid #a9b7ad", borderRadius: 6, background: "#fff", color: "#263b2d", fontWeight: 750, cursor: "pointer" },
   actionSelected: { borderColor: "#1f6a3a", background: "#e9f4ec", color: "#174b2c" },
+  mediaControls: {
+    display: "grid",
+    gap: 8,
+    marginTop: 6,
+  },
   label: { display: "grid", gap: 6, minWidth: 0, color: "#314239", fontWeight: 700 },
   textarea: { width: "100%", minWidth: 0, minHeight: 92, boxSizing: "border-box", padding: 10, border: "1px solid #93a59a", borderRadius: 6, background: "#fff", color: "#172317", font: "inherit", lineHeight: 1.45, resize: "vertical" },
   primary: { minHeight: 44, justifySelf: "start", padding: "0 16px", border: "1px solid #1f5132", borderRadius: 6, background: "#1f5132", color: "#fff", fontWeight: 800, cursor: "pointer" },
