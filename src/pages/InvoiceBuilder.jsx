@@ -15,6 +15,13 @@ import {
   CONVERSATION_ACTION_STAGE,
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { buildQuickInvoiceDocumentModel } from "../utils/customerDocumentModel";
+import {
+  downloadCustomerDocumentPdf,
+  getCustomerDocumentActionCopy,
+  shareCustomerDocumentPdf,
+} from "../utils/customerDocumentPdf";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -358,6 +365,34 @@ function InvoiceBuilder({ setPage }) {
       warrantyNotes,
       customerMessage,
     };
+  }
+
+  function buildQuickInvoicePdfModel() {
+    return buildQuickInvoiceDocumentModel(buildInvoicePayload(), {
+      locale: language,
+      branding: getBusinessIdentityProjection({}, {
+        fallbackName: "Meetro Professional",
+      }),
+    });
+  }
+
+  async function exportQuickInvoicePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    setStatusMessage(
+      await downloadCustomerDocumentPdf(buildQuickInvoicePdfModel())
+        ? copy.pdfReady
+        : copy.pdfUnavailable
+    );
+  }
+
+  async function shareQuickInvoicePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const result = await shareCustomerDocumentPdf({
+      model: buildQuickInvoicePdfModel(),
+      message: buildInvoiceSummary(),
+    });
+    if (!result.ok && result.method !== "cancelled") setStatusMessage(copy.pdfUnavailable);
+    if (result.ok) setStatusMessage(copy.pdfReady);
   }
 
   function buildInvoiceSummary() {
@@ -767,6 +802,12 @@ ${invoice.customerMessage || "—"}`;
           </button>
           <button style={secondaryBtn} onClick={printInvoice}>
             {invoiceCopy.printInvoice}
+          </button>
+          <button style={secondaryBtn} onClick={() => void exportQuickInvoicePdf()}>
+            {getCustomerDocumentActionCopy(language).exportPdf}
+          </button>
+          <button style={secondaryBtn} onClick={() => void shareQuickInvoicePdf()}>
+            {getCustomerDocumentActionCopy(language).sharePdf}
           </button>
         </div>
 
@@ -1327,6 +1368,7 @@ const actionsGrid = {
 };
 
 const secondaryBtn = {
+  minHeight: "44px",
   width: "100%",
   padding: "14px",
   borderRadius: "16px",

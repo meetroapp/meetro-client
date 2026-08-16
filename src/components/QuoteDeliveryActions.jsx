@@ -8,15 +8,18 @@ import {
 import {
   buildQuoteEmailUrl,
   copyQuoteDetails,
+  downloadQuotePdf,
   shareQuoteExternally,
 } from "../utils/quoteDeliveryShare.js";
 import { getCanonicalWorkCenterConversationActionTarget } from "../utils/conversationActionRouting.js";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import { t } from "../utils/language.js";
 
 export default function QuoteDeliveryActions({
   quoteId,
   jobId,
   quoteStatus,
+  quoteContext,
   language,
   setPage,
 }) {
@@ -65,6 +68,9 @@ export default function QuoteDeliveryActions({
   }
 
   const delivery = state.delivery;
+  const branding = getBusinessIdentityProjection({}, {
+    fallbackName: delivery.snapshot.business.displayName,
+  });
   const pending = sendState.status === "sending";
   const sent = sendState.status === "sent";
 
@@ -106,9 +112,9 @@ export default function QuoteDeliveryActions({
   async function handleSystemShare() {
     setShareNotice("");
     try {
-      const result = await shareQuoteExternally({ delivery, language });
-      if (result.method === "copy") {
-        setShareNotice(t("quoteDeliveryCopied", language));
+      const result = await shareQuoteExternally({ delivery, language, quoteContext, branding });
+      if (result.method === "download") {
+        setShareNotice(t("quoteDeliveryPdfReady", language));
       } else if (!result.ok && result.method !== "cancelled") {
         setShareNotice(t("quoteDeliveryShareUnavailable", language));
       }
@@ -130,9 +136,11 @@ export default function QuoteDeliveryActions({
     }
   }
 
-  function handleEmail() {
+  async function handleEmail() {
+    const downloaded = await downloadQuotePdf({ delivery, language, quoteContext, branding });
     const url = buildQuoteEmailUrl(delivery, { language });
-    if (url) window.location.href = url;
+    if (downloaded && url) window.location.href = url;
+    if (!downloaded) setShareNotice(t("quoteDeliveryShareUnavailable", language));
   }
 
   return (
@@ -182,7 +190,7 @@ export default function QuoteDeliveryActions({
           <button type="button" style={styles.menuButton} onClick={handleSystemShare}>
             {t("quoteDeliverySystemShare", language)}
           </button>
-          <button type="button" style={styles.menuButton} onClick={handleEmail}>
+          <button type="button" style={styles.menuButton} onClick={() => void handleEmail()}>
             {t("quoteDeliveryEmail", language)}
           </button>
           <button type="button" style={styles.menuButton} onClick={handleCopy}>

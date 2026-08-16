@@ -38,30 +38,20 @@ test("external presentation is informational, customer-safe, localized, and has 
   }
 });
 
-test("iOS uses Capacitor Share and desktop uses web share before safe copy fallback", async () => {
+test("Quote sharing always delegates an actual PDF model with text only as accompaniment", async () => {
   const calls = [];
-  assert.deepEqual(await shareQuoteExternally({
+  const result = await shareQuoteExternally({
     delivery: delivery(),
-    platform: "ios",
-    nativeShare: async (payload) => calls.push(["native", payload]),
-    webShare: async () => calls.push(["web"]),
-  }), { ok: true, method: "native" });
-  assert.equal(calls[0][0], "native");
-
-  assert.deepEqual(await shareQuoteExternally({
-    delivery: delivery(),
-    platform: "web",
-    nativeShare: null,
-    webShare: async (payload) => calls.push(["web", payload]),
-  }), { ok: true, method: "web" });
-
-  assert.deepEqual(await shareQuoteExternally({
-    delivery: delivery(),
-    platform: "web",
-    nativeShare: null,
-    webShare: null,
-    copy: async (text) => calls.push(["copy", text]),
-  }), { ok: true, method: "copy" });
+    sharePdf: async (payload) => {
+      calls.push(payload);
+      return { ok: true, method: "web-pdf" };
+    },
+  });
+  assert.deepEqual(result, { ok: true, method: "web-pdf" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].model.kind, "QUOTE");
+  assert.match(calls[0].message, /Handyman LLC/);
+  assert.doesNotMatch(calls[0].message, /data:application\/pdf/);
 });
 
 test("email and copy contain safe details but no public Quote link", async () => {

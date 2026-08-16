@@ -23,6 +23,12 @@ import {
   requestWorkflowIntelligence,
 } from "../utils/contextualIntelligence";
 import { applyConfirmedQuoteComposition } from "../utils/canonicalQuoteDraftCommands";
+import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
+import {
+  downloadCustomerDocumentPdf,
+  getCustomerDocumentActionCopy,
+  shareCustomerDocumentPdf,
+} from "../utils/customerDocumentPdf";
 
 function safeJson(value, fallback = null) {
   try {
@@ -1260,6 +1266,67 @@ ${terms || "—"}
 ${businessIdentity.businessName}`;
   };
 
+  function buildQuickQuotePdfModel() {
+    const pricing = getCurrentPricingPayload();
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Meetro Professional",
+    });
+    return buildQuickQuoteDocumentModel({
+      quoteNumber,
+      quoteDate,
+      customerName,
+      customerLocation,
+      projectTitle,
+      problemFound,
+      recommendedSolution,
+      lineItems: [
+        ...pricing.quoteLineItems.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+        })),
+        ...pricing.materialItems.map((item) => ({
+          description: item.name,
+          quantity: item.quantity,
+          unitPrice: item.cost,
+          total: item.total,
+        })),
+        ...pricing.laborItems.map((item) => ({
+          description: item.description,
+          quantity: item.hours,
+          unitPrice: item.rate,
+          total: item.total,
+        })),
+      ].filter((item) => cleanText(item.description)),
+      subtotal: pricing.subtotal,
+      discount: pricing.discountAmount,
+      tax: pricing.taxAmount,
+      fees: pricing.feesAmount,
+      total: pricing.totalAmount,
+      paymentTerms: terms,
+      estimatedDuration: estimatedDuration || timeline,
+      notes,
+      currency: "USD",
+    }, { locale: language, branding: businessIdentity });
+  }
+
+  async function exportQuickQuotePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const exported = await downloadCustomerDocumentPdf(buildQuickQuotePdfModel());
+    setCopiedNotice(exported ? copy.pdfReady : copy.pdfUnavailable);
+  }
+
+  async function shareQuickQuotePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const result = await shareCustomerDocumentPdf({
+      model: buildQuickQuotePdfModel(),
+      message: buildQuoteShareText(),
+    });
+    if (!result.ok && result.method !== "cancelled") setCopiedNotice(copy.pdfUnavailable);
+    if (result.ok) setCopiedNotice(copy.pdfReady);
+  }
+
   async function copyQuoteSummary() {
     const summary = buildQuoteShareText();
 
@@ -2023,6 +2090,12 @@ ${businessIdentity.businessName}`;
             <button style={secondaryActionButton} onClick={copyQuoteSummary}>
               {isSpanish ? "Copiar resumen" : "Copy Summary"}
             </button>
+            <button style={secondaryActionButton} onClick={() => void exportQuickQuotePdf()}>
+              {getCustomerDocumentActionCopy(language).exportPdf}
+            </button>
+            <button style={secondaryActionButton} onClick={() => void shareQuickQuotePdf()}>
+              {getCustomerDocumentActionCopy(language).sharePdf}
+            </button>
           </div>
 
           {copiedNotice && <p style={externalShareHint}>{copiedNotice}</p>}
@@ -2525,6 +2598,7 @@ const inlineActionGrid = {
 };
 
 const secondaryActionButton = {
+  minHeight: "44px",
   border: "1px solid rgba(31,77,52,0.22)",
   background: "#ffffff",
   color: "var(--meetro-color-forest, #1f4d34)",

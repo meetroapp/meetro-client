@@ -34,13 +34,18 @@ test("external Invoice presentation contains confirmed truth and no public link"
   assert.doesNotMatch(presentation.text, /https?:|token|hash|margin|cost/i);
   assert.equal(buildInvoiceSharePresentation(invoice({ status: "DRAFT" })), null);
 });
-test("iOS uses native Share and desktop falls through web then copy", async () => {
-  const native = [];
-  assert.equal((await shareInvoiceExternally({ invoice: invoice(), platform: "ios", nativeShare: async (value) => native.push(value), webShare: null, copy: null })).method, "native");
-  assert.equal(native.length, 1);
-  const web = [];
-  assert.equal((await shareInvoiceExternally({ invoice: invoice(), platform: "web", nativeShare: null, webShare: async (value) => web.push(value), copy: null })).method, "web");
-  assert.equal(web.length, 1);
+test("Invoice sharing always delegates an actual PDF model", async () => {
+  const shared = [];
+  assert.equal((await shareInvoiceExternally({
+    invoice: invoice(),
+    sharePdf: async (value) => {
+      shared.push(value);
+      return { ok: true, method: "web-pdf" };
+    },
+  })).method, "web-pdf");
+  assert.equal(shared.length, 1);
+  assert.equal(shared[0].model.kind, "INVOICE");
+  assert.match(shared[0].message, /INV-111111111111/);
   const copied = [];
   assert.equal(await copyInvoiceDetails({ invoice: invoice(), copy: async (value) => copied.push(value) }), true);
   assert.equal(copied.length, 1);

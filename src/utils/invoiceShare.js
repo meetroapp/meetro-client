@@ -1,6 +1,8 @@
-import { Capacitor } from "@capacitor/core";
-import { Share } from "@capacitor/share";
-
+import { buildCanonicalInvoiceDocumentModel } from "./customerDocumentModel.js";
+import {
+  downloadCustomerDocumentPdf,
+  shareCustomerDocumentPdf,
+} from "./customerDocumentPdf.js";
 import { formatLocaleCurrency } from "./localeFormat.js";
 import { getInvoiceCopy } from "./invoicePaymentLanguage.js";
 
@@ -38,31 +40,23 @@ function cancelled(error) {
 export async function shareInvoiceExternally({
   invoice,
   language = "en",
-  platform = Capacitor.getPlatform(),
-  nativeShare = (payload) => Share.share(payload),
-  webShare = globalThis.navigator?.share?.bind(globalThis.navigator),
-  copy = globalThis.navigator?.clipboard?.writeText?.bind(globalThis.navigator?.clipboard),
+  branding = {},
+  sharePdf = shareCustomerDocumentPdf,
 } = {}) {
   const presentation = buildInvoiceSharePresentation(invoice, { language });
-  if (!presentation) return { ok: false, method: "unavailable" };
+  const model = buildCanonicalInvoiceDocumentModel(invoice, { locale: language, branding });
+  if (!presentation || !model) return { ok: false, method: "unavailable" };
   try {
-    if (platform === "ios" && typeof nativeShare === "function") {
-      await nativeShare({ ...presentation, dialogTitle: presentation.title });
-      return { ok: true, method: "native" };
-    }
-    if (typeof webShare === "function") {
-      await webShare(presentation);
-      return { ok: true, method: "web" };
-    }
-    if (typeof copy === "function") {
-      await copy(presentation.text);
-      return { ok: true, method: "copy" };
-    }
+    return await sharePdf({ model, message: presentation.text });
   } catch (error) {
     if (cancelled(error)) return { ok: false, method: "cancelled" };
     throw error;
   }
-  return { ok: false, method: "unavailable" };
+}
+
+export async function downloadInvoicePdf({ invoice, language = "en", branding = {}, download = downloadCustomerDocumentPdf } = {}) {
+  const model = buildCanonicalInvoiceDocumentModel(invoice, { locale: language, branding });
+  return Boolean(model && await download(model));
 }
 
 export async function copyInvoiceDetails({

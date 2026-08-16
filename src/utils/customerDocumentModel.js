@@ -1,0 +1,344 @@
+const SUPPORTED_LANGUAGES = new Set(["en", "es", "fr", "pt-BR"]);
+
+function language(value) {
+  return SUPPORTED_LANGUAGES.has(value) ? value : "en";
+}
+
+function text(value, maximum = 4000) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized ? normalized.slice(0, maximum) : "";
+}
+
+function optionalText(value, maximum = 4000) {
+  return text(value, maximum) || null;
+}
+
+function minor(value, { allowZero = true } = {}) {
+  const amount = Number(value);
+  return Number.isSafeInteger(amount) && amount >= (allowZero ? 0 : 1)
+    ? amount
+    : null;
+}
+
+function majorToMinor(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0
+    ? Math.round(amount * 100)
+    : 0;
+}
+
+function currency(value) {
+  const normalized = text(value, 3).toUpperCase();
+  return /^[A-Z]{3}$/.test(normalized) ? normalized : "USD";
+}
+
+function date(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : value.trim();
+}
+
+function list(values, maximum = 200) {
+  return Array.isArray(values)
+    ? values.map((value) => text(value, maximum)).filter(Boolean)
+    : [];
+}
+
+function safeLogoUrl(value) {
+  const normalized = text(value, 2000);
+  if (/^data:image\/(?:png|jpeg);base64,[a-z0-9+/=]+$/i.test(normalized)) {
+    return normalized;
+  }
+  try {
+    const url = new URL(normalized);
+    return url.protocol === "https:" && url.hostname === "res.cloudinary.com"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildCustomerSafeBusinessBranding(source = {}, fallbackName = "Meetro Professional") {
+  const name = text(
+    source.displayName || source.businessName || source.business_name || source.name,
+    200
+  ) || fallbackName;
+  const city = text(source.city || source.businessCity, 120);
+  const state = text(source.state || source.stateProvince || source.state_province, 120);
+  const region = text(
+    source.serviceArea || source.service_area || source.location || [city, state].filter(Boolean).join(", "),
+    240
+  );
+  return Object.freeze({
+    name,
+    logoUrl: safeLogoUrl(
+      source.logo || source.logoUrl || source.logo_url || source.imageUrl || source.image_url
+    ),
+    phone: optionalText(source.phone || source.businessPhone || source.business_phone, 80),
+    email: optionalText(source.email || source.businessEmail || source.business_email, 200),
+    website: optionalText(source.website || source.businessWebsite || source.business_website, 240),
+    region: region || null,
+  });
+}
+
+function customer(source = {}) {
+  return Object.freeze({
+    name: optionalText(source.displayName || source.name || source.customerName, 200),
+    phone: optionalText(source.phone || source.customerPhone, 80),
+    email: optionalText(source.email || source.customerEmail, 200),
+    address: optionalText(source.address || source.serviceAddress || source.location, 500),
+  });
+}
+
+function lineItem({ description, quantity = 1, unitAmountMinor = null, lineTotalMinor }) {
+  const safeDescription = text(description, 1200);
+  const safeQuantity = Number(quantity);
+  const safeTotal = minor(lineTotalMinor);
+  const safeUnit = unitAmountMinor == null ? null : minor(unitAmountMinor);
+  if (!safeDescription || !Number.isFinite(safeQuantity) || safeQuantity <= 0 || safeTotal == null) {
+    return null;
+  }
+  return Object.freeze({
+    description: safeDescription,
+    quantity: safeQuantity,
+    unitAmountMinor: safeUnit,
+    lineTotalMinor: safeTotal,
+  });
+}
+
+function model({
+  kind,
+  draft,
+  locale,
+  branding,
+  documentNumber,
+  documentDate,
+  dueDate,
+  status,
+  customerDetails,
+  projectTitle,
+  projectLocation,
+  lineItems,
+  scopeSummary,
+  subtotalMinor,
+  discountMinor,
+  taxMinor,
+  feesMinor,
+  totalMinor,
+  paidMinor,
+  balanceMinor,
+  paymentTerms,
+  estimatedDuration,
+  conditions,
+  exclusions,
+  notes,
+  warrantyNotes,
+  customerMessage,
+  acceptance,
+  currencyCode,
+}) {
+  return Object.freeze({
+    schemaVersion: 1,
+    kind,
+    draft: draft === true,
+    locale: language(locale),
+    currency: currency(currencyCode),
+    branding,
+    documentNumber: optionalText(documentNumber, 120),
+    documentDate: date(documentDate),
+    dueDate: date(dueDate),
+    status: optionalText(status, 120),
+    customer: customerDetails,
+    projectTitle: optionalText(projectTitle, 300),
+    projectLocation: optionalText(projectLocation, 500),
+    lineItems: Object.freeze(lineItems.filter(Boolean)),
+    scopeSummary: optionalText(scopeSummary, 8000),
+    subtotalMinor: minor(subtotalMinor),
+    discountMinor: minor(discountMinor),
+    taxMinor: minor(taxMinor),
+    feesMinor: minor(feesMinor),
+    totalMinor: minor(totalMinor) ?? 0,
+    paidMinor: paidMinor == null ? null : minor(paidMinor),
+    balanceMinor: balanceMinor == null ? null : minor(balanceMinor),
+    paymentTerms: optionalText(paymentTerms, 5000),
+    estimatedDuration: optionalText(estimatedDuration, 1000),
+    conditions: Object.freeze(list(conditions, 3000)),
+    exclusions: Object.freeze(list(exclusions, 3000)),
+    notes: optionalText(notes, 5000),
+    warrantyNotes: optionalText(warrantyNotes, 3000),
+    customerMessage: optionalText(customerMessage, 3000),
+    acceptance: optionalText(acceptance, 500),
+  });
+}
+
+export function buildCanonicalQuoteDocumentModel(
+  delivery,
+  { locale = "en", branding = {}, quoteContext = {} } = {}
+) {
+  if (
+    delivery?.source !== "PROFESSIONAL_QUOTE_DELIVERY" ||
+    delivery.snapshot?.quoteId !== delivery.quoteId ||
+    delivery.snapshot?.jobId !== delivery.jobId
+  ) return null;
+  const snapshot = delivery.snapshot;
+  const lines = snapshot.scopeItems.map((item) => lineItem({
+    description: item.description,
+    quantity: item.quantity,
+    unitAmountMinor: Number.isInteger(item.amountMinor / item.quantity)
+      ? item.amountMinor / item.quantity
+      : null,
+    lineTotalMinor: item.amountMinor,
+  }));
+  if (lines.some((item) => !item)) return null;
+  return model({
+    kind: "QUOTE",
+    draft: false,
+    locale,
+    branding: buildCustomerSafeBusinessBranding(
+      { ...branding, displayName: snapshot.business.displayName },
+      snapshot.business.displayName
+    ),
+    documentNumber: snapshot.lineageLabel,
+    documentDate: snapshot.issuedAt,
+    status: snapshot.businessStatus,
+    customerDetails: customer(quoteContext.customer || {}),
+    projectTitle: quoteContext.job?.title || snapshot.job?.title,
+    projectLocation: quoteContext.job?.location,
+    lineItems: lines,
+    subtotalMinor: snapshot.totalMinor,
+    totalMinor: snapshot.totalMinor,
+    paymentTerms: quoteContext.paymentTerms,
+    estimatedDuration: quoteContext.estimatedDuration,
+    conditions: snapshot.conditions || [],
+    exclusions: (snapshot.exclusions || []).map((item) => item.description),
+    acceptance: snapshot.businessStatus === "APPROVED"
+      ? "APPROVED"
+      : snapshot.businessStatus === "DECLINED"
+        ? "DECLINED"
+        : "AWAITING_CUSTOMER_DECISION",
+    currencyCode: snapshot.currency,
+  });
+}
+
+export function buildCanonicalInvoiceDocumentModel(
+  invoice,
+  { locale = "en", branding = {} } = {}
+) {
+  if (!invoice?.invoiceId || !Array.isArray(invoice.lineItems)) return null;
+  const lines = invoice.lineItems.map((item) => lineItem({
+    description: item.description,
+    quantity: item.quantity,
+    unitAmountMinor: item.unitAmountMinor,
+    lineTotalMinor: item.lineTotalMinor,
+  }));
+  if (lines.some((item) => !item)) return null;
+  return model({
+    kind: "INVOICE",
+    draft: invoice.status === "DRAFT",
+    locale,
+    branding: buildCustomerSafeBusinessBranding(
+      { ...branding, displayName: invoice.business?.displayName },
+      invoice.business?.displayName || "Meetro Professional"
+    ),
+    documentNumber: invoice.invoiceNumber,
+    documentDate: invoice.invoiceDate,
+    dueDate: invoice.due?.mode === "SPECIFIC_DATE" ? invoice.due.date : null,
+    status: invoice.status,
+    customerDetails: customer(invoice.customer || {}),
+    projectTitle: invoice.job?.title || invoice.job?.service,
+    lineItems: lines,
+    scopeSummary: invoice.job?.service,
+    subtotalMinor: invoice.subtotalMinor,
+    totalMinor: invoice.totalMinor,
+    paidMinor: invoice.paidMinor,
+    balanceMinor: invoice.balanceMinor,
+    paymentTerms: invoice.terms || (invoice.due?.mode === "DUE_ON_RECEIPT" ? "DUE_ON_RECEIPT" : null),
+    notes: invoice.customerNotes,
+    acceptance: invoice.status,
+    currencyCode: invoice.currency,
+  });
+}
+
+export function buildQuickQuoteDocumentModel(
+  draft,
+  { locale = "en", branding = {} } = {}
+) {
+  const safeCurrency = currency(draft?.currency || "USD");
+  const lines = Array.isArray(draft?.lineItems)
+    ? draft.lineItems.map((item) => lineItem({
+        description: item.description,
+        quantity: Number(item.quantity) || 1,
+        unitAmountMinor: majorToMinor(item.unitPrice),
+        lineTotalMinor: majorToMinor(item.total),
+      }))
+    : [];
+  return model({
+    kind: "QUOTE",
+    draft: true,
+    locale,
+    branding: buildCustomerSafeBusinessBranding(branding),
+    documentNumber: draft?.quoteNumber,
+    documentDate: draft?.quoteDate,
+    status: "DRAFT_PREVIEW",
+    customerDetails: customer(draft || {}),
+    projectTitle: draft?.projectTitle,
+    projectLocation: draft?.customerLocation,
+    lineItems: lines,
+    scopeSummary: draft?.recommendedSolution || draft?.customerRequest || draft?.problemFound,
+    subtotalMinor: majorToMinor(draft?.subtotal),
+    discountMinor: majorToMinor(draft?.discount),
+    taxMinor: majorToMinor(draft?.tax),
+    feesMinor: majorToMinor(draft?.fees),
+    totalMinor: majorToMinor(draft?.total),
+    paymentTerms: draft?.paymentTerms || draft?.terms,
+    estimatedDuration: draft?.estimatedDuration || draft?.timeline,
+    conditions: draft?.conditions || [],
+    exclusions: draft?.exclusions || [],
+    notes: draft?.notes,
+    acceptance: "DRAFT_PREVIEW_NOT_ISSUED",
+    currencyCode: safeCurrency,
+  });
+}
+
+export function buildQuickInvoiceDocumentModel(
+  draft,
+  { locale = "en", branding = {} } = {}
+) {
+  const lines = Array.isArray(draft?.lineItems)
+    ? draft.lineItems.map((item) => lineItem({
+        description: item.description,
+        quantity: Number(item.quantity) || 1,
+        unitAmountMinor: majorToMinor(item.unitPrice),
+        lineTotalMinor: majorToMinor(item.amount),
+      }))
+    : [];
+  return model({
+    kind: "INVOICE",
+    draft: true,
+    locale,
+    branding: buildCustomerSafeBusinessBranding(branding),
+    documentNumber: draft?.invoiceNumber,
+    documentDate: draft?.invoiceDate,
+    dueDate: draft?.dueDate,
+    status: "DRAFT_PREVIEW",
+    customerDetails: customer(draft || {}),
+    projectTitle: draft?.serviceDescription || draft?.service,
+    projectLocation: draft?.serviceAddress,
+    lineItems: lines,
+    scopeSummary: draft?.workPerformed,
+    subtotalMinor: majorToMinor(draft?.subtotal),
+    discountMinor: majorToMinor(draft?.discount),
+    taxMinor: majorToMinor(draft?.tax),
+    feesMinor: majorToMinor(draft?.serviceFee) + majorToMinor(draft?.otherCharges),
+    totalMinor: majorToMinor(draft?.total),
+    paidMinor: 0,
+    balanceMinor: majorToMinor(draft?.total),
+    paymentTerms: draft?.paymentTerms,
+    notes: draft?.notes,
+    warrantyNotes: draft?.warrantyNotes,
+    customerMessage: draft?.customerMessage,
+    acceptance: "DRAFT_PREVIEW_NOT_RECORDED",
+    currencyCode: draft?.currency || "USD",
+  });
+}

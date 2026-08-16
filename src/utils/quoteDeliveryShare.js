@@ -1,6 +1,8 @@
-import { Capacitor } from "@capacitor/core";
-import { Share } from "@capacitor/share";
-
+import { buildCanonicalQuoteDocumentModel } from "./customerDocumentModel.js";
+import {
+  downloadCustomerDocumentPdf,
+  shareCustomerDocumentPdf,
+} from "./customerDocumentPdf.js";
 import { formatLocaleCurrency } from "./localeFormat.js";
 import { t } from "./language.js";
 
@@ -65,37 +67,32 @@ function cancelled(error) {
 export async function shareQuoteExternally({
   delivery,
   language = "en",
-  platform = Capacitor.getPlatform(),
-  nativeShare = (payload) => Share.share(payload),
-  webShare = globalThis.navigator?.share?.bind(globalThis.navigator),
-  copy = globalThis.navigator?.clipboard?.writeText?.bind(
-    globalThis.navigator?.clipboard
-  ),
+  quoteContext = {},
+  branding = {},
+  sharePdf = shareCustomerDocumentPdf,
 } = {}) {
   const presentation = buildQuoteSharePresentation(delivery, { language });
-  if (!presentation) return { ok: false, method: "unavailable" };
+  const model = buildCanonicalQuoteDocumentModel(delivery, {
+    locale: language,
+    quoteContext,
+    branding,
+  });
+  if (!presentation || !model) return { ok: false, method: "unavailable" };
   try {
-    if (platform === "ios" && typeof nativeShare === "function") {
-      await nativeShare({
-        title: presentation.title,
-        text: presentation.text,
-        dialogTitle: presentation.title,
-      });
-      return { ok: true, method: "native" };
-    }
-    if (typeof webShare === "function") {
-      await webShare(presentation);
-      return { ok: true, method: "web" };
-    }
-    if (typeof copy === "function") {
-      await copy(presentation.text);
-      return { ok: true, method: "copy" };
-    }
+    return await sharePdf({ model, message: presentation.text });
   } catch (error) {
     if (cancelled(error)) return { ok: false, method: "cancelled" };
     throw error;
   }
-  return { ok: false, method: "unavailable" };
+}
+
+export async function downloadQuotePdf({ delivery, language = "en", quoteContext = {}, branding = {}, download = downloadCustomerDocumentPdf } = {}) {
+  const model = buildCanonicalQuoteDocumentModel(delivery, {
+    locale: language,
+    quoteContext,
+    branding,
+  });
+  return Boolean(model && await download(model));
 }
 
 export async function copyQuoteDetails({

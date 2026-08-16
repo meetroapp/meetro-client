@@ -25,9 +25,11 @@ import {
   requestWorkflowIntelligence,
 } from "../utils/contextualIntelligence.js";
 import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
   buildInvoiceEmailUrl,
   copyInvoiceDetails,
+  downloadInvoicePdf,
   shareInvoiceExternally,
 } from "../utils/invoiceShare.js";
 
@@ -48,6 +50,9 @@ export default function ProfessionalInvoiceWorkspace({
   onBack,
 }) {
   const copy = getInvoiceCopy(language);
+  const branding = getBusinessIdentityProjection({}, {
+    fallbackName: "Meetro Professional",
+  });
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
   const [phase, setPhase] = useState("loading");
@@ -203,14 +208,23 @@ export default function ProfessionalInvoiceWorkspace({
 
   async function share() {
     if (!selected) return;
-    const result = await shareInvoiceExternally({ invoice: selected, language });
-    if (result.method === "copy") setNotice(copy.copied);
+    const result = await shareInvoiceExternally({ invoice: selected, language, branding });
+    if (result.ok && result.method === "download") setNotice(copy.pdfReady);
   }
 
   async function copyDetails() {
     if (selected && await copyInvoiceDetails({ invoice: selected, language })) {
       setNotice(copy.copied);
     }
+  }
+
+  async function emailInvoice() {
+    if (!selected || !await downloadInvoicePdf({ invoice: selected, language, branding })) {
+      setNotice(copy.unavailable);
+      return;
+    }
+    const url = buildInvoiceEmailUrl(selected, { language });
+    if (url) window.location.href = url;
   }
 
   async function requestInvoiceHelp(action, prompt) {
@@ -300,7 +314,7 @@ export default function ProfessionalInvoiceWorkspace({
       {selected.actions.canShareExternal && (
         <>
           <button type="button" style={styles.secondaryButton} onClick={share}>{copy.share}</button>
-          <a style={styles.linkButton} href={buildInvoiceEmailUrl(selected, { language }) || undefined}>{copy.email}</a>
+          <button type="button" style={styles.linkButton} onClick={() => void emailInvoice()}>{copy.email}</button>
           <button type="button" style={styles.secondaryButton} onClick={copyDetails}>{copy.copy}</button>
         </>
       )}

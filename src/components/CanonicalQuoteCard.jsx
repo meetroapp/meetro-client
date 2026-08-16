@@ -177,6 +177,7 @@ export default function CanonicalQuoteCard({
           quoteId={detail.id}
           jobId={jobId}
           quoteStatus={detail.status}
+          quoteContext={{ customer: quote.customer, job: quote.job }}
           language={language}
           setPage={setPage}
         />
