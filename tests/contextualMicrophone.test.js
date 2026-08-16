@@ -106,6 +106,7 @@ test("transcription adapter requires non-canonical transcript truth and explicit
 test("shared microphone remains transcript-only across all four workflows", () => {
   const control = read("src/components/WorkflowMicrophoneInput.jsx");
   const panel = read("src/components/ContextualAskMeetro.jsx");
+  const styles = read("src/index.css");
   const upload = read("src/pages/Upload.jsx");
   const evaluation = read("src/components/CanonicalJobEvaluation.jsx");
   const quote = read("src/pages/QuoteBuilder.jsx");
@@ -120,6 +121,10 @@ test("shared microphone remains transcript-only across all four workflows", () =
   assert.match(invoice, /contextLabel="invoice"/);
   assert.match(control, /visibilitychange/);
   assert.match(control, /minHeight: 44/);
+  assert.match(upload, /data-ask-meetro-context="job-request"/);
+  assert.match(styles, /body:has\(\.request-help-page\) \.meetro-assistant-launcher/);
+  assert.match(styles, /body:has\(\.contextual-ask-meetro-trigger\) \.meetro-assistant-launcher/);
+  assert.match(styles, /body:has\(\.contextual-ask-meetro\) \.meetro-assistant-launcher/);
 });
 
 test("microphone chrome is localized for all active languages", () => {

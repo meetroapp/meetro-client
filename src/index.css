@@ -2092,7 +2092,10 @@ h6 {
 .meetro-evaluation-notes-open .meetro-assistant-launcher,
 .meetro-quote-builder-open .meetro-assistant-launcher,
 .meetro-work-center-schedule-open .meetro-assistant-launcher,
-.messages-focused-flow-open .meetro-assistant-launcher {
+.messages-focused-flow-open .meetro-assistant-launcher,
+body:has(.request-help-page) .meetro-assistant-launcher,
+body:has(.contextual-ask-meetro-trigger) .meetro-assistant-launcher,
+body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   display: none !important;
 }
 
