@@ -10721,7 +10721,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
                   ? workCenterLifecycleProjection.projection?.liveJob || null
                   : null;
               const canonicalNextActionSection = resolveWorkCenterSectionForNextAction(
-                canonicalLiveJob?.nextAction?.code
+                canonicalLiveJob?.nextAction?.code,
+                canonicalLiveJob?.stage?.code
               );
               const canonicalAutoOpenToken = `${canonicalLiveJob?.jobId || "job"}:${canonicalLiveJob?.nextAction?.code || "unavailable"}`;
               const canMessageCanonicalCustomer =

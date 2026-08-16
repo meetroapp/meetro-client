@@ -41,6 +41,8 @@ test("server-owned next actions map only to their presentation section", () => {
   for (const [code, section] of Object.entries(cases)) {
     assert.equal(resolveWorkCenterSectionForNextAction(code), section, code);
   }
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_READY"), "visits");
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS"), "workPlan");
   assert.equal(resolveWorkCenterSectionForNextAction(""), "visits");
 });
 
@@ -75,6 +77,7 @@ test("Current Job stays identity-first and progressively discloses canonical sec
     "canonical-job-quotes", "canonical-job-completion-invoice",
   ]) assert.match(dashboard, new RegExp(`id="${id}"`));
   assert.match(dashboard, /canonicalLiveJob\?\.nextAction\?\.code/);
+  assert.match(dashboard, /canonicalLiveJob\?\.stage\?\.code/);
   assert.match(dashboard, /resolveWorkCenterSectionForNextAction/);
   assert.match(dashboard, /canonicalAutoOpenToken/);
   assert.match(dashboard, /CanonicalJobVisits/);
