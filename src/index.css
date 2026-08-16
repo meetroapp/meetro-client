@@ -2099,6 +2099,310 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   display: none !important;
 }
 
+.quick-quote-conversation {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 960px);
+  margin: 0 auto;
+  color: var(--meetro-color-ink, #172317);
+}
+
+.quick-quote-flow-header {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.quick-quote-flow-header p,
+.quick-quote-flow-header h1,
+.quick-quote-prompt-heading p,
+.quick-quote-summary-section p,
+.quick-quote-draft-truth,
+.quick-quote-action-notice,
+.quick-quote-media-gap {
+  margin: 0;
+}
+
+.quick-quote-flow-header p {
+  color: var(--meetro-color-forest, #1f4d34);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quick-quote-flow-header h1,
+.quick-quote-working h1 {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 38px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.quick-quote-prompt-card,
+.quick-quote-review-card,
+.quick-quote-working {
+  min-width: 0;
+  border: 1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.14));
+  border-radius: 26px;
+  background: var(--meetro-surface-paper, rgba(255, 253, 248, 0.97));
+  box-shadow: var(--meetro-shadow-soft, 0 16px 38px rgba(49, 35, 20, 0.08));
+}
+
+.quick-quote-prompt-card {
+  display: grid;
+  gap: 16px;
+  padding: clamp(18px, 4vw, 28px);
+}
+
+.quick-quote-prompt-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quick-quote-prompt-heading > div:last-child {
+  min-width: 0;
+}
+
+.quick-quote-prompt-heading strong {
+  font-size: 18px;
+}
+
+.quick-quote-prompt-heading p {
+  margin-top: 3px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.quick-quote-assistant-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  background: var(--meetro-surface-sage, #e9f4ec);
+  color: var(--meetro-color-forest, #1f4d34);
+}
+
+.quick-quote-prompt-label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: #263b2d;
+  font-weight: 850;
+}
+
+.quick-quote-prompt-label textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 132px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #9db4a3;
+  border-radius: 18px;
+  background: #fff;
+  padding: 14px;
+  color: #172317;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.quick-quote-input-row,
+.quick-quote-review-actions,
+.quick-quote-prompt-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+}
+
+.quick-quote-input-row > *,
+.quick-quote-input-row > div,
+.quick-quote-input-row > div > button {
+  width: 100%;
+}
+
+.quick-quote-input-row button,
+.quick-quote-review-actions button,
+.quick-quote-prompt-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px solid rgba(31, 77, 52, 0.26);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--meetro-color-forest, #1f4d34);
+  padding: 10px 13px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.quick-quote-input-row button:disabled,
+.quick-quote-prompt-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.quick-quote-media-gap,
+.quick-quote-draft-truth,
+.quick-quote-action-notice {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.quick-quote-prompt-actions {
+  justify-content: end;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 220px));
+}
+
+.quick-quote-primary-action {
+  border-color: var(--meetro-color-forest, #1f4d34) !important;
+  background: var(--meetro-color-forest, #1f4d34) !important;
+  color: #fff !important;
+}
+
+.quick-quote-working {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: clamp(22px, 5vw, 34px);
+}
+
+.quick-quote-working p {
+  margin: 6px 0 0;
+  color: #64748b;
+}
+
+.quick-quote-working ol {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-quote-working li {
+  min-width: 0;
+  border-radius: 14px;
+  background: var(--meetro-surface-sage, #eef4ea);
+  padding: 11px 9px;
+  color: var(--meetro-color-forest, #1f4d34);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-review-card {
+  padding: clamp(14px, 3vw, 22px);
+}
+
+.quick-quote-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.14));
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.quick-quote-summary-section {
+  min-width: 0;
+  min-height: 118px;
+  border-right: 1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.14));
+  border-bottom: 1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.14));
+  padding: 16px;
+}
+
+.quick-quote-summary-section > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #526257;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-quote-summary-section p,
+.quick-quote-summary-section li {
+  color: #334155;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-summary-section ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.quick-quote-summary-total {
+  background: var(--meetro-surface-sage, #eef4ea);
+}
+
+.quick-quote-summary-total strong {
+  color: var(--meetro-color-forest-deep, #14351f);
+  font-size: clamp(28px, 5vw, 42px);
+  letter-spacing: -0.04em;
+}
+
+.quick-quote-review-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.quick-quote-draft-truth,
+.quick-quote-action-notice {
+  margin-top: 12px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .quick-quote-working ol,
+  .quick-quote-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-quote-summary-section {
+    min-height: 0;
+    border-right: 0;
+  }
+
+  .quick-quote-review-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .quick-quote-conversation {
+    gap: 14px;
+  }
+
+  .quick-quote-prompt-card,
+  .quick-quote-review-card,
+  .quick-quote-working {
+    border-radius: 20px;
+  }
+
+  .quick-quote-input-row,
+  .quick-quote-review-actions,
+  .quick-quote-prompt-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-quote-prompt-label textarea {
+    min-height: 116px;
+  }
+}
+
 .meetro-evaluation-notes-open .bottom-nav-dock {
   display: none !important;
 }

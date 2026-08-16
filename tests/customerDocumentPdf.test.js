@@ -13,6 +13,7 @@ import {
   collectCustomerDocumentText,
   createCustomerDocumentPdfArtifact,
   getCustomerDocumentActionCopy,
+  previewCustomerDocumentPdf,
   renderCustomerDocumentPdf,
   shareCustomerDocumentPdf,
 } from "../src/utils/customerDocumentPdf.js";
@@ -216,6 +217,40 @@ test("native mobile sharing receives a PDF artifact and desktop falls back to PD
   });
   assert.equal(desktopResult.method, "download");
   assert.equal(downloads[0], model);
+});
+
+test("PDF preview opens the current customer-safe artifact without changing document authority", () => {
+  const model = buildQuickQuoteDocumentModel({
+    quoteNumber: "QQ-1002", customerName: "Taylor", projectTitle: "Repair",
+    lineItems: [{ description: "Repair", quantity: 1, unitPrice: 100, total: 100 }],
+    subtotal: 100, total: 100,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const calls = [];
+  const urlApi = {
+    createObjectURL(blob) { calls.push(["create", blob.type]); return "blob:quote-preview"; },
+    revokeObjectURL(url) { calls.push(["revoke", url]); },
+  };
+  const result = previewCustomerDocumentPdf(model, {
+    urlApi,
+    openWindow(url, target, features) {
+      calls.push(["open", url, target, features]);
+      return {};
+    },
+    scheduleRevoke(callback, delay) {
+      calls.push(["schedule", delay]);
+      callback();
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.method, "pdf-preview");
+  assert.deepEqual(calls, [
+    ["create", "application/pdf"],
+    ["open", "blob:quote-preview", "_blank", "noopener,noreferrer"],
+    ["schedule", 60000],
+    ["revoke", "blob:quote-preview"],
+  ]);
+  assert.equal(model.draft, true);
+  assert.equal(model.acceptance, "DRAFT_PREVIEW_NOT_ISSUED");
 });
 
 test("customer document actions have EN ES FR PT-BR parity and Quick controls remain bounded", () => {

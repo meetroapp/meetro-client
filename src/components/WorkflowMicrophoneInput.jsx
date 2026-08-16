@@ -15,6 +15,7 @@ export default function WorkflowMicrophoneInput({
   setPage,
   startCapture = startWorkflowAudioCapture,
   requestTranscription = requestWorkflowTranscription,
+  idleLabel,
 }) {
   const copy = getAskMeetroWorkflowCopy(language);
   const captureRef = useRef(null);
@@ -109,12 +110,12 @@ export default function WorkflowMicrophoneInput({
         type="button"
         style={styles.button}
         disabled={disabled || state === "transcribing"}
-        aria-label={state === "transcribing" ? copy.transcribing : copy.startRecording}
-        title={state === "transcribing" ? copy.transcribing : copy.startRecording}
+        aria-label={state === "transcribing" ? copy.transcribing : idleLabel || copy.startRecording}
+        title={state === "transcribing" ? copy.transcribing : idleLabel || copy.startRecording}
         onClick={() => void start()}
       >
         <MeetroIcon name="microphone" size={18} />
-        {state === "transcribing" ? copy.transcribing : copy.startRecording}
+        {state === "transcribing" ? copy.transcribing : idleLabel || copy.startRecording}
       </button>
       {message && <span role={messageType} style={messageType === "alert" ? styles.error : styles.notice}>{message}</span>}
     </div>

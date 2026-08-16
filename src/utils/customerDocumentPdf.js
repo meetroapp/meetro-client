@@ -279,6 +279,31 @@ export function createCustomerDocumentPdfArtifact(model, options = {}) {
   return Object.freeze({ doc, blob, fileName, title });
 }
 
+export function previewCustomerDocumentPdf(
+  model,
+  {
+    createArtifact = createCustomerDocumentPdfArtifact,
+    urlApi = globalThis.URL,
+    openWindow = globalThis.open,
+    scheduleRevoke = globalThis.setTimeout,
+  } = {}
+) {
+  if (typeof urlApi?.createObjectURL !== "function" || typeof openWindow !== "function") {
+    return Object.freeze({ ok: false, method: "unavailable" });
+  }
+  const artifact = createArtifact(model);
+  const objectUrl = urlApi.createObjectURL(artifact.blob);
+  const preview = openWindow(objectUrl, "_blank", "noopener,noreferrer");
+  if (!preview) {
+    urlApi.revokeObjectURL?.(objectUrl);
+    return Object.freeze({ ok: false, method: "blocked" });
+  }
+  if (typeof scheduleRevoke === "function") {
+    scheduleRevoke(() => urlApi.revokeObjectURL?.(objectUrl), 60_000);
+  }
+  return Object.freeze({ ok: true, method: "pdf-preview", fileName: artifact.fileName });
+}
+
 async function resolveCustomerDocumentLogo(model, fetchImpl = globalThis.fetch) {
   const logoUrl = model?.branding?.logoUrl;
   if (!logoUrl || logoUrl.startsWith("data:image/") || typeof fetchImpl !== "function") return model;

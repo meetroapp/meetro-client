@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
+import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
 import { getLanguage, t } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -27,8 +28,11 @@ import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
 import {
   downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
+  previewCustomerDocumentPdf,
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
+import { buildQuickQuoteConversationPatch } from "../utils/quickQuoteConversationDraft.js";
+import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
 
 function safeJson(value, fallback = null) {
   try {
@@ -766,6 +770,13 @@ function QuoteBuilder({ setPage }) {
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState("");
   const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null, commandKeys: null });
+  const [quickQuoteView, setQuickQuoteView] = useState(
+    isUniversalQuickQuote ? "entry" : "details"
+  );
+  const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
+  const [quickQuoteDraftPrepared, setQuickQuoteDraftPrepared] = useState(false);
+  const quickQuoteWorkingTimerRef = useRef(null);
+  const quickQuoteCopy = getQuickQuoteConversationCopy(language);
 
   const lineItemsTotal = lineItems.reduce(
     (sum, item) => sum + getEditableRowTotal(item),
@@ -817,6 +828,9 @@ function QuoteBuilder({ setPage }) {
 
     return () => {
       document.body.classList.remove("meetro-quote-builder-open");
+      if (quickQuoteWorkingTimerRef.current) {
+        window.clearTimeout(quickQuoteWorkingTimerRef.current);
+      }
     };
   }, []);
 
@@ -1317,6 +1331,12 @@ ${businessIdentity.businessName}`;
     setCopiedNotice(exported ? copy.pdfReady : copy.pdfUnavailable);
   }
 
+  function previewQuickQuotePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const result = previewCustomerDocumentPdf(buildQuickQuotePdfModel());
+    setCopiedNotice(result.ok ? copy.pdfReady : copy.pdfUnavailable);
+  }
+
   async function shareQuickQuotePdf() {
     const copy = getCustomerDocumentActionCopy(language);
     const result = await shareCustomerDocumentPdf({
@@ -1349,6 +1369,91 @@ ${businessIdentity.businessName}`;
     );
     setQuotePreviewOpen(true);
   }
+
+  function applyQuickQuoteConversationPatch(patch) {
+    if (patch.projectTitle !== undefined) setProjectTitle(patch.projectTitle);
+    if (patch.projectDescription !== undefined) setProjectDescription(patch.projectDescription);
+    if (patch.problemFound !== undefined) setProblemFound(patch.problemFound);
+    if (patch.recommendedSolution !== undefined) setRecommendedSolution(patch.recommendedSolution);
+    if (patch.timeline !== undefined) setTimeline(patch.timeline);
+    if (patch.estimatedDuration !== undefined) setEstimatedDuration(patch.estimatedDuration);
+    if (patch.totalOverride !== undefined) setTotalOverride(patch.totalOverride);
+    if (patch.depositRequired !== undefined) setDepositRequired(patch.depositRequired);
+    if (patch.depositTerms) {
+      setTerms((current) =>
+        cleanText(current).includes(patch.depositTerms)
+          ? current
+          : [cleanText(current), patch.depositTerms].filter(Boolean).join("\n")
+      );
+    }
+    if (patch.lineItemDescription) {
+      setLineItems((rows) => rows.map((row, index) =>
+        index === 0 && !cleanText(row.description)
+          ? { ...row, description: patch.lineItemDescription }
+          : row
+      ));
+    }
+    if (patch.materialAmount !== undefined) {
+      setMaterialRows((rows) => rows.map((row, index) =>
+        index === 0
+          ? {
+              ...row,
+              name: cleanText(row.name) || quickQuoteCopy.materialsAllowance,
+              quantity: cleanText(row.quantity) || "1",
+              cost: patch.materialAmount,
+              total: "",
+            }
+          : row
+      ));
+    }
+  }
+
+  function prepareQuickQuoteConversation(revision = false) {
+    const instruction = cleanText(quickQuotePrompt);
+    if (!instruction) return;
+    const patch = buildQuickQuoteConversationPatch({
+      prompt: instruction,
+      revision,
+      current: {
+        projectTitle,
+        projectDescription,
+        problemFound,
+        recommendedSolution,
+        lineItemDescription: lineItems[0]?.description || "",
+      },
+    });
+    if (quickQuoteWorkingTimerRef.current) {
+      window.clearTimeout(quickQuoteWorkingTimerRef.current);
+    }
+    setQuickQuoteView("working");
+    quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
+      applyQuickQuoteConversationPatch(patch);
+      setQuickQuoteDraftPrepared(true);
+      setQuickQuotePrompt("");
+      setQuickQuoteView("review");
+      quickQuoteWorkingTimerRef.current = null;
+    }, 650);
+  }
+
+  const quickQuoteReviewSummary = {
+    customerName,
+    customerLocation,
+    scope: recommendedSolution || projectDescription || problemFound,
+    materials: materialRows
+      .filter((item) => cleanText(item.name))
+      .map((item) => {
+        const total = getEditableRowTotal(item, "quantity", "cost");
+        return [item.name, total > 0 ? `$${total.toFixed(2)}` : ""].filter(Boolean).join(" · ");
+      }),
+    labor: laborRows
+      .filter((item) => cleanText(item.description) && getEditableRowTotal(item, "hours", "rate") > 0)
+      .map((item) => `${item.description} · $${getEditableRowTotal(item, "hours", "rate").toFixed(2)}`)
+      .join(" · "),
+    duration: estimatedDuration || timeline,
+    paymentTerms: terms,
+    notes,
+    total: calculatedTotal,
+  };
 
 
   return (
@@ -1416,6 +1521,34 @@ ${businessIdentity.businessName}`;
         </button>
       )}
 
+      {isUniversalQuickQuote && quickQuoteView !== "details" ? (
+        <QuickQuoteConversation
+          language={language}
+          view={quickQuoteView}
+          prompt={quickQuotePrompt}
+          onPromptChange={setQuickQuotePrompt}
+          onPrepare={prepareQuickQuoteConversation}
+          onOpenRevision={() => {
+            setQuickQuotePrompt("");
+            setQuickQuoteView("revision");
+          }}
+          onCancelRevision={() => setQuickQuoteView("review")}
+          onEditDetails={() => setQuickQuoteView("details")}
+          onPreviewPdf={previewQuickQuotePdf}
+          onSharePdf={() => void shareQuickQuotePdf()}
+          setPage={setPage}
+          summary={quickQuoteReviewSummary}
+          photoCount={importedPhotoCount}
+          canAddPhotos={false}
+          notice={copiedNotice}
+        />
+      ) : (
+        <>
+          {isUniversalQuickQuote && quickQuoteDraftPrepared && (
+            <button style={evaluationBackButton} onClick={() => setQuickQuoteView("review")}>
+              ← {quickQuoteCopy.backToReview}
+            </button>
+          )}
       <div style={hero}>
         {isRevisedQuoteFlow && (
           <div style={revisionBanner}>
@@ -2117,6 +2250,8 @@ ${businessIdentity.businessName}`;
           </div>
         </div>
       </div>
+        </>
+      )}
 
       <BottomNav
         setPage={setPage}
