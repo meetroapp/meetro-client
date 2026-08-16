@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
 import { fetchProfessionalJobHistoryDetail } from "../utils/jobCompletionApi.js";
+import { fetchProfessionalJobInvoice } from "../utils/invoicePaymentApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
+import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
 
 function displayDate(value, language) {
   const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
@@ -21,26 +24,31 @@ export default function ProfessionalJobHistoryWorkspace({
   onLoadMore,
 }) {
   const copy = getJobCompletionCopy(language);
+  const invoiceCopy = getInvoiceCopy(language);
   const [selectedJobId, setSelectedJobId] = useState("");
-  const [detailState, setDetailState] = useState({ status: "idle", detail: null, error: "" });
+  const [detailState, setDetailState] = useState({ status: "idle", detail: null, invoice: null, error: "" });
 
   useEffect(() => {
     let active = true;
     if (!selectedJobId) {
       queueMicrotask(() => {
-        if (active) setDetailState({ status: "idle", detail: null, error: "" });
+        if (active) setDetailState({ status: "idle", detail: null, invoice: null, error: "" });
       });
       return () => { active = false; };
     }
     queueMicrotask(() => {
-      if (active) setDetailState({ status: "loading", detail: null, error: "" });
+      if (active) setDetailState({ status: "loading", detail: null, invoice: null, error: "" });
     });
-    void fetchProfessionalJobHistoryDetail({ jobId: selectedJobId, setPage })
-      .then((detail) => {
-        if (active) setDetailState({ status: "ready", detail, error: "" });
+    void Promise.all([
+      fetchProfessionalJobHistoryDetail({ jobId: selectedJobId, setPage }),
+      fetchProfessionalJobInvoice({ jobId: selectedJobId, setPage })
+        .catch((error) => error?.code === "INVOICE_UNAVAILABLE" ? null : Promise.reject(error)),
+    ])
+      .then(([detail, invoice]) => {
+        if (active) setDetailState({ status: "ready", detail, invoice, error: "" });
       })
       .catch((error) => {
-        if (active) setDetailState({ status: "error", detail: null, error: String(error?.code || "JOB_HISTORY_FAILED") });
+        if (active) setDetailState({ status: "error", detail: null, invoice: null, error: String(error?.code || "JOB_HISTORY_FAILED") });
       });
     return () => { active = false; };
   }, [selectedJobId, setPage]);
@@ -62,7 +70,15 @@ export default function ProfessionalJobHistoryWorkspace({
                 <h2 style={styles.title}>{detail.serviceTitle}</h2>
                 <p style={styles.purpose}>{detail.customerName} · {copy.completedOn} {displayDate(detail.completedAt, language)}</p>
               </div>
-              <strong style={styles.status}>{copy.readyToInvoice}</strong>
+              <strong style={styles.status}>{detailState.invoice
+                ? invoiceCopy[detailState.invoice.status === "PAID"
+                  ? "paid"
+                  : detailState.invoice.status === "DRAFT"
+                    ? "drafts"
+                    : detailState.invoice.status === "PARTIALLY_PAID"
+                      ? "outstanding"
+                      : "waiting"]
+                : copy.readyToInvoice}</strong>
             </header>
             <div style={styles.metrics}>
               <span><strong>{detail.completionSummary.workstreamCount}</strong> {copy.work}</span>
@@ -80,6 +96,11 @@ export default function ProfessionalJobHistoryWorkspace({
               <strong>{copy.preservedRecord}</strong>
               <p style={styles.body}>{copy.preservedRecordBody}</p>
             </div>
+            {detailState.invoice && (
+              <section style={styles.financialRecord} aria-label={invoiceCopy.invoice}>
+                <CanonicalInvoiceDetail invoice={detailState.invoice} language={language} />
+              </section>
+            )}
           </>
         )}
       </section>
@@ -149,6 +170,7 @@ const styles = {
   meta: { color: "#64748b", fontSize: 13 },
   metrics: { display: "flex", gap: 16, flexWrap: "wrap", padding: "14px 0", borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
   record: { display: "grid", gap: 6, paddingLeft: 12, borderLeft: "3px solid #1f5132" },
+  financialRecord: { minWidth: 0 },
   body: { margin: 0, lineHeight: 1.55, overflowWrap: "anywhere" },
   empty: { margin: 0, color: "#64748b" },
   error: { color: "#991b1b" },

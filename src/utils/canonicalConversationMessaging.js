@@ -1,4 +1,5 @@
 import { normalizeQuoteDeliverySnapshot } from "./quoteDeliveryApi.js";
+import { normalizeInvoiceDeliverySnapshot } from "./invoicePaymentApi.js";
 
 export const CONVERSATION_THREAD_TYPES = Object.freeze({
   CANONICAL: "canonical_conversation",
@@ -230,7 +231,10 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     typeof message?.workflow?.status === "string" ? message.workflow.status : "";
   const isQuoteShared =
     contentType === "quote_shared" || workflowType === "QUOTE_SHARED";
+  const isInvoiceShared =
+    contentType === "invoice_shared" || workflowType === "INVOICE_SHARED";
   let quoteShare = null;
+  let invoiceShare = null;
   let reference = null;
 
   if (isQuoteShared) {
@@ -254,6 +258,27 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     reference = Object.freeze({ type: "quote", quoteId, jobId });
   }
 
+  if (isInvoiceShared) {
+    const invoiceId = String(message?.reference?.invoiceId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    invoiceShare = normalizeInvoiceDeliverySnapshot(message?.workflow?.payload, {
+      invoiceId,
+      jobId,
+    });
+    if (
+      contentType !== "invoice_shared" ||
+      workflowType !== "INVOICE_SHARED" ||
+      workflowStatus !== "SENT" ||
+      JSON.stringify(referenceKeys) !== JSON.stringify(["invoiceId", "jobId", "type"]) ||
+      message.reference.type !== "invoice" ||
+      !invoiceShare
+    ) return null;
+    reference = Object.freeze({ type: "invoice", invoiceId, jobId });
+  }
+
   const isViewer = message?.sender?.isViewer === true;
   const senderRole = isViewer
     ? viewerRole
@@ -272,7 +297,7 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     workflowType,
     workflowStatus,
     workflowPayload:
-      quoteShare || (message?.workflow?.payload && typeof message.workflow.payload === "object"
+      quoteShare || invoiceShare || (message?.workflow?.payload && typeof message.workflow.payload === "object"
         ? message.workflow.payload
         : {}),
     status: "delivered",
@@ -282,6 +307,10 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
   };
   if (quoteShare) {
     normalized.quoteShare = quoteShare;
+    normalized.reference = reference;
+  }
+  if (invoiceShare) {
+    normalized.invoiceShare = invoiceShare;
     normalized.reference = reference;
   }
   return normalized;

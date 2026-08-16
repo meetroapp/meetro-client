@@ -16,6 +16,7 @@ import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistor
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
 import WorkCenterBackButton from "../components/WorkCenterBackButton";
+import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, getFormattingLocale } from "../utils/localeFormat";
@@ -17314,85 +17315,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 
       {activeTab === "revenue" && !isLegacyCommandSurfaceContained && (
         <div ref={dynamicSectionRef} style={section}>
-          <WorkCenterBackButton
-            label={translate("backToWorkCenter", activeLanguage)}
-            onClick={returnToWorkCenterDashboard}
+          <ProfessionalInvoiceWorkspace
+            language={activeLanguage}
+            setPage={setPage}
+            onBack={returnToWorkCenterDashboard}
           />
-
-          <div style={workCenterChildHeader}>
-            <h2 style={workCenterChildTitle}>
-              {ui("workCenterRevenueTitle")}
-            </h2>
-            <p style={workCenterChildSummary}>
-              {ui("workCenterChildRevenueSummary")}
-            </p>
-          </div>
-
-          <div style={revenueCard}>
-            <div style={revenueGrid}>
-              <div style={revenueMiniCard}>
-                <div>
-                  <span style={revenueLabel}>
-                    {ui("wcThisWeek")}
-                  </span>
-                  <strong style={revenueBig}>
-                    ${Number(totalJobRevenue || 0).toLocaleString()}
-                  </strong>
-                  <div style={miniSub}>
-                    {`${completedJobsCount} ${ui("wcJobs")}`}
-                  </div>
-                </div>
-              </div>
-
-              <div style={revenueMiniCard}>
-                <div>
-                  <span style={revenueLabel}>
-                    {ui("wcThisMonth")}
-                  </span>
-                  <strong style={revenueBig}>
-                    ${Number(totalJobRevenue || 0).toLocaleString()}
-                  </strong>
-                  <div style={miniSub}>
-                    {`${quoteHistory.length} ${ui("wcQuotes")}`}
-                  </div>
-                </div>
-              </div>
-
-              <div style={revenueMiniCard}>
-                <div>
-                  <span style={revenueLabel}>
-                    {ui("wcCompletedJobs")}
-                  </span>
-                  <strong style={revenueBig}>{completedJobsCount}</strong>
-                  <div style={miniSub}>
-                    {`${ui("wcAvg")} $${averageJobValue}`}
-                  </div>
-                </div>
-              </div>
-
-              <div style={revenueMiniCard}>
-                <div>
-                  <span style={revenueLabel}>
-                    {ui("wcPendingRevenue")}
-                  </span>
-                  <strong style={revenueBig}>
-                    {totalQuoteAlerts > 0 ? totalQuoteAlerts : 0}
-                  </strong>
-                  <div style={miniSub}>
-                    {totalQuoteAlerts > 0
-                      ? ui("wcNeedAttention")
-                      : ui("wcOpen")}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={revenueCompactNote}>
-              <span>
-                {ui("wcRevenueNote")}
-              </span>
-            </div>
-          </div>
         </div>
       )}
 

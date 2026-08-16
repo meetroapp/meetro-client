@@ -50,6 +50,7 @@ import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
 import ProjectDetails from "./pages/ProjectDetails";
 import CustomerQuoteReviewRoute from "./pages/CustomerQuoteReviewRoute";
+import CustomerInvoiceReviewRoute from "./pages/CustomerInvoiceReviewRoute";
 import Login from "./pages/Login";
 import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
@@ -203,6 +204,7 @@ const assistantEnabledPages = new Set([
   "myRequests",
   "projectDetails",
   "customerQuoteReview",
+  "customerInvoiceReview",
   "conversationThread",
   "messagesInbox",
   "notifications",
@@ -1046,6 +1048,14 @@ if (page === "projectDetails") {
 if (page === "customerQuoteReview") {
   return withStartupChrome(withAssistantLayer(
     <CustomerQuoteReviewRoute setPage={setPage} />,
+    page,
+    setPage
+  ), updateNotice);
+}
+
+if (page === "customerInvoiceReview") {
+  return withStartupChrome(withAssistantLayer(
+    <CustomerInvoiceReviewRoute setPage={setPage} />,
     page,
     setPage
   ), updateNotice);

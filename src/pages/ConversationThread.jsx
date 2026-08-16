@@ -41,7 +41,9 @@ import MaterialsWorkflowPresentation from "../components/workflows/presentations
 import RevisedQuoteWorkflowPresentation from "../components/workflows/presentations/RevisedQuoteWorkflowPresentation";
 import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
 import ConversationQuoteCard from "../components/ConversationQuoteCard";
+import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
+import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -6304,6 +6306,34 @@ const handleImageUpload = (event) => {
                     onReview={() => {
                       const route = buildCustomerQuoteReviewRoute({
                         quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            if (msg.type === "invoice_shared" && msg.invoiceShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-invoice-message-row"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                    overscrollBehavior: "contain",
+                  }}
+                >
+                  <ConversationInvoiceCard
+                    invoice={msg.invoiceShare}
+                    language={language}
+                    canReview={currentViewerRole === "homeowner"}
+                    onReview={() => {
+                      const route = buildCustomerInvoiceReviewRoute({
+                        invoiceId: msg.reference?.invoiceId,
                         jobId: msg.reference?.jobId,
                         conversationId: canonicalConversationId,
                       });
