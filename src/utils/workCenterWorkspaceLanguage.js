@@ -223,9 +223,10 @@ export function getWorkCenterWorkspaceCopy(language = "en") {
   return COPY[language] || COPY.en;
 }
 
-export function resolveWorkCenterSectionForNextAction(nextActionCode = "", stageCode = "") {
+export function resolveWorkCenterSectionForNextAction(nextActionCode = "", stageCode = "", nextActionLabel = "") {
   const action = String(nextActionCode || "").trim();
   const stage = String(stageCode || "").trim();
-  if (action === "REVIEW_ACTIVE_WORK" && stage === "WORK_READY") return "visits";
+  const label = String(nextActionLabel || "").trim();
+  if (action === "REVIEW_ACTIVE_WORK" && (stage === "WORK_READY" || /schedule/i.test(label))) return "visits";
   return NEXT_ACTION_SECTION[action] || "visits";
 }

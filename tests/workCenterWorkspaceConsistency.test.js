@@ -43,6 +43,8 @@ test("server-owned next actions map only to their presentation section", () => {
   }
   assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_READY"), "visits");
   assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS"), "workPlan");
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS", "Schedule approved work"), "visits");
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS", "Continue work"), "workPlan");
   assert.equal(resolveWorkCenterSectionForNextAction(""), "visits");
 });
 
