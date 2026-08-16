@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
+import {
+  WorkCenterEmptyState,
+  WorkCenterMetricGrid,
+  WorkCenterPageHeader,
+  WorkCenterStatusPill,
+} from "./WorkCenterWorkspaceSystem.jsx";
 import { fetchProfessionalJobHistoryDetail } from "../utils/jobCompletionApi.js";
 import { fetchProfessionalJobInvoice } from "../utils/invoicePaymentApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
 
 function displayDate(value, language) {
   const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
@@ -25,6 +32,7 @@ export default function ProfessionalJobHistoryWorkspace({
 }) {
   const copy = getJobCompletionCopy(language);
   const invoiceCopy = getInvoiceCopy(language);
+  const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [detailState, setDetailState] = useState({ status: "idle", detail: null, invoice: null, error: "" });
 
@@ -64,13 +72,11 @@ export default function ProfessionalJobHistoryWorkspace({
         {detailState.status === "error" && <p role="alert" style={styles.error}>{copy.historyUnavailable}</p>}
         {detail && (
           <>
-            <header style={styles.header}>
-              <div>
-                <span style={styles.eyebrow}>{copy.workCompleted}</span>
-                <h2 style={styles.title}>{detail.serviceTitle}</h2>
-                <p style={styles.purpose}>{detail.customerName} · {copy.completedOn} {displayDate(detail.completedAt, language)}</p>
-              </div>
-              <strong style={styles.status}>{detailState.invoice
+            <WorkCenterPageHeader
+              eyebrow={copy.workCompleted}
+              title={detail.serviceTitle}
+              description={`${detail.customerName} · ${copy.completedOn} ${displayDate(detail.completedAt, language)}`}
+              action={<WorkCenterStatusPill>{detailState.invoice
                 ? invoiceCopy[detailState.invoice.status === "PAID"
                   ? "paid"
                   : detailState.invoice.status === "DRAFT"
@@ -78,8 +84,8 @@ export default function ProfessionalJobHistoryWorkspace({
                     : detailState.invoice.status === "PARTIALLY_PAID"
                       ? "outstanding"
                       : "waiting"]
-                : copy.readyToInvoice}</strong>
-            </header>
+                : copy.readyToInvoice}</WorkCenterStatusPill>}
+            />
             <div style={styles.metrics}>
               <span><strong>{detail.completionSummary.workstreamCount}</strong> {copy.work}</span>
               <span><strong>{detail.completionSummary.workItemCount}</strong> {copy.completed}</span>
@@ -110,13 +116,18 @@ export default function ProfessionalJobHistoryWorkspace({
   const history = sourceState?.history;
   return (
     <section style={styles.section} aria-labelledby="professional-job-history-title" data-professional-job-history-status={sourceState?.status || "loading"}>
-      <header style={styles.header}>
-        <div>
-          <h2 id="professional-job-history-title" style={styles.title}>{copy.history}</h2>
-          <p style={styles.purpose}>{copy.historyPurpose}</p>
-        </div>
-        {history && <strong style={styles.status}>{history.totalCount} {copy.completedJobs}</strong>}
-      </header>
+      <WorkCenterPageHeader
+        eyebrow={workspaceCopy.historyEyebrow}
+        title={copy.history}
+        titleId="professional-job-history-title"
+        description={workspaceCopy.historyDescription}
+      />
+      {history && (
+        <WorkCenterMetricGrid
+          ariaLabel={copy.history}
+          metrics={[{ key: "completed", icon: "jobHistory", tone: "success", label: copy.completedJobs, value: history.totalCount }]}
+        />
+      )}
       {sourceState?.status === "loading" && <p role="status">{copy.loading}</p>}
       {sourceState?.status === "error" && (
         <div role="alert" style={styles.error}>
@@ -124,10 +135,16 @@ export default function ProfessionalJobHistoryWorkspace({
           <button type="button" style={styles.secondaryButton} onClick={onRetry}>{copy.retry}</button>
         </div>
       )}
-      {sourceState?.status === "ready" && history?.jobs.length === 0 && <p style={styles.empty}>{copy.noHistory}</p>}
+      {sourceState?.status === "ready" && history?.jobs.length === 0 && (
+        <WorkCenterEmptyState
+          icon="jobHistory"
+          title={workspaceCopy.historyEmptyTitle}
+          body={workspaceCopy.historyEmptyBody}
+        />
+      )}
       <div style={styles.list}>
         {history?.jobs.map((job) => (
-          <button key={job.jobId} type="button" style={styles.row} onClick={() => setSelectedJobId(job.jobId)}>
+          <button key={job.jobId} type="button" className="work-center-content-card" style={styles.row} onClick={() => setSelectedJobId(job.jobId)}>
             <span style={styles.rowMain}>
               <strong style={styles.rowTitle}>{job.customerName}</strong>
               <span>{job.serviceTitle}</span>
@@ -156,14 +173,9 @@ export default function ProfessionalJobHistoryWorkspace({
 
 const styles = {
   section: { display: "grid", gap: 16, minWidth: 0 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
-  eyebrow: { color: "#475569", fontSize: 12, fontWeight: 800 },
-  title: { margin: 0, fontSize: 24, letterSpacing: 0 },
   subheading: { margin: 0, fontSize: 17, letterSpacing: 0 },
-  purpose: { margin: "6px 0 0", color: "#475569", lineHeight: 1.5 },
-  status: { color: "#1f5132", fontSize: 13 },
-  list: { display: "grid", gap: 0, borderTop: "1px solid #cbd5e1" },
-  row: { minHeight: 72, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "14px 0", border: 0, borderBottom: "1px solid #cbd5e1", background: "transparent", color: "#172317", textAlign: "left", cursor: "pointer" },
+  list: { display: "grid", gap: 12 },
+  row: { minHeight: 72, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 16, border: "1px solid #dce5d8", borderRadius: 8, background: "#fff", color: "#172317", textAlign: "left", cursor: "pointer", boxShadow: "0 8px 24px rgba(28,49,31,.05)" },
   rowMain: { display: "grid", gap: 4, minWidth: 0 },
   rowTitle: { overflowWrap: "anywhere" },
   rowAside: { display: "grid", gap: 4, flexShrink: 0, textAlign: "right", color: "#1f5132" },
@@ -172,7 +184,6 @@ const styles = {
   record: { display: "grid", gap: 6, paddingLeft: 12, borderLeft: "3px solid #1f5132" },
   financialRecord: { minWidth: 0 },
   body: { margin: 0, lineHeight: 1.55, overflowWrap: "anywhere" },
-  empty: { margin: 0, color: "#64748b" },
   error: { color: "#991b1b" },
   secondaryButton: { minHeight: 44, width: "fit-content", padding: "9px 14px", border: "1px solid #64748b", borderRadius: 6, background: "#fff", color: "#243326", fontWeight: 800, cursor: "pointer" },
 };

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
 import WorkCenterBackButton from "./WorkCenterBackButton.jsx";
+import {
+  WorkCenterEmptyState,
+  WorkCenterMetricGrid,
+  WorkCenterPageHeader,
+} from "./WorkCenterWorkspaceSystem.jsx";
 import { formatLocaleCurrency } from "../utils/localeFormat.js";
 import {
   createCanonicalInvoice,
@@ -12,6 +17,7 @@ import {
   recordCanonicalPayment,
 } from "../utils/invoicePaymentApi.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
 import {
   buildInvoiceEmailUrl,
   copyInvoiceDetails,
@@ -35,6 +41,7 @@ export default function ProfessionalInvoiceWorkspace({
   onBack,
 }) {
   const copy = getInvoiceCopy(language);
+  const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
   const [phase, setPhase] = useState("loading");
   const [selected, setSelected] = useState(null);
@@ -218,27 +225,29 @@ export default function ProfessionalInvoiceWorkspace({
   ) : null;
 
   return (
-    <section style={styles.workspace} data-invoice-workspace-phase={phase}>
+    <section className="work-center-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
       {onBack && <WorkCenterBackButton label={copy.back} onClick={onBack} />}
-      <header style={styles.workspaceHeader}>
-        <div><span style={styles.eyebrow}>Work Center</span><h2 style={styles.heading}>{copy.title}</h2></div>
-        <p style={styles.description}>{copy.summary}</p>
-      </header>
+      <WorkCenterPageHeader
+        eyebrow={workspaceCopy.financeEyebrow}
+        title={copy.title}
+        description={workspaceCopy.financeDescription}
+      />
 
       {phase === "loading" && <p role="status">{copy.loading}</p>}
       {phase === "error" && <p role="alert">{copy.unavailable}</p>}
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
 
       {summary && (
-        <div style={styles.summaryGrid}>
-          {[
-            [copy.ready, summary.readyToInvoice], [copy.drafts, summary.drafts],
-            [copy.waiting, summary.waitingForPayment], [copy.paid, summary.paid],
-          ].map(([label, value]) => (
-            <div key={label} style={styles.metric}><span>{label}</span><strong>{value}</strong></div>
-          ))}
-          <div style={styles.metric}><span>{copy.outstanding}</span><strong>{summary.totalOutstandingMinor == null ? "-" : money(summary.totalOutstandingMinor)}</strong></div>
-        </div>
+        <WorkCenterMetricGrid
+          ariaLabel={copy.title}
+          metrics={[
+            { key: "ready", icon: "completion", label: copy.ready, value: summary.readyToInvoice },
+            { key: "drafts", icon: "quickInvoice", tone: "info", label: copy.drafts, value: summary.drafts },
+            { key: "waiting", icon: "history", tone: "warning", label: copy.waiting, value: summary.waitingForPayment },
+            { key: "paid", icon: "payment", tone: "success", label: copy.paid, value: summary.paid },
+            { key: "outstanding", icon: "revenue", tone: "violet", label: copy.outstanding, value: summary.totalOutstandingMinor == null ? "-" : money(summary.totalOutstandingMinor) },
+          ]}
+        />
       )}
 
       {workspace?.readyJobs.length > 0 && (
@@ -291,7 +300,13 @@ export default function ProfessionalInvoiceWorkspace({
             ))}
           </div>
         </section>
-      ) : phase === "ready" && workspace?.readyJobs.length === 0 ? <p>{copy.empty}</p> : null}
+      ) : phase === "ready" && workspace?.readyJobs.length === 0 ? (
+        <WorkCenterEmptyState
+          icon="payment"
+          title={workspaceCopy.financeEmptyTitle}
+          body={workspaceCopy.financeEmptyBody}
+        />
+      ) : null}
 
       {selected && (
         <section style={styles.detailBand}>
@@ -314,14 +329,8 @@ export default function ProfessionalInvoiceWorkspace({
 }
 
 const styles = {
-  workspace: { display: "grid", gap: 20, minWidth: 0 },
-  workspaceHeader: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: 16, alignItems: "end" },
-  eyebrow: { color: "#0f766e", fontSize: 12, fontWeight: 900, textTransform: "uppercase" },
-  heading: { margin: "4px 0 0", fontSize: 28, letterSpacing: 0 },
-  description: { margin: 0, color: "#526052" },
+  workspace: { minWidth: 0 },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },
-  summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 },
-  metric: { display: "grid", gap: 4, minHeight: 84, padding: 14, border: "1px solid #d7ded8", borderRadius: 6, background: "#fff" },
   band: { display: "grid", gap: 10, minWidth: 0, paddingTop: 4 },
   subheading: { margin: 0, fontSize: 18, letterSpacing: 0 },
   list: { display: "grid", gap: 8, minWidth: 0 },

@@ -20,6 +20,11 @@ const overview = readFileSync(
   new URL("../src/components/ProfessionalWorkPlanOverview.jsx", import.meta.url),
   "utf8"
 );
+const workspaceSystem = readFileSync(
+  new URL("../src/components/WorkCenterWorkspaceSystem.jsx", import.meta.url),
+  "utf8"
+);
+const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 const customer = readFileSync(
   new URL("../src/components/CustomerWorkPlan.jsx", import.meta.url),
   "utf8"
@@ -94,7 +99,11 @@ test("Work Plan copy is complete for EN, ES, FR, and PT-BR", () => {
 test("desktop and compact Work Plan surfaces preserve readable 44px controls", () => {
   assert.match(dashboard, /compactWorkCenterChildTabs = \[[\s\S]*"workPlan"/);
   assert.match(workspace, /gridTemplateColumns: "repeat\(auto-fit, minmax\(110px, 1fr\)\)"/);
-  assert.match(overview, /gridTemplateColumns: "repeat\(auto-fit, minmax\(120px, 1fr\)\)"/);
+  assert.match(overview, /WorkCenterMetricGrid/);
+  assert.match(overview, /key: "jobs"/);
+  assert.match(workspaceSystem, /work-center-metric-grid/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /last-child:nth-child\(odd\)/);
   assert.match(customer, /gridTemplateColumns: "minmax\(90px, auto\) 1fr"/);
   for (const source of [workspace, overview, customer]) {
     assert.match(source, /minHeight: 44/);

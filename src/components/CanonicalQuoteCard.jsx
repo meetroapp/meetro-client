@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import useLanguage from "../hooks/useLanguage.js";
 import { loadCanonicalQuoteDetail } from "../utils/quoteReadController.js";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
 import QuoteDeliveryActions from "./QuoteDeliveryActions.jsx";
 
 function canonicalRecord(jobId) {
@@ -33,38 +34,19 @@ function readableEnum(value) {
   return value.replaceAll("_", " ").toLowerCase();
 }
 
-function lineageLabel(quote) {
-  if (!quote.parentQuoteId) return "Original Quote";
+function lineageLabel(quote, copy) {
+  if (!quote.parentQuoteId) return copy.originalQuote;
   return quote.lineageType === "SUPPLEMENTAL_QUOTE"
-    ? "Supplemental Quote"
-    : "Revised Quote";
+    ? copy.additionalQuote
+    : copy.revisedQuote;
 }
 
-function SourceReference({ source }) {
-  const reference = [
-    source.findingId,
-    source.recommendationId,
-    source.workstreamId,
-    source.activityId,
-    source.obligationId,
-  ].find(Boolean);
-  return (
-    <div style={styles.source}>
-      <span>
-        Source: {readableEnum(source.type)}
-        {source.version ? ` · version ${source.version}` : ""}
-      </span>
-      {reference && <span style={styles.reference}>{reference}</span>}
-    </div>
-  );
-}
-
-function ScopeItem({ item, currency }) {
+function ScopeItem({ item, currency, copy }) {
   const inclusionLabel = item.includedInTotal
-    ? "Included in quote total"
+    ? copy.includedInTotal
     : item.scopeSemantic === "SEPARATE_PROPOSAL"
-      ? "Separate proposal · not included in this total"
-      : "Excluded from quote total";
+      ? copy.separateProposal
+      : copy.excludedFromTotal;
   return (
     <article style={styles.scopeItem}>
       <div style={styles.scopeHeader}>
@@ -73,17 +55,11 @@ function ScopeItem({ item, currency }) {
           {inclusionLabel}
         </span>
       </div>
-      <div style={styles.scopeMeta}>
-        <span>{readableEnum(item.classification)}</span>
-        <span>{readableEnum(item.scopeSemantic)}</span>
-        <span>Material: {readableEnum(item.materialResponsibility)}</span>
-      </div>
       <div style={styles.amountRow}>
-        <span>Quantity {item.quantity}</span>
-        <span>Unit {formatMinorAmount(item.unitAmountMinor, currency)}</span>
-        <strong>Line total {formatMinorAmount(item.lineTotalMinor, currency)}</strong>
+        <span>{copy.quantity} {item.quantity}</span>
+        <span>{copy.unit} {formatMinorAmount(item.unitAmountMinor, currency)}</span>
+        <strong>{copy.lineTotal} {formatMinorAmount(item.lineTotalMinor, currency)}</strong>
       </div>
-      <SourceReference source={item.source} />
     </article>
   );
 }
@@ -96,6 +72,7 @@ export default function CanonicalQuoteCard({
   focused = false,
 }) {
   const language = useLanguage();
+  const copy = getWorkCenterWorkspaceCopy(language);
   const [state, setState] = useState({
     status: "loading",
     detail: null,
@@ -130,7 +107,7 @@ export default function CanonicalQuoteCard({
   }, [jobId, quote, setPage]);
 
   const detail = state.detail || quote;
-  const decision = detail.decisionState || "No decision recorded";
+  const decision = detail.decisionState || copy.noDecision;
   const leftInset = Math.min(depth, 2) * 12;
 
   return (
@@ -146,52 +123,24 @@ export default function CanonicalQuoteCard({
     >
       <div style={styles.header}>
         <div style={styles.headingGroup}>
-          <span style={styles.lineage}>{lineageLabel(detail)}</span>
+          <span style={styles.lineage}>{lineageLabel(detail, copy)}</span>
           <h4 id={`canonical-quote-${quote.id}`} style={styles.title}>
             {formatMinorAmount(detail.totalMinor, detail.currency)}
           </h4>
         </div>
-        <span style={styles.status}>Quote status: {detail.status}</span>
+        <span style={styles.status}>{readableEnum(detail.status)}</span>
       </div>
 
       <div style={styles.summaryGrid}>
         <div style={styles.summaryField}>
-          <span style={styles.label}>Quote total</span>
+          <span style={styles.label}>{copy.quoteTotal}</span>
           <strong>{formatMinorAmount(detail.totalMinor, detail.currency)}</strong>
         </div>
         <div style={styles.summaryField}>
-          <span style={styles.label}>Customer decision</span>
+          <span style={styles.label}>{copy.customerDecision}</span>
           <strong>{decision}</strong>
         </div>
-        <div style={styles.summaryField}>
-          <span style={styles.label}>Quote version</span>
-          <strong>{detail.currentVersion}</strong>
-        </div>
       </div>
-
-      <div style={styles.boundary}>
-        <span>Quote status and customer decision remain separate.</span>
-        <strong>Payment and scheduling are handled separately.</strong>
-      </div>
-
-      {detail.issuedAt && (
-        <span style={styles.timestamp}>
-          Issued {new Date(detail.issuedAt).toLocaleString()}
-        </span>
-      )}
-      {detail.decidedAt && (
-        <span style={styles.timestamp}>
-          Decision recorded {new Date(detail.decidedAt).toLocaleString()} against Quote version {detail.decisionVersion}
-        </span>
-      )}
-      {detail.parentQuoteId && (
-        <div style={styles.parentReference}>
-          <span>Parent Quote: {detail.parentQuoteId}</span>
-          <span>
-            Lineage: {readableEnum(detail.lineageType)} · {readableEnum(detail.lineageReasonCategory)}
-          </span>
-        </div>
-      )}
 
       {state.status === "loading" && (
         <p role="status" style={styles.message}>Loading quote details.</p>
@@ -199,18 +148,29 @@ export default function CanonicalQuoteCard({
       {state.status === "error" && (
         <p role="alert" style={styles.error}>{state.error}</p>
       )}
-      {state.status === "ready" && detail.scopeItems.length === 0 && (
-        <p style={styles.message}>No scope items recorded</p>
-      )}
-      {state.status === "ready" && detail.scopeItems.length > 0 && (
-        <section style={styles.scope} aria-label={`${lineageLabel(detail)} scope`}>
-          <h5 style={styles.scopeHeading}>Scope</h5>
-          <div style={styles.scopeList}>
-            {detail.scopeItems.map((item) => (
-              <ScopeItem key={item.scopeItemId} item={item} currency={detail.currency} />
-            ))}
+      {state.status === "ready" && (
+        <details style={styles.details}>
+          <summary style={styles.detailsSummary}>{copy.quoteDetails}</summary>
+          <div style={styles.detailsBody}>
+            {detail.issuedAt && (
+              <span style={styles.timestamp}>
+                {copy.issued} {new Date(detail.issuedAt).toLocaleString()}
+              </span>
+            )}
+            {detail.scopeItems.length === 0 ? (
+              <p style={styles.message}>{copy.noScope}</p>
+            ) : (
+              <section style={styles.scope} aria-label={`${lineageLabel(detail, copy)} ${copy.scope}`}>
+                <h5 style={styles.scopeHeading}>{copy.scope}</h5>
+                <div style={styles.scopeList}>
+                  {detail.scopeItems.map((item) => (
+                    <ScopeItem key={item.scopeItemId} item={item} currency={detail.currency} copy={copy} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
-        </section>
+        </details>
       )}
       {state.status === "ready" && (
         <QuoteDeliveryActions
@@ -257,25 +217,10 @@ const styles = {
   },
   summaryField: { display: "grid", gap: 4, minWidth: 0 },
   label: { color: "#64748b", fontSize: 12, fontWeight: 800 },
-  boundary: {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 8,
-    padding: "9px 0",
-    borderTop: "1px solid #e2e8f0",
-    borderBottom: "1px solid #e2e8f0",
-    color: "#7c2d12",
-    fontSize: 12,
-  },
   timestamp: { color: "#64748b", fontSize: 12 },
-  parentReference: {
-    display: "grid",
-    gap: 4,
-    color: "#475569",
-    fontSize: 12,
-    overflowWrap: "anywhere",
-  },
+  details: { borderTop: "1px solid #e2e8f0", paddingTop: 10 },
+  detailsSummary: { minHeight: 44, display: "flex", alignItems: "center", color: "#1f5132", fontWeight: 800, cursor: "pointer" },
+  detailsBody: { display: "grid", gap: 12, paddingTop: 10 },
   message: { margin: 0, color: "#64748b", lineHeight: 1.5 },
   error: {
     margin: 0,
@@ -309,14 +254,6 @@ const styles = {
   scopeTitle: { overflowWrap: "anywhere" },
   included: { color: "#166534", fontSize: 12, fontWeight: 800 },
   excluded: { color: "#7c2d12", fontSize: 12, fontWeight: 800 },
-  scopeMeta: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    color: "#475569",
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
   amountRow: {
     display: "flex",
     flexWrap: "wrap",
@@ -324,12 +261,4 @@ const styles = {
     color: "#334155",
     fontSize: 12,
   },
-  source: {
-    display: "grid",
-    gap: 3,
-    color: "#64748b",
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-  reference: { overflowWrap: "anywhere", textTransform: "none" },
 };

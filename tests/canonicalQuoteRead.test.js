@@ -561,13 +561,22 @@ test("bounded Quote panels expose commercial reads and no command authority", ()
     new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
     "utf8"
   );
+  const presentationCopy = readFileSync(
+    new URL("../src/utils/workCenterWorkspaceLanguage.js", import.meta.url),
+    "utf8"
+  );
 
   assert.match(sourceText, /No quotes issued yet/);
-  assert.match(sourceText, /Quote status and customer decision remain separate/);
-  assert.match(sourceText, /Payment and scheduling are handled separately/);
-  assert.match(sourceText, /Quote version/);
+  assert.match(sourceText, /<details/);
+  assert.match(sourceText, /detail\.totalMinor/);
+  assert.match(sourceText, /detail\.decisionState/);
+  assert.match(presentationCopy, /quoteDetails: "View quote details"/);
+  assert.match(presentationCopy, /separateProposal: "Additional proposal - not included in this total"/);
+  assert.doesNotMatch(
+    sourceText,
+    /Quote status and customer decision remain separate|Payment and scheduling are handled separately|Quote version|Parent Quote|Lineage:|Source:/
+  );
   assert.doesNotMatch(sourceText, /Canonical version|Server total|Server line total/);
-  assert.match(sourceText, /Separate proposal · not included in this total/);
   assert.match(dashboard, /CanonicalQuotesPanel/);
   assert.doesNotMatch(validator, /\.reduce\(|materialsSubtotalMinor\s*\+\s*laborServiceSubtotalMinor/);
   assert.doesNotMatch(

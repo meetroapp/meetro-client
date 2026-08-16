@@ -11,6 +11,7 @@ import {
 import { getEfrCopy } from "../utils/efrLanguage.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
 import CanonicalFindingsPanel from "./CanonicalFindingsPanel.jsx";
+import { WorkCenterAccordion } from "./WorkCenterWorkspaceSystem.jsx";
 
 const EMPTY_FORM = Object.freeze({
   observations: "",
@@ -48,6 +49,7 @@ export default function CanonicalJobEvaluation({
   availableActions = [],
   language = "en",
   setPage,
+  findingsPresentation = null,
   onCanonicalChange,
   onPrepareQuote,
 }) {
@@ -170,7 +172,7 @@ export default function CanonicalJobEvaluation({
 
   return (
     <>
-      <section style={styles.section} aria-labelledby="canonical-job-evaluation-title">
+      <section style={findingsPresentation ? { ...styles.section, ...styles.embeddedSection } : styles.section} aria-labelledby="canonical-job-evaluation-title">
         <div style={styles.header}>
           <div>
             <span style={styles.eyebrow}>{copy.assessment}</span>
@@ -258,15 +260,37 @@ export default function CanonicalJobEvaluation({
           </div>
         )}
       </section>
-      <CanonicalFindingsPanel
-        enabled={environmentEnabled && sourceContext?.type === "ordinary_job"}
-        evaluation={evaluation}
-        setPage={setPage}
-        language={language}
-        availableActions={availableActions}
-        onCanonicalChange={onCanonicalChange}
-        onPrepareQuote={onPrepareQuote}
-      />
+      {findingsPresentation ? (
+        <WorkCenterAccordion
+          id="canonical-job-findings"
+          icon="findingsLibrary"
+          title={findingsPresentation.title}
+          summary={findingsPresentation.summary}
+          defaultOpen={findingsPresentation.defaultOpen}
+          autoOpenToken={findingsPresentation.autoOpenToken}
+          nested
+        >
+          <CanonicalFindingsPanel
+            enabled={environmentEnabled && sourceContext?.type === "ordinary_job"}
+            evaluation={evaluation}
+            setPage={setPage}
+            language={language}
+            availableActions={availableActions}
+            onCanonicalChange={onCanonicalChange}
+            onPrepareQuote={onPrepareQuote}
+          />
+        </WorkCenterAccordion>
+      ) : (
+        <CanonicalFindingsPanel
+          enabled={environmentEnabled && sourceContext?.type === "ordinary_job"}
+          evaluation={evaluation}
+          setPage={setPage}
+          language={language}
+          availableActions={availableActions}
+          onCanonicalChange={onCanonicalChange}
+          onPrepareQuote={onPrepareQuote}
+        />
+      )}
     </>
   );
 }
@@ -274,6 +298,7 @@ export default function CanonicalJobEvaluation({
 const button = { minHeight: 44, padding: "9px 14px", borderRadius: 6, fontWeight: 800, cursor: "pointer" };
 const styles = {
   section: { display: "grid", gap: 16, padding: 16, border: "1px solid #cbd5e1", borderRadius: 8, background: "#ffffff" },
+  embeddedSection: { padding: "16px 0", border: 0, borderRadius: 0, background: "transparent" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
   eyebrow: { display: "block", color: "#475569", fontSize: 12, fontWeight: 800 },
   title: { margin: "4px 0 0", fontSize: 20, letterSpacing: 0 },

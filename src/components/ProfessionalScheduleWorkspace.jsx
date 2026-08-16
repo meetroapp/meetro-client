@@ -19,6 +19,12 @@ import {
   shareCanonicalScheduleExternally,
 } from "../utils/canonicalScheduleShare.js";
 import { t } from "../utils/language.js";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
+import {
+  WorkCenterEmptyState,
+  WorkCenterMetricGrid,
+  WorkCenterPageHeader,
+} from "./WorkCenterWorkspaceSystem.jsx";
 
 function tomorrow() {
   const value = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -216,6 +222,7 @@ export default function ProfessionalScheduleWorkspace({
   onViewJob,
   workCenterJobs = [],
 } = {}) {
+  const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const confirmed = sourceState?.confirmed;
   const [history, setHistory] = useState(null);
   const [historyStatus, setHistoryStatus] = useState("idle");
@@ -487,22 +494,27 @@ export default function ProfessionalScheduleWorkspace({
       aria-labelledby="professional-schedule-title"
       style={styles.workspace}
     >
-      <div style={styles.header}>
-        <div>
-          <h2 id="professional-schedule-title" style={styles.title}>
-            {t("professionalScheduleTitle", language)}
-          </h2>
-          <div style={styles.summary} aria-label={t("professionalScheduleTitle", language)}>
-            <span>{t("professionalScheduleReadyCount", language, { count: confirmed.summary.readyToSchedule })}</span>
-            <span>{t("professionalScheduleWaitingCount", language, { count: confirmed.summary.waitingOnCustomer })}</span>
-            <span>{t("professionalScheduleChangeCount", language, { count: confirmed.summary.changeRequested })}</span>
-            <span>{t("professionalScheduleUpcomingCount", language, { count: confirmed.summary.upcoming })}</span>
-          </div>
-        </div>
-        <button type="button" style={styles.secondaryButton} onClick={() => loadHistory()} disabled={historyStatus === "loading"}>
-          {t("professionalScheduleViewHistory", language)}
-        </button>
-      </div>
+      <WorkCenterPageHeader
+        eyebrow={workspaceCopy.scheduleEyebrow}
+        title={t("professionalScheduleTitle", language)}
+        titleId="professional-schedule-title"
+        description={workspaceCopy.scheduleDescription}
+        action={(
+          <button type="button" style={styles.secondaryButton} onClick={() => loadHistory()} disabled={historyStatus === "loading"}>
+            {t("professionalScheduleViewHistory", language)}
+          </button>
+        )}
+      />
+
+      <WorkCenterMetricGrid
+        ariaLabel={t("professionalScheduleTitle", language)}
+        metrics={[
+          { key: "ready", icon: "schedule", label: t("professionalScheduleReadyCount", language, { count: "" }).trim(), value: confirmed.summary.readyToSchedule },
+          { key: "waiting", icon: "history", tone: "warning", label: t("professionalScheduleWaitingCount", language, { count: "" }).trim(), value: confirmed.summary.waitingOnCustomer },
+          { key: "change", icon: "warning", tone: "warning", label: t("professionalScheduleChangeCount", language, { count: "" }).trim(), value: confirmed.summary.changeRequested },
+          { key: "upcoming", icon: "completion", tone: "success", label: t("professionalScheduleUpcomingCount", language, { count: "" }).trim(), value: confirmed.summary.upcoming },
+        ]}
+      />
 
       {sourceState.error && (
         <p role="alert" style={styles.warning}>{t("professionalScheduleRefreshWarning", language)}</p>
@@ -511,10 +523,11 @@ export default function ProfessionalScheduleWorkspace({
       {error && <p role="alert" style={styles.error}>{error}</p>}
 
       {activeCount === 0 ? (
-        <div style={styles.empty}>
-          <strong>{t("professionalScheduleEmpty", language)}</strong>
-          <span>{t("professionalScheduleEmptyDetail", language)}</span>
-        </div>
+        <WorkCenterEmptyState
+          icon="schedule"
+          title={workspaceCopy.scheduleEmptyTitle}
+          body={workspaceCopy.scheduleEmptyBody}
+        />
       ) : groups.map((group) => (
         group.items.length > 0 && (
           <section key={group.key} aria-labelledby={`schedule-${group.key}`} style={styles.group}>
@@ -653,19 +666,16 @@ export default function ProfessionalScheduleWorkspace({
 
 const styles = {
   workspace: { display: "grid", gap: 20, minWidth: 0 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
-  title: { margin: 0, color: "#172317", fontSize: "clamp(1.5rem, 4vw, 2rem)" },
-  summary: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, color: "#445246", fontSize: 14 },
   group: { display: "grid", gap: 12 },
   groupTitle: { margin: 0, color: "#172317", fontSize: 18 },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 14, minWidth: 0 },
-  card: { border: "1px solid #dce6dc", borderRadius: 18, background: "rgba(255,255,255,.94)", padding: 16, display: "grid", gap: 10, minWidth: 0, boxShadow: "0 10px 28px rgba(25,50,29,.06)" },
+  card: { border: "1px solid #dce6dc", borderRadius: 8, background: "rgba(255,255,255,.94)", padding: 16, display: "grid", gap: 10, minWidth: 0, boxShadow: "0 10px 28px rgba(25,50,29,.06)" },
   cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
   cardMain: { minWidth: 0 },
   eyebrow: { color: "#55705a", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em" },
   cardTitle: { margin: "4px 0", color: "#172317", overflowWrap: "anywhere" },
   jobTitle: { margin: 0, color: "#445246", overflowWrap: "anywhere" },
-  statePill: { borderRadius: 999, background: "#eef6ee", color: "#28552e", padding: "7px 10px", fontSize: 12, fontWeight: 800, maxWidth: "100%" },
+  statePill: { borderRadius: 999, background: "#eef6ee", color: "#28552e", padding: "7px 10px", fontSize: 12, fontWeight: 800, maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere", textAlign: "center" },
   scheduleTime: { margin: 0, color: "#172317", fontWeight: 800 },
   location: { margin: 0, color: "#536055", overflowWrap: "anywhere" },
   changeNote: { margin: 0, padding: 10, borderRadius: 12, background: "#fff7ed", color: "#9a4c13" },
@@ -677,7 +687,6 @@ const styles = {
   warning: { margin: 0, borderRadius: 12, padding: 12, background: "#fff8e8", color: "#775410" },
   error: { margin: 0, color: "#a53030", fontWeight: 700 },
   success: { margin: 0, color: "#25612c", fontWeight: 700 },
-  empty: { border: "1px dashed #b9c9ba", borderRadius: 18, padding: 24, display: "grid", gap: 6, color: "#445246" },
   overlay: { position: "fixed", inset: 0, zIndex: 10020, background: "rgba(18,30,20,.48)", display: "grid", placeItems: "center", padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))", overflowY: "auto" },
   editor: { width: "min(620px, 100%)", maxHeight: "min(88dvh, 760px)", overflowY: "auto", borderRadius: 20, background: "#fff", padding: 20, display: "grid", gap: 18, boxShadow: "0 24px 64px rgba(15,30,18,.24)" },
   editorHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },

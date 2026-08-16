@@ -26,6 +26,11 @@ const language = readFileSync(
   new URL("../src/utils/dailyWorkflowLanguage.js", import.meta.url),
   "utf8"
 );
+const workspaceSystem = readFileSync(
+  new URL("../src/components/WorkCenterWorkspaceSystem.jsx", import.meta.url),
+  "utf8"
+);
+const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 
 test("Work Center Quotes count comes only from the confirmed server summary", () => {
   assert.match(dashboard, /professionalQuotesSource\.confirmed\?\.summary/);
@@ -71,11 +76,12 @@ test("loading, unavailable, empty, refresh, and pagination remain distinct", () 
   for (const key of [
     "professionalQuotesLoading",
     "professionalQuotesUnavailable",
-    "professionalQuotesEmpty",
     "professionalQuotesRefreshing",
     "professionalQuotesShowMore",
     "professionalQuotesMoreUnavailable",
   ]) assert.match(workspace, new RegExp(key));
+  assert.match(workspace, /quotesEmptyTitle/);
+  assert.match(workspace, /quotesEmptyBody/);
   assert.match(adapter, /status: current\.confirmed \? "confirmed" : "error"/);
   assert.match(adapter, /nextCursor/);
 });
@@ -83,7 +89,9 @@ test("loading, unavailable, empty, refresh, and pagination remain distinct", () 
 test("workspace stays compact, responsive, touch-safe, and clear of persistent navigation", () => {
   assert.match(workspace, /repeat\(auto-fit, minmax\(min\(100%, 290px\), 1fr\)\)/);
   assert.match(workspace, /minHeight: 44/);
-  assert.match(workspace, /--meetro-bottom-nav-clearance/);
+  assert.match(workspace, /work-center-workspace/);
+  assert.match(workspaceSystem, /WorkCenterMetricGrid/);
+  assert.match(css, /--meetro-mobile-persistent-control-clearance/);
   assert.match(workspace, /minWidth: 0/);
 });
 

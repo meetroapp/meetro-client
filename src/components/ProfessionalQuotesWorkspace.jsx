@@ -1,4 +1,10 @@
 import WorkCenterBackButton from "./WorkCenterBackButton.jsx";
+import {
+  WorkCenterEmptyState,
+  WorkCenterMetricGrid,
+  WorkCenterPageHeader,
+} from "./WorkCenterWorkspaceSystem.jsx";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
 import { t } from "../utils/language.js";
 import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat.js";
 
@@ -102,23 +108,23 @@ export default function ProfessionalQuotesWorkspace({
   onLoadMore,
   onOpenQuote,
 }) {
+  const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const confirmed = sourceState?.confirmed;
   const quotes = confirmed?.quotes || [];
   return (
-    <section className="professional-quotes-workspace meetro-visual-surface" style={styles.workspace}>
+    <section className="professional-quotes-workspace work-center-workspace" style={styles.workspace}>
       <WorkCenterBackButton
         label={t("backToWorkCenter", language)}
         onClick={onBack}
       />
-      <header style={styles.header}>
-        <div>
-          <h2 style={styles.title}>{t("workCenterQuotesTitle", language)}</h2>
-          <p style={styles.purpose}>{t("professionalQuotesWorkspacePurpose", language)}</p>
-        </div>
-        {sourceState?.refreshing && (
+      <WorkCenterPageHeader
+        eyebrow={workspaceCopy.quotesEyebrow}
+        title={t("workCenterQuotesTitle", language)}
+        description={workspaceCopy.quotesDescription}
+        action={sourceState?.refreshing ? (
           <span role="status" style={styles.refreshing}>{t("professionalQuotesRefreshing", language)}</span>
-        )}
-      </header>
+        ) : null}
+      />
 
       {sourceState?.status === "loading" && !confirmed && (
         <p role="status" style={styles.state}>{t("professionalQuotesLoading", language)}</p>
@@ -131,8 +137,23 @@ export default function ProfessionalQuotesWorkspace({
           </button>
         </div>
       )}
+      {confirmed && (
+        <WorkCenterMetricGrid
+          ariaLabel={t("workCenterQuotesTitle", language)}
+          metrics={[
+            { key: "drafts", icon: "quote", label: t("professionalQuotesDrafts", language), value: confirmed.summary.drafts },
+            { key: "waiting", icon: "history", tone: "warning", label: t("professionalQuotesWaiting", language), value: confirmed.summary.waitingOnCustomer },
+            { key: "approved", icon: "completion", tone: "success", label: t("professionalQuotesApproved", language), value: confirmed.summary.approved },
+            { key: "declined", icon: "warning", tone: "neutral", label: t("professionalQuotesDeclined", language), value: confirmed.summary.declined },
+          ]}
+        />
+      )}
       {confirmed && quotes.length === 0 && (
-        <p style={styles.state}>{t("professionalQuotesEmpty", language)}</p>
+        <WorkCenterEmptyState
+          icon="quote"
+          title={workspaceCopy.quotesEmptyTitle}
+          body={workspaceCopy.quotesEmptyBody}
+        />
       )}
       {confirmed && quotes.length > 0 && (
         <div style={styles.groups}>
@@ -167,16 +188,13 @@ export default function ProfessionalQuotesWorkspace({
 }
 
 const styles = {
-  workspace: { display: "grid", gap: 20, width: "min(100%, 1080px)", minWidth: 0, margin: "0 auto", padding: "clamp(16px, 3vw, 28px)", paddingBottom: "calc(var(--meetro-bottom-nav-clearance, 0px) + 32px)" },
-  header: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
-  title: { margin: 0, color: "#172317", fontSize: "clamp(24px, 4vw, 34px)" },
-  purpose: { margin: "6px 0 0", color: "#526052", lineHeight: 1.5 },
+  workspace: { minWidth: 0 },
   refreshing: { color: "#526052", fontSize: 13, fontWeight: 700 },
-  state: { margin: 0, padding: "28px 16px", textAlign: "center", color: "#526052", border: "1px solid #dce5d8", borderRadius: 16 },
+  state: { margin: 0, padding: "28px 16px", textAlign: "center", color: "#526052", border: "1px solid #dce5d8", borderRadius: 8 },
   errorState: { display: "grid", gap: 12, justifyItems: "start", padding: 18, color: "#8f1d1d", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 16 },
   retry: { minHeight: 44, padding: "0 18px", border: 0, borderRadius: 999, color: "#fff", background: "#1f5132", fontWeight: 800, cursor: "pointer" },
   groups: { display: "grid", gap: 18, minWidth: 0 },
-  group: { minWidth: 0, padding: "clamp(14px, 2.5vw, 20px)", border: "1px solid #dce5d8", borderRadius: 18, background: "#fff" },
+  group: { minWidth: 0, padding: "clamp(14px, 2.5vw, 20px)", border: "1px solid #dce5d8", borderRadius: 8, background: "#fff" },
   groupHeading: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
   groupTitle: { margin: 0, color: "#172317", fontSize: 19 },
   groupDescription: { margin: "5px 0 14px", color: "#667266", lineHeight: 1.45 },
@@ -184,7 +202,7 @@ const styles = {
   summaryControl: { display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 44, color: "#172317", fontWeight: 800, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 290px), 1fr))", gap: 12, minWidth: 0 },
   groupEmpty: { gridColumn: "1 / -1", margin: 0, color: "#7b867b" },
-  card: { display: "grid", gap: 14, minWidth: 0, padding: 16, border: "1px solid #dce5d8", borderRadius: 16, background: "#fbfdf9" },
+  card: { display: "grid", gap: 14, minWidth: 0, padding: 16, border: "1px solid #dce5d8", borderRadius: 8, background: "#fbfdf9" },
   cardHeading: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 10, minWidth: 0 },
   identity: { display: "grid", gap: 4, minWidth: 0, flex: "1 1 180px" },
   customer: { color: "#172317", overflowWrap: "anywhere" },

@@ -24,7 +24,11 @@ test("canonical Invoice workspace has create, separate issue, Payment, and shari
   ]) assert.match(source, new RegExp(required));
   assert.doesNotMatch(source, /Pay Now|stripe|paypal|publicInvoice|invoiceUrl/);
   assert.match(source, /minHeight: 44/);
-  assert.match(source, /minmax\(min\(220px, 100%\), 1fr\)/);
+  assert.match(source, /WorkCenterMetricGrid/);
+  assert.match(source, /summary\.readyToInvoice/);
+  assert.match(source, /summary\.totalOutstandingMinor/);
+  assert.match(source, /WorkCenterEmptyState/);
+  assert.doesNotMatch(source, /No canonical Invoice records yet/);
 });
 
 test("Project Journey and Conversation route read canonical customer Invoice truth", () => {
