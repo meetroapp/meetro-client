@@ -20302,6 +20302,7 @@ const jobPersistentContextBlocker = {
 };
 
 const jobPersistentContextAction = {
+  minHeight: "44px",
   border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "12px",
   background: "#ffffff",
@@ -21726,9 +21727,10 @@ const emptyActionGrid = {
 };
 
 const emptyActionButton = {
+  minHeight: "44px",
   border: "1px solid var(--meetro-color-line)",
   background: "var(--meetro-surface-paper)",
-  borderRadius: "10px",
+  borderRadius: "8px",
   padding: "11px",
   fontWeight: "900",
   cursor: "pointer",

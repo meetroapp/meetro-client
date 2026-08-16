@@ -91,8 +91,12 @@ test("Current Job stays identity-first and progressively discloses canonical sec
 test("compact contract uses two metric columns, full-width odd final card, and persistent-control clearance", () => {
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.work-center-metric-card:last-child:nth-child\(odd\)[\s\S]*grid-column: 1 \/ -1/);
+  assert.match(css, /\.work-center-metric-card__label \{[\s\S]*overflow-wrap: normal;[\s\S]*word-break: normal;/);
   assert.match(css, /--meetro-mobile-persistent-control-clearance/);
+  assert.match(css, /@media \(min-width: 901px\)[\s\S]*padding-right: 184px/);
   assert.match(css, /\.work-center-status-pill \{[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/);
+  assert.match(dashboard, /const jobPersistentContextAction = \{[\s\S]*minHeight: "44px"/);
+  assert.match(dashboard, /const emptyActionButton = \{[\s\S]*minHeight: "44px"/);
 });
 
 test("normal Quote presentation hides technical version, lineage, and provenance detail", () => {

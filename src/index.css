@@ -763,6 +763,12 @@ body,
   box-shadow: 0 8px 24px rgba(28, 49, 31, 0.05);
 }
 
+@media (min-width: 901px) {
+  .work-center-workspace {
+    padding-right: 184px;
+  }
+}
+
 @media (max-width: 600px) {
   .work-center-workspace {
     gap: 18px;
@@ -792,7 +798,19 @@ body,
 
   .work-center-metric-card {
     min-height: 112px;
-    padding: 14px;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .work-center-metric-card__icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .work-center-metric-card__label {
+    font-size: 12px;
+    overflow-wrap: normal;
+    word-break: normal;
   }
 
   .work-center-metric-card:last-child:nth-child(odd) {
