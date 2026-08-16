@@ -72,6 +72,9 @@ import {
   markJobRequestInterpretIntentAmbiguous,
   requestJobRequestInterpretation,
 } from "../utils/jobRequestInterpret";
+import { recordWorkflowReview } from "../utils/contextualIntelligence";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
+import WorkflowMicrophoneInput from "../components/WorkflowMicrophoneInput.jsx";
 import {
   JOB_REQUEST_INTERPRETATION_FAILURE,
   applyHomeownerConversationText,
@@ -312,6 +315,9 @@ function Upload({ setPage }) {
   const [pendingInterpretText, setPendingInterpretText] = useState("");
   const [interpretationPending, setInterpretationPending] = useState(false);
   const [interpretationFailure, setInterpretationFailure] = useState(null);
+  const [pendingInterpretation, setPendingInterpretation] = useState(null);
+  const [editingInterpretation, setEditingInterpretation] = useState(false);
+  const [interpretationReviewPending, setInterpretationReviewPending] = useState(false);
   const [requestMode, setRequestMode] = useState("conversation");
   const [activeGuidedCard, setActiveGuidedCard] = useState("work");
   const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
@@ -829,17 +835,11 @@ function Upload({ setPage }) {
         authFetchImpl: authFetch,
       });
 
-      setDraft((current) => {
-        const patched = applyJobRequestInterpretationPatch(current, result.interpretation);
-        return alignAssistantServiceSelection(patched.draft);
+      setPendingInterpretation({
+        operationId: result.operationId,
+        interpretation: result.interpretation,
       });
-      appendCreationMessages(
-        createInterpretationSuccessMessages({
-          interpretation: result.interpretation,
-          language,
-          photosAttached: selectedRequestPhotos.length > 0,
-        })
-      );
+      setEditingInterpretation(false);
       setInterpretIntent({
         ...nextIntent,
         status: "completed",
@@ -860,6 +860,67 @@ function Upload({ setPage }) {
       });
     } finally {
       setInterpretationPending(false);
+    }
+  }
+
+  function updatePendingInterpretationField(path, value) {
+    setPendingInterpretation((current) => current ? {
+      ...current,
+      interpretation: {
+        ...current.interpretation,
+        draftPatch: {
+          ...current.interpretation.draftPatch,
+          fields: current.interpretation.draftPatch.fields.map((field) =>
+            field.path === path ? { ...field, value } : field
+          ),
+        },
+      },
+    } : current);
+  }
+
+  async function reviewPendingInterpretation(action) {
+    if (!pendingInterpretation?.operationId || interpretationReviewPending) return;
+    setInterpretationReviewPending(true);
+    setInterpretationFailure(null);
+    try {
+      const fields = pendingInterpretation.interpretation.draftPatch.fields;
+      await Promise.all(fields.map((field) => recordWorkflowReview({
+        proposalId: pendingInterpretation.operationId,
+        elementId: field.path,
+        action,
+        editedValue: action === "EDITED" ? field.value : undefined,
+        reasonCategory: action === "REJECTED" ? "HOMEOWNER_DISMISSED" : undefined,
+        setPage,
+        authFetchImpl: authFetch,
+      })));
+      if (action !== "REJECTED") {
+        setDraft((current) => {
+          const patched = applyJobRequestInterpretationPatch(
+            current,
+            pendingInterpretation.interpretation
+          );
+          return alignAssistantServiceSelection(patched.draft);
+        });
+        appendCreationMessages(
+          createInterpretationSuccessMessages({
+            interpretation: pendingInterpretation.interpretation,
+            language,
+            photosAttached: selectedRequestPhotos.length > 0,
+          })
+        );
+      }
+      setPendingInterpretation(null);
+      setEditingInterpretation(false);
+    } catch (error) {
+      setInterpretationFailure({
+        classification: JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE,
+        message: error?.message || getInterpretationFailureMessage(
+          JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE,
+          language
+        ),
+      });
+    } finally {
+      setInterpretationReviewPending(false);
     }
   }
 
@@ -1464,6 +1525,55 @@ function Upload({ setPage }) {
                   {t("jobRequestConversationProcessing", language)}
                 </div>
               )}
+              {pendingInterpretation && (
+                <section style={assistantFallbackCard} aria-label={getAskMeetroWorkflowCopy(language).title}>
+                  <strong>{pendingInterpretation.interpretation.summary}</strong>
+                  <div style={liveDraftSectionList}>
+                    {pendingInterpretation.interpretation.draftPatch.fields.map((field) => (
+                      <label key={field.path} style={liveDraftSection}>
+                        <span style={liveDraftSectionTitle}>{field.path.split(".").join(" / ")}</span>
+                        {editingInterpretation ? (
+                          <textarea
+                            style={composerInput}
+                            value={field.value}
+                            maxLength={4000}
+                            onChange={(event) => updatePendingInterpretationField(field.path, event.target.value)}
+                          />
+                        ) : (
+                          <span>{field.value}</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  <p style={emptyDraftText}>{getAskMeetroWorkflowCopy(language).noSilentChanges}</p>
+                  <div style={fallbackActions}>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => void reviewPendingInterpretation(editingInterpretation ? "EDITED" : "ACCEPTED")}
+                    >
+                      {getAskMeetroWorkflowCopy(language).add}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => setEditingInterpretation(true)}
+                    >
+                      {getAskMeetroWorkflowCopy(language).edit}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => void reviewPendingInterpretation("REJECTED")}
+                    >
+                      {getAskMeetroWorkflowCopy(language).dismiss}
+                    </button>
+                  </div>
+                </section>
+              )}
             </div>
 
             {interpretationFailure && (
@@ -1506,6 +1616,13 @@ function Upload({ setPage }) {
                 disabled={interpretationPending}
               />
               <div style={composerActions}>
+                <WorkflowMicrophoneInput
+                  language={language}
+                  contextLabel="job_request"
+                  disabled={interpretationPending}
+                  setPage={setPage}
+                  onTranscript={setConversationText}
+                />
                 <button
                   type="button"
                   style={secondaryActionButton}

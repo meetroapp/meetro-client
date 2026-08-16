@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ContextualAskMeetro from "./ContextualAskMeetro.jsx";
 import {
   getCanonicalEvaluationSourceContext,
   ordinaryCanonicalEvaluationContentToForm,
@@ -9,6 +10,12 @@ import {
   saveCanonicalEvaluationDraft,
 } from "../utils/evaluationAuthorityController.js";
 import { getEfrCopy } from "../utils/efrLanguage.js";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
+import {
+  INTELLIGENCE_OPERATION,
+  recordWorkflowReview,
+  requestWorkflowIntelligence,
+} from "../utils/contextualIntelligence.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
 import CanonicalFindingsPanel from "./CanonicalFindingsPanel.jsx";
 import { WorkCenterAccordion } from "./WorkCenterWorkspaceSystem.jsx";
@@ -69,11 +76,21 @@ export default function CanonicalJobEvaluation({
   const [editing, setEditing] = useState(false);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [assistant, setAssistant] = useState({
+    busy: false,
+    error: "",
+    notice: "",
+    result: null,
+  });
+  const [assistantFindingDraft, setAssistantFindingDraft] = useState(null);
+  const [assistantRecommendationDraft, setAssistantRecommendationDraft] = useState(null);
+  const [assistantEvaluationEdit, setAssistantEvaluationEdit] = useState(null);
 
   useEffect(() => {
     let active = true;
     setEditing(false);
     setConfirmingCompletion(false);
+    setAssistantEvaluationEdit(null);
     if (!environmentEnabled || !jobId || !requestId) {
       queueMicrotask(() => {
         if (active) {
@@ -110,7 +127,85 @@ export default function CanonicalJobEvaluation({
   function beginEditing() {
     setLoadState((current) => ({ ...current, error: "", notice: "" }));
     setForm(formForEvaluation(evaluation));
+    setAssistantEvaluationEdit(null);
     setEditing(true);
+  }
+
+  async function requestEvaluationHelp(action, prompt) {
+    const intents = {
+      describe: "DESCRIBE_CONDITION",
+      inspect: "INSPECTION_CHECKLIST",
+      photos: "ANALYZE_PHOTOS",
+      measurements: "MEASUREMENT_HELP",
+      findings: "DRAFT_FINDINGS",
+      recommendations: "DRAFT_RECOMMENDATIONS",
+    };
+    setAssistant({ busy: true, error: "", notice: "", result: null });
+    try {
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.EVALUATION,
+        locale: language,
+        input: {
+          jobId,
+          evaluationId: evaluation?.evaluation?.id || null,
+          intent: intents[action],
+          professionalInput: {
+            observations: form.observations || null,
+            measurements: [],
+            notes: [form.diagnosisSummary, form.limitations, form.internalNotes, prompt]
+              .filter(Boolean)
+              .join("\n") || null,
+          },
+        },
+        expected: { jobId, evaluationId: evaluation?.evaluation?.id || undefined },
+        setPage,
+      });
+      setAssistant({ busy: false, error: "", notice: "", result });
+    } catch (error) {
+      setAssistant({ busy: false, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable, notice: "", result: null });
+    }
+  }
+
+  async function reviewAssistantItem(item, action, editedValue) {
+    const result = assistant.result;
+    if (!result || !item?.id) return false;
+    try {
+      await recordWorkflowReview({
+        proposalId: result.proposal.proposalId,
+        elementId: item.id,
+        action,
+        editedValue,
+        reasonCategory: action === "REJECTED" ? "PROFESSIONAL_DISMISSED" : undefined,
+        setPage,
+      });
+      return true;
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+      return false;
+    }
+  }
+
+  async function addEvaluationDraft({ edit = false } = {}) {
+    const proposal = assistant.result?.proposal;
+    if (!proposal?.evaluationDraft || !editingAllowed) return;
+    if (!edit && !await reviewAssistantItem(proposal.evaluationDraft, "ACCEPTED")) return;
+    setForm((current) => ({
+      ...current,
+      observations: proposal.evaluationDraft.observations || current.observations,
+      diagnosisSummary: proposal.evaluationDraft.diagnosisSummary || current.diagnosisSummary,
+      limitations: proposal.evaluationDraft.limitations || current.limitations,
+    }));
+    setEditing(true);
+    setAssistantEvaluationEdit(edit ? proposal.evaluationDraft : null);
+    setAssistant((current) => ({ ...current, notice: getAskMeetroWorkflowCopy(language).addToEvaluation }));
+  }
+
+  async function prepareAssistantFinding(item) {
+    setAssistantFindingDraft(item);
+  }
+
+  async function prepareAssistantRecommendation(item) {
+    setAssistantRecommendationDraft(item);
   }
 
   async function saveEvaluation() {
@@ -124,6 +219,17 @@ export default function CanonicalJobEvaluation({
     }
     setLoadState((current) => ({ ...current, status: "saving", error: "", notice: "" }));
     try {
+      if (assistantEvaluationEdit) {
+        const reviewed = await reviewAssistantItem(assistantEvaluationEdit, "EDITED", {
+          observations: form.observations,
+          diagnosisSummary: form.diagnosisSummary,
+          limitations: form.limitations,
+        });
+        if (!reviewed) {
+          setLoadState((current) => ({ ...current, status: "ready" }));
+          return;
+        }
+      }
       const confirmed = await saveCanonicalEvaluationDraft({
         record: canonicalRecord({ jobId, requestId, relationshipId }),
         form,
@@ -133,6 +239,7 @@ export default function CanonicalJobEvaluation({
       setLoadState({ status: "ready", evaluation: confirmed, error: "", notice: copy.evaluationSaved });
       setForm(formForEvaluation(confirmed));
       setEditing(false);
+      setAssistantEvaluationEdit(null);
       onCanonicalChange?.();
     } catch (error) {
       setLoadState((current) => ({ ...current, status: "ready", error: errorMessage(error, copy) }));
@@ -188,6 +295,38 @@ export default function CanonicalJobEvaluation({
         {loadState.status === "loading" && <p role="status" style={styles.message}>{copy.loadingEvaluation}</p>}
         {loadState.error && <p role="alert" style={styles.error}>{loadState.error}</p>}
         {loadState.notice && <p role="status" style={styles.success}>{loadState.notice}</p>}
+        {environmentEnabled && jobId && (
+          <ContextualAskMeetro
+            language={language}
+            contextLabel="evaluation"
+            contextName={customerConcern || copy.evaluation}
+            actions={[
+              { id: "describe", label: getAskMeetroWorkflowCopy(language).helpDescribe },
+              { id: "inspect", label: getAskMeetroWorkflowCopy(language).whatCheck },
+              { id: "photos", label: getAskMeetroWorkflowCopy(language).analyzePhotos },
+              { id: "measurements", label: getAskMeetroWorkflowCopy(language).helpMeasurements },
+              { id: "findings", label: getAskMeetroWorkflowCopy(language).turnIntoFindings },
+              { id: "recommendations", label: getAskMeetroWorkflowCopy(language).draftRecommendations },
+            ]}
+            busy={assistant.busy}
+            error={assistant.error}
+            notice={assistant.notice}
+            onRequest={requestEvaluationHelp}
+          >
+            {assistant.result && (
+              <EvaluationAssistantResult
+                result={assistant.result.proposal}
+                language={language}
+                canApplyEvaluation={editingAllowed}
+                onAddEvaluation={() => void addEvaluationDraft()}
+                onEditEvaluation={() => void addEvaluationDraft({ edit: true })}
+                onAddFinding={(item) => void prepareAssistantFinding(item)}
+                onAddRecommendation={(item) => void prepareAssistantRecommendation(item)}
+                onDismiss={(item) => void reviewAssistantItem(item, "REJECTED")}
+              />
+            )}
+          </ContextualAskMeetro>
+        )}
         {loadState.status === "error" && (
           <button type="button" style={styles.secondaryButton} onClick={() => setRefresh((value) => value + 1)}>
             {copy.retry}
@@ -255,7 +394,10 @@ export default function CanonicalJobEvaluation({
               <button type="button" style={styles.primaryButton} disabled={loadState.status === "saving"} onClick={() => void saveEvaluation()}>
                 {loadState.status === "saving" ? copy.saving : copy.saveEvaluation}
               </button>
-              <button type="button" style={styles.secondaryButton} disabled={loadState.status === "saving"} onClick={() => setEditing(false)}>{copy.cancel}</button>
+              <button type="button" style={styles.secondaryButton} disabled={loadState.status === "saving"} onClick={() => {
+                setEditing(false);
+                setAssistantEvaluationEdit(null);
+              }}>{copy.cancel}</button>
             </div>
           </div>
         )}
@@ -278,6 +420,12 @@ export default function CanonicalJobEvaluation({
             availableActions={availableActions}
             onCanonicalChange={onCanonicalChange}
             onPrepareQuote={onPrepareQuote}
+            assistantFindingDraft={assistantFindingDraft}
+            assistantRecommendationDraft={assistantRecommendationDraft}
+            onAssistantFindingDraftConsumed={() => setAssistantFindingDraft(null)}
+            onAssistantRecommendationDraftConsumed={() => setAssistantRecommendationDraft(null)}
+            onAssistantFindingReview={(item, action, editedValue) => reviewAssistantItem(item, action, editedValue)}
+            onAssistantRecommendationReview={(item, action, editedValue) => reviewAssistantItem(item, action, editedValue)}
           />
         </WorkCenterAccordion>
       ) : (
@@ -289,9 +437,72 @@ export default function CanonicalJobEvaluation({
           availableActions={availableActions}
           onCanonicalChange={onCanonicalChange}
           onPrepareQuote={onPrepareQuote}
+          assistantFindingDraft={assistantFindingDraft}
+          assistantRecommendationDraft={assistantRecommendationDraft}
+          onAssistantFindingDraftConsumed={() => setAssistantFindingDraft(null)}
+          onAssistantRecommendationDraftConsumed={() => setAssistantRecommendationDraft(null)}
+          onAssistantFindingReview={(item, action, editedValue) => reviewAssistantItem(item, action, editedValue)}
+          onAssistantRecommendationReview={(item, action, editedValue) => reviewAssistantItem(item, action, editedValue)}
         />
       )}
     </>
+  );
+}
+
+function EvaluationAssistantResult({
+  result,
+  language,
+  canApplyEvaluation,
+  onAddEvaluation,
+  onEditEvaluation,
+  onAddFinding,
+  onAddRecommendation,
+  onDismiss,
+}) {
+  const copy = getAskMeetroWorkflowCopy(language);
+  const groups = [
+    [copy.observed, result.observed],
+    [copy.professionalInput, result.professionalInput],
+    [copy.needsVerification, result.needsVerification],
+    [copy.suggested, [...result.inspectionSuggestions, ...result.measurementSuggestions]],
+  ];
+  return (
+    <div style={styles.assistantResult}>
+      <strong>{result.summary}</strong>
+      {groups.map(([label, items]) => items.length > 0 && (
+        <section key={label} style={styles.assistantGroup}>
+          <h4 style={styles.assistantHeading}>{label}</h4>
+          {items.map((item) => <p key={item.id} style={styles.message}>{item.text}</p>)}
+        </section>
+      ))}
+      <div style={styles.actions}>
+        {canApplyEvaluation && (
+          <>
+            <button type="button" style={styles.primaryButton} onClick={onAddEvaluation}>{copy.addToEvaluation}</button>
+            <button type="button" style={styles.secondaryButton} onClick={onEditEvaluation}>{copy.edit}</button>
+          </>
+        )}
+        <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(result.evaluationDraft)}>{copy.dismiss}</button>
+      </div>
+      {result.findingDrafts.map((item) => (
+        <article key={item.id} style={styles.assistantDraft}>
+          <p style={styles.message}>{item.text}</p>
+          <div style={styles.actions}>
+            <button type="button" style={styles.secondaryButton} onClick={() => onAddFinding(item)}>{copy.addFinding}</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(item)}>{copy.dismiss}</button>
+          </div>
+        </article>
+      ))}
+      {result.recommendationDrafts.map((item) => (
+        <article key={item.id} style={styles.assistantDraft}>
+          <p style={styles.message}>{item.text}</p>
+          <div style={styles.actions}>
+            <button type="button" style={styles.secondaryButton} onClick={() => onAddRecommendation(item)}>{copy.addRecommendation}</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(item)}>{copy.dismiss}</button>
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -320,4 +531,8 @@ const styles = {
   confirmation: { display: "grid", gap: 10, padding: 12, border: "1px solid #d97706", borderRadius: 8, background: "#fffbeb" },
   primaryButton: { ...button, border: "1px solid #1f5132", color: "#ffffff", background: "#1f5132" },
   secondaryButton: { ...button, border: "1px solid #94a3b8", color: "#334155", background: "#ffffff" },
+  assistantResult: { display: "grid", gap: 12, minWidth: 0 },
+  assistantGroup: { display: "grid", gap: 6, paddingLeft: 10, borderLeft: "3px solid #8cab95" },
+  assistantHeading: { margin: 0, fontSize: 14, letterSpacing: 0 },
+  assistantDraft: { display: "grid", gap: 8, padding: 10, border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff" },
 };

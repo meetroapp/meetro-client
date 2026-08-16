@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
+import ContextualAskMeetro from "./ContextualAskMeetro.jsx";
 import WorkCenterBackButton from "./WorkCenterBackButton.jsx";
 import {
   WorkCenterEmptyState,
@@ -17,6 +18,12 @@ import {
   recordCanonicalPayment,
 } from "../utils/invoicePaymentApi.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
+import {
+  INTELLIGENCE_OPERATION,
+  recordWorkflowReview,
+  requestWorkflowIntelligence,
+} from "../utils/contextualIntelligence.js";
 import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
 import {
   buildInvoiceEmailUrl,
@@ -56,6 +63,8 @@ export default function ProfessionalInvoiceWorkspace({
   const [paymentDraft, setPaymentDraft] = useState({
     amount: "", method: "CHECK", receivedDate: today(), reference: "",
   });
+  const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null });
+  const [assistantInvoiceDraft, setAssistantInvoiceDraft] = useState(null);
 
   const loadWorkspace = useCallback(async () => {
     const value = await fetchProfessionalInvoiceWorkspace({ limit: 50, setPage });
@@ -98,6 +107,19 @@ export default function ProfessionalInvoiceWorkspace({
     setBusy("create");
     setNotice("");
     try {
+      if (assistantInvoiceDraft) {
+        const edits = [
+          [assistantInvoiceDraft.customerNotes, createDraft.customerNotes],
+          [assistantInvoiceDraft.terms, createDraft.terms],
+        ].filter(([item, value]) => item?.text !== value.trim());
+        await Promise.all(edits.map(([item, value]) => recordWorkflowReview({
+          proposalId: assistantInvoiceDraft.proposalId,
+          elementId: item.id,
+          action: "EDITED",
+          editedValue: value.trim(),
+          setPage,
+        })));
+      }
       const invoice = await createCanonicalInvoice({
         jobId: createTarget.jobId,
         expectedCompletionVersion: createTarget.completionVersion,
@@ -113,6 +135,7 @@ export default function ProfessionalInvoiceWorkspace({
       setSelected(invoice);
       setCreateTarget(null);
       setCreateDraft({ dueMode: "DUE_ON_RECEIPT", dueDate: "", customerNotes: "", terms: "" });
+      setAssistantInvoiceDraft(null);
       await loadWorkspace();
     } catch (error) {
       setNotice(error?.message || copy.unavailable);
@@ -190,6 +213,67 @@ export default function ProfessionalInvoiceWorkspace({
     }
   }
 
+  async function requestInvoiceHelp(action, prompt) {
+    const intents = {
+      create: "CREATE_INVOICE",
+      review: "REVIEW_INVOICE",
+      balance: "EXPLAIN_BALANCE",
+    };
+    if (!createTarget && !selected) return;
+    setAssistant({ busy: true, error: "", notice: "", result: null });
+    try {
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.INVOICE,
+        locale: language,
+        input: {
+          jobId: selected ? null : createTarget.jobId,
+          invoiceId: selected?.invoiceId || null,
+          intent: intents[action],
+          professionalInstructions: prompt || null,
+        },
+        expected: {
+          jobId: selected ? undefined : createTarget.jobId,
+          invoiceId: selected?.invoiceId || undefined,
+        },
+        setPage,
+      });
+      setAssistant({ busy: false, error: "", notice: "", result });
+    } catch (error) {
+      setAssistant({ busy: false, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable, notice: "", result: null });
+    }
+  }
+
+  async function reviewInvoiceProposal(action, { apply = false } = {}) {
+    const proposal = assistant.result?.proposal;
+    if (!proposal) return;
+    const items = [proposal.customerNotes, proposal.terms, proposal.dueDateWording, proposal.balanceExplanation]
+      .filter((item) => item?.id && item.text);
+    try {
+      await Promise.all(items.map((item) => recordWorkflowReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action,
+        reasonCategory: action === "REJECTED" ? "PROFESSIONAL_DISMISSED" : undefined,
+        setPage,
+      })));
+      if (apply && createTarget) {
+        setCreateDraft((current) => ({
+          ...current,
+          customerNotes: proposal.customerNotes.text || current.customerNotes,
+          terms: proposal.terms.text || current.terms,
+        }));
+        setAssistantInvoiceDraft(proposal);
+      }
+      setAssistant((current) => ({
+        ...current,
+        result: action === "REJECTED" ? null : current.result,
+        notice: action === "REJECTED" ? "" : getAskMeetroWorkflowCopy(language).useInInvoice,
+      }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+    }
+  }
+
   const summary = workspace?.summary;
   const selectedActions = selected ? (
     <div style={styles.actions}>
@@ -262,7 +346,11 @@ export default function ProfessionalInvoiceWorkspace({
                 </div>
                 <div style={styles.rowAction}>
                   {job.approvedAmount && <strong>{money(job.approvedAmount.totalMinor, job.approvedAmount.currency)}</strong>}
-                  <button type="button" style={styles.primaryButton} onClick={() => setCreateTarget(job)}>{copy.create}</button>
+                  <button type="button" style={styles.primaryButton} onClick={() => {
+                    setAssistantInvoiceDraft(null);
+                    setAssistant({ busy: false, error: "", notice: "", result: null });
+                    setCreateTarget(job);
+                  }}>{copy.create}</button>
                 </div>
               </div>
             ))}
@@ -284,8 +372,40 @@ export default function ProfessionalInvoiceWorkspace({
           )}
           <label style={styles.field}>{copy.customerNotes}<textarea maxLength={2000} value={createDraft.customerNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, customerNotes: event.target.value }))} style={styles.textarea} /></label>
           <label style={styles.field}>{copy.terms}<textarea maxLength={2000} value={createDraft.terms} onChange={(event) => setCreateDraft((current) => ({ ...current, terms: event.target.value }))} style={styles.textarea} /></label>
-          <div style={styles.confirmRow}><button type="submit" disabled={busy === "create"} style={styles.primaryButton}>{copy.create}</button><button type="button" style={styles.secondaryButton} onClick={() => setCreateTarget(null)}>{copy.cancel}</button></div>
+          <div style={styles.confirmRow}><button type="submit" disabled={busy === "create"} style={styles.primaryButton}>{copy.create}</button><button type="button" style={styles.secondaryButton} onClick={() => {
+            setCreateTarget(null);
+            setAssistantInvoiceDraft(null);
+          }}>{copy.cancel}</button></div>
         </form>
+      )}
+
+      {(createTarget || selected) && (
+        <ContextualAskMeetro
+          language={language}
+          contextLabel="invoice"
+          contextName={selected?.invoiceNumber || createTarget?.serviceTitle || getAskMeetroWorkflowCopy(language).invoice}
+          actions={selected ? [
+            { id: "review", label: getAskMeetroWorkflowCopy(language).reviewInvoice },
+            { id: "balance", label: getAskMeetroWorkflowCopy(language).explainBalance },
+          ] : [
+            { id: "create", label: getAskMeetroWorkflowCopy(language).helpCreateInvoice },
+          ]}
+          busy={assistant.busy}
+          error={assistant.error}
+          notice={assistant.notice}
+          onRequest={requestInvoiceHelp}
+        >
+          {assistant.result && (
+            <InvoiceAssistantResult
+              proposal={assistant.result.proposal}
+              language={language}
+              canApply={Boolean(createTarget)}
+              money={money}
+              onApply={() => void reviewInvoiceProposal("ACCEPTED", { apply: true })}
+              onDismiss={() => void reviewInvoiceProposal("REJECTED")}
+            />
+          )}
+        </ContextualAskMeetro>
       )}
 
       {workspace?.invoices.length > 0 ? (
@@ -328,6 +448,29 @@ export default function ProfessionalInvoiceWorkspace({
   );
 }
 
+function InvoiceAssistantResult({ proposal, language, canApply, money, onApply, onDismiss }) {
+  const copy = getAskMeetroWorkflowCopy(language);
+  const financial = proposal.canonicalFinancialTruth;
+  return (
+    <div style={styles.assistantResult}>
+      <strong>{proposal.summary}</strong>
+      <div style={styles.financialTruth}>
+        <span>{financial.status.replaceAll("_", " ")}</span>
+        {financial.totalMinor != null && <strong>{money(financial.totalMinor, financial.currency || "USD")}</strong>}
+        {financial.balanceMinor != null && <span>{money(financial.balanceMinor, financial.currency || "USD")}</span>}
+      </div>
+      {proposal.lineDescriptions.map((item) => <p key={item.id} style={styles.assistantText}>{item.text}</p>)}
+      {proposal.customerNotes.text && <p style={styles.assistantText}>{proposal.customerNotes.text}</p>}
+      {proposal.terms.text && <p style={styles.assistantText}>{proposal.terms.text}</p>}
+      {proposal.balanceExplanation.text && <p style={styles.assistantText}>{proposal.balanceExplanation.text}</p>}
+      <div style={styles.actions}>
+        {canApply && <button type="button" style={styles.primaryButton} onClick={onApply}>{copy.useInInvoice}</button>}
+        <button type="button" style={styles.secondaryButton} onClick={onDismiss}>{copy.dismiss}</button>
+      </div>
+    </div>
+  );
+}
+
 const styles = {
   workspace: { minWidth: 0 },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },
@@ -349,4 +492,7 @@ const styles = {
   field: { display: "grid", gap: 6, minWidth: 0, fontWeight: 700 },
   input: { width: "100%", minWidth: 0, minHeight: 44, padding: "8px 10px", border: "1px solid #9aa89d", borderRadius: 6, background: "#fff", font: "inherit" },
   textarea: { width: "100%", minWidth: 0, minHeight: 88, padding: 10, border: "1px solid #9aa89d", borderRadius: 6, background: "#fff", font: "inherit", resize: "vertical" },
+  assistantResult: { display: "grid", gap: 10, minWidth: 0 },
+  financialTruth: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, padding: 10, border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff" },
+  assistantText: { margin: 0, lineHeight: 1.5, overflowWrap: "anywhere" },
 };

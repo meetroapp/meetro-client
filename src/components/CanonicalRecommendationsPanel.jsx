@@ -40,6 +40,9 @@ export default function CanonicalRecommendationsPanel({
   canPrepareQuote = false,
   onPrepareQuote,
   onCanonicalChange,
+  assistantDraft = null,
+  onAssistantDraftConsumed,
+  onAssistantDraftReview,
 }) {
   const copy = getEfrCopy(language);
   const findingId = finding?.id || "";
@@ -87,16 +90,17 @@ export default function CanonicalRecommendationsPanel({
     return () => { active = false; };
   }, [copy, finding, findingId, refresh, setPage]);
 
-  function openEditor(recommendation = null) {
+  function openEditor(recommendation = null, initialStatement = "", assistantSource = null) {
     try {
       setEditor({
         mode: recommendation ? "update" : "create",
         recommendation,
-        statement: recommendation?.statement || "",
+        statement: recommendation?.statement || initialStatement,
         customerVisible: recommendation?.customerVisible === true,
         idempotencyKey: createLifecycleCommandKey(
           recommendation ? "recommendation-update" : "recommendation-create"
         ),
+        assistantDraft: recommendation ? null : assistantSource,
         saving: false,
       });
       setState((current) => ({ ...current, error: "", notice: "" }));
@@ -110,6 +114,18 @@ export default function CanonicalRecommendationsPanel({
     setEditor((current) => ({ ...current, saving: true }));
     setState((current) => ({ ...current, error: "", notice: "" }));
     try {
+      if (editor.assistantDraft) {
+        const action = editor.statement.trim() === editor.assistantDraft.text ? "ACCEPTED" : "EDITED";
+        const reviewed = await onAssistantDraftReview?.(
+          editor.assistantDraft,
+          action,
+          action === "EDITED" ? editor.statement.trim() : undefined
+        );
+        if (reviewed === false) {
+          setEditor((current) => ({ ...current, saving: false }));
+          return;
+        }
+      }
       if (editor.mode === "update") {
         await updateCanonicalRecommendation({
           recommendationId: editor.recommendation.id,
@@ -162,6 +178,15 @@ export default function CanonicalRecommendationsPanel({
       )}
       {state.status === "ready" && recommendations.length === 0 && !editor && (
         <p style={styles.message}>{copy.noRecommendations}</p>
+      )}
+      {assistantDraft && canManage && finding.confirmationState === "CONFIRMED" && !editor && (
+        <div style={styles.editor} data-assistant-recommendation-draft={assistantDraft.id}>
+          <p style={styles.statement}>{assistantDraft.text}</p>
+          <button type="button" style={styles.primaryButton} onClick={() => {
+            openEditor(null, assistantDraft.text, assistantDraft);
+            onAssistantDraftConsumed?.();
+          }}>{copy.addRecommendation}</button>
+        </div>
       )}
       {editor && (
         <div style={styles.editor}>

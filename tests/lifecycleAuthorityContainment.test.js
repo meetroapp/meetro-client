@@ -40,7 +40,8 @@ test("Change Order preserves request context without submission or message autho
 test("Quote Builder remains a calculation preview without unsupported evidence or issuance claims", () => {
   assert.match(quoteBuilder, /calculateCustomerTotal/);
   assert.match(quoteBuilder, /quoteNotSavedDelivered/);
-  assert.match(quoteBuilder, /runQuoteDraftHelp/);
+  assert.match(quoteBuilder, /ContextualAskMeetro/);
+  assert.match(quoteBuilder, /applyConfirmedQuoteComposition/);
   assert.doesNotMatch(
     quoteBuilder,
     /Professional-confirmed|confirmed materials|materiales confirmados|After reviewing|Después de revisar|before sending|antes de enviar/i

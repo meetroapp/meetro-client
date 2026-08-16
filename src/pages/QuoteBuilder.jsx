@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
@@ -13,6 +14,15 @@ import {
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
+import {
+  INTELLIGENCE_OPERATION,
+  createIntelligenceKey,
+  recordQuoteCompositionReview,
+  recordWorkflowReview,
+  requestWorkflowIntelligence,
+} from "../utils/contextualIntelligence";
+import { applyConfirmedQuoteComposition } from "../utils/canonicalQuoteDraftCommands";
 
 function safeJson(value, fallback = null) {
   try {
@@ -20,15 +30,6 @@ function safeJson(value, fallback = null) {
   } catch {
     return fallback;
   }
-}
-
-function parseCurrencyAmount(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-
-  const cleaned = text.replace(/[$,\s]/g, "");
-  const amount = Number(cleaned);
-  return Number.isFinite(amount) && amount > 0 ? String(amount) : "";
 }
 
 function normalizeQuotePricingMethodLabel(value) {
@@ -57,62 +58,6 @@ function stringifySavedAmount(value) {
   if (Array.isArray(value) || value === null || value === undefined) return "";
   const amount = parseQuotePricingAmount(value);
   return amount > 0 ? String(amount) : "";
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function findAmountNearLabels(text, labels) {
-  const source = String(text || "");
-  if (!source.trim()) return "";
-
-  const amountPattern = "(\\$?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?)";
-
-  for (const label of labels) {
-    const safeLabel = escapeRegExp(label);
-    const afterLabel = new RegExp(
-      `(?:${safeLabel})[^\\d$]{0,50}${amountPattern}`,
-      "i"
-    );
-    const beforeLabel = new RegExp(
-      `${amountPattern}[^\\n\\r]{0,50}(?:${safeLabel})`,
-      "i"
-    );
-
-    const afterMatch = source.match(afterLabel);
-    if (afterMatch?.[1]) return parseCurrencyAmount(afterMatch[1]);
-
-    const beforeMatch = source.match(beforeLabel);
-    if (beforeMatch?.[1]) return parseCurrencyAmount(beforeMatch[1]);
-  }
-
-  return "";
-}
-
-function findTotalQuoteAmount(text) {
-  return findAmountNearLabels(text, [
-    "quote",
-    "total",
-    "estimate",
-    "price",
-    "bid",
-    "cotizacion",
-    "cotización",
-    "total",
-    "precio",
-    "estimado",
-    "presupuesto",
-  ]);
-}
-
-function findTimelineFromText(text) {
-  const source = String(text || "");
-  const match = source.match(
-    /\b(\d+\s*(?:-|to|a|–)?\s*\d*\s*(?:day|days|week|weeks|hour|hours|día|días|semana|semanas|hora|horas))\b/i
-  );
-
-  return match?.[1]?.trim() || "";
 }
 
 function cleanText(value) {
@@ -458,14 +403,14 @@ function QuoteBuilder({ setPage }) {
       selectedQuoteForEdit?.date ||
       new Date().toISOString().slice(0, 10)
   );
-  const [labor, setLabor] = useState(
+  const [labor] = useState(
     stringifySavedAmount(
       selectedQuoteForEdit?.laborAmount ??
         selectedQuoteForEdit?.pricingBreakdown?.laborAmount ??
         selectedQuoteForEdit?.labor
     )
   );
-  const [materials, setMaterials] = useState(
+  const [materials] = useState(
     stringifySavedAmount(
       selectedQuoteForEdit?.materialsAmount ??
         selectedQuoteForEdit?.pricingBreakdown?.materialsAmount ??
@@ -805,8 +750,7 @@ function QuoteBuilder({ setPage }) {
   );
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState("");
-  const [draftSuggestion, setDraftSuggestion] = useState("");
-  const [draftSuggestionTarget, setDraftSuggestionTarget] = useState("recommendedSolution");
+  const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null, commandKeys: null });
 
   const lineItemsTotal = lineItems.reduce(
     (sum, item) => sum + getEditableRowTotal(item),
@@ -874,85 +818,219 @@ function QuoteBuilder({ setPage }) {
     });
   }
 
-  function getMissingQuoteDetails() {
-    const hasLineItem = lineItems.some((item) => cleanText(item.description));
-    const hasMaterialsOrLabor =
-      materialRows.some((item) => cleanText(item.name) || getEditableRowTotal(item, "quantity", "cost") > 0) ||
-      laborRows.some((item) => cleanText(item.description) || getEditableRowTotal(item, "hours", "rate") > 0);
+  const canonicalJobId = cleanText(request.jobId || request.job_id);
 
+  function inputKey(prefix, index) {
+    return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
+  }
+
+  function estimateCostInputs() {
     return [
-      !cleanText(customerName) ? (isSpanish ? "nombre del cliente" : "customer name") : "",
-      !cleanText(problemFound) ? (isSpanish ? "problema encontrado" : "problem found") : "",
-      !cleanText(recommendedSolution) ? (isSpanish ? "solución recomendada" : "recommended solution") : "",
-      !hasLineItem ? (isSpanish ? "partidas de servicio" : "line items") : "",
-      !hasMaterialsOrLabor ? (isSpanish ? "mano de obra o materiales" : "labor or materials") : "",
-      calculatedTotal <= 0 ? (isSpanish ? "total del precio" : "price total") : "",
-      !cleanText(terms) ? (isSpanish ? "términos de pago" : "payment terms") : "",
-    ].filter(Boolean);
+      ...materialRows.flatMap((item, index) => {
+        const amount = Math.round(parseQuotePricingAmount(item.cost) * 100);
+        const quantity = parseQuotePricingAmount(item.quantity) || 1;
+        return cleanText(item.name) && amount >= 0 ? [{
+          key: inputKey("material", index), classification: "MATERIAL",
+          description: cleanText(item.name), quantity, unitCostMinor: amount,
+        }] : [];
+      }),
+      ...laborRows.flatMap((item, index) => {
+        const amount = Math.round(parseQuotePricingAmount(item.rate) * 100);
+        const quantity = parseQuotePricingAmount(item.hours) || 1;
+        return cleanText(item.description) && amount >= 0 ? [{
+          key: inputKey("labor", index), classification: "LABOR",
+          description: cleanText(item.description), quantity, unitCostMinor: amount,
+        }] : [];
+      }),
+      ...(disposalFeeAmount > 0 ? [{
+        key: "disposal_0", classification: "DISPOSAL", description: "Disposal",
+        quantity: 1, unitCostMinor: Math.round(disposalFeeAmount * 100),
+      }] : []),
+    ];
   }
 
-  function runQuoteDraftHelp(action) {
-    const missingDetails = getMissingQuoteDetails();
-    const scopeName = cleanText(projectTitle) || (isSpanish ? "este servicio" : "this service");
-    const problemText = cleanText(problemFound || projectDescription);
-
-    if (action === "missing") {
-      setDraftSuggestionTarget("notes");
-      setDraftSuggestion(
-        missingDetails.length
-          ? `${missingDetails.join(", ")}. ${t("quoteProposalReviewHint", language)}`
-          : t("quoteProposalReviewHint", language)
-      );
-      return;
-    }
-
-    if (action === "lineItems") {
-      setDraftSuggestionTarget("notes");
-      setDraftSuggestion(
-        t("quoteDraftLineItems", language, { scope: scopeName })
-      );
-      return;
-    }
-
-    if (action === "terms") {
-      setDraftSuggestionTarget("terms");
-      setDraftSuggestion(
-        isSpanish
-          ? "El precio final depende de condiciones accesibles al momento del trabajo. Los cambios de alcance, materiales no incluidos o condiciones ocultas pueden requerir aprobación adicional por escrito."
-          : "Final pricing depends on accessible conditions at the time of work. Scope changes, excluded materials, or hidden conditions may require additional written approval."
-      );
-      return;
-    }
-
-    setDraftSuggestionTarget("recommendedSolution");
-    setDraftSuggestion(
-      [
-        t("quoteDraftRecommendation", language, { scope: scopeName }),
-        problemText
-          ? t("quoteDraftProblemContext", language, { problem: problemText })
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
+  function quoteCompositionInput(prompt) {
+    const pricingInputs = [
+      ...lineItems.flatMap((item, index) => {
+        const quantity = Number(item.quantity) || 1;
+        const amountMinor = Math.round(parseQuotePricingAmount(item.unitPrice || item.total) * 100);
+        return cleanText(item.description) && Number.isInteger(quantity) && amountMinor >= 0
+          ? [{ key: inputKey("service", index), classification: "LABOR_SERVICE", amountMinor, quantity }]
+          : [];
+      }),
+      ...materialRows.flatMap((item, index) => {
+        const quantity = Number(item.quantity) || 1;
+        const amountMinor = Math.round(parseQuotePricingAmount(item.cost || item.total) * 100);
+        return cleanText(item.name) && Number.isInteger(quantity) && amountMinor >= 0
+          ? [{ key: inputKey("material", index), classification: "MATERIAL", amountMinor, quantity }]
+          : [];
+      }),
+      ...laborRows.flatMap((item, index) => {
+        const quantity = Number(item.hours) || 1;
+        const amountMinor = Math.round(parseQuotePricingAmount(item.rate || item.total) * 100);
+        return cleanText(item.description) && Number.isInteger(quantity) && amountMinor >= 0
+          ? [{ key: inputKey("labor", index), classification: "LABOR_SERVICE", amountMinor, quantity }]
+          : [];
+      }),
+    ];
+    return {
+      jobId: canonicalJobId,
+      mode: "ADVISORY",
+      professionalInstructions: [problemFound, recommendedSolution, notes, prompt].filter(Boolean).join("\n") || undefined,
+      pricingInputs,
+      materialInputs: materialRows.flatMap((item, index) => cleanText(item.name) ? [{
+        key: inputKey("material", index),
+        description: cleanText(item.name),
+        responsibility: materialProvider === "Customer Provides" ? "CUSTOMER_SUPPLIED" : "PROFESSIONAL_SUPPLIED",
+      }] : []),
+      terms: {
+        availability: estimatedDuration || timeline || undefined,
+        confirmedTotalMinor: pricingInputs.length > 0
+          ? pricingInputs.reduce((sum, item) => sum + item.amountMinor * item.quantity, 0)
+          : undefined,
+      },
+    };
   }
 
-  function applyDraftSuggestion() {
-    if (!draftSuggestion.trim()) return;
-
-    if (draftSuggestionTarget === "terms") {
-      setTerms(draftSuggestion);
-      return;
+  async function requestEstimateHelp(action, prompt) {
+    if (!canonicalJobId) return;
+    const estimateIntents = {
+      materials: "ESTIMATE_MATERIALS",
+      prices: "CHECK_MATERIAL_PRICES",
+      labor: "ESTIMATE_LABOR",
+    };
+    const operation = action === "quote" ? INTELLIGENCE_OPERATION.QUOTE : INTELLIGENCE_OPERATION.ESTIMATE;
+    setAssistant({ busy: true, error: "", notice: "", result: null, commandKeys: null });
+    try {
+      const input = operation === INTELLIGENCE_OPERATION.QUOTE
+        ? quoteCompositionInput(prompt)
+        : {
+            jobId: canonicalJobId,
+            intent: estimateIntents[action],
+            professionalInstructions: [problemFound, recommendedSolution, notes, prompt].filter(Boolean).join("\n") || null,
+            measurements: [],
+            costInputs: estimateCostInputs(),
+            sellingPriceMinor: calculatedTotal > 0 ? Math.round(calculatedTotal * 100) : null,
+            retailerQuery: action === "prices"
+              ? [prompt, ...materialRows.map((item) => cleanText(item.name))].filter(Boolean).join(" ").slice(0, 500) || null
+              : null,
+          };
+      const result = await requestWorkflowIntelligence({
+        operation,
+        locale: language,
+        input,
+        expected: { jobId: canonicalJobId },
+        setPage,
+      });
+      const candidates = result.proposal.proposedScopeItems?.filter((item) => item.canonicalCandidate) || [];
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result,
+        commandKeys: operation === INTELLIGENCE_OPERATION.QUOTE ? {
+          createKey: createIntelligenceKey(),
+          scopeKeys: candidates.map(() => createIntelligenceKey()),
+        } : null,
+      });
+    } catch (error) {
+      setAssistant({ busy: false, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable, notice: "", result: null, commandKeys: null });
     }
+  }
 
-    if (draftSuggestionTarget === "notes") {
-      setNotes((currentNotes) =>
-        [currentNotes, draftSuggestion].map(cleanText).filter(Boolean).join("\n\n")
-      );
-      return;
+  async function applyEstimateDraft() {
+    const proposal = assistant.result?.proposal;
+    if (!proposal || assistant.result.operation !== INTELLIGENCE_OPERATION.ESTIMATE) return;
+    const elements = [
+      ...proposal.materials,
+      ...proposal.labor,
+      proposal.customerQuoteDraft,
+    ];
+    try {
+      await Promise.all(elements.map((item) => recordWorkflowReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: "ACCEPTED",
+        setPage,
+      })));
+      if (proposal.materials.length) setMaterialRows(proposal.materials.map((item, index) => normalizeQuoteMaterialItem({
+        id: item.id || inputKey("material", index), name: item.description,
+        quantity: String(item.quantity), cost: item.effectiveUnitCostMinor == null ? "" : String(item.effectiveUnitCostMinor / 100),
+        notes: [item.assumption, item.needsVerification ? getAskMeetroWorkflowCopy(language).needsVerification : ""].filter(Boolean).join(" · "),
+      }, index)));
+      if (proposal.labor.length) setLaborRows(proposal.labor.map((item, index) => normalizeQuoteLaborItem({
+        id: item.id || inputKey("labor", index), description: item.description,
+        hours: String(item.hoursPerWorker), rate: item.professionalOverride?.unitCostMinor == null ? "" : String(item.professionalOverride.unitCostMinor / 100),
+      }, index, isSpanish)));
+      setRecommendedSolution(proposal.customerQuoteDraft.customerWording);
+      setNotes(proposal.customerQuoteDraft.scopeSummary);
+      setTerms([...proposal.customerQuoteDraft.conditions, ...proposal.customerQuoteDraft.exclusions].join("\n"));
+      setTimeline(proposal.customerQuoteDraft.durationGuidance || timeline);
+      const acceptedPrice = proposal.professionalSellingPriceMinor || proposal.suggestedSellingRange.minimumMinor;
+      if (acceptedPrice > 0) setTotalOverride(String(acceptedPrice / 100));
+      setAssistant((current) => ({ ...current, notice: getAskMeetroWorkflowCopy(language).applyToEstimate }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
     }
+  }
 
-    setRecommendedSolution(draftSuggestion);
+  async function handleUseQuoteComposition(editedCandidates = null) {
+    const result = assistant.result;
+    if (!result || result.operation !== INTELLIGENCE_OPERATION.QUOTE || !assistant.commandKeys) return;
+    const proposal = editedCandidates ? {
+      ...result.proposal,
+      proposedScopeItems: result.proposal.proposedScopeItems.map((item) =>
+        editedCandidates[item.id]
+          ? { ...item, canonicalCandidate: editedCandidates[item.id] }
+          : item
+      ),
+    } : result.proposal;
+    const candidates = proposal.proposedScopeItems.filter((item) => item.canonicalCandidate);
+    try {
+      await Promise.all(candidates.map((item) => recordQuoteCompositionReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: editedCandidates?.[item.id] ? "EDITED" : "ACCEPTED",
+        editedValue: editedCandidates?.[item.id],
+        setPage,
+      })));
+      const quote = await applyConfirmedQuoteComposition({
+        jobId: canonicalJobId,
+        proposal,
+        createKey: assistant.commandKeys.createKey,
+        scopeKeys: assistant.commandKeys.scopeKeys,
+        setPage,
+      });
+      setAssistant((current) => ({ ...current, notice: `${getAskMeetroWorkflowCopy(language).useInQuote} · ${quote.scopeItemCount}` }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+    }
+  }
+
+  async function dismissEstimateHelp() {
+    const result = assistant.result;
+    if (!result) return;
+    try {
+      if (result.operation === INTELLIGENCE_OPERATION.QUOTE) {
+        await Promise.all(result.proposal.proposedScopeItems.map((item) => recordQuoteCompositionReview({
+          proposalId: result.proposal.proposalId,
+          elementId: item.id,
+          action: "REJECTED",
+          setPage,
+        })));
+      } else {
+        await Promise.all([...result.proposal.materials, ...result.proposal.labor, result.proposal.customerQuoteDraft].map((item) => recordWorkflowReview({
+          proposalId: result.proposal.proposalId,
+          elementId: item.id,
+          action: "REJECTED",
+          reasonCategory: "PROFESSIONAL_DISMISSED",
+          setPage,
+        })));
+      }
+      setAssistant((current) => ({ ...current, result: null, notice: "" }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+    }
   }
 
 
@@ -994,7 +1072,6 @@ function QuoteBuilder({ setPage }) {
 	      startDate,
 	      estimatedDuration,
 	      laborAmount: currentLaborAmount,
-	      laborPricingType,
 	      laborFee: laborPricingType === "flat_fee" ? currentLaborAmount : "",
 	      laborTotal: currentLaborAmount,
 	      materialsAmount: currentMaterialsAmount,
@@ -1530,53 +1607,35 @@ ${businessIdentity.businessName}`;
           <h2 style={sectionTitle}>{isSpanish ? "Partidas, totales y vista previa" : "Line Items, Totals, and Preview"}</h2>
           <p style={sectionHelperText}>{t("quotePricingPreviewHint", language)}</p>
 
-          <div style={draftHelpCard}>
-            <p style={eyebrowDark}>{t("quoteDraftHelpTitle", language)}</p>
-            <p style={draftHelpSubtitle}>{t("quoteDraftHelpBody", language)}</p>
-            <div style={draftChipGrid}>
-              <button style={draftChip} onClick={() => runQuoteDraftHelp("improve")}>
-                Improve wording
-              </button>
-              <button style={draftChip} onClick={() => runQuoteDraftHelp("lineItems")}>
-                Suggest line items
-              </button>
-              <button style={draftChip} onClick={() => runQuoteDraftHelp("missing")}>
-                Check missing details
-              </button>
-              <button style={draftChip} onClick={() => runQuoteDraftHelp("friendly")}>
-                Make customer friendly
-              </button>
-              <button style={draftChip} onClick={() => runQuoteDraftHelp("terms")}>
-                Add clear terms
-              </button>
-            </div>
-            {draftSuggestion && (
-              <div style={draftSuggestionBox}>
-                <label style={label}>
-                  {isSpanish ? "Sugerencia editable" : "Editable suggestion"}
-                </label>
-                <textarea
-                  style={textarea}
-                  value={draftSuggestion}
-                  onChange={(event) => setDraftSuggestion(event.target.value)}
+          {canonicalJobId && (
+            <ContextualAskMeetro
+              language={language}
+              contextLabel="estimate-and-quote"
+              voiceContextLabel="estimate"
+              contextName={projectTitle || getAskMeetroWorkflowCopy(language).estimate}
+              actions={[
+                { id: "materials", label: getAskMeetroWorkflowCopy(language).estimateMaterials },
+                { id: "prices", label: getAskMeetroWorkflowCopy(language).checkPrices },
+                { id: "labor", label: getAskMeetroWorkflowCopy(language).estimateLabor },
+                { id: "quote", label: getAskMeetroWorkflowCopy(language).prepareQuote },
+              ]}
+              busy={assistant.busy}
+              error={assistant.error}
+              notice={assistant.notice}
+              onRequest={requestEstimateHelp}
+            >
+              {assistant.result && (
+                <EstimateAssistantResult
+                  key={assistant.result.proposal.proposalId}
+                  result={assistant.result}
+                  language={language}
+                  onApplyEstimate={() => void applyEstimateDraft()}
+                  onUseQuote={(edits) => void handleUseQuoteComposition(edits)}
+                  onDismiss={() => void dismissEstimateHelp()}
                 />
-                <div style={inlineActionGrid}>
-                  <button style={secondaryActionButton} onClick={applyDraftSuggestion}>
-                    {isSpanish ? "Usar sugerencia" : "Use Suggestion"}
-                  </button>
-                  <button
-                    style={quietActionButton}
-                    onClick={() => {
-                      setDraftSuggestion("");
-                      setDraftSuggestionTarget("recommendedSolution");
-                    }}
-                  >
-                    {isSpanish ? "Limpiar" : "Clear"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </ContextualAskMeetro>
+          )}
 
           <div style={quoteBuilderSection}>
             <h3 style={quoteBuilderSectionTitle}>{isSpanish ? "Partidas" : "Line Items"}</h3>
@@ -1989,6 +2048,84 @@ ${businessIdentity.businessName}`;
   );
 }
 
+function EstimateAssistantResult({ result, language, onApplyEstimate, onUseQuote, onDismiss }) {
+  const copy = getAskMeetroWorkflowCopy(language);
+  const proposal = result.proposal;
+  const [editingQuote, setEditingQuote] = useState(false);
+  const [quoteEdits, setQuoteEdits] = useState({});
+  const formatMoney = (minor) => new Intl.NumberFormat(language, {
+    style: "currency", currency: "USD",
+  }).format((Number(minor) || 0) / 100);
+  if (result.operation === INTELLIGENCE_OPERATION.QUOTE) {
+    return (
+      <div style={assistantResultBox}>
+        <strong>{proposal.summary}</strong>
+        {proposal.proposedScopeItems.map((item) => {
+          const candidate = quoteEdits[item.id] || item.canonicalCandidate;
+          return (
+            <article key={item.id} style={assistantDraftItem}>
+              {editingQuote && candidate ? (
+                <>
+                  <label style={label}>{copy.suggested}
+                    <textarea style={textarea} value={candidate.description} onChange={(event) => setQuoteEdits((current) => ({
+                      ...current,
+                      [item.id]: { ...candidate, description: event.target.value },
+                    }))} />
+                  </label>
+                  <label style={label}>{copy.price}
+                    <input style={input} inputMode="decimal" value={candidate.unitAmountMinor / 100} onChange={(event) => {
+                      const minor = Math.round(parseQuotePricingAmount(event.target.value) * 100);
+                      setQuoteEdits((current) => ({ ...current, [item.id]: { ...candidate, unitAmountMinor: minor } }));
+                    }} />
+                  </label>
+                </>
+              ) : (
+                <strong>{item.description}</strong>
+              )}
+              <span>{item.scopeSemantic.replaceAll("_", " ")}</span>
+              <span>{candidate ? formatMoney(candidate.unitAmountMinor * candidate.quantity) : copy.needsVerification}</span>
+            </article>
+          );
+        })}
+        {proposal.commercialMissingInformation.map((item) => <p key={item.id} style={pricingReviewText}>{item.description}</p>)}
+        <div style={inlineActionGrid}>
+          <button type="button" style={secondaryActionButton} onClick={() => onUseQuote(editingQuote ? quoteEdits : null)}>{copy.useInQuote}</button>
+          <button type="button" style={quietActionButton} onClick={() => setEditingQuote(true)}>{copy.edit}</button>
+          <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={assistantResultBox}>
+      <strong>{proposal.summary}</strong>
+      <div style={assistantCostGrid}>
+        <span>{copy.internalOnly}</span>
+        <strong>{formatMoney(proposal.internalCost.totalMinor)}</strong>
+      </div>
+      {proposal.materials.map((item) => (
+        <article key={item.id} style={assistantDraftItem}>
+          <strong>{item.description}</strong>
+          <span>{item.quantity} {item.unit}</span>
+          <span>{item.effectiveUnitCostMinor == null ? copy.needsVerification : formatMoney(item.effectiveUnitCostMinor)}</span>
+          {item.retailerReference && <small>{copy.referencePrice} · {copy.notGuaranteed}</small>}
+        </article>
+      ))}
+      {proposal.labor.map((item) => (
+        <article key={item.id} style={assistantDraftItem}>
+          <strong>{item.description}</strong>
+          <span>{item.crewCount} × {item.hoursPerWorker}</span>
+        </article>
+      ))}
+      <p style={pricingReviewText}>{proposal.customerQuoteDraft.customerWording}</p>
+      <div style={inlineActionGrid}>
+        <button type="button" style={secondaryActionButton} onClick={onApplyEstimate}>{copy.applyToEstimate}</button>
+        <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
+      </div>
+    </div>
+  );
+}
+
 const page = {
   minHeight: "100dvh",
   background:
@@ -2087,18 +2224,6 @@ const proposalHint = {
   color: "#64748b",
   fontSize: "14px",
   fontWeight: "750",
-  lineHeight: 1.45,
-};
-
-const proposalProblemText = {
-  margin: "0 0 18px",
-  color: "#334155",
-  background: "#ffffff",
-  border: "1px solid rgba(148,163,184,0.22)",
-  borderRadius: "16px",
-  padding: "12px",
-  fontSize: "14px",
-  fontWeight: "800",
   lineHeight: 1.45,
 };
 
@@ -2262,19 +2387,6 @@ const importedWorkItemTitle = {
   lineHeight: 1.15,
 };
 
-const importedFieldBlock = {
-  display: "grid",
-  gap: "5px",
-};
-
-const importedFieldLabel = {
-  color: "#334155",
-  fontSize: "12px",
-  fontWeight: "950",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-
 const importedFieldText = {
   margin: 0,
   color: "#475569",
@@ -2292,12 +2404,6 @@ const cleanList = {
   lineHeight: 1.55,
 };
 
-const materialDetailLines = {
-  display: "grid",
-  gap: "3px",
-  marginTop: "4px",
-};
-
 const photoCountPill = {
   width: "fit-content",
   borderRadius: "999px",
@@ -2307,48 +2413,6 @@ const photoCountPill = {
   padding: "7px 10px",
   fontSize: "12px",
   fontWeight: "900",
-};
-
-const materialReviewBox = {
-  marginTop: "14px",
-  display: "grid",
-  gap: "10px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid rgba(31,77,52,0.16)",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
-};
-
-const materialReviewTitle = {
-  margin: 0,
-  color: "#111827",
-  fontSize: "17px",
-};
-
-const materialReviewHint = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "13px",
-  fontWeight: "750",
-  lineHeight: 1.4,
-};
-
-const materialReviewList = {
-  display: "grid",
-  gap: "9px",
-};
-
-const materialReviewItem = {
-  display: "grid",
-  gap: "4px",
-  padding: "12px",
-  borderRadius: "14px",
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  color: "#475569",
-  fontSize: "13px",
-  fontWeight: "750",
 };
 
 const input = {
@@ -2371,50 +2435,6 @@ const textarea = {
   ...input,
   minHeight: "110px",
   resize: "vertical",
-};
-
-const draftHelpCard = {
-  display: "grid",
-  gap: "10px",
-  padding: "16px",
-  borderRadius: "18px",
-  background: "#f8fafc",
-  border: "1px solid #dbeafe",
-  marginBottom: "18px",
-  maxWidth: "100%",
-  boxSizing: "border-box",
-};
-
-const draftHelpSubtitle = {
-  margin: 0,
-  color: "#475569",
-  fontSize: "14px",
-  lineHeight: 1.45,
-  fontWeight: "750",
-};
-
-const draftChipGrid = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "8px",
-  maxWidth: "100%",
-};
-
-const draftChip = {
-  border: "1px solid rgba(31,77,52,0.2)",
-  background: "#ffffff",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "999px",
-  padding: "10px 12px",
-  fontWeight: "900",
-  cursor: "pointer",
-  fontSize: "13px",
-};
-
-const draftSuggestionBox = {
-  display: "grid",
-  gap: "8px",
-  maxWidth: "100%",
 };
 
 const quoteBuilderSection = {
@@ -2507,6 +2527,34 @@ const quietActionButton = {
   ...secondaryActionButton,
   color: "#475569",
   border: "1px solid #cbd5e1",
+};
+
+const assistantResultBox = {
+  display: "grid",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const assistantDraftItem = {
+  display: "grid",
+  gap: "5px",
+  minWidth: 0,
+  padding: "12px",
+  border: "1px solid #d7ded8",
+  borderRadius: "6px",
+  background: "#ffffff",
+  overflowWrap: "anywhere",
+};
+
+const assistantCostGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  gap: "10px",
+  padding: "12px",
+  border: "1px solid #8fa297",
+  borderRadius: "6px",
+  background: "#f5f8f5",
 };
 
 const rowRemoveButton = {

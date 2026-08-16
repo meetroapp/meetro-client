@@ -29,6 +29,12 @@ export default function CanonicalFindingsPanel({
   availableActions = [],
   onPrepareQuote,
   onCanonicalChange,
+  assistantFindingDraft = null,
+  assistantRecommendationDraft = null,
+  onAssistantFindingDraftConsumed,
+  onAssistantRecommendationDraftConsumed,
+  onAssistantFindingReview,
+  onAssistantRecommendationReview,
 }) {
   const copy = getEfrCopy(language);
   const evaluationId = evaluation?.evaluation?.id || "";
@@ -83,16 +89,17 @@ export default function CanonicalFindingsPanel({
 
   if (!enabled || !evaluationId) return null;
 
-  function openEditor(finding = null) {
+  function openEditor(finding = null, initialStatement = "", assistantDraft = null) {
     try {
       setEditor({
         mode: finding ? "update" : "create",
         finding,
-        statement: finding?.statement || "",
+        statement: finding?.statement || initialStatement,
         customerVisible: finding?.customerVisible === true,
         idempotencyKey: createLifecycleCommandKey(
           finding ? "finding-update" : "finding-create"
         ),
+        assistantDraft: finding ? null : assistantDraft,
         saving: false,
       });
       setState((current) => ({ ...current, error: "", notice: "" }));
@@ -106,6 +113,18 @@ export default function CanonicalFindingsPanel({
     setEditor((current) => ({ ...current, saving: true }));
     setState((current) => ({ ...current, error: "", notice: "" }));
     try {
+      if (editor.assistantDraft) {
+        const action = editor.statement.trim() === editor.assistantDraft.text ? "ACCEPTED" : "EDITED";
+        const reviewed = await onAssistantFindingReview?.(
+          editor.assistantDraft,
+          action,
+          action === "EDITED" ? editor.statement.trim() : undefined
+        );
+        if (reviewed === false) {
+          setEditor((current) => ({ ...current, saving: false }));
+          return;
+        }
+      }
       if (editor.mode === "update") {
         await updateCanonicalFinding({
           findingId: editor.finding.id,
@@ -184,6 +203,15 @@ export default function CanonicalFindingsPanel({
       {state.status === "ready" && state.findings.length === 0 && !editor && (
         <p style={styles.message}>{copy.noFindings}</p>
       )}
+      {assistantFindingDraft && canReviewFindings && !editor && (
+        <div style={styles.editor} data-assistant-finding-draft={assistantFindingDraft.id}>
+          <p style={styles.statement}>{assistantFindingDraft.text}</p>
+          <button type="button" style={styles.primaryButton} onClick={() => {
+            openEditor(null, assistantFindingDraft.text, assistantFindingDraft);
+            onAssistantFindingDraftConsumed?.();
+          }}>{copy.addFinding}</button>
+        </div>
+      )}
       {editor && (
         <div style={styles.editor}>
           <label style={styles.label}>
@@ -253,6 +281,15 @@ export default function CanonicalFindingsPanel({
                 canPrepareQuote={canPrepareQuote}
                 onPrepareQuote={onPrepareQuote}
                 onCanonicalChange={onCanonicalChange}
+                assistantDraft={
+                  assistantRecommendationDraft &&
+                  state.findings.filter((candidate) => candidate.confirmationState === "CONFIRMED").length === 1 &&
+                  finding.confirmationState === "CONFIRMED"
+                    ? assistantRecommendationDraft
+                    : null
+                }
+                onAssistantDraftConsumed={onAssistantRecommendationDraftConsumed}
+                onAssistantDraftReview={onAssistantRecommendationReview}
               />
             </article>
           ))}

@@ -1,0 +1,229 @@
+import { authFetch } from "./authFetch.js";
+
+export const INTELLIGENCE_ROUTE = "/api/companion/ask";
+export const WORKFLOW_REVIEW_ROUTE = "/api/intelligence/proposals";
+
+export const INTELLIGENCE_OPERATION = Object.freeze({
+  EVALUATION: "evaluation.assist",
+  ESTIMATE: "estimate.compose",
+  QUOTE: "quote.compose",
+  INVOICE: "invoice.assist",
+});
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SUCCESS = new Set(["INTELLIGENCE_OPERATION_COMPLETED", "INTELLIGENCE_OPERATION_REPLAYED"]);
+const REVIEW_SUCCESS = new Set(["INTELLIGENCE_REVIEW_RECORDED", "INTELLIGENCE_REVIEW_REPLAYED"]);
+const PROHIBITED_KEYS = new Set([
+  "accesstoken", "authorization", "cookie", "grant", "grants", "hash", "hashes",
+  "idempotencykey", "password", "refreshtoken", "secret", "token", "tokens",
+]);
+
+function plain(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function safeUuid(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return UUID.test(normalized) ? normalized : "";
+}
+
+function normalizeKey(value) {
+  return String(value).replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function assertSafeObject(value, { allowInternalCost = false } = {}) {
+  const pending = [value];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    for (const [key, child] of Object.entries(current)) {
+      const normalized = normalizeKey(key);
+      if (PROHIBITED_KEYS.has(normalized)) throw new IntelligenceApiError("Unsafe assistant metadata was rejected.", { code: "UNSAFE_INTELLIGENCE_RESPONSE" });
+      if (!allowInternalCost && /internal(?:cost|margin|markup)|retailerreference/.test(normalized)) {
+        throw new IntelligenceApiError("Private estimating data was rejected.", { code: "UNSAFE_INTELLIGENCE_RESPONSE" });
+      }
+      if (child && typeof child === "object") pending.push(child);
+    }
+  }
+}
+
+function boundedText(value, maximum, { nullable = false } = {}) {
+  if (nullable && value == null) return null;
+  return typeof value === "string" && value.length <= maximum ? value : "";
+}
+
+function array(value, maximum = 100) {
+  return Array.isArray(value) && value.length <= maximum ? value : null;
+}
+
+function validateEnvelope(value, operation, expected = {}) {
+  if (!plain(value) || value.schemaVersion !== 1 || !safeUuid(value.proposalId)) return null;
+  if (expected.jobId && safeUuid(value.jobId) !== safeUuid(expected.jobId)) return null;
+  if (expected.evaluationId && safeUuid(value.evaluationId) !== safeUuid(expected.evaluationId)) return null;
+  if (expected.invoiceId && safeUuid(value.invoiceId) !== safeUuid(expected.invoiceId)) return null;
+  const allowedAuthority = operation === INTELLIGENCE_OPERATION.ESTIMATE
+    ? "INTERNAL_ESTIMATE_DRAFT_NON_CANONICAL"
+    : "ADVISORY_NON_CANONICAL";
+  if (value.authorityClassification !== allowedAuthority) return null;
+  if (value.humanToCanonicalBoundary?.directMutationAllowed !== false) return null;
+  return value;
+}
+
+function validateSuggestion(value) {
+  if (!plain(value) || typeof value.id !== "string" || !value.id || value.id.length > 160) return null;
+  const text = boundedText(value.text, 5000);
+  return text ? { ...value, id: value.id, text } : null;
+}
+
+export function validateEvaluationAssistance(value, expected = {}) {
+  const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.EVALUATION, expected);
+  if (!proposal) return null;
+  const keys = ["observed", "professionalInput", "needsVerification", "inspectionSuggestions", "measurementSuggestions", "findingDrafts", "recommendationDrafts"];
+  if (keys.some((key) => !array(proposal[key], 40)?.every((item) => validateSuggestion(item)))) return null;
+  if (!plain(proposal.evaluationDraft) || !plain(proposal.photoAnalysis)) return null;
+  assertSafeObject(proposal);
+  return proposal;
+}
+
+export function validateEstimateDraft(value, expected = {}) {
+  const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.ESTIMATE, expected);
+  if (!proposal || !array(proposal.materials, 80) || !array(proposal.labor, 80) ||
+      !plain(proposal.internalCost) || proposal.internalCost.customerVisible !== false ||
+      !plain(proposal.customerQuoteDraft)) return null;
+  assertSafeObject(proposal, { allowInternalCost: true });
+  assertSafeObject(proposal.customerQuoteDraft);
+  if (/Home Depot|homedepot\.com/i.test(JSON.stringify(proposal.customerQuoteDraft))) return null;
+  return proposal;
+}
+
+export function validateInvoiceAssistance(value, expected = {}) {
+  const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.INVOICE, expected);
+  if (!proposal || !plain(proposal.canonicalFinancialTruth) || !array(proposal.lineDescriptions, 100)) return null;
+  if (!["totalMinor", "paidMinor", "balanceMinor", "status", "currency"].every((key) => Object.hasOwn(proposal.canonicalFinancialTruth, key))) return null;
+  assertSafeObject(proposal);
+  return proposal;
+}
+
+export function validateQuoteComposition(value, expected = {}) {
+  const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.QUOTE, expected);
+  if (!proposal || !array(proposal.proposedScopeItems, 80) || !array(proposal.exclusions, 80) || !array(proposal.assumptions, 80)) return null;
+  assertSafeObject(proposal, { allowInternalCost: false });
+  return proposal;
+}
+
+const VALIDATORS = Object.freeze({
+  [INTELLIGENCE_OPERATION.EVALUATION]: validateEvaluationAssistance,
+  [INTELLIGENCE_OPERATION.ESTIMATE]: validateEstimateDraft,
+  [INTELLIGENCE_OPERATION.QUOTE]: validateQuoteComposition,
+  [INTELLIGENCE_OPERATION.INVOICE]: validateInvoiceAssistance,
+});
+
+export class IntelligenceApiError extends Error {
+  constructor(message, { status = 0, code = "INTELLIGENCE_REQUEST_FAILED" } = {}) {
+    super(message);
+    this.name = "IntelligenceApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function createIntelligenceKey(cryptoProvider = globalThis.crypto) {
+  if (!cryptoProvider || typeof cryptoProvider.randomUUID !== "function") {
+    throw new IntelligenceApiError("Ask Meetro is unavailable on this device.", { code: "INTELLIGENCE_IDEMPOTENCY_UNAVAILABLE" });
+  }
+  return cryptoProvider.randomUUID().toLowerCase();
+}
+
+export async function requestWorkflowIntelligence({
+  operation,
+  locale = "en-US",
+  input,
+  expected = {},
+  idempotencyKey = createIntelligenceKey(),
+  setPage,
+  authFetchImpl = authFetch,
+}) {
+  if (!VALIDATORS[operation] || !plain(input)) throw new TypeError("A governed Ask Meetro operation is required.");
+  const { response, data } = await authFetchImpl(INTELLIGENCE_ROUTE, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ operation, capability: operation, locale, context: {}, input }),
+  }, setPage);
+  if (!response.ok || data?.success !== true || !SUCCESS.has(data.code) || data.operation !== operation) {
+    throw new IntelligenceApiError(
+      data?.code === "INTELLIGENCE_PROVIDER_UNAVAILABLE"
+        ? "Ask Meetro is not connected to an intelligence provider yet."
+        : data?.message || "Ask Meetro could not prepare this suggestion.",
+      { status: response.status, code: data?.code }
+    );
+  }
+  const proposal = VALIDATORS[operation](data.result, expected);
+  if (!proposal) throw new IntelligenceApiError("Ask Meetro returned an unsafe or invalid suggestion.", { status: 502, code: "UNSAFE_INTELLIGENCE_RESPONSE" });
+  return {
+    operation,
+    operationId: safeUuid(data.operationId),
+    correlationId: safeUuid(data.correlationId),
+    proposal,
+    replayed: data.code === "INTELLIGENCE_OPERATION_REPLAYED",
+  };
+}
+
+export async function recordWorkflowReview({
+  proposalId,
+  elementId,
+  action,
+  editedValue,
+  reasonCategory,
+  idempotencyKey = createIntelligenceKey(),
+  setPage,
+  authFetchImpl = authFetch,
+}) {
+  const normalizedProposalId = safeUuid(proposalId);
+  const normalizedAction = String(action || "").trim().toUpperCase();
+  if (!normalizedProposalId || !/^[a-z][a-z0-9_.:-]{0,159}$/.test(String(elementId || "")) ||
+      !["ACCEPTED", "EDITED", "REJECTED"].includes(normalizedAction)) {
+    throw new TypeError("A governed Ask Meetro review is required.");
+  }
+  const body = { elementId, action: normalizedAction };
+  if (normalizedAction === "EDITED") body.editedValue = editedValue;
+  if (reasonCategory) body.reasonCategory = reasonCategory;
+  const { response, data } = await authFetchImpl(
+    `${WORKFLOW_REVIEW_ROUTE}/${encodeURIComponent(normalizedProposalId)}/review`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    },
+    setPage
+  );
+  if (!response.ok || data?.success !== true || !REVIEW_SUCCESS.has(data.code) || data.canonicalMutationPerformed !== false) {
+    throw new IntelligenceApiError(data?.message || "The Ask Meetro review could not be recorded.", { status: response.status, code: data?.code });
+  }
+  return data.review;
+}
+
+export async function recordQuoteCompositionReview({
+  proposalId,
+  elementId,
+  action,
+  editedValue,
+  idempotencyKey = createIntelligenceKey(),
+  setPage,
+  authFetchImpl = authFetch,
+}) {
+  const body = { elementId, action };
+  if (action === "EDITED") body.editedValue = editedValue;
+  const { response, data } = await authFetchImpl(
+    `/api/intelligence/quote-compositions/${encodeURIComponent(proposalId)}/feedback`,
+    { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify(body) },
+    setPage
+  );
+  if (!response.ok || data?.success !== true || data.canonicalMutationPerformed !== false) {
+    throw new IntelligenceApiError(data?.message || "The Quote suggestion review could not be recorded.", { status: response.status, code: data?.code });
+  }
+  return data.feedback;
+}
