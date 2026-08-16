@@ -5,7 +5,6 @@ const CONTAINED_LEGACY_SURFACES = new Set([
   "completed",
   "materials",
   "records",
-  "revenue",
 ]);
 
 export const WORK_CENTER_LEGACY_AUTHORITY_POLICY = Object.freeze({

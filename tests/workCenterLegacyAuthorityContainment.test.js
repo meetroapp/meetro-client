@@ -25,7 +25,6 @@ test("ordinary legacy command surfaces are release-contained while Pending prese
     "completed",
     "materials",
     "records",
-    "revenue",
   ]) {
     assert.equal(isLegacyWorkCenterCommandSurfaceContained(surface), true, surface);
     assert.match(
@@ -36,8 +35,10 @@ test("ordinary legacy command surfaces are release-contained while Pending prese
 
   assert.equal(isLegacyWorkCenterCommandSurfaceContained("schedule"), true);
   assert.equal(isLegacyWorkCenterCommandSurfaceContained("quotes"), true);
+  assert.equal(isLegacyWorkCenterCommandSurfaceContained("revenue"), false);
   assert.match(dashboard, /activeTab === "schedule" && !isLegacyCommandSurfaceContained[\s\S]*ProfessionalScheduleWorkspace/);
   assert.match(dashboard, /activeTab === "quotes" && isCanonicalQuotesSurface[\s\S]*ProfessionalQuotesWorkspace/);
+  assert.match(dashboard, /activeTab === "revenue" && !isLegacyCommandSurfaceContained[\s\S]*ProfessionalInvoiceWorkspace/);
   assert.match(dashboard, /activeTab === "quotes" && !isCanonicalQuotesSurface && !isLegacyCommandSurfaceContained/);
 
   assert.equal(isLegacyWorkCenterCommandSurfaceContained("pending"), false);
