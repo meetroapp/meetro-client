@@ -321,6 +321,15 @@ const pricingMethodOptions = [
 
 const priorityOptions = ["Standard", "Urgent", "Emergency", "Flexible"];
 
+const canonicalJobIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function getCanonicalJobIdFromRoute(hash = "") {
+  const query = String(hash).split("?", 2)[1] || "";
+  const jobId = cleanText(new URLSearchParams(query).get("jobId"));
+  return canonicalJobIdPattern.test(jobId) ? jobId : "";
+}
+
 function QuoteBuilder({ setPage }) {
   const language = getLanguage();
   const isSpanish = language === "es";
@@ -818,7 +827,9 @@ function QuoteBuilder({ setPage }) {
     });
   }
 
-  const canonicalJobId = cleanText(request.jobId || request.job_id);
+  const canonicalJobId =
+    getCanonicalJobIdFromRoute(window.location.hash) ||
+    cleanText(request.jobId || request.job_id);
 
   function inputKey(prefix, index) {
     return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);

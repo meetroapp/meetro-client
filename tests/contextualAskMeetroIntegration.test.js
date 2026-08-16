@@ -7,12 +7,17 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("four workflow surfaces expose contextual assistance without silent authority", () => {
   const upload = read("src/pages/Upload.jsx");
   const evaluation = read("src/components/CanonicalJobEvaluation.jsx");
+  const dashboard = read("src/pages/ContractorDashboard.jsx");
   const quote = read("src/pages/QuoteBuilder.jsx");
   const invoice = read("src/components/ProfessionalInvoiceWorkspace.jsx");
   assert.match(upload, /pendingInterpretation/);
   assert.doesNotMatch(upload.slice(upload.indexOf("async function runInterpretation"), upload.indexOf("function updatePendingInterpretationField")), /applyJobRequestInterpretationPatch/);
   assert.match(evaluation, /ContextualAskMeetro/);
   assert.match(evaluation, /recordWorkflowReview/);
+  assert.match(dashboard, /quoteBuilder\?jobId=/);
+  assert.match(dashboard, /getAskMeetroWorkflowCopy\(activeLanguage\)\.estimate/);
+  assert.match(quote, /getCanonicalJobIdFromRoute\(window\.location\.hash\)/);
+  assert.match(quote, /canonicalJobIdPattern\.test\(jobId\)/);
   assert.match(quote, /applyConfirmedQuoteComposition/);
   assert.match(invoice, /canonicalFinancialTruth/);
   for (const source of [evaluation, quote, invoice]) assert.match(source, /directMutationAllowed|recordWorkflowReview|recordQuoteCompositionReview/);

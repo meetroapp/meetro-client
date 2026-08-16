@@ -14,6 +14,7 @@ import ProfessionalWorkPlanOverview from "../components/ProfessionalWorkPlanOver
 import ProfessionalWorkPlanWorkspace from "../components/ProfessionalWorkPlanWorkspace.jsx";
 import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
 import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnlyPanel";
 import WorkCenterBackButton from "../components/WorkCenterBackButton";
 import {
@@ -11150,6 +11151,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
                               setPage={setPage}
                               focusQuoteId={selectedWorkCenterQuoteId}
                             />
+                            <button
+                              type="button"
+                              style={startScheduleBtn}
+                              onClick={() => setPage(
+                                `quoteBuilder?jobId=${encodeURIComponent(
+                                  workCenterLifecycleProjection.projection.job?.id || ""
+                                )}`
+                              )}
+                            >
+                              {getAskMeetroWorkflowCopy(activeLanguage).estimate}
+                            </button>
                           </WorkCenterAccordion>
                           {(canonicalNextActionSection === "completionInvoice" || canonicalLiveJob?.stage?.code === "JOB_COMPLETED") && (
                             <WorkCenterAccordion
