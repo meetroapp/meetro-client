@@ -1292,6 +1292,7 @@ ${businessIdentity.businessName}`;
       projectTitle,
       problemFound,
       recommendedSolution,
+      scopeSummary: recommendedSolution || projectDescription || problemFound,
       fixedPrice: Boolean(cleanText(totalOverride)) || pricingMethod === "Flat Fee",
       lineItems: [
         ...pricing.quoteLineItems.map((item) => ({
@@ -1371,6 +1372,7 @@ ${businessIdentity.businessName}`;
   }
 
   function applyQuickQuoteConversationPatch(patch) {
+    if (patch.customerName !== undefined) setCustomerName(patch.customerName);
     if (patch.projectTitle !== undefined) setProjectTitle(patch.projectTitle);
     if (patch.projectDescription !== undefined) setProjectDescription(patch.projectDescription);
     if (patch.problemFound !== undefined) setProblemFound(patch.problemFound);
@@ -1378,12 +1380,12 @@ ${businessIdentity.businessName}`;
     if (patch.timeline !== undefined) setTimeline(patch.timeline);
     if (patch.estimatedDuration !== undefined) setEstimatedDuration(patch.estimatedDuration);
     if (patch.totalOverride !== undefined) setTotalOverride(patch.totalOverride);
+    if (patch.notes !== undefined) setNotes(patch.notes);
     if (patch.depositRequired !== undefined) setDepositRequired(patch.depositRequired);
-    if (patch.depositTerms) {
+    if (patch.terms || patch.depositTerms) {
       setTerms((current) =>
-        cleanText(current).includes(patch.depositTerms)
-          ? current
-          : [cleanText(current), patch.depositTerms].filter(Boolean).join("\n")
+        [patch.terms, patch.depositTerms].filter(Boolean).reduce((next, term) =>
+          cleanText(next).includes(term) ? next : [cleanText(next), term].filter(Boolean).join("\n"), current)
       );
     }
     if (patch.lineItemDescription) {
@@ -1394,17 +1396,39 @@ ${businessIdentity.businessName}`;
       ));
     }
     if (patch.materialAmount !== undefined) {
-      setMaterialRows((rows) => rows.map((row, index) =>
-        index === 0
-          ? {
-              ...row,
-              name: cleanText(row.name) || quickQuoteCopy.materialsAllowance,
-              quantity: cleanText(row.quantity) || "1",
-              cost: patch.materialAmount,
-              total: "",
-            }
-          : row
-      ));
+      setMaterialRows((rows) => {
+        const targetName = patch.materialItems?.[0]?.name || quickQuoteCopy.materialsAllowance;
+        const namedIndex = patch.materialItems?.[0]?.name
+          ? rows.findIndex((row) => cleanText(row.name).toLowerCase() === targetName.toLowerCase())
+          : -1;
+        const index = namedIndex >= 0 ? namedIndex : rows.findIndex((row) => !cleanText(row.name));
+        if (index < 0) return [...rows, normalizeQuoteMaterialItem({ name: targetName, quantity: "1", cost: patch.materialAmount }, rows.length)];
+        return rows.map((row, rowIndex) => rowIndex === index
+          ? { ...row, name: cleanText(row.name) || targetName, quantity: cleanText(row.quantity) || "1", cost: patch.materialAmount, total: "" }
+          : row);
+      });
+    }
+    if (Array.isArray(patch.materialItems)) {
+      setMaterialRows((rows) => patch.materialItems.reduce((nextRows, item) => {
+        const itemName = cleanText(item.name);
+        const existingIndex = nextRows.findIndex((row) => cleanText(row.name).toLowerCase() === itemName.toLowerCase());
+        const blankIndex = nextRows.findIndex((row) => !cleanText(row.name));
+        const row = { ...item, quantity: cleanText(item.quantity) || "1", total: "" };
+        if (existingIndex >= 0) return nextRows.map((current, index) => index === existingIndex ? { ...current, ...row } : current);
+        if (blankIndex >= 0) return nextRows.map((current, index) => index === blankIndex ? { ...current, ...row } : current);
+        return [...nextRows, normalizeQuoteMaterialItem(row, nextRows.length)];
+      }, rows));
+    }
+    if (Array.isArray(patch.laborItems)) {
+      setLaborRows((rows) => patch.laborItems.reduce((nextRows, item) => {
+        const description = cleanText(item.description);
+        const existingIndex = nextRows.findIndex((row) => cleanText(row.description).toLowerCase() === description.toLowerCase());
+        const blankIndex = nextRows.findIndex((row) => !cleanText(row.description) || cleanText(row.description).toLowerCase() === "labor");
+        const row = { ...item, total: cleanText(item.total) };
+        if (existingIndex >= 0) return nextRows.map((current, index) => index === existingIndex ? { ...current, ...row } : current);
+        if (blankIndex >= 0) return nextRows.map((current, index) => index === blankIndex ? { ...current, ...row } : current);
+        return [...nextRows, normalizeQuoteLaborItem(row, nextRows.length, isSpanish)];
+      }, rows));
     }
   }
 

@@ -91,6 +91,74 @@ test("explicit professional instructions prepare structured fields without inven
   assert.equal(patch.materialAmount, undefined);
 });
 
+test("final quote authority excludes component totals and subtotals", () => {
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Final quote is $2,650." }).totalOverride, "2650");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Quote total is $2,650." }).totalOverride, "2650");
+  for (const prompt of [
+    "Materials total is $700.",
+    "Material total is $700.",
+    "Labor total is $1,950.",
+    "Installation total is $1,950.",
+    "Subtotal is $2,650.",
+    "Tax total is $150.",
+  ]) {
+    assert.equal(buildQuickQuoteConversationPatch({ prompt }).totalOverride, undefined, prompt);
+  }
+});
+
+test("postfix component totals are not overall quote authority", () => {
+  for (const prompt of [
+    "Materials $700 total.",
+    "Labor $1,950 total.",
+    "Installation $280 total.",
+    "Tax $150 total.",
+  ]) {
+    assert.equal(buildQuickQuoteConversationPatch({ prompt }).totalOverride, undefined, prompt);
+  }
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "$2,650 final." }).totalOverride, "2650");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "$2,650 total." }).totalOverride, "2650");
+});
+
+test("component total clauses are removed completely from clean scope", () => {
+  const patch = buildQuickQuoteConversationPatch({ prompt: "Replace the wall. Materials total is $700." });
+  assert.match(patch.projectDescription, /Replace the wall/);
+  assert.doesNotMatch(patch.projectDescription, /Materials/);
+  assert.equal(patch.totalOverride, undefined);
+});
+
+test("duration number words normalize without inventing timing", () => {
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Should take two days." }).estimatedDuration, "2 days");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "About three days." }).estimatedDuration, "3 days");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "two–three days" }).estimatedDuration, "2–3 days");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "3–4 days" }).estimatedDuration, "3–4 days");
+});
+
+test("explicit labor hours and rate produce a calculable labor row", () => {
+  const patch = buildQuickQuoteConversationPatch({ prompt: "Labor is 8 hours at $75 per hour." });
+  assert.deepEqual(patch.laborItems[0], { description: "Labor", hours: "8", rate: "75" });
+  assert.equal(patch.totalOverride, undefined);
+});
+
+test("only explicitly identified notes and conditions are extracted", () => {
+  const note = buildQuickQuoteConversationPatch({ prompt: "Note: protect the existing landscaping." });
+  assert.equal(note.notes, "protect the existing landscaping");
+  assert.equal(note.terms, undefined);
+
+  const condition = buildQuickQuoteConversationPatch({ prompt: "Condition: paint colors to be confirmed by customer. 50% deposit." });
+  assert.equal(condition.terms, "paint colors to be confirmed by customer");
+  assert.equal(condition.depositTerms, "50% deposit");
+  assert.equal(Object.values(condition).filter((value) => value === "50% deposit").length, 1);
+});
+
+test("customer-only revisions patch only the customer field", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Customer is Maria Lopez.",
+    current: { customerName: "Paul Becker", projectDescription: "Repair the knee wall", totalOverride: "2650" },
+    revision: true,
+  });
+  assert.deepEqual(patch, { customerName: "Maria Lopez" });
+});
+
 test("revision changes only explicit targeted fields and professional price wins", () => {
   const current = {
     projectTitle: "Knee wall repair",
@@ -151,6 +219,62 @@ test("explicit materials and removal instructions do not alter unrelated commerc
   });
   assert.doesNotMatch(removalPatch.projectDescription, /24 inch/);
   assert.equal(removalPatch.totalOverride, undefined);
+});
+
+test("detailed knee-wall conversation extracts clean structured draft with final price authority", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Quote for Paul Becker. Reconstruct the damaged front knee wall. Remove the damaged block, expose the footing, install rebar, rebuild with concrete block, apply stucco, prime, and repaint the wall in the existing two-tone finish. Materials are $700. Labor is $1,950. Estimated duration is 3–4 days. 50% deposit required. Final price is $2,650.",
+  });
+  const scope = patch.recommendedSolution;
+  assert.equal(patch.customerName, "Paul Becker");
+  assert.match(scope, /Reconstruct the damaged front knee wall/);
+  assert.match(scope, /Remove the damaged block, expose the footing, install rebar, rebuild with concrete block, apply stucco, prime, and repaint/);
+  assert.equal(patch.materialItems[0].cost, "700");
+  assert.equal(patch.laborItems[0].total, "1950");
+  assert.equal(patch.estimatedDuration, "3–4 days");
+  assert.equal(patch.depositTerms, "50% deposit");
+  assert.equal(patch.totalOverride, "2650");
+  for (const excluded of ["Paul Becker", "$700", "$1,950", "$2,650", "3–4 days", "50% deposit"]) {
+    assert.doesNotMatch(scope, new RegExp(excluded.replace(/[.$]/g, "\\$&")));
+  }
+});
+
+test("structured material and labor totals calculate when no final price is stated", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Quote for Paul Becker. Reconstruct the damaged front knee wall. Materials are $700. Labor is $1,950. Estimated duration is 3–4 days. 50% deposit required.",
+  });
+  assert.equal(patch.customerName, "Paul Becker");
+  assert.equal(patch.materialItems[0].cost, "700");
+  assert.equal(patch.laborItems[0].total, "1950");
+  assert.equal(patch.estimatedDuration, "3–4 days");
+  assert.equal(patch.depositTerms, "50% deposit");
+  assert.equal(patch.totalOverride, undefined);
+  assert.equal(Number(patch.materialItems[0].cost) + Number(patch.laborItems[0].total), 2650);
+});
+
+test("duration, generic materials, final price, and targeted material revisions remain governed", () => {
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "About 3–4 days." }).estimatedDuration, "3–4 days");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Should take one day." }).estimatedDuration, "1 day");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Use $500 materials." }).materialAmount, "500");
+  assert.equal(buildQuickQuoteConversationPatch({ prompt: "Reconstruct the knee wall. Materials are $700. Labor is $1,950. Final price is $2,800." }).totalOverride, "2800");
+
+  const current = { materialItems: [{ name: "Materials", quantity: "1", cost: "700" }] };
+  const revision = buildQuickQuoteConversationPatch({ prompt: "Change materials to $750.", current, revision: true });
+  assert.equal(revision.materialAmount, "750");
+  assert.equal(revision.totalOverride, undefined);
+});
+
+test("secondary door conversation keeps material and installation rows distinct", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Quote for Bob Hamel. Replace the front door. Door costs $450 and installation is $280. Should take one day. 50% deposit.",
+  });
+  assert.equal(patch.customerName, "Bob Hamel");
+  assert.equal(patch.recommendedSolution, "Replace the front door.");
+  assert.deepEqual(patch.materialItems[0], { name: "Door", quantity: "1", cost: "450" });
+  assert.deepEqual(patch.laborItems[0], { description: "installation", total: "280" });
+  assert.equal(patch.estimatedDuration, "1 day");
+  assert.equal(patch.depositTerms, "50% deposit");
+  assert.equal(patch.totalOverride, undefined);
 });
 
 test("working and review screens expose concise stages, summaries, and current-draft PDF actions", () => {
