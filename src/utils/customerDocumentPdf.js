@@ -35,6 +35,14 @@ function formatMoney(minor, currency, locale) {
   }).format((Number(minor) || 0) / 100);
 }
 
+function formatCustomerDocumentDate(value, locale) {
+  const date = String(value);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? new Date(`${date}T00:00:00`)
+    : new Date(value);
+  return parsed.toLocaleDateString(locale);
+}
+
 function readableStatus(model, copy) {
   if (model.draft) return model.kind === "QUOTE" ? copy.draftQuote : copy.draftInvoice;
   if (model.acceptance === "APPROVED") return copy.approved;
@@ -170,12 +178,8 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   doc.line(PAGE.margin, y, PAGE.width - PAGE.margin, y);
   y += 10;
 
-  const documentDate = model.documentDate
-    ? new Date(model.documentDate).toLocaleDateString(model.locale)
-    : "-";
-  const dueDate = model.dueDate
-    ? new Date(`${model.dueDate}T00:00:00`).toLocaleDateString(model.locale)
-    : null;
+  const documentDate = model.documentDate ? formatCustomerDocumentDate(model.documentDate, model.locale) : "-";
+  const dueDate = model.dueDate ? formatCustomerDocumentDate(model.dueDate, model.locale) : null;
   const meta = [
     model.customer.name ? [copy.customer, model.customer.name] : null,
     model.projectTitle ? [copy.project, model.projectTitle] : null,

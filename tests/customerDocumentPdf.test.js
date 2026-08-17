@@ -115,6 +115,47 @@ test("canonical Invoice preserves only server financial truth", () => {
   assert.doesNotMatch(collectCustomerDocumentText(model), /11111111|22222222|internalCost|margin|provider-sentinel|gpt-sentinel|hidden@example/i);
 });
 
+test("date-only document dates preserve the customer calendar date", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Taylor Customer", projectTitle: "Cabinet repair", quoteDate: "2026-08-17",
+    lineItems: [], subtotal: 0, total: 920,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const commands = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(commands, /\(8\/17\/2026\)/);
+  assert.doesNotMatch(commands, /\(8\/16\/2026\)/);
+});
+
+test("date-only document dates do not cross into the prior year", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Taylor Customer", projectTitle: "Cabinet repair", quoteDate: "2026-01-01",
+    lineItems: [], subtotal: 0, total: 920,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const commands = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(commands, /\(1\/1\/2026\)/);
+  assert.doesNotMatch(commands, /\(12\/31\/2025\)/);
+});
+
+test("date-only due dates preserve the customer calendar date", () => {
+  const model = buildQuickInvoiceDocumentModel({
+    customerName: "Taylor Customer", serviceDescription: "Cabinet repair",
+    invoiceDate: "2026-01-02", dueDate: "2026-01-01",
+    lineItems: [], subtotal: 0, total: 920,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const commands = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(commands, /\(1\/2\/2026 \/ 1\/1\/2026\)/);
+  assert.doesNotMatch(commands, /12\/31\/2025/);
+});
+
+test("Quick Quote PDF renders the localized quote date", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Taylor Customer", projectTitle: "Cabinet repair", quoteDate: "2026-08-17",
+    lineItems: [{ description: "Repair work", quantity: 1, unitPrice: 920, total: 920 }],
+    subtotal: 920, total: 920,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const commands = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(commands, /\(8\/17\/2026\)/);
+});
+
 test("Quick Quote and Quick Invoice render truthful draft models without canonical save claims", () => {
   const branding = buildCustomerSafeBusinessBranding({ businessName: "Handyman LLC" });
   const quote = buildQuickQuoteDocumentModel({
