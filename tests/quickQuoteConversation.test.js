@@ -79,6 +79,27 @@ test("revision changes only explicit targeted fields and professional price wins
   assert.deepEqual(Object.keys(patch).sort(), ["estimatedDuration", "timeline", "totalOverride"]);
 });
 
+test("duration revision removes stale timing from the clean review scope", () => {
+  const current = {
+    projectDescription: "Repair a cracked wall. Duration 3–4 days. Final price $2,650.",
+    problemFound: "Cracked wall requiring 3–4 days of work.",
+    recommendedSolution: "Repair and repaint in 3–4 days.",
+    totalOverride: "2650",
+  };
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Make the duration 4–5 days.",
+    current,
+    revision: true,
+  });
+  const revised = mergeQuickQuoteConversationPatch(current, patch);
+  assert.equal(revised.estimatedDuration, "4–5 days");
+  assert.doesNotMatch(revised.projectDescription, /3–4 days/);
+  assert.doesNotMatch(revised.problemFound, /3–4 days/);
+  assert.doesNotMatch(revised.recommendedSolution, /3–4 days/);
+  assert.match(revised.projectDescription, /4–5 days/);
+  assert.equal(revised.totalOverride, "2650");
+});
+
 test("explicit materials and removal instructions do not alter unrelated commercial truth", () => {
   const current = {
     projectDescription: "Repair the 24 inch section and paint two-tone",

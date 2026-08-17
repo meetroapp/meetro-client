@@ -38,6 +38,15 @@ function explicitDuration(text) {
   return cleanText(match?.[1] || "");
 }
 
+function replaceExistingDuration(value, duration) {
+  const current = cleanText(value);
+  if (!current || !duration) return current;
+  return cleanText(current.replace(
+    /\d+(?:\s*[–—-]\s*\d+)?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?)/i,
+    duration
+  ));
+}
+
 function explicitDeposit(text) {
   const match = text.match(
     /(\d{1,3})\s*%\s*(?:deposit|depósito|acompte|entrada|sinal)/i
@@ -103,6 +112,12 @@ export function buildQuickQuoteConversationPatch({
   if (duration) {
     patch.timeline = duration;
     patch.estimatedDuration = duration;
+    if (revision) {
+      for (const key of ["projectDescription", "problemFound", "recommendedSolution"]) {
+        const revisedValue = replaceExistingDuration(current[key], duration);
+        if (revisedValue && revisedValue !== cleanText(current[key])) patch[key] = revisedValue;
+      }
+    }
   }
   if (finalPrice !== null) patch.totalOverride = String(finalPrice);
   if (materialAmount !== null) patch.materialAmount = String(materialAmount);
