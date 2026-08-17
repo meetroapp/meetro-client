@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { jsPDF } from "jspdf";
 
 import {
   buildCanonicalInvoiceDocumentModel,
@@ -287,6 +288,100 @@ test("PDF preview opens the current customer-safe artifact without changing docu
   ]);
   assert.equal(model.draft, true);
   assert.equal(model.acceptance, "DRAFT_PREVIEW_NOT_ISSUED");
+});
+
+test("PDF preview succeeds when noopener returns a null window and cleans up only on delay", () => {
+  const model = buildQuickQuoteDocumentModel({
+    quoteNumber: "QQ-1003", customerName: "Taylor", projectTitle: "Repair",
+    lineItems: [{ description: "Repair", quantity: 1, unitPrice: 100, total: 100 }],
+    subtotal: 100, total: 100,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const calls = [];
+  let delayedCleanup;
+  const result = previewCustomerDocumentPdf(model, {
+    urlApi: {
+      createObjectURL: () => "blob:null-window-preview",
+      revokeObjectURL: (url) => calls.push(["revoke", url]),
+    },
+    openWindow: (url, target, features) => {
+      calls.push(["open", url, target, features]);
+      return null;
+    },
+    scheduleRevoke: (callback, delay) => {
+      calls.push(["schedule", delay]);
+      delayedCleanup = callback;
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.method, "pdf-preview");
+  assert.deepEqual(calls, [["open", "blob:null-window-preview", "_blank", "noopener,noreferrer"], ["schedule", 60000]]);
+  delayedCleanup();
+  assert.deepEqual(calls, [
+    ["open", "blob:null-window-preview", "_blank", "noopener,noreferrer"],
+    ["schedule", 60000],
+    ["revoke", "blob:null-window-preview"],
+  ]);
+});
+
+test("metadata box grows around wrapped Project values and contains Scope of Work", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Paul Becker",
+    projectTitle: "Reconstruct the damaged front knee wall",
+    quoteDate: "2026-08-16",
+    recommendedSolution: "Repair the damaged wall.",
+    lineItems: [],
+    subtotal: 0,
+    total: 2650,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const rectangles = [];
+  const texts = [];
+  class RecordingJsPDF extends jsPDF {
+    constructor(...args) {
+      super(...args);
+      const rect = this.rect.bind(this);
+      const text = this.text.bind(this);
+      this.rect = (...rectArgs) => {
+        rectangles.push(rectArgs);
+        return rect(...rectArgs);
+      };
+      this.text = (...textArgs) => {
+        texts.push(textArgs);
+        return text(...textArgs);
+      };
+    }
+  }
+  renderCustomerDocumentPdf(model, { jsPDFImpl: RecordingJsPDF });
+  const metadataRect = rectangles.find(([, , width, , style]) => width === 516 && style === "FD");
+  assert.ok(metadataRect);
+  assert.ok(metadataRect[3] > 34);
+  const projectText = texts.find(([value]) => Array.isArray(value) && value.includes("Reconstruct the damaged"));
+  assert.ok(projectText);
+  assert.ok(projectText[0].length >= 2);
+  assert.ok(projectText[2] + (projectText[0].length - 1) * 8.5 * 1.25 < metadataRect[1] + metadataRect[3]);
+  const scopeText = texts.find(([value]) => Array.isArray(value) && value[0] === "Scope of Work");
+  assert.ok(scopeText);
+  assert.ok(scopeText[2] > metadataRect[1] + metadataRect[3]);
+});
+
+test("single-line metadata keeps the original 34pt box height", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Paul Becker", projectTitle: "Repair", quoteDate: "2026-08-16",
+    lineItems: [], subtotal: 0, total: 100,
+  }, { branding: { businessName: "Handyman LLC" } });
+  const rectangles = [];
+  class RecordingJsPDF extends jsPDF {
+    constructor(...args) {
+      super(...args);
+      const rect = this.rect.bind(this);
+      this.rect = (...rectArgs) => {
+        rectangles.push(rectArgs);
+        return rect(...rectArgs);
+      };
+    }
+  }
+  renderCustomerDocumentPdf(model, { jsPDFImpl: RecordingJsPDF });
+  const metadataRect = rectangles.find(([, , width, , style]) => width === 516 && style === "FD");
+  assert.equal(metadataRect[3], 34);
 });
 
 test("customer document actions have EN ES FR PT-BR parity and Quick controls remain bounded", () => {

@@ -182,16 +182,22 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     [model.kind === "QUOTE" ? copy.quote : copy.invoice, model.documentNumber || (model.draft ? copy.draft : "-")],
     [dueDate ? `${copy.date} / ${copy.dueDate}` : copy.date, dueDate ? `${documentDate} / ${dueDate}` : documentDate],
   ].filter(Boolean);
+  const metaWidth = contentWidth / meta.length;
+  const metaValueWidth = metaWidth - 16;
+  const maxMetaValueLines = Math.max(
+    ...meta.map(([, value]) => doc.splitTextToSize(String(value || ""), metaValueWidth).length),
+    1
+  );
+  const metaHeight = 34 + Math.max(0, maxMetaValueLines - 1) * 8.5 * 1.25;
   doc.setFillColor(...COLOR.fill);
   doc.setDrawColor(...COLOR.line);
-  doc.rect(PAGE.margin, y, contentWidth, 34, "FD");
-  const metaWidth = contentWidth / meta.length;
+  doc.rect(PAGE.margin, y, contentWidth, metaHeight, "FD");
   meta.forEach(([label, value], index) => {
     const x = PAGE.margin + metaWidth * index + 8;
     addText(doc, label.toUpperCase(), x, y + 11, { size: 6.8, color: COLOR.muted, style: "bold" });
-    addText(doc, value, x, y + 25, { size: 8.5, color: COLOR.text, style: "bold", maxWidth: metaWidth - 16 });
+    addText(doc, value, x, y + 25, { size: 8.5, color: COLOR.text, style: "bold", maxWidth: metaValueWidth });
   });
-  y += 48;
+  y += metaHeight + 14;
 
   section(model.kind === "QUOTE" ? copy.scope : copy.work, model.scopeSummary);
 
@@ -295,13 +301,20 @@ export function previewCustomerDocumentPdf(
   }
   const artifact = createArtifact(model);
   const objectUrl = urlApi.createObjectURL(artifact.blob);
-  const preview = openWindow(objectUrl, "_blank", "noopener,noreferrer");
-  if (!preview) {
+  let revoked = false;
+  const revokeOnce = () => {
+    if (revoked) return;
+    revoked = true;
     urlApi.revokeObjectURL?.(objectUrl);
+  };
+  try {
+    openWindow(objectUrl, "_blank", "noopener,noreferrer");
+  } catch {
+    revokeOnce();
     return Object.freeze({ ok: false, method: "blocked" });
   }
   if (typeof scheduleRevoke === "function") {
-    scheduleRevoke(() => urlApi.revokeObjectURL?.(objectUrl), 60_000);
+    scheduleRevoke(revokeOnce, 60_000);
   }
   return Object.freeze({ ok: true, method: "pdf-preview", fileName: artifact.fileName });
 }
