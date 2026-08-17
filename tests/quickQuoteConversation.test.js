@@ -19,12 +19,46 @@ const styles = read("src/index.css");
 
 test("Quick Quote opens conversation-first while keeping the detailed editor secondary", () => {
   assert.match(builder, /isUniversalQuickQuote \? "entry" : "details"/);
-  assert.match(builder, /quickQuoteView !== "details"/);
   assert.match(builder, /<QuickQuoteConversation/);
-  assert.match(builder, /onEditDetails=\{\(\) => setQuickQuoteView\("details"\)\}/);
-  assert.match(builder, /quickQuoteCopy\.backToReview/);
+  assert.match(builder, /view=\{quickQuoteView === "details" \? "review" : quickQuoteView\}/);
+  assert.match(builder, /\(!isUniversalQuickQuote \|\| quickQuoteView === "details"\)/);
+  assert.match(builder, /onEditDetails=\{openQuickQuoteDetails\}/);
   assert.match(builder, /Customer Name/);
   assert.match(builder, /Manual Total Override/);
+});
+
+test("entry and review expose concise optional-workflow guidance", () => {
+  const copy = getQuickQuoteConversationCopy("en");
+  assert.equal(copy.entryGuidanceTitle, "Tell Meetro about the job in your own words.");
+  assert.match(copy.entryGuidanceBody, /review everything before anything is shared/i);
+  assert.equal(copy.reviewGuidanceTitle, "Review what Meetro prepared.");
+  assert.match(copy.reviewGuidanceBody, /edit any detail yourself/i);
+  assert.match(conversation, /copy\.entryGuidanceTitle/);
+  assert.match(conversation, /copy\.reviewGuidanceTitle/);
+});
+
+test("full details are collapsed by default and share one accessible editor", () => {
+  assert.match(conversation, /detailsExpanded = false/);
+  assert.match(conversation, /aria-expanded=\{detailsExpanded\}/);
+  assert.match(conversation, /aria-controls="quick-quote-full-details"/);
+  assert.match(conversation, /onClick=\{onToggleDetails\}/);
+  assert.match(builder, /detailsExpanded=\{quickQuoteView === "details"\}/);
+  assert.match(builder, /setQuickQuoteView\("review"\)/);
+  assert.match(builder, /setQuickQuoteView\("details"\)/);
+  assert.equal((builder.match(/id=\{isUniversalQuickQuote \? "quick-quote-full-details"/g) || []).length, 1);
+  assert.match(builder, /details\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(builder, /details\?\.scrollIntoView/);
+});
+
+test("conversation revisions and manual fields update the same review and PDF draft", () => {
+  assert.match(builder, /applyQuickQuoteConversationPatch\(patch\)/);
+  assert.match(builder, /value=\{projectDescription\}/);
+  assert.match(builder, /onChange=\{\(event\) => setProjectDescription\(event\.target\.value\)\}/);
+  assert.match(builder, /scope: recommendedSolution \|\| projectDescription \|\| problemFound/);
+  assert.match(builder, /summary=\{quickQuoteReviewSummary\}/);
+  assert.match(builder, /function buildQuickQuotePdfModel\(\)/);
+  assert.match(builder, /model: buildQuickQuotePdfModel\(\)/);
+  assert.doesNotMatch(builder, /quickQuoteDetailsDraft|setQuickQuoteDetailsDraft/);
 });
 
 test("conversation entry locks Speak Type Add Photos and one governed microphone", () => {
@@ -147,8 +181,10 @@ test("Quick Quote conversation copy has exact EN ES FR PT-BR parity", () => {
 });
 
 test("review and input controls remain contained at exact 390px capability", () => {
-  assert.match(styles, /@media \(max-width: 430px\)[\s\S]*\.quick-quote-input-row[\s\S]*grid-template-columns: 1fr/);
+  assert.match(styles, /@media \(max-width: 430px\)[\s\S]*\.quick-quote-input-row[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.quick-quote-input-row > :nth-child\(3\)[\s\S]*grid-column: 1 \/ -1/);
   assert.match(styles, /\.quick-quote-input-row button[\s\S]*min-height: 48px/);
+  assert.match(styles, /\.quick-quote-details-toggle[\s\S]*min-height: 48px/);
   assert.match(styles, /\.quick-quote-review-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*\.quick-quote-review-grid[\s\S]*grid-template-columns: 1fr/);
   assert.match(conversation, /ref=\{surfaceRef\} tabIndex=\{-1\}/);

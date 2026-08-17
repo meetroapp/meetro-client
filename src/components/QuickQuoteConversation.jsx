@@ -29,6 +29,8 @@ export default function QuickQuoteConversation({
   onOpenRevision,
   onCancelRevision,
   onEditDetails,
+  detailsExpanded = false,
+  onToggleDetails,
   onPreviewPdf,
   onSharePdf,
   setPage,
@@ -70,6 +72,10 @@ export default function QuickQuoteConversation({
         <header className="quick-quote-flow-header">
           <p>{copy.organizedFromInstructions}</p>
           <h1 id="quick-quote-review-title">{copy.reviewTitle}</h1>
+          <div className="quick-quote-guidance">
+            <strong>{copy.reviewGuidanceTitle}</strong>
+            <span>{copy.reviewGuidanceBody}</span>
+          </div>
         </header>
         <div className="quick-quote-review-card">
           <div className="quick-quote-review-grid">
@@ -117,6 +123,19 @@ export default function QuickQuoteConversation({
               {copy.sharePdf}
             </button>
           </div>
+          <div className="quick-quote-details-disclosure">
+            <button
+              type="button"
+              className="quick-quote-details-toggle"
+              aria-expanded={detailsExpanded}
+              aria-controls="quick-quote-full-details"
+              onClick={onToggleDetails}
+            >
+              <span>{copy.fullDetailsLabel}</span>
+              <span aria-hidden="true">{detailsExpanded ? "▴" : "▾"}</span>
+            </button>
+            <p>{copy.fullDetailsGuidance}</p>
+          </div>
           <p className="quick-quote-draft-truth" role="status">{copy.draftTruth}</p>
           {notice ? <p className="quick-quote-action-notice" role="status">{notice}</p> : null}
         </div>
@@ -129,6 +148,12 @@ export default function QuickQuoteConversation({
       <header className="quick-quote-flow-header">
         <p>{copy.assistant}</p>
         <h1 id="quick-quote-create-title">{isRevision ? copy.revisionTitle : copy.createTitle}</h1>
+        {!isRevision ? (
+          <div className="quick-quote-guidance">
+            <strong>{copy.entryGuidanceTitle}</strong>
+            <span>{copy.entryGuidanceBody}</span>
+          </div>
+        ) : null}
       </header>
       <section className="quick-quote-prompt-card" aria-label={copy.assistant}>
         <div className="quick-quote-prompt-heading">

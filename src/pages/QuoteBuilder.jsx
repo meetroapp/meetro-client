@@ -774,7 +774,6 @@ function QuoteBuilder({ setPage }) {
     isUniversalQuickQuote ? "entry" : "details"
   );
   const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
-  const [quickQuoteDraftPrepared, setQuickQuoteDraftPrepared] = useState(false);
   const quickQuoteWorkingTimerRef = useRef(null);
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
 
@@ -1429,7 +1428,6 @@ ${businessIdentity.businessName}`;
     setQuickQuoteView("working");
     quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
       applyQuickQuoteConversationPatch(patch);
-      setQuickQuoteDraftPrepared(true);
       setQuickQuotePrompt("");
       setQuickQuoteView("review");
       quickQuoteWorkingTimerRef.current = null;
@@ -1455,6 +1453,15 @@ ${businessIdentity.businessName}`;
     notes,
     total: calculatedTotal,
   };
+
+  function openQuickQuoteDetails() {
+    setQuickQuoteView("details");
+    window.requestAnimationFrame(() => {
+      const details = document.getElementById("quick-quote-full-details");
+      details?.focus({ preventScroll: true });
+      details?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
 
   return (
@@ -1522,10 +1529,10 @@ ${businessIdentity.businessName}`;
         </button>
       )}
 
-      {isUniversalQuickQuote && quickQuoteView !== "details" ? (
+      {isUniversalQuickQuote ? (
         <QuickQuoteConversation
           language={language}
-          view={quickQuoteView}
+          view={quickQuoteView === "details" ? "review" : quickQuoteView}
           prompt={quickQuotePrompt}
           onPromptChange={setQuickQuotePrompt}
           onPrepare={prepareQuickQuoteConversation}
@@ -1534,7 +1541,12 @@ ${businessIdentity.businessName}`;
             setQuickQuoteView("revision");
           }}
           onCancelRevision={() => setQuickQuoteView("review")}
-          onEditDetails={() => setQuickQuoteView("details")}
+          onEditDetails={openQuickQuoteDetails}
+          detailsExpanded={quickQuoteView === "details"}
+          onToggleDetails={() => {
+            if (quickQuoteView === "details") setQuickQuoteView("review");
+            else openQuickQuoteDetails();
+          }}
           onPreviewPdf={previewQuickQuotePdf}
           onSharePdf={() => void shareQuickQuotePdf()}
           setPage={setPage}
@@ -1543,13 +1555,14 @@ ${businessIdentity.businessName}`;
           canAddPhotos={false}
           notice={copiedNotice}
         />
-      ) : (
-        <>
-          {isUniversalQuickQuote && quickQuoteDraftPrepared && (
-            <button style={evaluationBackButton} onClick={() => setQuickQuoteView("review")}>
-              ← {quickQuoteCopy.backToReview}
-            </button>
-          )}
+      ) : null}
+      {(!isUniversalQuickQuote || quickQuoteView === "details") && (
+        <section
+          id={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}
+          className={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}
+          tabIndex={isUniversalQuickQuote ? -1 : undefined}
+          aria-label={isUniversalQuickQuote ? quickQuoteCopy.fullDetailsLabel : undefined}
+        >
       <div style={hero}>
         {isRevisedQuoteFlow && (
           <div style={revisionBanner}>
@@ -2251,7 +2264,7 @@ ${businessIdentity.businessName}`;
           </div>
         </div>
       </div>
-        </>
+        </section>
       )}
 
       <BottomNav

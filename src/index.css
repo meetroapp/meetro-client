@@ -2139,6 +2139,22 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   letter-spacing: -0.035em;
 }
 
+.quick-quote-guidance {
+  display: grid;
+  gap: 3px;
+  max-width: 680px;
+  margin: 2px auto 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.quick-quote-guidance strong {
+  color: #334155;
+  font-size: 15px;
+}
+
 .quick-quote-prompt-card,
 .quick-quote-review-card,
 .quick-quote-working {
@@ -2359,6 +2375,50 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   margin-top: 14px;
 }
 
+.quick-quote-details-disclosure {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  border-top: 1px solid var(--meetro-color-line, rgba(78, 68, 55, 0.14));
+  padding-top: 14px;
+}
+
+.quick-quote-details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(31, 77, 52, 0.26);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--meetro-color-forest, #1f4d34);
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-quote-details-disclosure p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.quick-quote-full-details {
+  width: min(100%, 1120px);
+  margin: 4px auto 0;
+  scroll-margin-top: 18px;
+}
+
+.quick-quote-full-details:focus {
+  outline: 3px solid rgba(31, 77, 52, 0.28);
+  outline-offset: 5px;
+}
+
 .quick-quote-draft-truth,
 .quick-quote-action-notice {
   margin-top: 12px;
@@ -2392,7 +2452,14 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
     border-radius: 20px;
   }
 
-  .quick-quote-input-row,
+  .quick-quote-input-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-quote-input-row > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
   .quick-quote-review-actions,
   .quick-quote-prompt-actions {
     grid-template-columns: 1fr;
