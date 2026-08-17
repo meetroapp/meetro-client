@@ -136,14 +136,50 @@ test("Quick Quote and Quick Invoice render truthful draft models without canonic
 test("branding allowlist accepts safe Cloudinary logos and gracefully falls back to the business name", () => {
   const safe = buildCustomerSafeBusinessBranding({
     businessName: "Handyman LLC", logoUrl: "https://res.cloudinary.com/demo/image/upload/logo.png",
-    phone: "555-0100", passwordHash: "never", apiKey: "never",
+    phone: "555-0100", serviceArea: "15 miles", passwordHash: "never", apiKey: "never",
   });
   assert.equal(safe.name, "Handyman LLC");
   assert.match(safe.logoUrl, /^https:\/\/res\.cloudinary\.com/);
   assert.deepEqual(Object.keys(safe), ["name", "logoUrl", "phone", "email", "website", "region"]);
+  assert.equal(safe.region, null);
   const fallback = buildCustomerSafeBusinessBranding({ logoUrl: "https://example.com/private.png" }, "Meetro Pro");
   assert.equal(fallback.name, "Meetro Pro");
   assert.equal(fallback.logoUrl, null);
+});
+
+test("fixed-price Quick Quote PDF keeps work scope clean and suppresses empty pricing rows", () => {
+  const model = buildQuickQuoteDocumentModel({
+    projectTitle: "Synthetic wall repair",
+    customerName: "",
+    customerLocation: "",
+    recommendedSolution: "Repair the cracked wall and paint to match. Duration 3–4 days. Final price $2,650. 50% deposit.",
+    lineItems: [
+      { description: "Repair labor", quantity: 1, unitPrice: 0, total: 0 },
+      { description: "Materials", quantity: 1, unitPrice: 0, total: 0 },
+    ],
+    subtotal: 0,
+    total: 2650,
+    terms: "50% deposit",
+    estimatedDuration: "3–4 days",
+    fixedPrice: true,
+  }, {
+    branding: { businessName: "Handyman LLC", serviceArea: "15 miles" },
+  });
+  assert.equal(model.scopeSummary, "Repair the cracked wall and paint to match.");
+  assert.equal(model.paymentTerms, "50% deposit required");
+  assert.equal(model.lineItems.length, 0);
+  assert.equal(model.subtotalMinor, null);
+  assert.equal(model.totalMinor, 265000);
+  assert.equal(model.customer.name, null);
+  assert.equal(model.projectLocation, null);
+  assert.equal(model.branding.region, null);
+
+  const commands = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.equal((commands.match(/Scope of Work/g) || []).length, 1);
+  assert.doesNotMatch(commands, /\$0\.00|15 miles|\(CUSTOMER\)|Duration 3|Final price|50% deposit\.\)/);
+  assert.match(commands, /\(50% deposit required\)/);
+  assert.match(commands, /\(\$2,650\.00\)/);
+  assert.match(commands, /\(DRAFT PREVIEW\)/);
 });
 
 test("renderer creates a real searchable multi-page PDF and long rows paginate", () => {

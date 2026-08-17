@@ -177,11 +177,11 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     ? new Date(`${model.dueDate}T00:00:00`).toLocaleDateString(model.locale)
     : null;
   const meta = [
-    [copy.customer, model.customer.name || "-"],
-    [copy.project, model.projectTitle || "-"],
+    model.customer.name ? [copy.customer, model.customer.name] : null,
+    model.projectTitle ? [copy.project, model.projectTitle] : null,
     [model.kind === "QUOTE" ? copy.quote : copy.invoice, model.documentNumber || (model.draft ? copy.draft : "-")],
     [dueDate ? `${copy.date} / ${copy.dueDate}` : copy.date, dueDate ? `${documentDate} / ${dueDate}` : documentDate],
-  ];
+  ].filter(Boolean);
   doc.setFillColor(...COLOR.fill);
   doc.setDrawColor(...COLOR.line);
   doc.rect(PAGE.margin, y, contentWidth, 34, "FD");
@@ -197,7 +197,9 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
 
   if (model.lineItems.length > 0) {
     ensureSpace(70);
-    y = addText(doc, model.kind === "QUOTE" ? copy.scope : copy.description, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
+    if (model.kind === "INVOICE") {
+      y = addText(doc, copy.description, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
+    }
     const columns = { description: PAGE.margin, quantity: 376, unit: 430, amount: 512 };
     doc.setFillColor(...COLOR.fill);
     doc.rect(PAGE.margin, y + 3, contentWidth, 22, "F");

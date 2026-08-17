@@ -66,10 +66,10 @@ export function buildCustomerSafeBusinessBranding(source = {}, fallbackName = "M
   ) || fallbackName;
   const city = text(source.city || source.businessCity, 120);
   const state = text(source.state || source.stateProvince || source.state_province, 120);
-  const region = text(
-    source.serviceArea || source.service_area || source.location || [city, state].filter(Boolean).join(", "),
-    240
-  );
+  const regionCandidate = text(source.location || [city, state].filter(Boolean).join(", "), 240);
+  const region = /\b\d+(?:\.\d+)?\s*(?:mi|miles?|km|kilometers?)\b/i.test(regionCandidate)
+    ? ""
+    : regionCandidate;
   return Object.freeze({
     name,
     logoUrl: safeLogoUrl(
@@ -80,6 +80,35 @@ export function buildCustomerSafeBusinessBranding(source = {}, fallbackName = "M
     website: optionalText(source.website || source.businessWebsite || source.business_website, 240),
     region: region || null,
   });
+}
+
+function quickQuoteScope(value) {
+  let scope = text(value, 8000);
+  if (!scope) return null;
+  const commercialClauses = [
+    /\b(?:duration|estimated\s+duration)\s*(?:is|:)?\s*\d+(?:\s*[–—-]\s*\d+)?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?)\b/gi,
+    /\b(?:about|around|approximately|aproximadamente|environ)\s+\d+(?:\s*[–—-]\s*\d+)?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?)\b/gi,
+    /\b(?:final\s+(?:price|selling\s+price)|project\s+price|total)\s*(?:is|:)?\s*\$?\s*[\d,.]+\b/gi,
+    /\b(?:with\s+)?\d{1,3}\s*%\s*(?:deposit|down\s+payment)(?:\s+required)?\b/gi,
+  ];
+  for (const clause of commercialClauses) scope = scope.replace(clause, "");
+  scope = scope
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/([.!?])(?:\s*[.!?])+/g, "$1")
+    .replace(/(?:^|[.!?]\s+)(?:and|with)\s+/gi, (match) => match.replace(/(?:and|with)\s+/i, ""))
+    .replace(/(?:,\s*)?(?:and|with)\s*[.!?]?$/i, "")
+    .replace(/^[,.;:\s]+|[,;:\s]+$/g, "")
+    .trim();
+  return scope || null;
+}
+
+function quickQuotePaymentTerms(value) {
+  const terms = text(value, 5000);
+  if (!terms) return null;
+  return terms.replace(
+    /\b(\d{1,3}\s*%)\s*(?:deposit|down\s+payment)\b(?!\s+required)/i,
+    "$1 deposit required"
+  );
 }
 
 function customer(source = {}) {
@@ -265,14 +294,16 @@ export function buildQuickQuoteDocumentModel(
   { locale = "en", branding = {} } = {}
 ) {
   const safeCurrency = currency(draft?.currency || "USD");
+  const fixedPrice = draft?.fixedPrice === true;
   const lines = Array.isArray(draft?.lineItems)
     ? draft.lineItems.map((item) => lineItem({
         description: item.description,
         quantity: Number(item.quantity) || 1,
         unitAmountMinor: majorToMinor(item.unitPrice),
         lineTotalMinor: majorToMinor(item.total),
-      }))
+      })).filter((item) => item && (!fixedPrice || item.lineTotalMinor > 0 || item.unitAmountMinor > 0))
     : [];
+  const subtotalMinor = majorToMinor(draft?.subtotal);
   return model({
     kind: "QUOTE",
     draft: true,
@@ -285,13 +316,15 @@ export function buildQuickQuoteDocumentModel(
     projectTitle: draft?.projectTitle,
     projectLocation: draft?.customerLocation,
     lineItems: lines,
-    scopeSummary: draft?.recommendedSolution || draft?.customerRequest || draft?.problemFound,
-    subtotalMinor: majorToMinor(draft?.subtotal),
+    scopeSummary: quickQuoteScope(
+      draft?.scopeSummary || draft?.recommendedSolution || draft?.customerRequest || draft?.problemFound
+    ),
+    subtotalMinor: fixedPrice && subtotalMinor === 0 ? undefined : subtotalMinor,
     discountMinor: majorToMinor(draft?.discount),
     taxMinor: majorToMinor(draft?.tax),
     feesMinor: majorToMinor(draft?.fees),
     totalMinor: majorToMinor(draft?.total),
-    paymentTerms: draft?.paymentTerms || draft?.terms,
+    paymentTerms: quickQuotePaymentTerms(draft?.paymentTerms || draft?.terms),
     estimatedDuration: draft?.estimatedDuration || draft?.timeline,
     conditions: draft?.conditions || [],
     exclusions: draft?.exclusions || [],

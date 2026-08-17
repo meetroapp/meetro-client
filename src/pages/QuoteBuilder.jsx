@@ -1293,6 +1293,7 @@ ${businessIdentity.businessName}`;
       projectTitle,
       problemFound,
       recommendedSolution,
+      fixedPrice: Boolean(cleanText(totalOverride)) || pricingMethod === "Flat Fee",
       lineItems: [
         ...pricing.quoteLineItems.map((item) => ({
           description: item.description,
