@@ -805,7 +805,7 @@ function BusinessDashboard({ setPage }) {
           }
 
           .business-dashboard-quick-access {
-            display: none;
+            display: grid;
           }
 
           .business-dashboard-community-entry {
@@ -872,7 +872,7 @@ function BusinessDashboard({ setPage }) {
             }
 
             .business-dashboard-quick-access {
-              display: grid;
+              display: none !important;
             }
 
             .business-dashboard-community-entry {

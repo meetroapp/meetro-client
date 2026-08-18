@@ -138,12 +138,18 @@ function InvoiceBuilder({ setPage }) {
     completed: isSpanish ? "Completado" : "Completed",
   };
   const returnPage = localStorage.getItem("invoiceBuilderReturnPage") || "";
+  const invoiceBuilderSource =
+    localStorage.getItem("invoiceBuilderSource") || "";
   const isWorkCenterReceipt = returnPage === "workCenter";
   const isBusinessToolsInvoice = returnPage === "businessCommandCenter";
+  const isDesktopSidebarInvoice =
+    invoiceBuilderSource === "desktop_sidebar_quick_invoice";
+  const isStandaloneQuickInvoice =
+    isBusinessToolsInvoice || isDesktopSidebarInvoice;
   const workCenterScheduleId = localStorage.getItem("invoiceBuilderScheduleId") || "";
   const workCenterQuoteId = localStorage.getItem("invoiceBuilderQuoteId") || "";
 
-  const service = isBusinessToolsInvoice
+  const service = isStandaloneQuickInvoice
     ? ""
     : activeJobSnapshot?.service ||
       localStorage.getItem("activeJobService") ||
@@ -152,7 +158,7 @@ function InvoiceBuilder({ setPage }) {
       "Service";
 
   const [customerName, setCustomerName] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : activeJobSnapshot?.customer ||
           localStorage.getItem("activeJobCustomer") ||
@@ -160,21 +166,21 @@ function InvoiceBuilder({ setPage }) {
           ""
   );
   const [customerPhone, setCustomerPhone] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : localStorage.getItem("activeCustomerPhone") ||
           localStorage.getItem("customerPhone") ||
           ""
   );
   const [customerEmail, setCustomerEmail] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : localStorage.getItem("activeCustomerEmail") ||
           localStorage.getItem("customerEmail") ||
           ""
   );
   const [serviceAddress, setServiceAddress] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : activeJobSnapshot?.location ||
           localStorage.getItem("activeJobLocation") ||
@@ -186,7 +192,7 @@ function InvoiceBuilder({ setPage }) {
   const [dueDate, setDueDate] = useState("");
   const [serviceDescription, setServiceDescription] = useState(service);
   const [jobReference, setJobReference] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : workCenterScheduleId || workCenterQuoteId || activeJobSnapshot?.id || ""
   );
@@ -518,8 +524,9 @@ ${invoice.customerMessage || "—"}`;
           onClick={() => {
             if (restoreConversationOriginContext(setPage)) return;
 
-            if (isBusinessToolsInvoice) {
+            if (isBusinessToolsInvoice || isDesktopSidebarInvoice) {
               localStorage.removeItem("invoiceBuilderReturnPage");
+              localStorage.removeItem("invoiceBuilderSource");
             }
 
             setPage(
@@ -527,6 +534,8 @@ ${invoice.customerMessage || "—"}`;
                 ? "businessCommandCenter"
                 : isWorkCenterReceipt
                 ? "workCenter"
+                : isDesktopSidebarInvoice && returnPage
+                ? returnPage
                 : "conversationThread"
             );
           }}
@@ -819,7 +828,13 @@ ${invoice.customerMessage || "—"}`;
 
       <BottomNav
         setPage={setPage}
-        currentPage={isBusinessToolsInvoice ? "businessDashboard" : "messages"}
+        currentPage={
+          isBusinessToolsInvoice
+            ? "businessDashboard"
+            : isDesktopSidebarInvoice
+            ? returnPage
+            : "messages"
+        }
       />
     </div>
   );

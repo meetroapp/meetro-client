@@ -345,14 +345,18 @@ function QuoteBuilder({ setPage }) {
   const isSpanish = language === "es";
   const quoteBuilderReturnPage =
     localStorage.getItem("quoteBuilderReturnPage") || "";
+  const quoteBuilderSource =
+    localStorage.getItem("quoteBuilderSource") || "";
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
   const isBusinessToolsReturn =
     quoteBuilderReturnPage === "businessCommandCenter";
   const isUniversalQuickQuote =
-    isBusinessToolsReturn &&
-    localStorage.getItem("quoteBuilderSource") === "business_tools_quick_quote";
+    (isBusinessToolsReturn && quoteBuilderSource === "business_tools_quick_quote") ||
+    quoteBuilderSource === "desktop_sidebar_quick_quote";
+  const isDesktopSidebarQuickQuote =
+    quoteBuilderSource === "desktop_sidebar_quick_quote";
   const workCenterReturnCustomer =
     localStorage.getItem("workCenterReturnCustomer") || "";
 
@@ -1502,12 +1506,16 @@ ${businessIdentity.businessName}`;
             setPage("workCenter");
           } else if (isRevisedQuoteFlow) {
             setPage("conversationThread");
+          } else if (isBusinessToolsReturn) {
+            setPage("businessCommandCenter");
+          } else if (isDesktopSidebarQuickQuote && quoteBuilderReturnPage) {
+            localStorage.removeItem("quoteBuilderReturnPage");
+            localStorage.removeItem("quoteBuilderSource");
+            setPage(quoteBuilderReturnPage);
           } else if (isWorkCenterReturn) {
             localStorage.setItem("meetroWorkCenterTab", "quotes");
             localStorage.setItem("activeWorkCenterTab", "quotes");
             setPage("workCenter");
-          } else if (isBusinessToolsReturn) {
-            setPage("businessCommandCenter");
           } else {
             setPage("businessLeads");
           }

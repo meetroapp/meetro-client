@@ -30,22 +30,23 @@ const businessMobile = mobileBlock(
   "const personalDesktopNavItems = ["
 );
 
-test("both mobile roles contain exactly six direct destinations", () => {
-  assert.equal((personalMobile.match(/page: "/g) || []).length, 6);
-  assert.equal((businessMobile.match(/page: "/g) || []).length, 6);
-  assert.equal((personalMobile.match(/page: "notifications"/g) || []).length, 1);
-  assert.equal((businessMobile.match(/page: "notifications"/g) || []).length, 1);
+test("both mobile roles contain five direct destinations without standalone Alerts", () => {
+  assert.equal((personalMobile.match(/page: "/g) || []).length, 5);
+  assert.equal((businessMobile.match(/page: "/g) || []).length, 5);
+  assert.equal((personalMobile.match(/page: "notifications"/g) || []).length, 0);
+  assert.equal((businessMobile.match(/page: "notifications"/g) || []).length, 0);
+  assert.doesNotMatch(personalMobile, /navigationAlerts/);
+  assert.doesNotMatch(businessMobile, /navigationAlerts/);
 });
 
-test("six items retain bounded practical width at 320px and 390px", () => {
+test("five items retain bounded practical width at 320px and 390px", () => {
   const horizontalDockPadding = 8;
   for (const viewportWidth of [320, 390]) {
-    const itemWidth = (viewportWidth - horizontalDockPadding) / 6;
+    const itemWidth = (viewportWidth - horizontalDockPadding) / 5;
     assert.ok(itemWidth >= 44, `${viewportWidth}px leaves ${itemWidth}px per item`);
   }
 
   assert.match(bottomNavSource, /flex: 1/);
-  assert.match(alertCss, /\.bottom-nav-item--alerts \{\s*min-width: 44px !important;/);
 });
 
 test("compact labels, touch targets, landscape rules, and safe area remain intact", () => {

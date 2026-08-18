@@ -4,7 +4,6 @@ import { t } from "../utils/language";
 import useLanguage from "../hooks/useLanguage";
 import {
   getNotifications,
-  getUnreadNotificationCount,
   saveNotifications,
 } from "../utils/notifications";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
@@ -292,13 +291,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationHistory", language),
     },
     {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
-    },
-    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
@@ -351,13 +343,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationHistory", language),
     },
     {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
-    },
-    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
@@ -408,13 +393,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "discover",
       label: t("navigationCommunity", language),
       sub: t("navigationDiscover", language),
-    },
-    {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
     },
     {
       page: "profile",
@@ -490,18 +468,35 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationDiscover", language),
     },
     {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
-    },
-    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
       label: t("navigationProfileAccount", language),
       sub: t("account"),
+    },
+  ];
+
+  const businessDesktopShortcutItems = [
+    {
+      page: "quoteBuilder",
+      shortcut: "quickQuote",
+      icon: "quickQuote",
+      label: t("desktopQuickQuote", language),
+      sub: t("desktopQuickQuoteNote", language),
+    },
+    {
+      page: "invoiceBuilder",
+      shortcut: "quickInvoice",
+      icon: "quickInvoice",
+      label: t("desktopQuickInvoice", language),
+      sub: t("desktopQuickInvoiceNote", language),
+    },
+    {
+      page: "businessLeads",
+      shortcut: "businessLeads",
+      icon: "businessLeads",
+      label: t("desktopBusinessLeads", language),
+      sub: t("desktopBusinessLeadsNote", language),
     },
   ];
 
@@ -551,21 +546,35 @@ function BottomNav({ setPage, currentPage = "" }) {
     activeMode
   );
 
-  const operationsAlertCount =
-    activeMode === "business"
-      ? Math.max(
-          getUnreadNotificationCount("professional"),
-          getAcceptedQuoteReadyCount(),
-          getActiveEmergencyAlertCount()
-        )
-      : 0;
+  const canonicalCategoryUnreadCount = (category) => {
+    if (alertCountSnapshot.identity !== alertCountIdentity) return 0;
+    const count = alertCountSnapshot.response?.counts?.byCategory?.[category]?.unread;
+    return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  };
 
-  const canonicalAlertUnreadCount =
-    alertCountSnapshot.identity === alertCountIdentity &&
-    Number.isSafeInteger(alertCountSnapshot.response?.counts?.unread) &&
-    alertCountSnapshot.response.counts.unread >= 0
-      ? alertCountSnapshot.response.counts.unread
-      : null;
+  const communicationAlertCount = Math.max(
+    canonicalCategoryUnreadCount("communication"),
+    canonicalCategoryUnreadCount("emergency"),
+    getUnreadMessageCount()
+  );
+  const workCenterAlertCount = Math.max(
+    canonicalCategoryUnreadCount("evaluation"),
+    canonicalCategoryUnreadCount("proposal"),
+    canonicalCategoryUnreadCount("invoice"),
+    canonicalCategoryUnreadCount("payment"),
+    canonicalCategoryUnreadCount("schedule"),
+    canonicalCategoryUnreadCount("work"),
+    canonicalCategoryUnreadCount("completion"),
+    canonicalCategoryUnreadCount("review"),
+    getAcceptedQuoteReadyCount(),
+    getActiveEmergencyAlertCount()
+  );
+  const leadsAlertCount =
+    activeMode === "business" ? canonicalCategoryUnreadCount("request") : 0;
+  const profileAlertCount =
+    activeMode === "business"
+      ? canonicalCategoryUnreadCount("business_verification")
+      : 0;
 
   void notificationTick;
   const isLandscapeCompact =
@@ -579,34 +588,50 @@ function BottomNav({ setPage, currentPage = "" }) {
     (item.page === "businessLeads" && normalizedPage === "businessLeads");
 
   const getItemUnreadCount = (item) =>
-    item.page === "notifications"
-      ? canonicalAlertUnreadCount
+    item.shortcut === "businessLeads"
+      ? leadsAlertCount
       : item.page === "contractorDashboard"
-      ? operationsAlertCount
+      ? workCenterAlertCount
+      : item.page === "myRequests"
+      ? Math.max(workCenterAlertCount, canonicalCategoryUnreadCount("request"))
       : item.aliases?.some((alias) =>
           ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
         )
-      ? getUnreadMessageCount()
+      ? communicationAlertCount
+      : item.page === "profile"
+      ? profileAlertCount
       : 0;
 
-  const getItemAccessibleLabel = (item, unread) => {
-    if (item.page !== "notifications" || !Number.isSafeInteger(unread) || unread < 1) {
-      return `${item.label}. ${item.sub}`;
-    }
-    if (unread > 99) {
-      return t("navigationAlertsUnreadOverflow", language);
-    }
-    return t(
-      unread === 1
-        ? "navigationAlertsUnreadSingular"
-        : "navigationAlertsUnreadPlural",
-      language,
-      { count: unread }
-    );
-  };
+  const getItemAccessibleLabel = (item) => `${item.label}. ${item.sub}`;
 
-  const getItemBadgeText = (item, unread) =>
-    item.page === "notifications" && unread > 99 ? "99+" : String(unread);
+  const getItemBadgeText = (_item, unread) =>
+    unread > 99 ? "99+" : String(unread);
+
+  const shortcutReturnPage = [
+    "contractorDashboard",
+    "workCenter",
+    "workDashboard",
+    "schedule",
+    "activeJobs",
+  ].includes(normalizedPage)
+    ? "workCenter"
+    : normalizedPage || "businessDashboard";
+
+  const prepareBusinessShortcut = (item) => {
+    if (item.shortcut === "quickQuote") {
+      localStorage.removeItem("selectedQuoteRequest");
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.removeItem("selectedWorkCenterRequest");
+      localStorage.removeItem("selectedHomeownerRequest");
+      localStorage.setItem("quoteBuilderSource", "desktop_sidebar_quick_quote");
+      localStorage.setItem("quoteBuilderReturnPage", shortcutReturnPage);
+    }
+
+    if (item.shortcut === "quickInvoice") {
+      localStorage.setItem("invoiceBuilderSource", "desktop_sidebar_quick_invoice");
+      localStorage.setItem("invoiceBuilderReturnPage", shortcutReturnPage);
+    }
+  };
 
   const handleNavPress = (item, variant = "bottom", event) => {
     if (item.page === "home") {
@@ -635,6 +660,10 @@ function BottomNav({ setPage, currentPage = "" }) {
     }
 
     setProfileContextCardOpen(false);
+
+    if (variant === "sidebar" && item.shortcut) {
+      prepareBusinessShortcut(item);
+    }
 
     if (item.page === "contractorDashboard") {
       localStorage.removeItem("meetroWorkCenterTab");
@@ -686,7 +715,7 @@ function BottomNav({ setPage, currentPage = "" }) {
           aria-current={active ? "page" : undefined}
           aria-haspopup={item.page === "profile" ? "dialog" : undefined}
           aria-expanded={item.page === "profile" ? profileContextCardOpen : undefined}
-          aria-label={getItemAccessibleLabel(item, unread)}
+          aria-label={getItemAccessibleLabel(item)}
           title={`${item.label} — ${item.sub}`}
           onClick={(event) => handleNavPress(item, "sidebar", event)}
           style={{
@@ -709,15 +738,7 @@ function BottomNav({ setPage, currentPage = "" }) {
               decorative
               style={active ? activeIconText : iconText}
             />
-            {unread > 0 && (
-              item.page === "notifications" ? (
-                <span className="alert-navigation-badge alert-navigation-badge--sidebar" aria-hidden="true">
-                  {badgeText}
-                </span>
-              ) : (
-                <span style={sidebarBadge}>{unread}</span>
-              )
-            )}
+            {unread > 0 && <span style={sidebarBadge}>{badgeText}</span>}
           </span>
 
           <span style={sidebarLabelStack}>
@@ -736,9 +757,9 @@ function BottomNav({ setPage, currentPage = "" }) {
       <button
         key={item.page}
         type="button"
-        className={`bottom-nav-item${item.page === "notifications" ? " bottom-nav-item--alerts" : ""}${active ? " active" : ""}`}
+        className={`bottom-nav-item${active ? " active" : ""}`}
         aria-current={active ? "page" : undefined}
-        aria-label={getItemAccessibleLabel(item, unread)}
+        aria-label={getItemAccessibleLabel(item)}
         onPointerDown={(event) => {
           navTouchStartRef.current = {
             x: event.clientX || 0,
@@ -797,15 +818,7 @@ function BottomNav({ setPage, currentPage = "" }) {
             style={active ? activeIconText : iconText}
           />
 
-          {unread > 0 && (
-            item.page === "notifications" ? (
-              <span className="alert-navigation-badge alert-navigation-badge--mobile" aria-hidden="true">
-                {badgeText}
-              </span>
-            ) : (
-              <div style={badge}>{unread}</div>
-            )
-          )}
+          {unread > 0 && <div style={badge}>{badgeText}</div>}
         </div>
 
         <span
@@ -855,7 +868,37 @@ function BottomNav({ setPage, currentPage = "" }) {
           </div>
         </div>
 
-        <div style={sidebarNavList}>{desktopNavItems.map((item) => renderNavItem(item, "sidebar"))}</div>
+        <div style={sidebarScrollArea}>
+          <div style={sidebarNavList}>
+            {desktopNavItems
+              .filter((item) => item.page !== "profile")
+              .map((item) => renderNavItem(item, "sidebar"))}
+          </div>
+
+          {activeMode === "business" && (
+            <section
+              style={sidebarShortcutGroup}
+              aria-label={t("desktopBusinessShortcuts", language)}
+            >
+              <div style={sidebarShortcutHeading}>
+                {t("desktopBusinessShortcuts", language)}
+              </div>
+              <div style={sidebarShortcutList}>
+                {businessDesktopShortcutItems.map((item) =>
+                  renderNavItem(item, "sidebar")
+                )}
+              </div>
+            </section>
+          )}
+
+          {desktopNavItems
+            .filter((item) => item.page === "profile")
+            .map((item) => (
+              <div key={`${item.page}-profile`} style={sidebarProfileGroup}>
+                {renderNavItem(item, "sidebar")}
+              </div>
+            ))}
+        </div>
       </nav>
 
       {profileContextCardOpen && (
@@ -1076,6 +1119,15 @@ const desktopSidebar = {
   overflow: "hidden",
 };
 
+const sidebarScrollArea = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  paddingRight: "2px",
+};
+
 const sidebarBrand = {
   display: "grid",
   gridTemplateColumns: "42px minmax(0, 1fr)",
@@ -1123,6 +1175,36 @@ const sidebarNavList = {
   display: "grid",
   gap: "8px",
   minWidth: 0,
+};
+
+const sidebarShortcutGroup = {
+  display: "grid",
+  gap: "8px",
+  marginTop: "14px",
+  paddingTop: "14px",
+  borderTop: "1px solid var(--meetro-color-line)",
+};
+
+const sidebarShortcutHeading = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  padding: "0 10px",
+};
+
+const sidebarShortcutList = {
+  display: "grid",
+  gap: "6px",
+  minWidth: 0,
+};
+
+const sidebarProfileGroup = {
+  marginTop: "14px",
+  paddingTop: "14px",
+  borderTop: "1px solid var(--meetro-color-line)",
 };
 
 const sidebarNavButton = {

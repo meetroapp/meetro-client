@@ -21,7 +21,7 @@ test("business dashboard desktop quick access routes to existing destinations on
 });
 
 test("business dashboard desktop presentation begins at the stable tablet breakpoint", () => {
-  assert.match(source, /\.business-dashboard-quick-access \{\s*display: none;\s*\}/);
+  assert.match(source, /\.business-dashboard-quick-access \{\s*display: grid;\s*\}/);
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: block;\s*\}/);
   assert.match(source, /@media \(min-width: 1100px\)/);
   assert.match(source, /#root\[data-app-layout="desktop"\]/);
@@ -37,11 +37,23 @@ test("business dashboard desktop presentation begins at the stable tablet breakp
     source,
     /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
   );
+  assert.match(source, /\.business-dashboard-quick-access \{\s*display: none !important;/);
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: none !important;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*margin: 0;/);
   assert.match(source, /const dashboardContentLane = \{\s*display: "contents",\s*\}/);
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
+});
+
+test("business dashboard keeps Quick Access mobile-only when desktop shortcuts are present", () => {
+  const desktopQuickAccessRule = source.match(
+    /@media \(min-width: 1100px\)[\s\S]*?\.business-dashboard-quick-access \{\s*display: none !important;\s*\}/
+  );
+  assert.ok(desktopQuickAccessRule);
+  assert.match(source, /icon: "quickQuote"/);
+  assert.match(source, /icon: "quickInvoice"/);
+  assert.match(source, /setPage\("quoteBuilder"\)/);
+  assert.match(source, /setPage\("invoiceBuilder"\)/);
 });
 
 test("business dashboard renders a professional mobile Community entry to the shared destination", () => {

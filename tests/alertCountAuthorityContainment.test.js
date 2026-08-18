@@ -74,12 +74,16 @@ test("Alert Center mutation integration only requests canonical invalidation", (
   assert.doesNotMatch(notificationsSource, /counts?\.(?:unread|active)\s*=/);
 });
 
-test("navigation does not substitute message or legacy notification counts for Alerts", () => {
+test("navigation projects canonical category counts without a local unread authority", () => {
   const unreadBranch = bottomNavSource.slice(
     bottomNavSource.indexOf("const getItemUnreadCount"),
     bottomNavSource.indexOf("const getItemAccessibleLabel")
   );
-  assert.match(unreadBranch, /item\.page === "notifications"\s*\? canonicalAlertUnreadCount/);
-  assert.doesNotMatch(unreadBranch, /notifications[^\n]*getUnreadMessageCount/);
-  assert.doesNotMatch(unreadBranch, /notifications[^\n]*getUnreadNotificationCount/);
+  assert.match(bottomNavSource, /counts\?\.byCategory\?\./);
+  assert.match(bottomNavSource, /canonicalCategoryUnreadCount\("communication"\)/);
+  assert.match(bottomNavSource, /canonicalCategoryUnreadCount\("request"\)/);
+  assert.match(unreadBranch, /item\.shortcut === "businessLeads"/);
+  assert.match(unreadBranch, /item\.page === "contractorDashboard"/);
+  assert.doesNotMatch(bottomNavSource, /getUnreadNotificationCount/);
+  assert.doesNotMatch(bottomNavSource, /canonicalAlertUnreadCount/);
 });
