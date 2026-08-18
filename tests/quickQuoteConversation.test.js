@@ -139,6 +139,37 @@ test("explicit labor hours and rate produce a calculable labor row", () => {
   assert.equal(patch.totalOverride, undefined);
 });
 
+test("flat conversational pricing stays flat while explicit hours and rate keep arithmetic", () => {
+  const flat = buildQuickQuoteConversationPatch({
+    prompt:
+      "Reconstruct the wall. Materials are $700. Labor is $1,950. Final price is $2,650.",
+  });
+
+  assert.deepEqual(flat.materialItems[0], {
+    name: "Materials",
+    total: "700",
+  });
+  assert.deepEqual(flat.laborItems[0], {
+    description: "Labor",
+    total: "1950",
+  });
+
+  const hourly = buildQuickQuoteConversationPatch({
+    prompt: "Labor is 8 hours at $75 per hour.",
+  });
+
+  assert.deepEqual(hourly.laborItems[0], {
+    description: "Labor",
+    hours: "8",
+    rate: "75",
+  });
+
+  assert.match(builder, /function formatQuickQuoteSharePricingLine/);
+  assert.match(builder, /pricingPresentation:/);
+  assert.doesNotMatch(builder, /item\.hours \|\| "—"/);
+  assert.doesNotMatch(builder, /item\.quantity \|\| "—"/);
+});
+
 test("only explicitly identified notes and conditions are extracted", () => {
   const note = buildQuickQuoteConversationPatch({ prompt: "Note: protect the existing landscaping." });
   assert.equal(note.notes, "protect the existing landscaping");
@@ -229,7 +260,7 @@ test("detailed knee-wall conversation extracts clean structured draft with final
   assert.equal(patch.customerName, "Paul Becker");
   assert.match(scope, /Reconstruct the damaged front knee wall/);
   assert.match(scope, /Remove the damaged block, expose the footing, install rebar, rebuild with concrete block, apply stucco, prime, and repaint/);
-  assert.equal(patch.materialItems[0].cost, "700");
+  assert.equal(patch.materialItems[0].total, "700");
   assert.equal(patch.laborItems[0].total, "1950");
   assert.equal(patch.estimatedDuration, "3–4 days");
   assert.equal(patch.depositTerms, "50% deposit");
@@ -244,12 +275,12 @@ test("structured material and labor totals calculate when no final price is stat
     prompt: "Quote for Paul Becker. Reconstruct the damaged front knee wall. Materials are $700. Labor is $1,950. Estimated duration is 3–4 days. 50% deposit required.",
   });
   assert.equal(patch.customerName, "Paul Becker");
-  assert.equal(patch.materialItems[0].cost, "700");
+  assert.equal(patch.materialItems[0].total, "700");
   assert.equal(patch.laborItems[0].total, "1950");
   assert.equal(patch.estimatedDuration, "3–4 days");
   assert.equal(patch.depositTerms, "50% deposit");
   assert.equal(patch.totalOverride, undefined);
-  assert.equal(Number(patch.materialItems[0].cost) + Number(patch.laborItems[0].total), 2650);
+  assert.equal(Number(patch.materialItems[0].total) + Number(patch.laborItems[0].total), 2650);
 });
 
 test("duration, generic materials, final price, and targeted material revisions remain governed", () => {
@@ -270,7 +301,10 @@ test("secondary door conversation keeps material and installation rows distinct"
   });
   assert.equal(patch.customerName, "Bob Hamel");
   assert.equal(patch.recommendedSolution, "Replace the front door.");
-  assert.deepEqual(patch.materialItems[0], { name: "Door", quantity: "1", cost: "450" });
+  assert.deepEqual(patch.materialItems[0], {
+    name: "Door",
+    total: "450",
+  });
   assert.deepEqual(patch.laborItems[0], { description: "installation", total: "280" });
   assert.equal(patch.estimatedDuration, "1 day");
   assert.equal(patch.depositTerms, "50% deposit");

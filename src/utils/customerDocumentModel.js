@@ -120,19 +120,41 @@ function customer(source = {}) {
   });
 }
 
-function lineItem({ description, quantity = 1, unitAmountMinor = null, lineTotalMinor }) {
+function lineItem({
+  description,
+  quantity = 1,
+  unitAmountMinor = null,
+  lineTotalMinor,
+  pricingPresentation = "unit",
+}) {
   const safeDescription = text(description, 1200);
-  const safeQuantity = Number(quantity);
+  const safePricingPresentation =
+    pricingPresentation === "flat" ? "flat" : "unit";
+  const safeQuantity =
+    safePricingPresentation === "flat" ? null : Number(quantity);
   const safeTotal = minor(lineTotalMinor);
-  const safeUnit = unitAmountMinor == null ? null : minor(unitAmountMinor);
-  if (!safeDescription || !Number.isFinite(safeQuantity) || safeQuantity <= 0 || safeTotal == null) {
+  const safeUnit =
+    safePricingPresentation === "flat"
+      ? null
+      : unitAmountMinor == null
+      ? null
+      : minor(unitAmountMinor);
+
+  if (
+    !safeDescription ||
+    safeTotal == null ||
+    (safePricingPresentation === "unit" &&
+      (!Number.isFinite(safeQuantity) || safeQuantity <= 0))
+  ) {
     return null;
   }
+
   return Object.freeze({
     description: safeDescription,
     quantity: safeQuantity,
     unitAmountMinor: safeUnit,
     lineTotalMinor: safeTotal,
+    pricingPresentation: safePricingPresentation,
   });
 }
 
@@ -296,12 +318,30 @@ export function buildQuickQuoteDocumentModel(
   const safeCurrency = currency(draft?.currency || "USD");
   const fixedPrice = draft?.fixedPrice === true;
   const lines = Array.isArray(draft?.lineItems)
-    ? draft.lineItems.map((item) => lineItem({
-        description: item.description,
-        quantity: Number(item.quantity) || 1,
-        unitAmountMinor: majorToMinor(item.unitPrice),
-        lineTotalMinor: majorToMinor(item.total),
-      })).filter((item) => item && (!fixedPrice || item.lineTotalMinor > 0 || item.unitAmountMinor > 0))
+    ? draft.lineItems.map((item) => {
+        const pricingPresentation =
+          item.pricingPresentation === "flat" ? "flat" : "unit";
+
+        return lineItem({
+          description: item.description,
+          quantity:
+            pricingPresentation === "flat"
+              ? null
+              : Number(item.quantity) || 1,
+          unitAmountMinor:
+            pricingPresentation === "flat"
+              ? null
+              : majorToMinor(item.unitPrice),
+          lineTotalMinor: majorToMinor(item.total),
+          pricingPresentation,
+        });
+      }).filter(
+        (item) =>
+          item &&
+          (!fixedPrice ||
+            item.lineTotalMinor > 0 ||
+            (item.unitAmountMinor ?? 0) > 0)
+      )
     : [];
   const subtotalMinor = majorToMinor(draft?.subtotal);
   return model({

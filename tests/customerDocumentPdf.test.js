@@ -224,6 +224,87 @@ test("fixed-price Quick Quote PDF keeps work scope clean and suppresses empty pr
   assert.match(commands, /\(DRAFT PREVIEW\)/);
 });
 
+test("flat-price Quick Quote PDF renders flat rows without invented quantity or unit arithmetic", () => {
+  const model = buildQuickQuoteDocumentModel(
+    {
+      customerName: "Paul Becker",
+      projectTitle: "Front knee wall reconstruction",
+      quoteDate: "2026-08-17",
+      lineItems: [
+        {
+          description: "Labor",
+          total: 1950,
+          pricingPresentation: "flat",
+        },
+        {
+          description: "Materials",
+          total: 700,
+          pricingPresentation: "flat",
+        },
+        {
+          description: "Reconstruct the damaged front knee wall",
+          quantity: 1,
+          unitPrice: 0,
+          total: 0,
+          pricingPresentation: "unit",
+        },
+      ],
+      subtotal: 2650,
+      total: 2650,
+      fixedPrice: true,
+    },
+    { branding: { businessName: "Handyman LLC" } }
+  );
+
+  assert.equal(model.lineItems.length, 2);
+  assert.equal(model.lineItems[0].pricingPresentation, "flat");
+  assert.equal(model.lineItems[0].quantity, null);
+  assert.equal(model.lineItems[0].unitAmountMinor, null);
+  assert.equal(model.lineItems[1].pricingPresentation, "flat");
+  assert.equal(model.lineItems[1].quantity, null);
+  assert.equal(model.lineItems[1].unitAmountMinor, null);
+
+  const commands = renderCustomerDocumentPdf(model)
+    .internal.pages.flat()
+    .join("\n");
+
+  assert.match(commands, /\(Labor\)/);
+  assert.match(commands, /\(Materials\)/);
+  assert.match(commands, /\(\$1,950\.00\)/);
+  assert.match(commands, /\(\$700\.00\)/);
+  assert.doesNotMatch(commands, /\(Qty\)|\(Unit\)|\(\$0\.00\)/);
+});
+
+test("Quick Quote PDF keeps quantity and unit columns when arithmetic was explicitly supplied", () => {
+  const model = buildQuickQuoteDocumentModel(
+    {
+      projectTitle: "Hourly repair",
+      lineItems: [
+        {
+          description: "Labor",
+          quantity: 8,
+          unitPrice: 75,
+          total: 600,
+          pricingPresentation: "unit",
+        },
+      ],
+      subtotal: 600,
+      total: 600,
+    },
+    { branding: { businessName: "Handyman LLC" } }
+  );
+
+  const commands = renderCustomerDocumentPdf(model)
+    .internal.pages.flat()
+    .join("\n");
+
+  assert.match(commands, /\(Qty\)/);
+  assert.match(commands, /\(Unit\)/);
+  assert.match(commands, /\(8\)/);
+  assert.match(commands, /\(\$75\.00\)/);
+  assert.match(commands, /\(\$600\.00\)/);
+});
+
 test("renderer creates a real searchable multi-page PDF and long rows paginate", () => {
   const base = buildQuickQuoteDocumentModel({
     customerName: "Taylor Customer", projectTitle: "Large renovation", quoteDate: "2026-08-16",

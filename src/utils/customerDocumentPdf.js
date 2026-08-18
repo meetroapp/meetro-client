@@ -97,7 +97,12 @@ export function collectCustomerDocumentText(model) {
     model.projectTitle,
     model.projectLocation,
     model.scopeSummary,
-    ...model.lineItems.flatMap((item) => [item.description, item.quantity, item.unitAmountMinor, item.lineTotalMinor]),
+    ...model.lineItems.flatMap((item) => [
+      item.description,
+      item.pricingPresentation === "flat" ? null : item.quantity,
+      item.pricingPresentation === "flat" ? null : item.unitAmountMinor,
+      item.lineTotalMinor,
+    ]),
     model.subtotalMinor,
     model.discountMinor,
     model.taxMinor,
@@ -207,29 +212,109 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
 
   if (model.lineItems.length > 0) {
     ensureSpace(70);
+
     if (model.kind === "INVOICE") {
-      y = addText(doc, copy.description, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
+      y = addText(doc, copy.description, PAGE.margin, y, {
+        size: 12,
+        color: COLOR.ink,
+        style: "bold",
+      });
     }
-    const columns = { description: PAGE.margin, quantity: 376, unit: 430, amount: 512 };
+
+    const showUnitPricingColumns = model.lineItems.some(
+      (item) => item.pricingPresentation !== "flat"
+    );
+    const columns = {
+      description: PAGE.margin,
+      quantity: 376,
+      unit: 430,
+      amount: 512,
+    };
+    const descriptionWidth = showUnitPricingColumns ? 300 : 420;
+
     doc.setFillColor(...COLOR.fill);
     doc.rect(PAGE.margin, y + 3, contentWidth, 22, "F");
-    addText(doc, copy.description, columns.description + 7, y + 17, { size: 7.5, color: COLOR.muted, style: "bold" });
-    addText(doc, copy.quantity, columns.quantity, y + 17, { size: 7.5, color: COLOR.muted, style: "bold" });
-    addText(doc, copy.unit, columns.unit, y + 17, { size: 7.5, color: COLOR.muted, style: "bold" });
-    addText(doc, copy.amount, columns.amount, y + 17, { size: 7.5, color: COLOR.muted, style: "bold" });
+    addText(doc, copy.description, columns.description + 7, y + 17, {
+      size: 7.5,
+      color: COLOR.muted,
+      style: "bold",
+    });
+
+    if (showUnitPricingColumns) {
+      addText(doc, copy.quantity, columns.quantity, y + 17, {
+        size: 7.5,
+        color: COLOR.muted,
+        style: "bold",
+      });
+      addText(doc, copy.unit, columns.unit, y + 17, {
+        size: 7.5,
+        color: COLOR.muted,
+        style: "bold",
+      });
+    }
+
+    addText(doc, copy.amount, columns.amount, y + 17, {
+      size: 7.5,
+      color: COLOR.muted,
+      style: "bold",
+    });
+
     y += 31;
+
     for (const item of model.lineItems) {
-      const descriptionLines = doc.splitTextToSize(item.description, 300);
+      const descriptionLines = doc.splitTextToSize(
+        item.description,
+        descriptionWidth
+      );
       const rowHeight = Math.max(22, descriptionLines.length * 12 + 8);
       ensureSpace(rowHeight + 4);
-      addText(doc, item.description, columns.description + 7, y + 10, { size: 8.8, maxWidth: 300 });
-      addText(doc, String(item.quantity), columns.quantity, y + 10, { size: 8.8 });
-      addText(doc, item.unitAmountMinor == null ? "-" : formatMoney(item.unitAmountMinor, model.currency, model.locale), columns.unit, y + 10, { size: 8.3 });
-      addText(doc, formatMoney(item.lineTotalMinor, model.currency, model.locale), columns.amount, y + 10, { size: 8.3, style: "bold" });
+
+      addText(doc, item.description, columns.description + 7, y + 10, {
+        size: 8.8,
+        maxWidth: descriptionWidth,
+      });
+
+      if (item.pricingPresentation !== "flat") {
+        addText(doc, String(item.quantity), columns.quantity, y + 10, {
+          size: 8.8,
+        });
+        addText(
+          doc,
+          item.unitAmountMinor == null
+            ? "-"
+            : formatMoney(
+                item.unitAmountMinor,
+                model.currency,
+                model.locale
+              ),
+          columns.unit,
+          y + 10,
+          { size: 8.3 }
+        );
+      }
+
+      addText(
+        doc,
+        formatMoney(
+          item.lineTotalMinor,
+          model.currency,
+          model.locale
+        ),
+        columns.amount,
+        y + 10,
+        { size: 8.3, style: "bold" }
+      );
+
       doc.setDrawColor(...COLOR.line);
-      doc.line(PAGE.margin, y + rowHeight, PAGE.width - PAGE.margin, y + rowHeight);
+      doc.line(
+        PAGE.margin,
+        y + rowHeight,
+        PAGE.width - PAGE.margin,
+        y + rowHeight
+      );
       y += rowHeight + 3;
     }
+
     y += 5;
   }
 

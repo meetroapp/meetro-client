@@ -83,7 +83,7 @@ function explicitCondition(text) {
 function explicitMaterialItems(text) {
   const items = [];
   const generic = explicitMaterialAmount(text);
-  if (generic !== null) items.push({ name: "Materials", quantity: "1", cost: String(generic) });
+  if (generic !== null) items.push({ name: "Materials", total: String(generic) });
 
   const specific = text.match(/\b([A-Za-z][\w -]{1,38}?)\s+costs?\s*\$\s*([\d,.]+)/gi) || [];
   specific.forEach((statement) => {
@@ -91,14 +91,14 @@ function explicitMaterialItems(text) {
     const amount = parseAmount(match?.[2]);
     const name = cleanText(match?.[1] || "");
     if (amount !== null && name && !/^(?:labor|labour|installation)$/i.test(name)) {
-      items.push({ name, quantity: "1", cost: String(amount) });
+      items.push({ name, total: String(amount) });
     }
   });
 
   const useSpecific = text.match(/\buse\s+\$\s*([\d,.]+)\s+for\s+(?:the\s+)?([A-Za-z][\w -]{1,38}?)(?:\.|$)/i);
   if (useSpecific) {
     const amount = parseAmount(useSpecific[1]);
-    if (amount !== null) items.push({ name: cleanText(useSpecific[2]), quantity: "1", cost: String(amount) });
+    if (amount !== null) items.push({ name: cleanText(useSpecific[2]), total: String(amount) });
   }
   return items;
 }

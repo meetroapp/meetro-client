@@ -74,6 +74,40 @@ function cleanText(value) {
   return String(value || "").trim();
 }
 
+function formatQuickQuoteSharePricingLine({
+  description,
+  quantity,
+  unitPrice,
+  total,
+  unitLabel = "",
+  notes = "",
+}) {
+  const descriptionText = cleanText(description);
+  const totalAmount = parseOptionalQuoteAmount(total);
+
+  if (!descriptionText || totalAmount === null || totalAmount <= 0) return "";
+
+  const quantityAmount = parseOptionalQuoteAmount(quantity);
+  const unitAmount = parseOptionalQuoteAmount(unitPrice);
+  const hasArithmetic =
+    quantityAmount !== null &&
+    quantityAmount > 0 &&
+    unitAmount !== null &&
+    unitAmount > 0;
+
+  const pricingText = hasArithmetic
+    ? `${quantityAmount}${unitLabel ? ` ${unitLabel}` : ""} × $${unitAmount.toFixed(
+        2
+      )} = $${totalAmount.toFixed(2)}`
+    : `$${totalAmount.toFixed(2)}`;
+
+  const noteText = cleanText(notes);
+
+  return `- ${descriptionText}: ${pricingText}${
+    noteText ? ` (${noteText})` : ""
+  }`;
+}
+
 function isGenericQuoteText(value) {
   const text = cleanText(value).toLowerCase();
   return !text || ["project", "request", "service", "quote"].includes(text);
@@ -1232,25 +1266,59 @@ function QuoteBuilder({ setPage }) {
       fallbackName: "Meetro Professional",
     });
     const serviceLines = pricing.quoteLineItems
-      .filter((item) => cleanText(item.description))
-      .map(
-        (item) =>
-          `- ${item.description}: ${item.quantity || "—"} × ${item.unitPrice || "—"} = $${Number(item.total || 0).toFixed(2)}`
+      .map((item) =>
+        formatQuickQuoteSharePricingLine({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+        })
       )
+      .filter(Boolean)
       .join("\n");
+
     const materialLines = pricing.materialItems
-      .filter((item) => cleanText(item.name))
-      .map(
-        (item) =>
-          `- ${item.name}: ${item.quantity || "—"} × ${item.cost || "—"} = $${Number(item.total || 0).toFixed(2)}${item.notes ? ` (${item.notes})` : ""}`
-      )
+      .map((item) => {
+        const hasArithmetic =
+          Boolean(cleanText(item.quantity)) && Boolean(cleanText(item.cost));
+        const genericMaterial =
+          /^(?:materials?|materiales|matériaux|materiais)$/i.test(
+            cleanText(item.name)
+          );
+
+        if (!hasArithmetic && genericMaterial) return "";
+
+        return formatQuickQuoteSharePricingLine({
+          description: item.name,
+          quantity: item.quantity,
+          unitPrice: item.cost,
+          total: item.total,
+          notes: item.notes,
+        });
+      })
+      .filter(Boolean)
       .join("\n");
+
     const laborLines = pricing.laborItems
-      .filter((item) => cleanText(item.description))
-      .map(
-        (item) =>
-          `- ${item.description}: ${item.hours || "—"} hrs × ${item.rate || "—"} = $${Number(item.total || 0).toFixed(2)}`
-      )
+      .map((item) => {
+        const hasArithmetic =
+          Boolean(cleanText(item.hours)) && Boolean(cleanText(item.rate));
+        const genericLabor =
+          /^(?:labor|labour|mano de obra|main-d'œuvre|mão de obra)$/i.test(
+            cleanText(item.description)
+          );
+
+        if (!hasArithmetic && genericLabor) return "";
+
+        return formatQuickQuoteSharePricingLine({
+          description: item.description,
+          quantity: item.hours,
+          unitPrice: item.rate,
+          total: item.total,
+          unitLabel: isSpanish ? "h" : "hrs",
+        });
+      })
+      .filter(Boolean)
       .join("\n");
 
     return `${isSpanish ? "Cotización" : "Quote"}: ${projectTitle}
@@ -1304,18 +1372,30 @@ ${businessIdentity.businessName}`;
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           total: item.total,
+          pricingPresentation:
+            cleanText(item.quantity) && cleanText(item.unitPrice)
+              ? "unit"
+              : "flat",
         })),
         ...pricing.materialItems.map((item) => ({
           description: item.name,
           quantity: item.quantity,
           unitPrice: item.cost,
           total: item.total,
+          pricingPresentation:
+            cleanText(item.quantity) && cleanText(item.cost)
+              ? "unit"
+              : "flat",
         })),
         ...pricing.laborItems.map((item) => ({
           description: item.description,
           quantity: item.hours,
           unitPrice: item.rate,
           total: item.total,
+          pricingPresentation:
+            cleanText(item.hours) && cleanText(item.rate)
+              ? "unit"
+              : "flat",
         })),
       ].filter((item) => cleanText(item.description)),
       subtotal: pricing.subtotal,
@@ -1406,10 +1486,27 @@ ${businessIdentity.businessName}`;
           ? rows.findIndex((row) => cleanText(row.name).toLowerCase() === targetName.toLowerCase())
           : -1;
         const index = namedIndex >= 0 ? namedIndex : rows.findIndex((row) => !cleanText(row.name));
-        if (index < 0) return [...rows, normalizeQuoteMaterialItem({ name: targetName, quantity: "1", cost: patch.materialAmount }, rows.length)];
-        return rows.map((row, rowIndex) => rowIndex === index
-          ? { ...row, name: cleanText(row.name) || targetName, quantity: cleanText(row.quantity) || "1", cost: patch.materialAmount, total: "" }
-          : row);
+        if (index < 0) {
+          return [
+            ...rows,
+            normalizeQuoteMaterialItem(
+              { name: targetName, total: patch.materialAmount },
+              rows.length
+            ),
+          ];
+        }
+
+        return rows.map((row, rowIndex) =>
+          rowIndex === index
+            ? {
+                ...row,
+                name: cleanText(row.name) || targetName,
+                quantity: "",
+                cost: "",
+                total: patch.materialAmount,
+              }
+            : row
+        );
       });
     }
     if (Array.isArray(patch.materialItems)) {
@@ -1417,7 +1514,12 @@ ${businessIdentity.businessName}`;
         const itemName = cleanText(item.name);
         const existingIndex = nextRows.findIndex((row) => cleanText(row.name).toLowerCase() === itemName.toLowerCase());
         const blankIndex = nextRows.findIndex((row) => !cleanText(row.name));
-        const row = { ...item, quantity: cleanText(item.quantity) || "1", total: "" };
+        const row = {
+          ...item,
+          quantity: cleanText(item.quantity),
+          cost: cleanText(item.cost ?? item.unitPrice ?? item.price),
+          total: cleanText(item.total ?? item.amount ?? item.lineTotal),
+        };
         if (existingIndex >= 0) return nextRows.map((current, index) => index === existingIndex ? { ...current, ...row } : current);
         if (blankIndex >= 0) return nextRows.map((current, index) => index === blankIndex ? { ...current, ...row } : current);
         return [...nextRows, normalizeQuoteMaterialItem(row, nextRows.length)];
