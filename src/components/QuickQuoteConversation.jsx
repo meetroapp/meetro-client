@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
@@ -41,12 +41,64 @@ export default function QuickQuoteConversation({
   photoBusy = false,
   onAddPhotos,
   onRemovePhoto,
+  photoProposal = null,
+  photoDecisions = {},
+  photoReviewBusyId = "",
+  onReviewPhotoSuggestion,
   notice = "",
 }) {
   const copy = getQuickQuoteConversationCopy(language);
   const promptRef = useRef(null);
   const surfaceRef = useRef(null);
   const isRevision = view === "revision";
+  const [editingPhotoItemId, setEditingPhotoItemId] =
+    useState("");
+  const [photoEditText, setPhotoEditText] = useState("");
+
+  const photoGroups = photoProposal
+    ? [
+        [copy.observed, "observed", photoProposal.observed],
+        [
+          copy.needsVerification,
+          "needsVerification",
+          photoProposal.needsVerification,
+        ],
+        [
+          copy.repairSuggestions,
+          "repairSuggestions",
+          photoProposal.repairSuggestions,
+        ],
+        [
+          copy.materialSuggestions,
+          "materialSuggestions",
+          photoProposal.materialSuggestions,
+        ],
+      ]
+    : [];
+
+  function photoDecisionLabel(action) {
+    if (action === "ACCEPTED") return copy.photoAccepted;
+    if (action === "EDITED") return copy.photoEdited;
+    if (action === "REJECTED") return copy.photoRejected;
+    return "";
+  }
+
+  async function submitEditedPhotoSuggestion(
+    category,
+    item
+  ) {
+    const ok = await onReviewPhotoSuggestion?.({
+      category,
+      item,
+      action: "EDITED",
+      editedText: photoEditText,
+    });
+
+    if (ok) {
+      setEditingPhotoItemId("");
+      setPhotoEditText("");
+    }
+  }
 
   useEffect(() => {
     surfaceRef.current?.focus();
@@ -63,7 +115,9 @@ export default function QuickQuoteConversation({
           <p>{copy.workingHelp}</p>
         </div>
         <ol aria-label={copy.working}>
-          {copy.stages.map((stage) => <li key={stage}>{stage}</li>)}
+          {(photoCount ? copy.photoStages : copy.stages).map(
+            (stage) => <li key={stage}>{stage}</li>
+          )}
         </ol>
       </main>
     );
@@ -123,7 +177,9 @@ export default function QuickQuoteConversation({
                 onClick={onAddPhotos}
               >
                 <MeetroIcon name="photoCount" size={18} />
-                {copy.addPhotos}
+                {photoCount
+                  ? copy.addAnotherPhoto
+                  : copy.addPhotos}
               </button>
             </div>
 
@@ -152,6 +208,162 @@ export default function QuickQuoteConversation({
               <p className="quick-quote-photo-empty">{copy.noPhotos}</p>
             )}
           </section>
+
+          {photoProposal ? (
+            <section
+              className="quick-quote-photo-review"
+              aria-label={copy.photoEvidenceTitle}
+            >
+              <div className="quick-quote-photo-review-heading">
+                <div>
+                  <strong>{copy.photoEvidenceTitle}</strong>
+                  <p>{copy.photoEvidenceHelp}</p>
+                </div>
+              </div>
+
+              <p>{photoProposal.summary}</p>
+
+              {photoGroups.map(([title, category, items]) =>
+                items?.length ? (
+                  <section
+                    key={category}
+                    className="quick-quote-summary-section"
+                  >
+                    <span>{title}</span>
+                    <div className="quick-quote-photo-suggestion-list">
+                      {items.map((item) => {
+                        const decision =
+                          photoDecisions[item.id];
+                        const editing =
+                          editingPhotoItemId ===
+                          `${photoProposal.proposalId}:${item.id}`;
+                        const busy =
+                          photoReviewBusyId === item.id;
+
+                        return (
+                          <article
+                            key={item.id}
+                            className="quick-quote-photo-suggestion"
+                          >
+                            <p>{decision?.text || item.text}</p>
+
+                            {decision ? (
+                              <strong
+                                className="quick-quote-photo-decision"
+                                role="status"
+                              >
+                                {photoDecisionLabel(
+                                  decision.action
+                                )}
+                              </strong>
+                            ) : editing ? (
+                              <>
+                                <textarea
+                                  className="quick-quote-photo-edit"
+                                  aria-label={`${copy.editAndUse}: ${item.text}`}
+                                  value={photoEditText}
+                                  rows={3}
+                                  maxLength={3000}
+                                  onChange={(event) =>
+                                    setPhotoEditText(
+                                      event.target.value
+                                    )
+                                  }
+                                />
+                                <div className="quick-quote-review-actions">
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      busy ||
+                                      !photoEditText.trim()
+                                    }
+                                    onClick={() =>
+                                      void submitEditedPhotoSuggestion(
+                                        category,
+                                        item
+                                      )
+                                    }
+                                  >
+                                    {copy.saveAndUse}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => {
+                                      setEditingPhotoItemId("");
+                                      setPhotoEditText("");
+                                    }}
+                                  >
+                                    {copy.cancel}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="quick-quote-review-actions">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void onReviewPhotoSuggestion?.({
+                                      category,
+                                      item,
+                                      action: "ACCEPTED",
+                                    })
+                                  }
+                                >
+                                  {copy.useSuggestion}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setEditingPhotoItemId(
+                                      `${photoProposal.proposalId}:${item.id}`
+                                    );
+                                    setPhotoEditText(
+                                      item.text
+                                    );
+                                  }}
+                                >
+                                  {copy.editAndUse}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void onReviewPhotoSuggestion?.({
+                                      category,
+                                      item,
+                                      action: "REJECTED",
+                                    })
+                                  }
+                                >
+                                  {copy.dismissSuggestion}
+                                </button>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null
+              )}
+
+              {photoProposal.photoAnalysis?.limitations?.length ? (
+                <section className="quick-quote-summary-section">
+                  <span>{copy.photoLimitations}</span>
+                  <div>
+                    <ul>
+                      {photoProposal.photoAnalysis.limitations.map(
+                        (item) => <li key={item}>{item}</li>
+                      )}
+                    </ul>
+                  </div>
+                </section>
+              ) : null}
+            </section>
+          ) : null}
 
           <div className="quick-quote-review-actions" aria-label={copy.reviewTitle}>
             <button type="button" onClick={onOpenRevision}>
@@ -244,13 +456,79 @@ export default function QuickQuoteConversation({
             {copy.addPhotos}{photoCount ? ` (${photoCount})` : ""}
           </button>
         </div>
+
+        {photos.length ? (
+          <section
+            className="quick-quote-photo-review"
+            aria-label={copy.photos}
+          >
+            <div className="quick-quote-photo-review-heading">
+              <div>
+                <strong>{copy.photos}</strong>
+                <p>{copy.photoDraftNotice}</p>
+              </div>
+              <button
+                type="button"
+                disabled={!canAddPhotos || photoBusy}
+                onClick={onAddPhotos}
+              >
+                <MeetroIcon name="photoCount" size={18} />
+                {copy.addAnotherPhoto}
+              </button>
+            </div>
+
+            <div className="quick-quote-photo-grid">
+              {photos.map((photo, index) => (
+                <figure
+                  key={photo.id}
+                  className="quick-quote-photo-item"
+                >
+                  {photo.previewUrl ? (
+                    <img
+                      src={photo.previewUrl}
+                      alt={`${copy.photos} ${index + 1}`}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={photoBusy}
+                    onClick={() =>
+                      onRemovePhoto?.(photo.id)
+                    }
+                    aria-label={copy.removePhoto(index + 1)}
+                  >
+                    {copy.remove}
+                  </button>
+                </figure>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {!canAddPhotos ? <p id="quick-quote-photo-authority" className="quick-quote-media-gap">{copy.photoUnavailable}</p> : null}
         <div className="quick-quote-prompt-actions">
           {isRevision ? <button type="button" onClick={onCancelRevision}>{copy.cancel}</button> : null}
-          <button type="button" className="quick-quote-primary-action" disabled={!prompt.trim()} onClick={() => onPrepare(isRevision)}>
+          <button
+            type="button"
+            className="quick-quote-primary-action"
+            disabled={
+              photoBusy ||
+              (!prompt.trim() && photoCount === 0)
+            }
+            onClick={() => onPrepare(isRevision)}
+          >
             {isRevision ? copy.revise : copy.prepare}
           </button>
         </div>
+
+        {notice ? (
+          <p
+            className="quick-quote-action-notice"
+            role="status"
+          >
+            {notice}
+          </p>
+        ) : null}
       </section>
     </main>
   );

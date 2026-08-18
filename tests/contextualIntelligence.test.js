@@ -8,6 +8,7 @@ import {
   requestWorkflowIntelligence,
   validateEstimateDraft,
   validateInvoiceAssistance,
+  validateQuickQuotePhotoAssistance,
 } from "../src/utils/contextualIntelligence.js";
 
 const ids = Object.freeze({
@@ -26,6 +27,218 @@ function boundary(authorityClassification = "ADVISORY_NON_CANONICAL") {
     humanToCanonicalBoundary: { directMutationAllowed: false },
   };
 }
+
+test(
+  "Quick Quote photo validator preserves advisory evidence and explicit human review",
+  () => {
+    const photoId =
+      "meetro/quote-draft-photo/contractor-65/example";
+
+    const value = {
+      ...boundary(),
+      summary: "Visible wall damage requires professional review.",
+      observed: [
+        {
+          id: "obs_1",
+          text: "A visible crack is present in the wall finish.",
+          classification: "OBSERVED",
+          sourceReferences: [
+            {
+              type: "QUOTE_DRAFT_PHOTO",
+              id: photoId,
+              version: 1,
+            },
+          ],
+        },
+      ],
+      needsVerification: [
+        {
+          id: "verify_1",
+          text: "Verify whether cracking extends into the block.",
+          classification: "NEEDS_VERIFICATION",
+          sourceReferences: [],
+        },
+      ],
+      repairSuggestions: [
+        {
+          id: "repair_1",
+          text: "Consider removing loose finish before repair.",
+          classification: "AI_SUGGESTED",
+          sourceReferences: [],
+        },
+      ],
+      materialSuggestions: [
+        {
+          id: "material_1",
+          text: "Masonry repair materials",
+          classification: "AI_SUGGESTED",
+          sourceReferences: [],
+        },
+      ],
+      photoAnalysis: {
+        supported: true,
+        analyzedReferenceIds: [photoId],
+        limitations: [
+          "Concealed conditions are not visible.",
+        ],
+        imageMeasurementsAreEstimates: true,
+      },
+      warnings: [],
+      reviewContract: {
+        actions: ["ACCEPTED", "EDITED", "REJECTED"],
+        explicitHumanDecisionRequired: true,
+      },
+      humanToCanonicalBoundary: {
+        directMutationAllowed: false,
+        workingDraftApplicationRequiresReview: true,
+        prohibitedCanonicalCommands: [
+          "quote.create",
+          "quote.issue",
+        ],
+      },
+      learningContext: {
+        context: "quick_quote_photo_assistance",
+        learnedPatternIsCanonicalRule: false,
+      },
+    };
+
+    assert.equal(
+      validateQuickQuotePhotoAssistance(value),
+      value
+    );
+
+    assert.equal(
+      validateQuickQuotePhotoAssistance({
+        ...value,
+        observed: [
+          {
+            ...value.observed[0],
+            sourceReferences: [],
+          },
+        ],
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuotePhotoAssistance({
+        ...value,
+        materialSuggestions: [
+          {
+            ...value.materialSuggestions[0],
+            price: 49.99,
+          },
+        ],
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuotePhotoAssistance({
+        ...value,
+        humanToCanonicalBoundary: {
+          ...value.humanToCanonicalBoundary,
+          directMutationAllowed: true,
+        },
+      }),
+      null
+    );
+  }
+);
+
+test(
+  "Quick Quote photo assistance uses the governed companion operation contract",
+  async () => {
+    const photoId =
+      "meetro/quote-draft-photo/contractor-65/example";
+    const calls = [];
+
+    const proposal = {
+      ...boundary(),
+      summary: "Photo reviewed.",
+      observed: [],
+      needsVerification: [],
+      repairSuggestions: [],
+      materialSuggestions: [],
+      photoAnalysis: {
+        supported: true,
+        analyzedReferenceIds: [photoId],
+        limitations: [],
+        imageMeasurementsAreEstimates: true,
+      },
+      warnings: [],
+      reviewContract: {
+        actions: ["ACCEPTED", "EDITED", "REJECTED"],
+        explicitHumanDecisionRequired: true,
+      },
+      humanToCanonicalBoundary: {
+        directMutationAllowed: false,
+        workingDraftApplicationRequiresReview: true,
+        prohibitedCanonicalCommands: [],
+      },
+      learningContext: {
+        context: "quick_quote_photo_assistance",
+        learnedPatternIsCanonicalRule: false,
+      },
+    };
+
+    const result = await requestWorkflowIntelligence({
+      operation: INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO,
+      input: {
+        prompt: "",
+        photos: [
+          {
+            public_id: photoId,
+            secure_url:
+              "https://res.cloudinary.com/example/image/upload/v1/example.jpg",
+            resource_type: "image",
+            format: "jpg",
+            bytes: 1000,
+            width: 1200,
+            height: 900,
+            version: 1,
+            uploaded_at: "2026-08-18T20:00:00.000Z",
+          },
+        ],
+      },
+      idempotencyKey: ids.key,
+      authFetchImpl: async (url, options) => {
+        calls.push({ url, options });
+
+        return {
+          response: { ok: true, status: 200 },
+          data: {
+            success: true,
+            code: "INTELLIGENCE_OPERATION_COMPLETED",
+            operation: "quick_quote.photo_assist",
+            operationId: ids.proposal,
+            correlationId: ids.proposal,
+            result: proposal,
+          },
+        };
+      },
+    });
+
+    assert.equal(
+      result.operation,
+      INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO
+    );
+
+    const body = JSON.parse(calls[0].options.body);
+
+    assert.equal(calls[0].url, "/api/companion/ask");
+    assert.equal(
+      body.operation,
+      "quick_quote.photo_assist"
+    );
+    assert.equal(
+      body.capability,
+      "quick_quote.photo_assist"
+    );
+    assert.equal(body.input.prompt, "");
+    assert.equal(body.input.photos.length, 1);
+  }
+);
 
 test("Estimate Draft validator keeps internal costs private and rejects customer leakage", () => {
   const value = {

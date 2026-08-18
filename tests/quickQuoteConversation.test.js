@@ -135,6 +135,211 @@ test("Quick Quote uses governed private draft media without claiming canonical Q
   );
 });
 
+test("Quick Quote can start from photos without requiring typed text", () => {
+  assert.match(
+    conversation,
+    /\(!prompt\.trim\(\) && photoCount === 0\)/
+  );
+  assert.match(
+    conversation,
+    /photoBusy \|\|/
+  );
+  assert.match(conversation, /copy\.addAnotherPhoto/);
+  assert.ok(
+    (conversation.match(/quick-quote-photo-grid/g) || []).length >= 2
+  );
+
+  assert.match(
+    builder,
+    /if \(!instruction && photos\.length === 0\) return;/
+  );
+  assert.match(
+    builder,
+    /if \(photos\.length === 0\)/
+  );
+});
+
+test("photo-backed Quick Quote uses governed Ask Meetro while text-only keeps the deterministic path", () => {
+  assert.match(
+    builder,
+    /INTELLIGENCE_OPERATION\.QUICK_QUOTE_PHOTO/
+  );
+  assert.match(
+    builder,
+    /photos: photos\.map\(\(photo\) => photo\.media\)/
+  );
+  assert.match(
+    builder,
+    /requestWorkflowIntelligence\(\{/
+  );
+  assert.match(
+    builder,
+    /quickQuoteWorkingTimerRef\.current = window\.setTimeout/
+  );
+  assert.match(
+    builder,
+    /if \(patch\) applyQuickQuoteConversationPatch\(patch\)/
+  );
+});
+
+test("photo intelligence requires explicit review before affecting the working draft", () => {
+  assert.match(
+    builder,
+    /async function reviewQuickQuotePhotoSuggestion/
+  );
+  assert.match(builder, /recordWorkflowReview\(\{/);
+  assert.match(
+    builder,
+    /if \(normalizedAction !== "REJECTED"\)/
+  );
+  assert.match(
+    builder,
+    /applyReviewedQuickQuotePhotoItem/
+  );
+
+  const start = builder.indexOf(
+    "function applyReviewedQuickQuotePhotoItem"
+  );
+  const end = builder.indexOf(
+    "async function reviewQuickQuotePhotoSuggestion",
+    start
+  );
+  const applicationBoundary = builder.slice(start, end);
+
+  assert.match(applicationBoundary, /setProblemFound/);
+  assert.match(applicationBoundary, /setNotes/);
+  assert.match(applicationBoundary, /setRecommendedSolution/);
+  assert.match(applicationBoundary, /setMaterialRows/);
+
+  assert.doesNotMatch(
+    applicationBoundary,
+    /setTotalOverride|setLaborRows|setPricingMethod|retailer|markup|margin/
+  );
+
+  assert.match(conversation, /copy\.useSuggestion/);
+  assert.match(conversation, /copy\.editAndUse/);
+  assert.match(conversation, /copy\.dismissSuggestion/);
+  assert.match(conversation, /copy\.photoEvidenceTitle/);
+});
+
+test("photo review language is complete across supported Quick Quote locales", () => {
+  for (const language of QUICK_QUOTE_CONVERSATION_LANGUAGES) {
+    const copy = getQuickQuoteConversationCopy(language);
+
+    for (const key of [
+      "addAnotherPhoto",
+      "photoChangedNotice",
+      "photoAnalysisFailed",
+      "photoReviewFailed",
+      "photoEvidenceTitle",
+      "photoEvidenceHelp",
+      "observed",
+      "needsVerification",
+      "repairSuggestions",
+      "materialSuggestions",
+      "useSuggestion",
+      "editAndUse",
+      "dismissSuggestion",
+      "saveAndUse",
+      "photoAccepted",
+      "photoEdited",
+      "photoRejected",
+      "photoLimitations",
+    ]) {
+      assert.equal(typeof copy[key], "string", `${language}:${key}`);
+      assert.ok(copy[key].trim(), `${language}:${key}`);
+    }
+
+    assert.ok(Array.isArray(copy.photoStages));
+    assert.equal(copy.photoStages.length, 5);
+  }
+});
+
+test(
+  "photo review preserves edited wording, mobile containment, and current-photo analysis",
+  () => {
+    assert.match(
+      conversation,
+      /decision\?\.text \|\| item\.text/
+    );
+    assert.match(
+      conversation,
+      /quick-quote-photo-suggestion/
+    );
+    assert.match(
+      conversation,
+      /quick-quote-photo-edit/
+    );
+    assert.match(
+      conversation,
+      /quick-quote-photo-decision/
+    );
+
+    assert.match(
+      styles,
+      /\.quick-quote-photo-suggestion-list/
+    );
+    assert.match(
+      styles,
+      /\.quick-quote-photo-suggestion/
+    );
+    assert.match(
+      styles,
+      /\.quick-quote-photo-edit/
+    );
+    assert.match(
+      styles,
+      /width: 100%/
+    );
+    assert.match(
+      styles,
+      /box-sizing: border-box/
+    );
+
+    assert.equal(
+      (
+        builder.match(
+          /\["review", "details"\]\.includes\(quickQuoteView\)/g
+        ) || []
+      ).length,
+      2
+    );
+
+    assert.doesNotMatch(
+      builder,
+      /setQuickQuotePhotoNotice\(message\)/
+    );
+  }
+);
+
+test(
+  "entry surfaces photo workflow failures and edit state is proposal scoped",
+  () => {
+    assert.ok(
+      (
+        conversation.match(
+          /quick-quote-action-notice/g
+        ) || []
+      ).length >= 2
+    );
+
+    assert.match(
+      conversation,
+      /editingPhotoItemId ===\s*`\$\{photoProposal\.proposalId\}:\$\{item\.id\}`/
+    );
+
+    assert.match(
+      conversation,
+      /setEditingPhotoItemId\(\s*`\$\{photoProposal\.proposalId\}:\$\{item\.id\}`/
+    );
+
+    assert.doesNotMatch(
+      conversation,
+      /editingPhotoItemId === item\.id/
+    );
+  }
+);
+
 test("explicit professional instructions prepare structured fields without invented commercial values", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt: "Repair cracked knee wall and repaint two-tone. About 3–4 days. Final price $2,650 with 75% deposit.",

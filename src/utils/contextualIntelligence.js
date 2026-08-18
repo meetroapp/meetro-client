@@ -5,6 +5,7 @@ export const WORKFLOW_REVIEW_ROUTE = "/api/intelligence/proposals";
 
 export const INTELLIGENCE_OPERATION = Object.freeze({
   EVALUATION: "evaluation.assist",
+  QUICK_QUOTE_PHOTO: "quick_quote.photo_assist",
   ESTIMATE: "estimate.compose",
   QUOTE: "quote.compose",
   INVOICE: "invoice.assist",
@@ -89,6 +90,162 @@ export function validateEvaluationAssistance(value, expected = {}) {
   return proposal;
 }
 
+function validateQuickQuotePhotoSourceReference(value) {
+  if (!plain(value)) return null;
+
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 3 ||
+    !["type", "id", "version"].every((key) =>
+      Object.hasOwn(value, key)
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    value.type !== "QUOTE_DRAFT_PHOTO" ||
+    typeof value.id !== "string" ||
+    !value.id ||
+    value.id.length > 500 ||
+    !Number.isInteger(value.version) ||
+    value.version < 1
+  ) {
+    return null;
+  }
+
+  return value;
+}
+
+function validateQuickQuotePhotoItem(
+  value,
+  expectedClassification
+) {
+  if (!plain(value)) return null;
+
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 4 ||
+    !["id", "text", "classification", "sourceReferences"].every(
+      (key) => Object.hasOwn(value, key)
+    )
+  ) {
+    return null;
+  }
+
+  const suggestion = validateSuggestion(value);
+  const references = array(value.sourceReferences, 12);
+
+  if (
+    !suggestion ||
+    value.classification !== expectedClassification ||
+    !references ||
+    !references.every(validateQuickQuotePhotoSourceReference) ||
+    (
+      expectedClassification === "OBSERVED" &&
+      references.length === 0
+    )
+  ) {
+    return null;
+  }
+
+  return value;
+}
+
+export function validateQuickQuotePhotoAssistance(
+  value,
+  expected = {}
+) {
+  const proposal = validateEnvelope(
+    value,
+    INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO,
+    expected
+  );
+
+  if (!proposal || !boundedText(proposal.summary, 1200)) {
+    return null;
+  }
+
+  const collections = [
+    ["observed", "OBSERVED"],
+    ["needsVerification", "NEEDS_VERIFICATION"],
+    ["repairSuggestions", "AI_SUGGESTED"],
+    ["materialSuggestions", "AI_SUGGESTED"],
+  ];
+
+  for (const [key, classification] of collections) {
+    const items = array(proposal[key], 40);
+
+    if (
+      !items ||
+      !items.every((item) =>
+        validateQuickQuotePhotoItem(item, classification)
+      )
+    ) {
+      return null;
+    }
+  }
+
+  if (
+    !plain(proposal.photoAnalysis) ||
+    proposal.photoAnalysis.supported !== true ||
+    proposal.photoAnalysis.imageMeasurementsAreEstimates !== true
+  ) {
+    return null;
+  }
+
+  const analyzedReferenceIds = array(
+    proposal.photoAnalysis.analyzedReferenceIds,
+    5
+  );
+  const limitations = array(
+    proposal.photoAnalysis.limitations,
+    20
+  );
+  const warnings = array(proposal.warnings, 40);
+
+  if (
+    !analyzedReferenceIds ||
+    !analyzedReferenceIds.every(
+      (item) =>
+        typeof item === "string" &&
+        Boolean(item) &&
+        item.length <= 500
+    ) ||
+    !limitations ||
+    !limitations.every(
+      (item) => Boolean(boundedText(item, 500))
+    ) ||
+    !warnings ||
+    !warnings.every(
+      (item) => Boolean(boundedText(item, 500))
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    !plain(proposal.reviewContract) ||
+    proposal.reviewContract.explicitHumanDecisionRequired !== true ||
+    !array(proposal.reviewContract.actions, 3) ||
+    !["ACCEPTED", "EDITED", "REJECTED"].every((action) =>
+      proposal.reviewContract.actions.includes(action)
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    proposal.humanToCanonicalBoundary
+      ?.workingDraftApplicationRequiresReview !== true
+  ) {
+    return null;
+  }
+
+  assertSafeObject(proposal);
+  return proposal;
+}
+
 export function validateEstimateDraft(value, expected = {}) {
   const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.ESTIMATE, expected);
   if (!proposal || !array(proposal.materials, 80) || !array(proposal.labor, 80) ||
@@ -117,6 +274,8 @@ export function validateQuoteComposition(value, expected = {}) {
 
 const VALIDATORS = Object.freeze({
   [INTELLIGENCE_OPERATION.EVALUATION]: validateEvaluationAssistance,
+  [INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO]:
+    validateQuickQuotePhotoAssistance,
   [INTELLIGENCE_OPERATION.ESTIMATE]: validateEstimateDraft,
   [INTELLIGENCE_OPERATION.QUOTE]: validateQuoteComposition,
   [INTELLIGENCE_OPERATION.INVOICE]: validateInvoiceAssistance,

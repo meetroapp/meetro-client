@@ -2316,6 +2316,68 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   font-weight: 850;
 }
 
+.quick-quote-photo-review > .quick-quote-summary-section {
+  min-height: 0;
+  border: 1px solid var(
+    --meetro-color-line,
+    rgba(78, 68, 55, 0.14)
+  );
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.quick-quote-photo-suggestion-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.quick-quote-photo-suggestion {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(31, 77, 52, 0.14);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.quick-quote-photo-suggestion > p {
+  margin: 0;
+}
+
+.quick-quote-photo-suggestion .quick-quote-review-actions {
+  margin-top: 10px;
+}
+
+.quick-quote-photo-edit {
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  box-sizing: border-box;
+  margin-top: 10px;
+  border: 1px solid rgba(31, 77, 52, 0.28);
+  border-radius: 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  background: #fff;
+  color: #263b2d;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.quick-quote-photo-edit:focus {
+  border-color: #326749;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(50, 103, 73, 0.14);
+}
+
+.quick-quote-photo-decision {
+  display: block;
+  margin-top: 10px;
+  color: #24543b;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .quick-quote-photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));

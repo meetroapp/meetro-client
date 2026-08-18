@@ -841,6 +841,13 @@ function QuoteBuilder({ setPage }) {
   const [quickQuoteDraftPhotos, setQuickQuoteDraftPhotos] = useState([]);
   const [quickQuotePhotoNotice, setQuickQuotePhotoNotice] = useState("");
   const [quickQuotePhotoBusy, setQuickQuotePhotoBusy] = useState(false);
+  const [quickQuotePhotoAssistant, setQuickQuotePhotoAssistant] = useState({
+    busy: false,
+    error: "",
+    proposal: null,
+    decisions: {},
+    reviewingId: "",
+  });
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
   const quickQuoteWorkingTimerRef = useRef(null);
@@ -1590,30 +1597,260 @@ ${businessIdentity.businessName}`;
     }
   }
 
-  function prepareQuickQuoteConversation(revision = false) {
+  async function prepareQuickQuoteConversation(revision = false) {
     const instruction = cleanText(quickQuotePrompt);
-    if (!instruction) return;
-    const patch = buildQuickQuoteConversationPatch({
-      prompt: instruction,
-      revision,
-      current: {
-        projectTitle,
-        projectDescription,
-        problemFound,
-        recommendedSolution,
-        lineItemDescription: lineItems[0]?.description || "",
-      },
-    });
+    const photos = quickQuoteDraftPhotosRef.current;
+
+    if (!instruction && photos.length === 0) return;
+
+    const patch = instruction
+      ? buildQuickQuoteConversationPatch({
+          prompt: instruction,
+          revision,
+          current: {
+            projectTitle,
+            projectDescription,
+            problemFound,
+            recommendedSolution,
+            lineItemDescription: lineItems[0]?.description || "",
+          },
+        })
+      : null;
+
     if (quickQuoteWorkingTimerRef.current) {
       window.clearTimeout(quickQuoteWorkingTimerRef.current);
     }
+
+    setQuickQuotePhotoNotice("");
     setQuickQuoteView("working");
-    quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
-      applyQuickQuoteConversationPatch(patch);
+
+    // Preserve the existing deterministic text-only Quick Quote path.
+    if (photos.length === 0) {
+      quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
+        if (patch) applyQuickQuoteConversationPatch(patch);
+        setQuickQuotePrompt("");
+        setQuickQuoteView("review");
+        quickQuoteWorkingTimerRef.current = null;
+      }, 650);
+      return;
+    }
+
+    setQuickQuotePhotoAssistant({
+      busy: true,
+      error: "",
+      proposal: null,
+      decisions: {},
+      reviewingId: "",
+    });
+
+    try {
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO,
+        locale: language,
+        input: {
+          prompt: instruction,
+          photos: photos.map((photo) => photo.media),
+        },
+        setPage,
+      });
+
+      // Professional-entered text remains explicit input and may organize
+      // the working draft. Photo intelligence remains review-only below.
+      if (patch) applyQuickQuoteConversationPatch(patch);
+
       setQuickQuotePrompt("");
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal: result.proposal,
+        decisions: {},
+        reviewingId: "",
+      });
       setQuickQuoteView("review");
-      quickQuoteWorkingTimerRef.current = null;
-    }, 650);
+    } catch (error) {
+      const message =
+        error?.message || quickQuoteCopy.photoAnalysisFailed;
+
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: message,
+        proposal: null,
+        decisions: {},
+        reviewingId: "",
+      });
+      setQuickQuoteView(revision ? "revision" : "entry");
+    }
+  }
+
+  function appendReviewedQuickQuoteText(setter, value) {
+    const reviewed = cleanText(value);
+    if (!reviewed) return;
+
+    setter((current) => {
+      const existing = cleanText(current);
+      if (!existing) return reviewed;
+
+      if (
+        existing.toLowerCase().includes(reviewed.toLowerCase())
+      ) {
+        return current;
+      }
+
+      return `${existing}\n${reviewed}`;
+    });
+  }
+
+  function applyReviewedQuickQuotePhotoItem(category, value) {
+    const reviewed = cleanText(value);
+    if (!reviewed) return;
+
+    if (category === "observed") {
+      appendReviewedQuickQuoteText(setProblemFound, reviewed);
+      return;
+    }
+
+    if (category === "needsVerification") {
+      appendReviewedQuickQuoteText(setNotes, reviewed);
+      return;
+    }
+
+    if (category === "repairSuggestions") {
+      appendReviewedQuickQuoteText(
+        setRecommendedSolution,
+        reviewed
+      );
+      return;
+    }
+
+    if (category === "materialSuggestions") {
+      setMaterialRows((rows) => {
+        const materialName = reviewed.slice(0, 500);
+
+        if (
+          rows.some(
+            (row) =>
+              cleanText(row.name).toLowerCase() ===
+              materialName.toLowerCase()
+          )
+        ) {
+          return rows;
+        }
+
+        const blankIndex = rows.findIndex(
+          (row) =>
+            ![
+              row.name,
+              row.quantity,
+              row.cost,
+              row.total,
+            ].some((item) => cleanText(item))
+        );
+
+        if (blankIndex >= 0) {
+          return rows.map((row, index) =>
+            index === blankIndex
+              ? {
+                  ...row,
+                  name: materialName,
+                }
+              : row
+          );
+        }
+
+        return [
+          ...rows,
+          normalizeQuoteMaterialItem(
+            { name: materialName },
+            rows.length
+          ),
+        ];
+      });
+    }
+  }
+
+  async function reviewQuickQuotePhotoSuggestion({
+    category,
+    item,
+    action,
+    editedText = "",
+  }) {
+    const proposal = quickQuotePhotoAssistant.proposal;
+    const normalizedAction =
+      String(action || "").trim().toUpperCase();
+
+    if (
+      !proposal?.proposalId ||
+      !item?.id ||
+      !["ACCEPTED", "EDITED", "REJECTED"].includes(
+        normalizedAction
+      ) ||
+      quickQuotePhotoAssistant.decisions[item.id]
+    ) {
+      return false;
+    }
+
+    const reviewedText =
+      normalizedAction === "EDITED"
+        ? cleanText(editedText)
+        : cleanText(item.text);
+
+    if (normalizedAction === "EDITED" && !reviewedText) {
+      return false;
+    }
+
+    setQuickQuotePhotoAssistant((current) => ({
+      ...current,
+      error: "",
+      reviewingId: item.id,
+    }));
+
+    try {
+      await recordWorkflowReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: normalizedAction,
+        ...(normalizedAction === "EDITED"
+          ? {
+              editedValue: {
+                ...item,
+                text: reviewedText,
+              },
+            }
+          : {}),
+        setPage,
+      });
+
+      // This is the only point where photo intelligence may influence
+      // the local working draft, after explicit professional review.
+      if (normalizedAction !== "REJECTED") {
+        applyReviewedQuickQuotePhotoItem(
+          category,
+          reviewedText
+        );
+      }
+
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        reviewingId: "",
+        decisions: {
+          ...current.decisions,
+          [item.id]: {
+            action: normalizedAction,
+            text: reviewedText,
+          },
+        },
+      }));
+
+      return true;
+    } catch (error) {
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        reviewingId: "",
+        error:
+          error?.message || quickQuoteCopy.photoReviewFailed,
+      }));
+      return false;
+    }
   }
 
   async function addQuickQuoteDraftPhotoFiles(files = []) {
@@ -1690,8 +1927,25 @@ ${businessIdentity.businessName}`;
         ...prepared,
       ]);
 
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal: null,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      const photoSetChangedAfterReview =
+        ["review", "details"].includes(quickQuoteView);
+
+      if (photoSetChangedAfterReview) {
+        setQuickQuoteView("entry");
+      }
+
       setQuickQuotePhotoNotice(
-        rejected
+        photoSetChangedAfterReview
+          ? quickQuoteCopy.photoChangedNotice
+          : rejected
           ? quickQuoteCopy.photoInvalid
           : quickQuoteCopy.photoDraftNotice
       );
@@ -1761,8 +2015,25 @@ ${businessIdentity.businessName}`;
         current.filter((item) => item.id !== photoId)
       );
 
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal: null,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      const photoSetChangedAfterReview =
+        ["review", "details"].includes(quickQuoteView);
+
+      if (photoSetChangedAfterReview) {
+        setQuickQuoteView("entry");
+      }
+
       setQuickQuotePhotoNotice(
-        quickQuoteCopy.photoDraftNotice
+        photoSetChangedAfterReview
+          ? quickQuoteCopy.photoChangedNotice
+          : quickQuoteCopy.photoDraftNotice
       );
     } finally {
       setQuickQuotePhotoBusy(false);
@@ -1911,7 +2182,19 @@ ${businessIdentity.businessName}`;
           onRemovePhoto={(photoId) =>
             void removeQuickQuoteDraftPhoto(photoId)
           }
-          notice={[copiedNotice, quickQuotePhotoNotice].filter(Boolean).join(" ")}
+          photoProposal={quickQuotePhotoAssistant.proposal}
+          photoDecisions={quickQuotePhotoAssistant.decisions}
+          photoReviewBusyId={quickQuotePhotoAssistant.reviewingId}
+          onReviewPhotoSuggestion={
+            reviewQuickQuotePhotoSuggestion
+          }
+          notice={[
+            copiedNotice,
+            quickQuotePhotoNotice,
+            quickQuotePhotoAssistant.error,
+          ]
+            .filter(Boolean)
+            .join(" ")}
         />
         </>
       ) : null}
