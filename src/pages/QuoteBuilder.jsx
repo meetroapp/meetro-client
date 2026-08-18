@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
 import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
+import { pickNativeJobPhoto } from "../utils/cameraPhotoPicker.js";
 import { getLanguage, t } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -72,6 +73,47 @@ function stringifySavedAmount(value) {
 
 function cleanText(value) {
   return String(value || "").trim();
+}
+
+const QUICK_QUOTE_DRAFT_PHOTO_MAX_COUNT = 5;
+const QUICK_QUOTE_DRAFT_PHOTO_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const QUICK_QUOTE_DRAFT_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+
+function createQuickQuoteDraftPhoto(file) {
+  if (
+    !file ||
+    !QUICK_QUOTE_DRAFT_PHOTO_TYPES.has(String(file.type || "").toLowerCase()) ||
+    !Number.isInteger(file.size) ||
+    file.size <= 0 ||
+    file.size > QUICK_QUOTE_DRAFT_PHOTO_MAX_BYTES
+  ) {
+    return null;
+  }
+
+  const previewUrl =
+    typeof globalThis.URL?.createObjectURL === "function"
+      ? globalThis.URL.createObjectURL(file)
+      : "";
+
+  let revoked = false;
+
+  return {
+    id: `${file.name || "quote-photo"}-${file.size}-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`,
+    file,
+    name: file.name || "quote-photo",
+    previewUrl,
+    revoke() {
+      if (revoked) return;
+      revoked = true;
+      if (previewUrl) globalThis.URL?.revokeObjectURL?.(previewUrl);
+    },
+  };
 }
 
 function todayLocalIsoDate(now = new Date()) {
@@ -819,6 +861,10 @@ function QuoteBuilder({ setPage }) {
     isUniversalQuickQuote ? "entry" : "details"
   );
   const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
+  const [quickQuoteDraftPhotos, setQuickQuoteDraftPhotos] = useState([]);
+  const [quickQuotePhotoNotice, setQuickQuotePhotoNotice] = useState("");
+  const quickQuotePhotoInputRef = useRef(null);
+  const quickQuoteDraftPhotosRef = useRef([]);
   const quickQuoteWorkingTimerRef = useRef(null);
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
 
@@ -868,6 +914,10 @@ function QuoteBuilder({ setPage }) {
   );
 
   useEffect(() => {
+    quickQuoteDraftPhotosRef.current = quickQuoteDraftPhotos;
+  }, [quickQuoteDraftPhotos]);
+
+  useEffect(() => {
     document.body.classList.add("meetro-quote-builder-open");
 
     return () => {
@@ -875,6 +925,8 @@ function QuoteBuilder({ setPage }) {
       if (quickQuoteWorkingTimerRef.current) {
         window.clearTimeout(quickQuoteWorkingTimerRef.current);
       }
+      quickQuoteDraftPhotosRef.current.forEach((photo) => photo.revoke?.());
+      quickQuoteDraftPhotosRef.current = [];
     };
   }, []);
 
@@ -1580,6 +1632,78 @@ ${businessIdentity.businessName}`;
     }, 650);
   }
 
+  function addQuickQuoteDraftPhotoFiles(files = []) {
+    const source = Array.from(files || []);
+    if (!source.length) return;
+
+    const remaining =
+      QUICK_QUOTE_DRAFT_PHOTO_MAX_COUNT - quickQuoteDraftPhotos.length;
+
+    if (remaining <= 0) {
+      setQuickQuotePhotoNotice(quickQuoteCopy.photoLimit);
+      return;
+    }
+
+    const accepted = [];
+    let rejected = false;
+
+    for (const file of source.slice(0, remaining)) {
+      const photo = createQuickQuoteDraftPhoto(file);
+      if (photo) accepted.push(photo);
+      else rejected = true;
+    }
+
+    if (source.length > remaining) rejected = true;
+
+    if (accepted.length) {
+      setQuickQuoteDraftPhotos((current) => [...current, ...accepted]);
+    }
+
+    setQuickQuotePhotoNotice(
+      rejected ? quickQuoteCopy.photoInvalid : quickQuoteCopy.photoDraftNotice
+    );
+  }
+
+  async function openQuickQuotePhotoPicker() {
+    setQuickQuotePhotoNotice("");
+
+    try {
+      const result = await pickNativeJobPhoto({
+        fileNamePrefix: "quick-quote-photo",
+        quality: 72,
+      });
+
+      if (result?.photos?.length) {
+        addQuickQuoteDraftPhotoFiles(
+          result.photos.map((photo) => photo.file).filter(Boolean)
+        );
+        return;
+      }
+
+      if (result?.cancelled) return;
+    } catch {
+      // Fall through to the browser file picker.
+    }
+
+    quickQuotePhotoInputRef.current?.click();
+  }
+
+  function handleQuickQuotePhotoInput(event) {
+    addQuickQuoteDraftPhotoFiles(event.target.files);
+    event.target.value = "";
+  }
+
+  function removeQuickQuoteDraftPhoto(photoId) {
+    setQuickQuoteDraftPhotos((current) =>
+      current.filter((photo) => {
+        if (photo.id !== photoId) return true;
+        photo.revoke?.();
+        return false;
+      })
+    );
+    setQuickQuotePhotoNotice(quickQuoteCopy.photoDraftNotice);
+  }
+
   const quickQuoteReviewSummary = {
     customerName,
     customerLocation,
@@ -1680,6 +1804,15 @@ ${businessIdentity.businessName}`;
       )}
 
       {isUniversalQuickQuote ? (
+        <>
+        <input
+          ref={quickQuotePhotoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          onChange={handleQuickQuotePhotoInput}
+        />
         <QuickQuoteConversation
           language={language}
           view={quickQuoteView === "details" ? "review" : quickQuoteView}
@@ -1701,10 +1834,14 @@ ${businessIdentity.businessName}`;
           onSharePdf={() => void shareQuickQuotePdf()}
           setPage={setPage}
           summary={quickQuoteReviewSummary}
-          photoCount={importedPhotoCount}
-          canAddPhotos={false}
-          notice={copiedNotice}
+          photoCount={quickQuoteDraftPhotos.length}
+          photos={quickQuoteDraftPhotos}
+          canAddPhotos={true}
+          onAddPhotos={() => void openQuickQuotePhotoPicker()}
+          onRemovePhoto={removeQuickQuoteDraftPhoto}
+          notice={[copiedNotice, quickQuotePhotoNotice].filter(Boolean).join(" ")}
         />
+        </>
       ) : null}
       {(!isUniversalQuickQuote || quickQuoteView === "details") && (
         <section

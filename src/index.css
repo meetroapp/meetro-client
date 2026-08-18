@@ -2277,6 +2277,66 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 220px));
 }
 
+.quick-quote-photo-review {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(31, 77, 52, 0.14);
+  padding-top: 16px;
+}
+
+.quick-quote-photo-review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-quote-photo-review-heading > div {
+  min-width: 0;
+}
+
+.quick-quote-photo-review-heading p,
+.quick-quote-photo-empty {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.quick-quote-photo-review-heading button,
+.quick-quote-photo-item button {
+  min-height: 44px;
+  border: 1px solid rgba(31, 77, 52, 0.26);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--meetro-color-forest, #1f4d34);
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.quick-quote-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.quick-quote-photo-item {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.quick-quote-photo-item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #eef2ed;
+}
+
 .quick-quote-primary-action {
   border-color: var(--meetro-color-forest, #1f4d34) !important;
   background: var(--meetro-color-forest, #1f4d34) !important;

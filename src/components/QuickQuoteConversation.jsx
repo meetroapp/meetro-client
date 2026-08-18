@@ -36,8 +36,10 @@ export default function QuickQuoteConversation({
   setPage,
   summary,
   photoCount = 0,
+  photos = [],
   canAddPhotos = false,
   onAddPhotos,
+  onRemovePhoto,
   notice = "",
 }) {
   const copy = getQuickQuoteConversationCopy(language);
@@ -105,6 +107,46 @@ export default function QuickQuoteConversation({
               <strong>{formatMoney(summary.total, language)}</strong>
             </SummarySection>
           </div>
+          <section
+            className="quick-quote-photo-review"
+            aria-label={copy.photos}
+          >
+            <div className="quick-quote-photo-review-heading">
+              <div>
+                <strong>{copy.photos}</strong>
+                <p>{copy.photoDraftNotice}</p>
+              </div>
+              <button type="button" onClick={onAddPhotos}>
+                <MeetroIcon name="photoCount" size={18} />
+                {copy.addPhotos}
+              </button>
+            </div>
+
+            {photos.length ? (
+              <div className="quick-quote-photo-grid">
+                {photos.map((photo, index) => (
+                  <figure key={photo.id} className="quick-quote-photo-item">
+                    {photo.previewUrl ? (
+                      <img
+                        src={photo.previewUrl}
+                        alt={`${copy.photos} ${index + 1}`}
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onRemovePhoto?.(photo.id)}
+                      aria-label={copy.removePhoto(index + 1)}
+                    >
+                      {copy.remove}
+                    </button>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              <p className="quick-quote-photo-empty">{copy.noPhotos}</p>
+            )}
+          </section>
+
           <div className="quick-quote-review-actions" aria-label={copy.reviewTitle}>
             <button type="button" onClick={onOpenRevision}>
               <MeetroIcon name="assistant" size={18} />

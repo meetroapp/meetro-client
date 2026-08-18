@@ -83,11 +83,21 @@ test("conversation entry locks Speak Type Add Photos and one governed microphone
   assert.match(styles, /\.meetro-quote-builder-open \.meetro-assistant-launcher/);
 });
 
-test("Quick Quote photo control fails closed without governed draft media", () => {
-  assert.match(builder, /canAddPhotos=\{false\}/);
-  assert.match(conversation, /disabled=\{!canAddPhotos\}/);
-  assert.match(conversation, /quick-quote-photo-authority/);
-  assert.doesNotMatch(`${builder}\n${conversation}`, /URL\.createObjectURL\([^)]*photo|localStorage[^\n]*photo/i);
+test("Quick Quote supports transient photo review without claiming durable media authority", () => {
+  assert.match(builder, /quickQuoteDraftPhotos/);
+  assert.match(builder, /pickNativeJobPhoto/);
+  assert.match(builder, /globalThis\.URL\.createObjectURL/);
+  assert.match(builder, /revokeObjectURL/);
+  assert.match(builder, /canAddPhotos=\{true\}/);
+  assert.match(builder, /onAddPhotos=/);
+  assert.match(builder, /onRemovePhoto=/);
+  assert.match(conversation, /photos\.map/);
+  assert.match(conversation, /quick-quote-photo-review/);
+  assert.match(conversation, /copy\.photoDraftNotice/);
+  assert.doesNotMatch(
+    `${builder}\n${conversation}`,
+    /\/media\/upload-signature|request-photo|localStorage[^\n]*quickQuoteDraftPhotos|sessionStorage[^\n]*quickQuoteDraftPhotos/i
+  );
 });
 
 test("explicit professional instructions prepare structured fields without invented commercial values", () => {
