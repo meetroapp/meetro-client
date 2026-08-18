@@ -8,6 +8,18 @@ const invoiceSource = readFileSync(
 );
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 
+test("Invoice Builder seeds draft dates from the local calendar instead of UTC", () => {
+  assert.match(invoiceSource, /function todayIsoDate\(now = new Date\(\)\)/);
+  assert.match(invoiceSource, /now\.getFullYear\(\)/);
+  assert.match(invoiceSource, /now\.getMonth\(\) \+ 1/);
+  assert.match(invoiceSource, /now\.getDate\(\)/);
+  assert.match(invoiceSource, /useState\(todayIsoDate\(\)\)/);
+  assert.doesNotMatch(
+    invoiceSource,
+    /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/
+  );
+});
+
 test("Invoice Builder does not treat browser storage as invoice persistence", () => {
   assert.doesNotMatch(invoiceSource, /localStorage\.setItem|sessionStorage\.setItem/);
   assert.doesNotMatch(invoiceSource, /activeInvoice|meetro_customer_invoice_history/);

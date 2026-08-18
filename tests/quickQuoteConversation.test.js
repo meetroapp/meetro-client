@@ -27,6 +27,18 @@ test("Quick Quote opens conversation-first while keeping the detailed editor sec
   assert.match(builder, /Manual Total Override/);
 });
 
+test("Quick Quote seeds customer document dates from the local calendar instead of UTC", () => {
+  assert.match(builder, /function todayLocalIsoDate/);
+  assert.match(builder, /now\.getFullYear\(\)/);
+  assert.match(builder, /now\.getMonth\(\) \+ 1/);
+  assert.match(builder, /now\.getDate\(\)/);
+  assert.match(builder, /todayLocalIsoDate\(\)/);
+  assert.doesNotMatch(
+    builder,
+    /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/
+  );
+});
+
 test("entry and review expose concise optional-workflow guidance", () => {
   const copy = getQuickQuoteConversationCopy("en");
   assert.equal(copy.entryGuidanceTitle, "Tell Meetro about the job in your own words.");

@@ -74,6 +74,13 @@ function cleanText(value) {
   return String(value || "").trim();
 }
 
+function todayLocalIsoDate(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatQuickQuoteSharePricingLine({
   description,
   quantity,
@@ -458,7 +465,7 @@ function QuoteBuilder({ setPage }) {
   const [quoteDate, setQuoteDate] = useState(
     selectedQuoteForEdit?.quoteDate ||
       selectedQuoteForEdit?.date ||
-      new Date().toISOString().slice(0, 10)
+      todayLocalIsoDate()
   );
   const [labor] = useState(
     stringifySavedAmount(
