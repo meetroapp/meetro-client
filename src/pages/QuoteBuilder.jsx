@@ -1464,6 +1464,9 @@ ${businessIdentity.businessName}`;
 
   function applyQuickQuoteConversationPatch(patch) {
     if (patch.customerName !== undefined) setCustomerName(patch.customerName);
+    if (patch.customerLocation !== undefined) {
+      setCustomerLocation(patch.customerLocation);
+    }
     if (patch.projectTitle !== undefined) setProjectTitle(patch.projectTitle);
     if (patch.projectDescription !== undefined) setProjectDescription(patch.projectDescription);
     if (patch.problemFound !== undefined) setProblemFound(patch.problemFound);

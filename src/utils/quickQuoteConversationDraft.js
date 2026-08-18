@@ -34,13 +34,31 @@ function explicitMaterialAmount(text) {
 function explicitLaborAmount(text) {
   const match = firstMatch(text, [
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*\$\s*([\d,.]+)/i,
+    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
     /\$\s*([\d,.]+)\s+(?:for\s+)?(?:labor|labour|installation)/i,
   ]);
   return match ? parseAmount(match[1]) : null;
 }
 
 function explicitCustomerName(text) {
-  const match = text.match(/(?:quote\s+for|customer\s+is|client\s+is)\s+([^.!?]+)/i);
+  const explicit = text.match(
+    /(?:quote\s+for|customer\s+is|client\s+is)\s+([^.!?]+)/i
+  );
+  if (explicit) return cleanText(explicit[1]);
+
+  const conversational = text.match(
+    /\bcustomer\s+([A-Za-zÀ-ÖØ-öø-ÿ'’-]+)\s+([A-Za-zÀ-ÖØ-öø-ÿ'’-]+)(?=\s+(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|rebuild|paint|painting|service|work)\b)/i
+  );
+
+  return conversational
+    ? cleanText(`${conversational[1]} ${conversational[2]}`)
+    : "";
+}
+
+function explicitCustomerLocation(text) {
+  const match = text.match(
+    /\b(?:at|location\s*(?:is|:)?|address\s*(?:is|:)?)\s+(\d{1,6}\s+[A-Za-z0-9][A-Za-z0-9 .#'’-]*?\b(?:ave(?:nue)?|st(?:reet)?|rd|road|dr(?:ive)?|blvd|boulevard|ln|lane|ct|court|way|pkwy|parkway|pl|place)\b(?:\s+(?:unit|apt|suite|#)\s*[\w-]+)?)/i
+  );
   return cleanText(match?.[1] || "");
 }
 
@@ -100,6 +118,22 @@ function explicitMaterialItems(text) {
     const amount = parseAmount(useSpecific[1]);
     if (amount !== null) items.push({ name: cleanText(useSpecific[2]), total: String(amount) });
   }
+
+  const naturalPrice = text.match(
+    /\b(?:price\s+for|cost\s+of)\s+(?:the\s+)?([A-Za-z][\w -]{0,38}?)\s*(?:is|:)?\s*\$?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i
+  );
+  if (naturalPrice) {
+    const amount = parseAmount(naturalPrice[2]);
+    const name = cleanText(naturalPrice[1]);
+    if (
+      amount !== null &&
+      name &&
+      !items.some((item) => item.name.toLowerCase() === name.toLowerCase())
+    ) {
+      items.push({ name, total: String(amount) });
+    }
+  }
+
   return items;
 }
 
@@ -114,10 +148,18 @@ function explicitLaborItems(text) {
       return items;
     }
   }
-  const match = text.match(/\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*\$\s*([\d,.]+)/i);
+  const match = firstMatch(text, [
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*\$\s*([\d,.]+)/i,
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
+  ]);
   if (match) {
     const amount = parseAmount(match[2]);
-    if (amount !== null) items.push({ description: cleanText(match[1]), total: String(amount) });
+    if (amount !== null) {
+      items.push({
+        description: cleanText(match[1]),
+        total: String(amount),
+      });
+    }
   }
   return items;
 }
@@ -125,6 +167,22 @@ function explicitLaborItems(text) {
 function cleanScope(text) {
   let scope = text;
   scope = scope.replace(/(?:quote\s+for|customer\s+is|client\s+is)\s+[^.!?]+[.!?]?/i, "");
+  scope = scope.replace(
+    /\bcustomer\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=\s+(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|rebuild|paint|painting|service|work)\b)/i,
+    ""
+  );
+  scope = scope.replace(
+    /\b(?:at|location\s*(?:is|:)?|address\s*(?:is|:)?)\s+\d{1,6}\s+[A-Za-z0-9][A-Za-z0-9 .#'’-]*?\b(?:ave(?:nue)?|st(?:reet)?|rd|road|dr(?:ive)?|blvd|boulevard|ln|lane|ct|court|way|pkwy|parkway|pl|place)\b(?:\s+(?:unit|apt|suite|#)\s*[\w-]+)?/gi,
+    ""
+  );
+  scope = scope.replace(
+    /\b(?:price\s+for|cost\s+of)\s+(?:the\s+)?[A-Za-z][\w -]{0,38}?\s*(?:is|:)?\s*\$?\s*[\d,.]+\s*(?:dollars?|usd)\b[,.;]?/gi,
+    ""
+  );
+  scope = scope.replace(
+    /\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*[\d,.]+\s*(?:dollars?|usd)\b[,.;]?/gi,
+    ""
+  );
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation|tax|subtotal)\s+(?:(?:total)\s+(?:is|are|:)?\s*\$\s*[\d,.]+|\$\s*[\d,.]+\s+total)[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|de|a|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
@@ -134,7 +192,11 @@ function cleanScope(text) {
   scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|total|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:note|condition)\s*:\s*[^.!?]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:[A-Za-z][\w -]{1,38}?)\s+costs?\s*\$\s*[\d,.]+[.!]?/gi, "");
-  return cleanText(scope).replace(/\s+([.!?])/g, "$1").replace(/\.{2,}/g, ".").replace(/\s+(?:and|with|,)$/i, "");
+  return cleanText(scope)
+    .replace(/\s+([.!?])/g, "$1")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^[,;:\s]+|[,;:\s]+$/g, "")
+    .replace(/\s+(?:and|with|,)$/i, "");
 }
 
 function suggestedTitle(text) {
@@ -169,6 +231,7 @@ export function buildQuickQuoteConversationPatch({
   const laborAmount = explicitLaborAmount(instruction);
   const laborItems = explicitLaborItems(instruction);
   const customerName = explicitCustomerName(instruction);
+  const customerLocation = explicitCustomerLocation(instruction);
   const duration = explicitDuration(instruction);
   const deposit = explicitDeposit(instruction);
   const note = explicitNote(instruction);
@@ -184,8 +247,10 @@ export function buildQuickQuoteConversationPatch({
       if (!cleanText(current.lineItemDescription)) patch.lineItemDescription = suggestedTitle(scope);
     }
     if (customerName) patch.customerName = customerName;
+    if (customerLocation) patch.customerLocation = customerLocation;
   }
   if (revision && customerName) patch.customerName = customerName;
+  if (revision && customerLocation) patch.customerLocation = customerLocation;
 
   if (replacement) {
     patch.projectDescription = replacement;

@@ -264,6 +264,37 @@ test("explicit materials and removal instructions do not alter unrelated commerc
   assert.equal(removalPatch.totalOverride, undefined);
 });
 
+test("natural field-service shorthand organizes customer location materials labor and total without command syntax", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt:
+      "customer cristal Tejada ceiling fan installation at 117 se 2nd ave, price for fan 180 dollar, installation 160 dollars",
+  });
+
+  assert.equal(patch.customerName, "cristal Tejada");
+  assert.equal(patch.customerLocation, "117 se 2nd ave");
+  assert.match(patch.projectDescription, /ceiling fan installation/i);
+  assert.doesNotMatch(patch.projectDescription, /cristal Tejada/i);
+  assert.doesNotMatch(patch.projectDescription, /117 se 2nd ave/i);
+  assert.doesNotMatch(patch.projectDescription, /180|160/);
+
+  assert.deepEqual(patch.materialItems, [
+    { name: "fan", total: "180" },
+  ]);
+  assert.deepEqual(patch.laborItems, [
+    { description: "installation", total: "160" },
+  ]);
+
+  assert.equal(patch.totalOverride, undefined);
+  assert.equal(
+    Number(patch.materialItems[0].total) +
+      Number(patch.laborItems[0].total),
+    340
+  );
+
+  assert.match(builder, /patch\.customerLocation/);
+  assert.match(builder, /setCustomerLocation\(patch\.customerLocation\)/);
+});
+
 test("detailed knee-wall conversation extracts clean structured draft with final price authority", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt: "Quote for Paul Becker. Reconstruct the damaged front knee wall. Remove the damaged block, expose the footing, install rebar, rebuild with concrete block, apply stucco, prime, and repaint the wall in the existing two-tone finish. Materials are $700. Labor is $1,950. Estimated duration is 3–4 days. 50% deposit required. Final price is $2,650.",
