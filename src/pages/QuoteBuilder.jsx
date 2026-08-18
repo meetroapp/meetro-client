@@ -2302,7 +2302,9 @@ ${businessIdentity.businessName}`;
       <BottomNav
         setPage={setPage}
         currentPage={
-          isWorkCenterReturn
+          isDesktopSidebarQuickQuote
+            ? "quoteBuilder"
+            : isWorkCenterReturn
             ? "workCenter"
             : isBusinessToolsReturn
             ? "businessDashboard"

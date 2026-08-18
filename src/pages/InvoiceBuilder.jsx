@@ -829,10 +829,10 @@ ${invoice.customerMessage || "—"}`;
       <BottomNav
         setPage={setPage}
         currentPage={
-          isBusinessToolsInvoice
+          isDesktopSidebarInvoice
+            ? "invoiceBuilder"
+            : isBusinessToolsInvoice
             ? "businessDashboard"
-            : isDesktopSidebarInvoice
-            ? returnPage
             : "messages"
         }
       />

@@ -53,6 +53,17 @@ test("shortcut destinations reuse standalone builders and route Leads directly",
   assert.match(bottomNav, /page: "businessLeads"/);
 });
 
+test("desktop Quick Quote and Quick Invoice remain selected while their builders are open", () => {
+  assert.match(
+    quoteBuilder,
+    /<BottomNav[\s\S]*currentPage=\{[\s\S]*isDesktopSidebarQuickQuote[\s\S]*\? "quoteBuilder"/
+  );
+  assert.match(
+    invoiceBuilder,
+    /<BottomNav[\s\S]*currentPage=\{[\s\S]*isDesktopSidebarInvoice[\s\S]*\? "invoiceBuilder"/
+  );
+});
+
 test("shortcut return context preserves communication, Work Center, and Business Tools origins", () => {
   assert.match(bottomNav, /shortcutReturnPage = \[/);
   assert.match(bottomNav, /\? "workCenter"/);

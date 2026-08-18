@@ -763,6 +763,7 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessQuoteBuilderNote,
       tone: "#d97706",
       toneBg: "rgba(217,119,6,0.13)",
+      desktopDuplicate: true,
       onClick: () => setPage("quoteBuilder"),
     },
     {
@@ -772,6 +773,7 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessInvoiceBuilderNote,
       tone: "#16a34a",
       toneBg: "rgba(22,163,74,0.13)",
+      desktopDuplicate: true,
       onClick: () => setPage("invoiceBuilder"),
     },
     {
@@ -872,6 +874,10 @@ function BusinessDashboard({ setPage }) {
             }
 
             .business-dashboard-quick-access {
+              display: grid !important;
+            }
+
+            .business-dashboard-quick-access-item--desktop-duplicate {
               display: none !important;
             }
 
@@ -928,7 +934,7 @@ function BusinessDashboard({ setPage }) {
 
             @media (min-width: 1100px) {
               .business-dashboard-quick-access-grid {
-                grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
               }
 
               .business-dashboard-glance-grid {
@@ -1344,11 +1350,23 @@ function QuickAction({ icon, label, note, badge, onClick }) {
   );
 }
 
-function DashboardQuickAccessShortcut({ icon, label, note, tone, toneBg, onClick }) {
+function DashboardQuickAccessShortcut({
+  icon,
+  label,
+  note,
+  tone,
+  toneBg,
+  desktopDuplicate = false,
+  onClick,
+}) {
   return (
     <button
       type="button"
-      className="business-dashboard-quick-access-item"
+      className={`business-dashboard-quick-access-item${
+        desktopDuplicate
+          ? " business-dashboard-quick-access-item--desktop-duplicate"
+          : ""
+      }`}
       style={quickAccessShortcut}
       onClick={onClick}
     >

@@ -37,7 +37,10 @@ test("business dashboard desktop presentation begins at the stable tablet breakp
     source,
     /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
   );
-  assert.match(source, /\.business-dashboard-quick-access \{\s*display: none !important;/);
+  assert.match(
+    source,
+    /\.business-dashboard-quick-access \{\s*display: grid !important;/
+  );
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: none !important;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*margin: 0;/);
@@ -45,15 +48,39 @@ test("business dashboard desktop presentation begins at the stable tablet breakp
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
 });
 
-test("business dashboard keeps Quick Access mobile-only when desktop shortcuts are present", () => {
-  const desktopQuickAccessRule = source.match(
-    /@media \(min-width: 1100px\)[\s\S]*?\.business-dashboard-quick-access \{\s*display: none !important;\s*\}/
+test("business dashboard desktop Quick Access keeps non-duplicated actions and mobile keeps all actions", () => {
+  assert.match(
+    source,
+    /\.business-dashboard-quick-access \{\s*display: grid !important;/
   );
-  assert.ok(desktopQuickAccessRule);
-  assert.match(source, /icon: "quickQuote"/);
-  assert.match(source, /icon: "quickInvoice"/);
-  assert.match(source, /setPage\("quoteBuilder"\)/);
-  assert.match(source, /setPage\("invoiceBuilder"\)/);
+  assert.match(
+    source,
+    /\.business-dashboard-quick-access-item--desktop-duplicate \{\s*display: none !important;/
+  );
+
+  assert.match(source, /key: "schedule"/);
+  assert.match(source, /key: "messages"/);
+  assert.match(source, /key: "hiring"/);
+  assert.match(source, /key: "business-profile"/);
+
+  assert.match(
+    source,
+    /key: "quote-builder"[\s\S]*desktopDuplicate: true/
+  );
+  assert.match(
+    source,
+    /key: "invoice-builder"[\s\S]*desktopDuplicate: true/
+  );
+
+  assert.match(
+    source,
+    /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\) !important;/
+  );
+
+  assert.match(source, /tone: "#0284c7"/);
+  assert.match(source, /tone: "#d97706"/);
+  assert.match(source, /tone: "#16a34a"/);
+  assert.match(source, /toneBg:/);
 });
 
 test("business dashboard renders a professional mobile Community entry to the shared destination", () => {
