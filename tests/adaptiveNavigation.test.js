@@ -57,17 +57,24 @@ test("adaptive navigation keeps BottomNav for compact layouts and Sidebar for de
   assert.match(bottomNavSource, /#root\[data-app-layout="desktop"\] \.bottom-nav-dock \{/);
 });
 
-test("adaptive desktop navigation reuses the existing role-based destinations", () => {
+test("adaptive desktop navigation reuses the existing role-based destinations without standalone Alerts", () => {
   const personalDesktopBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const personalDesktopNavItems = ["),
     bottomNavSource.indexOf("const businessDesktopNavItems = [")
   );
   const businessDesktopBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const businessDesktopNavItems = ["),
-    bottomNavSource.indexOf("useEffect(() => {\n    setKeyboardOpen")
+    bottomNavSource.indexOf("const businessDesktopShortcutItems = [")
   );
 
-  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "notifications", "discover", "profile"]) {
+  for (const page of [
+    "home",
+    "myRequests",
+    "messagesInbox",
+    "meetroMoments",
+    "discover",
+    "profile",
+  ]) {
     assert.match(personalDesktopBlock, new RegExp(`page: "${page}"`));
   }
 
@@ -79,28 +86,44 @@ test("adaptive desktop navigation reuses the existing role-based destinations", 
     "assetCenter",
     "customerRelationshipsCenter",
     "discover",
-    "notifications",
     "profile",
   ]) {
     assert.match(businessDesktopBlock, new RegExp(`page: "${page}"`));
   }
 
-  assert.match(personalDesktopBlock, /label: t\("navigationCommunication", language\)/);
-  assert.match(personalDesktopBlock, /label: t\("navigationAlerts", language\)/);
+  assert.match(
+    personalDesktopBlock,
+    /label: t\("navigationCommunication", language\)/
+  );
   assert.match(personalDesktopBlock, /label: "Meetro Moments"/);
-  assert.match(businessDesktopBlock, /label: t\("navigationCommunication", language\)/);
-  assert.match(businessDesktopBlock, /label: t\("navigationAlerts", language\)/);
+
+  assert.match(
+    businessDesktopBlock,
+    /label: t\("navigationCommunication", language\)/
+  );
   assert.match(businessDesktopBlock, /label: "Meetro Moments"/);
+
+  for (const block of [personalDesktopBlock, businessDesktopBlock]) {
+    assert.doesNotMatch(block, /page: "notifications"/);
+    assert.doesNotMatch(
+      block,
+      /label: t\("navigationAlerts", language\)/
+    );
+  }
+
   assert.doesNotMatch(businessDesktopBlock, /page: "businessLeads"/);
   assert.doesNotMatch(businessDesktopBlock, /page: "upload"/);
-  assert.doesNotMatch(businessDesktopBlock, /page: "businessCommandCenter"/);
+  assert.doesNotMatch(
+    businessDesktopBlock,
+    /page: "businessCommandCenter"/
+  );
   assert.doesNotMatch(businessDesktopBlock, /page: "hiringCenter"/);
 });
 
 test("Community Discover is a shared destination and not an implicit role switch", () => {
   const businessDesktopBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const businessDesktopNavItems = ["),
-    bottomNavSource.indexOf("useEffect(() => {\n    setKeyboardOpen")
+    bottomNavSource.indexOf("const businessDesktopShortcutItems = [")
   );
   const personalModeBlock = sessionSource.slice(
     sessionSource.indexOf("const personalModePages = new Set(["),
@@ -113,7 +136,7 @@ test("Community Discover is a shared destination and not an implicit role switch
   assert.doesNotMatch(personalModeBlock, /"discover"/);
 });
 
-test("mobile bottom navigation uses permanent platform destinations", () => {
+test("mobile bottom navigation uses five permanent platform destinations without standalone Alerts", () => {
   const personalMobileBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const personalMobileNavItems = ["),
     bottomNavSource.indexOf("const businessMobileNavItems = [")
@@ -123,7 +146,13 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
     bottomNavSource.indexOf("const personalDesktopNavItems = [")
   );
 
-  for (const page of ["home", "myRequests", "messagesInbox", "meetroMoments", "notifications", "profile"]) {
+  for (const page of [
+    "home",
+    "myRequests",
+    "messagesInbox",
+    "meetroMoments",
+    "profile",
+  ]) {
     assert.match(personalMobileBlock, new RegExp(`page: "${page}"`));
   }
 
@@ -132,20 +161,40 @@ test("mobile bottom navigation uses permanent platform destinations", () => {
     'label: t\\("navigationWorkCenter", language\\)',
     'label: t\\("navigationChat", language\\)',
     'label: t\\("navigationMoments", language\\)',
-    'label: t\\("navigationAlerts", language\\)',
     'label: t\\("navigationProfile", language\\)',
   ]) {
     assert.match(personalMobileBlock, new RegExp(label));
   }
 
-  for (const page of ["businessDashboard", "contractorDashboard", "messagesInbox", "meetroMoments", "notifications", "profile"]) {
+  for (const page of [
+    "businessDashboard",
+    "contractorDashboard",
+    "messagesInbox",
+    "meetroMoments",
+    "profile",
+  ]) {
     assert.match(businessMobileBlock, new RegExp(`page: "${page}"`));
+  }
+
+  assert.equal(
+    (personalMobileBlock.match(/page: "/g) || []).length,
+    5
+  );
+  assert.equal(
+    (businessMobileBlock.match(/page: "/g) || []).length,
+    5
+  );
+
+  for (const block of [personalMobileBlock, businessMobileBlock]) {
+    assert.doesNotMatch(block, /page: "notifications"/);
+    assert.doesNotMatch(block, /navigationAlerts/);
   }
 
   assert.doesNotMatch(personalMobileBlock, /page: "upload"/);
   assert.doesNotMatch(personalMobileBlock, /label: t\("upload"\)/);
   assert.doesNotMatch(personalMobileBlock, /page: "discover"/);
   assert.doesNotMatch(personalMobileBlock, /label: "Community"/);
+
   assert.doesNotMatch(businessMobileBlock, /page: "businessLeads"/);
   assert.doesNotMatch(businessMobileBlock, /label: t\("leads"\)/);
   assert.doesNotMatch(businessMobileBlock, /page: "discover"/);
@@ -182,7 +231,7 @@ test("desktop sidebar and mobile dock share active state and navigation handlers
 test("desktop Property and Relationships actions report their own active page state", () => {
   const businessDesktopBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const businessDesktopNavItems = ["),
-    bottomNavSource.indexOf("useEffect(() => {\n    setKeyboardOpen")
+    bottomNavSource.indexOf("const businessDesktopShortcutItems = [")
   );
 
   assert.match(

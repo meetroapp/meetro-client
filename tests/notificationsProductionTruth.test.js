@@ -83,10 +83,27 @@ test("both legacy notification stores ignore stale records and reject browser-lo
   }
 });
 
-test("legacy notification stores remain unavailable while the global badge uses canonical Alert counts", () => {
+test("legacy notification stores remain unavailable while canonical Alert counts project to owning navigation", () => {
   assert.match(bottomNavSource, /subscribeAlertCounts/);
-  assert.match(bottomNavSource, /alertCountSnapshot\.response\.counts\.unread/);
-  assert.match(bottomNavSource, /item\.page === "notifications"/);
+  assert.match(
+    bottomNavSource,
+    /alertCountSnapshot\.response\?\.counts\?\.byCategory/
+  );
+  assert.match(bottomNavSource, /canonicalCategoryUnreadCount/);
+  assert.match(bottomNavSource, /communicationAlertCount/);
+  assert.match(bottomNavSource, /workCenterAlertCount/);
+  assert.match(bottomNavSource, /leadsAlertCount/);
+  assert.match(bottomNavSource, /profileAlertCount/);
+  assert.match(
+    bottomNavSource,
+    /canonicalCategoryUnreadCount\("business_verification"\)/
+  );
+
+  assert.doesNotMatch(
+    bottomNavSource,
+    /item\.page === "notifications"/
+  );
+
   assert.equal(getMeetroUnreadCount("homeowner"), 0);
   assert.equal(getMeetroUnreadCount("professional"), 0);
   assert.equal(getLegacyUnreadCount("homeowner"), 0);
