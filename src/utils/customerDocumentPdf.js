@@ -186,7 +186,14 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   const documentDate = model.documentDate ? formatCustomerDocumentDate(model.documentDate, model.locale) : "-";
   const dueDate = model.dueDate ? formatCustomerDocumentDate(model.dueDate, model.locale) : null;
   const meta = [
-    model.customer.name ? [copy.customer, model.customer.name] : null,
+    model.customer.name || model.projectLocation
+      ? [
+          copy.customer,
+          [model.customer.name, model.projectLocation]
+            .filter(Boolean)
+            .join("\n"),
+        ]
+      : null,
     model.projectTitle ? [copy.project, model.projectTitle] : null,
     [model.kind === "QUOTE" ? copy.quote : copy.invoice, model.documentNumber || (model.draft ? copy.draft : "-")],
     [dueDate ? `${copy.date} / ${copy.dueDate}` : copy.date, dueDate ? `${documentDate} / ${dueDate}` : documentDate],

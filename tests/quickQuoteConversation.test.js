@@ -151,6 +151,21 @@ test("explicit labor hours and rate produce a calculable labor row", () => {
   assert.equal(patch.totalOverride, undefined);
 });
 
+test("Quick Quote share presentation does not repeat specific labor and material totals", () => {
+  assert.match(builder, /const laborShareBlock = laborLines/);
+  assert.match(builder, /const materialShareBlock = materialLines/);
+  assert.match(builder, /\$\{laborShareBlock\}/);
+  assert.match(builder, /\$\{materialShareBlock\}/);
+  assert.doesNotMatch(
+    builder,
+    /pricing\.laborAmount\.toFixed\(2\)\}\n\$\{laborLines/
+  );
+  assert.doesNotMatch(
+    builder,
+    /pricing\.materialsAmount\.toFixed\(2\)\}\n\$\{materialLines/
+  );
+});
+
 test("flat conversational pricing stays flat while explicit hours and rate keep arithmetic", () => {
   const flat = buildQuickQuoteConversationPatch({
     prompt:

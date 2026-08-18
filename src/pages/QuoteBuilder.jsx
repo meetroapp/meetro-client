@@ -1328,6 +1328,14 @@ function QuoteBuilder({ setPage }) {
       .filter(Boolean)
       .join("\n");
 
+    const laborShareBlock = laborLines
+      ? `${isSpanish ? "Mano de obra" : "Labor"}:\n${laborLines}`
+      : `${isSpanish ? "Mano de obra" : "Labor"}: $${pricing.laborAmount.toFixed(2)}`;
+
+    const materialShareBlock = materialLines
+      ? `${isSpanish ? "Materiales" : "Materials"}:\n${materialLines}`
+      : `${isSpanish ? "Materiales" : "Materials"}: $${pricing.materialsAmount.toFixed(2)}`;
+
     return `${isSpanish ? "Cotización" : "Quote"}: ${projectTitle}
 
 ${isSpanish ? "Cliente" : "Customer"}: ${customerName || "—"}
@@ -1337,10 +1345,8 @@ ${isSpanish ? "Tipo / prioridad" : "Type / Priority"}: ${proposalType === "Custo
 ${isSpanish ? "Partidas" : "Line Items"}:
 ${serviceLines || "—"}
 
-${isSpanish ? "Mano de obra" : "Labor"}: $${pricing.laborAmount.toFixed(2)}
-${laborLines || ""}
-${isSpanish ? "Materiales" : "Materials"}: $${pricing.materialsAmount.toFixed(2)}
-${materialLines || ""}
+${laborShareBlock}
+${materialShareBlock}
 ${isSpanish ? "Tarifas" : "Fees"}: $${Number(pricing.feesAmount || 0).toFixed(2)}
 ${isSpanish ? "Tiempo estimado" : "Estimated timeline"}: ${timeline || "—"}
 ${isSpanish ? "Depósito" : "Deposit"}: ${depositRequired}${depositAmountValue ? ` · $${depositAmountValue.toFixed(2)}` : ""}

@@ -445,6 +445,42 @@ test("PDF preview succeeds when noopener returns a null window and cleans up onl
   ]);
 });
 
+test("Quick Quote PDF keeps the supplied service location with the customer identity", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "cristal Tejada",
+    customerLocation: "117 se 2nd ave",
+    projectTitle: "ceiling fan installation",
+    quoteDate: "2026-08-17",
+    lineItems: [],
+    subtotal: 0,
+    total: 340,
+  }, { branding: { businessName: "Handyman LLC" } });
+
+  assert.equal(model.projectLocation, "117 se 2nd ave");
+
+  const texts = [];
+  class RecordingJsPDF extends jsPDF {
+    constructor(...args) {
+      super(...args);
+      const text = this.text.bind(this);
+      this.text = (...textArgs) => {
+        texts.push(textArgs);
+        return text(...textArgs);
+      };
+    }
+  }
+
+  renderCustomerDocumentPdf(model, { jsPDFImpl: RecordingJsPDF });
+
+  const customerMetadata = texts.find(([value]) =>
+    Array.isArray(value) &&
+    value.includes("cristal Tejada") &&
+    value.includes("117 se 2nd ave")
+  );
+
+  assert.ok(customerMetadata);
+});
+
 test("metadata box grows around wrapped Project values and contains Scope of Work", () => {
   const model = buildQuickQuoteDocumentModel({
     customerName: "Paul Becker",
