@@ -15,6 +15,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const builder = read("src/pages/QuoteBuilder.jsx");
 const conversation = read("src/components/QuickQuoteConversation.jsx");
 const microphone = read("src/components/WorkflowMicrophoneInput.jsx");
+const quoteDraftMedia = read("src/utils/quoteDraftPhotoMedia.js");
 const styles = read("src/index.css");
 
 test("Quick Quote opens conversation-first while keeping the detailed editor secondary", () => {
@@ -83,20 +84,54 @@ test("conversation entry locks Speak Type Add Photos and one governed microphone
   assert.match(styles, /\.meetro-quote-builder-open \.meetro-assistant-launcher/);
 });
 
-test("Quick Quote supports transient photo review without claiming durable media authority", () => {
+test("Quick Quote uses governed private draft media without claiming canonical Quote attachment authority", () => {
   assert.match(builder, /quickQuoteDraftPhotos/);
   assert.match(builder, /pickNativeJobPhoto/);
-  assert.match(builder, /globalThis\.URL\.createObjectURL/);
-  assert.match(builder, /revokeObjectURL/);
-  assert.match(builder, /canAddPhotos=\{true\}/);
-  assert.match(builder, /onAddPhotos=/);
-  assert.match(builder, /onRemovePhoto=/);
-  assert.match(conversation, /photos\.map/);
-  assert.match(conversation, /quick-quote-photo-review/);
-  assert.match(conversation, /copy\.photoDraftNotice/);
+  assert.match(builder, /uploadQuoteDraftPhotos/);
+  assert.match(builder, /cleanupQuoteDraftPhoto/);
+  assert.match(
+    builder,
+    /canAddPhotos=\{quickQuotePhotoUploadEnabled\}/
+  );
+  assert.match(
+    builder,
+    /photoBusy=\{quickQuotePhotoBusy\}/
+  );
   assert.doesNotMatch(
-    `${builder}\n${conversation}`,
-    /\/media\/upload-signature|request-photo|localStorage[^\n]*quickQuoteDraftPhotos|sessionStorage[^\n]*quickQuoteDraftPhotos/i
+    builder,
+    /globalThis\.URL\.createObjectURL|revokeObjectURL/
+  );
+
+  assert.match(
+    quoteDraftMedia,
+    /QUOTE_DRAFT_PHOTO_PURPOSE = "quote-draft-photo"/
+  );
+  assert.match(
+    quoteDraftMedia,
+    /"\/media\/upload-signature"/
+  );
+  assert.match(
+    quoteDraftMedia,
+    /"\/media\/quote-draft-photo\/cleanup"/
+  );
+
+  assert.match(conversation, /photos\.map/);
+  assert.match(
+    conversation,
+    /quick-quote-photo-review/
+  );
+  assert.match(
+    conversation,
+    /copy\.photoDraftNotice/
+  );
+  assert.match(
+    conversation,
+    /disabled=\{photoBusy\}/
+  );
+
+  assert.doesNotMatch(
+    `${builder}\n${conversation}\n${quoteDraftMedia}`,
+    /request-photo|localStorage[^\n]*quickQuoteDraftPhotos|sessionStorage[^\n]*quickQuoteDraftPhotos/i
   );
 });
 

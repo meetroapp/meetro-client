@@ -4,6 +4,13 @@ import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
 import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
 import { pickNativeJobPhoto } from "../utils/cameraPhotoPicker.js";
+import {
+  QUOTE_DRAFT_PHOTO_MAX_COUNT,
+  cleanupQuoteDraftPhoto,
+  isQuickQuoteDraftPhotoUploadEnabled,
+  uploadQuoteDraftPhotos,
+  validateQuoteDraftPhotoFile,
+} from "../utils/quoteDraftPhotoMedia.js";
 import { getLanguage, t } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -75,44 +82,14 @@ function cleanText(value) {
   return String(value || "").trim();
 }
 
-const QUICK_QUOTE_DRAFT_PHOTO_MAX_COUNT = 5;
-const QUICK_QUOTE_DRAFT_PHOTO_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const QUICK_QUOTE_DRAFT_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
-
-function createQuickQuoteDraftPhoto(file) {
-  if (
-    !file ||
-    !QUICK_QUOTE_DRAFT_PHOTO_TYPES.has(String(file.type || "").toLowerCase()) ||
-    !Number.isInteger(file.size) ||
-    file.size <= 0 ||
-    file.size > QUICK_QUOTE_DRAFT_PHOTO_MAX_BYTES
-  ) {
-    return null;
-  }
-
-  const previewUrl =
-    typeof globalThis.URL?.createObjectURL === "function"
-      ? globalThis.URL.createObjectURL(file)
-      : "";
-
-  let revoked = false;
+function createQuickQuoteDraftPhoto(file, media) {
+  if (!media?.public_id || !media?.secure_url) return null;
 
   return {
-    id: `${file.name || "quote-photo"}-${file.size}-${Date.now()}-${Math.random()
-      .toString(16)
-      .slice(2)}`,
-    file,
-    name: file.name || "quote-photo",
-    previewUrl,
-    revoke() {
-      if (revoked) return;
-      revoked = true;
-      if (previewUrl) globalThis.URL?.revokeObjectURL?.(previewUrl);
-    },
+    id: media.public_id,
+    name: file?.name || "quote-photo",
+    previewUrl: media.secure_url,
+    media,
   };
 }
 
@@ -863,10 +840,13 @@ function QuoteBuilder({ setPage }) {
   const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
   const [quickQuoteDraftPhotos, setQuickQuoteDraftPhotos] = useState([]);
   const [quickQuotePhotoNotice, setQuickQuotePhotoNotice] = useState("");
+  const [quickQuotePhotoBusy, setQuickQuotePhotoBusy] = useState(false);
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
   const quickQuoteWorkingTimerRef = useRef(null);
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
+  const quickQuotePhotoUploadEnabled =
+    isQuickQuoteDraftPhotoUploadEnabled();
 
   const lineItemsTotal = lineItems.reduce(
     (sum, item) => sum + getEditableRowTotal(item),
@@ -925,7 +905,11 @@ function QuoteBuilder({ setPage }) {
       if (quickQuoteWorkingTimerRef.current) {
         window.clearTimeout(quickQuoteWorkingTimerRef.current);
       }
-      quickQuoteDraftPhotosRef.current.forEach((photo) => photo.revoke?.());
+      quickQuoteDraftPhotosRef.current.forEach((photo) => {
+        if (photo.media) {
+          void cleanupQuoteDraftPhoto({ media: photo.media });
+        }
+      });
       quickQuoteDraftPhotosRef.current = [];
     };
   }, []);
@@ -1632,39 +1616,93 @@ ${businessIdentity.businessName}`;
     }, 650);
   }
 
-  function addQuickQuoteDraftPhotoFiles(files = []) {
+  async function addQuickQuoteDraftPhotoFiles(files = []) {
+    if (!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy) return;
+
     const source = Array.from(files || []);
     if (!source.length) return;
 
+    const existingCount = quickQuoteDraftPhotosRef.current.length;
     const remaining =
-      QUICK_QUOTE_DRAFT_PHOTO_MAX_COUNT - quickQuoteDraftPhotos.length;
+      QUOTE_DRAFT_PHOTO_MAX_COUNT - existingCount;
 
     if (remaining <= 0) {
       setQuickQuotePhotoNotice(quickQuoteCopy.photoLimit);
       return;
     }
 
-    const accepted = [];
+    const acceptedFiles = [];
     let rejected = false;
 
     for (const file of source.slice(0, remaining)) {
-      const photo = createQuickQuoteDraftPhoto(file);
-      if (photo) accepted.push(photo);
+      const validation = validateQuoteDraftPhotoFile(file);
+      if (validation.ok) acceptedFiles.push(file);
       else rejected = true;
     }
 
     if (source.length > remaining) rejected = true;
 
-    if (accepted.length) {
-      setQuickQuoteDraftPhotos((current) => [...current, ...accepted]);
+    if (!acceptedFiles.length) {
+      setQuickQuotePhotoNotice(
+        rejected
+          ? quickQuoteCopy.photoInvalid
+          : quickQuoteCopy.photoLimit
+      );
+      return;
     }
 
-    setQuickQuotePhotoNotice(
-      rejected ? quickQuoteCopy.photoInvalid : quickQuoteCopy.photoDraftNotice
-    );
+    setQuickQuotePhotoBusy(true);
+    setQuickQuotePhotoNotice(quickQuoteCopy.photoUploading);
+
+    try {
+      const upload = await uploadQuoteDraftPhotos({
+        files: acceptedFiles,
+        existingCount,
+        setPage,
+      });
+
+      if (!upload.ok) {
+        setQuickQuotePhotoNotice(quickQuoteCopy.photoUploadFailed);
+        return;
+      }
+
+      const prepared = upload.photos
+        .map((media, index) =>
+          createQuickQuoteDraftPhoto(
+            acceptedFiles[index],
+            media
+          )
+        )
+        .filter(Boolean);
+
+      if (prepared.length !== upload.photos.length) {
+        await Promise.all(
+          upload.photos.map((media) =>
+            cleanupQuoteDraftPhoto({ media, setPage })
+          )
+        );
+        setQuickQuotePhotoNotice(quickQuoteCopy.photoUploadFailed);
+        return;
+      }
+
+      setQuickQuoteDraftPhotos((current) => [
+        ...current,
+        ...prepared,
+      ]);
+
+      setQuickQuotePhotoNotice(
+        rejected
+          ? quickQuoteCopy.photoInvalid
+          : quickQuoteCopy.photoDraftNotice
+      );
+    } finally {
+      setQuickQuotePhotoBusy(false);
+    }
   }
 
   async function openQuickQuotePhotoPicker() {
+    if (!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy) return;
+
     setQuickQuotePhotoNotice("");
 
     try {
@@ -1674,7 +1712,7 @@ ${businessIdentity.businessName}`;
       });
 
       if (result?.photos?.length) {
-        addQuickQuoteDraftPhotoFiles(
+        await addQuickQuoteDraftPhotoFiles(
           result.photos.map((photo) => photo.file).filter(Boolean)
         );
         return;
@@ -1689,19 +1727,46 @@ ${businessIdentity.businessName}`;
   }
 
   function handleQuickQuotePhotoInput(event) {
-    addQuickQuoteDraftPhotoFiles(event.target.files);
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
+    void addQuickQuoteDraftPhotoFiles(files);
   }
 
-  function removeQuickQuoteDraftPhoto(photoId) {
-    setQuickQuoteDraftPhotos((current) =>
-      current.filter((photo) => {
-        if (photo.id !== photoId) return true;
-        photo.revoke?.();
-        return false;
-      })
+  async function removeQuickQuoteDraftPhoto(photoId) {
+    if (quickQuotePhotoBusy) return;
+
+    const photo = quickQuoteDraftPhotosRef.current.find(
+      (item) => item.id === photoId
     );
-    setQuickQuotePhotoNotice(quickQuoteCopy.photoDraftNotice);
+
+    if (!photo?.media) return;
+
+    setQuickQuotePhotoBusy(true);
+    setQuickQuotePhotoNotice("");
+
+    try {
+      const cleaned = await cleanupQuoteDraftPhoto({
+        media: photo.media,
+        setPage,
+      });
+
+      if (!cleaned) {
+        setQuickQuotePhotoNotice(
+          quickQuoteCopy.photoCleanupFailed
+        );
+        return;
+      }
+
+      setQuickQuoteDraftPhotos((current) =>
+        current.filter((item) => item.id !== photoId)
+      );
+
+      setQuickQuotePhotoNotice(
+        quickQuoteCopy.photoDraftNotice
+      );
+    } finally {
+      setQuickQuotePhotoBusy(false);
+    }
   }
 
   const quickQuoteReviewSummary = {
@@ -1811,6 +1876,10 @@ ${businessIdentity.businessName}`;
           accept="image/jpeg,image/png,image/webp"
           multiple
           hidden
+          disabled={
+            !quickQuotePhotoUploadEnabled ||
+            quickQuotePhotoBusy
+          }
           onChange={handleQuickQuotePhotoInput}
         />
         <QuickQuoteConversation
@@ -1836,9 +1905,12 @@ ${businessIdentity.businessName}`;
           summary={quickQuoteReviewSummary}
           photoCount={quickQuoteDraftPhotos.length}
           photos={quickQuoteDraftPhotos}
-          canAddPhotos={true}
+          canAddPhotos={quickQuotePhotoUploadEnabled}
+          photoBusy={quickQuotePhotoBusy}
           onAddPhotos={() => void openQuickQuotePhotoPicker()}
-          onRemovePhoto={removeQuickQuoteDraftPhoto}
+          onRemovePhoto={(photoId) =>
+            void removeQuickQuoteDraftPhoto(photoId)
+          }
           notice={[copiedNotice, quickQuotePhotoNotice].filter(Boolean).join(" ")}
         />
         </>

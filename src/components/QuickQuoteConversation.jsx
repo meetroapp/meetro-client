@@ -38,6 +38,7 @@ export default function QuickQuoteConversation({
   photoCount = 0,
   photos = [],
   canAddPhotos = false,
+  photoBusy = false,
   onAddPhotos,
   onRemovePhoto,
   notice = "",
@@ -116,7 +117,11 @@ export default function QuickQuoteConversation({
                 <strong>{copy.photos}</strong>
                 <p>{copy.photoDraftNotice}</p>
               </div>
-              <button type="button" onClick={onAddPhotos}>
+              <button
+                type="button"
+                disabled={!canAddPhotos || photoBusy}
+                onClick={onAddPhotos}
+              >
                 <MeetroIcon name="photoCount" size={18} />
                 {copy.addPhotos}
               </button>
@@ -134,6 +139,7 @@ export default function QuickQuoteConversation({
                     ) : null}
                     <button
                       type="button"
+                      disabled={photoBusy}
                       onClick={() => onRemovePhoto?.(photo.id)}
                       aria-label={copy.removePhoto(index + 1)}
                     >
@@ -230,7 +236,7 @@ export default function QuickQuoteConversation({
           </button>
           <button
             type="button"
-            disabled={!canAddPhotos}
+            disabled={!canAddPhotos || photoBusy}
             aria-describedby={!canAddPhotos ? "quick-quote-photo-authority" : undefined}
             onClick={onAddPhotos}
           >
