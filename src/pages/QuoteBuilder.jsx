@@ -36,10 +36,8 @@ import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
 import {
   downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
-  previewCustomerDocumentPdf,
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
-import { buildQuickQuoteConversationPatch } from "../utils/quickQuoteConversationDraft.js";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
 
 function safeJson(value, fallback = null) {
@@ -848,6 +846,11 @@ function QuoteBuilder({ setPage }) {
     decisions: {},
     reviewingId: "",
   });
+  const [quickQuoteAnalysisState, setQuickQuoteAnalysisState] = useState({
+    available: false,
+    stale: false,
+    analyzedPrompt: "",
+  });
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
   const quickQuoteWorkingTimerRef = useRef(null);
@@ -1472,12 +1475,6 @@ ${businessIdentity.businessName}`;
     setCopiedNotice(exported ? copy.pdfReady : copy.pdfUnavailable);
   }
 
-  function previewQuickQuotePdf() {
-    const copy = getCustomerDocumentActionCopy(language);
-    const result = previewCustomerDocumentPdf(buildQuickQuotePdfModel());
-    setCopiedNotice(result.ok ? copy.pdfReady : copy.pdfUnavailable);
-  }
-
   async function shareQuickQuotePdf() {
     const copy = getCustomerDocumentActionCopy(language);
     const result = await shareCustomerDocumentPdf({
@@ -1511,111 +1508,11 @@ ${businessIdentity.businessName}`;
     setQuotePreviewOpen(true);
   }
 
-  function applyQuickQuoteConversationPatch(patch) {
-    if (patch.customerName !== undefined) setCustomerName(patch.customerName);
-    if (patch.customerLocation !== undefined) {
-      setCustomerLocation(patch.customerLocation);
-    }
-    if (patch.projectTitle !== undefined) setProjectTitle(patch.projectTitle);
-    if (patch.projectDescription !== undefined) setProjectDescription(patch.projectDescription);
-    if (patch.problemFound !== undefined) setProblemFound(patch.problemFound);
-    if (patch.recommendedSolution !== undefined) setRecommendedSolution(patch.recommendedSolution);
-    if (patch.timeline !== undefined) setTimeline(patch.timeline);
-    if (patch.estimatedDuration !== undefined) setEstimatedDuration(patch.estimatedDuration);
-    if (patch.totalOverride !== undefined) setTotalOverride(patch.totalOverride);
-    if (patch.notes !== undefined) setNotes(patch.notes);
-    if (patch.depositRequired !== undefined) setDepositRequired(patch.depositRequired);
-    if (patch.terms || patch.depositTerms) {
-      setTerms((current) =>
-        [patch.terms, patch.depositTerms].filter(Boolean).reduce((next, term) =>
-          cleanText(next).includes(term) ? next : [cleanText(next), term].filter(Boolean).join("\n"), current)
-      );
-    }
-    if (patch.lineItemDescription) {
-      setLineItems((rows) => rows.map((row, index) =>
-        index === 0 && !cleanText(row.description)
-          ? { ...row, description: patch.lineItemDescription }
-          : row
-      ));
-    }
-    if (patch.materialAmount !== undefined) {
-      setMaterialRows((rows) => {
-        const targetName = patch.materialItems?.[0]?.name || quickQuoteCopy.materialsAllowance;
-        const namedIndex = patch.materialItems?.[0]?.name
-          ? rows.findIndex((row) => cleanText(row.name).toLowerCase() === targetName.toLowerCase())
-          : -1;
-        const index = namedIndex >= 0 ? namedIndex : rows.findIndex((row) => !cleanText(row.name));
-        if (index < 0) {
-          return [
-            ...rows,
-            normalizeQuoteMaterialItem(
-              { name: targetName, total: patch.materialAmount },
-              rows.length
-            ),
-          ];
-        }
-
-        return rows.map((row, rowIndex) =>
-          rowIndex === index
-            ? {
-                ...row,
-                name: cleanText(row.name) || targetName,
-                quantity: "",
-                cost: "",
-                total: patch.materialAmount,
-              }
-            : row
-        );
-      });
-    }
-    if (Array.isArray(patch.materialItems)) {
-      setMaterialRows((rows) => patch.materialItems.reduce((nextRows, item) => {
-        const itemName = cleanText(item.name);
-        const existingIndex = nextRows.findIndex((row) => cleanText(row.name).toLowerCase() === itemName.toLowerCase());
-        const blankIndex = nextRows.findIndex((row) => !cleanText(row.name));
-        const row = {
-          ...item,
-          quantity: cleanText(item.quantity),
-          cost: cleanText(item.cost ?? item.unitPrice ?? item.price),
-          total: cleanText(item.total ?? item.amount ?? item.lineTotal),
-        };
-        if (existingIndex >= 0) return nextRows.map((current, index) => index === existingIndex ? { ...current, ...row } : current);
-        if (blankIndex >= 0) return nextRows.map((current, index) => index === blankIndex ? { ...current, ...row } : current);
-        return [...nextRows, normalizeQuoteMaterialItem(row, nextRows.length)];
-      }, rows));
-    }
-    if (Array.isArray(patch.laborItems)) {
-      setLaborRows((rows) => patch.laborItems.reduce((nextRows, item) => {
-        const description = cleanText(item.description);
-        const existingIndex = nextRows.findIndex((row) => cleanText(row.description).toLowerCase() === description.toLowerCase());
-        const blankIndex = nextRows.findIndex((row) => !cleanText(row.description) || cleanText(row.description).toLowerCase() === "labor");
-        const row = { ...item, total: cleanText(item.total) };
-        if (existingIndex >= 0) return nextRows.map((current, index) => index === existingIndex ? { ...current, ...row } : current);
-        if (blankIndex >= 0) return nextRows.map((current, index) => index === blankIndex ? { ...current, ...row } : current);
-        return [...nextRows, normalizeQuoteLaborItem(row, nextRows.length, isSpanish)];
-      }, rows));
-    }
-  }
-
-  async function prepareQuickQuoteConversation(revision = false) {
+  async function prepareQuickQuoteConversation() {
     const instruction = cleanText(quickQuotePrompt);
     const photos = quickQuoteDraftPhotosRef.current;
 
     if (!instruction && photos.length === 0) return;
-
-    const patch = instruction
-      ? buildQuickQuoteConversationPatch({
-          prompt: instruction,
-          revision,
-          current: {
-            projectTitle,
-            projectDescription,
-            problemFound,
-            recommendedSolution,
-            lineItemDescription: lineItems[0]?.description || "",
-          },
-        })
-      : null;
 
     if (quickQuoteWorkingTimerRef.current) {
       window.clearTimeout(quickQuoteWorkingTimerRef.current);
@@ -1624,24 +1521,46 @@ ${businessIdentity.businessName}`;
     setQuickQuotePhotoNotice("");
     setQuickQuoteView("working");
 
-    // Preserve the existing deterministic text-only Quick Quote path.
+    /*
+     * R1-01 AUTHORITY BOUNDARY
+     *
+     * Job Analysis is private pre-quote work.
+     * Professional text and AI suggestions must not populate Quote,
+     * pricing, labor, materials, customer, deposit, or other
+     * commercial fields during this stage.
+     *
+     * Text-only entry remains a private source-information analysis
+     * until governed continuation authority is added in later R1 work.
+     */
     if (photos.length === 0) {
       quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
-        if (patch) applyQuickQuoteConversationPatch(patch);
-        setQuickQuotePrompt("");
+        setQuickQuoteAnalysisState({
+          available: true,
+          stale: false,
+          analyzedPrompt: instruction,
+        });
+
+        setQuickQuotePhotoAssistant({
+          busy: false,
+          error: "",
+          proposal: null,
+          decisions: {},
+          reviewingId: "",
+        });
+
         setQuickQuoteView("review");
         quickQuoteWorkingTimerRef.current = null;
       }, 650);
+
       return;
     }
 
-    setQuickQuotePhotoAssistant({
+    setQuickQuotePhotoAssistant((current) => ({
+      ...current,
       busy: true,
       error: "",
-      proposal: null,
-      decisions: {},
       reviewingId: "",
-    });
+    }));
 
     try {
       const result = await requestWorkflowIntelligence({
@@ -1654,11 +1573,16 @@ ${businessIdentity.businessName}`;
         setPage,
       });
 
-      // Professional-entered text remains explicit input and may organize
-      // the working draft. Photo intelligence remains review-only below.
-      if (patch) applyQuickQuoteConversationPatch(patch);
+      /*
+       * Preserve the exact professional input.
+       * Do not copy it into Quote fields and do not clear it after analysis.
+       */
+      setQuickQuoteAnalysisState({
+        available: true,
+        stale: false,
+        analyzedPrompt: instruction,
+      });
 
-      setQuickQuotePrompt("");
       setQuickQuotePhotoAssistant({
         busy: false,
         error: "",
@@ -1666,105 +1590,20 @@ ${businessIdentity.businessName}`;
         decisions: {},
         reviewingId: "",
       });
+
       setQuickQuoteView("review");
     } catch (error) {
       const message =
         error?.message || quickQuoteCopy.photoAnalysisFailed;
 
-      setQuickQuotePhotoAssistant({
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
         busy: false,
         error: message,
-        proposal: null,
-        decisions: {},
         reviewingId: "",
-      });
-      setQuickQuoteView(revision ? "revision" : "entry");
-    }
-  }
+      }));
 
-  function appendReviewedQuickQuoteText(setter, value) {
-    const reviewed = cleanText(value);
-    if (!reviewed) return;
-
-    setter((current) => {
-      const existing = cleanText(current);
-      if (!existing) return reviewed;
-
-      if (
-        existing.toLowerCase().includes(reviewed.toLowerCase())
-      ) {
-        return current;
-      }
-
-      return `${existing}\n${reviewed}`;
-    });
-  }
-
-  function applyReviewedQuickQuotePhotoItem(category, value) {
-    const reviewed = cleanText(value);
-    if (!reviewed) return;
-
-    if (category === "observed") {
-      appendReviewedQuickQuoteText(setProblemFound, reviewed);
-      return;
-    }
-
-    if (category === "needsVerification") {
-      appendReviewedQuickQuoteText(setNotes, reviewed);
-      return;
-    }
-
-    if (category === "repairSuggestions") {
-      appendReviewedQuickQuoteText(
-        setRecommendedSolution,
-        reviewed
-      );
-      return;
-    }
-
-    if (category === "materialSuggestions") {
-      setMaterialRows((rows) => {
-        const materialName = reviewed.slice(0, 500);
-
-        if (
-          rows.some(
-            (row) =>
-              cleanText(row.name).toLowerCase() ===
-              materialName.toLowerCase()
-          )
-        ) {
-          return rows;
-        }
-
-        const blankIndex = rows.findIndex(
-          (row) =>
-            ![
-              row.name,
-              row.quantity,
-              row.cost,
-              row.total,
-            ].some((item) => cleanText(item))
-        );
-
-        if (blankIndex >= 0) {
-          return rows.map((row, index) =>
-            index === blankIndex
-              ? {
-                  ...row,
-                  name: materialName,
-                }
-              : row
-          );
-        }
-
-        return [
-          ...rows,
-          normalizeQuoteMaterialItem(
-            { name: materialName },
-            rows.length
-          ),
-        ];
-      });
+      setQuickQuoteView("entry");
     }
   }
 
@@ -1820,15 +1659,22 @@ ${businessIdentity.businessName}`;
         setPage,
       });
 
-      // This is the only point where photo intelligence may influence
-      // the local working draft, after explicit professional review.
-      if (normalizedAction !== "REJECTED") {
-        applyReviewedQuickQuotePhotoItem(
-          category,
-          reviewedText
-        );
-      }
-
+      /*
+       * R1-01:
+       * Review decisions are recorded as governed evidence only.
+       *
+       * ACCEPTED and EDITED items must NOT yet write into:
+       * - problemFound
+       * - recommendedSolution
+       * - notes
+       * - materialRows
+       * - laborRows
+       * - pricing
+       * - customer fields
+       * - Quote state
+       *
+       * R1-05 will introduce Reviewed Solution / Materials List authority.
+       */
       setQuickQuotePhotoAssistant((current) => ({
         ...current,
         reviewingId: "",
@@ -1837,6 +1683,7 @@ ${businessIdentity.businessName}`;
           [item.id]: {
             action: normalizedAction,
             text: reviewedText,
+            category,
           },
         },
       }));
@@ -1849,6 +1696,7 @@ ${businessIdentity.businessName}`;
         error:
           error?.message || quickQuoteCopy.photoReviewFailed,
       }));
+
       return false;
     }
   }
@@ -1927,23 +1775,16 @@ ${businessIdentity.businessName}`;
         ...prepared,
       ]);
 
-      setQuickQuotePhotoAssistant({
-        busy: false,
-        error: "",
-        proposal: null,
-        decisions: {},
-        reviewingId: "",
-      });
+      const analysisWasAvailable =
+        quickQuoteAnalysisState.available;
 
-      const photoSetChangedAfterReview =
-        ["review", "details"].includes(quickQuoteView);
-
-      if (photoSetChangedAfterReview) {
+      if (analysisWasAvailable) {
+        markQuickQuoteAnalysisStale();
         setQuickQuoteView("entry");
       }
 
       setQuickQuotePhotoNotice(
-        photoSetChangedAfterReview
+        analysisWasAvailable
           ? quickQuoteCopy.photoChangedNotice
           : rejected
           ? quickQuoteCopy.photoInvalid
@@ -1986,6 +1827,48 @@ ${businessIdentity.businessName}`;
     void addQuickQuoteDraftPhotoFiles(files);
   }
 
+  function markQuickQuoteAnalysisStale() {
+    setQuickQuoteAnalysisState((current) =>
+      current.available
+        ? {
+            ...current,
+            stale: true,
+          }
+        : current
+    );
+  }
+
+  function handleQuickQuotePromptChange(value) {
+    setQuickQuotePrompt(value);
+
+    /*
+     * R1-01 presentation-only stale state.
+     * This is not a durable evidence fingerprint or server authority.
+     * Any professional description change after analysis requires
+     * a new analysis before the previous result may be treated as current.
+     */
+    markQuickQuoteAnalysisStale();
+  }
+
+  function backToQuickQuoteJobDetails() {
+    /*
+     * Internal workflow navigation only.
+     * Do not clean media, clear analysis, or navigate out of QuoteBuilder.
+     */
+    setQuickQuoteView("entry");
+  }
+
+  function returnToQuickQuoteAnalysis() {
+    if (
+      !quickQuoteAnalysisState.available ||
+      quickQuoteAnalysisState.stale
+    ) {
+      return;
+    }
+
+    setQuickQuoteView("review");
+  }
+
   async function removeQuickQuoteDraftPhoto(photoId) {
     if (quickQuotePhotoBusy) return;
 
@@ -2015,23 +1898,16 @@ ${businessIdentity.businessName}`;
         current.filter((item) => item.id !== photoId)
       );
 
-      setQuickQuotePhotoAssistant({
-        busy: false,
-        error: "",
-        proposal: null,
-        decisions: {},
-        reviewingId: "",
-      });
+      const analysisWasAvailable =
+        quickQuoteAnalysisState.available;
 
-      const photoSetChangedAfterReview =
-        ["review", "details"].includes(quickQuoteView);
-
-      if (photoSetChangedAfterReview) {
+      if (analysisWasAvailable) {
+        markQuickQuoteAnalysisStale();
         setQuickQuoteView("entry");
       }
 
       setQuickQuotePhotoNotice(
-        photoSetChangedAfterReview
+        analysisWasAvailable
           ? quickQuoteCopy.photoChangedNotice
           : quickQuoteCopy.photoDraftNotice
       );
@@ -2040,63 +1916,141 @@ ${businessIdentity.businessName}`;
     }
   }
 
-  const quickQuoteReviewSummary = {
-    customerName,
-    customerLocation,
-    scope: recommendedSolution || projectDescription || problemFound,
-    materials: materialRows
-      .filter((item) => cleanText(item.name))
-      .map((item) => {
-        const total = getEditableRowTotal(item, "quantity", "cost");
-        return [item.name, total > 0 ? `$${total.toFixed(2)}` : ""].filter(Boolean).join(" · ");
-      }),
-    labor: laborRows
-      .filter((item) => cleanText(item.description) && getEditableRowTotal(item, "hours", "rate") > 0)
-      .map((item) => `${item.description} · $${getEditableRowTotal(item, "hours", "rate").toFixed(2)}`)
-      .join(" · "),
-    duration: estimatedDuration || timeline,
-    paymentTerms: terms,
-    notes,
-    total: calculatedTotal,
-  };
+  function navigateFromQuoteBuilder() {
+    /*
+     * Preserve the existing destination-selection logic exactly.
+     * This function is called only after any required R1-01
+     * transient-media cleanup has completed.
+     */
+    if (restoreConversationOriginContext(setPage)) return;
 
-  function openQuickQuoteDetails() {
-    setQuickQuoteView("details");
-    window.requestAnimationFrame(() => {
-      const details = document.getElementById("quick-quote-full-details");
-      details?.focus({ preventScroll: true });
-      details?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    if (isEditingExistingQuote) {
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      setPage("workCenter");
+    } else if (isRevisedQuoteFlow) {
+      setPage("conversationThread");
+    } else if (isBusinessToolsReturn) {
+      setPage("businessCommandCenter");
+    } else if (isDesktopSidebarQuickQuote && quoteBuilderReturnPage) {
+      localStorage.removeItem("quoteBuilderReturnPage");
+      localStorage.removeItem("quoteBuilderSource");
+      setPage(quoteBuilderReturnPage);
+    } else if (isWorkCenterReturn) {
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      setPage("workCenter");
+    } else {
+      setPage("businessLeads");
+    }
   }
 
+  async function exitQuickQuoteAnalysis() {
+    const currentPhotos = [
+      ...quickQuoteDraftPhotosRef.current,
+    ];
+
+    const hasPrivateAnalysis =
+      Boolean(cleanText(quickQuotePrompt)) ||
+      currentPhotos.length > 0 ||
+      quickQuoteAnalysisState.available ||
+      Boolean(quickQuotePhotoAssistant.proposal);
+
+    if (hasPrivateAnalysis) {
+      const confirmed = window.confirm(
+        `${quickQuoteCopy.discardTitle}\n\n${quickQuoteCopy.discardBody}`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    /*
+     * Full workflow exit is different from internal Back.
+     * Every governed transient photo must be explicitly cleaned
+     * before navigation is allowed.
+     */
+    const failedPhotoIds = new Set();
+
+    for (const photo of currentPhotos) {
+      if (!photo?.media) {
+        continue;
+      }
+
+      let cleaned;
+
+      try {
+        cleaned = await cleanupQuoteDraftPhoto({
+          media: photo.media,
+          setPage,
+        });
+      } catch {
+        cleaned = false;
+      }
+
+      if (!cleaned) {
+        failedPhotoIds.add(photo.id);
+      }
+    }
+
+    if (failedPhotoIds.size > 0) {
+      /*
+       * Successfully cleaned refs are removed immediately.
+       * Failed refs remain so cleanup can be retried.
+       * Do not navigate out of the workflow.
+       */
+      const failedPhotos = currentPhotos.filter(
+        (photo) => failedPhotoIds.has(photo.id)
+      );
+
+      quickQuoteDraftPhotosRef.current = failedPhotos;
+      setQuickQuoteDraftPhotos(failedPhotos);
+      setQuickQuotePhotoNotice(
+        quickQuoteCopy.photoCleanupFailed
+      );
+
+      return;
+    }
+
+    /*
+     * Clear the ref BEFORE setPage/navigating so the defensive
+     * unmount cleanup does not issue duplicate cleanup requests.
+     */
+    quickQuoteDraftPhotosRef.current = [];
+
+    setQuickQuoteDraftPhotos([]);
+    setQuickQuotePrompt("");
+    setQuickQuotePhotoNotice("");
+    setQuickQuotePhotoAssistant({
+      busy: false,
+      error: "",
+      proposal: null,
+      decisions: {},
+      reviewingId: "",
+    });
+    setQuickQuoteAnalysisState({
+      available: false,
+      stale: false,
+      analyzedPrompt: "",
+    });
+    setQuickQuoteView("entry");
+
+    navigateFromQuoteBuilder();
+  }
 
   return (
     <div className="app-page meetro-form-page" style={page}>
       <button
         style={backButton}
         onClick={() => {
-          if (restoreConversationOriginContext(setPage)) return;
-
-          if (isEditingExistingQuote) {
-            localStorage.removeItem("selectedQuoteForEdit");
-            localStorage.setItem("meetroWorkCenterTab", "quotes");
-            localStorage.setItem("activeWorkCenterTab", "quotes");
-            setPage("workCenter");
-          } else if (isRevisedQuoteFlow) {
-            setPage("conversationThread");
-          } else if (isBusinessToolsReturn) {
-            setPage("businessCommandCenter");
-          } else if (isDesktopSidebarQuickQuote && quoteBuilderReturnPage) {
-            localStorage.removeItem("quoteBuilderReturnPage");
-            localStorage.removeItem("quoteBuilderSource");
-            setPage(quoteBuilderReturnPage);
-          } else if (isWorkCenterReturn) {
-            localStorage.setItem("meetroWorkCenterTab", "quotes");
-            localStorage.setItem("activeWorkCenterTab", "quotes");
-            setPage("workCenter");
-          } else {
-            setPage("businessLeads");
+          if (isUniversalQuickQuote) {
+            void exitQuickQuoteAnalysis();
+            return;
           }
+
+          navigateFromQuoteBuilder();
         }}
       >
         ←{" "}
@@ -2155,41 +2109,42 @@ ${businessIdentity.businessName}`;
         />
         <QuickQuoteConversation
           language={language}
-          view={quickQuoteView === "details" ? "review" : quickQuoteView}
+          view={quickQuoteView}
           prompt={quickQuotePrompt}
-          onPromptChange={setQuickQuotePrompt}
+          onPromptChange={handleQuickQuotePromptChange}
           onPrepare={prepareQuickQuoteConversation}
-          onOpenRevision={() => {
-            setQuickQuotePrompt("");
-            setQuickQuoteView("revision");
-          }}
-          onCancelRevision={() => setQuickQuoteView("review")}
-          onEditDetails={openQuickQuoteDetails}
-          detailsExpanded={quickQuoteView === "details"}
-          onToggleDetails={() => {
-            if (quickQuoteView === "details") setQuickQuoteView("review");
-            else openQuickQuoteDetails();
-          }}
-          onPreviewPdf={previewQuickQuotePdf}
-          onSharePdf={() => void shareQuickQuotePdf()}
+          onBackToDetails={backToQuickQuoteJobDetails}
+          onReturnToAnalysis={returnToQuickQuoteAnalysis}
+          analysisAvailable={
+            quickQuoteAnalysisState.available
+          }
+          analysisStale={
+            quickQuoteAnalysisState.stale
+          }
           setPage={setPage}
-          summary={quickQuoteReviewSummary}
           photoCount={quickQuoteDraftPhotos.length}
           photos={quickQuoteDraftPhotos}
           canAddPhotos={quickQuotePhotoUploadEnabled}
           photoBusy={quickQuotePhotoBusy}
-          onAddPhotos={() => void openQuickQuotePhotoPicker()}
+          onAddPhotos={() =>
+            void openQuickQuotePhotoPicker()
+          }
           onRemovePhoto={(photoId) =>
             void removeQuickQuoteDraftPhoto(photoId)
           }
-          photoProposal={quickQuotePhotoAssistant.proposal}
-          photoDecisions={quickQuotePhotoAssistant.decisions}
-          photoReviewBusyId={quickQuotePhotoAssistant.reviewingId}
+          photoProposal={
+            quickQuotePhotoAssistant.proposal
+          }
+          photoDecisions={
+            quickQuotePhotoAssistant.decisions
+          }
+          photoReviewBusyId={
+            quickQuotePhotoAssistant.reviewingId
+          }
           onReviewPhotoSuggestion={
             reviewQuickQuotePhotoSuggestion
           }
           notice={[
-            copiedNotice,
             quickQuotePhotoNotice,
             quickQuotePhotoAssistant.error,
           ]
@@ -2198,7 +2153,7 @@ ${businessIdentity.businessName}`;
         />
         </>
       ) : null}
-      {(!isUniversalQuickQuote || quickQuoteView === "details") && (
+      {!isUniversalQuickQuote && (
         <section
           id={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}
           className={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}

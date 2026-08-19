@@ -18,12 +18,24 @@ const microphone = read("src/components/WorkflowMicrophoneInput.jsx");
 const quoteDraftMedia = read("src/utils/quoteDraftPhotoMedia.js");
 const styles = read("src/index.css");
 
-test("Quick Quote opens conversation-first while keeping the detailed editor secondary", () => {
+
+test("universal Quick Quote opens Job Analysis and keeps the full Quote editor out of the analysis flow", () => {
   assert.match(builder, /isUniversalQuickQuote \? "entry" : "details"/);
   assert.match(builder, /<QuickQuoteConversation/);
-  assert.match(builder, /view=\{quickQuoteView === "details" \? "review" : quickQuoteView\}/);
-  assert.match(builder, /\(!isUniversalQuickQuote \|\| quickQuoteView === "details"\)/);
-  assert.match(builder, /onEditDetails=\{openQuickQuoteDetails\}/);
+  assert.match(builder, /view=\{quickQuoteView\}/);
+  assert.match(builder, /\{!isUniversalQuickQuote && \(/);
+
+  assert.doesNotMatch(
+    builder,
+    /quickQuoteView === "details"/
+  );
+
+  assert.doesNotMatch(
+    builder,
+    /onEditDetails=\{/
+  );
+
+  // Preserve the existing real Quote editor for non-universal flows.
   assert.match(builder, /Customer Name/);
   assert.match(builder, /Manual Total Override/);
 });
@@ -40,38 +52,92 @@ test("Quick Quote seeds customer document dates from the local calendar instead 
   );
 });
 
-test("entry and review expose concise optional-workflow guidance", () => {
+
+test("entry and analysis copy describe private pre-quote Job Analysis", () => {
   const copy = getQuickQuoteConversationCopy("en");
-  assert.equal(copy.entryGuidanceTitle, "Tell Meetro about the job in your own words.");
-  assert.match(copy.entryGuidanceBody, /review everything before anything is shared/i);
-  assert.equal(copy.reviewGuidanceTitle, "Review what Meetro prepared.");
-  assert.match(copy.reviewGuidanceBody, /edit any detail yourself/i);
+
+  assert.equal(copy.createTitle, "Start Job Analysis");
+  assert.equal(copy.reviewTitle, "Job Analysis");
+  assert.equal(copy.prepare, "Analyze Job");
+
+  assert.equal(
+    copy.entryGuidanceTitle,
+    "Tell Meetro about the job in your own words."
+  );
+
+  assert.match(
+    copy.entryGuidanceBody,
+    /privately analyze the job details and evidence/i
+  );
+
+  assert.match(
+    copy.entryGuidanceBody,
+    /nothing is turned into a Quote or shared/i
+  );
+
+  assert.equal(
+    copy.reviewGuidanceTitle,
+    "Review Meetro’s private job analysis."
+  );
+
+  assert.match(
+    copy.reviewGuidanceBody,
+    /observations, verification needs, repair suggestions/i
+  );
+
   assert.match(conversation, /copy\.entryGuidanceTitle/);
   assert.match(conversation, /copy\.reviewGuidanceTitle/);
+  assert.match(conversation, /copy\.workingPrivately/);
 });
 
-test("full details are collapsed by default and share one accessible editor", () => {
-  assert.match(conversation, /detailsExpanded = false/);
-  assert.match(conversation, /aria-expanded=\{detailsExpanded\}/);
-  assert.match(conversation, /aria-controls="quick-quote-full-details"/);
-  assert.match(conversation, /onClick=\{onToggleDetails\}/);
-  assert.match(builder, /detailsExpanded=\{quickQuoteView === "details"\}/);
-  assert.match(builder, /setQuickQuoteView\("review"\)/);
-  assert.match(builder, /setQuickQuoteView\("details"\)/);
-  assert.equal((builder.match(/id=\{isUniversalQuickQuote \? "quick-quote-full-details"/g) || []).length, 1);
-  assert.match(builder, /details\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(builder, /details\?\.scrollIntoView/);
+
+test("Job Analysis provides internal Back and Return controls without exposing full Quote details", () => {
+  assert.match(conversation, /onBackToDetails/);
+  assert.match(conversation, /onReturnToAnalysis/);
+  assert.match(conversation, /copy\.backToJobDetails/);
+  assert.match(conversation, /copy\.returnToJobAnalysis/);
+  assert.match(conversation, /quick-quote-analysis-back/);
+  assert.match(conversation, /quick-quote-return-analysis/);
+
+  assert.match(
+    builder,
+    /onBackToDetails=\{backToQuickQuoteJobDetails\}/
+  );
+
+  assert.match(
+    builder,
+    /onReturnToAnalysis=\{returnToQuickQuoteAnalysis\}/
+  );
+
+  assert.doesNotMatch(conversation, /detailsExpanded/);
+  assert.doesNotMatch(conversation, /onToggleDetails/);
+  assert.doesNotMatch(conversation, /quick-quote-full-details/);
+
+  assert.match(builder, /\{!isUniversalQuickQuote && \(/);
 });
 
-test("conversation revisions and manual fields update the same review and PDF draft", () => {
-  assert.match(builder, /applyQuickQuoteConversationPatch\(patch\)/);
-  assert.match(builder, /value=\{projectDescription\}/);
-  assert.match(builder, /onChange=\{\(event\) => setProjectDescription\(event\.target\.value\)\}/);
-  assert.match(builder, /scope: recommendedSolution \|\| projectDescription \|\| problemFound/);
-  assert.match(builder, /summary=\{quickQuoteReviewSummary\}/);
+
+test("Job Analysis does not patch Quote state while real Quote document architecture remains available elsewhere", () => {
+  assert.doesNotMatch(
+    builder,
+    /applyQuickQuoteConversationPatch/
+  );
+
+  assert.doesNotMatch(
+    builder,
+    /buildQuickQuoteConversationPatch/
+  );
+
+  // Existing non-universal Quote/document architecture remains intact.
   assert.match(builder, /function buildQuickQuotePdfModel\(\)/);
-  assert.match(builder, /model: buildQuickQuotePdfModel\(\)/);
-  assert.doesNotMatch(builder, /quickQuoteDetailsDraft|setQuickQuoteDetailsDraft/);
+  assert.match(builder, /async function exportQuickQuotePdf\(\)/);
+  assert.match(builder, /async function shareQuickQuotePdf\(\)/);
+  assert.match(builder, /buildQuickQuoteDocumentModel/);
+
+  assert.doesNotMatch(
+    builder,
+    /quickQuoteReviewSummary/
+  );
 });
 
 test("conversation entry locks Speak Type Add Photos and one governed microphone", () => {
@@ -159,61 +225,105 @@ test("Quick Quote can start from photos without requiring typed text", () => {
   );
 });
 
-test("photo-backed Quick Quote uses governed Ask Meetro while text-only keeps the deterministic path", () => {
+
+test("photo-backed Job Analysis uses governed Ask Meetro while text-only analysis remains private and non-Quote", () => {
   assert.match(
     builder,
     /INTELLIGENCE_OPERATION\.QUICK_QUOTE_PHOTO/
   );
+
   assert.match(
     builder,
     /photos: photos\.map\(\(photo\) => photo\.media\)/
   );
+
   assert.match(
     builder,
     /requestWorkflowIntelligence\(\{/
   );
-  assert.match(
-    builder,
-    /quickQuoteWorkingTimerRef\.current = window\.setTimeout/
-  );
-  assert.match(
-    builder,
-    /if \(patch\) applyQuickQuoteConversationPatch\(patch\)/
-  );
-});
-
-test("photo intelligence requires explicit review before affecting the working draft", () => {
-  assert.match(
-    builder,
-    /async function reviewQuickQuotePhotoSuggestion/
-  );
-  assert.match(builder, /recordWorkflowReview\(\{/);
-  assert.match(
-    builder,
-    /if \(normalizedAction !== "REJECTED"\)/
-  );
-  assert.match(
-    builder,
-    /applyReviewedQuickQuotePhotoItem/
-  );
 
   const start = builder.indexOf(
-    "function applyReviewedQuickQuotePhotoItem"
+    "async function prepareQuickQuoteConversation"
   );
+
   const end = builder.indexOf(
     "async function reviewQuickQuotePhotoSuggestion",
     start
   );
-  const applicationBoundary = builder.slice(start, end);
 
-  assert.match(applicationBoundary, /setProblemFound/);
-  assert.match(applicationBoundary, /setNotes/);
-  assert.match(applicationBoundary, /setRecommendedSolution/);
-  assert.match(applicationBoundary, /setMaterialRows/);
+  assert.ok(start >= 0 && end > start);
+
+  const analysisBoundary = builder.slice(start, end);
+
+  assert.match(
+    analysisBoundary,
+    /quickQuoteWorkingTimerRef\.current = window\.setTimeout/
+  );
+
+  assert.match(
+    analysisBoundary,
+    /setQuickQuoteAnalysisState/
+  );
 
   assert.doesNotMatch(
-    applicationBoundary,
-    /setTotalOverride|setLaborRows|setPricingMethod|retailer|markup|margin/
+    analysisBoundary,
+    /applyQuickQuoteConversationPatch|buildQuickQuoteConversationPatch/
+  );
+
+  assert.doesNotMatch(
+    analysisBoundary,
+    /setQuickQuotePrompt\(""\)/
+  );
+
+  assert.doesNotMatch(
+    analysisBoundary,
+    /setCustomerName|setCustomerLocation|setProblemFound|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
+  );
+});
+
+
+test("photo intelligence review records governed decisions without mutating Quote fields", () => {
+  const start = builder.indexOf(
+    "async function reviewQuickQuotePhotoSuggestion"
+  );
+
+  const end = builder.indexOf(
+    "async function addQuickQuoteDraftPhotoFiles",
+    start
+  );
+
+  assert.ok(start >= 0 && end > start);
+
+  const reviewBoundary = builder.slice(start, end);
+
+  assert.match(
+    reviewBoundary,
+    /recordWorkflowReview\(\{/
+  );
+
+  assert.match(
+    reviewBoundary,
+    /action: normalizedAction/
+  );
+
+  assert.match(
+    reviewBoundary,
+    /\[item\.id\]: \{/
+  );
+
+  assert.match(
+    reviewBoundary,
+    /text: reviewedText/
+  );
+
+  assert.doesNotMatch(
+    reviewBoundary,
+    /setProblemFound|setNotes|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
+  );
+
+  assert.doesNotMatch(
+    reviewBoundary,
+    /applyReviewedQuickQuotePhotoItem/
   );
 
   assert.match(conversation, /copy\.useSuggestion/);
@@ -255,62 +365,62 @@ test("photo review language is complete across supported Quick Quote locales", (
   }
 });
 
-test(
-  "photo review preserves edited wording, mobile containment, and current-photo analysis",
-  () => {
-    assert.match(
-      conversation,
-      /decision\?\.text \|\| item\.text/
-    );
-    assert.match(
-      conversation,
-      /quick-quote-photo-suggestion/
-    );
-    assert.match(
-      conversation,
-      /quick-quote-photo-edit/
-    );
-    assert.match(
-      conversation,
-      /quick-quote-photo-decision/
-    );
 
-    assert.match(
-      styles,
-      /\.quick-quote-photo-suggestion-list/
-    );
-    assert.match(
-      styles,
-      /\.quick-quote-photo-suggestion/
-    );
-    assert.match(
-      styles,
-      /\.quick-quote-photo-edit/
-    );
-    assert.match(
-      styles,
-      /width: 100%/
-    );
-    assert.match(
-      styles,
-      /box-sizing: border-box/
-    );
+test("photo review preserves edited wording and evidence changes mark prior analysis stale", () => {
+  assert.match(
+    conversation,
+    /decision\?\.text \|\| item\.text/
+  );
 
-    assert.equal(
-      (
-        builder.match(
-          /\["review", "details"\]\.includes\(quickQuoteView\)/g
-        ) || []
-      ).length,
-      2
-    );
+  assert.match(
+    conversation,
+    /quick-quote-photo-suggestion/
+  );
 
-    assert.doesNotMatch(
-      builder,
-      /setQuickQuotePhotoNotice\(message\)/
-    );
-  }
-);
+  assert.match(
+    conversation,
+    /quick-quote-photo-edit/
+  );
+
+  assert.match(
+    conversation,
+    /quick-quote-photo-decision/
+  );
+
+  assert.match(styles, /\.quick-quote-photo-suggestion-list/);
+  assert.match(styles, /\.quick-quote-photo-suggestion/);
+  assert.match(styles, /\.quick-quote-photo-edit/);
+  assert.match(styles, /width: 100%/);
+  assert.match(styles, /box-sizing: border-box/);
+
+  assert.match(
+    builder,
+    /function markQuickQuoteAnalysisStale\(\)/
+  );
+
+  assert.match(
+    builder,
+    /const analysisWasAvailable =\s*quickQuoteAnalysisState\.available/
+  );
+
+  assert.ok(
+    (
+      builder.match(
+        /markQuickQuoteAnalysisStale\(\);/g
+      ) || []
+    ).length >= 3
+  );
+
+  assert.match(
+    builder,
+    /setQuickQuoteView\("entry"\)/
+  );
+
+  assert.doesNotMatch(
+    builder,
+    /\["review", "details"\]\.includes\(quickQuoteView\)/
+  );
+});
 
 test(
   "entry surfaces photo workflow failures and edit state is proposal scoped",
@@ -529,7 +639,8 @@ test("explicit materials and removal instructions do not alter unrelated commerc
   assert.equal(removalPatch.totalOverride, undefined);
 });
 
-test("natural field-service shorthand organizes customer location materials labor and total without command syntax", () => {
+
+test("natural field-service shorthand parser remains available without granting Job Analysis Quote authority", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt:
       "customer cristal Tejada ceiling fan installation at 117 se 2nd ave, price for fan 180 dollar, installation 160 dollars",
@@ -537,27 +648,47 @@ test("natural field-service shorthand organizes customer location materials labo
 
   assert.equal(patch.customerName, "cristal Tejada");
   assert.equal(patch.customerLocation, "117 se 2nd ave");
-  assert.match(patch.projectDescription, /ceiling fan installation/i);
-  assert.doesNotMatch(patch.projectDescription, /cristal Tejada/i);
-  assert.doesNotMatch(patch.projectDescription, /117 se 2nd ave/i);
-  assert.doesNotMatch(patch.projectDescription, /180|160/);
+  assert.match(
+    patch.projectDescription,
+    /ceiling fan installation/i
+  );
+
+  assert.doesNotMatch(
+    patch.projectDescription,
+    /cristal Tejada/i
+  );
+
+  assert.doesNotMatch(
+    patch.projectDescription,
+    /117 se 2nd ave/i
+  );
+
+  assert.doesNotMatch(
+    patch.projectDescription,
+    /180|160/
+  );
 
   assert.deepEqual(patch.materialItems, [
     { name: "fan", total: "180" },
   ]);
+
   assert.deepEqual(patch.laborItems, [
     { description: "installation", total: "160" },
   ]);
 
   assert.equal(patch.totalOverride, undefined);
+
   assert.equal(
     Number(patch.materialItems[0].total) +
       Number(patch.laborItems[0].total),
     340
   );
 
-  assert.match(builder, /patch\.customerLocation/);
-  assert.match(builder, /setCustomerLocation\(patch\.customerLocation\)/);
+  // Parser capability remains, but universal Job Analysis does not apply it.
+  assert.doesNotMatch(
+    builder,
+    /applyQuickQuoteConversationPatch/
+  );
 });
 
 test("detailed knee-wall conversation extracts clean structured draft with final price authority", () => {
@@ -619,18 +750,48 @@ test("secondary door conversation keeps material and installation rows distinct"
   assert.equal(patch.totalOverride, undefined);
 });
 
-test("working and review screens expose concise stages, summaries, and current-draft PDF actions", () => {
-  for (const stage of ["Analyze notes", "Organize scope", "Capture labor", "Capture materials", "Draft terms"]) {
-    assert.match(read("src/utils/quickQuoteConversationLanguage.js"), new RegExp(stage));
+
+test("working and analysis screens expose private analysis stages without premature Quote actions", () => {
+  const languageSource = read(
+    "src/utils/quickQuoteConversationLanguage.js"
+  );
+
+  for (const stage of [
+    "Review job details",
+    "Separate observations",
+    "Flag verification",
+    "Consider repair options",
+    "Consider material categories",
+  ]) {
+    assert.match(
+      languageSource,
+      new RegExp(stage)
+    );
   }
-  for (const label of ["customer", "scope", "materials", "laborDuration", "paymentTerms", "notes", "total"]) {
-    assert.match(conversation, new RegExp(`copy\\.${label}`));
-  }
-  assert.match(builder, /summary=\{quickQuoteReviewSummary\}/);
-  assert.match(builder, /onPreviewPdf=\{previewQuickQuotePdf\}/);
-  assert.match(builder, /onSharePdf=\{\(\) => void shareQuickQuotePdf\(\)\}/);
-  assert.match(builder, /buildQuickQuotePdfModel\(\)/);
+
+  assert.match(conversation, /copy\.sourceInformation/);
+  assert.match(conversation, /copy\.photoEvidenceTitle/);
+  assert.match(conversation, /copy\.photoLimitations/);
   assert.match(conversation, /copy\.draftTruth/);
+
+  assert.doesNotMatch(conversation, /copy\.customer/);
+  assert.doesNotMatch(conversation, /copy\.scope/);
+  assert.doesNotMatch(conversation, /copy\.laborDuration/);
+  assert.doesNotMatch(conversation, /copy\.paymentTerms/);
+  assert.doesNotMatch(conversation, /copy\.total/);
+  assert.doesNotMatch(conversation, /copy\.previewPdf/);
+  assert.doesNotMatch(conversation, /copy\.sharePdf/);
+  assert.doesNotMatch(conversation, /copy\.fullDetailsLabel/);
+
+  assert.doesNotMatch(
+    builder,
+    /summary=\{quickQuoteReviewSummary\}/
+  );
+
+  assert.doesNotMatch(
+    builder,
+    /onPreviewPdf=\{previewQuickQuotePdf\}/
+  );
 });
 
 test("Quick Quote conversation copy has exact EN ES FR PT-BR parity", () => {
@@ -654,4 +815,101 @@ test("review and input controls remain contained at exact 390px capability", () 
   assert.match(styles, /\.quick-quote-review-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*\.quick-quote-review-grid[\s\S]*grid-template-columns: 1fr/);
   assert.match(conversation, /ref=\{surfaceRef\} tabIndex=\{-1\}/);
+});
+
+test("internal Job Analysis Back stays in memory while full exit confirms and cleans governed media before navigation", () => {
+  const internalStart = builder.indexOf(
+    "function backToQuickQuoteJobDetails()"
+  );
+
+  const internalEnd = builder.indexOf(
+    "function returnToQuickQuoteAnalysis()",
+    internalStart
+  );
+
+  assert.ok(
+    internalStart >= 0 && internalEnd > internalStart
+  );
+
+  const internalBack = builder.slice(
+    internalStart,
+    internalEnd
+  );
+
+  assert.match(
+    internalBack,
+    /setQuickQuoteView\("entry"\)/
+  );
+
+  assert.doesNotMatch(
+    internalBack,
+    /cleanupQuoteDraftPhoto|setPage|localStorage|sessionStorage/
+  );
+
+  const exitStart = builder.indexOf(
+    "async function exitQuickQuoteAnalysis()"
+  );
+
+  const exitEnd = builder.indexOf(
+    "\n\n  return (",
+    exitStart
+  );
+
+  assert.ok(exitStart >= 0 && exitEnd > exitStart);
+
+  const exitBoundary = builder.slice(
+    exitStart,
+    exitEnd
+  );
+
+  assert.match(exitBoundary, /window\.confirm\(/);
+  assert.match(exitBoundary, /quickQuoteCopy\.discardTitle/);
+  assert.match(exitBoundary, /quickQuoteCopy\.discardBody/);
+  assert.match(exitBoundary, /cleanupQuoteDraftPhoto\(\{/);
+  assert.match(exitBoundary, /failedPhotoIds/);
+  assert.match(
+    exitBoundary,
+    /setQuickQuotePhotoNotice\(\s*quickQuoteCopy\.photoCleanupFailed/
+  );
+
+  const clearRef = exitBoundary.indexOf(
+    "quickQuoteDraftPhotosRef.current = [];"
+  );
+
+  const navigate = exitBoundary.indexOf(
+    "navigateFromQuoteBuilder();"
+  );
+
+  assert.ok(clearRef >= 0);
+  assert.ok(navigate > clearRef);
+});
+
+test("description changes mark an existing analysis stale without browser persistence authority", () => {
+  const start = builder.indexOf(
+    "function handleQuickQuotePromptChange(value)"
+  );
+
+  const end = builder.indexOf(
+    "function backToQuickQuoteJobDetails()",
+    start
+  );
+
+  assert.ok(start >= 0 && end > start);
+
+  const promptBoundary = builder.slice(start, end);
+
+  assert.match(
+    promptBoundary,
+    /setQuickQuotePrompt\(value\)/
+  );
+
+  assert.match(
+    promptBoundary,
+    /markQuickQuoteAnalysisStale\(\)/
+  );
+
+  assert.doesNotMatch(
+    promptBoundary,
+    /localStorage|sessionStorage/
+  );
 });

@@ -4535,6 +4535,83 @@ button {
   }
 }
 
+/* MC-QUICK-QUOTE-R1-01 JOB ANALYSIS */
+
+.quick-quote-analysis-back,
+.quick-quote-return-analysis {
+  min-height: 44px;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-analysis-back {
+  align-self: flex-start;
+}
+
+.quick-quote-return-analysis {
+  width: 100%;
+}
+
+.quick-quote-analysis-stale {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-source-information {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.quick-quote-review-card,
+.quick-quote-review-card > *,
+.quick-quote-summary-section,
+.quick-quote-summary-section > *,
+.quick-quote-photo-review,
+.quick-quote-photo-suggestion,
+.quick-quote-photo-suggestion-list {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.quick-quote-photo-suggestion p,
+.quick-quote-photo-review p,
+.quick-quote-photo-review li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 430px) {
+  .quick-quote-analysis-back,
+  .quick-quote-return-analysis {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .quick-quote-review-actions {
+    width: 100%;
+  }
+
+  .quick-quote-review-actions > button {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .quick-quote-photo-edit {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
 /* Canonical Alert count badge — navigation presentation only. */
 .alert-navigation-badge {
   position: absolute;

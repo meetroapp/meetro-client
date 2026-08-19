@@ -4,37 +4,18 @@ import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
 
-function formatMoney(value, language) {
-  return new Intl.NumberFormat(language === "pt-BR" ? "pt-BR" : language, {
-    style: "currency",
-    currency: "USD",
-  }).format(Number(value) || 0);
-}
-
-function SummarySection({ title, children, emphasized = false }) {
-  return (
-    <section className={`quick-quote-summary-section${emphasized ? " quick-quote-summary-total" : ""}`}>
-      <span>{title}</span>
-      <div>{children}</div>
-    </section>
-  );
-}
-
 export default function QuickQuoteConversation({
   language = "en",
   view = "entry",
   prompt,
   onPromptChange,
   onPrepare,
-  onOpenRevision,
   onCancelRevision,
-  onEditDetails,
-  detailsExpanded = false,
-  onToggleDetails,
-  onPreviewPdf,
-  onSharePdf,
+  onBackToDetails,
+  onReturnToAnalysis,
+  analysisAvailable = false,
+  analysisStale = false,
   setPage,
-  summary,
   photoCount = 0,
   photos = [],
   canAddPhotos = false,
@@ -125,43 +106,49 @@ export default function QuickQuoteConversation({
 
   if (view === "review") {
     return (
-      <main ref={surfaceRef} tabIndex={-1} className="quick-quote-conversation" aria-labelledby="quick-quote-review-title">
+      <main
+        ref={surfaceRef}
+        tabIndex={-1}
+        className="quick-quote-conversation"
+        aria-labelledby="quick-quote-review-title"
+      >
         <header className="quick-quote-flow-header">
-          <p>{copy.organizedFromInstructions}</p>
-          <h1 id="quick-quote-review-title">{copy.reviewTitle}</h1>
+          <button
+            type="button"
+            className="quick-quote-analysis-back"
+            onClick={onBackToDetails}
+          >
+            ‹ {copy.backToJobDetails}
+          </button>
+
+          <p>{copy.workingPrivately}</p>
+
+          <h1 id="quick-quote-review-title">
+            {copy.reviewTitle}
+          </h1>
+
           <div className="quick-quote-guidance">
             <strong>{copy.reviewGuidanceTitle}</strong>
             <span>{copy.reviewGuidanceBody}</span>
           </div>
         </header>
+
         <div className="quick-quote-review-card">
-          <div className="quick-quote-review-grid">
-            <SummarySection title={copy.customer}>
-              <strong>{summary.customerName || copy.notProvided}</strong>
-              {summary.customerLocation ? <p>{summary.customerLocation}</p> : null}
-            </SummarySection>
-            <SummarySection title={copy.scope}>
-              <p>{summary.scope || copy.notProvided}</p>
-            </SummarySection>
-            <SummarySection title={copy.materials}>
-              {summary.materials.length ? (
-                <ul>{summary.materials.map((material) => <li key={material}>{material}</li>)}</ul>
-              ) : <p>{copy.noMaterials}</p>}
-            </SummarySection>
-            <SummarySection title={copy.laborDuration}>
-              <p>{summary.labor || copy.notProvided}</p>
-              <p>{summary.duration || copy.notProvided}</p>
-            </SummarySection>
-            <SummarySection title={copy.paymentTerms}>
-              <p>{summary.paymentTerms || copy.notProvided}</p>
-            </SummarySection>
-            <SummarySection title={copy.notes}>
-              <p>{summary.notes || copy.notProvided}</p>
-            </SummarySection>
-            <SummarySection title={copy.total} emphasized>
-              <strong>{formatMoney(summary.total, language)}</strong>
-            </SummarySection>
-          </div>
+          {prompt.trim() ? (
+            <section
+              className="quick-quote-summary-section"
+              aria-label={copy.sourceInformation}
+            >
+              <span>{copy.sourceInformation}</span>
+
+              <div>
+                <p className="quick-quote-source-information">
+                  {prompt}
+                </p>
+              </div>
+            </section>
+          ) : null}
+
           <section
             className="quick-quote-photo-review"
             aria-label={copy.photos}
@@ -171,41 +158,28 @@ export default function QuickQuoteConversation({
                 <strong>{copy.photos}</strong>
                 <p>{copy.photoDraftNotice}</p>
               </div>
-              <button
-                type="button"
-                disabled={!canAddPhotos || photoBusy}
-                onClick={onAddPhotos}
-              >
-                <MeetroIcon name="photoCount" size={18} />
-                {photoCount
-                  ? copy.addAnotherPhoto
-                  : copy.addPhotos}
-              </button>
             </div>
 
             {photos.length ? (
               <div className="quick-quote-photo-grid">
                 {photos.map((photo, index) => (
-                  <figure key={photo.id} className="quick-quote-photo-item">
+                  <figure
+                    key={photo.id}
+                    className="quick-quote-photo-item"
+                  >
                     {photo.previewUrl ? (
                       <img
                         src={photo.previewUrl}
                         alt={`${copy.photos} ${index + 1}`}
                       />
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={photoBusy}
-                      onClick={() => onRemovePhoto?.(photo.id)}
-                      aria-label={copy.removePhoto(index + 1)}
-                    >
-                      {copy.remove}
-                    </button>
                   </figure>
                 ))}
               </div>
             ) : (
-              <p className="quick-quote-photo-empty">{copy.noPhotos}</p>
+              <p className="quick-quote-photo-empty">
+                {copy.noPhotos}
+              </p>
             )}
           </section>
 
@@ -221,142 +195,163 @@ export default function QuickQuoteConversation({
                 </div>
               </div>
 
-              <p>{photoProposal.summary}</p>
+              {photoProposal.summary ? (
+                <p>{photoProposal.summary}</p>
+              ) : null}
 
-              {photoGroups.map(([title, category, items]) =>
-                items?.length ? (
-                  <section
-                    key={category}
-                    className="quick-quote-summary-section"
-                  >
-                    <span>{title}</span>
-                    <div className="quick-quote-photo-suggestion-list">
-                      {items.map((item) => {
-                        const decision =
-                          photoDecisions[item.id];
-                        const editing =
-                          editingPhotoItemId ===
-                          `${photoProposal.proposalId}:${item.id}`;
-                        const busy =
-                          photoReviewBusyId === item.id;
+              {photoGroups.map(
+                ([title, category, items]) =>
+                  items?.length ? (
+                    <section
+                      key={category}
+                      className="quick-quote-summary-section"
+                    >
+                      <span>
+                        {title} · {items.length}
+                      </span>
 
-                        return (
-                          <article
-                            key={item.id}
-                            className="quick-quote-photo-suggestion"
-                          >
-                            <p>{decision?.text || item.text}</p>
+                      <div className="quick-quote-photo-suggestion-list">
+                        {items.map((item) => {
+                          const decision =
+                            photoDecisions[item.id];
 
-                            {decision ? (
-                              <strong
-                                className="quick-quote-photo-decision"
-                                role="status"
-                              >
-                                {photoDecisionLabel(
-                                  decision.action
-                                )}
-                              </strong>
-                            ) : editing ? (
-                              <>
-                                <textarea
-                                  className="quick-quote-photo-edit"
-                                  aria-label={`${copy.editAndUse}: ${item.text}`}
-                                  value={photoEditText}
-                                  rows={3}
-                                  maxLength={3000}
-                                  onChange={(event) =>
-                                    setPhotoEditText(
-                                      event.target.value
-                                    )
-                                  }
-                                />
+                          const editing =
+                            editingPhotoItemId ===
+                            `${photoProposal.proposalId}:${item.id}`;
+
+                          const busy =
+                            photoReviewBusyId === item.id;
+
+                          return (
+                            <article
+                              key={item.id}
+                              className="quick-quote-photo-suggestion"
+                            >
+                              <p>
+                                {decision?.text || item.text}
+                              </p>
+
+                              {decision ? (
+                                <strong
+                                  className="quick-quote-photo-decision"
+                                  role="status"
+                                >
+                                  {photoDecisionLabel(
+                                    decision.action
+                                  )}
+                                </strong>
+                              ) : editing ? (
+                                <>
+                                  <textarea
+                                    className="quick-quote-photo-edit"
+                                    aria-label={`${copy.editAndUse}: ${item.text}`}
+                                    value={photoEditText}
+                                    rows={3}
+                                    maxLength={3000}
+                                    onChange={(event) =>
+                                      setPhotoEditText(
+                                        event.target.value
+                                      )
+                                    }
+                                  />
+
+                                  <div className="quick-quote-review-actions">
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        busy ||
+                                        !photoEditText.trim()
+                                      }
+                                      onClick={() =>
+                                        void submitEditedPhotoSuggestion(
+                                          category,
+                                          item
+                                        )
+                                      }
+                                    >
+                                      {copy.saveAndUse}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setEditingPhotoItemId("");
+                                        setPhotoEditText("");
+                                      }}
+                                    >
+                                      {copy.cancel}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
                                 <div className="quick-quote-review-actions">
                                   <button
                                     type="button"
-                                    disabled={
-                                      busy ||
-                                      !photoEditText.trim()
-                                    }
+                                    disabled={busy}
                                     onClick={() =>
-                                      void submitEditedPhotoSuggestion(
+                                      void onReviewPhotoSuggestion?.({
                                         category,
-                                        item
-                                      )
+                                        item,
+                                        action: "ACCEPTED",
+                                      })
                                     }
                                   >
-                                    {copy.saveAndUse}
+                                    {copy.useSuggestion}
                                   </button>
+
                                   <button
                                     type="button"
                                     disabled={busy}
                                     onClick={() => {
-                                      setEditingPhotoItemId("");
-                                      setPhotoEditText("");
+                                      setEditingPhotoItemId(
+                                        `${photoProposal.proposalId}:${item.id}`
+                                      );
+                                      setPhotoEditText(item.text);
                                     }}
                                   >
-                                    {copy.cancel}
+                                    {copy.editAndUse}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void onReviewPhotoSuggestion?.({
+                                        category,
+                                        item,
+                                        action: "REJECTED",
+                                      })
+                                    }
+                                  >
+                                    {copy.dismissSuggestion}
                                   </button>
                                 </div>
-                              </>
-                            ) : (
-                              <div className="quick-quote-review-actions">
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() =>
-                                    void onReviewPhotoSuggestion?.({
-                                      category,
-                                      item,
-                                      action: "ACCEPTED",
-                                    })
-                                  }
-                                >
-                                  {copy.useSuggestion}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setEditingPhotoItemId(
-                                      `${photoProposal.proposalId}:${item.id}`
-                                    );
-                                    setPhotoEditText(
-                                      item.text
-                                    );
-                                  }}
-                                >
-                                  {copy.editAndUse}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() =>
-                                    void onReviewPhotoSuggestion?.({
-                                      category,
-                                      item,
-                                      action: "REJECTED",
-                                    })
-                                  }
-                                >
-                                  {copy.dismissSuggestion}
-                                </button>
-                              </div>
-                            )}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ) : null
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ) : null
               )}
 
               {photoProposal.photoAnalysis?.limitations?.length ? (
                 <section className="quick-quote-summary-section">
-                  <span>{copy.photoLimitations}</span>
+                  <span>
+                    {copy.photoLimitations} ·{" "}
+                    {
+                      photoProposal.photoAnalysis
+                        .limitations.length
+                    }
+                  </span>
+
                   <div>
                     <ul>
                       {photoProposal.photoAnalysis.limitations.map(
-                        (item) => <li key={item}>{item}</li>
+                        (item) => (
+                          <li key={item}>{item}</li>
+                        )
                       )}
                     </ul>
                   </div>
@@ -365,39 +360,21 @@ export default function QuickQuoteConversation({
             </section>
           ) : null}
 
-          <div className="quick-quote-review-actions" aria-label={copy.reviewTitle}>
-            <button type="button" onClick={onOpenRevision}>
-              <MeetroIcon name="assistant" size={18} />
-              {copy.askRevise}
-            </button>
-            <button type="button" onClick={onEditDetails}>
-              <MeetroIcon name="editPortfolio" size={18} />
-              {copy.editDetails}
-            </button>
-            <button type="button" onClick={onPreviewPdf}>
-              <MeetroIcon name="preview" size={18} />
-              {copy.previewPdf}
-            </button>
-            <button type="button" className="quick-quote-primary-action" onClick={onSharePdf}>
-              <MeetroIcon name="share" size={18} />
-              {copy.sharePdf}
-            </button>
-          </div>
-          <div className="quick-quote-details-disclosure">
-            <button
-              type="button"
-              className="quick-quote-details-toggle"
-              aria-expanded={detailsExpanded}
-              aria-controls="quick-quote-full-details"
-              onClick={onToggleDetails}
+          <p
+            className="quick-quote-draft-truth"
+            role="status"
+          >
+            {copy.draftTruth}
+          </p>
+
+          {notice ? (
+            <p
+              className="quick-quote-action-notice"
+              role="status"
             >
-              <span>{copy.fullDetailsLabel}</span>
-              <span aria-hidden="true">{detailsExpanded ? "▴" : "▾"}</span>
-            </button>
-            <p>{copy.fullDetailsGuidance}</p>
-          </div>
-          <p className="quick-quote-draft-truth" role="status">{copy.draftTruth}</p>
-          {notice ? <p className="quick-quote-action-notice" role="status">{notice}</p> : null}
+              {notice}
+            </p>
+          ) : null}
         </div>
       </main>
     );
@@ -416,6 +393,24 @@ export default function QuickQuoteConversation({
         ) : null}
       </header>
       <section className="quick-quote-prompt-card" aria-label={copy.assistant}>
+        {analysisStale ? (
+          <div
+            className="quick-quote-analysis-stale"
+            role="status"
+          >
+            <strong>{copy.analysisNeedsUpdating}</strong>
+          </div>
+        ) : null}
+
+        {analysisAvailable && !analysisStale ? (
+          <button
+            type="button"
+            className="quick-quote-return-analysis"
+            onClick={onReturnToAnalysis}
+          >
+            {copy.returnToJobAnalysis}
+          </button>
+        ) : null}
         <div className="quick-quote-prompt-heading">
           <span className="quick-quote-assistant-mark" aria-hidden="true"><MeetroIcon name="assistant" size={22} /></span>
           <div>
@@ -517,7 +512,11 @@ export default function QuickQuoteConversation({
             }
             onClick={() => onPrepare(isRevision)}
           >
-            {isRevision ? copy.revise : copy.prepare}
+            {isRevision
+              ? copy.revise
+              : analysisStale
+              ? copy.analyzeUpdated
+              : copy.prepare}
           </button>
         </div>
 
