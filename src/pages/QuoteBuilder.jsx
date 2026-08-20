@@ -1523,9 +1523,14 @@ ${businessIdentity.businessName}`;
   }
 
   async function prepareQuickQuoteConversation() {
+    const professionalInput =
+      String(
+        quickQuotePrompt ?? ""
+      );
+
     const instruction =
       cleanText(
-        quickQuotePrompt
+        professionalInput
       );
 
     const photos =
@@ -1576,8 +1581,7 @@ ${businessIdentity.businessName}`;
       if (!sessionId) {
         const created =
           await createQuickQuoteAnalysisSession({
-            professionalInput:
-              instruction,
+            professionalInput,
             photos:
               governedPhotos,
             setPage,
@@ -1593,8 +1597,7 @@ ${businessIdentity.businessName}`;
       } else {
         await appendQuickQuoteAnalysisEvidence({
           sessionId,
-          professionalInput:
-            instruction,
+          professionalInput,
           photos:
             governedPhotos,
           setPage,
@@ -1648,7 +1651,7 @@ ${businessIdentity.businessName}`;
         available: true,
         stale: false,
         analyzedPrompt:
-          instruction,
+          professionalInput,
       });
 
       /*

@@ -266,7 +266,7 @@ test(
 
     assert.match(
       analysisBoundary,
-      /professionalInput:\s*instruction/
+      /professionalInput,/
     );
 
     assert.match(
@@ -291,6 +291,73 @@ test(
     assert.match(
       analysisBoundary,
       /analyzeQuickQuoteAnalysisSession/
+    );
+  }
+);
+
+test(
+  "Job Analysis preserves exact professional input while using trimmed text only for presence checks",
+  () => {
+    const start =
+      builder.indexOf(
+        "async function prepareQuickQuoteConversation"
+      );
+
+    const end =
+      builder.indexOf(
+        "async function continueQuickQuoteConversation",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
+
+    const analysisBoundary =
+      builder.slice(
+        start,
+        end
+      );
+
+    assert.match(
+      analysisBoundary,
+      /const professionalInput =\s*String\(\s*quickQuotePrompt \?\? ""\s*\)/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /const instruction =\s*cleanText\(\s*professionalInput\s*\)/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /createQuickQuoteAnalysisSession\(\{[\s\S]*professionalInput,[\s\S]*photos:\s*governedPhotos/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /appendQuickQuoteAnalysisEvidence\(\{[\s\S]*professionalInput,[\s\S]*photos:\s*governedPhotos/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /analyzedPrompt:\s*professionalInput/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /professionalInput:\s*instruction/
+    );
+
+    /*
+     * Trimming is allowed only for the empty-input gate and
+     * follow-on presence logic. Durable evidence keeps the
+     * professional's exact source text.
+     */
+    assert.match(
+      analysisBoundary,
+      /if\s*\(\s*!instruction\s*&&\s*photos\.length\s*===\s*0/
     );
   }
 );
@@ -352,7 +419,7 @@ test(
 
     assert.match(
       analysisBoundary,
-      /professionalInput:\s*instruction/
+      /professionalInput,/
     );
 
     assert.match(
