@@ -4900,6 +4900,29 @@ button {
   opacity: 0.56;
 }
 
+.quick-quote-professional-confirmation {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 7px;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  min-height: 36px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--meetro-surface-sage, #eef4ea);
+  color: var(--meetro-color-forest, #1f4d34);
+  padding: 7px 12px;
+  font-weight: 850;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-professional-confirmation > span:first-child {
+  flex: 0 0 auto;
+  font-weight: 950;
+}
+
 .quick-quote-optional-help {
   margin: 8px 0 0;
   color: #64748b;
@@ -5156,6 +5179,19 @@ button {
 .quick-quote-cost-confirmation-list strong {
   color: var(--meetro-color-forest, #1f4d34);
   font-size: 18px;
+}
+
+.quick-quote-cost-confirmation > .quick-quote-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .quick-quote-internal-estimate {

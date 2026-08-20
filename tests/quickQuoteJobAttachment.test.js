@@ -127,6 +127,21 @@ test("empty eligible list, Cancel, Back, and unavailable Create Job are explicit
   assert.match(conversation, /copy\.createJobComingNext/);
 });
 
+test("Job connection cancel restores idle while picker Back keeps professional details active", () => {
+  assert.match(
+    builder,
+    /onCancelJobConnection=\{\(\)\s*=>[\s\S]*stage:\s*"idle"/
+  );
+  assert.match(
+    builder,
+    /onBackToJobConnection=\{\(\)\s*=>[\s\S]*stage:\s*"decision"/
+  );
+  assert.match(
+    conversation,
+    /"decision",\s*"picker",\s*"costConfirmation"/
+  );
+});
+
 test("direct Prepare Quote remains available and is not forced through Job Analysis", () => {
   assert.match(builder, /id:\s*"quote"[\s\S]*prepareQuote/);
   assert.match(builder, /onRequest=\{requestEstimateHelp\}/);

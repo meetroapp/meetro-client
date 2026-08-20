@@ -80,6 +80,7 @@ test("Job Analysis exposes professional-first continuation and optional collapse
   assert.match(conversation, /onContinueWithMyDetails/);
   assert.match(conversation, /copy\.yourJobDetails/);
   assert.match(conversation, /copy\.continueWithMyDetails/);
+  assert.match(conversation, /copy\.usingMyDetails/);
   assert.match(conversation, /copy\.useMeetroSuggestions/);
   assert.match(conversation, /quick-quote-professional-actions/);
   assert.match(conversation, /quick-quote-suggestion-group/);
@@ -100,6 +101,10 @@ test("Job Analysis exposes professional-first continuation and optional collapse
   assert.match(continueBoundary, /getQuickQuoteProfessionalContinuation/);
   assert.match(continueBoundary, /quickQuoteAnalysisState\.analyzedPrompt/);
   assert.match(continueBoundary, /setQuickQuoteContinuationNotice/);
+  assert.match(
+    continueBoundary,
+    /quickQuoteJobConnection\.stage\s*!==\s*"idle"[\s\S]*return false/
+  );
   assert.doesNotMatch(continueBoundary, /recordWorkflowReview/);
   assert.doesNotMatch(
     continueBoundary,
@@ -115,10 +120,10 @@ test("Job Analysis exposes professional-first continuation and optional collapse
 
 test("professional continuation copy is complete in every Quick Quote locale", () => {
   const expected = {
-    en: "Continue with My Details",
-    es: "Continuar con mis detalles",
-    fr: "Continuer avec mes détails",
-    "pt-BR": "Continuar com meus detalhes",
+    en: ["Continue with My Details", "Using My Details"],
+    es: ["Continuar con mis detalles", "Usando mis detalles"],
+    fr: ["Continuer avec mes détails", "Utilisation de mes détails"],
+    "pt-BR": ["Continuar com meus detalhes", "Usando meus detalhes"],
   };
 
   for (const language of QUICK_QUOTE_CONVERSATION_LANGUAGES) {
@@ -127,6 +132,7 @@ test("professional continuation copy is complete in every Quick Quote locale", (
     for (const key of [
       "yourJobDetails",
       "continueWithMyDetails",
+      "usingMyDetails",
       "useMeetroSuggestions",
       "optionalSuggestionsHelp",
       "canonicalJobRequired",
@@ -137,8 +143,45 @@ test("professional continuation copy is complete in every Quick Quote locale", (
       assert.ok(copy[key].trim(), `${language}:${key}`);
     }
 
-    assert.equal(copy.continueWithMyDetails, expected[language]);
+    assert.deepEqual(
+      [copy.continueWithMyDetails, copy.usingMyDetails],
+      expected[language]
+    );
   }
+});
+
+test("Using My Details replaces the continuation button throughout Job connection", () => {
+  assert.match(
+    conversation,
+    /\[\s*"decision",\s*"picker",\s*"costConfirmation",?\s*\]\.includes\(jobConnection\.stage\)/
+  );
+  assert.match(
+    conversation,
+    /usingProfessionalDetails\s*\?\s*\([\s\S]*quick-quote-professional-confirmation[\s\S]*role="status"[\s\S]*aria-live="polite"[\s\S]*aria-hidden="true">✓[\s\S]*copy\.usingMyDetails[\s\S]*:\s*\([\s\S]*onClick=\{onContinueWithMyDetails\}/
+  );
+
+  const confirmationStart = conversation.indexOf(
+    'className="quick-quote-professional-confirmation"'
+  );
+  const confirmationEnd = conversation.indexOf("</p>", confirmationStart);
+  const confirmation = conversation.slice(confirmationStart, confirmationEnd);
+  assert.ok(confirmationStart >= 0 && confirmationEnd > confirmationStart);
+  assert.doesNotMatch(confirmation, /button|onClick|tabIndex/);
+});
+
+test("Using My Details is compact and contained at mobile and desktop widths", () => {
+  const rule = styles.match(
+    /\.quick-quote-professional-confirmation\s*\{([^}]*)\}/
+  );
+
+  assert.ok(rule, "expected professional confirmation styles");
+  assert.match(rule[1], /display:\s*inline-flex/);
+  assert.match(rule[1], /justify-self:\s*start/);
+  assert.match(rule[1], /box-sizing:\s*border-box/);
+  assert.match(rule[1], /max-inline-size:\s*100%/);
+  assert.match(rule[1], /min-height:\s*36px/);
+  assert.match(rule[1], /overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(rule[1], /cursor:\s*pointer/);
 });
 
 

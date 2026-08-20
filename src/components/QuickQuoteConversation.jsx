@@ -55,6 +55,11 @@ export default function QuickQuoteConversation({
     jobConnection.jobs,
     jobSearch
   );
+  const usingProfessionalDetails = [
+    "decision",
+    "picker",
+    "costConfirmation",
+  ].includes(jobConnection.stage);
   const formatMoney = (minor) =>
     new Intl.NumberFormat(language, {
       style: "currency",
@@ -261,14 +266,25 @@ export default function QuickQuoteConversation({
           ) : null}
 
           <div className="quick-quote-professional-actions">
-            <button
-              type="button"
-              className="quick-quote-primary-action"
-              disabled={analysisBusy || !prompt.trim()}
-              onClick={onContinueWithMyDetails}
-            >
-              {copy.continueWithMyDetails}
-            </button>
+            {usingProfessionalDetails ? (
+              <p
+                className="quick-quote-professional-confirmation"
+                role="status"
+                aria-live="polite"
+              >
+                <span aria-hidden="true">✓</span>
+                <span>{copy.usingMyDetails}</span>
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="quick-quote-primary-action"
+                disabled={analysisBusy || !prompt.trim()}
+                onClick={onContinueWithMyDetails}
+              >
+                {copy.continueWithMyDetails}
+              </button>
+            )}
 
             <button
               type="button"

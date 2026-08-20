@@ -1991,6 +1991,10 @@ ${businessIdentity.businessName}`;
   }
 
   async function continueQuickQuoteWithProfessionalDetails() {
+    if (quickQuoteJobConnection.stage !== "idle") {
+      return false;
+    }
+
     const continuation = getQuickQuoteProfessionalContinuation({
       professionalInput:
         quickQuoteAnalysisState.analyzedPrompt || quickQuotePrompt,

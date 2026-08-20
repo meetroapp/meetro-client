@@ -18,6 +18,10 @@ const conversation = readFileSync(
   new URL("../src/components/QuickQuoteConversation.jsx", import.meta.url),
   "utf8"
 );
+const styles = readFileSync(
+  new URL("../src/index.css", import.meta.url),
+  "utf8"
+);
 
 test("explicit professional flat totals become confirmation candidates in minor units", () => {
   const input = [
@@ -94,4 +98,21 @@ test("flat-total presentation does not render category amounts as rates, hours, 
   const resultView = builder.slice(start, end);
   assert.match(resultView, /professionalCategoryCosts/);
   assert.doesNotMatch(resultView, /professionalCategoryCosts[\s\S]{0,200}(?:unitCostMinor|hoursPerWorker|crewCount)/);
+});
+
+test("Confirm amounts keeps a readable full-width touch target", () => {
+  const rule = styles.match(
+    /\.quick-quote-cost-confirmation\s*>\s*\.quick-quote-primary-action\s*\{([^}]*)\}/
+  );
+
+  assert.ok(rule, "expected a cost-confirmation primary-action rule");
+  assert.match(rule[1], /display:\s*inline-flex/);
+  assert.match(rule[1], /align-items:\s*center/);
+  assert.match(rule[1], /justify-content:\s*center/);
+  assert.match(rule[1], /box-sizing:\s*border-box/);
+  assert.match(rule[1], /inline-size:\s*100%/);
+  assert.match(rule[1], /max-inline-size:\s*100%/);
+  assert.match(rule[1], /min-height:\s*(?:4[4-9]|[5-9][0-9])px/);
+  assert.match(rule[1], /padding:\s*12px\s+18px/);
+  assert.match(rule[1], /text-align:\s*center/);
 });
