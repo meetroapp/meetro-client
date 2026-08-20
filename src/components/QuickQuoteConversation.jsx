@@ -27,6 +27,7 @@ export default function QuickQuoteConversation({
   onAddPhotos,
   onRemovePhoto,
   photoProposal = null,
+  reviewedResult = null,
   photoDecisions = {},
   photoReviewBusyId = "",
   onReviewPhotoSuggestion,
@@ -60,6 +61,44 @@ export default function QuickQuoteConversation({
         ],
       ]
     : [];
+
+  /*
+   * R1-05 first-class reviewed result.
+   *
+   * These sections come ONLY from the validated server
+   * reviewed-result projection. Local photoDecisions never
+   * populate Reviewed Solution or Materials List.
+   *
+   * Questions remain conversation prompts and are not
+   * promoted into this reviewed result.
+   */
+  const reviewedSections =
+    reviewedResult
+      ? [
+          [
+            copy.reviewedSolution,
+            "reviewedSolution",
+            reviewedResult.reviewedSolution,
+          ],
+          [
+            copy.materialsList,
+            "materialsList",
+            reviewedResult.materialsList,
+          ],
+          [
+            copy.needsVerification,
+            "needsVerification",
+            reviewedResult.needsVerification,
+          ],
+        ]
+      : [];
+
+  const hasReviewedResult =
+    reviewedSections.some(
+      ([, , items]) =>
+        Array.isArray(items) &&
+        items.length > 0
+    );
 
   function photoDecisionLabel(action) {
     if (action === "ACCEPTED") return copy.photoAccepted;
@@ -374,6 +413,49 @@ export default function QuickQuoteConversation({
                     </section>
                   ) : null
               )}
+
+              {hasReviewedResult ? (
+                <section
+                  className="quick-quote-reviewed-result"
+                  aria-labelledby="quick-quote-reviewed-result-title"
+                >
+                  <div className="quick-quote-reviewed-result-heading">
+                    <strong id="quick-quote-reviewed-result-title">
+                      {copy.reviewedResultTitle}
+                    </strong>
+                    <p>
+                      {copy.reviewedResultHelp}
+                    </p>
+                  </div>
+
+                  <div className="quick-quote-reviewed-result-grid">
+                    {reviewedSections.map(
+                      ([title, category, items]) =>
+                        items?.length ? (
+                          <section
+                            key={category}
+                            className="quick-quote-reviewed-result-section"
+                            data-reviewed-category={category}
+                          >
+                            <span>
+                              {title} · {items.length}
+                            </span>
+
+                            <ul>
+                              {items.map(
+                                (item) => (
+                                  <li key={item.elementId}>
+                                    {item.text}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </section>
+                        ) : null
+                    )}
+                  </div>
+                </section>
+              ) : null}
 
               {photoProposal.photoAnalysis?.limitations?.length ? (
                 <section className="quick-quote-summary-section">

@@ -4800,3 +4800,59 @@ button {
     right: -7px;
   }
 }
+
+/* R1-05B — durable Reviewed Solution / Materials List presentation */
+.quick-quote-reviewed-result {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.24);
+}
+
+.quick-quote-reviewed-result-heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quick-quote-reviewed-result-heading p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-reviewed-result-grid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.quick-quote-reviewed-result-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quick-quote-reviewed-result-section > span {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-reviewed-result-section ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.quick-quote-reviewed-result-section li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 430px) {
+  .quick-quote-reviewed-result {
+    padding: 14px;
+  }
+}

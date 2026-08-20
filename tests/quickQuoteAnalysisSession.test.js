@@ -16,9 +16,11 @@ import {
   createQuickQuoteAnalysisSession,
   discardQuickQuoteAnalysisSession,
   hydrateQuickQuoteAnalysisPresentationState,
+  loadQuickQuoteAnalysisReviewedResult,
   loadQuickQuoteAnalysisSession,
   markQuickQuoteAnalysisPresentationStale,
   validateQuickQuoteAnalysisProposal,
+  validateQuickQuoteAnalysisReviewedResult,
   validateQuickQuoteAnalysisSession,
 } from "../src/utils/quickQuoteAnalysisSession.js";
 
@@ -192,6 +194,91 @@ function proposal({
       learnedPatternIsCanonicalRule:
         false,
     },
+    canonicalMutationPerformed:
+      false,
+  };
+}
+
+function reviewedResult({
+  proposalId =
+    PROPOSAL_ID,
+  evidenceVersion = 1,
+} = {}) {
+  return {
+    schemaVersion: 1,
+    analysisSessionId:
+      SESSION_ID,
+    evidenceVersion,
+    proposalId,
+    authorityClassification:
+      QUICK_QUOTE_ANALYSIS_PRIVATE_AUTHORITY,
+    sourceProposalAuthorityClassification:
+      QUICK_QUOTE_ANALYSIS_PROPOSAL_AUTHORITY,
+    reviewedObservations: [
+      {
+        elementId:
+          "visible_crack",
+        text:
+          "A visible crack appears in the photographed area.",
+        reviewAction:
+          "ACCEPTED",
+        classification:
+          "OBSERVED",
+        sourceReferences: [
+          sourceReference(),
+        ],
+      },
+    ],
+    needsVerification: [
+      {
+        elementId:
+          "hidden_damage",
+        text:
+          "Hidden damage needs field verification.",
+        reviewAction:
+          "ACCEPTED",
+        classification:
+          "NEEDS_VERIFICATION",
+        sourceReferences: [],
+      },
+    ],
+    reviewedSolution: [
+      {
+        elementId:
+          "repair_option",
+        text:
+          "Expose the affected section before finalizing repair scope.",
+        reviewAction:
+          "ACCEPTED",
+        classification:
+          "AI_SUGGESTED",
+        sourceReferences: [],
+      },
+    ],
+    materialsList: [
+      {
+        elementId:
+          "material_option",
+        text:
+          "Use matching replacement masonry materials.",
+        reviewAction:
+          "EDITED",
+        classification:
+          "AI_SUGGESTED",
+        sourceReferences: [],
+      },
+    ],
+    reviewedElementIds: [
+      "confirm_access",
+      "hidden_damage",
+      "material_option",
+      "repair_option",
+      "visible_crack",
+    ],
+    rejectedElementIds: [
+      "discarded_material",
+    ],
+    reviewDecisionCount: 6,
     canonicalMutationPerformed:
       false,
   };
@@ -438,6 +525,111 @@ test(
 );
 
 test(
+  "reviewed result validator accepts only durable private reviewed projection",
+  () => {
+    const valid =
+      reviewedResult();
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult(
+        valid,
+        {
+          sessionId:
+            SESSION_ID,
+          evidenceVersion: 1,
+          proposalId:
+            PROPOSAL_ID,
+        }
+      ),
+      valid
+    );
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult({
+        ...valid,
+        canonicalMutationPerformed:
+          true,
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult({
+        ...valid,
+        authorityClassification:
+          "CANONICAL",
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult({
+        ...valid,
+        reviewedSolution: [
+          {
+            ...valid
+              .reviewedSolution[0],
+            reviewAction:
+              "REJECTED",
+          },
+        ],
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult({
+        ...valid,
+        reviewedElementIds: [
+          ...valid.reviewedElementIds,
+          "material_option",
+        ],
+        reviewDecisionCount: 7,
+      }),
+      null
+    );
+
+    assert.equal(
+      validateQuickQuoteAnalysisReviewedResult(
+        valid,
+        {
+          sessionId:
+            SESSION_ID,
+          evidenceVersion: 2,
+          proposalId:
+            PROPOSAL_ID,
+        }
+      ),
+      null
+    );
+
+    assert.equal(
+      Object.hasOwn(
+        valid,
+        "pricing"
+      ),
+      false
+    );
+
+    assert.equal(
+      Object.hasOwn(
+        valid,
+        "labor"
+      ),
+      false
+    );
+
+    assert.equal(
+      Object.hasOwn(
+        valid,
+        "quote"
+      ),
+      false
+    );
+  }
+);
+
+test(
   "create session sends only governed evidence with idempotency",
   async () => {
     const calls = [];
@@ -622,6 +814,97 @@ test(
           },
         ],
       }
+    );
+  }
+);
+
+test(
+  "reviewed result GET sends session identity only and validates current durable expectations",
+  async () => {
+    const calls = [];
+    const projection =
+      reviewedResult();
+
+    const result =
+      await loadQuickQuoteAnalysisReviewedResult({
+        sessionId:
+          SESSION_ID,
+        expectedEvidenceVersion:
+          1,
+        expectedProposalId:
+          PROPOSAL_ID,
+
+        /*
+         * These are intentionally ignored by the API helper.
+         * They must never become request authority.
+         */
+        actorUserId: 999,
+        evidenceVersion: 999,
+        proposalId:
+          NEXT_PROPOSAL_ID,
+
+        authFetchImpl:
+          async (
+            route,
+            options
+          ) => {
+            calls.push({
+              route,
+              options,
+            });
+
+            return success({
+              code:
+                "QUICK_QUOTE_ANALYSIS_REVIEWED_RESULT_LOADED",
+              reviewedResult:
+                projection,
+            });
+          },
+      });
+
+    assert.equal(
+      result.reviewedResult,
+      projection
+    );
+
+    assert.equal(
+      calls.length,
+      1
+    );
+
+    assert.equal(
+      calls[0].route,
+      `${QUICK_QUOTE_ANALYSIS_SESSION_COLLECTION_ROUTE}/${SESSION_ID}/reviewed-result`
+    );
+
+    assert.deepEqual(
+      calls[0].options,
+      {
+        method: "GET",
+      }
+    );
+
+    await assert.rejects(
+      () =>
+        loadQuickQuoteAnalysisReviewedResult({
+          sessionId:
+            SESSION_ID,
+          expectedEvidenceVersion:
+            2,
+          expectedProposalId:
+            PROPOSAL_ID,
+          authFetchImpl:
+            async () =>
+              success({
+                code:
+                  "QUICK_QUOTE_ANALYSIS_REVIEWED_RESULT_LOADED",
+                reviewedResult:
+                  projection,
+              }),
+        }),
+      (error) =>
+        error?.code ===
+        "UNSAFE_QUICK_QUOTE_ANALYSIS_REVIEWED_RESULT_RESPONSE"
     );
   }
 );

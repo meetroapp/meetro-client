@@ -1373,3 +1373,362 @@ test("description changes mark an existing analysis stale without browser persis
     /localStorage|sessionStorage/
   );
 });
+
+test(
+  "R1-05B hydrates first-class Reviewed Solution and Materials List only from the server projection",
+  () => {
+    assert.match(
+      builder,
+      /loadQuickQuoteAnalysisReviewedResult/
+    );
+
+    assert.match(
+      builder,
+      /quickQuoteReviewedResult/
+    );
+
+    /*
+     * R1-05B hardening:
+     * the reviewed result is now passed only when the
+     * current browser presentation still matches the same
+     * durable session, evidence version, and proposal.
+     */
+    assert.match(
+      builder,
+      /reviewedResult=\{[\s\S]*!quickQuoteAnalysisState\.stale[\s\S]*!quickQuoteAnalysisSessionState\.stale[\s\S]*analysisSessionId[\s\S]*evidenceVersion[\s\S]*proposalId[\s\S]*\? quickQuoteReviewedResult[\s\S]*: null/
+    );
+
+    assert.match(
+      builder,
+      /expectedEvidenceVersion:\s*evidenceVersion/
+    );
+
+    assert.match(
+      builder,
+      /expectedProposalId:\s*proposalId/
+    );
+
+    const reviewStart =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion"
+      );
+
+    const reviewEnd =
+      builder.indexOf(
+        "async function addQuickQuoteDraftPhotoFiles",
+        reviewStart
+      );
+
+    assert.ok(
+      reviewStart >= 0 &&
+      reviewEnd > reviewStart
+    );
+
+    const reviewBoundary =
+      builder.slice(
+        reviewStart,
+        reviewEnd
+      );
+
+    const recordIndex =
+      reviewBoundary.indexOf(
+        "await recordWorkflowReview"
+      );
+
+    const refreshIndex =
+      reviewBoundary.indexOf(
+        "await refreshQuickQuoteReviewedResult"
+      );
+
+    assert.ok(
+      recordIndex >= 0 &&
+      refreshIndex > recordIndex
+    );
+
+    assert.doesNotMatch(
+      reviewBoundary,
+      /setProblemFound|setNotes|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
+    );
+
+    assert.match(
+      conversation,
+      /reviewedResult = null/
+    );
+
+    assert.match(
+      conversation,
+      /copy\.reviewedSolution/
+    );
+
+    assert.match(
+      conversation,
+      /copy\.materialsList/
+    );
+
+    assert.match(
+      conversation,
+      /reviewedResult\.needsVerification/
+    );
+
+    const reviewedStart =
+      conversation.indexOf(
+        "const reviewedSections"
+      );
+
+    const reviewedEnd =
+      conversation.indexOf(
+        "function photoDecisionLabel",
+        reviewedStart
+      );
+
+    assert.ok(
+      reviewedStart >= 0 &&
+      reviewedEnd > reviewedStart
+    );
+
+    const reviewedBoundary =
+      conversation.slice(
+        reviewedStart,
+        reviewedEnd
+      );
+
+    assert.doesNotMatch(
+      reviewedBoundary,
+      /questionsForProfessional/
+    );
+
+    assert.doesNotMatch(
+      reviewedBoundary,
+      /photoDecisions/
+    );
+  }
+);
+
+test(
+  "R1-05B hides stale reviewed authority and preserves four-language reviewed-result copy",
+  () => {
+    const staleStart =
+      builder.indexOf(
+        "function markQuickQuoteAnalysisStale"
+      );
+
+    const staleEnd =
+      builder.indexOf(
+        "function handleQuickQuotePromptChange",
+        staleStart
+      );
+
+    assert.ok(
+      staleStart >= 0 &&
+      staleEnd > staleStart
+    );
+
+    const staleBoundary =
+      builder.slice(
+        staleStart,
+        staleEnd
+      );
+
+    assert.match(
+      staleBoundary,
+      /invalidateQuickQuoteReviewedResult\(\)/
+    );
+
+    for (
+      const language of
+        QUICK_QUOTE_CONVERSATION_LANGUAGES
+    ) {
+      const copy =
+        getQuickQuoteConversationCopy(
+          language
+        );
+
+      for (
+        const key of [
+          "reviewedResultTitle",
+          "reviewedResultHelp",
+          "reviewedSolution",
+          "materialsList",
+          "reviewedResultLoadFailed",
+        ]
+      ) {
+        assert.equal(
+          typeof copy[key],
+          "string"
+        );
+
+        assert.ok(
+          copy[key].trim()
+        );
+      }
+    }
+
+    const english =
+      getQuickQuoteConversationCopy(
+        "en"
+      );
+
+    assert.equal(
+      english.reviewedSolution,
+      "Reviewed Solution"
+    );
+
+    assert.equal(
+      english.materialsList,
+      "Materials List"
+    );
+
+    assert.match(
+      english.reviewedResultHelp,
+      /private/i
+    );
+
+    assert.match(
+      english.reviewedResultHelp,
+      /does not change the Quote/i
+    );
+  }
+);
+
+test(
+  "R1-05B reviewed-result surface remains mobile-contained and introduces no R1-06 action",
+  () => {
+    assert.match(
+      styles,
+      /\.quick-quote-reviewed-result\s*\{[\s\S]*min-width:\s*0/
+    );
+
+    assert.match(
+      styles,
+      /\.quick-quote-reviewed-result-section li\s*\{[\s\S]*overflow-wrap:\s*anywhere/
+    );
+
+    assert.match(
+      styles,
+      /@media \(max-width: 430px\)[\s\S]*\.quick-quote-reviewed-result/
+    );
+
+    assert.doesNotMatch(
+      conversation,
+      /Solution Ready|Confirm Solution Ready|Create Quote/
+    );
+
+    assert.doesNotMatch(
+      conversation,
+      /setMaterialRows|setLaborRows|setTotalOverride/
+    );
+  }
+);
+
+test(
+  "R1-05B prevents superseded reviewed-result requests from reviving stale or older proposal authority",
+  () => {
+    assert.match(
+      builder,
+      /quickQuoteReviewedResultRequestRef/
+    );
+
+    assert.match(
+      builder,
+      /function invalidateQuickQuoteReviewedResult/
+    );
+
+    assert.match(
+      builder,
+      /quickQuoteReviewedResultRequestRef\.current \+= 1/
+    );
+
+    assert.match(
+      builder,
+      /const requestGeneration =[\s\S]*quickQuoteReviewedResultRequestRef[\s\S]*\.current \+ 1/
+    );
+
+    assert.match(
+      builder,
+      /quickQuoteReviewedResultRequestRef\.current !==[\s\S]*requestGeneration/
+    );
+
+    const staleStart =
+      builder.indexOf(
+        "function markQuickQuoteAnalysisStale"
+      );
+
+    const staleEnd =
+      builder.indexOf(
+        "function handleQuickQuotePromptChange",
+        staleStart
+      );
+
+    assert.ok(
+      staleStart >= 0 &&
+      staleEnd > staleStart
+    );
+
+    assert.match(
+      builder.slice(
+        staleStart,
+        staleEnd
+      ),
+      /invalidateQuickQuoteReviewedResult\(\)/
+    );
+
+    assert.match(
+      builder,
+      /reviewedResult=\{[\s\S]*!quickQuoteAnalysisState\.stale[\s\S]*!quickQuoteAnalysisSessionState\.stale[\s\S]*analysisSessionId[\s\S]*evidenceVersion[\s\S]*proposalId/
+    );
+  }
+);
+
+test(
+  "R1-05B serializes review persistence and reviewed-result refresh",
+  () => {
+    const start =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion"
+      );
+
+    const end =
+      builder.indexOf(
+        "async function addQuickQuoteDraftPhotoFiles",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
+
+    const boundary =
+      builder.slice(
+        start,
+        end
+      );
+
+    const recordIndex =
+      boundary.indexOf(
+        "await recordWorkflowReview"
+      );
+
+    const refreshIndex =
+      boundary.indexOf(
+        "await refreshQuickQuoteReviewedResult"
+      );
+
+    const busyFalseIndex =
+      boundary.indexOf(
+        "busy: false",
+        refreshIndex
+      );
+
+    assert.match(
+      boundary,
+      /busy: true,[\s\S]*reviewingId: item\.id/
+    );
+
+    assert.ok(
+      recordIndex >= 0 &&
+      refreshIndex > recordIndex &&
+      busyFalseIndex > refreshIndex
+    );
+  }
+);

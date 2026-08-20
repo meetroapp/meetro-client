@@ -27,6 +27,10 @@ const LOAD_SUCCESS = new Set([
   "QUICK_QUOTE_ANALYSIS_SESSION_LOADED",
 ]);
 
+const REVIEWED_RESULT_SUCCESS = new Set([
+  "QUICK_QUOTE_ANALYSIS_REVIEWED_RESULT_LOADED",
+]);
+
 const EVIDENCE_SUCCESS = new Set([
   "QUICK_QUOTE_ANALYSIS_EVIDENCE_APPENDED",
   "QUICK_QUOTE_ANALYSIS_EVIDENCE_CURRENT",
@@ -379,6 +383,56 @@ function validAssistanceItem(
     !safeText(
       value.text,
       3000
+    ) ||
+    value.classification !==
+      classification ||
+    !safeArray(
+      value.sourceReferences,
+      12
+    ) ||
+    !value.sourceReferences.every(
+      validSourceReference
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    classification !==
+      "OBSERVED" ||
+    value.sourceReferences.length > 0
+  );
+}
+
+function validReviewedAssistanceItem(
+  value,
+  classification
+) {
+  if (
+    !exactKeys(
+      value,
+      [
+        "elementId",
+        "text",
+        "reviewAction",
+        "classification",
+        "sourceReferences",
+      ]
+    ) ||
+    !ELEMENT_ID.test(
+      String(
+        value.elementId || ""
+      )
+    ) ||
+    !safeText(
+      value.text,
+      3000
+    ) ||
+    ![
+      "ACCEPTED",
+      "EDITED",
+    ].includes(
+      value.reviewAction
     ) ||
     value.classification !==
       classification ||
@@ -753,6 +807,235 @@ function validatePhotoReference(
       value.displayOrder
     )
   );
+}
+
+export function validateQuickQuoteAnalysisReviewedResult(
+  value,
+  expected = {}
+) {
+  const requiredKeys = [
+    "schemaVersion",
+    "analysisSessionId",
+    "evidenceVersion",
+    "proposalId",
+    "authorityClassification",
+    "sourceProposalAuthorityClassification",
+    "reviewedObservations",
+    "needsVerification",
+    "reviewedSolution",
+    "materialsList",
+    "reviewedElementIds",
+    "rejectedElementIds",
+    "reviewDecisionCount",
+    "canonicalMutationPerformed",
+  ];
+
+  if (
+    !exactKeys(
+      value,
+      requiredKeys
+    ) ||
+    value.schemaVersion !== 1 ||
+    !safeUuid(
+      value.analysisSessionId
+    ) ||
+    !safePositiveInteger(
+      value.evidenceVersion
+    ) ||
+    !safeUuid(
+      value.proposalId
+    ) ||
+    value.authorityClassification !==
+      QUICK_QUOTE_ANALYSIS_PRIVATE_AUTHORITY ||
+    value.sourceProposalAuthorityClassification !==
+      QUICK_QUOTE_ANALYSIS_PROPOSAL_AUTHORITY ||
+    value.canonicalMutationPerformed !==
+      false
+  ) {
+    return null;
+  }
+
+  if (
+    expected.sessionId &&
+    safeUuid(
+      value.analysisSessionId
+    ) !==
+      safeUuid(
+        expected.sessionId
+      )
+  ) {
+    return null;
+  }
+
+  if (
+    expected.evidenceVersion != null &&
+    value.evidenceVersion !==
+      Number(
+        expected.evidenceVersion
+      )
+  ) {
+    return null;
+  }
+
+  if (
+    expected.proposalId &&
+    safeUuid(
+      value.proposalId
+    ) !==
+      safeUuid(
+        expected.proposalId
+      )
+  ) {
+    return null;
+  }
+
+  if (
+    !safeArray(
+      value.reviewedObservations,
+      40
+    ) ||
+    !value.reviewedObservations.every(
+      (item) =>
+        validReviewedAssistanceItem(
+          item,
+          "OBSERVED"
+        )
+    ) ||
+    !safeArray(
+      value.needsVerification,
+      40
+    ) ||
+    !value.needsVerification.every(
+      (item) =>
+        validReviewedAssistanceItem(
+          item,
+          "NEEDS_VERIFICATION"
+        )
+    ) ||
+    !safeArray(
+      value.reviewedSolution,
+      40
+    ) ||
+    !value.reviewedSolution.every(
+      (item) =>
+        validReviewedAssistanceItem(
+          item,
+          "AI_SUGGESTED"
+        )
+    ) ||
+    !safeArray(
+      value.materialsList,
+      40
+    ) ||
+    !value.materialsList.every(
+      (item) =>
+        validReviewedAssistanceItem(
+          item,
+          "AI_SUGGESTED"
+        )
+    )
+  ) {
+    return null;
+  }
+
+  const validElementIdList =
+    (items) =>
+      safeArray(
+        items,
+        200
+      ) &&
+      items.every(
+        (item) =>
+          typeof item ===
+            "string" &&
+          ELEMENT_ID.test(item)
+      );
+
+  if (
+    !validElementIdList(
+      value.reviewedElementIds
+    ) ||
+    !validElementIdList(
+      value.rejectedElementIds
+    ) ||
+    !safeNonNegativeInteger(
+      value.reviewDecisionCount
+    ) ||
+    value.reviewDecisionCount >
+      200
+  ) {
+    return null;
+  }
+
+  const decisionIds = [
+    ...value.reviewedElementIds,
+    ...value.rejectedElementIds,
+  ];
+
+  const decisionIdSet =
+    new Set(
+      decisionIds
+    );
+
+  if (
+    decisionIdSet.size !==
+      decisionIds.length ||
+    value.reviewDecisionCount !==
+      decisionIds.length
+  ) {
+    return null;
+  }
+
+  const reviewedIdSet =
+    new Set(
+      value.reviewedElementIds
+    );
+
+  const rejectedIdSet =
+    new Set(
+      value.rejectedElementIds
+    );
+
+  const projectedItems = [
+    ...value.reviewedObservations,
+    ...value.needsVerification,
+    ...value.reviewedSolution,
+    ...value.materialsList,
+  ];
+
+  const projectedIds =
+    projectedItems.map(
+      (item) =>
+        item.elementId
+    );
+
+  if (
+    new Set(
+      projectedIds
+    ).size !==
+      projectedIds.length ||
+    projectedIds.some(
+      (elementId) =>
+        !reviewedIdSet.has(
+          elementId
+        ) ||
+        rejectedIdSet.has(
+          elementId
+        )
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    !assertSafeResponseObject(
+      value
+    )
+  ) {
+    return null;
+  }
+
+  return value;
 }
 
 export function validateQuickQuoteAnalysisEvidence(
@@ -1262,6 +1545,120 @@ export async function loadQuickQuoteAnalysisSession({
 
   return {
     session,
+  };
+}
+
+export async function loadQuickQuoteAnalysisReviewedResult({
+  sessionId,
+  expectedEvidenceVersion = null,
+  expectedProposalId = "",
+  setPage,
+  authFetchImpl = authFetch,
+} = {}) {
+  const normalizedSessionId =
+    safeUuid(
+      sessionId
+    );
+
+  if (!normalizedSessionId) {
+    throw new TypeError(
+      "A valid Job Analysis session is required."
+    );
+  }
+
+  const normalizedExpectedVersion =
+    expectedEvidenceVersion ==
+      null
+      ? null
+      : Number(
+          expectedEvidenceVersion
+        );
+
+  if (
+    normalizedExpectedVersion !=
+      null &&
+    !safePositiveInteger(
+      normalizedExpectedVersion
+    )
+  ) {
+    throw new TypeError(
+      "A valid current Job Analysis evidence version is required."
+    );
+  }
+
+  const normalizedExpectedProposal =
+    expectedProposalId
+      ? safeUuid(
+          expectedProposalId
+        )
+      : "";
+
+  if (
+    expectedProposalId &&
+    !normalizedExpectedProposal
+  ) {
+    throw new TypeError(
+      "A valid current Job Analysis proposal is required."
+    );
+  }
+
+  /*
+   * Read-only R1-05 authority.
+   *
+   * Evidence version and proposal identity are NOT sent to
+   * the server. They are local expectations used only to
+   * fail closed if the server projection no longer matches
+   * the browser's current durable session presentation.
+   */
+  const data =
+    await requestQuickQuoteAnalysis({
+      route:
+        analysisRoute(
+          normalizedSessionId,
+          "/reviewed-result"
+        ),
+      method: "GET",
+      successCodes:
+        REVIEWED_RESULT_SUCCESS,
+      setPage,
+      authFetchImpl,
+    });
+
+  const reviewedResult =
+    validateQuickQuoteAnalysisReviewedResult(
+      data.reviewedResult,
+      {
+        sessionId:
+          normalizedSessionId,
+        ...(normalizedExpectedVersion !=
+        null
+          ? {
+              evidenceVersion:
+                normalizedExpectedVersion,
+            }
+          : {}),
+        ...(normalizedExpectedProposal
+          ? {
+              proposalId:
+                normalizedExpectedProposal,
+            }
+          : {}),
+      }
+    );
+
+  if (!reviewedResult) {
+    throw new QuickQuoteAnalysisApiError(
+      "The professional-reviewed Job Analysis result was invalid.",
+      {
+        status: 502,
+        code:
+          "UNSAFE_QUICK_QUOTE_ANALYSIS_REVIEWED_RESULT_RESPONSE",
+      }
+    );
+  }
+
+  return {
+    reviewedResult,
   };
 }
 

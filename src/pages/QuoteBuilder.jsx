@@ -48,6 +48,7 @@ import {
   continueQuickQuoteAnalysisSession,
   discardQuickQuoteAnalysisSession,
   hydrateQuickQuoteAnalysisPresentationState,
+  loadQuickQuoteAnalysisReviewedResult,
   loadQuickQuoteAnalysisSession,
   markQuickQuoteAnalysisPresentationStale,
 } from "../utils/quickQuoteAnalysisSession.js";
@@ -869,6 +870,12 @@ function QuoteBuilder({ setPage }) {
   ] = useState(() =>
     createQuickQuoteAnalysisPresentationState()
   );
+  const [
+    quickQuoteReviewedResult,
+    setQuickQuoteReviewedResult,
+  ] = useState(null);
+  const quickQuoteReviewedResultRequestRef =
+    useRef(0);
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
@@ -1522,6 +1529,119 @@ ${businessIdentity.businessName}`;
     setQuotePreviewOpen(true);
   }
 
+  function invalidateQuickQuoteReviewedResult() {
+    /*
+     * Invalidate every in-flight reviewed-result GET before
+     * clearing presentation authority.
+     *
+     * A response started against an older browser evidence /
+     * proposal state must never repopulate Reviewed Solution
+     * or Materials List after that state becomes stale.
+     */
+    quickQuoteReviewedResultRequestRef.current += 1;
+
+    setQuickQuoteReviewedResult(
+      null
+    );
+  }
+
+  async function refreshQuickQuoteReviewedResult(
+    presentation,
+    proposal,
+    {
+      surfaceError = false,
+    } = {}
+  ) {
+    const sessionId =
+      presentation?.sessionId;
+
+    const evidenceVersion =
+      presentation
+        ?.latestEvidenceVersion;
+
+    const proposalId =
+      proposal?.proposalId;
+
+    if (
+      !sessionId ||
+      !Number.isInteger(
+        evidenceVersion
+      ) ||
+      evidenceVersion < 1 ||
+      presentation?.stale ||
+      !proposalId ||
+      presentation
+        ?.latestProposal
+        ?.proposalId !==
+        proposalId
+    ) {
+      invalidateQuickQuoteReviewedResult();
+      return null;
+    }
+
+    const requestGeneration =
+      quickQuoteReviewedResultRequestRef
+        .current + 1;
+
+    quickQuoteReviewedResultRequestRef.current =
+      requestGeneration;
+
+    try {
+      const loaded =
+        await loadQuickQuoteAnalysisReviewedResult({
+          sessionId,
+          expectedEvidenceVersion:
+            evidenceVersion,
+          expectedProposalId:
+            proposalId,
+          setPage,
+        });
+
+      if (
+        quickQuoteReviewedResultRequestRef.current !==
+        requestGeneration
+      ) {
+        return null;
+      }
+
+      setQuickQuoteReviewedResult(
+        loaded.reviewedResult
+      );
+
+      return loaded.reviewedResult;
+    } catch (error) {
+      if (
+        quickQuoteReviewedResultRequestRef.current !==
+        requestGeneration
+      ) {
+        return null;
+      }
+
+      /*
+       * R1-05:
+       * Never fall back to browser review decisions as
+       * durable Reviewed Solution / Materials authority.
+       */
+      setQuickQuoteReviewedResult(
+        null
+      );
+
+      if (surfaceError) {
+        setQuickQuotePhotoAssistant(
+          (current) => ({
+            ...current,
+            error:
+              error?.message ||
+              quickQuoteCopy
+                .reviewedResultLoadFailed,
+          })
+        );
+      }
+
+      return null;
+    }
+  }
+
   async function prepareQuickQuoteConversation() {
     const professionalInput =
       String(
@@ -1550,6 +1670,7 @@ ${businessIdentity.businessName}`;
       );
 
     setQuickQuotePhotoNotice("");
+    invalidateQuickQuoteReviewedResult();
     setQuickQuoteView("working");
 
     setQuickQuotePhotoAssistant(
@@ -1618,6 +1739,16 @@ ${businessIdentity.businessName}`;
           hydrateQuickQuoteAnalysisPresentationState(
             loaded.session
           );
+
+        if (
+          presentation.latestProposal &&
+          !presentation.stale
+        ) {
+          await refreshQuickQuoteReviewedResult(
+            presentation,
+            presentation.latestProposal
+          );
+        }
       }
 
       setQuickQuoteAnalysisSessionState(
@@ -1640,6 +1771,11 @@ ${businessIdentity.businessName}`;
 
       setQuickQuoteAnalysisSessionState(
         currentPresentation
+      );
+
+      await refreshQuickQuoteReviewedResult(
+        currentPresentation,
+        execution.proposal
       );
 
       /*
@@ -1737,8 +1873,20 @@ ${businessIdentity.businessName}`;
           execution
         );
 
+      /*
+       * The continuation created a NEW latest proposal.
+       * Invalidate any in-flight projection for the prior one
+       * before publishing the new presentation.
+       */
+      invalidateQuickQuoteReviewedResult();
+
       setQuickQuoteAnalysisSessionState(
         nextPresentation
+      );
+
+      await refreshQuickQuoteReviewedResult(
+        nextPresentation,
+        execution.proposal
       );
 
       setQuickQuoteAnalysisState(
@@ -1820,6 +1968,7 @@ ${businessIdentity.businessName}`;
 
     setQuickQuotePhotoAssistant((current) => ({
       ...current,
+      busy: true,
       error: "",
       reviewingId: item.id,
     }));
@@ -1858,7 +2007,6 @@ ${businessIdentity.businessName}`;
        */
       setQuickQuotePhotoAssistant((current) => ({
         ...current,
-        reviewingId: "",
         decisions: {
           ...current.decisions,
           [item.id]: {
@@ -1869,10 +2017,32 @@ ${businessIdentity.businessName}`;
         },
       }));
 
+      /*
+       * The review POST is durable evidence.
+       * The first-class Reviewed Solution / Materials List
+       * is then re-read from the server projection.
+       *
+       * Browser photoDecisions remains presentation-only.
+       */
+      await refreshQuickQuoteReviewedResult(
+        quickQuoteAnalysisSessionState,
+        proposal,
+        {
+          surfaceError: true,
+        }
+      );
+
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        busy: false,
+        reviewingId: "",
+      }));
+
       return true;
     } catch (error) {
       setQuickQuotePhotoAssistant((current) => ({
         ...current,
+        busy: false,
         reviewingId: "",
         error:
           error?.message || quickQuoteCopy.photoReviewFailed,
@@ -2009,6 +2179,8 @@ ${businessIdentity.businessName}`;
   }
 
   function markQuickQuoteAnalysisStale() {
+    invalidateQuickQuoteReviewedResult();
+
     setQuickQuoteAnalysisState((current) =>
       current.available
         ? {
@@ -2196,6 +2368,8 @@ ${businessIdentity.businessName}`;
         createQuickQuoteAnalysisPresentationState()
       );
 
+      invalidateQuickQuoteReviewedResult();
+
       setQuickQuoteAnalysisState({
         available: false,
         stale: false,
@@ -2281,6 +2455,7 @@ ${businessIdentity.businessName}`;
       decisions: {},
       reviewingId: "",
     });
+    invalidateQuickQuoteReviewedResult();
     setQuickQuoteAnalysisState({
       available: false,
       stale: false,
@@ -2401,6 +2576,25 @@ ${businessIdentity.businessName}`;
           }
           photoProposal={
             quickQuotePhotoAssistant.proposal
+          }
+          reviewedResult={
+            !quickQuoteAnalysisState.stale &&
+            !quickQuoteAnalysisSessionState.stale &&
+            quickQuoteReviewedResult
+              ?.analysisSessionId ===
+              quickQuoteAnalysisSessionState
+                .sessionId &&
+            quickQuoteReviewedResult
+              ?.evidenceVersion ===
+              quickQuoteAnalysisSessionState
+                .latestEvidenceVersion &&
+            quickQuoteReviewedResult
+              ?.proposalId ===
+              quickQuotePhotoAssistant
+                .proposal
+                ?.proposalId
+              ? quickQuoteReviewedResult
+              : null
           }
           photoDecisions={
             quickQuotePhotoAssistant.decisions
