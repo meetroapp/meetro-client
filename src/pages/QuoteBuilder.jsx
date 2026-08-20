@@ -32,6 +32,10 @@ import {
   requestWorkflowIntelligence,
 } from "../utils/contextualIntelligence";
 import { applyConfirmedQuoteComposition } from "../utils/canonicalQuoteDraftCommands";
+import {
+  buildQuoteCompositionInput,
+  getSolutionReadyReviewElements,
+} from "../utils/quoteBuilderIntelligenceBoundary.js";
 import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
 import {
   downloadCustomerDocumentPdf,
@@ -991,47 +995,16 @@ function QuoteBuilder({ setPage }) {
     ];
   }
 
-  function quoteCompositionInput(prompt) {
-    const pricingInputs = [
-      ...lineItems.flatMap((item, index) => {
-        const quantity = Number(item.quantity) || 1;
-        const amountMinor = Math.round(parseQuotePricingAmount(item.unitPrice || item.total) * 100);
-        return cleanText(item.description) && Number.isInteger(quantity) && amountMinor >= 0
-          ? [{ key: inputKey("service", index), classification: "LABOR_SERVICE", amountMinor, quantity }]
-          : [];
-      }),
-      ...materialRows.flatMap((item, index) => {
-        const quantity = Number(item.quantity) || 1;
-        const amountMinor = Math.round(parseQuotePricingAmount(item.cost || item.total) * 100);
-        return cleanText(item.name) && Number.isInteger(quantity) && amountMinor >= 0
-          ? [{ key: inputKey("material", index), classification: "MATERIAL", amountMinor, quantity }]
-          : [];
-      }),
-      ...laborRows.flatMap((item, index) => {
-        const quantity = Number(item.hours) || 1;
-        const amountMinor = Math.round(parseQuotePricingAmount(item.rate || item.total) * 100);
-        return cleanText(item.description) && Number.isInteger(quantity) && amountMinor >= 0
-          ? [{ key: inputKey("labor", index), classification: "LABOR_SERVICE", amountMinor, quantity }]
-          : [];
-      }),
-    ];
-    return {
+  function quoteCompositionInput(prompt, { estimateProposalId } = {}) {
+    return buildQuoteCompositionInput({
       jobId: canonicalJobId,
-      mode: "ADVISORY",
       professionalInstructions: [problemFound, recommendedSolution, notes, prompt].filter(Boolean).join("\n") || undefined,
-      pricingInputs,
-      materialInputs: materialRows.flatMap((item, index) => cleanText(item.name) ? [{
-        key: inputKey("material", index),
-        description: cleanText(item.name),
-        responsibility: materialProvider === "Customer Provides" ? "CUSTOMER_SUPPLIED" : "PROFESSIONAL_SUPPLIED",
-      }] : []),
-      terms: {
-        availability: estimatedDuration || timeline || undefined,
-        confirmedTotalMinor: pricingInputs.length > 0
-          ? pricingInputs.reduce((sum, item) => sum + item.amountMinor * item.quantity, 0)
-          : undefined,
-      },
-    };
+      lineItems,
+      materialRows,
+      materialProvider,
+      availability: estimatedDuration || timeline,
+      estimateProposalId,
+    });
   }
 
   async function requestEstimateHelp(action, prompt) {
@@ -1080,14 +1053,11 @@ function QuoteBuilder({ setPage }) {
     }
   }
 
-  async function applyEstimateDraft() {
+  async function markEstimateSolutionReady() {
     const proposal = assistant.result?.proposal;
     if (!proposal || assistant.result.operation !== INTELLIGENCE_OPERATION.ESTIMATE) return;
-    const elements = [
-      ...proposal.materials,
-      ...proposal.labor,
-      proposal.customerQuoteDraft,
-    ];
+    const elements = getSolutionReadyReviewElements(proposal);
+    setAssistant((current) => ({ ...current, busy: true, error: "", notice: "" }));
     try {
       await Promise.all(elements.map((item) => recordWorkflowReview({
         proposalId: proposal.proposalId,
@@ -1095,24 +1065,32 @@ function QuoteBuilder({ setPage }) {
         action: "ACCEPTED",
         setPage,
       })));
-      if (proposal.materials.length) setMaterialRows(proposal.materials.map((item, index) => normalizeQuoteMaterialItem({
-        id: item.id || inputKey("material", index), name: item.description,
-        quantity: String(item.quantity), cost: item.effectiveUnitCostMinor == null ? "" : String(item.effectiveUnitCostMinor / 100),
-        notes: [item.assumption, item.needsVerification ? getAskMeetroWorkflowCopy(language).needsVerification : ""].filter(Boolean).join(" · "),
-      }, index)));
-      if (proposal.labor.length) setLaborRows(proposal.labor.map((item, index) => normalizeQuoteLaborItem({
-        id: item.id || inputKey("labor", index), description: item.description,
-        hours: String(item.hoursPerWorker), rate: item.professionalOverride?.unitCostMinor == null ? "" : String(item.professionalOverride.unitCostMinor / 100),
-      }, index, isSpanish)));
-      setRecommendedSolution(proposal.customerQuoteDraft.customerWording);
-      setNotes(proposal.customerQuoteDraft.scopeSummary);
-      setTerms([...proposal.customerQuoteDraft.conditions, ...proposal.customerQuoteDraft.exclusions].join("\n"));
-      setTimeline(proposal.customerQuoteDraft.durationGuidance || timeline);
-      const acceptedPrice = proposal.professionalSellingPriceMinor || proposal.suggestedSellingRange.minimumMinor;
-      if (acceptedPrice > 0) setTotalOverride(String(acceptedPrice / 100));
-      setAssistant((current) => ({ ...current, notice: getAskMeetroWorkflowCopy(language).applyToEstimate }));
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.QUOTE,
+        locale: language,
+        input: quoteCompositionInput("", {
+          estimateProposalId: proposal.proposalId,
+        }),
+        expected: { jobId: canonicalJobId },
+        setPage,
+      });
+      const candidates = result.proposal.proposedScopeItems?.filter((item) => item.canonicalCandidate) || [];
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: getAskMeetroWorkflowCopy(language).solutionReady,
+        result,
+        commandKeys: {
+          createKey: createIntelligenceKey(),
+          scopeKeys: candidates.map(() => createIntelligenceKey()),
+        },
+      });
     } catch (error) {
-      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+      setAssistant((current) => ({
+        ...current,
+        busy: false,
+        error: error?.message || getAskMeetroWorkflowCopy(language).unavailable,
+      }));
     }
   }
 
@@ -1143,7 +1121,7 @@ function QuoteBuilder({ setPage }) {
         scopeKeys: assistant.commandKeys.scopeKeys,
         setPage,
       });
-      setAssistant((current) => ({ ...current, notice: `${getAskMeetroWorkflowCopy(language).useInQuote} · ${quote.scopeItemCount}` }));
+      setAssistant((current) => ({ ...current, notice: `${getAskMeetroWorkflowCopy(language).createQuote} · ${quote.scopeItemCount}` }));
     } catch (error) {
       setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
     }
@@ -2912,7 +2890,7 @@ ${businessIdentity.businessName}`;
                   key={assistant.result.proposal.proposalId}
                   result={assistant.result}
                   language={language}
-                  onApplyEstimate={() => void applyEstimateDraft()}
+                  onSolutionReady={() => void markEstimateSolutionReady()}
                   onUseQuote={(edits) => void handleUseQuoteComposition(edits)}
                   onDismiss={() => void dismissEstimateHelp()}
                 />
@@ -3341,7 +3319,7 @@ ${businessIdentity.businessName}`;
   );
 }
 
-function EstimateAssistantResult({ result, language, onApplyEstimate, onUseQuote, onDismiss }) {
+function EstimateAssistantResult({ result, language, onSolutionReady, onUseQuote, onDismiss }) {
   const copy = getAskMeetroWorkflowCopy(language);
   const proposal = result.proposal;
   const [editingQuote, setEditingQuote] = useState(false);
@@ -3382,7 +3360,7 @@ function EstimateAssistantResult({ result, language, onApplyEstimate, onUseQuote
         })}
         {proposal.commercialMissingInformation.map((item) => <p key={item.id} style={pricingReviewText}>{item.description}</p>)}
         <div style={inlineActionGrid}>
-          <button type="button" style={secondaryActionButton} onClick={() => onUseQuote(editingQuote ? quoteEdits : null)}>{copy.useInQuote}</button>
+          <button type="button" style={secondaryActionButton} onClick={() => onUseQuote(editingQuote ? quoteEdits : null)}>{copy.createQuote}</button>
           <button type="button" style={quietActionButton} onClick={() => setEditingQuote(true)}>{copy.edit}</button>
           <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
         </div>
@@ -3412,7 +3390,7 @@ function EstimateAssistantResult({ result, language, onApplyEstimate, onUseQuote
       ))}
       <p style={pricingReviewText}>{proposal.customerQuoteDraft.customerWording}</p>
       <div style={inlineActionGrid}>
-        <button type="button" style={secondaryActionButton} onClick={onApplyEstimate}>{copy.applyToEstimate}</button>
+        <button type="button" style={secondaryActionButton} onClick={onSolutionReady}>{copy.solutionReady}</button>
         <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
       </div>
     </div>
