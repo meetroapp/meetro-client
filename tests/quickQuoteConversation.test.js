@@ -10,6 +10,10 @@ import {
   getQuickQuoteConversationCopy,
   QUICK_QUOTE_CONVERSATION_LANGUAGES,
 } from "../src/utils/quickQuoteConversationLanguage.js";
+import {
+  getQuickQuoteProfessionalContinuation,
+  isQuickQuoteSuggestionReviewable,
+} from "../src/utils/quickQuoteProfessionalContinuation.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const builder = read("src/pages/QuoteBuilder.jsx");
@@ -18,6 +22,124 @@ const analysisThread = read("src/components/QuickQuoteAnalysisThread.jsx");
 const microphone = read("src/components/WorkflowMicrophoneInput.jsx");
 const quoteDraftMedia = read("src/utils/quoteDraftPhotoMedia.js");
 const styles = read("src/index.css");
+
+
+test("professional input enables continuation without accepting Meetro suggestions", () => {
+  const professionalInput = [
+    "Purchase materials $40",
+    "Labor $260.00",
+    "Repair wall inside closet",
+    "Move outlet from closet to living room wall.",
+    "Install new outlet plate.",
+  ].join("\n");
+
+  const continuation = getQuickQuoteProfessionalContinuation({
+    professionalInput,
+    canonicalJobId: "",
+    photoDecisions: {
+      repair_1: { action: "REJECTED" },
+    },
+    ignoredMaterialSuggestionIds: ["material_1"],
+    needsVerification: ["Confirm wall type"],
+  });
+
+  assert.equal(continuation.canContinue, true);
+  assert.equal(continuation.professionalInput, professionalInput);
+  assert.equal(continuation.nextStep, "CANONICAL_JOB_REQUIRED");
+  assert.equal(continuation.reviewEvents, undefined);
+  assert.equal(continuation.pricingInputs, undefined);
+  assert.equal(continuation.estimateInput, undefined);
+});
+
+
+test("professional continuation recognizes a canonical Job without promoting pricing", () => {
+  const professionalInput = "Materials $40. Labor $260. Repair wall.";
+  const canonicalJobId = "4b7f7d0b-99b0-4f45-84c0-86c216fa0d14";
+  const continuation = getQuickQuoteProfessionalContinuation({
+    professionalInput,
+    canonicalJobId,
+  });
+
+  assert.equal(continuation.canContinue, true);
+  assert.equal(continuation.professionalInput, professionalInput);
+  assert.equal(continuation.canonicalJobId, canonicalJobId);
+  assert.equal(continuation.nextStep, "INTERNAL_ESTIMATE");
+  assert.equal(continuation.pricingInputs, undefined);
+});
+
+
+test("Needs Verification stays advisory while selectable suggestions remain reviewable", () => {
+  assert.equal(isQuickQuoteSuggestionReviewable("needsVerification"), false);
+  assert.equal(isQuickQuoteSuggestionReviewable("observed"), false);
+  assert.equal(isQuickQuoteSuggestionReviewable("repairSuggestions"), true);
+  assert.equal(isQuickQuoteSuggestionReviewable("materialSuggestions"), true);
+});
+
+
+test("Job Analysis exposes professional-first continuation and optional collapsed Meetro help", () => {
+  assert.match(conversation, /onContinueWithMyDetails/);
+  assert.match(conversation, /copy\.yourJobDetails/);
+  assert.match(conversation, /copy\.continueWithMyDetails/);
+  assert.match(conversation, /copy\.useMeetroSuggestions/);
+  assert.match(conversation, /quick-quote-professional-actions/);
+  assert.match(conversation, /quick-quote-suggestion-group/);
+  assert.match(conversation, /<details/);
+  assert.match(conversation, /isQuickQuoteSuggestionReviewable\(category\)/);
+
+  const continueStart = builder.indexOf(
+    "function continueQuickQuoteWithProfessionalDetails"
+  );
+  const continueEnd = builder.indexOf(
+    "async function continueQuickQuoteConversation",
+    continueStart
+  );
+
+  assert.ok(continueStart >= 0 && continueEnd > continueStart);
+
+  const continueBoundary = builder.slice(continueStart, continueEnd);
+  assert.match(continueBoundary, /getQuickQuoteProfessionalContinuation/);
+  assert.match(continueBoundary, /quickQuoteAnalysisState\.analyzedPrompt/);
+  assert.match(continueBoundary, /setQuickQuoteContinuationNotice/);
+  assert.doesNotMatch(continueBoundary, /recordWorkflowReview/);
+  assert.doesNotMatch(
+    continueBoundary,
+    /setProblemFound|setRecommendedSolution|setMaterialRows|setLaborRows|setLineItems|setTotalOverride/
+  );
+
+  assert.match(
+    builder,
+    /onContinueWithMyDetails=\{continueQuickQuoteWithProfessionalDetails\}/
+  );
+});
+
+
+test("professional continuation copy is complete in every Quick Quote locale", () => {
+  const expected = {
+    en: "Continue with My Details",
+    es: "Continuar con mis detalles",
+    fr: "Continuer avec mes détails",
+    "pt-BR": "Continuar com meus detalhes",
+  };
+
+  for (const language of QUICK_QUOTE_CONVERSATION_LANGUAGES) {
+    const copy = getQuickQuoteConversationCopy(language);
+
+    for (const key of [
+      "yourJobDetails",
+      "continueWithMyDetails",
+      "useMeetroSuggestions",
+      "optionalSuggestionsHelp",
+      "canonicalJobRequired",
+      "recommendedSolution",
+      "thingsToVerify",
+    ]) {
+      assert.equal(typeof copy[key], "string", `${language}:${key}`);
+      assert.ok(copy[key].trim(), `${language}:${key}`);
+    }
+
+    assert.equal(copy.continueWithMyDetails, expected[language]);
+  }
+});
 
 
 test("universal Quick Quote opens Job Analysis and keeps the full Quote editor out of the analysis flow", () => {
@@ -83,7 +205,12 @@ test("entry and analysis copy describe private pre-quote Job Analysis", () => {
 
   assert.match(
     copy.reviewGuidanceBody,
-    /observations, verification needs, repair suggestions/i
+    /details are enough to continue/i
+  );
+
+  assert.match(
+    copy.reviewGuidanceBody,
+    /suggestions are optional/i
   );
 
   assert.match(conversation, /copy\.entryGuidanceTitle/);
@@ -402,7 +529,7 @@ test(
 
     const end =
       builder.indexOf(
-        "async function reviewQuickQuotePhotoSuggestion",
+        "async function requestQuickQuoteInternalEstimate",
         start
       );
 
@@ -669,7 +796,7 @@ test(
 
     assert.match(
       conversation,
-      /editingPhotoItemId ===\s*`\$\{photoProposal\.proposalId\}:\$\{item\.id\}`/
+      /editingPhotoItemId ===\s*`\$\{photoProposal\.proposalId\}:\$\{sourceItemId\}`/
     );
 
     assert.match(

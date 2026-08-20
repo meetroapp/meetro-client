@@ -4,6 +4,8 @@ import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import QuickQuoteAnalysisThread from "./QuickQuoteAnalysisThread.jsx";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
+import { isQuickQuoteSuggestionReviewable } from "../utils/quickQuoteProfessionalContinuation.js";
+import { filterAuthorizedProfessionalJobs } from "../utils/professionalJobPicker.js";
 
 export default function QuickQuoteConversation({
   language = "en",
@@ -19,6 +21,13 @@ export default function QuickQuoteConversation({
   analysisBusy = false,
   analysisTurns = [],
   onContinueAnalysis,
+  onContinueWithMyDetails,
+  jobConnection = {},
+  onOpenJobPicker,
+  onSelectJob,
+  onConfirmCategoryCosts,
+  onCancelJobConnection,
+  onBackToJobConnection,
   setPage,
   photoCount = 0,
   photos = [],
@@ -40,17 +49,39 @@ export default function QuickQuoteConversation({
   const [editingPhotoItemId, setEditingPhotoItemId] =
     useState("");
   const [photoEditText, setPhotoEditText] = useState("");
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
+  const [jobSearch, setJobSearch] = useState("");
+  const filteredJobs = filterAuthorizedProfessionalJobs(
+    jobConnection.jobs,
+    jobSearch
+  );
+  const formatMoney = (minor) =>
+    new Intl.NumberFormat(language, {
+      style: "currency",
+      currency: "USD",
+    }).format((Number(minor) || 0) / 100);
+
+  const thingsToVerify = photoProposal
+    ? [
+        ...(photoProposal.questionsForProfessional || []).map((item) => ({
+          ...item,
+          sourceCategory: "questionsForProfessional",
+        })),
+        ...(photoProposal.needsVerification || []).map((item) => ({
+          ...item,
+          sourceCategory: "needsVerification",
+        })),
+        ...(photoProposal.observed || []).map((item) => ({
+          ...item,
+          sourceCategory: "observed",
+        })),
+      ]
+    : [];
 
   const photoGroups = photoProposal
     ? [
-        [copy.observed, "observed", photoProposal.observed],
         [
-          copy.needsVerification,
-          "needsVerification",
-          photoProposal.needsVerification,
-        ],
-        [
-          copy.repairSuggestions,
+          copy.recommendedSolution,
           "repairSuggestions",
           photoProposal.repairSuggestions,
         ],
@@ -58,6 +89,11 @@ export default function QuickQuoteConversation({
           copy.materialSuggestions,
           "materialSuggestions",
           photoProposal.materialSuggestions,
+        ],
+        [
+          copy.thingsToVerify,
+          "needsVerification",
+          thingsToVerify,
         ],
       ]
     : [];
@@ -184,7 +220,7 @@ export default function QuickQuoteConversation({
               className="quick-quote-summary-section"
               aria-label={copy.sourceInformation}
             >
-              <span>{copy.sourceInformation}</span>
+              <span>{copy.yourJobDetails}</span>
 
               <div>
                 <p className="quick-quote-source-information">
@@ -194,18 +230,18 @@ export default function QuickQuoteConversation({
             </section>
           ) : null}
 
-          <section
-            className="quick-quote-photo-review"
-            aria-label={copy.photos}
-          >
-            <div className="quick-quote-photo-review-heading">
-              <div>
-                <strong>{copy.photos}</strong>
-                <p>{copy.photoDraftNotice}</p>
+          {photos.length ? (
+            <section
+              className="quick-quote-photo-review"
+              aria-label={copy.photos}
+            >
+              <div className="quick-quote-photo-review-heading">
+                <div>
+                  <strong>{copy.photos}</strong>
+                  <p>{copy.photoDraftNotice}</p>
+                </div>
               </div>
-            </div>
 
-            {photos.length ? (
               <div className="quick-quote-photo-grid">
                 {photos.map((photo, index) => (
                   <figure
@@ -221,20 +257,216 @@ export default function QuickQuoteConversation({
                   </figure>
                 ))}
               </div>
-            ) : (
-              <p className="quick-quote-photo-empty">
-                {copy.noPhotos}
-              </p>
-            )}
-          </section>
+            </section>
+          ) : null}
 
-          <QuickQuoteAnalysisThread
-            language={language}
-            turns={analysisTurns}
-            busy={analysisBusy}
-            onContinue={onContinueAnalysis}
-            setPage={setPage}
-          />
+          <div className="quick-quote-professional-actions">
+            <button
+              type="button"
+              className="quick-quote-primary-action"
+              disabled={analysisBusy || !prompt.trim()}
+              onClick={onContinueWithMyDetails}
+            >
+              {copy.continueWithMyDetails}
+            </button>
+
+            <button
+              type="button"
+              aria-expanded={suggestionsExpanded}
+              disabled={
+                analysisBusy ||
+                (!photoProposal && analysisTurns.length === 0)
+              }
+              onClick={() =>
+                setSuggestionsExpanded((current) => !current)
+              }
+            >
+              {copy.useMeetroSuggestions}
+            </button>
+          </div>
+
+          <p className="quick-quote-optional-help">
+            {copy.optionalSuggestionsHelp}
+          </p>
+
+          {["decision", "picker"].includes(jobConnection.stage) ? (
+            <section
+              className="quick-quote-job-connection"
+              aria-labelledby="quick-quote-job-connection-title"
+            >
+              <div className="quick-quote-job-connection-heading">
+                <div>
+                  <p>{copy.readyToContinue}</p>
+                  <h2 id="quick-quote-job-connection-title">
+                    {copy.connectToJob}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="quick-quote-job-connection-cancel"
+                  disabled={jobConnection.busy}
+                  onClick={onCancelJobConnection}
+                >
+                  {copy.cancel}
+                </button>
+              </div>
+
+              {jobConnection.stage === "decision" ? (
+                <div className="quick-quote-job-connection-actions">
+                  <button
+                    type="button"
+                    className="quick-quote-primary-action"
+                    onClick={onOpenJobPicker}
+                  >
+                    {copy.attachExistingJob}
+                  </button>
+                  <button type="button" disabled>
+                    <span>{copy.createJob}</span>
+                    <small>{copy.createJobComingNext}</small>
+                  </button>
+                </div>
+              ) : (
+                <div className="quick-quote-job-picker">
+                  <button
+                    type="button"
+                    className="quick-quote-job-picker-back"
+                    disabled={jobConnection.busy}
+                    onClick={onBackToJobConnection}
+                  >
+                    ← {copy.back}
+                  </button>
+                  <label>
+                    <span>{copy.searchJobs}</span>
+                    <input
+                      type="search"
+                      value={jobSearch}
+                      placeholder={copy.searchJobsPlaceholder}
+                      onChange={(event) => setJobSearch(event.target.value)}
+                    />
+                  </label>
+
+                  {jobConnection.busy ? (
+                    <p role="status">{copy.loadingEligibleJobs}</p>
+                  ) : null}
+                  {jobConnection.error ? (
+                    <p className="quick-quote-job-picker-error" role="alert">
+                      {jobConnection.error}
+                    </p>
+                  ) : null}
+                  {!jobConnection.busy && !jobConnection.error &&
+                  filteredJobs.length === 0 ? (
+                    <p className="quick-quote-job-picker-empty" role="status">
+                      {copy.noEligibleJobs}
+                    </p>
+                  ) : null}
+
+                  <div className="quick-quote-job-picker-list">
+                    {filteredJobs.map((job) => (
+                      <button
+                        type="button"
+                        key={job.jobId}
+                        disabled={jobConnection.busy}
+                        aria-busy={
+                          jobConnection.selectedJobId === job.jobId
+                        }
+                        onClick={() => onSelectJob?.(job)}
+                      >
+                        <strong>{job.title}</strong>
+                        <span>{job.customerLabel}</span>
+                        <small>
+                          {[
+                            job.serviceSpecialty || job.serviceDomain,
+                            job.city || job.serviceArea,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {jobConnection.stage === "costConfirmation" ? (
+            <section
+              className="quick-quote-job-connection quick-quote-cost-confirmation"
+              aria-labelledby="quick-quote-cost-confirmation-title"
+            >
+              <div className="quick-quote-job-connection-heading">
+                <div>
+                  <p>{copy.costsFromDetails}</p>
+                  <h2 id="quick-quote-cost-confirmation-title">
+                    {copy.confirmPrivateCosts}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="quick-quote-job-connection-cancel"
+                  disabled={jobConnection.busy}
+                  onClick={onCancelJobConnection}
+                >
+                  {copy.cancel}
+                </button>
+              </div>
+
+              <div className="quick-quote-cost-confirmation-list">
+                {(jobConnection.professionalCategoryCosts || []).map(
+                  (item) => (
+                    <div key={item.classification}>
+                      <span>
+                        {item.classification === "MATERIAL"
+                          ? copy.materialsTotal
+                          : copy.laborTotal}
+                      </span>
+                      <strong>{formatMoney(item.totalCostMinor)}</strong>
+                    </div>
+                  )
+                )}
+              </div>
+
+              <p className="quick-quote-optional-help">
+                {copy.privateCostConfirmationHelp}
+              </p>
+
+              {jobConnection.error ? (
+                <p className="quick-quote-job-picker-error" role="alert">
+                  {jobConnection.error}
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                className="quick-quote-primary-action"
+                disabled={
+                  jobConnection.busy ||
+                  jobConnection.categoryCostConflicts?.length > 0
+                }
+                onClick={onConfirmCategoryCosts}
+              >
+                {copy.confirmAmounts}
+              </button>
+            </section>
+          ) : null}
+
+          {suggestionsExpanded ? (
+            <div className="quick-quote-optional-suggestions">
+              <details className="quick-quote-summary-section quick-quote-suggestion-group">
+                <summary>
+                  <span>{copy.analysisConversationTitle}</span>
+                </summary>
+
+                <div className="quick-quote-conversation-disclosure">
+                  <QuickQuoteAnalysisThread
+                    language={language}
+                    turns={analysisTurns}
+                    busy={analysisBusy}
+                    onContinue={onContinueAnalysis}
+                    setPage={setPage}
+                  />
+                </div>
+              </details>
 
           {photoProposal ? (
             <section
@@ -252,62 +484,50 @@ export default function QuickQuoteConversation({
                 <p>{photoProposal.summary}</p>
               ) : null}
 
-              {photoProposal.questionsForProfessional?.length ? (
-                <section className="quick-quote-summary-section">
-                  <span>
-                    {copy.questionsForProfessional} ·{" "}
-                    {
-                      photoProposal.questionsForProfessional
-                        .length
-                    }
-                  </span>
-
-                  <div>
-                    <ul>
-                      {photoProposal.questionsForProfessional.map(
-                        (item) => (
-                          <li key={item.id}>
-                            {item.text}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </div>
-                </section>
-              ) : null}
-
               {photoGroups.map(
                 ([title, category, items]) =>
                   items?.length ? (
-                    <section
+                    <details
                       key={category}
-                      className="quick-quote-summary-section"
+                      className="quick-quote-summary-section quick-quote-suggestion-group"
                     >
-                      <span>
-                        {title} · {items.length}
-                      </span>
+                      <summary>
+                        <span>{title}</span>
+                        <strong>{items.length}</strong>
+                      </summary>
 
                       <div className="quick-quote-photo-suggestion-list">
                         {items.map((item) => {
+                          const sourceItemId = item.id;
                           const decision =
-                            photoDecisions[item.id];
+                            photoDecisions[sourceItemId];
+
+                          const reviewable =
+                            isQuickQuoteSuggestionReviewable(category);
 
                           const editing =
                             editingPhotoItemId ===
-                            `${photoProposal.proposalId}:${item.id}`;
+                            `${photoProposal.proposalId}:${sourceItemId}`;
 
                           const busy =
                             analysisBusy ||
-                            photoReviewBusyId === item.id;
+                            photoReviewBusyId === sourceItemId;
 
                           return (
                             <article
-                              key={item.id}
+                              key={`${item.sourceCategory || category}:${item.id}`}
                               className="quick-quote-photo-suggestion"
                             >
                               <p>
                                 {decision?.text || item.text}
                               </p>
+
+                              {item.sourceCategory ===
+                              "questionsForProfessional" ? (
+                                <span className="quick-quote-advisory-label">
+                                  {copy.questionsForProfessional}
+                                </span>
+                              ) : null}
 
                               {decision ? (
                                 <strong
@@ -318,7 +538,7 @@ export default function QuickQuoteConversation({
                                     decision.action
                                   )}
                                 </strong>
-                              ) : editing ? (
+                              ) : editing && reviewable ? (
                                 <>
                                   <textarea
                                     className="quick-quote-photo-edit"
@@ -362,7 +582,7 @@ export default function QuickQuoteConversation({
                                     </button>
                                   </div>
                                 </>
-                              ) : (
+                              ) : reviewable ? (
                                 <div className="quick-quote-review-actions">
                                   <button
                                     type="button"
@@ -405,12 +625,12 @@ export default function QuickQuoteConversation({
                                     {copy.dismissSuggestion}
                                   </button>
                                 </div>
-                              )}
+                              ) : null}
                             </article>
                           );
                         })}
                       </div>
-                    </section>
+                    </details>
                   ) : null
               )}
 
@@ -479,6 +699,8 @@ export default function QuickQuoteConversation({
                 </section>
               ) : null}
             </section>
+          ) : null}
+            </div>
           ) : null}
 
           <p

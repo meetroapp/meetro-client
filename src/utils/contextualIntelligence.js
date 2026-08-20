@@ -61,6 +61,34 @@ function array(value, maximum = 100) {
   return Array.isArray(value) && value.length <= maximum ? value : null;
 }
 
+function validateProfessionalCategoryCosts(value) {
+  if (value == null) return true;
+  if (
+    !plain(value) ||
+    Object.keys(value).sort().join(",") !== "labor,materials"
+  ) {
+    return false;
+  }
+  const validEntry = (entry, classification) => {
+    if (entry == null) return true;
+    return (
+      plain(entry) &&
+      Object.keys(entry).sort().join(",") ===
+        "amountMinor,basis,classification,customerVisibleByDefault,provenance" &&
+      entry.classification === classification &&
+      Number.isSafeInteger(entry.amountMinor) &&
+      entry.amountMinor >= 0 &&
+      entry.provenance === "PROFESSIONAL_INPUT" &&
+      entry.basis === "FLAT_TOTAL" &&
+      entry.customerVisibleByDefault === false
+    );
+  };
+  return (
+    validEntry(value.materials, "MATERIAL") &&
+    validEntry(value.labor, "LABOR")
+  );
+}
+
 function validateEnvelope(value, operation, expected = {}) {
   if (!plain(value) || value.schemaVersion !== 1 || !safeUuid(value.proposalId)) return null;
   if (expected.jobId && safeUuid(value.jobId) !== safeUuid(expected.jobId)) return null;
@@ -250,7 +278,8 @@ export function validateEstimateDraft(value, expected = {}) {
   const proposal = validateEnvelope(value, INTELLIGENCE_OPERATION.ESTIMATE, expected);
   if (!proposal || !array(proposal.materials, 80) || !array(proposal.labor, 80) ||
       !plain(proposal.internalCost) || proposal.internalCost.customerVisible !== false ||
-      !plain(proposal.customerQuoteDraft)) return null;
+      !plain(proposal.customerQuoteDraft) ||
+      !validateProfessionalCategoryCosts(proposal.professionalCategoryCosts)) return null;
   assertSafeObject(proposal, { allowInternalCost: true });
   assertSafeObject(proposal.customerQuoteDraft);
   if (/Home Depot|homedepot\.com/i.test(JSON.stringify(proposal.customerQuoteDraft))) return null;

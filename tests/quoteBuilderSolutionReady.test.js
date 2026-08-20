@@ -42,6 +42,18 @@ test("Solution Ready sends only Estimate identity plus separately explicit Quote
     ],
     internalEstimate: {
       internalCost: { totalMinor: 265000 },
+      professionalCategoryCosts: {
+        materials: {
+          amountMinor: 70000,
+          provenance: "PROFESSIONAL_INPUT",
+          basis: "FLAT_TOTAL",
+        },
+        labor: {
+          amountMinor: 195000,
+          provenance: "PROFESSIONAL_INPUT",
+          basis: "FLAT_TOTAL",
+        },
+      },
       suggestedSellingRange: { minimumMinor: 265000 },
       professionalSellingPriceMinor: 265000,
       estimatedCostMinor: 265000,
@@ -70,6 +82,8 @@ test("Solution Ready sends only Estimate identity plus separately explicit Quote
     "effectiveUnitCostMinor",
     "estimatedCostMinor",
     "professionalOverride",
+    "professionalCategoryCosts",
+    "FLAT_TOTAL",
   ]) {
     assert.doesNotMatch(serialized, new RegExp(forbidden));
   }
@@ -126,7 +140,7 @@ test("QuoteBuilder preserves explicit Solution Ready, rejection, direct Prepare 
     source.indexOf("async function handleUseQuoteComposition")
   );
   assert.doesNotMatch(solutionReady, /setTotalOverride|setMaterialRows|setLaborRows|setRecommendedSolution|setNotes|setTerms|setTimeline/);
-  assert.doesNotMatch(solutionReady, /suggestedSellingRange|professionalSellingPriceMinor|effectiveUnitCostMinor|professionalOverride/);
+  assert.doesNotMatch(solutionReady, /suggestedSellingRange|professionalSellingPriceMinor|effectiveUnitCostMinor|professionalOverride|professionalCategoryCosts|FLAT_TOTAL/);
 });
 
 test("Solution Ready and Create Quote copy exists in every supported workflow locale", () => {

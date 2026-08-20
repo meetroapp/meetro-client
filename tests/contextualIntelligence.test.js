@@ -253,6 +253,53 @@ test("Estimate Draft validator keeps internal costs private and rejects customer
   }, { jobId: ids.job }), (error) => error instanceof IntelligenceApiError && error.code === "UNSAFE_INTELLIGENCE_RESPONSE");
 });
 
+test("Estimate Draft validator accepts only server-owned flat category cost provenance", () => {
+  const value = {
+    ...boundary("INTERNAL_ESTIMATE_DRAFT_NON_CANONICAL"),
+    materials: [],
+    labor: [],
+    professionalCategoryCosts: {
+      materials: {
+        classification: "MATERIAL",
+        amountMinor: 4000,
+        provenance: "PROFESSIONAL_INPUT",
+        basis: "FLAT_TOTAL",
+        customerVisibleByDefault: false,
+      },
+      labor: {
+        classification: "LABOR",
+        amountMinor: 26000,
+        provenance: "PROFESSIONAL_INPUT",
+        basis: "FLAT_TOTAL",
+        customerVisibleByDefault: false,
+      },
+    },
+    internalCost: {
+      materialsMinor: 4000,
+      laborMinor: 26000,
+      baseTotalMinor: 30000,
+      totalMinor: 30000,
+      customerVisible: false,
+    },
+    customerQuoteDraft: {
+      id: "customer_quote_draft",
+      customerWording: "Repair the wall.",
+    },
+  };
+
+  assert.equal(validateEstimateDraft(value, { jobId: ids.job }), value);
+  assert.equal(validateEstimateDraft({
+    ...value,
+    professionalCategoryCosts: {
+      ...value.professionalCategoryCosts,
+      labor: {
+        ...value.professionalCategoryCosts.labor,
+        provenance: "AI_SUGGESTED",
+      },
+    },
+  }, { jobId: ids.job }), null);
+});
+
 test("Invoice assistance copies financial truth but rejects secrets and mismatched identity", () => {
   const value = {
     ...boundary(), invoiceId: ids.invoice,

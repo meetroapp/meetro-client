@@ -43,6 +43,14 @@ import {
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
+import { getQuickQuoteProfessionalContinuation } from "../utils/quickQuoteProfessionalContinuation.js";
+import {
+  buildQuickQuoteEstimateInput,
+  fetchAuthorizedProfessionalJobs,
+} from "../utils/professionalJobPicker.js";
+import {
+  extractProfessionalCategoryCostCandidates,
+} from "../utils/quickQuoteProfessionalCategoryCosts.js";
 import {
   analyzeQuickQuoteAnalysisSession,
   appendQuickQuoteAnalysisEvidence,
@@ -855,6 +863,16 @@ function QuoteBuilder({ setPage }) {
   const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
   const [quickQuoteDraftPhotos, setQuickQuoteDraftPhotos] = useState([]);
   const [quickQuotePhotoNotice, setQuickQuotePhotoNotice] = useState("");
+  const [quickQuoteContinuationNotice, setQuickQuoteContinuationNotice] =
+    useState("");
+  const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
+  const [quickQuoteJobConnection, setQuickQuoteJobConnection] = useState({
+    stage: "idle",
+    busy: false,
+    error: "",
+    jobs: [],
+    selectedJobId: "",
+  });
   const [quickQuotePhotoBusy, setQuickQuotePhotoBusy] = useState(false);
   const [quickQuotePhotoAssistant, setQuickQuotePhotoAssistant] = useState({
     busy: false,
@@ -962,9 +980,11 @@ function QuoteBuilder({ setPage }) {
     });
   }
 
-  const canonicalJobId =
+  const routeCanonicalJobId =
     getCanonicalJobIdFromRoute(window.location.hash) ||
     cleanText(request.jobId || request.job_id);
+  const canonicalJobId =
+    quickQuoteAttachedJob?.jobId || routeCanonicalJobId;
 
   function inputKey(prefix, index) {
     return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
@@ -1648,6 +1668,7 @@ ${businessIdentity.businessName}`;
       );
 
     setQuickQuotePhotoNotice("");
+    setQuickQuoteContinuationNotice("");
     invalidateQuickQuoteReviewedResult();
     setQuickQuoteView("working");
 
@@ -1797,6 +1818,207 @@ ${businessIdentity.businessName}`;
 
       setQuickQuoteView("entry");
     }
+  }
+
+  async function requestQuickQuoteInternalEstimate({
+    job,
+    jobId,
+    professionalInput,
+    professionalCategoryCosts = [],
+  }) {
+    setQuickQuoteJobConnection((current) => ({
+      ...current,
+      busy: true,
+      error: "",
+      selectedJobId: jobId,
+    }));
+    setAssistant({
+      busy: true,
+      error: "",
+      notice: "",
+      result: null,
+      commandKeys: null,
+    });
+
+    try {
+      const input = buildQuickQuoteEstimateInput({
+        jobId,
+        professionalInput,
+        professionalCategoryCosts,
+      });
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.ESTIMATE,
+        locale: language,
+        input,
+        expected: { jobId },
+        setPage,
+      });
+
+      setQuickQuoteAttachedJob(
+        job || {
+          jobId,
+          title: projectTitle || quickQuoteCopy.connectedJob,
+          customerLabel: customerName || quickQuoteCopy.customer,
+        }
+      );
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result,
+        commandKeys: null,
+      });
+      setQuickQuoteJobConnection({
+        stage: "idle",
+        busy: false,
+        error: "",
+        jobs: [],
+        selectedJobId: "",
+      });
+      setQuickQuoteContinuationNotice("");
+      setQuickQuoteView("internalEstimate");
+      return true;
+    } catch (error) {
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result: null,
+        commandKeys: null,
+      });
+      setQuickQuoteJobConnection((current) => ({
+        ...current,
+        stage: routeCanonicalJobId ? "decision" : "picker",
+        busy: false,
+        error:
+          error?.message || quickQuoteCopy.jobConnectionFailed,
+        selectedJobId: "",
+      }));
+      return false;
+    }
+  }
+
+  function prepareQuickQuoteInternalEstimate({
+    job,
+    jobId,
+    professionalInput,
+  }) {
+    const extracted = extractProfessionalCategoryCostCandidates(
+      professionalInput
+    );
+
+    if (extracted.costs.length || extracted.conflicts.length) {
+      setQuickQuoteJobConnection({
+        stage: "costConfirmation",
+        busy: false,
+        error: extracted.conflicts.length
+          ? quickQuoteCopy.categoryCostConflict
+          : "",
+        jobs: [],
+        selectedJobId: jobId,
+        pendingJob: job || null,
+        pendingJobId: jobId,
+        professionalInput,
+        professionalCategoryCosts: extracted.costs,
+        categoryCostConflicts: extracted.conflicts,
+      });
+      return true;
+    }
+
+    return requestQuickQuoteInternalEstimate({
+      job,
+      jobId,
+      professionalInput,
+      professionalCategoryCosts: [],
+    });
+  }
+
+  async function confirmQuickQuoteCategoryCosts() {
+    if (
+      quickQuoteJobConnection.stage !== "costConfirmation" ||
+      quickQuoteJobConnection.categoryCostConflicts?.length
+    ) {
+      return false;
+    }
+
+    return requestQuickQuoteInternalEstimate({
+      job: quickQuoteJobConnection.pendingJob,
+      jobId: quickQuoteJobConnection.pendingJobId,
+      professionalInput: quickQuoteJobConnection.professionalInput,
+      professionalCategoryCosts:
+        quickQuoteJobConnection.professionalCategoryCosts,
+    });
+  }
+
+  async function openQuickQuoteJobPicker() {
+    setQuickQuoteJobConnection((current) => ({
+      ...current,
+      stage: "picker",
+      busy: true,
+      error: "",
+      jobs: [],
+      selectedJobId: "",
+    }));
+    try {
+      const jobs = await fetchAuthorizedProfessionalJobs({ setPage });
+      setQuickQuoteJobConnection({
+        stage: "picker",
+        busy: false,
+        error: "",
+        jobs,
+        selectedJobId: "",
+      });
+    } catch (error) {
+      setQuickQuoteJobConnection({
+        stage: "picker",
+        busy: false,
+        error:
+          error?.message || quickQuoteCopy.jobListUnavailable,
+        jobs: [],
+        selectedJobId: "",
+      });
+    }
+  }
+
+  async function attachQuickQuoteToJob(job) {
+    const professionalInput =
+      quickQuoteAnalysisState.analyzedPrompt || quickQuotePrompt;
+    return prepareQuickQuoteInternalEstimate({
+      job,
+      jobId: job.jobId,
+      professionalInput,
+    });
+  }
+
+  async function continueQuickQuoteWithProfessionalDetails() {
+    const continuation = getQuickQuoteProfessionalContinuation({
+      professionalInput:
+        quickQuoteAnalysisState.analyzedPrompt || quickQuotePrompt,
+      canonicalJobId,
+    });
+
+    if (!continuation.canContinue) {
+      return false;
+    }
+
+    if (continuation.nextStep === "INTERNAL_ESTIMATE") {
+      return prepareQuickQuoteInternalEstimate({
+        job: quickQuoteAttachedJob,
+        jobId: continuation.canonicalJobId,
+        professionalInput: continuation.professionalInput,
+      });
+    }
+
+    setQuickQuoteContinuationNotice("");
+    setQuickQuoteJobConnection({
+      stage: "decision",
+      busy: false,
+      error: "",
+      jobs: [],
+      selectedJobId: "",
+    });
+
+    return true;
   }
 
   async function continueQuickQuoteConversation(
@@ -2180,6 +2402,7 @@ ${businessIdentity.businessName}`;
 
   function handleQuickQuotePromptChange(value) {
     setQuickQuotePrompt(value);
+    setQuickQuoteContinuationNotice("");
 
     /*
      * R1-01 presentation-only stale state.
@@ -2511,6 +2734,56 @@ ${businessIdentity.businessName}`;
           }
           onChange={handleQuickQuotePhotoInput}
         />
+        {quickQuoteView === "internalEstimate" && assistant.result ? (
+          <main
+            className="quick-quote-internal-estimate"
+            aria-labelledby="quick-quote-internal-estimate-title"
+          >
+            <button
+              type="button"
+              className="quick-quote-analysis-back"
+              onClick={() => setQuickQuoteView("review")}
+            >
+              ← {quickQuoteCopy.backToJobAnalysis}
+            </button>
+            <header className="quick-quote-flow-header">
+              <p>{quickQuoteCopy.privateInternal}</p>
+              <h1 id="quick-quote-internal-estimate-title">
+                {assistant.result.operation === INTELLIGENCE_OPERATION.ESTIMATE
+                  ? quickQuoteCopy.internalEstimateTitle
+                  : quickQuoteCopy.quoteReviewTitle}
+              </h1>
+              <div className="quick-quote-guidance">
+                <strong>
+                  {assistant.result.operation === INTELLIGENCE_OPERATION.ESTIMATE
+                    ? quickQuoteCopy.internalEstimateHelp
+                    : quickQuoteCopy.quoteReviewHelp}
+                </strong>
+                <span>{quickQuoteCopy.noQuotePricingPromotion}</span>
+              </div>
+            </header>
+            <section className="quick-quote-connected-job">
+              <span>{quickQuoteCopy.connectedJob}</span>
+              <strong>{quickQuoteAttachedJob?.title}</strong>
+              {quickQuoteAttachedJob?.customerLabel ? (
+                <small>{quickQuoteAttachedJob.customerLabel}</small>
+              ) : null}
+            </section>
+            <EstimateAssistantResult
+              key={assistant.result.proposal.proposalId}
+              result={assistant.result}
+              language={language}
+              onSolutionReady={() => void markEstimateSolutionReady()}
+              onUseQuote={(edits) => void handleUseQuoteComposition(edits)}
+              onDismiss={() => void dismissEstimateHelp()}
+            />
+            {assistant.error ? (
+              <p className="quick-quote-action-notice" role="alert">
+                {assistant.error}
+              </p>
+            ) : null}
+          </main>
+        ) : (
         <QuickQuoteConversation
           language={language}
           view={quickQuoteView}
@@ -2540,6 +2813,30 @@ ${businessIdentity.businessName}`;
           }
           onContinueAnalysis={
             continueQuickQuoteConversation
+          }
+          onContinueWithMyDetails={continueQuickQuoteWithProfessionalDetails}
+          jobConnection={quickQuoteJobConnection}
+          onOpenJobPicker={() => void openQuickQuoteJobPicker()}
+          onSelectJob={(job) => void attachQuickQuoteToJob(job)}
+          onConfirmCategoryCosts={() =>
+            void confirmQuickQuoteCategoryCosts()
+          }
+          onCancelJobConnection={() =>
+            setQuickQuoteJobConnection({
+              stage: "idle",
+              busy: false,
+              error: "",
+              jobs: [],
+              selectedJobId: "",
+            })
+          }
+          onBackToJobConnection={() =>
+            setQuickQuoteJobConnection((current) => ({
+              ...current,
+              stage: "decision",
+              error: "",
+              selectedJobId: "",
+            }))
           }
           setPage={setPage}
           photoCount={quickQuoteDraftPhotos.length}
@@ -2584,12 +2881,14 @@ ${businessIdentity.businessName}`;
             reviewQuickQuotePhotoSuggestion
           }
           notice={[
+            quickQuoteContinuationNotice,
             quickQuotePhotoNotice,
             quickQuotePhotoAssistant.error,
           ]
             .filter(Boolean)
             .join(" ")}
         />
+        )}
         </>
       ) : null}
       {!isUniversalQuickQuote && (
@@ -3367,14 +3666,32 @@ function EstimateAssistantResult({ result, language, onSolutionReady, onUseQuote
       </div>
     );
   }
+  const professionalCategoryCosts = proposal.professionalCategoryCosts || {};
+  const professionalMaterialsTotal = professionalCategoryCosts.materials;
+  const professionalLaborTotal = professionalCategoryCosts.labor;
+  const hasProfessionalCategoryCosts = Boolean(
+    professionalMaterialsTotal || professionalLaborTotal
+  );
   return (
     <div style={assistantResultBox}>
       <strong>{proposal.summary}</strong>
-      <div style={assistantCostGrid}>
-        <span>{copy.internalOnly}</span>
-        <strong>{formatMoney(proposal.internalCost.totalMinor)}</strong>
-      </div>
-      {proposal.materials.map((item) => (
+      {professionalMaterialsTotal ? (
+        <section style={assistantDraftItem}>
+          <strong>{copy.materials}</strong>
+          <span>{copy.professionalMaterialsTotal}</span>
+          <strong>{formatMoney(professionalMaterialsTotal.amountMinor)}</strong>
+          <small>{copy.materialsNotItemized}</small>
+        </section>
+      ) : null}
+      {professionalLaborTotal ? (
+        <section style={assistantDraftItem}>
+          <strong>{copy.labor}</strong>
+          <span>{copy.professionalLaborTotal}</span>
+          <strong>{formatMoney(professionalLaborTotal.amountMinor)}</strong>
+          <small>{copy.laborNotItemized}</small>
+        </section>
+      ) : null}
+      {!professionalMaterialsTotal && proposal.materials.map((item) => (
         <article key={item.id} style={assistantDraftItem}>
           <strong>{item.description}</strong>
           <span>{item.quantity} {item.unit}</span>
@@ -3382,12 +3699,57 @@ function EstimateAssistantResult({ result, language, onSolutionReady, onUseQuote
           {item.retailerReference && <small>{copy.referencePrice} · {copy.notGuaranteed}</small>}
         </article>
       ))}
-      {proposal.labor.map((item) => (
+      {professionalMaterialsTotal && proposal.materials.length ? (
+        <details style={assistantDraftItem}>
+          <summary>{copy.advisoryMaterialSuggestions}</summary>
+          {proposal.materials.map((item) => (
+            <p key={item.id} style={pricingReviewText}>{item.description}</p>
+          ))}
+        </details>
+      ) : null}
+      {!professionalLaborTotal && proposal.labor.map((item) => (
         <article key={item.id} style={assistantDraftItem}>
           <strong>{item.description}</strong>
           <span>{item.crewCount} × {item.hoursPerWorker}</span>
         </article>
       ))}
+      {professionalLaborTotal && proposal.labor.length ? (
+        <details style={assistantDraftItem}>
+          <summary>{copy.advisoryLaborSuggestions}</summary>
+          {proposal.labor.map((item) => (
+            <p key={item.id} style={pricingReviewText}>{item.description}</p>
+          ))}
+        </details>
+      ) : null}
+      <section style={assistantDraftItem}>
+        <strong>{copy.internalCostSummary}</strong>
+        <div style={assistantCostGrid}>
+          <span>{copy.materials}</span>
+          <strong>{formatMoney(proposal.internalCost.materialsMinor)}</strong>
+          <span>{copy.labor}</span>
+          <strong>{formatMoney(proposal.internalCost.laborMinor)}</strong>
+          {hasProfessionalCategoryCosts ? (
+            <>
+              <span>{copy.internalBaseTotal}</span>
+              <strong>{formatMoney(proposal.internalCost.baseTotalMinor)}</strong>
+            </>
+          ) : null}
+          {proposal.internalCost.contingencyMinor > 0 ? (
+            <>
+              <span>{copy.advisoryContingency}</span>
+              <strong>{formatMoney(proposal.internalCost.contingencyMinor)}</strong>
+            </>
+          ) : null}
+          {!hasProfessionalCategoryCosts || proposal.internalCost.contingencyMinor > 0 ? (
+            <>
+              <span>{copy.total}</span>
+              <strong>{formatMoney(proposal.internalCost.totalMinor)}</strong>
+            </>
+          ) : null}
+        </div>
+        <small>{copy.internalOnly}</small>
+        <small>{copy.customerQuotePricingSeparate}</small>
+      </section>
       <p style={pricingReviewText}>{proposal.customerQuoteDraft.customerWording}</p>
       <div style={inlineActionGrid}>
         <button type="button" style={secondaryActionButton} onClick={onSolutionReady}>{copy.solutionReady}</button>
