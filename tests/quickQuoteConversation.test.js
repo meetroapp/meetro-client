@@ -14,6 +14,7 @@ import {
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const builder = read("src/pages/QuoteBuilder.jsx");
 const conversation = read("src/components/QuickQuoteConversation.jsx");
+const analysisThread = read("src/components/QuickQuoteAnalysisThread.jsx");
 const microphone = read("src/components/WorkflowMicrophoneInput.jsx");
 const quoteDraftMedia = read("src/utils/quoteDraftPhotoMedia.js");
 const styles = read("src/index.css");
@@ -201,86 +202,252 @@ test("Quick Quote uses governed private draft media without claiming canonical Q
   );
 });
 
-test("Quick Quote can start from photos without requiring typed text", () => {
-  assert.match(
-    conversation,
-    /\(!prompt\.trim\(\) && photoCount === 0\)/
-  );
-  assert.match(
-    conversation,
-    /photoBusy \|\|/
-  );
-  assert.match(conversation, /copy\.addAnotherPhoto/);
-  assert.ok(
-    (conversation.match(/quick-quote-photo-grid/g) || []).length >= 2
-  );
+test(
+  "Quick Quote can start durable Job Analysis from photos without typed text",
+  () => {
+    assert.match(
+      conversation,
+      /\(!prompt\.trim\(\) && photoCount === 0\)/
+    );
 
-  assert.match(
-    builder,
-    /if \(!instruction && photos\.length === 0\) return;/
-  );
-  assert.match(
-    builder,
-    /if \(photos\.length === 0\)/
-  );
-});
+    assert.match(
+      conversation,
+      /photoBusy \|\|/
+    );
 
+    assert.match(
+      conversation,
+      /copy\.addAnotherPhoto/
+    );
 
-test("photo-backed Job Analysis uses governed Ask Meetro while text-only analysis remains private and non-Quote", () => {
-  assert.match(
-    builder,
-    /INTELLIGENCE_OPERATION\.QUICK_QUOTE_PHOTO/
-  );
+    assert.ok(
+      (
+        conversation.match(
+          /quick-quote-photo-grid/g
+        ) || []
+      ).length >= 2
+    );
 
-  assert.match(
-    builder,
-    /photos: photos\.map\(\(photo\) => photo\.media\)/
-  );
+    const start =
+      builder.indexOf(
+        "async function prepareQuickQuoteConversation"
+      );
 
-  assert.match(
-    builder,
-    /requestWorkflowIntelligence\(\{/
-  );
+    const end =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion",
+        start
+      );
 
-  const start = builder.indexOf(
-    "async function prepareQuickQuoteConversation"
-  );
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
 
-  const end = builder.indexOf(
-    "async function reviewQuickQuotePhotoSuggestion",
-    start
-  );
+    const analysisBoundary =
+      builder.slice(
+        start,
+        end
+      );
 
-  assert.ok(start >= 0 && end > start);
+    /*
+     * Empty text is allowed when governed photos exist.
+     * Only the absence of BOTH text and photos stops analysis.
+     */
+    assert.match(
+      analysisBoundary,
+      /if\s*\(\s*!instruction\s*&&\s*photos\.length\s*===\s*0\s*\)\s*\{\s*return;\s*\}/
+    );
 
-  const analysisBoundary = builder.slice(start, end);
+    assert.match(
+      analysisBoundary,
+      /const governedPhotos =\s*photos\.map/
+    );
 
-  assert.match(
-    analysisBoundary,
-    /quickQuoteWorkingTimerRef\.current = window\.setTimeout/
-  );
+    assert.match(
+      analysisBoundary,
+      /professionalInput:\s*instruction/
+    );
 
-  assert.match(
-    analysisBoundary,
-    /setQuickQuoteAnalysisState/
-  );
+    assert.match(
+      analysisBoundary,
+      /photos:\s*governedPhotos/
+    );
 
-  assert.doesNotMatch(
-    analysisBoundary,
-    /applyQuickQuoteConversationPatch|buildQuickQuoteConversationPatch/
-  );
+    /*
+     * R1-04 removes the old browser-only text-vs-photo
+     * execution split. Both now use the durable server session.
+     */
+    assert.doesNotMatch(
+      analysisBoundary,
+      /if\s*\(\s*photos\.length\s*===\s*0\s*\)/
+    );
 
-  assert.doesNotMatch(
-    analysisBoundary,
-    /setQuickQuotePrompt\(""\)/
-  );
+    assert.match(
+      analysisBoundary,
+      /createQuickQuoteAnalysisSession/
+    );
 
-  assert.doesNotMatch(
-    analysisBoundary,
-    /setCustomerName|setCustomerLocation|setProblemFound|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
-  );
-});
+    assert.match(
+      analysisBoundary,
+      /analyzeQuickQuoteAnalysisSession/
+    );
+  }
+);
 
+test(
+  "Job Analysis uses one durable server session for text and governed photos without Quote mutation",
+  () => {
+    assert.match(
+      builder,
+      /createQuickQuoteAnalysisSession/
+    );
+
+    assert.match(
+      builder,
+      /appendQuickQuoteAnalysisEvidence/
+    );
+
+    assert.match(
+      builder,
+      /loadQuickQuoteAnalysisSession/
+    );
+
+    assert.match(
+      builder,
+      /analyzeQuickQuoteAnalysisSession/
+    );
+
+    assert.match(
+      builder,
+      /hydrateQuickQuoteAnalysisPresentationState/
+    );
+
+    assert.match(
+      builder,
+      /applyQuickQuoteAnalysisExecutionToPresentationState/
+    );
+
+    const start =
+      builder.indexOf(
+        "async function prepareQuickQuoteConversation"
+      );
+
+    const end =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
+
+    const analysisBoundary =
+      builder.slice(
+        start,
+        end
+      );
+
+    assert.match(
+      analysisBoundary,
+      /professionalInput:\s*instruction/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /photos:\s*governedPhotos/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /photos\.map\(\s*\(photo\)\s*=>\s*photo\.media/
+    );
+
+    assert.match(
+      analysisBoundary,
+      /if \(!sessionId\)/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /requestWorkflowIntelligence/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /INTELLIGENCE_OPERATION\.QUICK_QUOTE_PHOTO/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /quickQuoteWorkingTimerRef/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /window\.setTimeout/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /if \(photos\.length === 0\)/
+    );
+
+    assert.doesNotMatch(
+      analysisBoundary,
+      /setCustomerName|setCustomerLocation|setProblemFound|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
+    );
+  }
+);
+
+test(
+  "full Job Analysis exit discards the server session before governed media cleanup",
+  () => {
+    const start =
+      builder.indexOf(
+        "async function exitQuickQuoteAnalysis"
+      );
+
+    const cleanup =
+      builder.indexOf(
+        "const failedPhotoIds",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      cleanup > start
+    );
+
+    const discardBoundary =
+      builder.slice(
+        start,
+        cleanup
+      );
+
+    assert.match(
+      discardBoundary,
+      /quickQuoteAnalysisSessionState\.sessionId/
+    );
+
+    assert.match(
+      discardBoundary,
+      /discardQuickQuoteAnalysisSession/
+    );
+
+    assert.match(
+      discardBoundary,
+      /createQuickQuoteAnalysisPresentationState/
+    );
+
+    assert.match(
+      discardBoundary,
+      /setQuickQuoteView\("entry"\)/
+    );
+  }
+);
 
 test("photo intelligence review records governed decisions without mutating Quote fields", () => {
   const start = builder.indexOf(
@@ -750,6 +917,232 @@ test("secondary door conversation keeps material and installation rows distinct"
   assert.equal(patch.totalOverride, undefined);
 });
 
+
+test(
+  "R1-04C renders only durable Professional and Meetro conversation turns with explicit follow-up submission",
+  () => {
+    assert.match(
+      conversation,
+      /<QuickQuoteAnalysisThread/
+    );
+
+    assert.match(
+      conversation,
+      /turns=\{analysisTurns\}/
+    );
+
+    assert.match(
+      analysisThread,
+      /turn\?\.role === "PROFESSIONAL"/
+    );
+
+    assert.match(
+      analysisThread,
+      /turn\?\.payload\?\.message/
+    );
+
+    assert.match(
+      analysisThread,
+      /turn\?\.payload\?\.assistantMessage/
+    );
+
+    assert.match(
+      analysisThread,
+      /contextLabel="quick-quote-analysis-follow-up"/
+    );
+
+    assert.match(
+      analysisThread,
+      /await onContinue\(message\)/
+    );
+
+    assert.match(
+      analysisThread,
+      /disabled=\{\s*busy \|\|\s*!followUpMessage\.trim\(\)\s*\}/
+    );
+
+    assert.doesNotMatch(
+      analysisThread,
+      /localStorage|sessionStorage|fetch\(|\/turns/
+    );
+  }
+);
+
+test(
+  "R1-04C continuation is bound to the current server session and latest proposal without caller authority",
+  () => {
+    const start =
+      builder.indexOf(
+        "async function continueQuickQuoteConversation"
+      );
+
+    const end =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
+
+    const boundary =
+      builder.slice(
+        start,
+        end
+      );
+
+    assert.match(
+      boundary,
+      /continueQuickQuoteAnalysisSession/
+    );
+
+    assert.match(
+      boundary,
+      /sessionId:\s*presentation\.sessionId/
+    );
+
+    assert.match(
+      boundary,
+      /priorProposalId:\s*priorProposal\.proposalId/
+    );
+
+    assert.match(
+      boundary,
+      /message:\s*normalizedMessage/
+    );
+
+    assert.match(
+      boundary,
+      /applyQuickQuoteAnalysisExecutionToPresentationState/
+    );
+
+    assert.doesNotMatch(
+      boundary,
+      /actorUserId|evidenceVersion:|provider:|operation:|turnPayload:|role:/
+    );
+
+    assert.doesNotMatch(
+      boundary,
+      /setCustomerName|setProblemFound|setRecommendedSolution|setMaterialRows|setLaborRows|setTotalOverride/
+    );
+  }
+);
+
+test(
+  "R1-04C keeps proposal review bound to the current non-stale server proposal",
+  () => {
+    const start =
+      builder.indexOf(
+        "async function reviewQuickQuotePhotoSuggestion"
+      );
+
+    const end =
+      builder.indexOf(
+        "async function addQuickQuoteDraftPhotoFiles",
+        start
+      );
+
+    assert.ok(
+      start >= 0 &&
+      end > start
+    );
+
+    const boundary =
+      builder.slice(
+        start,
+        end
+      );
+
+    assert.match(
+      boundary,
+      /quickQuoteAnalysisState\.stale/
+    );
+
+    assert.match(
+      boundary,
+      /quickQuoteAnalysisSessionState\.stale/
+    );
+
+    assert.match(
+      boundary,
+      /\.latestProposal[\s\S]*\.proposalId !==[\s\S]*proposal\.proposalId/
+    );
+  }
+);
+
+test(
+  "R1-04C surfaces provider questions and preserves four-language conversation parity",
+  () => {
+    assert.match(
+      conversation,
+      /photoProposal\.questionsForProfessional/
+    );
+
+    assert.match(
+      conversation,
+      /copy\.questionsForProfessional/
+    );
+
+    for (
+      const language of
+        QUICK_QUOTE_CONVERSATION_LANGUAGES
+    ) {
+      const copy =
+        getQuickQuoteConversationCopy(
+          language
+        );
+
+      for (const key of [
+        "analysisConversationTitle",
+        "analysisConversationHelp",
+        "professionalTurnLabel",
+        "followUpLabel",
+        "followUpPlaceholder",
+        "sendFollowUp",
+        "continuingAnalysis",
+        "questionsForProfessional",
+      ]) {
+        assert.equal(
+          typeof copy[key],
+          "string",
+          `${language}.${key}`
+        );
+
+        assert.ok(
+          copy[key].trim(),
+          `${language}.${key}`
+        );
+      }
+    }
+  }
+);
+
+test(
+  "R1-04C multi-turn conversation stays contained and touch-safe at 390px",
+  () => {
+    assert.match(
+      styles,
+      /\.quick-quote-analysis-turn[\s\S]*max-width: min\(88%, 720px\)/
+    );
+
+    assert.match(
+      styles,
+      /\.quick-quote-follow-up-label textarea[\s\S]*width: 100%[\s\S]*box-sizing: border-box/
+    );
+
+    assert.match(
+      styles,
+      /\.quick-quote-follow-up-actions button[\s\S]*min-height: 48px/
+    );
+
+    assert.match(
+      styles,
+      /@media \(max-width: 430px\)[\s\S]*\.quick-quote-follow-up-actions[\s\S]*grid-template-columns: 1fr/
+    );
+  }
+);
 
 test("working and analysis screens expose private analysis stages without premature Quote actions", () => {
   const languageSource = read(

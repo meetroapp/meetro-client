@@ -4612,6 +4612,157 @@ button {
   }
 }
 
+/* MC-QUICK-QUOTE-PHOTO-INTELLIGENCE-001B3B-R1 / R1-04C */
+.quick-quote-analysis-conversation {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 16px;
+  border-top: 1px solid rgba(31, 77, 52, 0.14);
+  padding-top: 16px;
+}
+
+.quick-quote-analysis-conversation-heading {
+  min-width: 0;
+}
+
+.quick-quote-analysis-conversation-heading strong {
+  color: #263b2d;
+  font-size: 16px;
+}
+
+.quick-quote-analysis-conversation-heading p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.quick-quote-analysis-thread {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quick-quote-analysis-turn {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  max-width: min(88%, 720px);
+  box-sizing: border-box;
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.quick-quote-analysis-turn strong {
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.quick-quote-analysis-turn p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.quick-quote-analysis-turn-professional {
+  justify-self: end;
+  background: rgba(31, 77, 52, 0.10);
+  color: #263b2d;
+}
+
+.quick-quote-analysis-turn-meetro {
+  justify-self: start;
+  border: 1px solid rgba(31, 77, 52, 0.14);
+  background: #fff;
+  color: #334155;
+}
+
+.quick-quote-follow-up {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid rgba(31, 77, 52, 0.12);
+  padding-top: 14px;
+}
+
+.quick-quote-follow-up-label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.quick-quote-follow-up-label > span {
+  color: #526257;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-quote-follow-up-label textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  box-sizing: border-box;
+  border: 1px solid rgba(31, 77, 52, 0.28);
+  border-radius: 14px;
+  background: #fff;
+  color: #263b2d;
+  padding: 11px 12px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.quick-quote-follow-up-label textarea:focus {
+  border-color: #326749;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(50, 103, 73, 0.14);
+}
+
+.quick-quote-follow-up-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.quick-quote-follow-up-actions > *,
+.quick-quote-follow-up-actions > div,
+.quick-quote-follow-up-actions > div > button,
+.quick-quote-follow-up-actions > button {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.quick-quote-follow-up-actions button {
+  min-height: 48px;
+}
+
+@media (max-width: 430px) {
+  .quick-quote-analysis-turn {
+    max-width: 94%;
+  }
+
+  .quick-quote-follow-up-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-quote-follow-up-label textarea {
+    min-height: 108px;
+  }
+}
+
 /* Canonical Alert count badge — navigation presentation only. */
 .alert-navigation-badge {
   position: absolute;

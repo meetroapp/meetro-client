@@ -39,6 +39,18 @@ import {
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
+import {
+  analyzeQuickQuoteAnalysisSession,
+  appendQuickQuoteAnalysisEvidence,
+  applyQuickQuoteAnalysisExecutionToPresentationState,
+  createQuickQuoteAnalysisPresentationState,
+  createQuickQuoteAnalysisSession,
+  continueQuickQuoteAnalysisSession,
+  discardQuickQuoteAnalysisSession,
+  hydrateQuickQuoteAnalysisPresentationState,
+  loadQuickQuoteAnalysisSession,
+  markQuickQuoteAnalysisPresentationStale,
+} from "../utils/quickQuoteAnalysisSession.js";
 
 function safeJson(value, fallback = null) {
   try {
@@ -851,9 +863,14 @@ function QuoteBuilder({ setPage }) {
     stale: false,
     analyzedPrompt: "",
   });
+  const [
+    quickQuoteAnalysisSessionState,
+    setQuickQuoteAnalysisSessionState,
+  ] = useState(() =>
+    createQuickQuoteAnalysisPresentationState()
+  );
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
-  const quickQuoteWorkingTimerRef = useRef(null);
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
   const quickQuotePhotoUploadEnabled =
     isQuickQuoteDraftPhotoUploadEnabled();
@@ -912,9 +929,6 @@ function QuoteBuilder({ setPage }) {
 
     return () => {
       document.body.classList.remove("meetro-quote-builder-open");
-      if (quickQuoteWorkingTimerRef.current) {
-        window.clearTimeout(quickQuoteWorkingTimerRef.current);
-      }
       quickQuoteDraftPhotosRef.current.forEach((photo) => {
         if (photo.media) {
           void cleanupQuoteDraftPhoto({ media: photo.media });
@@ -1509,101 +1523,258 @@ ${businessIdentity.businessName}`;
   }
 
   async function prepareQuickQuoteConversation() {
-    const instruction = cleanText(quickQuotePrompt);
-    const photos = quickQuoteDraftPhotosRef.current;
+    const instruction =
+      cleanText(
+        quickQuotePrompt
+      );
 
-    if (!instruction && photos.length === 0) return;
+    const photos =
+      quickQuoteDraftPhotosRef.current;
 
-    if (quickQuoteWorkingTimerRef.current) {
-      window.clearTimeout(quickQuoteWorkingTimerRef.current);
+    if (
+      !instruction &&
+      photos.length === 0
+    ) {
+      return;
     }
+
+    const governedPhotos =
+      photos.map(
+        (photo) =>
+          photo.media
+      );
 
     setQuickQuotePhotoNotice("");
     setQuickQuoteView("working");
 
-    /*
-     * R1-01 AUTHORITY BOUNDARY
-     *
-     * Job Analysis is private pre-quote work.
-     * Professional text and AI suggestions must not populate Quote,
-     * pricing, labor, materials, customer, deposit, or other
-     * commercial fields during this stage.
-     *
-     * Text-only entry remains a private source-information analysis
-     * until governed continuation authority is added in later R1 work.
-     */
-    if (photos.length === 0) {
-      quickQuoteWorkingTimerRef.current = window.setTimeout(() => {
-        setQuickQuoteAnalysisState({
-          available: true,
-          stale: false,
-          analyzedPrompt: instruction,
-        });
-
-        setQuickQuotePhotoAssistant({
-          busy: false,
-          error: "",
-          proposal: null,
-          decisions: {},
-          reviewingId: "",
-        });
-
-        setQuickQuoteView("review");
-        quickQuoteWorkingTimerRef.current = null;
-      }, 650);
-
-      return;
-    }
-
-    setQuickQuotePhotoAssistant((current) => ({
-      ...current,
-      busy: true,
-      error: "",
-      reviewingId: "",
-    }));
+    setQuickQuotePhotoAssistant(
+      (current) => ({
+        ...current,
+        busy: true,
+        error: "",
+        reviewingId: "",
+      })
+    );
 
     try {
-      const result = await requestWorkflowIntelligence({
-        operation: INTELLIGENCE_OPERATION.QUICK_QUOTE_PHOTO,
-        locale: language,
-        input: {
-          prompt: instruction,
-          photos: photos.map((photo) => photo.media),
-        },
-        setPage,
-      });
+      let presentation =
+        quickQuoteAnalysisSessionState;
+
+      let sessionId =
+        presentation.sessionId;
 
       /*
-       * Preserve the exact professional input.
-       * Do not copy it into Quote fields and do not clear it after analysis.
+       * R1-04 SERVER AUTHORITY
+       *
+       * First analysis creates one private durable session.
+       * Later evidence changes append a new server evidence
+       * version to that SAME session.
+       *
+       * The browser never supplies actor, evidence version,
+       * role, provider, operation, or arbitrary turn payload.
+       */
+      if (!sessionId) {
+        const created =
+          await createQuickQuoteAnalysisSession({
+            professionalInput:
+              instruction,
+            photos:
+              governedPhotos,
+            setPage,
+          });
+
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            created.session
+          );
+
+        sessionId =
+          presentation.sessionId;
+      } else {
+        await appendQuickQuoteAnalysisEvidence({
+          sessionId,
+          professionalInput:
+            instruction,
+          photos:
+            governedPhotos,
+          setPage,
+        });
+
+        /*
+         * Reload the server projection after evidence append.
+         * This prevents an older Meetro turn from being treated
+         * as current when the evidence version has advanced.
+         */
+        const loaded =
+          await loadQuickQuoteAnalysisSession({
+            sessionId,
+            setPage,
+          });
+
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            loaded.session
+          );
+      }
+
+      setQuickQuoteAnalysisSessionState(
+        presentation
+      );
+
+      const execution =
+        await analyzeQuickQuoteAnalysisSession({
+          sessionId,
+          locale:
+            language,
+          setPage,
+        });
+
+      const currentPresentation =
+        applyQuickQuoteAnalysisExecutionToPresentationState(
+          presentation,
+          execution
+        );
+
+      setQuickQuoteAnalysisSessionState(
+        currentPresentation
+      );
+
+      /*
+       * Preserve the exact professional input as presentation.
+       * No Quote, pricing, materials, labor, customer, deposit,
+       * lifecycle, or publication state is mutated here.
        */
       setQuickQuoteAnalysisState({
         available: true,
         stale: false,
-        analyzedPrompt: instruction,
+        analyzedPrompt:
+          instruction,
       });
 
+      /*
+       * Reuse the existing R1-01 review presentation temporarily.
+       * R1-04C will replace it with the multi-turn workspace.
+       */
       setQuickQuotePhotoAssistant({
         busy: false,
         error: "",
-        proposal: result.proposal,
+        proposal:
+          execution.proposal,
         decisions: {},
         reviewingId: "",
       });
 
       setQuickQuoteView("review");
     } catch (error) {
-      const message =
-        error?.message || quickQuoteCopy.photoAnalysisFailed;
-
-      setQuickQuotePhotoAssistant((current) => ({
-        ...current,
-        busy: false,
-        error: message,
-        reviewingId: "",
-      }));
+      setQuickQuotePhotoAssistant(
+        (current) => ({
+          ...current,
+          busy: false,
+          error:
+            error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed,
+          reviewingId: "",
+        })
+      );
 
       setQuickQuoteView("entry");
+    }
+  }
+
+  async function continueQuickQuoteConversation(
+    message
+  ) {
+    const normalizedMessage =
+      cleanText(message);
+
+    const presentation =
+      quickQuoteAnalysisSessionState;
+
+    const priorProposal =
+      presentation.latestProposal;
+
+    if (
+      !normalizedMessage ||
+      !presentation.sessionId ||
+      !priorProposal?.proposalId ||
+      presentation.stale ||
+      quickQuoteAnalysisState.stale ||
+      quickQuotePhotoAssistant.busy
+    ) {
+      return false;
+    }
+
+    setQuickQuotePhotoAssistant(
+      (current) => ({
+        ...current,
+        busy: true,
+        error: "",
+        reviewingId: "",
+      })
+    );
+
+    try {
+      const execution =
+        await continueQuickQuoteAnalysisSession({
+          sessionId:
+            presentation.sessionId,
+          priorProposalId:
+            priorProposal.proposalId,
+          message:
+            normalizedMessage,
+          locale:
+            language,
+          setPage,
+        });
+
+      const nextPresentation =
+        applyQuickQuoteAnalysisExecutionToPresentationState(
+          presentation,
+          execution
+        );
+
+      setQuickQuoteAnalysisSessionState(
+        nextPresentation
+      );
+
+      setQuickQuoteAnalysisState(
+        (current) => ({
+          ...current,
+          available: true,
+          stale: false,
+        })
+      );
+
+      /*
+       * Only the latest proposal remains review-active.
+       * Earlier proposals and their review decisions stay durable
+       * on the server and are available to governed continuation.
+       */
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal:
+          execution.proposal,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      return true;
+    } catch (error) {
+      setQuickQuotePhotoAssistant(
+        (current) => ({
+          ...current,
+          busy: false,
+          error:
+            error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed,
+          reviewingId: "",
+        })
+      );
+
+      return false;
     }
   }
 
@@ -1623,6 +1794,13 @@ ${businessIdentity.businessName}`;
       !["ACCEPTED", "EDITED", "REJECTED"].includes(
         normalizedAction
       ) ||
+      quickQuoteAnalysisState.stale ||
+      quickQuoteAnalysisSessionState.stale ||
+      quickQuotePhotoAssistant.busy ||
+      quickQuoteAnalysisSessionState
+        .latestProposal
+        ?.proposalId !==
+        proposal.proposalId ||
       quickQuotePhotoAssistant.decisions[item.id]
     ) {
       return false;
@@ -1836,6 +2014,15 @@ ${businessIdentity.businessName}`;
           }
         : current
     );
+
+    setQuickQuoteAnalysisSessionState(
+      (current) =>
+        current.sessionId
+          ? markQuickQuoteAnalysisPresentationStale(
+              current
+            )
+          : current
+    );
   }
 
   function handleQuickQuotePromptChange(value) {
@@ -1955,6 +2142,9 @@ ${businessIdentity.businessName}`;
       Boolean(cleanText(quickQuotePrompt)) ||
       currentPhotos.length > 0 ||
       quickQuoteAnalysisState.available ||
+      Boolean(
+        quickQuoteAnalysisSessionState.sessionId
+      ) ||
       Boolean(quickQuotePhotoAssistant.proposal);
 
     if (hasPrivateAnalysis) {
@@ -1965,6 +2155,64 @@ ${businessIdentity.businessName}`;
       if (!confirmed) {
         return;
       }
+    }
+
+    /*
+     * R1-04 full workflow discard.
+     *
+     * Internal Back never deletes the session.
+     * Explicit full exit does.
+     *
+     * Delete the durable private session first, then continue
+     * with governed transient-media cleanup. If session discard
+     * fails, do not navigate and do not start media cleanup.
+     */
+    const analysisSessionId =
+      quickQuoteAnalysisSessionState
+        .sessionId;
+
+    if (analysisSessionId) {
+      try {
+        await discardQuickQuoteAnalysisSession({
+          sessionId:
+            analysisSessionId,
+          setPage,
+        });
+      } catch (error) {
+        setQuickQuotePhotoNotice(
+          error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed
+        );
+
+        setQuickQuoteView("entry");
+        return;
+      }
+
+      setQuickQuoteAnalysisSessionState(
+        createQuickQuoteAnalysisPresentationState()
+      );
+
+      setQuickQuoteAnalysisState({
+        available: false,
+        stale: false,
+        analyzedPrompt: "",
+      });
+
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal: null,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      /*
+       * If Cloudinary cleanup below fails, the server session
+       * is already authoritatively discarded. Keep only the
+       * failed transient media refs so cleanup can be retried.
+       */
+      setQuickQuoteView("entry");
     }
 
     /*
@@ -2120,6 +2368,22 @@ ${businessIdentity.businessName}`;
           }
           analysisStale={
             quickQuoteAnalysisState.stale
+          }
+          analysisBusy={
+            quickQuotePhotoAssistant.busy
+          }
+          analysisTurns={
+            quickQuoteAnalysisSessionState
+              .turns
+              .filter(
+                (turn) =>
+                  turn.evidenceVersion ===
+                  quickQuoteAnalysisSessionState
+                    .latestEvidenceVersion
+              )
+          }
+          onContinueAnalysis={
+            continueQuickQuoteConversation
           }
           setPage={setPage}
           photoCount={quickQuoteDraftPhotos.length}

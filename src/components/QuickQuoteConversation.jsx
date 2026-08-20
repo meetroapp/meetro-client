@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
+import QuickQuoteAnalysisThread from "./QuickQuoteAnalysisThread.jsx";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
 
 export default function QuickQuoteConversation({
@@ -15,6 +16,9 @@ export default function QuickQuoteConversation({
   onReturnToAnalysis,
   analysisAvailable = false,
   analysisStale = false,
+  analysisBusy = false,
+  analysisTurns = [],
+  onContinueAnalysis,
   setPage,
   photoCount = 0,
   photos = [],
@@ -111,11 +115,13 @@ export default function QuickQuoteConversation({
         tabIndex={-1}
         className="quick-quote-conversation"
         aria-labelledby="quick-quote-review-title"
+        aria-busy={analysisBusy}
       >
         <header className="quick-quote-flow-header">
           <button
             type="button"
             className="quick-quote-analysis-back"
+            disabled={analysisBusy}
             onClick={onBackToDetails}
           >
             ‹ {copy.backToJobDetails}
@@ -183,6 +189,14 @@ export default function QuickQuoteConversation({
             )}
           </section>
 
+          <QuickQuoteAnalysisThread
+            language={language}
+            turns={analysisTurns}
+            busy={analysisBusy}
+            onContinue={onContinueAnalysis}
+            setPage={setPage}
+          />
+
           {photoProposal ? (
             <section
               className="quick-quote-photo-review"
@@ -197,6 +211,30 @@ export default function QuickQuoteConversation({
 
               {photoProposal.summary ? (
                 <p>{photoProposal.summary}</p>
+              ) : null}
+
+              {photoProposal.questionsForProfessional?.length ? (
+                <section className="quick-quote-summary-section">
+                  <span>
+                    {copy.questionsForProfessional} ·{" "}
+                    {
+                      photoProposal.questionsForProfessional
+                        .length
+                    }
+                  </span>
+
+                  <div>
+                    <ul>
+                      {photoProposal.questionsForProfessional.map(
+                        (item) => (
+                          <li key={item.id}>
+                            {item.text}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                </section>
               ) : null}
 
               {photoGroups.map(
@@ -220,6 +258,7 @@ export default function QuickQuoteConversation({
                             `${photoProposal.proposalId}:${item.id}`;
 
                           const busy =
+                            analysisBusy ||
                             photoReviewBusyId === item.id;
 
                           return (
