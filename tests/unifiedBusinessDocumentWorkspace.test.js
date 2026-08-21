@@ -6,6 +6,7 @@ import {
   buildBusinessDocumentConversationPatch,
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
+  reconcileBusinessDocumentInstructions,
 } from "../src/utils/businessDocumentWorkspace.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -43,7 +44,7 @@ test("document switching preserves the component-owned Job and conversation cont
   assert.match(workspace, /const \[turns, setTurns\]/);
   assert.match(workspace, /const \[invoice, setInvoice\]/);
   assert.match(workspace, /function switchDocument/);
-  const switchBlock = workspace.slice(workspace.indexOf("function switchDocument"), workspace.indexOf("function submitMessage"));
+  const switchBlock = workspace.slice(workspace.indexOf("function switchDocument"), workspace.indexOf("function applyManualDraft"));
   assert.doesNotMatch(switchBlock, /setTurns|setInvoice|setPage|localStorage/);
 });
 
@@ -56,16 +57,18 @@ test("conversation and manual entry update one working Quote draft", () => {
   assert.equal(patch.customerName, "Maria Lopez");
   assert.equal(patch.totalOverride, "2650");
   assert.match(patch.projectDescription, /Replace the wall/);
-  assert.match(workspace, /onApplyQuotePatch\(documentPatch\)/);
-  assert.match(workspace, /onQuoteFieldChange/);
+  assert.match(workspace, /reconcileDocument\(activeDocument, nextTurns\)/);
+  assert.match(workspace, /onApplyQuotePatch\(\{ \.\.\.result\.draft, replaceCollections: true \}\)/);
   assert.match(workspace, /Let Meetro prefill the form/);
   assert.match(workspace, /Fill the form manually/);
+  assert.match(workspace, />Apply changes</);
+  assert.match(workspace, /onClick=\{onCancel\}>Cancel/);
 });
 
 test("Speak, Type, Add Photos, and the live document remain reachable without suggestion cards", () => {
   assert.match(workspace, /<WorkflowMicrophoneInput/);
-  assert.match(workspace, /<textarea id="business-document-message"/);
-  assert.match(workspace, />Add Photos</);
+  assert.match(workspace, /<textarea[^>]*id="business-document-message"/);
+  assert.match(workspace, /"Add Photos"/);
   assert.match(workspace, /Live \{activeDocument === "quote" \? "Quote" : "Invoice"\} Preview/);
   assert.doesNotMatch(workspace, /Use Suggestion|Edit & Use|Needs Verification|Dismiss Suggestion/);
 });
@@ -178,4 +181,146 @@ test("live customer documents show the canonical business identity field", () =>
   assert.match(workspace, /branding\.businessName/);
   assert.doesNotMatch(workspace, /branding\.name/);
   assert.match(styles, /\.business-saved-drawer h2 \{[^}]*color:\s*#142236/);
+});
+
+test("working-draft customer language supports explicit forms without guessing ambiguous for-language", () => {
+  for (const instruction of [
+    "Customer Jack Smith.",
+    "Customer is Jack Smith.",
+    "Customer name Jack Smith.",
+    "Set customer to Jack Smith.",
+    "Change customer to Jack Smith.",
+  ]) {
+    assert.equal(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction, current: {} }).customerName, "Jack Smith");
+  }
+
+  const service = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "fan replacement for Jack Smith.",
+    current: {},
+  });
+  assert.equal(service.customerName, "Jack Smith");
+  assert.equal(service.projectTitle, "Fan replacement");
+  assert.doesNotMatch(service.projectDescription, /Jack Smith/);
+
+  const ambiguous = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Fan replacement for the kitchen.",
+    current: {},
+  });
+  assert.equal(ambiguous.customerName, undefined);
+});
+
+test("bare money requires financial language and preserves intended grouping", () => {
+  const fanDecimal = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "fan cost 89.99", current: {} });
+  assert.deepEqual(fanDecimal.materialItems, [{ name: "Fan", total: "89.99" }]);
+  assert.equal(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "fan cost 89", current: {} }).materialItems[0].total, "89");
+  assert.equal(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "fan cost $89.99", current: {} }).materialItems[0].total, "89.99");
+
+  for (const instruction of ["labor 180", "labor 180.00", "installation cost 180.00", "labor is 220", "labor 180 dollars"]) {
+    const patch = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction, current: {} });
+    assert.equal(patch.laborItems[0].total, instruction.includes("220") ? "220" : "180");
+  }
+
+  assert.deepEqual(
+    buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "materials cost 42.50", current: {} }).materialItems,
+    [{ name: "Materials", total: "42.5" }]
+  );
+  for (const instruction of ["price 265", "project price 265", "total 265"]) {
+    assert.equal(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction, current: {} }).totalOverride, "265");
+  }
+  assert.deepEqual(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "charge 75", current: {} }).materialItems, [{ name: "Charge", total: "75" }]);
+  assert.deepEqual(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "charge 75 for service call", current: {} }).materialItems, [{ name: "Service call", total: "75" }]);
+  assert.deepEqual(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "add 50 for microwave handle", current: {} }).materialItems, [{ name: "Microwave handle", total: "50" }]);
+  assert.deepEqual(buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "fan is 65", current: {} }).materialItems, [{ name: "Fan", total: "65" }]);
+});
+
+test("dates addresses dimensions counts and durations do not become prices", () => {
+  const patch = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Install 2 fans, 24 inches wide, at 117 SE 2nd Ave on August 20, 2026. Model 8842. Crew of 3. Should take 4 hours.",
+    current: {},
+  });
+  assert.equal(patch.totalOverride, undefined);
+  assert.equal(patch.materialItems, undefined);
+  assert.equal(patch.laborItems, undefined);
+  assert.equal(patch.estimatedDuration, "4 hours");
+});
+
+test("exact Jack Smith workflow produces two priced rows and no zero-dollar scope row", () => {
+  const result = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline: {},
+    instructions: [{ id: "first", text: "fan replacement for Jack Smith. fan cost 89.99 installation cost 180.00" }],
+  });
+  assert.equal(result.draft.customerName, "Jack Smith");
+  assert.equal(result.draft.projectTitle, "Fan replacement");
+  assert.deepEqual(result.draft.materialItems, [{ name: "Fan", total: "89.99" }]);
+  assert.deepEqual(result.draft.laborItems, [{ description: "installation", total: "180" }]);
+  assert.equal(Number(result.draft.materialItems[0].total) + Number(result.draft.laborItems[0].total), 269.99);
+  assert.equal(result.draft.lineItemDescription, undefined);
+  assert.match(workspace, /filter\(\(item\) => item\.description && item\.amount > 0\)/);
+});
+
+test("editing an earlier instruction reconstructs pricing and preserves deliberate manual overrides", () => {
+  const baseline = {};
+  const edited = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline,
+    instructions: [{ id: "first", text: "fan replacement for Jack Smith. fan cost 89.99 installation cost 200.00" }],
+    manualOverrides: { terms: "Due on acceptance" },
+  });
+  assert.deepEqual(edited.draft.materialItems, [{ name: "Fan", total: "89.99" }]);
+  assert.deepEqual(edited.draft.laborItems, [{ description: "installation", total: "200" }]);
+  assert.equal(edited.draft.terms, "Due on acceptance");
+  assert.equal(Number(edited.draft.materialItems[0].total) + Number(edited.draft.laborItems[0].total), 289.99);
+  assert.doesNotMatch(JSON.stringify(edited.draft), /180/);
+  assert.match(workspace, /revisionHistory:/);
+  assert.match(workspace, />Edited</);
+});
+
+test("private instruction editing remains private and outside customer-visible document truth", () => {
+  const result = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    instructions: [{ id: "private-one", text: "Keep this private: bring a ladder" }],
+  });
+  assert.deepEqual(result.privateReminders, [{ id: "private-one", text: "Keep this private: bring a ladder" }]);
+  assert.equal(result.draft.privateReminder, undefined);
+  assert.equal(customerVisibleWorkspaceDraft(result.draft).privateReminder, undefined);
+
+  const invoicePrivate = buildBusinessDocumentConversationPatch({
+    documentType: "invoice",
+    instruction: "Keep this private: customer requested a quiet arrival",
+  });
+  assert.deepEqual(invoicePrivate, { privateReminder: "Keep this private: customer requested a quiet arrival" });
+
+  const invoicePhoto = buildBusinessDocumentConversationPatch({
+    documentType: "invoice",
+    instruction: "These photos are after photos.",
+  });
+  assert.equal(invoicePhoto.photoIntent, "after");
+  assert.equal(invoicePhoto.projectTitle, undefined);
+});
+
+test("prefill manual amount shortcuts and governed photo input are functional shared-draft affordances", () => {
+  assert.match(workspace, /function usePrefill/);
+  assert.match(workspace, /Prefill refreshed from your saved conversation instructions/);
+  assert.match(workspace, /messageRef\.current\?\.focus/);
+  assert.match(workspace, /setManualState\(\{ focus: "amount" \}\)/);
+  assert.match(workspace, /role="dialog" aria-modal="true"/);
+  assert.match(workspace, /manualOverrides/);
+  assert.match(quoteBuilder, /ref=\{quickQuotePhotoInputRef\}[\s\S]*onChange=\{handleQuickQuotePhotoInput\}[\s\S]*<UnifiedBusinessDocumentWorkspace/);
+  assert.match(quoteBuilder, /onAddPhotos=\{\(\) => void openQuickQuotePhotoPicker\(\)\}/);
+  assert.match(workspace, /Photos stay private until you explicitly label them Before or After/);
+  assert.match(workspace, /photoAssignments\[photo\.id\]\?\.intent === "before"/);
+  assert.match(workspace, /photoAssignments\[photo\.id\]\?\.intent === "after"/);
+});
+
+test("shortcut focus is explicit without false selected state", () => {
+  const shortcuts = workspace.slice(workspace.indexOf("business-document-conversation-shortcuts"), workspace.indexOf("business-private-reminders"));
+  assert.match(shortcuts, /focusComposer\("Note: "\)/);
+  assert.match(shortcuts, /focusComposer\("Keep this private: "\)/);
+  assert.match(shortcuts, /setManualState\(\{ focus: "amount" \}\)/);
+  assert.doesNotMatch(shortcuts, /aria-pressed|aria-selected|className=.*active/);
+  assert.match(styles, /business-document-conversation-shortcuts button:focus-visible/);
 });

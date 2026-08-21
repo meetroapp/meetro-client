@@ -133,3 +133,20 @@ test("microphone chrome is localized for all active languages", () => {
     assert.equal((source.match(new RegExp(`${key}:`, "g")) || []).length, 4);
   }
 });
+
+test("active microphone and error states are reversible without submitting transcript", () => {
+  const control = read("src/components/WorkflowMicrophoneInput.jsx");
+  const recording = control.slice(control.indexOf('state === "recording"'), control.indexOf('state === "error"'));
+
+  assert.match(recording, /onClick=\{\(\) => void cancel\(\)\}/);
+  assert.match(recording, /copy\.cancelRecording/);
+  assert.match(control, /document\.addEventListener\("pointerdown", closeFromOutside\)/);
+  assert.match(control, /wrapperRef\.current\?\.contains\(event\.target\)/);
+  assert.match(control, /if \(state === "error"\)[\s\S]*aria-label="Dismiss microphone message"/);
+  assert.match(control, /if \(state === "error"\)[\s\S]*onClick=\{\(\) => void cancel\(\)\}/);
+  assert.match(control, />\s*Dismiss\s*</);
+  assert.match(control, /minHeight: 44/);
+
+  const cancelBlock = control.slice(control.indexOf("const cancel"), control.indexOf("useEffect", control.indexOf("const cancel")));
+  assert.doesNotMatch(cancelBlock, /onTranscript|requestTranscription|setMessage\([^""]|setPage/);
+});

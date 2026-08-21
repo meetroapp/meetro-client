@@ -2702,14 +2702,30 @@ ${businessIdentity.businessName}`;
           : [existing, patch.depositTerms].filter(Boolean).join(" · ");
       });
     }
-    if (patch.lineItemDescription) {
+    if (patch.replaceCollections) {
+      setLineItems(
+        patch.lineItems?.length
+          ? patch.lineItems.map((item, index) => normalizeQuoteLineItem(item, index))
+          : [normalizeQuoteLineItem({}, 0)]
+      );
+      setMaterialRows(
+        patch.materialItems?.length
+          ? patch.materialItems.map((item, index) => normalizeQuoteMaterialItem(item, index))
+          : [normalizeQuoteMaterialItem({}, 0)]
+      );
+      setLaborRows(
+        patch.laborItems?.length
+          ? patch.laborItems.map((item, index) => normalizeQuoteLaborItem(item, index, isSpanish))
+          : [normalizeQuoteLaborItem({}, 0, isSpanish)]
+      );
+    } else if (patch.lineItemDescription) {
       setLineItems((rows) => rows.map((row, index) =>
         index === 0 && !cleanText(row.description)
           ? { ...row, description: patch.lineItemDescription }
           : row
       ));
     }
-    if (patch.materialItems?.length) {
+    if (!patch.replaceCollections && patch.materialItems?.length) {
       setMaterialRows((rows) => {
         const next = [...rows];
         patch.materialItems.forEach((item) => {
@@ -2722,20 +2738,16 @@ ${businessIdentity.businessName}`;
         });
         return next.filter((row, index) => index > 0 || cleanText(row.name) || Number(row.total || 0) > 0);
       });
-    } else if (patch.materialAmount) {
+    } else if (!patch.replaceCollections && patch.materialAmount) {
       setMaterialRows((rows) => rows.map((row, index) =>
         index === 0 ? { ...row, name: row.name || "Materials", total: patch.materialAmount } : row
       ));
     }
-    if (patch.laborItems?.length) {
+    if (!patch.replaceCollections && patch.laborItems?.length) {
       setLaborRows((rows) => patch.laborItems.map((item, index) =>
         normalizeQuoteLaborItem({ ...item, id: rows[index]?.id || item.id }, index, isSpanish)
       ));
     }
-  }
-
-  function changeUnifiedQuoteField(field, value) {
-    applyUnifiedQuotePatch({ [field]: value });
   }
 
   function leaveUnifiedBusinessWorkspace() {
@@ -2778,26 +2790,38 @@ ${businessIdentity.businessName}`;
 
   if (unifiedWorkspaceEnabled) {
     return (
-      <UnifiedBusinessDocumentWorkspace
-        setPage={setPage}
-        language={language}
-        initialDocument={initialDocument}
-        job={{
-          title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
-          customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
-          location: activeJobSnapshot?.location || customerLocation,
-          canonical: Boolean(canonicalJobId),
-        }}
-        quote={unifiedQuoteDraft}
-        onApplyQuotePatch={applyUnifiedQuotePatch}
-        onQuoteFieldChange={changeUnifiedQuoteField}
-        onAddPhotos={() => void openQuickQuotePhotoPicker()}
-        photos={quickQuoteDraftPhotos}
-        photoBusy={quickQuotePhotoBusy}
-        onDownloadQuote={() => void exportQuickQuotePdf()}
-        onPreviewQuote={() => previewCustomerDocumentPdf(buildQuickQuotePdfModel())}
-        onBack={leaveUnifiedBusinessWorkspace}
-      />
+      <>
+        <input
+          ref={quickQuotePhotoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          disabled={!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy}
+          onChange={handleQuickQuotePhotoInput}
+        />
+        <UnifiedBusinessDocumentWorkspace
+          setPage={setPage}
+          language={language}
+          initialDocument={initialDocument}
+          job={{
+            title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
+            customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
+            location: activeJobSnapshot?.location || customerLocation,
+            canonical: Boolean(canonicalJobId),
+          }}
+          quote={unifiedQuoteDraft}
+          onApplyQuotePatch={applyUnifiedQuotePatch}
+          onAddPhotos={() => void openQuickQuotePhotoPicker()}
+          canAddPhotos={quickQuotePhotoUploadEnabled}
+          photos={quickQuoteDraftPhotos}
+          photoBusy={quickQuotePhotoBusy}
+          photoNotice={quickQuotePhotoNotice}
+          onDownloadQuote={() => void exportQuickQuotePdf()}
+          onPreviewQuote={() => previewCustomerDocumentPdf(buildQuickQuotePdfModel())}
+          onBack={leaveUnifiedBusinessWorkspace}
+        />
+      </>
     );
   }
 

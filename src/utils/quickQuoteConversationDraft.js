@@ -7,6 +7,11 @@ function parseAmount(value) {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
+function capitalizeLabel(value) {
+  const label = cleanText(value).replace(/^[.!?;,\s]+/, "").replace(/^the\s+/i, "");
+  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : "";
+}
+
 function firstMatch(text, patterns) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -17,7 +22,7 @@ function firstMatch(text, patterns) {
 
 function explicitFinalPrice(text) {
   const match = firstMatch(text, [
-    /(?:^|[.!?;]\s*)(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|total|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|:)?\s*\$?\s*([\d,.]+)/i,
+    /(?:^|[.!?;]\s*)(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
     /(?:^|[.!?;]\s*)\$\s*([\d,.]+)\s*(?:final|total)/i,
   ]);
   return match ? parseAmount(match[match.length - 1]) : null;
@@ -26,6 +31,7 @@ function explicitFinalPrice(text) {
 function explicitMaterialAmount(text) {
   const match = firstMatch(text, [
     /(?:use|set|materials?|materiales|matériaux|materiais)\s*(?:(?:are|is|costs?|to|at|de|a)|:)?\s*\$\s*([\d,.]+)/i,
+    /(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /\$\s*([\d,.]+)\s+(?:for\s+)?(?:materials?|materiales|matériaux|materiais)/i,
   ]);
   return match ? parseAmount(match[1]) : null;
@@ -34,17 +40,33 @@ function explicitMaterialAmount(text) {
 function explicitLaborAmount(text) {
   const match = firstMatch(text, [
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
+    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|to|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
+    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+([\d,.]+)\b(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
     /\$\s*([\d,.]+)\s+(?:for\s+)?(?:labor|labour|installation)/i,
   ]);
   return match ? parseAmount(match[1]) : null;
 }
 
 function explicitCustomerName(text) {
-  const explicit = text.match(
-    /(?:quote\s+for|customer\s+is|client\s+is)\s+([^.!?]+)/i
+  const explicit = firstMatch(text, [
+    /\b(?:set|change)\s+(?:the\s+)?(?:customer|client)(?:\s+name)?\s+to\s+([^.!?;]+)/i,
+    /\b(?:customer|client)\s+name\s*(?:is|:)?\s+([^.!?;]+)/i,
+    /\b(?:quote\s+for|customer\s+is|client\s+is)\s+([^.!?;]+)/i,
+    /\b(?:customer|client)\s+([^.!?;]+)/i,
+  ]);
+  if (explicit) {
+    const candidate = cleanText(explicit[1]).split(
+      /\s+(?=(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|replacement|rebuild|paint|painting|service|work|materials?|labor|labour|price|total)\b)/i
+    )[0];
+    const words = candidate.match(/[A-Za-zÀ-ÖØ-öø-ÿ'’-]+/g) || [];
+    if (words.length >= 2 && words.length <= 4) return candidate;
+  }
+
+  const serviceForCustomer = text.match(
+    /(?:^|[.!?;]\s*)((?:[A-Za-z][\w'’-]*\s+){0,5}(?:replacement|repair|installation|install|service|painting|rebuild))\s+for\s+([A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+)(?=[.!?;]|$)/
   );
-  if (explicit) return cleanText(explicit[1]);
+  if (serviceForCustomer) return cleanText(serviceForCustomer[2]);
 
   const conversational = text.match(
     /\bcustomer\s+([A-Za-zÀ-ÖØ-öø-ÿ'’-]+)\s+([A-Za-zÀ-ÖØ-öø-ÿ'’-]+)(?=\s+(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|rebuild|paint|painting|service|work)\b)/i
@@ -103,12 +125,12 @@ function explicitMaterialItems(text) {
   const generic = explicitMaterialAmount(text);
   if (generic !== null) items.push({ name: "Materials", total: String(generic) });
 
-  const specific = text.match(/\b([A-Za-z][\w -]{1,38}?)\s+costs?\s*\$\s*([\d,.]+)/gi) || [];
+  const specific = text.match(/(?:^|[.!?;,]\s*)(?:the\s+)?[A-Za-z][\w -]{0,38}?\s+(?:costs?|is)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?/gi) || [];
   specific.forEach((statement) => {
-    const match = statement.match(/^(.+?)\s+costs?\s*\$\s*([\d,.]+)/i);
+    const match = statement.match(/(?:^|[.!?;,]\s*)(?:the\s+)?(.+?)\s+(?:costs?|is)\s*\$?\s*([\d,.]+)/i);
     const amount = parseAmount(match?.[2]);
-    const name = cleanText(match?.[1] || "");
-    if (amount !== null && name && !/^(?:labor|labour|installation)$/i.test(name)) {
+    const name = capitalizeLabel(match?.[1] || "");
+    if (amount !== null && name && !/^(?:labor|labour|installation|materials?|tax|subtotal|total|price|project price|final price|final quote|amount)$/i.test(name)) {
       items.push({ name, total: String(amount) });
     }
   });
@@ -134,6 +156,22 @@ function explicitMaterialItems(text) {
     }
   }
 
+  const chargeItems = text.match(/\b(?:charge|add)\s+\$?\s*[\d,.]+\s+for\s+(?:the\s+)?[A-Za-z][\w -]{0,38}?(?=[.!?;,]|$)/gi) || [];
+  chargeItems.forEach((statement) => {
+    const match = statement.match(/\b(?:charge|add)\s+\$?\s*([\d,.]+)\s+for\s+(?:the\s+)?(.+?)(?=[.!?;,]|$)/i);
+    const amount = parseAmount(match?.[1]);
+    const name = capitalizeLabel(match?.[2] || "");
+    if (amount !== null && name && !items.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      items.push({ name, total: String(amount) });
+    }
+  });
+
+  const standaloneCharge = text.match(/(?:^|[.!?;]\s*)charge\s+\$?\s*([\d,.]+)(?=[.!?;]|$)/i);
+  if (standaloneCharge) {
+    const amount = parseAmount(standaloneCharge[1]);
+    if (amount !== null) items.push({ name: "Charge", total: String(amount) });
+  }
+
   return items;
 }
 
@@ -150,7 +188,9 @@ function explicitLaborItems(text) {
   }
   const match = firstMatch(text, [
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|to|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+([\d,.]+)\b(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
   ]);
   if (match) {
     const amount = parseAmount(match[2]);
@@ -166,7 +206,10 @@ function explicitLaborItems(text) {
 
 function cleanScope(text) {
   let scope = text;
-  scope = scope.replace(/(?:quote\s+for|customer\s+is|client\s+is)\s+[^.!?]+[.!?]?/i, "");
+  scope = scope.replace(/\b(?:set|change)\s+(?:the\s+)?(?:customer|client)(?:\s+name)?\s+to\s+[^.!?;]+[.!?;]?/i, "");
+  scope = scope.replace(/\b(?:quote\s+for|customer(?:\s+name)?\s*(?:is|:)|client(?:\s+name)?\s*(?:is|:))\s+[^.!?;]+[.!?;]?/i, "");
+  scope = scope.replace(/\b(?:customer|client)\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=[.!?;]|$)/i, "");
+  scope = scope.replace(/\s+for\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=[.!?;]|$)/g, "");
   scope = scope.replace(
     /\bcustomer\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=\s+(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|rebuild|paint|painting|service|work)\b)/i,
     ""
@@ -179,19 +222,23 @@ function cleanScope(text) {
     /\b(?:price\s+for|cost\s+of)\s+(?:the\s+)?[A-Za-z][\w -]{0,38}?\s*(?:is|:)?\s*\$?\s*[\d,.]+\s*(?:dollars?|usd)\b[,.;]?/gi,
     ""
   );
+  scope = scope.replace(/\b(?:charge|add)\s+\$?\s*[\d,.]+\s+for\s+(?:the\s+)?[A-Za-z][\w -]{0,38}?(?=[.!?;,]|$)[.!?;,]?/gi, "");
+  scope = scope.replace(/(?:^|[.!?;]\s*)charge\s+\$?\s*[\d,.]+(?=[.!?;]|$)[.!?;]?/gi, "");
   scope = scope.replace(
     /\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*[\d,.]+\s*(?:dollars?|usd)\b[,.;]?/gi,
     ""
   );
+  scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+[\d,.]+\b(?!\s*(?:hours?|hrs?|days?|weeks?))[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation|tax|subtotal)\s+(?:(?:total)\s+(?:is|are|:)?\s*\$\s*[\d,.]+|\$\s*[\d,.]+\s+total)[.!]?/gi, "");
+  scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|de|a|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:estimated\s+)?duration\s+(?:is|:)?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
   scope = scope.replace(/\b(?:about|around|approximately|should\s+take|takes?)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
   scope = scope.replace(/\b\d{1,3}\s*%\s*(?:deposit|depósito|acompte|entrada|sinal)(?:\s+required)?[.!]?/gi, "");
-  scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|total|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
+  scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:note|condition)\s*:\s*[^.!?]+[.!]?/gi, "");
-  scope = scope.replace(/\b(?:[A-Za-z][\w -]{1,38}?)\s+costs?\s*\$\s*[\d,.]+[.!]?/gi, "");
+  scope = scope.replace(/(^|[.!?;,]\s*)(?:the\s+)?[A-Za-z][\w -]{0,38}?\s+(?:costs?|is)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "$1");
   return cleanText(scope)
     .replace(/\s+([.!?])/g, "$1")
     .replace(/\.{2,}/g, ".")
@@ -200,7 +247,7 @@ function cleanScope(text) {
 }
 
 function suggestedTitle(text) {
-  const title = cleanText(text.split(/[,.!?]/, 1)[0]);
+  const title = capitalizeLabel(text.split(/[,.!?]/, 1)[0]);
   return title.length > 72 ? `${title.slice(0, 69).trim()}…` : title;
 }
 
@@ -244,7 +291,6 @@ export function buildQuickQuoteConversationPatch({
       patch.projectDescription = scope;
       patch.recommendedSolution = scope;
       if (!cleanText(current.projectTitle)) patch.projectTitle = suggestedTitle(scope);
-      if (!cleanText(current.lineItemDescription)) patch.lineItemDescription = suggestedTitle(scope);
     }
     if (customerName) patch.customerName = customerName;
     if (customerLocation) patch.customerLocation = customerLocation;

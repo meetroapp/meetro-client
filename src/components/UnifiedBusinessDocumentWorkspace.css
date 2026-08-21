@@ -124,6 +124,14 @@
 .business-document-turns article.you > span { background: #18364b; }
 .business-document-turns p { margin: 0; padding: 10px 12px; border: 1px solid #e0e6e1; border-radius: 4px 14px 14px 14px; color: #314257; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .business-document-turns article.you p { background: #f7f8f6; }
+.business-document-turn-body { min-width: 0; }
+.business-document-turn-body > div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.business-document-turn-body button,
+.business-document-turn-editor button { min-height: 44px; border: 1px solid #dce5de; border-radius: 9px; color: #24523c; background: #fff; padding: 7px 11px; font-size: 10px; font-weight: 850; }
+.business-document-turn-body small { color: #557064; font-size: 10px; font-weight: 850; }
+.business-document-turn-editor { min-width: 0; }
+.business-document-turn-editor textarea { width: 100%; min-height: 78px; resize: vertical; border: 1px solid #cfdad1; border-radius: 11px; padding: 10px; color: #26384c; background: #fff; }
+.business-document-turn-editor > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 6px; }
 
 .business-document-photo-workspace { margin: 8px 0; padding: 10px; border-radius: 12px; background: #fff; border: 1px solid #e1e6df; }
 .business-document-photo-workspace > strong { display: block; margin-bottom: 8px; font-size: 12px; }
@@ -140,6 +148,7 @@
 
 .business-document-conversation-shortcuts { display: flex; gap: 7px; overflow-x: auto; margin-top: 8px; padding-bottom: 3px; }
 .business-document-conversation-shortcuts button { flex: 0 0 auto; border: 1px solid #dfe6df; border-radius: 10px; color: #385547; background: #fff; padding: 8px 10px; font-size: 10px; font-weight: 850; }
+.business-document-conversation-shortcuts button:focus-visible { outline: 3px solid #77a98a; outline-offset: 2px; }
 .business-private-reminders { margin-top: 9px; padding: 11px; border-radius: 12px; color: #4b3b1d; background: #fff9e9; border: 1px solid #ecdfb9; }
 .business-private-reminders strong { font-size: 12px; }
 .business-private-reminders p { margin: 6px 0; font-size: 11px; }
@@ -185,7 +194,8 @@
 .business-document-delivery-menu button:hover { background: #eff6ef; }
 .business-document-notice { margin: 10px 0 0; padding: 10px; border-radius: 10px; color: #634d20; background: #fff8e7; font-size: 11px; text-align: center; }
 
-.business-document-manual { margin-top: 14px; padding: 14px; border: 1px solid #dce4dc; border-radius: 16px; background: #fff; box-shadow: 0 12px 30px rgba(37,52,41,.08); }
+.business-document-manual-backdrop { position: fixed; z-index: 10030; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(15,26,20,.28); }
+.business-document-manual { position: fixed; z-index: 10031; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 16px; overflow: auto; border: 1px solid #dce4dc; border-radius: 18px; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.22); }
 .business-document-manual > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .business-document-manual header span { color: #0c6b3d; font-size: 10px; font-weight: 950; text-transform: uppercase; }
 .business-document-manual h2 { margin: 3px 0 0; font-size: 16px; }
@@ -196,6 +206,14 @@
 .business-document-manual textarea,
 .business-saved-drawer input { display: block; width: 100%; min-width: 0; margin-top: 5px; padding: 11px; border: 1px solid #dbe3dc; border-radius: 10px; color: #25374a; background: #fff; }
 .business-document-manual textarea { min-height: 84px; resize: vertical; }
+.business-document-manual-line-groups { display: grid; gap: 12px; margin-top: 14px; }
+.business-document-manual-rows { min-width: 0; margin: 0; padding: 12px; border: 1px solid #dce4dc; border-radius: 13px; }
+.business-document-manual-rows legend { padding: 0 6px; color: #145b38; font-size: 12px; font-weight: 900; }
+.business-document-manual-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, .45fr) auto; gap: 8px; align-items: end; margin-bottom: 8px; }
+.business-document-manual-rows button,
+.business-document-manual > footer button { min-height: 44px; border: 1px solid #d7e1d9; border-radius: 10px; color: #195b3a; background: #fff; padding: 8px 12px; font-size: 11px; font-weight: 850; }
+.business-document-manual > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e3e8e4; }
+.business-document-manual > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
 
 .business-saved-backdrop { position: fixed; z-index: 10020; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(15,26,20,.2); }
 .business-saved-drawer { position: fixed; z-index: 10021; inset: 0 0 0 auto; width: min(390px, 94vw); padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; background: #fff; box-shadow: -18px 0 48px rgba(27,42,32,.18); }
@@ -238,6 +256,9 @@
   .business-document-tabs button { font-size: 11px; gap: 5px; }
   .business-document-actions { padding-bottom: 4px; }
   .business-saved-drawer { width: 100vw; }
+  .business-document-manual { inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 13px; }
+  .business-document-manual-rows > div { grid-template-columns: minmax(0, 1fr) minmax(86px, .5fr); }
+  .business-document-manual-rows > div > button { grid-column: 1 / -1; justify-self: start; }
 }
 
 @media (max-width: 900px) and (orientation: portrait) {

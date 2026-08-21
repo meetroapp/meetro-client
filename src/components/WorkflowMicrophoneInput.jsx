@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import MeetroIcon from "./MeetroIcon.jsx";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
@@ -19,17 +19,18 @@ export default function WorkflowMicrophoneInput({
 }) {
   const copy = getAskMeetroWorkflowCopy(language);
   const captureRef = useRef(null);
+  const wrapperRef = useRef(null);
   const [state, setState] = useState("idle");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("status");
 
-  const cancel = async ({ announce = true } = {}) => {
+  const cancel = useCallback(async ({ announce = true } = {}) => {
     const capture = captureRef.current;
     captureRef.current = null;
     if (capture) await capture.cancel().catch(() => null);
     setState("idle");
     if (announce) setMessage("");
-  };
+  }, []);
 
   useEffect(() => {
     const cancelWhenHidden = () => {
@@ -43,7 +44,16 @@ export default function WorkflowMicrophoneInput({
       if (captureRef.current) void captureRef.current.cancel().catch(() => null);
       captureRef.current = null;
     };
-  }, []);
+  }, [cancel]);
+
+  useEffect(() => {
+    if (state !== "recording" && state !== "error") return undefined;
+    const closeFromOutside = (event) => {
+      if (!wrapperRef.current?.contains(event.target)) void cancel();
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    return () => document.removeEventListener("pointerdown", closeFromOutside);
+  }, [cancel, state]);
 
   const start = async () => {
     setMessage("");
@@ -51,7 +61,7 @@ export default function WorkflowMicrophoneInput({
       captureRef.current = await startCapture();
       setState("recording");
     } catch (error) {
-      setState("idle");
+      setState("error");
       setMessageType("alert");
       setMessage(error?.code === "MICROPHONE_PERMISSION_DENIED"
         ? copy.microphoneDenied
@@ -77,17 +87,21 @@ export default function WorkflowMicrophoneInput({
       onTranscript?.(result.transcript);
       setMessageType("status");
       setMessage(copy.transcriptReady);
+      setState("idle");
     } catch (error) {
+      setState("error");
       setMessageType("alert");
       setMessage(error?.message || copy.microphoneUnavailable);
-    } finally {
-      setState("idle");
     }
   };
 
   if (state === "recording") {
     return (
-      <div style={styles.group} role="group" aria-label={copy.recording}>
+      <div ref={wrapperRef} style={styles.group} role="group" aria-label={copy.recording}>
+        <button type="button" style={styles.button} onClick={() => void cancel()}>
+          <MeetroIcon name="microphone" size={18} />
+          {copy.cancelRecording}
+        </button>
         <span style={styles.recording} role="status">
           <span style={styles.indicator} aria-hidden="true" />
           {copy.recording}
@@ -96,16 +110,24 @@ export default function WorkflowMicrophoneInput({
           <MeetroIcon name="stopRecording" size={18} />
           {copy.stopRecording}
         </button>
-        <button type="button" style={styles.button} onClick={() => void cancel()}>
+      </div>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <div ref={wrapperRef} style={styles.wrapper}>
+        <button type="button" style={styles.button} onClick={() => void cancel()} aria-label="Dismiss microphone message">
           <MeetroIcon name="close" size={18} />
-          {copy.cancelRecording}
+          Dismiss
         </button>
+        <span role="alert" style={styles.error}>{message}</span>
       </div>
     );
   }
 
   return (
-    <div style={styles.wrapper}>
+    <div ref={wrapperRef} style={styles.wrapper}>
       <button
         type="button"
         style={styles.button}
