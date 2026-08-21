@@ -116,6 +116,7 @@ function createQuickQuoteDraftPhoto(file, media) {
     name: file?.name || "quote-photo",
     previewUrl: media.secure_url,
     media,
+    uploadState: "transient",
   };
 }
 
@@ -910,6 +911,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     useRef(0);
   const quickQuotePhotoInputRef = useRef(null);
   const quickQuoteDraftPhotosRef = useRef([]);
+  const quickQuotePersistedPhotoIdsRef = useRef(new Set());
+  const quickQuotePhotoDocumentRef = useRef(new Map());
+  const quickQuotePhotoTargetDocumentRef = useRef("quote");
   const quickQuoteCopy = getQuickQuoteConversationCopy(language);
   const quickQuotePhotoUploadEnabled =
     isQuickQuoteDraftPhotoUploadEnabled();
@@ -964,12 +968,14 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   }, [quickQuoteDraftPhotos]);
 
   useEffect(() => {
+    const persistedPhotoIds = quickQuotePersistedPhotoIdsRef.current;
     document.body.classList.add("meetro-quote-builder-open");
 
     return () => {
       document.body.classList.remove("meetro-quote-builder-open");
       quickQuoteDraftPhotosRef.current.forEach((photo) => {
-        if (photo.media) {
+        if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+        if (photo.media && !persistedPhotoIds.has(photo.id)) {
           void cleanupQuoteDraftPhoto({ media: photo.media });
         }
       });
@@ -2312,6 +2318,19 @@ ${businessIdentity.businessName}`;
       });
 
       if (!upload.ok) {
+        const pending = acceptedFiles.map((file) => {
+          const id = `pending-photo-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`}`;
+          quickQuotePhotoDocumentRef.current.set(id, quickQuotePhotoTargetDocumentRef.current);
+          return {
+            id,
+            name: file.name || "quote-photo",
+            previewUrl: URL.createObjectURL(file),
+            media: null,
+            pendingFile: file,
+            uploadState: "pending",
+          };
+        });
+        setQuickQuoteDraftPhotos((current) => [...current, ...pending]);
         setQuickQuotePhotoNotice(quickQuoteCopy.photoUploadFailed);
         return;
       }
@@ -2337,7 +2356,10 @@ ${businessIdentity.businessName}`;
 
       setQuickQuoteDraftPhotos((current) => [
         ...current,
-        ...prepared,
+        ...prepared.map((photo) => {
+          quickQuotePhotoDocumentRef.current.set(photo.id, quickQuotePhotoTargetDocumentRef.current);
+          return photo;
+        }),
       ]);
 
       const analysisWasAvailable =
@@ -2390,6 +2412,70 @@ ${businessIdentity.businessName}`;
     const files = Array.from(event.target.files || []);
     event.target.value = "";
     void addQuickQuoteDraftPhotoFiles(files);
+  }
+
+  async function ensureWorkspacePhotosDurable(pendingPhotos = []) {
+    const pendingIds = new Set(pendingPhotos.map((photo) => photo.id));
+    const pending = quickQuoteDraftPhotosRef.current.filter((photo) => pendingIds.has(photo.id) && photo.pendingFile);
+    if (!pending.length) return { ok: true, photos: quickQuoteDraftPhotosRef.current, idMap: {} };
+    const upload = await uploadQuoteDraftPhotos({
+      files: pending.map((photo) => photo.pendingFile),
+      existingCount: quickQuoteDraftPhotosRef.current.length - pending.length,
+      setPage,
+    });
+    if (!upload.ok || upload.photos.length !== pending.length) return { ok: false };
+    const replacements = new Map();
+    const idMap = {};
+    pending.forEach((photo, index) => {
+      const replacement = createQuickQuoteDraftPhoto(photo.pendingFile, upload.photos[index]);
+      if (!replacement) return;
+      replacements.set(photo.id, replacement);
+      idMap[photo.id] = replacement.id;
+      const documentType = quickQuotePhotoDocumentRef.current.get(photo.id) || "quote";
+      quickQuotePhotoDocumentRef.current.delete(photo.id);
+      quickQuotePhotoDocumentRef.current.set(replacement.id, documentType);
+      if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+    });
+    if (replacements.size !== pending.length) return { ok: false };
+    const next = quickQuoteDraftPhotosRef.current.map((photo) => replacements.get(photo.id) || photo);
+    quickQuoteDraftPhotosRef.current = next;
+    setQuickQuoteDraftPhotos(next);
+    return { ok: true, photos: next, idMap };
+  }
+
+  function restoreWorkspacePhotos(nextPhotos = [], options = {}) {
+    const prepared = nextPhotos.map((photo) => ({
+      ...photo,
+      previewUrl: photo.previewUrl || photo.media?.secure_url || (photo.pendingFile ? URL.createObjectURL(photo.pendingFile) : ""),
+    }));
+    let next;
+    if (options.replaceAll) {
+      next = prepared;
+      quickQuotePhotoDocumentRef.current.clear();
+    } else {
+      const type = options.documentType || "quote";
+      const retained = quickQuoteDraftPhotosRef.current.filter((photo) => quickQuotePhotoDocumentRef.current.get(photo.id) !== type);
+      next = [...retained, ...prepared];
+      [...quickQuotePhotoDocumentRef.current.entries()].forEach(([id, documentType]) => {
+        if (documentType === type) quickQuotePhotoDocumentRef.current.delete(id);
+      });
+    }
+    prepared.forEach((photo) => quickQuotePhotoDocumentRef.current.set(photo.id, options.documentType || "quote"));
+    if (options.persisted) prepared.forEach((photo) => quickQuotePersistedPhotoIdsRef.current.add(photo.id));
+    quickQuoteDraftPhotosRef.current = next;
+    setQuickQuoteDraftPhotos(next);
+  }
+
+  function markWorkspacePhotosPersisted(photoIds = []) {
+    photoIds.forEach((id) => quickQuotePersistedPhotoIdsRef.current.add(id));
+  }
+
+  function discardWorkspaceTransientPhotos() {
+    quickQuoteDraftPhotosRef.current.forEach((photo) => {
+      if (quickQuotePersistedPhotoIdsRef.current.has(photo.id)) return;
+      if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+      if (photo.media) void cleanupQuoteDraftPhoto({ media: photo.media, setPage });
+    });
   }
 
   function markQuickQuoteAnalysisStale() {
@@ -2805,6 +2891,7 @@ ${businessIdentity.businessName}`;
           language={language}
           initialDocument={initialDocument}
           job={{
+            id: canonicalJobId || null,
             title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
             customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
             location: activeJobSnapshot?.location || customerLocation,
@@ -2812,11 +2899,18 @@ ${businessIdentity.businessName}`;
           }}
           quote={unifiedQuoteDraft}
           onApplyQuotePatch={applyUnifiedQuotePatch}
-          onAddPhotos={() => void openQuickQuotePhotoPicker()}
+          onAddPhotos={(documentType = "quote") => {
+            quickQuotePhotoTargetDocumentRef.current = documentType;
+            void openQuickQuotePhotoPicker();
+          }}
           canAddPhotos={quickQuotePhotoUploadEnabled}
           photos={quickQuoteDraftPhotos}
           photoBusy={quickQuotePhotoBusy}
           photoNotice={quickQuotePhotoNotice}
+          onEnsurePhotosDurable={ensureWorkspacePhotosDurable}
+          onRestorePhotos={restoreWorkspacePhotos}
+          onPhotosPersisted={markWorkspacePhotosPersisted}
+          onDiscardTransientPhotos={discardWorkspaceTransientPhotos}
           onDownloadQuote={() => void exportQuickQuotePdf()}
           onPreviewQuote={() => previewCustomerDocumentPdf(buildQuickQuotePdfModel())}
           onBack={leaveUnifiedBusinessWorkspace}

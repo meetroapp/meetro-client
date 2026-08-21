@@ -201,7 +201,14 @@ test("live unsafe media writers are guarded before Friends and Family release", 
       contents.includes("/contractor-profile/logo") &&
       contents.includes("business-logo");
 
-    if (!isGuarded && !isGovernedPersonalProfileUpload && !isGovernedBusinessLogoUpload) {
+    const isGovernedQuickQuoteRecoveryPreview =
+      relative(repoRoot, absolutePath) === "src/pages/QuoteBuilder.jsx" &&
+      contents.includes("isQuickQuoteDraftPhotoUploadEnabled") &&
+      contents.includes("uploadQuoteDraftPhotos") &&
+      contents.includes("pendingFile: file") &&
+      contents.includes("URL.revokeObjectURL(photo.previewUrl)");
+
+    if (!isGuarded && !isGovernedPersonalProfileUpload && !isGovernedBusinessLogoUpload && !isGovernedQuickQuoteRecoveryPreview) {
       unguarded.push(relative(repoRoot, absolutePath));
     }
   }

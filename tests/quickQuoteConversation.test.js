@@ -334,10 +334,11 @@ test("Quick Quote uses governed private draft media without claiming canonical Q
     builder,
     /photoBusy=\{quickQuotePhotoBusy\}/
   );
-  assert.doesNotMatch(
-    builder,
-    /globalThis\.URL\.createObjectURL|revokeObjectURL/
-  );
+  assert.match(builder, /pendingFile: file/);
+  assert.match(builder, /uploadState: "pending"/);
+  assert.match(builder, /URL\.createObjectURL\(file\)/);
+  assert.match(builder, /URL\.revokeObjectURL\(photo\.previewUrl\)/);
+  assert.match(builder, /quickQuotePersistedPhotoIdsRef/);
 
   assert.match(
     quoteDraftMedia,

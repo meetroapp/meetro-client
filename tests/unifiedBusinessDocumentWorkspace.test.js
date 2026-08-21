@@ -141,7 +141,7 @@ test("Invoice continuity copies only context unless canonical Quote truth is acc
   assert.equal(accepted.totalOverride, "2650");
 });
 
-test("Before and After photos require explicit conversation intent", () => {
+test("Before and After photos require explicit conversation intent and independent customer visibility", () => {
   assert.equal(buildBusinessDocumentConversationPatch({
     documentType: "invoice",
     instruction: "Use the quote photos as before photos.",
@@ -154,12 +154,20 @@ test("Before and After photos require explicit conversation intent", () => {
     documentType: "invoice",
     instruction: "Attach photos.",
   }).photoIntent, undefined);
-  assert.match(workspace, /Photos stay private until you explicitly label them Before or After/);
+  assert.match(workspace, /Photos are private by default/);
+  assert.match(workspace, /Role and customer visibility are separate/);
+  assert.match(workspace, /customerVisibleBusinessDocumentPhotoGroups/);
+  assert.match(workspace, /Project Photos \/ Evidence/);
+  assert.match(workspace, /<h3>Before<\/h3>/);
+  assert.match(workspace, /<h3>After<\/h3>/);
+  assert.match(workspace, /normalizeBusinessDocumentPhotoAssignment/);
 });
 
-test("Saved Files is a truthful governed-search seam with no browser authority", () => {
-  assert.match(workspace, /No browser-stored or fabricated records are shown/);
-  assert.match(workspace, /canonical backend listing capability/);
+test("Saved Files uses governed server listing and reopening with no browser authority", () => {
+  assert.match(workspace, /listBusinessDocumentDrafts/);
+  assert.match(workspace, /getBusinessDocumentDraft/);
+  assert.match(workspace, /Only governed server-saved working drafts appear here/);
+  assert.match(workspace, /Search customer, job, number, or address/);
   assert.doesNotMatch(workspace, /localStorage|sessionStorage/);
 });
 
@@ -310,10 +318,12 @@ test("prefill manual amount shortcuts and governed photo input are functional sh
   assert.match(workspace, /role="dialog" aria-modal="true"/);
   assert.match(workspace, /manualOverrides/);
   assert.match(quoteBuilder, /ref=\{quickQuotePhotoInputRef\}[\s\S]*onChange=\{handleQuickQuotePhotoInput\}[\s\S]*<UnifiedBusinessDocumentWorkspace/);
-  assert.match(quoteBuilder, /onAddPhotos=\{\(\) => void openQuickQuotePhotoPicker\(\)\}/);
-  assert.match(workspace, /Photos stay private until you explicitly label them Before or After/);
-  assert.match(workspace, /photoAssignments\[photo\.id\]\?\.intent === "before"/);
-  assert.match(workspace, /photoAssignments\[photo\.id\]\?\.intent === "after"/);
+  assert.match(quoteBuilder, /onAddPhotos=\{\(documentType = "quote"\) => \{/);
+  assert.match(quoteBuilder, /quickQuotePhotoTargetDocumentRef\.current = documentType/);
+  assert.match(quoteBuilder, /void openQuickQuotePhotoPicker\(\)/);
+  assert.match(workspace, /Photos are private by default/);
+  assert.match(workspace, /customerPhotoGroups\.before/);
+  assert.match(workspace, /customerPhotoGroups\.after/);
 });
 
 test("shortcut focus is explicit without false selected state", () => {
