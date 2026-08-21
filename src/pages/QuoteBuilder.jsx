@@ -2788,6 +2788,8 @@ ${businessIdentity.businessName}`;
     if (Object.hasOwn(patch, "totalOverride")) setTotalOverride(patch.totalOverride);
     if (Object.hasOwn(patch, "notes")) setNotes(patch.notes);
     if (Object.hasOwn(patch, "terms")) setTerms(patch.terms);
+    if (Object.hasOwn(patch, "quoteNumber")) setQuoteNumber(patch.quoteNumber);
+    if (Object.hasOwn(patch, "quoteDate")) setQuoteDate(patch.quoteDate);
     if (Object.hasOwn(patch, "depositRequired")) setDepositRequired(patch.depositRequired);
     if (patch.depositTerms) {
       setTerms((current) => {

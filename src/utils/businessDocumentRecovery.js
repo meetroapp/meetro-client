@@ -135,4 +135,49 @@ export async function deleteBusinessDocumentRecovery({
   }
 }
 
+export async function clearDeletedBusinessDocumentRecoveryIdentity({
+  identityKey,
+  draftId,
+  repository = indexedDbBusinessDocumentRecoveryRepository,
+  indexedDBImpl,
+} = {}) {
+  const owner = identity(identityKey);
+  const target = identity(draftId);
+  if (!owner || !target) return false;
+  try {
+    const record = await repository.get(owner, indexedDBImpl);
+    if (!record || record.classification !== "NONCANONICAL_LOCAL_RECOVERY" || !plain(record.snapshot)) return false;
+    const cleared = clearDeletedBusinessDocumentRecoverySnapshot(record.snapshot, target);
+    if (!cleared.changed) return false;
+    await repository.put({
+      ...record,
+      snapshot: cleared.snapshot,
+    }, indexedDBImpl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearDeletedBusinessDocumentRecoverySnapshot(snapshot, draftId) {
+  if (!plain(snapshot)) return Object.freeze({ changed: false, snapshot });
+  const target = identity(draftId);
+  const savedDocuments = plain(snapshot.savedDocuments) ? { ...snapshot.savedDocuments } : {};
+  const matchingTypes = Object.entries(savedDocuments)
+    .filter(([, document]) => document?.id === target)
+    .map(([documentType]) => documentType);
+  if (!target || !matchingTypes.length) return Object.freeze({ changed: false, snapshot });
+  const savedFingerprints = plain(snapshot.savedFingerprints)
+    ? { ...snapshot.savedFingerprints }
+    : {};
+  for (const documentType of matchingTypes) {
+    savedDocuments[documentType] = null;
+    savedFingerprints[documentType] = "";
+  }
+  return Object.freeze({
+    changed: true,
+    snapshot: { ...snapshot, savedDocuments, savedFingerprints },
+  });
+}
+
 export const businessDocumentRecoveryInternals = Object.freeze({ approximateBytes, identity });

@@ -136,6 +136,19 @@ export async function updateBusinessDocumentDraft({ draftId, expectedVersion, pa
   return document;
 }
 
+export async function deleteBusinessDocumentDraft({ draftId, expectedVersion, setPage, authFetchImpl } = {}) {
+  const data = await request(`/business-document-drafts/${encodeURIComponent(draftId)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ expectedVersion }),
+  }, { setPage, authFetchImpl });
+  if (data.deletedDraftId !== draftId) {
+    throw new BusinessDocumentDraftError("The server returned an invalid delete result.", {
+      code: "BUSINESS_DOCUMENT_RESPONSE_INVALID",
+    });
+  }
+  return Object.freeze({ deletedDraftId: data.deletedDraftId });
+}
+
 export async function getBusinessDocumentDraft({ draftId, setPage, authFetchImpl } = {}) {
   const data = await request(`/business-document-drafts/${encodeURIComponent(draftId)}`, { method: "GET" }, { setPage, authFetchImpl });
   const document = validateBusinessDocumentDraft(data.document);

@@ -22,11 +22,14 @@ import {
 import {
   createBusinessDocumentDraft,
   createBusinessDocumentSaveKey,
+  deleteBusinessDocumentDraft,
   getBusinessDocumentDraft,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
 } from "../utils/businessDocumentDraftApi.js";
 import {
+  clearDeletedBusinessDocumentRecoveryIdentity,
+  clearDeletedBusinessDocumentRecoverySnapshot,
   deleteBusinessDocumentRecovery,
   loadBusinessDocumentRecovery,
   saveBusinessDocumentRecovery,
@@ -204,20 +207,59 @@ function InstructionTurn({ turn, onSave, onCancel, onEdit }) {
   return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article><article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article></>;
 }
 
-function SavedFilesDrawer({ onClose, onOpen, setPage }) {
+function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, setPage }) {
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [time, setTime] = useState("ALL");
   const [state, setState] = useState({ busy: true, error: "", documents: [] });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteState, setDeleteState] = useState({ busy: false, error: "" });
+  const [notice, setNotice] = useState("");
   const closeRef = useRef(null);
+  const deleteTriggerRef = useRef(null);
 
-  async function load() {
+  async function load(successNotice = "") {
     setState((current) => ({ ...current, busy: true, error: "" }));
     try {
       const documents = await listBusinessDocumentDrafts({ search, type, time, setPage });
       setState({ busy: false, error: "", documents });
+      if (successNotice) setNotice(successNotice);
     } catch {
       setState((current) => ({ ...current, busy: false, error: "Saved Files could not be loaded. Your current work is unchanged." }));
+    }
+  }
+
+  function cancelDelete() {
+    if (deleteState.busy) return;
+    setDeleteTarget(null);
+    setDeleteState({ busy: false, error: "" });
+    requestAnimationFrame(() => deleteTriggerRef.current?.focus());
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleteState.busy) return;
+    setDeleteState({ busy: true, error: "" });
+    try {
+      await deleteBusinessDocumentDraft({
+        draftId: deleteTarget.id,
+        expectedVersion: deleteTarget.version,
+        setPage,
+      });
+      setState((current) => ({
+        ...current,
+        documents: current.documents.filter((document) => document.id !== deleteTarget.id),
+      }));
+      await onDeleted(deleteTarget);
+      setDeleteTarget(null);
+      setDeleteState({ busy: false, error: "" });
+      setNotice("Draft deleted.");
+      await load("Draft deleted.");
+      requestAnimationFrame(() => closeRef.current?.focus());
+    } catch (error) {
+      setDeleteState({
+        busy: false,
+        error: error?.message || "This draft could not be deleted. It remains in Saved Files.",
+      });
     }
   }
 
@@ -227,12 +269,22 @@ function SavedFilesDrawer({ onClose, onOpen, setPage }) {
     return () => cancelAnimationFrame(frame);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    function escape(event) { if (event.key === "Escape") onClose(); }
+    function escape(event) { if (event.key === "Escape" && !deleteTarget) onClose(); }
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, [deleteTarget, onClose]);
 
-  return <><button type="button" className="business-saved-backdrop" aria-label="Close Saved Files" onClick={onClose} /><aside className="business-saved-drawer" role="dialog" aria-modal="true" aria-labelledby="saved-files-title"><header><h2 id="saved-files-title">Saved Quotes &amp; Invoices</h2><button ref={closeRef} type="button" onClick={onClose} aria-label="Close Saved Files">×</button></header><form className="business-saved-search" onSubmit={(event) => { event.preventDefault(); void load(); }}><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, job, number, or address…" aria-label="Search saved documents" /><button type="submit">Search</button></form><div className="business-saved-filters" aria-label="Saved document filters"><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option value="">All Types</option><option value="QUOTE">Quotes</option><option value="INVOICE">Invoices</option></select></label><label>Status<select value="WORKING_DRAFT" disabled><option>WORKING_DRAFT</option></select></label><label>Time<select value={time} onChange={(event) => setTime(event.target.value)}><option value="ALL">All Time</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select></label></div>{state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <button type="button" key={document.id} onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.content.customerName || document.reference}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.content.customerName || "Customer not entered"} · {document.reference}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}</aside></>;
+  return <>
+    <button type="button" className="business-saved-backdrop" aria-label="Close Saved Files" onClick={onClose} />
+    <aside className="business-saved-drawer" role="dialog" aria-modal="true" aria-labelledby="saved-files-title">
+      <header><h2 id="saved-files-title">Saved Quotes &amp; Invoices</h2><button ref={closeRef} type="button" onClick={onClose} aria-label="Close Saved Files">×</button></header>
+      <form className="business-saved-search" onSubmit={(event) => { event.preventDefault(); void load(); }}><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, job, number, or address…" aria-label="Search saved documents" /><button type="submit">Search</button></form>
+      <div className="business-saved-filters" aria-label="Saved document filters"><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option value="">All Types</option><option value="QUOTE">Quotes</option><option value="INVOICE">Invoices</option></select></label><label>Status<select value="WORKING_DRAFT" disabled><option>WORKING_DRAFT</option></select></label><label>Time<select value={time} onChange={(event) => setTime(event.target.value)}><option value="ALL">All Time</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select></label></div>
+      {notice ? <p className="business-saved-notice" role="status">{notice}</p> : null}
+      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.content.customerName || document.reference}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.content.customerName || "Customer not entered"} · {document.reference}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">Delete Draft</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
+    </aside>
+    {deleteTarget ? <WorkspaceDialog titleId="business-document-delete-title" title="Delete this draft?" onClose={cancelDelete} actions={[{ label: "Cancel", onClick: cancelDelete, disabled: deleteState.busy }, { label: deleteState.busy ? "Deleting…" : "Delete Draft", destructive: true, disabled: deleteState.busy, onClick: () => void confirmDelete() }]}><p>This removes the saved working draft from Meetro. It does not delete the Job or customer.</p>{currentSavedIds.includes(deleteTarget.id) ? <p>Your currently open workspace will remain as an unsaved copy.</p> : null}{deleteState.error ? <p role="alert">{deleteState.error}</p> : null}</WorkspaceDialog> : null}
+  </>;
 }
 
 function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
@@ -243,7 +295,7 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [onClose]);
-  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 id={titleId}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
+  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 id={titleId}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
 function PhotoWorkspace({ photos, assignments, onChange, onReview }) {
@@ -447,8 +499,12 @@ export default function UnifiedBusinessDocumentWorkspace({
           prepared.assignments
         ),
       });
+      const restoredFingerprint = businessDocumentRestoredSnapshotFingerprint(document);
+      if (fingerprint !== restoredFingerprint) {
+        throw new Error("The saved draft response did not match the editable workspace. Reopen Saved Files before retrying.");
+      }
       setSavedDocuments((current) => ({ ...current, [documentType]: document }));
-      setSavedFingerprints((current) => ({ ...current, [documentType]: fingerprint }));
+      setSavedFingerprints((current) => ({ ...current, [documentType]: restoredFingerprint }));
       saveAttemptKeysRef.current[documentType] = "";
       setSaveState({ busy: false, error: "", lastSavedAt: document.updatedAt, documentType });
       setRecovered(false);
@@ -493,6 +549,25 @@ export default function UnifiedBusinessDocumentWorkspace({
     } catch (error) {
       setNotice(error?.message || "The saved document could not be opened.");
     }
+  }
+
+  async function handleDeletedDocument(document) {
+    const type = document.documentType.toLowerCase();
+    if (savedDocuments[type]?.id === document.id) {
+      setSavedDocuments((current) => ({ ...current, [type]: null }));
+      setSavedFingerprints((current) => ({ ...current, [type]: "" }));
+      saveAttemptKeysRef.current[type] = "";
+      setRecovered(false);
+    }
+    const identityKey = getAuthenticatedIdentitySnapshot().userId;
+    if (identityKey) {
+      await clearDeletedBusinessDocumentRecoveryIdentity({ identityKey, draftId: document.id });
+    }
+    setRecoveryRecord((current) => {
+      if (!current?.snapshot) return current;
+      const cleared = clearDeletedBusinessDocumentRecoverySnapshot(current.snapshot, document.id);
+      return cleared.changed ? { ...current, snapshot: cleared.snapshot } : current;
+    });
   }
 
   function requestExit(action) {
@@ -748,7 +823,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") void onPreviewQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED"); else void previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED") : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onUnavailable={deliveryUnavailable} /></div>{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
-      {savedFilesOpen ? <SavedFilesDrawer setPage={setPage} onClose={() => setSavedFilesOpen(false)} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
+      {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={[{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || "Your work is still here."}</p><p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p></WorkspaceDialog> : null}

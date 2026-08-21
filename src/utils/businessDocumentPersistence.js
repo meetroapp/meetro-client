@@ -40,8 +40,93 @@ function stable(value) {
   return JSON.stringify(value);
 }
 
+const SERVER_MEDIA_PRESENTATION_KEYS = new Set([
+  "customer_visible_by_default",
+  "display_order",
+  "lifecycle_state",
+  "name",
+  "uploaded_at",
+]);
+
+function fingerprintText(value) {
+  return String(value ?? "").trim();
+}
+
+function fingerprintTotal(total, quantity, price) {
+  const saved = fingerprintText(total);
+  if (saved) return saved;
+  const quantityNumber = Number(fingerprintText(quantity));
+  const priceNumber = Number(fingerprintText(price));
+  return Number.isFinite(quantityNumber) && Number.isFinite(priceNumber) &&
+    fingerprintText(quantity) && fingerprintText(price)
+    ? String(quantityNumber * priceNumber)
+    : "";
+}
+
+function canonicalFingerprintRows(key, rows) {
+  return rows.map((item, index) => {
+    if (key === "materialItems") {
+      const quantity = fingerprintText(item.quantity ?? item.qty);
+      const cost = fingerprintText(item.cost ?? item.unitPrice ?? item.price);
+      return {
+        id: fingerprintText(item.id) || `material-line-${index}`,
+        name: fingerprintText(item.name ?? item.description ?? item.label),
+        quantity,
+        cost,
+        total: fingerprintTotal(item.total ?? item.amount ?? item.lineTotal, quantity, cost),
+        notes: fingerprintText(item.notes ?? item.provider),
+      };
+    }
+    if (key === "laborItems") {
+      const hours = fingerprintText(item.hours ?? item.estimatedHours ?? item.quantity);
+      const rate = fingerprintText(item.rate ?? item.unitPrice);
+      return {
+        id: fingerprintText(item.id) || `labor-line-${index}`,
+        description: fingerprintText(item.description ?? item.label ?? item.title) || "Labor",
+        hours,
+        rate,
+        total: fingerprintTotal(item.total ?? item.amount ?? item.lineTotal, hours, rate),
+      };
+    }
+    const quantity = fingerprintText(item.quantity ?? item.qty) || "1";
+    const unitPrice = fingerprintText(item.unitPrice ?? item.rate ?? item.price);
+    return {
+      id: fingerprintText(item.id) || `quote-line-${index}`,
+      description: fingerprintText(item.description ?? item.label ?? item.title),
+      quantity,
+      unitPrice,
+      total: fingerprintTotal(item.total ?? item.amount ?? item.lineTotal, quantity, unitPrice),
+    };
+  }).filter((row) => {
+    if (key === "materialItems") return row.name || row.cost || row.total || row.notes;
+    if (key === "laborItems") return row.description !== "Labor" || row.hours || row.rate || row.total;
+    return row.description || row.unitPrice || row.total;
+  });
+}
+
+function canonicalFingerprintValue(value, path = []) {
+  if (Array.isArray(value)) {
+    const key = path.at(-1);
+    if (["lineItems", "materialItems", "laborItems"].includes(key)) {
+      return canonicalFingerprintRows(key, value);
+    }
+    return value.map((item, index) => canonicalFingerprintValue(item, [...path, index]));
+  }
+  if (!value || typeof value !== "object") {
+    if ((path.includes("content") || path.includes("manualOverrides")) && value !== undefined && value !== null) {
+      return String(value).trim();
+    }
+    return value;
+  }
+  const inMedia = path.at(-1) === "media";
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => (!inMedia || !SERVER_MEDIA_PRESENTATION_KEYS.has(key)) &&
+      !(key === "uploadState" && value.media?.public_id))
+    .map(([key, item]) => [key, canonicalFingerprintValue(item, [...path, key])]));
+}
+
 export function businessDocumentSnapshotFingerprint(snapshot) {
-  return stable(snapshot);
+  return stable(canonicalFingerprintValue(snapshot));
 }
 
 export function businessDocumentSavePresentation({

@@ -6,6 +6,7 @@ import { jsPDF } from "jspdf";
 import {
   BusinessDocumentDraftError,
   createBusinessDocumentDraft,
+  deleteBusinessDocumentDraft,
   getBusinessDocumentDraft,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
@@ -14,6 +15,7 @@ import {
 import {
   BUSINESS_DOCUMENT_RECOVERY_MAX_BYTES,
   BUSINESS_DOCUMENT_RECOVERY_TTL_MS,
+  clearDeletedBusinessDocumentRecoveryIdentity,
   deleteBusinessDocumentRecovery,
   loadBusinessDocumentRecovery,
   saveBusinessDocumentRecovery,
@@ -114,6 +116,24 @@ test("draft transport creates, updates, lists, and reopens governed server proje
   assert.match(calls[1].endpoint, new RegExp(DRAFT_ID));
   assert.equal(JSON.parse(calls[1].options.body).expectedVersion, 1);
   assert.match(calls[3].endpoint, /search=Jack\+Smith/);
+});
+
+test("draft transport deletes only after an explicit expected-version request", async () => {
+  const calls = [];
+  const result = await deleteBusinessDocumentDraft({
+    draftId: DRAFT_ID,
+    expectedVersion: 3,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return {
+        response: { ok: true, status: 200 },
+        data: { success: true, code: "BUSINESS_DOCUMENT_DRAFT_DELETED", deletedDraftId: DRAFT_ID },
+      };
+    },
+  });
+  assert.equal(result.deletedDraftId, DRAFT_ID);
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { expectedVersion: 3 });
 });
 
 test("invalid server projections and governed conflicts fail closed", async () => {
@@ -264,6 +284,31 @@ test("expired recovery is deleted without becoming a Saved File", async () => {
   await saveBusinessDocumentRecovery({ identityKey: "7", snapshot: { quote: true }, now: 0, repository });
   assert.equal(await loadBusinessDocumentRecovery({ identityKey: "7", now: BUSINESS_DOCUMENT_RECOVERY_TTL_MS + 1, repository }), null);
   assert.equal(repository.records.size, 0);
+});
+
+test("deleting a saved target clears only that recovery identity", async () => {
+  const repository = memoryRecoveryRepository();
+  await saveBusinessDocumentRecovery({
+    identityKey: "7",
+    repository,
+    snapshot: {
+      payloads: { quote: { content: { customerName: "Jack Smith" } }, invoice: { content: { customerName: "Maria Lopez" } } },
+      savedDocuments: {
+        quote: { id: DRAFT_ID },
+        invoice: { id: "33333333-3333-4333-8333-333333333333" },
+      },
+      savedFingerprints: { quote: "quote-saved", invoice: "invoice-saved" },
+    },
+  });
+  assert.equal(await clearDeletedBusinessDocumentRecoveryIdentity({
+    identityKey: "7", draftId: DRAFT_ID, repository,
+  }), true);
+  const record = await loadBusinessDocumentRecovery({ identityKey: "7", repository });
+  assert.equal(record.snapshot.savedDocuments.quote, null);
+  assert.equal(record.snapshot.savedFingerprints.quote, "");
+  assert.equal(record.snapshot.savedDocuments.invoice.id, "33333333-3333-4333-8333-333333333333");
+  assert.equal(record.snapshot.savedFingerprints.invoice, "invoice-saved");
+  assert.equal(record.snapshot.payloads.quote.content.customerName, "Jack Smith");
 });
 
 test("save payload preserves instructions, manual overrides, private reminders, Job, and separate photo authority", () => {
@@ -520,6 +565,10 @@ test("dirty fingerprints change for private reminders, edits, photo role, and vi
   assert.equal(businessDocumentSnapshotFingerprint(first), businessDocumentSnapshotFingerprint(structuredClone(first)));
   assert.notEqual(businessDocumentSnapshotFingerprint(first), businessDocumentSnapshotFingerprint({ ...first, photos: [{ role: "BEFORE", visibility: "CUSTOMER_VISIBLE" }] }));
   assert.notEqual(businessDocumentSnapshotFingerprint(first), businessDocumentSnapshotFingerprint({ ...first, privateReminder: "ladder" }));
+  assert.equal(
+    businessDocumentSnapshotFingerprint({ payload: { workspace: { manualOverrides: { laborItems: [{ total: 180 }] } } } }),
+    businessDocumentSnapshotFingerprint({ payload: { workspace: { manualOverrides: { laborItems: [{ total: "180" }] } } } })
+  );
 });
 
 test("photo notice distinguishes all-private, mixed, and all-customer-visible collections", () => {
@@ -630,6 +679,120 @@ test("exact governed reopen is clean until a genuine change and becomes clean af
   assert.equal(cleanAgain.dirty, false);
   assert.equal(cleanAgain.label, "Saved ✓");
   assert.equal(cleanAgain.savedAt, "2026-08-21T12:05:00.000Z");
+});
+
+test("legacy R1 Quote converges across editor projection, repeated saves, and a real price revision", () => {
+  const legacyText = "fan replacement for Jack Smith. fan cost 89.99 installation cost 180.00";
+  const legacy = draft({
+    version: 7,
+    updatedAt: "2026-08-20T12:00:00.000Z",
+    content: {
+      customerName: "Jack Smith",
+      projectTitle: "Fan replacement",
+      projectDescription: "Replace the existing fan.",
+      materialItems: [{ name: "Fan", total: "89.99" }],
+      laborItems: [{ description: "Installation", total: "180" }],
+      lineItems: [],
+      totalOverride: "",
+    },
+    workspace: {
+      activeDocument: "QUOTE",
+      instructions: [{
+        id: "legacy-turn",
+        documentType: "QUOTE",
+        text: legacyText,
+        recognized: true,
+        revisions: 0,
+        revisionHistory: [],
+      }],
+      manualOverrides: { terms: "Due on acceptance" },
+      privateReminders: [],
+    },
+    photos: [photo({
+      media: {
+        ...photo().media,
+        name: "fan.jpg",
+        uploaded_at: "2026-08-20T11:00:00.000Z",
+        lifecycle_state: "business_document_working_draft",
+        customer_visible_by_default: false,
+      },
+      role: "BEFORE",
+      visibility: "CUSTOMER_VISIBLE",
+    })],
+  });
+  const restored = restoreBusinessDocumentDraft(legacy);
+  const editorContent = {
+    ...restored.content,
+    lineItems: [],
+    materialItems: [{ id: "material-line-0", name: "Fan", quantity: "", cost: "", total: 89.99, notes: "" }],
+    laborItems: [{ id: "labor-line-0", description: "Installation", hours: "", rate: "", total: 180 }],
+  };
+  const editorPayload = buildBusinessDocumentSavePayload({
+    documentType: restored.documentType,
+    content: editorContent,
+    turns: restored.turns,
+    manualOverrides: restored.manualOverrides,
+    photos: restored.photos,
+    photoAssignments: restored.photoAssignments,
+    jobId: restored.jobId,
+  });
+  const editorFingerprint = businessDocumentSnapshotFingerprint({
+    payload: editorPayload,
+    recoveryPhotos: recoveryPhotoProjection(restored.photos, restored.photoAssignments),
+  });
+  assert.equal(editorFingerprint, businessDocumentRestoredSnapshotFingerprint(legacy));
+  assert.equal(businessDocumentSavePresentation({
+    savedDocument: legacy,
+    currentFingerprint: editorFingerprint,
+    savedFingerprint: businessDocumentRestoredSnapshotFingerprint(legacy),
+    hasMeaningfulContent: true,
+  }).dirty, false);
+
+  const firstSave = draft({
+    ...legacy,
+    version: 8,
+    updatedAt: "2026-08-21T12:00:00.000Z",
+    content: editorPayload.content,
+    workspace: editorPayload.workspace,
+    photos: editorPayload.photos,
+  });
+  const secondSave = draft({
+    ...firstSave,
+    version: 9,
+    updatedAt: "2026-08-21T12:05:00.000Z",
+  });
+  assert.equal(businessDocumentRestoredSnapshotFingerprint(firstSave), editorFingerprint);
+  assert.equal(businessDocumentRestoredSnapshotFingerprint(secondSave), editorFingerprint);
+
+  const changedPayload = {
+    ...editorPayload,
+    content: {
+      ...editorPayload.content,
+      laborItems: [{ ...editorPayload.content.laborItems[0], total: 200 }],
+    },
+  };
+  const changedFingerprint = businessDocumentSnapshotFingerprint({
+    payload: changedPayload,
+    recoveryPhotos: recoveryPhotoProjection(restored.photos, restored.photoAssignments),
+  });
+  assert.notEqual(changedFingerprint, editorFingerprint);
+  assert.equal(businessDocumentSavePresentation({
+    savedDocument: secondSave,
+    currentFingerprint: changedFingerprint,
+    savedFingerprint: editorFingerprint,
+    hasMeaningfulContent: true,
+  }).label, "Save Changes");
+  const changedSave = draft({
+    ...secondSave,
+    version: 10,
+    updatedAt: "2026-08-21T12:10:00.000Z",
+    content: changedPayload.content,
+    workspace: changedPayload.workspace,
+    photos: changedPayload.photos,
+  });
+  assert.equal(businessDocumentRestoredSnapshotFingerprint(changedSave), changedFingerprint);
+  assert.equal(restoreBusinessDocumentDraft(changedSave).content.laborItems[0].total, 200);
+  assert.doesNotMatch(JSON.stringify(changedSave.content.laborItems), /180/);
 });
 
 test("workspace exposes real save/list/restore/exit/recovery flows without conflating Save and Send", () => {

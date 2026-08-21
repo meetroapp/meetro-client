@@ -175,6 +175,23 @@ test("Saved Files uses governed server listing and reopening with no browser aut
   assert.doesNotMatch(workspace, /localStorage|sessionStorage/);
 });
 
+test("Saved Files deletion requires confirmation and preserves the open workspace as an unsaved copy", () => {
+  assert.match(workspace, /className="business-saved-delete"/);
+  assert.match(workspace, /setDeleteTarget\(document\)/);
+  assert.match(workspace, /Delete this draft\?/);
+  assert.match(workspace, /label: "Cancel"/);
+  assert.match(workspace, /Delete Draft", destructive: true/);
+  assert.match(workspace, /await deleteBusinessDocumentDraft/);
+  assert.match(workspace, /documents\.filter\(\(document\) => document\.id !== deleteTarget\.id\)/);
+  assert.match(workspace, /await load\("Draft deleted\."\)/);
+  assert.match(workspace, /currently open workspace will remain as an unsaved copy/i);
+  assert.match(workspace, /setSavedDocuments\(\(current\) => \(\{ \.\.\.current, \[type\]: null \}\)\)/);
+  assert.match(workspace, /setSavedFingerprints\(\(current\) => \(\{ \.\.\.current, \[type\]: "" \}\)\)/);
+  assert.match(workspace, /clearDeletedBusinessDocumentRecoveryIdentity/);
+  assert.match(styles, /\.business-saved-delete[^}]*min-height:\s*44px/);
+  assert.match(styles, /\.business-document-destructive/);
+});
+
 test("mobile Conversation and Preview switch without horizontal overflow", () => {
   assert.match(workspace, /business-document-mobile-switch/);
   assert.match(workspace, /setMobilePane\("conversation"\)/);
