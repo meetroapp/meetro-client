@@ -226,6 +226,7 @@ function model({
   projectLocation,
   lineItems,
   scopeSummary,
+  observation,
   subtotalMinor,
   discountMinor,
   taxMinor,
@@ -261,6 +262,7 @@ function model({
     projectLocation: optionalText(projectLocation, 500),
     lineItems: Object.freeze(lineItems.filter(Boolean)),
     scopeSummary: optionalText(scopeSummary, 8000),
+    observation: optionalText(observation, 8000),
     subtotalMinor: minor(subtotalMinor),
     discountMinor: minor(discountMinor),
     taxMinor: minor(taxMinor),
@@ -401,6 +403,8 @@ export function buildQuickQuoteDocumentModel(
       )
     : [];
   const subtotalMinor = majorToMinor(draft?.subtotal);
+  const recommendedSolution = optionalText(draft?.recommendedSolution, 8000);
+  const customerDescription = optionalText(draft?.projectDescription, 8000);
   return model({
     kind: "QUOTE",
     draft: true,
@@ -417,6 +421,9 @@ export function buildQuickQuoteDocumentModel(
     scopeSummary: quickQuoteScope(
       draft?.scopeSummary || draft?.recommendedSolution || draft?.customerRequest || draft?.problemFound
     ),
+    observation: recommendedSolution && customerDescription && recommendedSolution !== customerDescription
+      ? customerDescription
+      : null,
     subtotalMinor: fixedPrice && subtotalMinor === 0 ? undefined : subtotalMinor,
     discountMinor: majorToMinor(draft?.discount),
     taxMinor: majorToMinor(draft?.tax),

@@ -383,13 +383,19 @@ test("save payload preserves instructions, manual overrides, private reminders, 
   const payload = buildBusinessDocumentSavePayload({
     documentType: "quote",
     jobId: JOB_ID,
-    content: draft().content,
+    content: {
+      ...draft().content,
+      projectDescription: "Existing fan shows visible wear.",
+      recommendedSolution: "Replace the fan.",
+    },
     turns: [{ id: "turn-1", documentType: "quote", text: "Keep this private: bring a ladder", recognized: true, revisions: 1, revisionHistory: ["bring ladder"] }],
     manualOverrides: { terms: "Due on acceptance" },
     photos,
     photoAssignments: { [photo().id]: { role: "BEFORE", visibility: "PRIVATE_INTERNAL" } },
   });
   assert.equal(payload.jobId, JOB_ID);
+  assert.equal(payload.content.projectDescription, "Existing fan shows visible wear.");
+  assert.equal(payload.content.recommendedSolution, "Replace the fan.");
   assert.deepEqual(payload.content.agreement.exclusions, []);
   assert.equal(payload.workspace.instructions[0].revisions, 1);
   assert.equal(payload.workspace.privateReminders[0].text, "Keep this private: bring a ladder");

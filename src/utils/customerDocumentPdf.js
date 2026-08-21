@@ -13,6 +13,13 @@ const LABELS = Object.freeze({
   "pt-BR": Object.freeze({ quote: "ORCAMENTO", invoice: "FATURA", customer: "Cliente", project: "Projeto", date: "Data", dueDate: "Vencimento", scope: "Escopo do trabalho", work: "Trabalho realizado", description: "Descricao", quantity: "Qtd.", unit: "Unidade", amount: "Valor", subtotal: "Subtotal", discount: "Desconto", tax: "Imposto", fees: "Taxas", projectPrice: "PRECO DO PROJETO", totalDue: "TOTAL", paid: "Valor pago", balance: "SALDO DEVIDO", paymentTerms: "Termos de pagamento", duration: "Duracao estimada", conditions: "Condicoes do projeto", exclusions: "Nao incluido", notes: "Notas", warranty: "Garantia", message: "Mensagem ao cliente", acceptance: "Aceite / Status", awaiting: "Aguardando decisao do cliente no Meetro", approved: "Aprovado no Meetro", declined: "Recusado no Meetro", dueReceipt: "Vencimento no recebimento", preparedWith: "Preparado com Meetro", exportPdf: "Exportar PDF", sharePdf: "Compartilhar PDF", pdfReady: "PDF pronto.", pdfUnavailable: "A exportacao de PDF nao esta disponivel neste dispositivo." }),
 });
 
+const PARITY_LABELS = Object.freeze({
+  en: Object.freeze({ observation: "Observation", confirmTerms: "Confirm terms before delivery.", notConfirmed: "Not confirmed." }),
+  es: Object.freeze({ observation: "Observacion", confirmTerms: "Confirma los terminos antes de entregar.", notConfirmed: "Sin confirmar." }),
+  fr: Object.freeze({ observation: "Observation", confirmTerms: "Confirmez les conditions avant la remise.", notConfirmed: "Non confirme." }),
+  "pt-BR": Object.freeze({ observation: "Observacao", confirmTerms: "Confirme os termos antes da entrega.", notConfirmed: "Nao confirmado." }),
+});
+
 const PHOTO_LABELS = Object.freeze({
   en: Object.freeze({ projectPhotos: "Project Photos / Evidence", beforePhotos: "Before Photos", afterPhotos: "After Photos" }),
   es: Object.freeze({ projectPhotos: "Fotos / evidencia del proyecto", beforePhotos: "Fotos de antes", afterPhotos: "Fotos de despues" }),
@@ -35,7 +42,8 @@ const WORKING_DRAFT_LABELS = Object.freeze({
 });
 
 function labels(locale) {
-  return LABELS[locale] || LABELS.en;
+  const language = LABELS[locale] ? locale : "en";
+  return Object.freeze({ ...LABELS[language], ...PARITY_LABELS[language] });
 }
 
 function photoLabels(locale) {
@@ -136,6 +144,7 @@ export function collectCustomerDocumentText(model) {
     model.customer.address,
     model.projectTitle,
     model.projectLocation,
+    model.observation,
     model.scopeSummary,
     model.photoEvidence?.projectPhotos?.length ? photoLabels(model.locale).projectPhotos : null,
     model.photoEvidence?.beforePhotos?.length ? photoLabels(model.locale).beforePhotos : null,
@@ -307,6 +316,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   });
   y += metaHeight + 14;
 
+  section(copy.observation, model.observation);
   section(model.kind === "QUOTE" ? copy.scope : copy.work, model.scopeSummary);
   const evidenceLabels = photoLabels(model.locale);
   photoSection(evidenceLabels.projectPhotos, model.photoEvidence?.projectPhotos);
@@ -445,8 +455,10 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   }
   y += 4;
 
-  section(copy.paymentTerms, model.paymentTerms === "DUE_ON_RECEIPT" ? copy.dueReceipt : model.paymentTerms);
-  section(copy.duration, model.estimatedDuration);
+  section(copy.paymentTerms, model.paymentTerms === "DUE_ON_RECEIPT"
+    ? copy.dueReceipt
+    : model.paymentTerms || (model.kind === "QUOTE" ? copy.confirmTerms : copy.notConfirmed));
+  if (model.kind === "QUOTE") section(copy.duration, model.estimatedDuration || copy.notConfirmed);
   bulletSection(copy.conditions, model.conditions);
   bulletSection(copy.exclusions, model.exclusions);
   if (model.kind === "QUOTE") {

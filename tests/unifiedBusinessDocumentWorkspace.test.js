@@ -74,6 +74,19 @@ test("Speak, Type, Add Photos, and the live document remain reachable without su
   assert.doesNotMatch(workspace, /Use Suggestion|Edit & Use|Needs Verification|Dismiss Suggestion/);
 });
 
+test("Live Preview keeps customer Observation separate and uses truthful saved footer parity", () => {
+  assert.match(workspace, /<h3>Observation<\/h3>/);
+  assert.match(workspace, /quote\.recommendedSolution && quote\.projectDescription/);
+  assert.match(workspace, /Confirm terms before delivery\./);
+  assert.match(workspace, /Not confirmed\./);
+  assert.match(workspace, /Saved Draft - Not Issued/);
+  assert.match(workspace, /Saved Draft - Not Issued or Paid/);
+  for (const label of ["Due Date", "Amount Paid", "Balance Due"]) {
+    assert.match(workspace, new RegExp(`<h3>${label}<\\/h3>`));
+  }
+  assert.match(workspace, /saved=\{Boolean\(activeSaved && !activeDirty\)\}/);
+});
+
 test("saved Preview and Download use the authoritative server PDF while unsaved preview remains local", () => {
   assert.match(quoteBuilder, /buildQuickQuoteDocumentModel/);
   assert.match(quoteBuilder, /onDownloadQuote=\{\(photoEvidence, workingDraftStatus\) => void exportQuickQuotePdf\(photoEvidence, workingDraftStatus\)\}/);

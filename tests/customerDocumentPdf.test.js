@@ -102,11 +102,40 @@ test("canonical Quote creates an explicit customer document with authoritative t
     "acceptance", "balanceMinor", "branding", "conditions", "currency", "customer",
     "customerMessage", "discountMinor", "documentDate", "documentNumber", "draft",
     "dueDate", "estimatedDuration", "exclusions", "feesMinor", "kind", "lineItems",
-    "locale", "notes", "paidMinor", "paymentTerms", "projectLocation", "projectTitle",
+    "locale", "notes", "observation", "paidMinor", "paymentTerms", "projectLocation", "projectTitle",
     "schemaVersion", "scopeSummary", "status", "subtotalMinor", "taxMinor", "totalMinor",
     "warrantyNotes",
   ].sort());
   assert.doesNotMatch(collectCustomerDocumentText(model), /hidden@example|private-user|materialCost|margin|estimate|uuid|Home Depot|gpt/i);
+});
+
+test("working Quote keeps customer-facing description as Observation beside the recommended Scope", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Jack Smith",
+    projectTitle: "Ceiling Fan Replacement",
+    projectDescription: "Existing fan shows visible wear at the motor housing.",
+    recommendedSolution: "Replace existing fan with customer-approved replacement.",
+    lineItems: [{ description: "Fan", quantity: 1, unitPrice: 89.99, total: 89.99 }],
+    subtotal: 89.99,
+    total: 89.99,
+  }, { branding: { businessName: "Handyman LLC" }, workingDraftStatus: "SAVED" });
+  assert.equal(model.observation, "Existing fan shows visible wear at the motor housing.");
+  assert.equal(model.scopeSummary, "Replace existing fan with customer-approved replacement.");
+  const collected = collectCustomerDocumentText(model);
+  assert.equal((collected.match(/Existing fan shows visible wear/g) || []).length, 1);
+  const rendered = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(rendered, /Observation/);
+  assert.match(rendered, /Existing fan shows visible wear/);
+  assert.match(rendered, /Replace existing fan with customer-approved replacement/);
+
+  const withoutObservation = buildQuickQuoteDocumentModel({
+    customerName: "Jack Smith",
+    recommendedSolution: "Replace the fan.",
+    lineItems: [],
+    total: 0,
+  }, { branding: { businessName: "Handyman LLC" } });
+  assert.equal(withoutObservation.observation, null);
+  assert.doesNotMatch(renderCustomerDocumentPdf(withoutObservation).internal.pages.flat().join("\n"), /Observation/);
 });
 
 test("canonical Invoice preserves only server financial truth", () => {
