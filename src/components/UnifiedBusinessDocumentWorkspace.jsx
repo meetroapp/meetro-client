@@ -24,11 +24,19 @@ import {
   createBusinessDocumentSaveKey,
   deleteBusinessDocumentDraft,
   getBusinessDocumentDraft,
+  getBusinessDocumentCustomerPdf,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
   deliverBusinessDocumentDraft,
   listBusinessDocumentDeliveries,
 } from "../utils/businessDocumentDraftApi.js";
+import {
+  copyBusinessDocumentShareMessage,
+  downloadBusinessDocumentPdfArtifact,
+  openBusinessDocumentEmailDraft,
+  previewBusinessDocumentPdfArtifact,
+  shareBusinessDocumentPdfArtifact,
+} from "../utils/businessDocumentDeviceShare.js";
 import {
   BUSINESS_DOCUMENT_AGREEMENT_FIELDS,
   BUSINESS_DOCUMENT_AGREEMENT_PRESETS,
@@ -107,13 +115,13 @@ function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles }) {
   );
 }
 
-function DeliveryMenu({ kind, onSelect }) {
+function DeliveryMenu({ kind, onSelect, disabled = false }) {
   const [open, setOpen] = useState(false);
   const label = kind === "quote" ? "Send Quote" : "Send Invoice";
   return (
     <div className="business-document-delivery">
-      <button type="button" className="business-document-primary" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{label} <span aria-hidden="true">⌄</span></button>
-      {open ? <div role="menu" className="business-document-delivery-menu"><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("EMAIL"); }}>Email</button><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("MEETRO_MESSAGE"); }}>Message</button></div> : null}
+      <button type="button" className="business-document-primary" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{label} <span aria-hidden="true">⌄</span></button>
+      {open ? <div role="menu" className="business-document-delivery-menu"><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("EMAIL"); }}>Email with Meetro</button><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("MEETRO_MESSAGE"); }}>Meetro Message</button><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("DEVICE_SHARE"); }}>Share with device…</button></div> : null}
     </div>
   );
 }
@@ -821,6 +829,47 @@ export default function UnifiedBusinessDocumentWorkspace({
     if (!(await previewCustomerDocumentPdfWithMedia(invoicePdfModel())).ok) setNotice("PDF preview is unavailable. Nothing was saved or sent.");
   }
 
+  async function savedPdfArtifact(document) {
+    return getBusinessDocumentCustomerPdf({
+      draftId: document.id,
+      expectedVersion: document.version,
+      setPage,
+    });
+  }
+
+  async function previewActivePdf() {
+    focusPreview();
+    if (activeSaved && !activeDirty) {
+      try {
+        const artifact = await savedPdfArtifact(activeSaved);
+        setNotice(previewBusinessDocumentPdfArtifact(artifact)
+          ? `Previewing exact saved ${activeSaved.documentType.toLowerCase()} ${activeSaved.reference}, version ${activeSaved.version}.`
+          : "PDF preview is unavailable. Nothing was saved or sent.");
+      } catch (error) {
+        setNotice(error?.message || "The exact saved PDF could not be prepared. Nothing was sent.");
+      }
+      return;
+    }
+    if (activeDocument === "quote") await onPreviewQuote(customerPhotoGroups, "UNSAVED");
+    else await previewInvoice();
+  }
+
+  async function downloadActivePdf() {
+    if (activeSaved && !activeDirty) {
+      try {
+        const artifact = await savedPdfArtifact(activeSaved);
+        setNotice(downloadBusinessDocumentPdfArtifact(artifact)
+          ? `Downloaded exact saved ${activeSaved.documentType.toLowerCase()} ${activeSaved.reference}, version ${activeSaved.version}.`
+          : "PDF download is unavailable. Nothing was sent.");
+      } catch (error) {
+        setNotice(error?.message || "The exact saved PDF could not be prepared. Nothing was sent.");
+      }
+      return;
+    }
+    if (activeDocument === "quote") await onDownloadQuote(customerPhotoGroups, "UNSAVED");
+    else await downloadInvoice();
+  }
+
   function deliveryTotal(documentType, content) {
     const override = Number(content?.totalOverride);
     if (Number.isFinite(override) && String(content?.totalOverride || "").trim()) return override;
@@ -852,11 +901,43 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function beginDelivery(channel) {
+    if (deliveryState?.busy || deliveryState?.stage === "sharing") return;
     if (!activeSaved || activeDirty) {
       setDeliveryState({ stage: "saveRequired", channel, documentType: activeDocument, busy: false, error: "" });
       return;
     }
+    if (channel === "DEVICE_SHARE") {
+      void shareSavedDocument(activeSaved);
+      return;
+    }
     openDeliveryReview(channel, activeSaved);
+  }
+
+  async function shareSavedDocument(document) {
+    const type = document.documentType.toLowerCase();
+    const content = document.content || currentContent(type);
+    const subject = `${type === "quote" ? "Quote" : "Invoice"} ${document.reference}`;
+    const customerMessage = "Please review the attached customer document.";
+    setDeliveryState({ stage: "sharing", channel: "DEVICE_SHARE", documentType: type, document, busy: true });
+    try {
+      const artifact = await savedPdfArtifact(document);
+      const result = await shareBusinessDocumentPdfArtifact({ artifact, message: customerMessage });
+      if (result.ok) {
+        setDeliveryState(null);
+        setNotice("External share opened. Meetro cannot confirm delivery. No Email or Meetro Message delivery event was created.");
+      } else if (result.method === "cancelled") {
+        setDeliveryState(null);
+      } else {
+        setDeliveryState({
+          stage: "shareFallback", channel: "DEVICE_SHARE", documentType: type,
+          document, artifact, busy: false, recipientEmail: content.customerEmail || "",
+          subject, customerMessage,
+        });
+      }
+    } catch (error) {
+      setDeliveryState(null);
+      setNotice(error?.message || "The exact saved PDF could not be prepared. Nothing was shared or sent.");
+    }
   }
 
   async function saveAndContinueDelivery() {
@@ -866,7 +947,8 @@ export default function UnifiedBusinessDocumentWorkspace({
       setDeliveryState((current) => ({ ...current, busy: false, error: saveState.error || "The draft could not be saved. Nothing was sent." }));
       return;
     }
-    openDeliveryReview(deliveryState.channel, document);
+    if (deliveryState.channel === "DEVICE_SHARE") await shareSavedDocument(document);
+    else openDeliveryReview(deliveryState.channel, document);
   }
 
   async function sendCurrentDelivery({ retry = false } = {}) {
@@ -934,12 +1016,13 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") void onPreviewQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED"); else void previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED") : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
-      {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title="Save changes before sending" onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
+      {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
+      {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
       {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={[{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || "Your work is still here."}</p><p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p></WorkspaceDialog> : null}

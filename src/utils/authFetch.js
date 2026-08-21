@@ -66,6 +66,7 @@ export function handleAuthExpired(setPage) {
 export async function authFetch(endpoint, options = {}, setPage) {
   const {
     skipAuthExpirationHandling = false,
+    responseType = "json",
     ...requestOptions
   } = options;
   const token = localStorage.getItem("token");
@@ -94,25 +95,28 @@ export async function authFetch(endpoint, options = {}, setPage) {
   });
 
   let data;
-
-  try {
-    data = await response.json();
-  } catch {
-    data = {};
+  if (responseType === "blob") {
+    data = await response.blob();
+  } else {
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
   }
 
   const authError =
     response.status === 401 ||
-    data.error === "Invalid token" ||
-    data.error === "No token provided" ||
-    data.message === "Invalid token" ||
-    data.message === "No token provided";
+    data?.error === "Invalid token" ||
+    data?.error === "No token provided" ||
+    data?.message === "Invalid token" ||
+    data?.message === "No token provided";
 
   if (authError) {
     if (!skipAuthExpirationHandling) {
       handleAuthExpired(setPage);
     }
-  } else {
+  } else if (responseType === "json") {
     const accountConnectionState =
       getAccountConnectionStateFromAuthResult({ response, data });
 

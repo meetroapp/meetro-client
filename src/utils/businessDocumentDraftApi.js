@@ -114,6 +114,42 @@ async function request(endpoint, options, { setPage, authFetchImpl = authFetch }
   return data;
 }
 
+function responseFilename(response, fallback) {
+  const disposition = response?.headers?.get?.("content-disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const candidate = String(match?.[1] || fallback || "customer-document.pdf")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 160);
+  return candidate.toLowerCase().endsWith(".pdf") ? candidate : `${candidate || "customer-document"}.pdf`;
+}
+
+export async function getBusinessDocumentCustomerPdf({
+  draftId,
+  expectedVersion,
+  setPage,
+  authFetchImpl = authFetch,
+} = {}) {
+  const endpoint = `/business-document-drafts/${encodeURIComponent(draftId)}/customer-pdf?version=${encodeURIComponent(expectedVersion)}`;
+  const { response, data } = await authFetchImpl(endpoint, { method: "GET", responseType: "blob" }, setPage);
+  if (!response?.ok) {
+    let errorData = {};
+    try { errorData = JSON.parse(await data?.text?.()); } catch { /* preserve bounded fallback */ }
+    throw apiError(response, errorData);
+  }
+  const contentType = String(response.headers?.get?.("content-type") || data?.type || "").split(";", 1)[0].toLowerCase();
+  if (!(data instanceof Blob) || contentType !== "application/pdf" || data.size < 5) {
+    throw new BusinessDocumentDraftError("The server returned an invalid customer PDF.", { code: "BUSINESS_DOCUMENT_PDF_RESPONSE_INVALID" });
+  }
+  return Object.freeze({
+    blob: data,
+    fileName: responseFilename(response, `customer-document-v${expectedVersion}.pdf`),
+    contentType,
+    documentId: draftId,
+    documentVersion: Number(expectedVersion),
+  });
+}
+
 export async function createBusinessDocumentDraft({ payload, idempotencyKey, setPage, authFetchImpl } = {}) {
   const data = await request("/business-document-drafts", {
     method: "POST",

@@ -44,6 +44,8 @@ test("governed Quote and Invoice delivery cannot issue, accept, pay, complete, o
   assert.match(quoteBuilder, /<UnifiedBusinessDocumentWorkspace/);
   assert.match(invoiceBuilder, /<QuoteBuilder setPage=\{setPage\} initialDocument="invoice"/);
   assert.match(documentWorkspace, /Save & Continue to Send/);
+  assert.match(documentWorkspace, /Save & Continue to Share/);
+  assert.match(documentWorkspace, /External share opened\. Meetro cannot confirm delivery/);
   assert.match(documentWorkspace, /Sending does not issue, accept, approve, pay, or close anything\./);
   assert.match(documentWorkspace, /No acceptance or payment was inferred\./);
   assert.match(documentWorkspace, /Payment and completion are not inferred\./);

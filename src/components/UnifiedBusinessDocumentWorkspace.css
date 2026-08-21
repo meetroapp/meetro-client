@@ -254,6 +254,8 @@
 .business-document-delivery-review dl div { min-width: 0; }
 .business-document-delivery-review dt { color: #64766b; font-size: 8px; font-weight: 900; text-transform: uppercase; }
 .business-document-delivery-review dd { margin: 3px 0 0; overflow-wrap: anywhere; color: #20372a; font-size: 10px; font-weight: 850; }
+.business-document-share-fallback { display: flex; flex-wrap: wrap; gap: 8px; }
+.business-document-share-fallback button { min-height: 40px; padding: 8px 12px; border: 1px solid #bfd0c4; border-radius: 10px; background: #fff; color: #174d31; font-weight: 700; cursor: pointer; }
 .business-document-delivery-truth { padding: 9px; border-radius: 10px; color: #586c60 !important; background: #f7f9f7; font-size: 10px !important; }
 .business-document-delivery-error { color: #8b2929 !important; background: #fff0ee; }
 .business-document-delivery-history { max-width: 620px; margin: 10px auto 0; padding: 9px 11px; border: 1px solid #dce6de; border-radius: 11px; color: #284638; background: #fff; font-size: 10px; }

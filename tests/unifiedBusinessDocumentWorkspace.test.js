@@ -74,7 +74,7 @@ test("Speak, Type, Add Photos, and the live document remain reachable without su
   assert.doesNotMatch(workspace, /Use Suggestion|Edit & Use|Needs Verification|Dismiss Suggestion/);
 });
 
-test("the existing PDF model and generator remain the document boundary", () => {
+test("saved Preview and Download use the authoritative server PDF while unsaved preview remains local", () => {
   assert.match(quoteBuilder, /buildQuickQuoteDocumentModel/);
   assert.match(quoteBuilder, /onDownloadQuote=\{\(photoEvidence, workingDraftStatus\) => void exportQuickQuotePdf\(photoEvidence, workingDraftStatus\)\}/);
   assert.match(workspace, /buildQuickInvoiceDocumentModel/);
@@ -82,8 +82,12 @@ test("the existing PDF model and generator remain the document boundary", () => 
   assert.match(workspace, /previewCustomerDocumentPdfWithMedia/);
   assert.match(quoteBuilder, /onPreviewQuote=\{\(photoEvidence, workingDraftStatus\) => previewQuickQuotePdfWithPhotos\(photoEvidence, workingDraftStatus\)\}/);
   assert.match(quoteBuilder, /attachCustomerDocumentPhotoEvidence/);
-  assert.match(workspace, /onPreviewQuote\(customerPhotoGroups, activeSaved && !activeDirty \? "SAVED" : "UNSAVED"\)/);
-  assert.match(workspace, /onDownloadQuote\(customerPhotoGroups, activeSaved && !activeDirty \? "SAVED" : "UNSAVED"\)/);
+  assert.match(workspace, /getBusinessDocumentCustomerPdf/);
+  assert.match(workspace, /draftId: document\.id/);
+  assert.match(workspace, /expectedVersion: document\.version/);
+  assert.match(workspace, /activeSaved && !activeDirty/);
+  assert.match(workspace, /onPreviewQuote\(customerPhotoGroups, "UNSAVED"\)/);
+  assert.match(workspace, /onDownloadQuote\(customerPhotoGroups, "UNSAVED"\)/);
   assert.match(workspace, />Preview PDF</);
   assert.match(workspace, />Download PDF</);
 });
@@ -110,14 +114,22 @@ test("Internal Estimate and Solution Ready are not mandatory visible workspace s
 
 test("Quote and Invoice delivery use one menu while PDF remains separate", () => {
   assert.match(workspace, /kind === "quote" \? "Send Quote" : "Send Invoice"/);
-  assert.match(workspace, /role="menuitem"[\s\S]*Email/);
-  assert.match(workspace, /role="menuitem"[\s\S]*Message/);
+  assert.match(workspace, /Email with Meetro/);
+  assert.match(workspace, /Meetro Message/);
+  assert.match(workspace, /Share with device…/);
   assert.match(workspace, /Save & Continue to Send/);
+  assert.match(workspace, /Save & Continue to Share/);
   assert.match(workspace, /deliverBusinessDocumentDraft/);
   assert.match(workspace, /listBusinessDocumentDeliveries/);
   assert.match(workspace, /PDF included/);
   assert.match(workspace, /Sending does not issue, accept, approve, pay, or close anything/);
-  assert.doesNotMatch(workspace, /navigator\.share|deliveryUnavailable/);
+  assert.match(workspace, /shareBusinessDocumentPdfArtifact/);
+  assert.match(workspace, /External share opened\. Meetro cannot confirm delivery/);
+  assert.match(workspace, /No Email or Meetro Message delivery event was created/);
+  assert.match(workspace, /email draft cannot attach the PDF automatically/);
+  const shareBlock = workspace.slice(workspace.indexOf("async function shareSavedDocument"), workspace.indexOf("async function saveAndContinueDelivery"));
+  assert.doesNotMatch(shareBlock, /deliverBusinessDocumentDraft|setDeliveryHistory|SENT|DELIVERED/);
+  assert.doesNotMatch(workspace, /deliveryUnavailable/);
   assert.doesNotMatch(workspace, />Save \{activeDocument === "quote"/);
 });
 

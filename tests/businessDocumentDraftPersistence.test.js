@@ -9,6 +9,7 @@ import {
   deleteBusinessDocumentDraft,
   deliverBusinessDocumentDraft,
   getBusinessDocumentDraft,
+  getBusinessDocumentCustomerPdf,
   listBusinessDocumentDeliveries,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
@@ -175,6 +176,31 @@ test("delivery transport binds the exact saved version and restores durable hist
     customerMessage: "Please review.",
   });
   assert.match(calls[1].endpoint, /\/deliveries$/);
+});
+
+test("saved customer PDF transport binds the exact server document reference and version", async () => {
+  const calls = [];
+  const artifact = await getBusinessDocumentCustomerPdf({
+    draftId: DRAFT_ID,
+    expectedVersion: 10,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return {
+        response: {
+          ok: true,
+          status: 200,
+          headers: { get: (name) => name.toLowerCase() === "content-type" ? "application/pdf" : name.toLowerCase() === "content-disposition" ? 'inline; filename="quote-WQ-TEST-PARITY-v10.pdf"' : null },
+        },
+        data: new Blob(["%PDF-saved"], { type: "application/pdf" }),
+      };
+    },
+  });
+  assert.equal(artifact.documentId, DRAFT_ID);
+  assert.equal(artifact.documentVersion, 10);
+  assert.equal(artifact.fileName, "quote-WQ-TEST-PARITY-v10.pdf");
+  assert.equal(artifact.contentType, "application/pdf");
+  assert.match(calls[0].endpoint, new RegExp(`${DRAFT_ID}/customer-pdf\\?version=10$`));
+  assert.equal(calls[0].options.responseType, "blob");
 });
 
 test("invalid server projections and governed conflicts fail closed", async () => {
