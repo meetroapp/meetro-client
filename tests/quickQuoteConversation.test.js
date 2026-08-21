@@ -300,8 +300,8 @@ test("Job Analysis does not patch Quote state while real Quote document architec
   );
 
   // Existing non-universal Quote/document architecture remains intact.
-  assert.match(builder, /function buildQuickQuotePdfModel\(\)/);
-  assert.match(builder, /async function exportQuickQuotePdf\(\)/);
+  assert.match(builder, /function buildQuickQuotePdfModel\(photoEvidence = \{\}, workingDraftStatus = "UNSAVED"\)/);
+  assert.match(builder, /async function exportQuickQuotePdf\(photoEvidence = \{\}, workingDraftStatus = "UNSAVED"\)/);
   assert.match(builder, /async function shareQuickQuotePdf\(\)/);
   assert.match(builder, /buildQuickQuoteDocumentModel/);
 

@@ -7,14 +7,43 @@ const PAGE = Object.freeze({ width: 612, height: 792, margin: 48, footerY: 766 }
 const COLOR = Object.freeze({ ink: [24, 49, 70], text: [42, 45, 48], muted: [91, 105, 116], line: [196, 209, 218], fill: [242, 246, 248], accent: [31, 81, 50], white: [255, 255, 255] });
 
 const LABELS = Object.freeze({
-  en: Object.freeze({ quote: "QUOTE", invoice: "INVOICE", draft: "DRAFT PREVIEW", customer: "Customer", project: "Project", date: "Date", dueDate: "Due date", status: "Status", scope: "Scope of Work", work: "Work Performed", description: "Description", quantity: "Qty", unit: "Unit", amount: "Amount", subtotal: "Subtotal", discount: "Discount", tax: "Tax", fees: "Fees", projectPrice: "PROJECT PRICE", totalDue: "TOTAL DUE", paid: "Amount paid", balance: "BALANCE DUE", paymentTerms: "Payment Terms", duration: "Estimated Duration", conditions: "Project Conditions", exclusions: "Not Included", notes: "Notes", warranty: "Warranty Notes", message: "Customer Message", acceptance: "Acceptance / Status", awaiting: "Awaiting customer decision in Meetro", approved: "Approved in Meetro", declined: "Declined in Meetro", draftQuote: "Preview only - not issued or saved", draftInvoice: "Preview only - not issued or recorded", dueReceipt: "Due on receipt", preparedWith: "Prepared with Meetro", exportPdf: "Export PDF", sharePdf: "Share PDF", pdfReady: "PDF ready.", pdfUnavailable: "PDF export is unavailable on this device." }),
-  es: Object.freeze({ quote: "COTIZACION", invoice: "FACTURA", draft: "VISTA PREVIA", customer: "Cliente", project: "Proyecto", date: "Fecha", dueDate: "Vencimiento", status: "Estado", scope: "Alcance del trabajo", work: "Trabajo realizado", description: "Descripcion", quantity: "Cant.", unit: "Unidad", amount: "Importe", subtotal: "Subtotal", discount: "Descuento", tax: "Impuesto", fees: "Cargos", projectPrice: "PRECIO DEL PROYECTO", totalDue: "TOTAL", paid: "Pagado", balance: "SALDO PENDIENTE", paymentTerms: "Terminos de pago", duration: "Duracion estimada", conditions: "Condiciones del proyecto", exclusions: "No incluido", notes: "Notas", warranty: "Garantia", message: "Mensaje al cliente", acceptance: "Aceptacion / Estado", awaiting: "Esperando la decision del cliente en Meetro", approved: "Aprobada en Meetro", declined: "Rechazada en Meetro", draftQuote: "Vista previa - no emitida ni guardada", draftInvoice: "Vista previa - no emitida ni registrada", dueReceipt: "Vence al recibir", preparedWith: "Preparado con Meetro", exportPdf: "Exportar PDF", sharePdf: "Compartir PDF", pdfReady: "PDF listo.", pdfUnavailable: "La exportacion PDF no esta disponible en este dispositivo." }),
-  fr: Object.freeze({ quote: "DEVIS", invoice: "FACTURE", draft: "APERCU", customer: "Client", project: "Projet", date: "Date", dueDate: "Echeance", status: "Statut", scope: "Etendue des travaux", work: "Travaux effectues", description: "Description", quantity: "Qte", unit: "Unite", amount: "Montant", subtotal: "Sous-total", discount: "Remise", tax: "Taxe", fees: "Frais", projectPrice: "PRIX DU PROJET", totalDue: "TOTAL DU", paid: "Montant paye", balance: "SOLDE DU", paymentTerms: "Conditions de paiement", duration: "Duree estimee", conditions: "Conditions du projet", exclusions: "Non inclus", notes: "Notes", warranty: "Garantie", message: "Message au client", acceptance: "Acceptation / Statut", awaiting: "En attente de la decision du client dans Meetro", approved: "Approuve dans Meetro", declined: "Refuse dans Meetro", draftQuote: "Apercu - non emis et non enregistre", draftInvoice: "Apercu - non emis et non comptabilise", dueReceipt: "Du a reception", preparedWith: "Prepare avec Meetro", exportPdf: "Exporter le PDF", sharePdf: "Partager le PDF", pdfReady: "PDF pret.", pdfUnavailable: "L'exportation PDF n'est pas disponible sur cet appareil." }),
-  "pt-BR": Object.freeze({ quote: "ORCAMENTO", invoice: "FATURA", draft: "PRE-VISUALIZACAO", customer: "Cliente", project: "Projeto", date: "Data", dueDate: "Vencimento", status: "Status", scope: "Escopo do trabalho", work: "Trabalho realizado", description: "Descricao", quantity: "Qtd.", unit: "Unidade", amount: "Valor", subtotal: "Subtotal", discount: "Desconto", tax: "Imposto", fees: "Taxas", projectPrice: "PRECO DO PROJETO", totalDue: "TOTAL", paid: "Valor pago", balance: "SALDO DEVIDO", paymentTerms: "Termos de pagamento", duration: "Duracao estimada", conditions: "Condicoes do projeto", exclusions: "Nao incluido", notes: "Notas", warranty: "Garantia", message: "Mensagem ao cliente", acceptance: "Aceite / Status", awaiting: "Aguardando decisao do cliente no Meetro", approved: "Aprovado no Meetro", declined: "Recusado no Meetro", draftQuote: "Previa - nao emitida nem salva", draftInvoice: "Previa - nao emitida nem registrada", dueReceipt: "Vencimento no recebimento", preparedWith: "Preparado com Meetro", exportPdf: "Exportar PDF", sharePdf: "Compartilhar PDF", pdfReady: "PDF pronto.", pdfUnavailable: "A exportacao de PDF nao esta disponivel neste dispositivo." }),
+  en: Object.freeze({ quote: "QUOTE", invoice: "INVOICE", customer: "Customer", project: "Project", date: "Date", dueDate: "Due date", scope: "Scope of Work", work: "Work Performed", description: "Description", quantity: "Qty", unit: "Unit", amount: "Amount", subtotal: "Subtotal", discount: "Discount", tax: "Tax", fees: "Fees", projectPrice: "PROJECT PRICE", totalDue: "TOTAL DUE", paid: "Amount paid", balance: "BALANCE DUE", paymentTerms: "Payment Terms", duration: "Estimated Duration", conditions: "Project Conditions", exclusions: "Not Included", notes: "Notes", warranty: "Warranty Notes", message: "Customer Message", acceptance: "Acceptance / Status", awaiting: "Awaiting customer decision in Meetro", approved: "Approved in Meetro", declined: "Declined in Meetro", dueReceipt: "Due on receipt", preparedWith: "Prepared with Meetro", exportPdf: "Export PDF", sharePdf: "Share PDF", pdfReady: "PDF ready.", pdfUnavailable: "PDF export is unavailable on this device." }),
+  es: Object.freeze({ quote: "COTIZACION", invoice: "FACTURA", customer: "Cliente", project: "Proyecto", date: "Fecha", dueDate: "Vencimiento", scope: "Alcance del trabajo", work: "Trabajo realizado", description: "Descripcion", quantity: "Cant.", unit: "Unidad", amount: "Importe", subtotal: "Subtotal", discount: "Descuento", tax: "Impuesto", fees: "Cargos", projectPrice: "PRECIO DEL PROYECTO", totalDue: "TOTAL", paid: "Pagado", balance: "SALDO PENDIENTE", paymentTerms: "Terminos de pago", duration: "Duracion estimada", conditions: "Condiciones del proyecto", exclusions: "No incluido", notes: "Notas", warranty: "Garantia", message: "Mensaje al cliente", acceptance: "Aceptacion / Estado", awaiting: "Esperando la decision del cliente en Meetro", approved: "Aprobada en Meetro", declined: "Rechazada en Meetro", dueReceipt: "Vence al recibir", preparedWith: "Preparado con Meetro", exportPdf: "Exportar PDF", sharePdf: "Compartir PDF", pdfReady: "PDF listo.", pdfUnavailable: "La exportacion PDF no esta disponible en este dispositivo." }),
+  fr: Object.freeze({ quote: "DEVIS", invoice: "FACTURE", customer: "Client", project: "Projet", date: "Date", dueDate: "Echeance", scope: "Etendue des travaux", work: "Travaux effectues", description: "Description", quantity: "Qte", unit: "Unite", amount: "Montant", subtotal: "Sous-total", discount: "Remise", tax: "Taxe", fees: "Frais", projectPrice: "PRIX DU PROJET", totalDue: "TOTAL DU", paid: "Montant paye", balance: "SOLDE DU", paymentTerms: "Conditions de paiement", duration: "Duree estimee", conditions: "Conditions du projet", exclusions: "Non inclus", notes: "Notes", warranty: "Garantie", message: "Message au client", acceptance: "Acceptation / Statut", awaiting: "En attente de la decision du client dans Meetro", approved: "Approuve dans Meetro", declined: "Refuse dans Meetro", dueReceipt: "Du a reception", preparedWith: "Prepare avec Meetro", exportPdf: "Exporter le PDF", sharePdf: "Partager le PDF", pdfReady: "PDF pret.", pdfUnavailable: "L'exportation PDF n'est pas disponible sur cet appareil." }),
+  "pt-BR": Object.freeze({ quote: "ORCAMENTO", invoice: "FATURA", customer: "Cliente", project: "Projeto", date: "Data", dueDate: "Vencimento", scope: "Escopo do trabalho", work: "Trabalho realizado", description: "Descricao", quantity: "Qtd.", unit: "Unidade", amount: "Valor", subtotal: "Subtotal", discount: "Desconto", tax: "Imposto", fees: "Taxas", projectPrice: "PRECO DO PROJETO", totalDue: "TOTAL", paid: "Valor pago", balance: "SALDO DEVIDO", paymentTerms: "Termos de pagamento", duration: "Duracao estimada", conditions: "Condicoes do projeto", exclusions: "Nao incluido", notes: "Notas", warranty: "Garantia", message: "Mensagem ao cliente", acceptance: "Aceite / Status", awaiting: "Aguardando decisao do cliente no Meetro", approved: "Aprovado no Meetro", declined: "Recusado no Meetro", dueReceipt: "Vencimento no recebimento", preparedWith: "Preparado com Meetro", exportPdf: "Exportar PDF", sharePdf: "Compartilhar PDF", pdfReady: "PDF pronto.", pdfUnavailable: "A exportacao de PDF nao esta disponivel neste dispositivo." }),
+});
+
+const PHOTO_LABELS = Object.freeze({
+  en: Object.freeze({ projectPhotos: "Project Photos / Evidence", beforePhotos: "Before Photos", afterPhotos: "After Photos" }),
+  es: Object.freeze({ projectPhotos: "Fotos / evidencia del proyecto", beforePhotos: "Fotos de antes", afterPhotos: "Fotos de despues" }),
+  fr: Object.freeze({ projectPhotos: "Photos / preuves du projet", beforePhotos: "Photos avant", afterPhotos: "Photos apres" }),
+  "pt-BR": Object.freeze({ projectPhotos: "Fotos / evidencias do projeto", beforePhotos: "Fotos de antes", afterPhotos: "Fotos de depois" }),
+});
+
+const WORKING_DRAFT_LABELS = Object.freeze({
+  en: Object.freeze({ unsavedLabel: "DRAFT PREVIEW", savedLabel: "SAVED DRAFT", unsavedStatus: "Draft Preview — Not Saved or Issued", savedStatus: "Saved Draft — Not Issued" }),
+  es: Object.freeze({ unsavedLabel: "VISTA PREVIA", savedLabel: "BORRADOR GUARDADO", unsavedStatus: "Vista previa del borrador — No guardado ni emitido", savedStatus: "Borrador guardado — No emitido" }),
+  fr: Object.freeze({ unsavedLabel: "APERCU DU BROUILLON", savedLabel: "BROUILLON ENREGISTRE", unsavedStatus: "Apercu du brouillon — Non enregistre ni emis", savedStatus: "Brouillon enregistre — Non emis" }),
+  "pt-BR": Object.freeze({ unsavedLabel: "PRE-VISUALIZACAO", savedLabel: "RASCUNHO SALVO", unsavedStatus: "Pre-visualizacao do rascunho — Nao salvo nem emitido", savedStatus: "Rascunho salvo — Nao emitido" }),
 });
 
 function labels(locale) {
   return LABELS[locale] || LABELS.en;
+}
+
+function photoLabels(locale) {
+  return PHOTO_LABELS[locale] || PHOTO_LABELS.en;
+}
+
+function workingDraftLabels(locale) {
+  return WORKING_DRAFT_LABELS[locale] || WORKING_DRAFT_LABELS.en;
+}
+
+function draftPresentation(model) {
+  const copy = workingDraftLabels(model.locale);
+  return model.workingDraftStatus === "SAVED"
+    ? { label: copy.savedLabel, status: copy.savedStatus }
+    : { label: copy.unsavedLabel, status: copy.unsavedStatus };
 }
 
 export function getCustomerDocumentActionCopy(locale = "en") {
@@ -44,7 +73,7 @@ function formatCustomerDocumentDate(value, locale) {
 }
 
 function readableStatus(model, copy) {
-  if (model.draft) return model.kind === "QUOTE" ? copy.draftQuote : copy.draftInvoice;
+  if (model.draft) return draftPresentation(model).status;
   if (model.acceptance === "APPROVED") return copy.approved;
   if (model.acceptance === "DECLINED") return copy.declined;
   if (model.acceptance === "AWAITING_CUSTOMER_DECISION") return copy.awaiting;
@@ -88,7 +117,7 @@ export function collectCustomerDocumentText(model) {
     model.branding.website,
     model.branding.region,
     model.kind,
-    model.draft ? "DRAFT PREVIEW" : "",
+    model.draft ? draftPresentation(model).status : "",
     model.documentNumber,
     model.customer.name,
     model.customer.phone,
@@ -97,6 +126,9 @@ export function collectCustomerDocumentText(model) {
     model.projectTitle,
     model.projectLocation,
     model.scopeSummary,
+    model.photoEvidence?.projectPhotos?.length ? photoLabels(model.locale).projectPhotos : null,
+    model.photoEvidence?.beforePhotos?.length ? photoLabels(model.locale).beforePhotos : null,
+    model.photoEvidence?.afterPhotos?.length ? photoLabels(model.locale).afterPhotos : null,
     ...model.lineItems.flatMap((item) => [
       item.description,
       item.pricingPresentation === "flat" ? null : item.quantity,
@@ -166,6 +198,46 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     y += 8;
   }
 
+  function photoSection(title, photos) {
+    if (!photos?.length) return;
+    if (photos.some((photo) => !photo.dataUrl)) {
+      throw new TypeError("Customer-visible photo evidence must be prepared before PDF rendering.");
+    }
+    ensureSpace(140);
+    y = addText(doc, title, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
+    y += 5;
+    const gap = 10;
+    const columns = 3;
+    const width = (contentWidth - gap * (columns - 1)) / columns;
+    const height = 96;
+    for (let index = 0; index < photos.length; index += columns) {
+      ensureSpace(height + 10);
+      photos.slice(index, index + columns).forEach((photo, column) => {
+        const dataFormat = photo.dataUrl.match(/^data:image\/(png|jpeg|webp);/i)?.[1];
+        const photoFormat = (dataFormat || photo.format || "").toUpperCase() === "JPG"
+          ? "JPEG"
+          : (dataFormat || photo.format || "").toUpperCase();
+        const sourceWidth = Number(photo.width) || width;
+        const sourceHeight = Number(photo.height) || height;
+        const scale = Math.min(width / sourceWidth, height / sourceHeight);
+        const renderedWidth = sourceWidth * scale;
+        const renderedHeight = sourceHeight * scale;
+        doc.addImage(
+          photo.dataUrl,
+          photoFormat || undefined,
+          PAGE.margin + column * (width + gap) + (width - renderedWidth) / 2,
+          y + (height - renderedHeight) / 2,
+          renderedWidth,
+          renderedHeight,
+          undefined,
+          "FAST"
+        );
+      });
+      y += height + 10;
+    }
+    y += 4;
+  }
+
   const embeddedLogo = /^data:image\/(?:png|jpeg);base64,/i.test(model.branding.logoUrl || "");
   if (embeddedLogo) {
     const format = model.branding.logoUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
@@ -176,7 +248,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   y += 30;
   const contact = [model.branding.phone, model.branding.email, model.branding.website, model.branding.region].filter(Boolean).join("  |  ");
   if (contact) y = addText(doc, contact, PAGE.margin, y, { size: 8.5, color: COLOR.muted, maxWidth: contentWidth });
-  if (model.draft) addText(doc, copy.draft, PAGE.width - PAGE.margin, y, { size: 9, color: COLOR.accent, style: "bold", align: "right" });
+  if (model.draft) addText(doc, draftPresentation(model).label, PAGE.width - PAGE.margin, y, { size: 9, color: COLOR.accent, style: "bold", align: "right" });
   y += 8;
   doc.setDrawColor(...COLOR.ink);
   doc.setLineWidth(1.2);
@@ -195,7 +267,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
         ]
       : null,
     model.projectTitle ? [copy.project, model.projectTitle] : null,
-    [model.kind === "QUOTE" ? copy.quote : copy.invoice, model.documentNumber || (model.draft ? copy.draft : "-")],
+    [model.kind === "QUOTE" ? copy.quote : copy.invoice, model.documentNumber || (model.draft ? draftPresentation(model).label : "-")],
     [dueDate ? `${copy.date} / ${copy.dueDate}` : copy.date, dueDate ? `${documentDate} / ${dueDate}` : documentDate],
   ].filter(Boolean);
   const metaWidth = contentWidth / meta.length;
@@ -216,6 +288,10 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   y += metaHeight + 14;
 
   section(model.kind === "QUOTE" ? copy.scope : copy.work, model.scopeSummary);
+  const evidenceLabels = photoLabels(model.locale);
+  photoSection(evidenceLabels.projectPhotos, model.photoEvidence?.projectPhotos);
+  photoSection(evidenceLabels.beforePhotos, model.photoEvidence?.beforePhotos);
+  photoSection(evidenceLabels.afterPhotos, model.photoEvidence?.afterPhotos);
 
   if (model.lineItems.length > 0) {
     ensureSpace(70);
@@ -368,7 +444,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   }
   doc.setProperties({
     title: `${model.kind === "QUOTE" ? copy.quote : copy.invoice} ${model.documentNumber || ""}`.trim(),
-    subject: model.draft ? copy.draft : readableStatus(model, copy),
+    subject: model.draft ? draftPresentation(model).status : readableStatus(model, copy),
     author: model.branding.name,
     creator: "Meetro",
   });
@@ -442,16 +518,100 @@ async function resolveCustomerDocumentLogo(model, fetchImpl = globalThis.fetch) 
   }
 }
 
+async function customerDocumentImageDataUrl(imageUrl, fetchImpl) {
+  if (/^data:image\/(?:png|jpeg|webp);base64,/i.test(imageUrl || "")) return imageUrl;
+  if (typeof fetchImpl !== "function") return null;
+  const response = await fetchImpl(imageUrl, { method: "GET", credentials: "omit", cache: "force-cache" });
+  if (!response.ok) return null;
+  const blob = await response.blob();
+  if (!new Set(["image/png", "image/jpeg", "image/webp"]).has(blob.type) || blob.size > 12_000_000) return null;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  }
+  const base64 = globalThis.btoa?.(binary);
+  return base64 ? `data:${blob.type};base64,${base64}` : null;
+}
+
+export async function prepareCustomerDocumentPdfModel(model, { fetchImpl = globalThis.fetch } = {}) {
+  const withLogo = await resolveCustomerDocumentLogo(model, fetchImpl);
+  if (!withLogo.photoEvidence) return withLogo;
+  const preparedGroups = {};
+  for (const group of ["projectPhotos", "beforePhotos", "afterPhotos"]) {
+    preparedGroups[group] = Object.freeze(await Promise.all((withLogo.photoEvidence[group] || []).map(async (photo) => {
+      const dataUrl = await customerDocumentImageDataUrl(photo.dataUrl || photo.imageUrl, fetchImpl);
+      if (!dataUrl) {
+        const error = new Error("Customer-visible photo evidence is unavailable for PDF output.");
+        error.code = "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE";
+        throw error;
+      }
+      return Object.freeze({ ...photo, dataUrl });
+    })));
+  }
+  return Object.freeze({
+    ...withLogo,
+    photoEvidence: Object.freeze(preparedGroups),
+  });
+}
+
 async function createCustomerDocumentPdfArtifactWithLogo(model, options = {}) {
   return createCustomerDocumentPdfArtifact(
-    await resolveCustomerDocumentLogo(model, options.fetchImpl),
+    await prepareCustomerDocumentPdfModel(model, options),
     options
   );
 }
 
+export async function previewCustomerDocumentPdfWithMedia(model, options = {}) {
+  const remoteLogo = Boolean(model?.branding?.logoUrl && !model.branding.logoUrl.startsWith("data:image/"));
+  const remotePhoto = ["projectPhotos", "beforePhotos", "afterPhotos"].some((group) =>
+    model?.photoEvidence?.[group]?.some((photo) => !photo.dataUrl)
+  );
+  if (!remoteLogo && !remotePhoto) return previewCustomerDocumentPdf(model, options);
+  const openWindow = options.openWindow || globalThis.open;
+  let reservedWindow = null;
+  if (typeof openWindow === "function") {
+    try {
+      reservedWindow = openWindow("", "_blank");
+      if (reservedWindow) reservedWindow.opener = null;
+    } catch {
+      reservedWindow = null;
+    }
+  }
+  try {
+    const result = previewCustomerDocumentPdf(
+      await prepareCustomerDocumentPdfModel(model, options),
+      {
+        ...options,
+        openWindow: (url, target, features) => {
+          if (reservedWindow?.location) {
+            reservedWindow.location.replace?.(url);
+            return reservedWindow;
+          }
+          return openWindow?.(url, target, features);
+        },
+      }
+    );
+    if (!result.ok) reservedWindow?.close?.();
+    return result;
+  } catch (error) {
+    reservedWindow?.close?.();
+    if (error?.code === "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE") {
+      return Object.freeze({ ok: false, method: "photo-unavailable" });
+    }
+    throw error;
+  }
+}
+
 export async function downloadCustomerDocumentPdf(model, { documentObject = globalThis.document, urlObject = globalThis.URL, fetchImpl = globalThis.fetch } = {}) {
   if (!documentObject?.createElement || !urlObject?.createObjectURL) return false;
-  const artifact = await createCustomerDocumentPdfArtifactWithLogo(model, { fetchImpl });
+  let artifact;
+  try {
+    artifact = await createCustomerDocumentPdfArtifactWithLogo(model, { fetchImpl });
+  } catch (error) {
+    if (error?.code === "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE") return false;
+    throw error;
+  }
   const url = urlObject.createObjectURL(artifact.blob);
   const link = documentObject.createElement("a");
   link.href = url;
@@ -491,8 +651,8 @@ export async function shareCustomerDocumentPdf({
   download = downloadCustomerDocumentPdf,
 } = {}) {
   if (!validateModel(model)) return { ok: false, method: "unavailable" };
-  const artifact = await createCustomerDocumentPdfArtifactWithLogo(model);
   try {
+    const artifact = await createCustomerDocumentPdfArtifactWithLogo(model);
     if (isNative && (platform === "ios" || platform === "android") && typeof nativePdfShare === "function") {
       await nativePdfShare(artifact);
       return { ok: true, method: "native-pdf", fileName: artifact.fileName };
@@ -505,11 +665,12 @@ export async function shareCustomerDocumentPdf({
       await webShare(payload);
       return { ok: true, method: "web-pdf", fileName: artifact.fileName };
     }
-    if (typeof download === "function" && download(model)) {
+    if (typeof download === "function" && await download(model)) {
       return { ok: true, method: "download", fileName: artifact.fileName };
     }
   } catch (error) {
     if (cancelled(error)) return { ok: false, method: "cancelled" };
+    if (error?.code === "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE") return { ok: false, method: "unavailable" };
     throw error;
   }
   return { ok: false, method: "unavailable" };

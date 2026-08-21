@@ -1,4 +1,7 @@
-import { reconcileBusinessDocumentInstructions } from "./businessDocumentWorkspace.js";
+import {
+  buildBusinessDocumentConversationPatch,
+  reconcileBusinessDocumentInstructions,
+} from "./businessDocumentWorkspace.js";
 
 export const BUSINESS_DOCUMENT_PHOTO_ROLES = Object.freeze([
   "UNCLASSIFIED", "GENERAL_EVIDENCE", "BEFORE", "AFTER",
@@ -41,15 +44,102 @@ export function businessDocumentSnapshotFingerprint(snapshot) {
   return stable(snapshot);
 }
 
+export function businessDocumentSavePresentation({
+  savedDocument = null,
+  currentFingerprint = "",
+  savedFingerprint = "",
+  hasMeaningfulContent = false,
+  busy = false,
+} = {}) {
+  const dirty = savedDocument
+    ? currentFingerprint !== savedFingerprint
+    : hasMeaningfulContent === true;
+  return Object.freeze({
+    dirty,
+    label: busy ? "Saving…" : savedDocument ? (dirty ? "Save Changes" : "Saved ✓") : "Save Draft",
+    savedAt: savedDocument && !dirty ? String(savedDocument.updatedAt || "") : "",
+  });
+}
+
+export function businessDocumentPhotoVisibilityNotice(photos = [], assignments = {}) {
+  const hasCustomerVisiblePhoto = photos.some((photo) =>
+    assignments[photo.id]?.visibility === "CUSTOMER_VISIBLE"
+  );
+  return hasCustomerVisiblePhoto
+    ? "Customer-visible photos will appear on the document. Private photos remain internal."
+    : "Photos are private and will not appear on customer documents.";
+}
+
+export function businessDocumentTurnResponse(turn = {}) {
+  if (String(turn.responseText || "").trim()) return String(turn.responseText).trim();
+  if (turn.privateReminder === true) return "Private reminder saved for this working document.";
+  if (["before", "after", "BEFORE", "AFTER"].includes(turn.photoIntent)) {
+    return "Photo classification updated for this working document.";
+  }
+  if (turn.recognized === true) {
+    return `${String(turn.documentType || "").toLowerCase() === "invoice" ? "Invoice" : "Quote"} working draft updated. Review the live document.`;
+  }
+  return "I kept your instruction here. Use manual edit for unsupported details.";
+}
+
+function validTimestamp(value) {
+  return value && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : null;
+}
+
+export function buildBusinessDocumentConversationTurn({
+  id,
+  documentType,
+  instruction,
+  current = {},
+  previousTurn = null,
+  now = new Date().toISOString(),
+} = {}) {
+  const text = String(instruction || "").trim();
+  const type = String(documentType || "").toLowerCase();
+  const patch = buildBusinessDocumentConversationPatch({ documentType: type, instruction: text, current });
+  const recognized = Object.keys(patch).length > 0;
+  const timestamp = validTimestamp(now) || new Date().toISOString();
+  const createdAt = previousTurn ? validTimestamp(previousTurn.createdAt) : timestamp;
+  const turn = {
+    ...(previousTurn || {}),
+    id: String(id || previousTurn?.id || ""),
+    documentType: type,
+    originalText: String(previousTurn?.originalText || previousTurn?.text || text),
+    text,
+    recognized,
+    revisions: previousTurn ? Number(previousTurn.revisions || 0) + 1 : 0,
+    revisionHistory: previousTurn
+      ? [...(previousTurn.revisionHistory || []), String(previousTurn.text || "")]
+      : [],
+    privateReminder: Boolean(patch.privateReminder),
+    photoIntent: patch.photoIntent || null,
+    ...(createdAt ? { createdAt } : {}),
+    updatedAt: timestamp,
+    editing: false,
+    responseText: "",
+  };
+  turn.responseText = businessDocumentTurnResponse(turn);
+  return Object.freeze({ turn: Object.freeze(turn), patch: Object.freeze({ ...patch }) });
+}
+
 function savedInstruction(turn) {
-  return {
+  const saved = {
     id: String(turn.id || ""),
     documentType: String(turn.documentType || "").toUpperCase(),
+    originalText: String(turn.originalText || turn.revisionHistory?.[0] || turn.text || ""),
     text: String(turn.text || ""),
+    responseText: businessDocumentTurnResponse(turn),
     recognized: turn.recognized === true,
     revisions: Number(turn.revisions || 0),
     revisionHistory: Array.isArray(turn.revisionHistory) ? [...turn.revisionHistory] : [],
+    privateReminder: turn.privateReminder === true,
+    photoIntent: turn.photoIntent ? String(turn.photoIntent).toUpperCase() : null,
   };
+  const createdAt = validTimestamp(turn.createdAt);
+  const updatedAt = validTimestamp(turn.updatedAt);
+  if (createdAt) saved.createdAt = createdAt;
+  if (updatedAt) saved.updatedAt = updatedAt;
+  return saved;
 }
 
 function savedPhoto(photo, assignment) {
@@ -138,8 +228,27 @@ export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
   );
 }
 
+export function restoreBusinessDocumentConversationTurns(instructions = [], documentType = "") {
+  return instructions.map((turn) => {
+    const restored = {
+      ...turn,
+      documentType: String(turn.documentType || documentType || "").toLowerCase(),
+      originalText: String(turn.originalText || turn.revisionHistory?.[0] || turn.text || ""),
+      revisionHistory: Array.isArray(turn.revisionHistory) ? [...turn.revisionHistory] : [],
+      privateReminder: turn.privateReminder === true,
+      photoIntent: turn.photoIntent ? String(turn.photoIntent).toLowerCase() : null,
+      editing: false,
+    };
+    restored.responseText = businessDocumentTurnResponse(restored);
+    return restored;
+  });
+}
+
 export function restoreBusinessDocumentDraft(document) {
-  const turns = (document.workspace?.instructions || []).map((turn) => ({ ...turn, editing: false }));
+  const turns = restoreBusinessDocumentConversationTurns(
+    document.workspace?.instructions || [],
+    document.documentType
+  );
   const photos = (document.photos || []).map((photo) => ({
     id: photo.id,
     name: photo.name,
@@ -161,6 +270,23 @@ export function restoreBusinessDocumentDraft(document) {
     photoAssignments,
     jobId: document.jobId || null,
   };
+}
+
+export function businessDocumentRestoredSnapshotFingerprint(document) {
+  const restored = restoreBusinessDocumentDraft(document);
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: restored.documentType,
+    content: restored.content,
+    turns: restored.turns,
+    manualOverrides: restored.manualOverrides,
+    photos: restored.photos,
+    photoAssignments: restored.photoAssignments,
+    jobId: restored.jobId,
+  });
+  return businessDocumentSnapshotFingerprint({
+    payload,
+    recoveryPhotos: recoveryPhotoProjection(restored.photos, restored.photoAssignments),
+  });
 }
 
 export function customerVisibleBusinessDocumentPhotos(photos = [], assignments = {}) {

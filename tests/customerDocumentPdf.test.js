@@ -4,6 +4,7 @@ import test from "node:test";
 import { jsPDF } from "jspdf";
 
 import {
+  attachCustomerDocumentPhotoEvidence,
   buildCanonicalInvoiceDocumentModel,
   buildCanonicalQuoteDocumentModel,
   buildCustomerSafeBusinessBranding,
@@ -13,8 +14,10 @@ import {
 import {
   collectCustomerDocumentText,
   createCustomerDocumentPdfArtifact,
+  downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
   previewCustomerDocumentPdf,
+  previewCustomerDocumentPdfWithMedia,
   renderCustomerDocumentPdf,
   shareCustomerDocumentPdf,
 } from "../src/utils/customerDocumentPdf.js";
@@ -172,7 +175,9 @@ test("Quick Quote and Quick Invoice render truthful draft models without canonic
   assert.equal(quote.acceptance, "DRAFT_PREVIEW_NOT_ISSUED");
   assert.equal(bill.draft, true);
   assert.equal(bill.acceptance, "DRAFT_PREVIEW_NOT_RECORDED");
-  assert.doesNotMatch(`${collectCustomerDocumentText(quote)}\n${collectCustomerDocumentText(bill)}`, /retailerReference|internalNotes|saved|delivered/i);
+  const text = `${collectCustomerDocumentText(quote)}\n${collectCustomerDocumentText(bill)}`;
+  assert.doesNotMatch(text, /retailerReference|internalNotes|delivered/i);
+  assert.match(text, /Draft Preview — Not Saved or Issued/);
 });
 
 test("branding allowlist accepts safe Cloudinary logos and gracefully falls back to the business name", () => {
@@ -412,6 +417,37 @@ test("PDF preview opens the current customer-safe artifact without changing docu
   assert.equal(model.acceptance, "DRAFT_PREVIEW_NOT_ISSUED");
 });
 
+test("working Quote and Invoice PDFs distinguish unsaved previews from saved unissued drafts", () => {
+  const quoteDraft = {
+    quoteNumber: "QQ-1004", customerName: "Taylor", projectTitle: "Repair",
+    lineItems: [{ description: "Repair", quantity: 1, unitPrice: 100, total: 100 }],
+    subtotal: 100, total: 100,
+  };
+  const invoiceDraft = {
+    invoiceNumber: "INV-1004", customerName: "Taylor", serviceDescription: "Repair",
+    lineItems: [{ description: "Repair", amount: 100 }], subtotal: 100, total: 100,
+  };
+  const branding = { businessName: "Handyman LLC" };
+  const unsavedQuote = buildQuickQuoteDocumentModel(quoteDraft, { branding });
+  const savedQuote = buildQuickQuoteDocumentModel(quoteDraft, { branding, workingDraftStatus: "SAVED" });
+  const unsavedInvoice = buildQuickInvoiceDocumentModel(invoiceDraft, { branding });
+  const savedInvoice = buildQuickInvoiceDocumentModel(invoiceDraft, { branding, workingDraftStatus: "SAVED" });
+
+  for (const model of [unsavedQuote, unsavedInvoice]) {
+    assert.equal(model.workingDraftStatus, "UNSAVED");
+    assert.match(collectCustomerDocumentText(model), /Draft Preview — Not Saved or Issued/);
+    assert.doesNotMatch(collectCustomerDocumentText(model), /Saved Draft — Not Issued/);
+  }
+  for (const model of [savedQuote, savedInvoice]) {
+    assert.equal(model.workingDraftStatus, "SAVED");
+    assert.match(collectCustomerDocumentText(model), /Saved Draft — Not Issued/);
+    assert.doesNotMatch(collectCustomerDocumentText(model), /Not Saved or Issued/);
+    const renderedText = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+    assert.match(renderedText, /SAVED DRAFT/);
+    assert.doesNotMatch(collectCustomerDocumentText(model), /approved|accepted|delivered/i);
+  }
+});
+
 test("PDF preview succeeds when noopener returns a null window and cleans up only on delay", () => {
   const model = buildQuickQuoteDocumentModel({
     quoteNumber: "QQ-1003", customerName: "Taylor", projectTitle: "Repair",
@@ -443,6 +479,58 @@ test("PDF preview succeeds when noopener returns a null window and cleans up onl
     ["schedule", 60000],
     ["revoke", "blob:null-window-preview"],
   ]);
+});
+
+test("customer-visible photo evidence is consistent in preview and download PDF projections", async () => {
+  const image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const evidencePhoto = (mediaId) => ({
+    media: { public_id: mediaId, secure_url: image, format: "png", width: 1, height: 1 },
+  });
+  const model = attachCustomerDocumentPhotoEvidence(buildQuickQuoteDocumentModel({
+    quoteNumber: "QQ-1004",
+    customerName: "Taylor",
+    projectTitle: "Repair",
+    lineItems: [],
+    subtotal: 0,
+    total: 100,
+  }, { branding: { businessName: "Handyman LLC" } }), {
+    general: [evidencePhoto("project-photo")],
+    before: [evidencePhoto("before-photo")],
+    after: [evidencePhoto("after-photo")],
+  });
+  const customerText = collectCustomerDocumentText(model);
+  assert.match(customerText, /Project Photos \/ Evidence/);
+  assert.match(customerText, /Before Photos/);
+  assert.match(customerText, /After Photos/);
+
+  const previewCalls = [];
+  const preview = await previewCustomerDocumentPdfWithMedia(model, {
+    urlApi: {
+      createObjectURL: () => "blob:photo-preview",
+      revokeObjectURL: () => {},
+    },
+    openWindow: (url) => previewCalls.push(url),
+    scheduleRevoke: () => {},
+  });
+  assert.equal(preview.ok, true);
+  assert.deepEqual(previewCalls, ["blob:photo-preview"]);
+
+  let downloaded = "";
+  const link = {
+    click() { downloaded = this.download; },
+    remove() {},
+  };
+  assert.equal(await downloadCustomerDocumentPdf(model, {
+    documentObject: {
+      createElement: () => link,
+      body: { appendChild() {} },
+    },
+    urlObject: {
+      createObjectURL: () => "blob:photo-download",
+      revokeObjectURL() {},
+    },
+  }), true);
+  assert.equal(downloaded, "Quote-QQ-1004.pdf");
 });
 
 test("Quick Quote PDF keeps the supplied service location with the customer identity", () => {

@@ -37,11 +37,14 @@ import {
   buildQuoteCompositionInput,
   getSolutionReadyReviewElements,
 } from "../utils/quoteBuilderIntelligenceBoundary.js";
-import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
+import {
+  attachCustomerDocumentPhotoEvidence,
+  buildQuickQuoteDocumentModel,
+} from "../utils/customerDocumentModel";
 import {
   downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
-  previewCustomerDocumentPdf,
+  previewCustomerDocumentPdfWithMedia,
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
@@ -1445,12 +1448,12 @@ ${terms || "—"}
 ${businessIdentity.businessName}`;
   };
 
-  function buildQuickQuotePdfModel() {
+  function buildQuickQuotePdfModel(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
     const pricing = getCurrentPricingPayload();
     const businessIdentity = getBusinessIdentityProjection({}, {
       fallbackName: "Meetro Professional",
     });
-    return buildQuickQuoteDocumentModel({
+    return attachCustomerDocumentPhotoEvidence(buildQuickQuoteDocumentModel({
       quoteNumber,
       quoteDate,
       customerName,
@@ -1501,13 +1504,19 @@ ${businessIdentity.businessName}`;
       estimatedDuration: estimatedDuration || timeline,
       notes,
       currency: "USD",
-    }, { locale: language, branding: businessIdentity });
+    }, { locale: language, branding: businessIdentity, workingDraftStatus }), photoEvidence);
   }
 
-  async function exportQuickQuotePdf() {
+  async function exportQuickQuotePdf(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
     const copy = getCustomerDocumentActionCopy(language);
-    const exported = await downloadCustomerDocumentPdf(buildQuickQuotePdfModel());
+    const exported = await downloadCustomerDocumentPdf(buildQuickQuotePdfModel(photoEvidence, workingDraftStatus));
     setCopiedNotice(exported ? copy.pdfReady : copy.pdfUnavailable);
+  }
+
+  async function previewQuickQuotePdfWithPhotos(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
+    const result = await previewCustomerDocumentPdfWithMedia(buildQuickQuotePdfModel(photoEvidence, workingDraftStatus));
+    if (!result.ok) setCopiedNotice(getCustomerDocumentActionCopy(language).pdfUnavailable);
+    return result;
   }
 
   async function shareQuickQuotePdf() {
@@ -2911,8 +2920,8 @@ ${businessIdentity.businessName}`;
           onRestorePhotos={restoreWorkspacePhotos}
           onPhotosPersisted={markWorkspacePhotosPersisted}
           onDiscardTransientPhotos={discardWorkspaceTransientPhotos}
-          onDownloadQuote={() => void exportQuickQuotePdf()}
-          onPreviewQuote={() => previewCustomerDocumentPdf(buildQuickQuotePdfModel())}
+          onDownloadQuote={(photoEvidence, workingDraftStatus) => void exportQuickQuotePdf(photoEvidence, workingDraftStatus)}
+          onPreviewQuote={(photoEvidence, workingDraftStatus) => previewQuickQuotePdfWithPhotos(photoEvidence, workingDraftStatus)}
           onBack={leaveUnifiedBusinessWorkspace}
         />
       </>

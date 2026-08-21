@@ -3,6 +3,7 @@ import { authFetch } from "./authFetch.js";
 const DOCUMENT_TYPES = new Set(["QUOTE", "INVOICE"]);
 const PHOTO_ROLES = new Set(["UNCLASSIFIED", "GENERAL_EVIDENCE", "BEFORE", "AFTER"]);
 const PHOTO_VISIBILITIES = new Set(["PRIVATE_INTERNAL", "CUSTOMER_VISIBLE"]);
+const PHOTO_INTENTS = new Set(["BEFORE", "AFTER"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class BusinessDocumentDraftError extends Error {
@@ -39,14 +40,51 @@ function validatePhoto(value) {
     PHOTO_VISIBILITIES.has(value.visibility);
 }
 
+function validateInstruction(value, documentType) {
+  const validOptionalTimestamp = (timestamp) =>
+    timestamp === undefined ||
+    (typeof timestamp === "string" && timestamp.trim() && !Number.isNaN(Date.parse(timestamp)));
+  if (!plain(value) ||
+      typeof value.id !== "string" || !value.id ||
+      value.documentType !== documentType ||
+      typeof value.text !== "string" || !value.text ||
+      typeof value.recognized !== "boolean" ||
+      !Number.isSafeInteger(value.revisions) || value.revisions < 0 ||
+      !Array.isArray(value.revisionHistory) || !value.revisionHistory.every((item) => typeof item === "string") ||
+      (value.originalText !== undefined && (typeof value.originalText !== "string" || !value.originalText.trim())) ||
+      (value.responseText !== undefined && typeof value.responseText !== "string") ||
+      (value.privateReminder !== undefined && typeof value.privateReminder !== "boolean") ||
+      (value.photoIntent != null && !PHOTO_INTENTS.has(value.photoIntent)) ||
+      !validOptionalTimestamp(value.createdAt) ||
+      !validOptionalTimestamp(value.updatedAt)) return null;
+  return Object.freeze({ ...value, revisionHistory: Object.freeze([...value.revisionHistory]) });
+}
+
+function validateWorkspace(value, documentType) {
+  if (!plain(value) || value.activeDocument !== documentType ||
+      !Array.isArray(value.instructions) || !plain(value.manualOverrides) ||
+      !Array.isArray(value.privateReminders)) return null;
+  const instructions = value.instructions.map((item) => validateInstruction(item, documentType));
+  if (instructions.some((item) => !item) || value.privateReminders.some((item) =>
+    !plain(item) || typeof item.id !== "string" || typeof item.text !== "string"
+  )) return null;
+  return Object.freeze({
+    ...value,
+    instructions: Object.freeze(instructions),
+    manualOverrides: Object.freeze({ ...value.manualOverrides }),
+    privateReminders: Object.freeze(value.privateReminders.map((item) => Object.freeze({ ...item }))),
+  });
+}
+
 export function validateBusinessDocumentDraft(value) {
+  const workspace = plain(value) ? validateWorkspace(value.workspace, value.documentType) : null;
   if (!plain(value) ||
       !UUID_PATTERN.test(String(value.id || "")) ||
       !DOCUMENT_TYPES.has(value.documentType) ||
       value.status !== "WORKING_DRAFT" ||
       typeof value.reference !== "string" ||
       !Number.isSafeInteger(value.version) || value.version < 1 ||
-      !plain(value.content) || !plain(value.workspace) ||
+      !plain(value.content) || !workspace ||
       !Array.isArray(value.photos) || !value.photos.every(validatePhoto) ||
       Number.isNaN(Date.parse(value.createdAt)) || Number.isNaN(Date.parse(value.updatedAt))) {
     return null;
@@ -54,7 +92,7 @@ export function validateBusinessDocumentDraft(value) {
   return Object.freeze({
     ...value,
     content: Object.freeze({ ...value.content }),
-    workspace: Object.freeze({ ...value.workspace }),
+    workspace,
     photos: Object.freeze(value.photos.map((photo) => Object.freeze({ ...photo, media: Object.freeze({ ...photo.media }) }))),
   });
 }

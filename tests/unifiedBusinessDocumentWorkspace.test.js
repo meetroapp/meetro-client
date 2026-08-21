@@ -11,6 +11,7 @@ import {
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workspace = read("src/components/UnifiedBusinessDocumentWorkspace.jsx");
+const persistence = read("src/utils/businessDocumentPersistence.js");
 const styles = read("src/components/UnifiedBusinessDocumentWorkspace.css");
 const quoteBuilder = read("src/pages/QuoteBuilder.jsx");
 const invoiceBuilder = read("src/pages/InvoiceBuilder.jsx");
@@ -75,11 +76,14 @@ test("Speak, Type, Add Photos, and the live document remain reachable without su
 
 test("the existing PDF model and generator remain the document boundary", () => {
   assert.match(quoteBuilder, /buildQuickQuoteDocumentModel/);
-  assert.match(quoteBuilder, /onDownloadQuote=\{\(\) => void exportQuickQuotePdf\(\)\}/);
+  assert.match(quoteBuilder, /onDownloadQuote=\{\(photoEvidence, workingDraftStatus\) => void exportQuickQuotePdf\(photoEvidence, workingDraftStatus\)\}/);
   assert.match(workspace, /buildQuickInvoiceDocumentModel/);
   assert.match(workspace, /downloadCustomerDocumentPdf/);
-  assert.match(workspace, /previewCustomerDocumentPdf/);
-  assert.match(quoteBuilder, /onPreviewQuote=\{\(\) => previewCustomerDocumentPdf\(buildQuickQuotePdfModel\(\)\)\}/);
+  assert.match(workspace, /previewCustomerDocumentPdfWithMedia/);
+  assert.match(quoteBuilder, /onPreviewQuote=\{\(photoEvidence, workingDraftStatus\) => previewQuickQuotePdfWithPhotos\(photoEvidence, workingDraftStatus\)\}/);
+  assert.match(quoteBuilder, /attachCustomerDocumentPhotoEvidence/);
+  assert.match(workspace, /onPreviewQuote\(customerPhotoGroups, activeSaved && !activeDirty \? "SAVED" : "UNSAVED"\)/);
+  assert.match(workspace, /onDownloadQuote\(customerPhotoGroups, activeSaved && !activeDirty \? "SAVED" : "UNSAVED"\)/);
   assert.match(workspace, />Preview PDF</);
   assert.match(workspace, />Download PDF</);
 });
@@ -154,7 +158,7 @@ test("Before and After photos require explicit conversation intent and independe
     documentType: "invoice",
     instruction: "Attach photos.",
   }).photoIntent, undefined);
-  assert.match(workspace, /Photos are private by default/);
+  assert.match(workspace, /businessDocumentPhotoVisibilityNotice/);
   assert.match(workspace, /Role and customer visibility are separate/);
   assert.match(workspace, /customerVisibleBusinessDocumentPhotoGroups/);
   assert.match(workspace, /Project Photos \/ Evidence/);
@@ -283,8 +287,9 @@ test("editing an earlier instruction reconstructs pricing and preserves delibera
   assert.equal(edited.draft.terms, "Due on acceptance");
   assert.equal(Number(edited.draft.materialItems[0].total) + Number(edited.draft.laborItems[0].total), 289.99);
   assert.doesNotMatch(JSON.stringify(edited.draft), /180/);
-  assert.match(workspace, /revisionHistory:/);
+  assert.match(persistence, /revisionHistory:/);
   assert.match(workspace, />Edited</);
+  assert.match(workspace, />Revision history</);
 });
 
 test("private instruction editing remains private and outside customer-visible document truth", () => {
@@ -321,7 +326,7 @@ test("prefill manual amount shortcuts and governed photo input are functional sh
   assert.match(quoteBuilder, /onAddPhotos=\{\(documentType = "quote"\) => \{/);
   assert.match(quoteBuilder, /quickQuotePhotoTargetDocumentRef\.current = documentType/);
   assert.match(quoteBuilder, /void openQuickQuotePhotoPicker\(\)/);
-  assert.match(workspace, /Photos are private by default/);
+  assert.match(workspace, /businessDocumentPhotoVisibilityNotice/);
   assert.match(workspace, /customerPhotoGroups\.before/);
   assert.match(workspace, /customerPhotoGroups\.after/);
 });

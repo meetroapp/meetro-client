@@ -4,18 +4,20 @@ import BottomNav from "./BottomNav.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import {
-  buildBusinessDocumentConversationPatch,
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   normalizeBusinessDocumentTab,
   reconcileBusinessDocumentInstructions,
 } from "../utils/businessDocumentWorkspace.js";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
-import { buildQuickInvoiceDocumentModel } from "../utils/customerDocumentModel.js";
+import {
+  attachCustomerDocumentPhotoEvidence,
+  buildQuickInvoiceDocumentModel,
+} from "../utils/customerDocumentModel.js";
 import {
   downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
-  previewCustomerDocumentPdf,
+  previewCustomerDocumentPdfWithMedia,
 } from "../utils/customerDocumentPdf.js";
 import {
   createBusinessDocumentDraft,
@@ -31,12 +33,18 @@ import {
 } from "../utils/businessDocumentRecovery.js";
 import {
   buildBusinessDocumentSavePayload,
+  buildBusinessDocumentConversationTurn,
+  businessDocumentPhotoVisibilityNotice,
+  businessDocumentRestoredSnapshotFingerprint,
+  businessDocumentSavePresentation,
   businessDocumentSnapshotFingerprint,
+  businessDocumentTurnResponse,
   customerVisibleBusinessDocumentPhotoGroups,
   defaultBusinessDocumentPhotoAssignment,
   hasMeaningfulBusinessDocumentDraft,
   normalizeBusinessDocumentPhotoAssignment,
   recoveryPhotoProjection,
+  restoreBusinessDocumentConversationTurns,
   restoreBusinessDocumentDraft,
 } from "../utils/businessDocumentPersistence.js";
 import { getAuthenticatedIdentitySnapshot } from "../utils/session.js";
@@ -186,10 +194,14 @@ function ManualEditor({ activeDocument, quote, invoice, initialFocus, onApply, o
   );
 }
 
-function InstructionTurn({ turn, onSave, onCancel, onEdit }) {
+function InstructionEditor({ turn, onSave, onCancel }) {
   const [value, setValue] = useState(turn.text);
-  if (turn.editing) return <article className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
-  return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div></div></article><article className="meetro"><span>M</span><p>{turn.recognized ? `${turn.documentType === "quote" ? "Quote" : "Invoice"} working draft updated. Review the live document.` : "I kept your instruction here. Use manual edit for unsupported details."}</p></article></>;
+  return <article className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
+}
+
+function InstructionTurn({ turn, onSave, onCancel, onEdit }) {
+  if (turn.editing) return <InstructionEditor turn={turn} onSave={onSave} onCancel={onCancel} />;
+  return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article><article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article></>;
 }
 
 function SavedFilesDrawer({ onClose, onOpen, setPage }) {
@@ -235,7 +247,7 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
 }
 
 function PhotoWorkspace({ photos, assignments, onChange, onReview }) {
-  return <section className="business-document-photo-workspace"><div><strong>Photos added</strong><button type="button" onClick={onReview}>Review photos</button></div><div className="business-document-photo-cards">{photos.map((photo) => { const assignment = assignments[photo.id] || defaultBusinessDocumentPhotoAssignment(); return <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Documented work"} /> : null}<span>{["UNCLASSIFIED", "GENERAL_EVIDENCE"].includes(assignment.role) ? "General" : assignment.role === "BEFORE" ? "Before" : "After"} · {assignment.visibility === "CUSTOMER_VISIBLE" ? "Customer" : "Private"}</span><button type="button" onClick={() => onChange(photo.id)}>Change</button></article>; })}</div><p>Photos are private by default. Choose Before, After, or General, and decide separately whether to include them on the customer document.</p></section>;
+  return <section className="business-document-photo-workspace"><div><strong>Photos added</strong><button type="button" onClick={onReview}>Review photos</button></div><div className="business-document-photo-cards">{photos.map((photo) => { const assignment = assignments[photo.id] || defaultBusinessDocumentPhotoAssignment(); return <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Documented work"} /> : null}<span>{["UNCLASSIFIED", "GENERAL_EVIDENCE"].includes(assignment.role) ? "General" : assignment.role === "BEFORE" ? "Before" : "After"} · {assignment.visibility === "CUSTOMER_VISIBLE" ? "Customer" : "Private"}</span><button type="button" onClick={() => onChange(photo.id)}>Change</button></article>; })}</div><p>{businessDocumentPhotoVisibilityNotice(photos, assignments)}</p></section>;
 }
 
 function PhotoReviewDialog({ photos, assignments, onApply, onCancel }) {
@@ -308,9 +320,13 @@ export default function UnifiedBusinessDocumentWorkspace({
     quote: businessDocumentSnapshotFingerprint({ payload: quotePayload, recoveryPhotos: recoveryPhotoProjection(photos.filter((photo) => (photoAssignments[photo.id]?.documentType || "quote") === "quote"), photoAssignments) }),
     invoice: businessDocumentSnapshotFingerprint({ payload: invoicePayload, recoveryPhotos: recoveryPhotoProjection(photos.filter((photo) => photoAssignments[photo.id]?.documentType === "invoice"), photoAssignments) }),
   };
+  const savePresentations = {
+    quote: businessDocumentSavePresentation({ savedDocument: savedDocuments.quote, currentFingerprint: fingerprints.quote, savedFingerprint: savedFingerprints.quote, hasMeaningfulContent: hasMeaningfulBusinessDocumentDraft(quotePayload), busy: saveState.busy && saveState.documentType === "quote" }),
+    invoice: businessDocumentSavePresentation({ savedDocument: savedDocuments.invoice, currentFingerprint: fingerprints.invoice, savedFingerprint: savedFingerprints.invoice, hasMeaningfulContent: hasMeaningfulBusinessDocumentDraft(invoicePayload), busy: saveState.busy && saveState.documentType === "invoice" }),
+  };
   const dirty = {
-    quote: savedDocuments.quote ? fingerprints.quote !== savedFingerprints.quote : hasMeaningfulBusinessDocumentDraft(quotePayload),
-    invoice: savedDocuments.invoice ? fingerprints.invoice !== savedFingerprints.invoice : hasMeaningfulBusinessDocumentDraft(invoicePayload),
+    quote: savePresentations.quote.dirty,
+    invoice: savePresentations.invoice.dirty,
   };
   const activeDirty = dirty[activeDocument];
   const activeSaved = savedDocuments[activeDocument];
@@ -448,24 +464,13 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
-  function restoredFingerprint(document) {
-    const payload = {
-      documentType: document.documentType,
-      jobId: document.jobId,
-      content: document.content,
-      workspace: document.workspace,
-      photos: document.photos.map((photo) => ({ id: photo.id, name: photo.name, purpose: "quote-draft-photo", media: photo.media, role: photo.role, visibility: photo.visibility })),
-    };
-    const recoveredPhotos = document.photos.map((photo) => ({ id: photo.id, name: photo.name, media: photo.media, uploadState: "durable", assignment: { role: photo.role, visibility: photo.visibility } }));
-    return businessDocumentSnapshotFingerprint({ payload, recoveryPhotos: recoveredPhotos });
-  }
-
   function applyRestoredDocument(document) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
     if (type === "quote") onApplyQuotePatch({ ...restored.content, replaceCollections: true });
     else setInvoice(restored.content);
     setTurns((current) => [...current.filter((turn) => turn.documentType !== type), ...restored.turns]);
+    turnIdRef.current = Math.max(turnIdRef.current, restored.turns.length);
     setManualOverrides((current) => ({ ...current, [type]: restored.manualOverrides }));
     setPhotoAssignments((current) => ({
       ...Object.fromEntries(Object.entries(current).filter(([, assignment]) => assignment.documentType !== type)),
@@ -475,7 +480,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     onRestorePhotos?.(restored.photos, { documentType: type, persisted: true });
     setSavedDocuments((current) => ({ ...current, [type]: document }));
     setDocumentJobIds((current) => ({ ...current, [type]: document.jobId || null }));
-    setSavedFingerprints((current) => ({ ...current, [type]: restoredFingerprint(document) }));
+    setSavedFingerprints((current) => ({ ...current, [type]: businessDocumentRestoredSnapshotFingerprint(document) }));
     setActiveDocument(type);
     setSavedFilesOpen(false);
     setNotice(`${document.reference} reopened. Continue editing this saved working draft.`);
@@ -561,7 +566,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       if (!payload) continue;
       if (type === "quote") onApplyQuotePatch({ ...payload.content, replaceCollections: true });
       else setInvoice(payload.content);
-      combinedTurns.push(...(payload.workspace?.instructions || []).map((turn) => ({ ...turn, documentType: type, editing: false })));
+      combinedTurns.push(...restoreBusinessDocumentConversationTurns(payload.workspace?.instructions || [], type));
     }
     setTurns(combinedTurns);
     setManualOverrides({
@@ -625,28 +630,24 @@ export default function UnifiedBusinessDocumentWorkspace({
     const instruction = String(rawInstruction || "").trim();
     if (!instruction) return;
     const current = activeDocument === "quote" ? quote : invoice;
-    const parsed = buildBusinessDocumentConversationPatch({ documentType: activeDocument, instruction, current });
-    const recognized = Object.keys(parsed).length > 0;
     let turnId = existingId;
     let nextTurns;
-    if (existingId) nextTurns = turns.map((turn) => turn.id === existingId ? {
-      ...turn,
-      text: instruction,
-      editing: false,
-      recognized,
-      revisions: (turn.revisions || 0) + 1,
-      revisionHistory: [...(turn.revisionHistory || []), turn.text],
-    } : turn);
-    else {
+    let conversationTurn;
+    if (existingId) {
+      const previousTurn = turns.find((turn) => turn.id === existingId);
+      conversationTurn = buildBusinessDocumentConversationTurn({ id: existingId, documentType: activeDocument, instruction, current, previousTurn });
+      nextTurns = turns.map((turn) => turn.id === existingId ? conversationTurn.turn : turn);
+    } else {
       turnIdRef.current += 1;
-      turnId = `professional-instruction-${turnIdRef.current}`;
-      nextTurns = [...turns, { id: turnId, documentType: activeDocument, text: instruction, recognized, revisions: 0, editing: false }];
+      turnId = `professional-instruction-${Date.now()}-${turnIdRef.current}`;
+      conversationTurn = buildBusinessDocumentConversationTurn({ id: turnId, documentType: activeDocument, instruction, current });
+      nextTurns = [...turns, conversationTurn.turn];
     }
     setTurns(nextTurns);
     reconcileDocument(activeDocument, nextTurns);
-    assignPhotoIntent(turnId, parsed.photoIntent);
+    assignPhotoIntent(turnId, conversationTurn.patch.photoIntent);
     setMessage("");
-    setNotice(recognized ? "Working draft updated from your instruction." : "Instruction preserved. Use manual edit for any unsupported detail.");
+    setNotice(conversationTurn.turn.recognized ? "Working draft updated from your instruction." : "Instruction preserved. Use manual edit for any unsupported detail.");
   }
 
   function focusComposer(prefix = "") {
@@ -693,7 +694,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     const customerVisible = customerVisibleWorkspaceDraft(invoice);
     const rows = invoiceRows(customerVisible);
     const total = invoiceTotal(customerVisible);
-    return buildQuickInvoiceDocumentModel({ ...customerVisible, total, subtotal: total, lineItems: rows.map((item) => ({ description: item.description, amount: item.amount })), serviceDescription: customerVisible.projectTitle }, { locale: language, branding });
+    return attachCustomerDocumentPhotoEvidence(
+      buildQuickInvoiceDocumentModel({ ...customerVisible, total, subtotal: total, lineItems: rows.map((item) => ({ description: item.description, amount: item.amount })), serviceDescription: customerVisible.projectTitle }, { locale: language, branding, workingDraftStatus: activeSaved && !activeDirty ? "SAVED" : "UNSAVED" }),
+      customerPhotoGroups
+    );
   }
 
   async function downloadInvoice() {
@@ -701,8 +705,8 @@ export default function UnifiedBusinessDocumentWorkspace({
     setNotice(await downloadCustomerDocumentPdf(invoicePdfModel()) ? copy.pdfReady : copy.pdfUnavailable);
   }
 
-  function previewInvoice() {
-    if (!previewCustomerDocumentPdf(invoicePdfModel()).ok) setNotice("PDF preview is unavailable. Nothing was saved or sent.");
+  async function previewInvoice() {
+    if (!(await previewCustomerDocumentPdfWithMedia(invoicePdfModel())).ok) setNotice("PDF preview is unavailable. Nothing was saved or sent.");
   }
 
   function deliveryUnavailable(channel) {
@@ -719,15 +723,12 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   const guardedSetPage = (page) => requestExit(() => setPage(page));
-  const saveLabel = saveState.busy && saveState.documentType === activeDocument
-    ? "Saving…"
-    : activeSaved
-    ? activeDirty ? "Save Changes" : "Saved ✓"
-    : "Save Draft";
+  const activeSavePresentation = savePresentations[activeDocument];
+  const saveLabel = activeSavePresentation.label;
 
   return (
     <div className="app-page meetro-wide-page business-document-workspace">
-      <header className="business-document-header"><button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button><div><div className="business-document-title-row"><h1>{activeContent.projectTitle || job.title || "Quote & Invoice"}</h1><span>{recovered ? "Recovered · Not saved" : documentJobIds[activeDocument] ? "Job linked" : "Working draft"}</span></div><p>{activeContent.customerName || job.customerName ? `Customer: ${activeContent.customerName || job.customerName}` : "Customer not selected"}{activeContent.customerLocation || job.location ? ` · ${activeContent.customerLocation || job.location}` : ""}</p></div><div className="business-document-save-status" aria-live="polite">{activeSaved && !activeDirty ? `Saved · ${new Date(activeSaved.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty ? "Unsaved changes" : "Not saved"}</div></header>
+      <header className="business-document-header"><button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button><div><div className="business-document-title-row"><h1>{activeContent.projectTitle || job.title || "Quote & Invoice"}</h1><span>{recovered ? "Recovered · Not saved" : documentJobIds[activeDocument] ? "Job linked" : "Working draft"}</span></div><p>{activeContent.customerName || job.customerName ? `Customer: ${activeContent.customerName || job.customerName}` : "Customer not selected"}{activeContent.customerLocation || job.location ? ` · ${activeContent.customerLocation || job.location}` : ""}</p></div><div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty ? "Unsaved changes" : "Not saved"}</div></header>
       <DocumentTabs activeDocument={activeDocument} onDocumentChange={switchDocument} onSavedFiles={() => setSavedFilesOpen(true)} />
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className="business-document-main">
@@ -744,7 +745,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") onPreviewQuote(); else previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote() : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onUnavailable={deliveryUnavailable} /></div>{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") void onPreviewQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED"); else void previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED") : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onUnavailable={deliveryUnavailable} /></div>{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer setPage={setPage} onClose={() => setSavedFilesOpen(false)} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}

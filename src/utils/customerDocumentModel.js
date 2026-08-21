@@ -82,6 +82,57 @@ export function buildCustomerSafeBusinessBranding(source = {}, fallbackName = "M
   });
 }
 
+function safeCustomerDocumentPhotoUrl(value) {
+  const normalized = text(value, 2000);
+  if (/^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(normalized)) return normalized;
+  try {
+    const url = new URL(normalized);
+    return url.protocol === "https:" && url.hostname === "res.cloudinary.com"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function customerDocumentPhoto(photo, role) {
+  const mediaId = text(photo?.media?.public_id || photo?.mediaId, 500);
+  const imageUrl = safeCustomerDocumentPhotoUrl(
+    photo?.media?.secure_url || photo?.imageUrl || photo?.dataUrl
+  );
+  if (!mediaId || !imageUrl) return null;
+  return Object.freeze({
+    mediaId,
+    imageUrl,
+    dataUrl: /^data:image\//i.test(imageUrl) ? imageUrl : null,
+    format: optionalText(photo?.media?.format || photo?.format, 20),
+    width: minor(photo?.media?.width || photo?.width),
+    height: minor(photo?.media?.height || photo?.height),
+    role,
+  });
+}
+
+export function attachCustomerDocumentPhotoEvidence(model, groups = {}) {
+  if (!model?.schemaVersion) return model;
+  const projectPhotos = (groups.general || [])
+    .map((photo) => customerDocumentPhoto(photo, "GENERAL_EVIDENCE"))
+    .filter(Boolean);
+  const beforePhotos = (groups.before || [])
+    .map((photo) => customerDocumentPhoto(photo, "BEFORE"))
+    .filter(Boolean);
+  const afterPhotos = (groups.after || [])
+    .map((photo) => customerDocumentPhoto(photo, "AFTER"))
+    .filter(Boolean);
+  return Object.freeze({
+    ...model,
+    photoEvidence: Object.freeze({
+      projectPhotos: Object.freeze(projectPhotos),
+      beforePhotos: Object.freeze(beforePhotos),
+      afterPhotos: Object.freeze(afterPhotos),
+    }),
+  });
+}
+
 function quickQuoteScope(value) {
   let scope = text(value, 8000);
   if (!scope) return null;
@@ -161,6 +212,7 @@ function lineItem({
 function model({
   kind,
   draft,
+  workingDraftStatus,
   locale,
   branding,
   documentNumber,
@@ -193,6 +245,7 @@ function model({
     schemaVersion: 1,
     kind,
     draft: draft === true,
+    ...(draft === true ? { workingDraftStatus: workingDraftStatus === "SAVED" ? "SAVED" : "UNSAVED" } : {}),
     locale: language(locale),
     currency: currency(currencyCode),
     branding,
@@ -313,7 +366,7 @@ export function buildCanonicalInvoiceDocumentModel(
 
 export function buildQuickQuoteDocumentModel(
   draft,
-  { locale = "en", branding = {} } = {}
+  { locale = "en", branding = {}, workingDraftStatus = "UNSAVED" } = {}
 ) {
   const safeCurrency = currency(draft?.currency || "USD");
   const fixedPrice = draft?.fixedPrice === true;
@@ -347,6 +400,7 @@ export function buildQuickQuoteDocumentModel(
   return model({
     kind: "QUOTE",
     draft: true,
+    workingDraftStatus,
     locale,
     branding: buildCustomerSafeBusinessBranding(branding),
     documentNumber: draft?.quoteNumber,
@@ -376,7 +430,7 @@ export function buildQuickQuoteDocumentModel(
 
 export function buildQuickInvoiceDocumentModel(
   draft,
-  { locale = "en", branding = {} } = {}
+  { locale = "en", branding = {}, workingDraftStatus = "UNSAVED" } = {}
 ) {
   const lines = Array.isArray(draft?.lineItems)
     ? draft.lineItems.map((item) => lineItem({
@@ -389,6 +443,7 @@ export function buildQuickInvoiceDocumentModel(
   return model({
     kind: "INVOICE",
     draft: true,
+    workingDraftStatus,
     locale,
     branding: buildCustomerSafeBusinessBranding(branding),
     documentNumber: draft?.invoiceNumber,
