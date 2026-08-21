@@ -479,17 +479,10 @@ function BottomNav({ setPage, currentPage = "" }) {
   const businessDesktopShortcutItems = [
     {
       page: "quoteBuilder",
-      shortcut: "quickQuote",
+      shortcut: "quoteInvoice",
       icon: "quickQuote",
-      label: t("desktopQuickQuote", language),
-      sub: t("desktopQuickQuoteNote", language),
-    },
-    {
-      page: "invoiceBuilder",
-      shortcut: "quickInvoice",
-      icon: "quickInvoice",
-      label: t("desktopQuickInvoice", language),
-      sub: t("desktopQuickInvoiceNote", language),
+      label: t("desktopQuoteInvoice", language),
+      sub: t("desktopQuoteInvoiceNote", language),
     },
     {
       page: "businessLeads",
@@ -618,18 +611,15 @@ function BottomNav({ setPage, currentPage = "" }) {
     : normalizedPage || "businessDashboard";
 
   const prepareBusinessShortcut = (item) => {
-    if (item.shortcut === "quickQuote") {
+    if (item.shortcut === "quoteInvoice") {
       localStorage.removeItem("selectedQuoteRequest");
       localStorage.removeItem("selectedQuoteForEdit");
       localStorage.removeItem("selectedWorkCenterRequest");
       localStorage.removeItem("selectedHomeownerRequest");
-      localStorage.setItem("quoteBuilderSource", "desktop_sidebar_quick_quote");
+      localStorage.setItem("quoteBuilderSource", "desktop_sidebar_quote_invoice");
       localStorage.setItem("quoteBuilderReturnPage", shortcutReturnPage);
-    }
-
-    if (item.shortcut === "quickInvoice") {
-      localStorage.setItem("invoiceBuilderSource", "desktop_sidebar_quick_invoice");
-      localStorage.setItem("invoiceBuilderReturnPage", shortcutReturnPage);
+      localStorage.removeItem("invoiceBuilderSource");
+      localStorage.removeItem("invoiceBuilderReturnPage");
     }
   };
 

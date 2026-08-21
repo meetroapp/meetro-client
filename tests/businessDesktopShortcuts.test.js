@@ -25,13 +25,13 @@ test("all four primary navigation modes remove standalone Alerts", () => {
   }
 });
 
-test("business desktop sidebar owns the three persistent shortcuts and personal/mobile navigation does not", () => {
+test("business desktop sidebar owns one document shortcut plus Leads and personal/mobile navigation does not", () => {
   const shortcutBlock = block(
     "const businessDesktopShortcutItems = [",
     "useEffect(() => {"
   );
-  assert.match(shortcutBlock, /page: "quoteBuilder"[\s\S]*shortcut: "quickQuote"/);
-  assert.match(shortcutBlock, /page: "invoiceBuilder"[\s\S]*shortcut: "quickInvoice"/);
+  assert.match(shortcutBlock, /page: "quoteBuilder"[\s\S]*shortcut: "quoteInvoice"/);
+  assert.doesNotMatch(shortcutBlock, /page: "invoiceBuilder"/);
   assert.match(shortcutBlock, /page: "businessLeads"[\s\S]*shortcut: "businessLeads"/);
   assert.match(bottomNav, /activeMode === "business" && \([\s\S]*businessDesktopShortcutItems\.map/);
   assert.match(bottomNav, /prepareBusinessShortcut\(item\)/);
@@ -43,33 +43,28 @@ test("business desktop sidebar owns the three persistent shortcuts and personal/
   assert.match(bottomNav, /style=\{sidebarProfileGroup\}/);
 });
 
-test("shortcut destinations reuse standalone builders and route Leads directly", () => {
+test("document shortcut opens the unified workspace and Leads routes directly", () => {
   assert.match(bottomNav, /setPage\(item\.page\)/);
-  assert.match(bottomNav, /localStorage\.setItem\("quoteBuilderSource", "desktop_sidebar_quick_quote"\)/);
-  assert.match(bottomNav, /localStorage\.setItem\("invoiceBuilderSource", "desktop_sidebar_quick_invoice"\)/);
-  assert.match(quoteBuilder, /quoteBuilderSource === "desktop_sidebar_quick_quote"/);
-  assert.match(invoiceBuilder, /invoiceBuilderSource === "desktop_sidebar_quick_invoice"/);
+  assert.match(bottomNav, /localStorage\.setItem\("quoteBuilderSource", "desktop_sidebar_quote_invoice"\)/);
+  assert.match(quoteBuilder, /quoteBuilderSource === "desktop_sidebar_quote_invoice"/);
+  assert.match(invoiceBuilder, /<QuoteBuilder setPage=\{setPage\} initialDocument="invoice"/);
   assert.match(quoteBuilder, /isUniversalQuickQuote/);
   assert.match(bottomNav, /page: "businessLeads"/);
 });
 
-test("desktop Quick Quote and Quick Invoice remain selected while their builders are open", () => {
+test("Quote and Invoice share one selected desktop document shortcut", () => {
   assert.match(
     quoteBuilder,
     /<BottomNav[\s\S]*currentPage=\{[\s\S]*isDesktopSidebarQuickQuote[\s\S]*\? "quoteBuilder"/
   );
-  assert.match(
-    invoiceBuilder,
-    /<BottomNav[\s\S]*currentPage=\{[\s\S]*isDesktopSidebarInvoice[\s\S]*\? "invoiceBuilder"/
-  );
+  assert.match(invoiceBuilder, /initialDocument="invoice"/);
 });
 
 test("shortcut return context preserves communication, Work Center, and Business Tools origins", () => {
   assert.match(bottomNav, /shortcutReturnPage = \[/);
   assert.match(bottomNav, /\? "workCenter"/);
   assert.match(bottomNav, /quoteBuilderReturnPage", shortcutReturnPage/);
-  assert.match(bottomNav, /invoiceBuilderReturnPage", shortcutReturnPage/);
-  assert.match(quoteBuilder, /isDesktopSidebarQuickQuote && quoteBuilderReturnPage/);
+  assert.match(quoteBuilder, /quoteBuilderReturnPage/);
   assert.match(quoteBuilder, /setPage\(quoteBuilderReturnPage\)/);
   assert.match(invoiceBuilder, /isDesktopSidebarInvoice && returnPage/);
   assert.match(

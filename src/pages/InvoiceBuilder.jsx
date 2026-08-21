@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import QuoteBuilder from "./QuoteBuilder.jsx";
 import { getLanguage } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -44,7 +45,7 @@ function formatMoney(value) {
   return `$${moneyValue(value).toFixed(2)}`;
 }
 
-function InvoiceBuilder({ setPage }) {
+export function LegacyInvoiceBuilder({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
 
   const language = getLanguage();
@@ -1522,4 +1523,6 @@ const printTotalDue = {
   fontWeight: "950",
 };
 
-export default InvoiceBuilder;
+export default function InvoiceBuilder({ setPage }) {
+  return <QuoteBuilder setPage={setPage} initialDocument="invoice" />;
+}

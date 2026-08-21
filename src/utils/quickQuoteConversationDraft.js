@@ -33,7 +33,7 @@ function explicitMaterialAmount(text) {
 
 function explicitLaborAmount(text) {
   const match = firstMatch(text, [
-    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*\$\s*([\d,.]+)/i,
+    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
     /\$\s*([\d,.]+)\s+(?:for\s+)?(?:labor|labour|installation)/i,
   ]);
@@ -149,7 +149,7 @@ function explicitLaborItems(text) {
     }
   }
   const match = firstMatch(text, [
-    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*\$\s*([\d,.]+)/i,
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
   ]);
   if (match) {

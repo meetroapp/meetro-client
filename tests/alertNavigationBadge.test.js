@@ -77,10 +77,8 @@ test("localized business desktop shortcuts remain available only in the business
   for (const language of ["en", "es", "fr", "pt-BR"]) {
     for (const key of [
       "desktopBusinessShortcuts",
-      "desktopQuickQuote",
-      "desktopQuickQuoteNote",
-      "desktopQuickInvoice",
-      "desktopQuickInvoiceNote",
+      "desktopQuoteInvoice",
+      "desktopQuoteInvoiceNote",
       "desktopBusinessLeads",
       "desktopBusinessLeadsNote",
     ]) {

@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
 import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
+import UnifiedBusinessDocumentWorkspace from "../components/UnifiedBusinessDocumentWorkspace.jsx";
 import { pickNativeJobPhoto } from "../utils/cameraPhotoPicker.js";
 import {
   QUOTE_DRAFT_PHOTO_MAX_COUNT,
@@ -40,9 +41,11 @@ import { buildQuickQuoteDocumentModel } from "../utils/customerDocumentModel";
 import {
   downloadCustomerDocumentPdf,
   getCustomerDocumentActionCopy,
+  previewCustomerDocumentPdf,
   shareCustomerDocumentPdf,
 } from "../utils/customerDocumentPdf";
 import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
+import { getActiveJobSnapshot } from "../utils/workCenter.js";
 import { getQuickQuoteProfessionalContinuation } from "../utils/quickQuoteProfessionalContinuation.js";
 import {
   buildQuickQuoteEstimateInput,
@@ -423,13 +426,19 @@ function getCanonicalJobIdFromRoute(hash = "") {
   return canonicalJobIdPattern.test(jobId) ? jobId : "";
 }
 
-function QuoteBuilder({ setPage }) {
+function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const language = getLanguage();
+  const activeJobSnapshot = getActiveJobSnapshot();
   const isSpanish = language === "es";
   const quoteBuilderReturnPage =
     localStorage.getItem("quoteBuilderReturnPage") || "";
   const quoteBuilderSource =
     localStorage.getItem("quoteBuilderSource") || "";
+  const invoiceBuilderReturnPage =
+    localStorage.getItem("invoiceBuilderReturnPage") || "";
+  const invoiceBuilderSource =
+    localStorage.getItem("invoiceBuilderSource") || "";
+  const isUnifiedInvoiceEntry = initialDocument === "invoice";
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
@@ -437,7 +446,8 @@ function QuoteBuilder({ setPage }) {
     quoteBuilderReturnPage === "businessCommandCenter";
   const isUniversalQuickQuote =
     (isBusinessToolsReturn && quoteBuilderSource === "business_tools_quick_quote") ||
-    quoteBuilderSource === "desktop_sidebar_quick_quote";
+    quoteBuilderSource === "desktop_sidebar_quick_quote" ||
+    quoteBuilderSource === "desktop_sidebar_quote_invoice";
   const isDesktopSidebarQuickQuote =
     quoteBuilderSource === "desktop_sidebar_quick_quote";
   const workCenterReturnCustomer =
@@ -2669,6 +2679,126 @@ ${businessIdentity.businessName}`;
     setQuickQuoteView("entry");
 
     navigateFromQuoteBuilder();
+  }
+
+  function applyUnifiedQuotePatch(patch = {}) {
+    if (Object.hasOwn(patch, "customerName")) setCustomerName(patch.customerName);
+    if (Object.hasOwn(patch, "customerLocation")) setCustomerLocation(patch.customerLocation);
+    if (Object.hasOwn(patch, "projectTitle")) setProjectTitle(patch.projectTitle);
+    if (Object.hasOwn(patch, "projectDescription")) setProjectDescription(patch.projectDescription);
+    if (Object.hasOwn(patch, "problemFound")) setProblemFound(patch.problemFound);
+    if (Object.hasOwn(patch, "recommendedSolution")) setRecommendedSolution(patch.recommendedSolution);
+    if (Object.hasOwn(patch, "timeline")) setTimeline(patch.timeline);
+    if (Object.hasOwn(patch, "estimatedDuration")) setEstimatedDuration(patch.estimatedDuration);
+    if (Object.hasOwn(patch, "totalOverride")) setTotalOverride(patch.totalOverride);
+    if (Object.hasOwn(patch, "notes")) setNotes(patch.notes);
+    if (Object.hasOwn(patch, "terms")) setTerms(patch.terms);
+    if (Object.hasOwn(patch, "depositRequired")) setDepositRequired(patch.depositRequired);
+    if (patch.depositTerms) {
+      setTerms((current) => {
+        const existing = cleanText(current);
+        return existing.toLowerCase().includes(patch.depositTerms.toLowerCase())
+          ? existing
+          : [existing, patch.depositTerms].filter(Boolean).join(" · ");
+      });
+    }
+    if (patch.lineItemDescription) {
+      setLineItems((rows) => rows.map((row, index) =>
+        index === 0 && !cleanText(row.description)
+          ? { ...row, description: patch.lineItemDescription }
+          : row
+      ));
+    }
+    if (patch.materialItems?.length) {
+      setMaterialRows((rows) => {
+        const next = [...rows];
+        patch.materialItems.forEach((item) => {
+          const index = next.findIndex((row) =>
+            cleanText(row.name).toLowerCase() === cleanText(item.name).toLowerCase()
+          );
+          const normalized = normalizeQuoteMaterialItem(item, index >= 0 ? index : next.length);
+          if (index >= 0) next[index] = { ...next[index], ...normalized, id: next[index].id };
+          else next.push(normalized);
+        });
+        return next.filter((row, index) => index > 0 || cleanText(row.name) || Number(row.total || 0) > 0);
+      });
+    } else if (patch.materialAmount) {
+      setMaterialRows((rows) => rows.map((row, index) =>
+        index === 0 ? { ...row, name: row.name || "Materials", total: patch.materialAmount } : row
+      ));
+    }
+    if (patch.laborItems?.length) {
+      setLaborRows((rows) => patch.laborItems.map((item, index) =>
+        normalizeQuoteLaborItem({ ...item, id: rows[index]?.id || item.id }, index, isSpanish)
+      ));
+    }
+  }
+
+  function changeUnifiedQuoteField(field, value) {
+    applyUnifiedQuotePatch({ [field]: value });
+  }
+
+  function leaveUnifiedBusinessWorkspace() {
+    if (isUnifiedInvoiceEntry) {
+      const destination = invoiceBuilderReturnPage || "conversationThread";
+      if (invoiceBuilderSource) localStorage.removeItem("invoiceBuilderSource");
+      if (invoiceBuilderReturnPage) localStorage.removeItem("invoiceBuilderReturnPage");
+      setPage(destination);
+      return;
+    }
+
+    if (isUniversalQuickQuote) {
+      void exitQuickQuoteAnalysis();
+      return;
+    }
+
+    navigateFromQuoteBuilder();
+  }
+
+  const unifiedQuoteDraft = {
+    customerName,
+    customerLocation,
+    projectTitle,
+    projectDescription,
+    recommendedSolution,
+    quoteNumber,
+    quoteDate,
+    lineItems: lineItems.map((item) => ({ ...item, total: getEditableRowTotal(item) })),
+    materialItems: materialRows.map((item) => ({ ...item, total: getEditableRowTotal(item, "quantity", "cost") })),
+    laborItems: laborRows.map((item) => ({ ...item, total: getEditableRowTotal(item, "hours", "rate") })),
+    total: calculatedTotal,
+    totalOverride,
+    terms,
+    estimatedDuration,
+    notes,
+    canonicalStatus: "DRAFT",
+  };
+
+  const unifiedWorkspaceEnabled = true;
+
+  if (unifiedWorkspaceEnabled) {
+    return (
+      <UnifiedBusinessDocumentWorkspace
+        setPage={setPage}
+        language={language}
+        initialDocument={initialDocument}
+        job={{
+          title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
+          customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
+          location: activeJobSnapshot?.location || customerLocation,
+          canonical: Boolean(canonicalJobId),
+        }}
+        quote={unifiedQuoteDraft}
+        onApplyQuotePatch={applyUnifiedQuotePatch}
+        onQuoteFieldChange={changeUnifiedQuoteField}
+        onAddPhotos={() => void openQuickQuotePhotoPicker()}
+        photos={quickQuoteDraftPhotos}
+        photoBusy={quickQuotePhotoBusy}
+        onDownloadQuote={() => void exportQuickQuotePdf()}
+        onPreviewQuote={() => previewCustomerDocumentPdf(buildQuickQuotePdfModel())}
+        onBack={leaveUnifiedBusinessWorkspace}
+      />
+    );
   }
 
   return (
