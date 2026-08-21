@@ -20,6 +20,13 @@ const PHOTO_LABELS = Object.freeze({
   "pt-BR": Object.freeze({ projectPhotos: "Fotos / evidencias do projeto", beforePhotos: "Fotos de antes", afterPhotos: "Fotos de depois" }),
 });
 
+const AGREEMENT_LABELS = Object.freeze({
+  en: Object.freeze({ additionalWork: "Additional Work / Change Orders", hiddenConditions: "Hidden / Unforeseen Conditions", diagnostic: "Diagnostic / Troubleshooting Fees", customerResponsibilities: "Customer Responsibilities", warranty: "Warranty / Workmanship", cancellation: "Cancellation / Rescheduling", preauthorizedLimit: "Pre-authorized Additional Work Limit", acceptance: "Acceptance Terms" }),
+  es: Object.freeze({ additionalWork: "Trabajo adicional / Ordenes de cambio", hiddenConditions: "Condiciones ocultas / imprevistas", diagnostic: "Diagnostico / resolucion de problemas", customerResponsibilities: "Responsabilidades del cliente", warranty: "Garantia / mano de obra", cancellation: "Cancelacion / reprogramacion", preauthorizedLimit: "Limite preautorizado de trabajo adicional", acceptance: "Terminos de aceptacion" }),
+  fr: Object.freeze({ additionalWork: "Travaux supplementaires / Avenants", hiddenConditions: "Conditions cachees / imprevues", diagnostic: "Diagnostic / depannage", customerResponsibilities: "Responsabilites du client", warranty: "Garantie / main-d'oeuvre", cancellation: "Annulation / report", preauthorizedLimit: "Limite preautorisee de travaux supplementaires", acceptance: "Conditions d'acceptation" }),
+  "pt-BR": Object.freeze({ additionalWork: "Trabalho adicional / Alteracoes", hiddenConditions: "Condicoes ocultas / imprevistas", diagnostic: "Diagnostico / solucao de problemas", customerResponsibilities: "Responsabilidades do cliente", warranty: "Garantia / mao de obra", cancellation: "Cancelamento / reagendamento", preauthorizedLimit: "Limite pre-autorizado de trabalho adicional", acceptance: "Termos de aceite" }),
+});
+
 const WORKING_DRAFT_LABELS = Object.freeze({
   en: Object.freeze({ unsavedLabel: "DRAFT PREVIEW", savedLabel: "SAVED DRAFT", unsavedStatus: "Draft Preview — Not Saved or Issued", savedStatus: "Saved Draft — Not Issued" }),
   es: Object.freeze({ unsavedLabel: "VISTA PREVIA", savedLabel: "BORRADOR GUARDADO", unsavedStatus: "Vista previa del borrador — No guardado ni emitido", savedStatus: "Borrador guardado — No emitido" }),
@@ -33,6 +40,10 @@ function labels(locale) {
 
 function photoLabels(locale) {
   return PHOTO_LABELS[locale] || PHOTO_LABELS.en;
+}
+
+function agreementLabels(locale) {
+  return AGREEMENT_LABELS[locale] || AGREEMENT_LABELS.en;
 }
 
 function workingDraftLabels(locale) {
@@ -150,6 +161,15 @@ export function collectCustomerDocumentText(model) {
     model.warrantyNotes,
     model.customerMessage,
     model.acceptance,
+    ...(model.agreement?.exclusions || []),
+    model.agreement?.additionalWorkTerms,
+    model.agreement?.hiddenConditionsTerms,
+    model.agreement?.diagnosticTerms,
+    model.agreement?.customerResponsibilities,
+    model.agreement?.warrantyTerms,
+    model.agreement?.cancellationTerms,
+    model.agreement?.preauthorizedAdditionalWorkLimit,
+    model.agreement?.acceptanceTerms,
   ].filter((value) => value !== null && value !== undefined && value !== "").join("\n");
 }
 
@@ -429,6 +449,18 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   section(copy.duration, model.estimatedDuration);
   bulletSection(copy.conditions, model.conditions);
   bulletSection(copy.exclusions, model.exclusions);
+  if (model.kind === "QUOTE") {
+    const agreementCopy = agreementLabels(model.locale);
+    bulletSection(copy.exclusions, model.agreement?.exclusions);
+    section(agreementCopy.additionalWork, model.agreement?.additionalWorkTerms);
+    section(agreementCopy.hiddenConditions, model.agreement?.hiddenConditionsTerms);
+    section(agreementCopy.diagnostic, model.agreement?.diagnosticTerms);
+    section(agreementCopy.customerResponsibilities, model.agreement?.customerResponsibilities);
+    section(agreementCopy.preauthorizedLimit, model.agreement?.preauthorizedAdditionalWorkLimit);
+    section(agreementCopy.cancellation, model.agreement?.cancellationTerms);
+    section(agreementCopy.warranty, model.agreement?.warrantyTerms);
+    section(agreementCopy.acceptance, model.agreement?.acceptanceTerms);
+  }
   section(copy.notes, model.notes);
   section(copy.warranty, model.warrantyNotes);
   section(copy.message, model.customerMessage);

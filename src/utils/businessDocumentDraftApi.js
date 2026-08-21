@@ -168,3 +168,50 @@ export async function listBusinessDocumentDrafts({ search = "", type = "", statu
   if (documents.some((document) => !document)) throw new BusinessDocumentDraftError("The server returned an invalid Saved Files list.", { code: "BUSINESS_DOCUMENT_RESPONSE_INVALID" });
   return Object.freeze(documents);
 }
+
+function validateDelivery(value) {
+  if (!plain(value) || !UUID_PATTERN.test(String(value.id || "")) ||
+      !UUID_PATTERN.test(String(value.documentId || "")) ||
+      !DOCUMENT_TYPES.has(value.documentType) ||
+      !Number.isSafeInteger(value.documentVersion) || value.documentVersion < 1 ||
+      !new Set(["EMAIL", "MEETRO_MESSAGE"]).has(value.channel) ||
+      !new Set(["REQUESTING", "DELIVERY_REQUESTED", "SENT", "FAILED"]).has(value.state)) return null;
+  return Object.freeze({ ...value });
+}
+
+export async function deliverBusinessDocumentDraft({
+  draftId,
+  expectedVersion,
+  channel,
+  recipientEmail,
+  subject = "",
+  customerMessage = "",
+  idempotencyKey,
+  setPage,
+  authFetchImpl,
+} = {}) {
+  const data = await request(`/business-document-drafts/${encodeURIComponent(draftId)}/deliveries`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({
+      expectedVersion,
+      channel,
+      ...(channel === "EMAIL" ? { recipientEmail } : {}),
+      subject,
+      customerMessage,
+    }),
+  }, { setPage, authFetchImpl });
+  const delivery = validateDelivery(data.delivery);
+  if (!delivery) throw new BusinessDocumentDraftError("The server returned invalid delivery evidence.", { code: "BUSINESS_DOCUMENT_RESPONSE_INVALID" });
+  return delivery;
+}
+
+export async function listBusinessDocumentDeliveries({ draftId, setPage, authFetchImpl } = {}) {
+  const data = await request(`/business-document-drafts/${encodeURIComponent(draftId)}/deliveries`, {
+    method: "GET",
+  }, { setPage, authFetchImpl });
+  if (!Array.isArray(data.deliveries)) throw new BusinessDocumentDraftError("The server returned invalid delivery history.", { code: "BUSINESS_DOCUMENT_RESPONSE_INVALID" });
+  const deliveries = data.deliveries.map(validateDelivery);
+  if (deliveries.some((delivery) => !delivery)) throw new BusinessDocumentDraftError("The server returned invalid delivery history.", { code: "BUSINESS_DOCUMENT_RESPONSE_INVALID" });
+  return Object.freeze(deliveries);
+}

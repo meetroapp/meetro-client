@@ -192,6 +192,11 @@
 .business-document-footer-grid section { min-width: 0; padding-right: 9px; border-right: 1px solid #e3e8e4; }
 .business-live-document > footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 15px; padding-top: 8px; border-top: 1px solid #e3e7e3; color: #66768b; font-size: 8px; }
 .business-document-proof { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 13px; }
+.business-document-agreement-preview { display: grid; gap: 9px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8e3; }
+.business-document-agreement-preview > h3 { margin: 0; color: #145b38; font-size: 12px; }
+.business-document-agreement-preview strong { display: block; color: #263e31; font-size: 9px; }
+.business-document-agreement-preview p,
+.business-document-agreement-preview ul { margin: 4px 0 0; color: #506276; font-size: 9px; line-height: 1.45; }
 
 .business-document-actions { display: flex; align-items: flex-start; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .business-document-actions > button,
@@ -225,6 +230,13 @@
 .business-document-manual > footer button { min-height: 44px; border: 1px solid #d7e1d9; border-radius: 10px; color: #195b3a; background: #fff; padding: 8px 12px; font-size: 11px; font-weight: 850; }
 .business-document-manual > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e3e8e4; }
 .business-document-manual > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
+.business-document-agreement-editor { display: grid; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid #d7e4da; border-radius: 14px; background: #fafcf9; }
+.business-document-agreement-editor legend { padding: 0 6px; color: #145b38; font-size: 13px; font-weight: 900; }
+.business-document-agreement-editor > p { margin: 0; color: #607164; font-size: 10px; line-height: 1.45; }
+.business-document-agreement-editor label { display: block; }
+.business-document-agreement-editor textarea { min-height: 72px; }
+.business-document-agreement-presets { display: flex; gap: 7px; flex-wrap: wrap; }
+.business-document-agreement-presets button { min-height: 44px; border: 1px solid #bed4c3; border-radius: 10px; color: #145b38; background: #edf6ee; padding: 8px 10px; font-size: 10px; font-weight: 850; }
 
 .business-document-confirm { position: fixed; z-index: 10035; inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 18px; overflow: auto; border: 1px solid #d9e3db; border-radius: 18px; color: #24374a; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.24); }
 .business-document-confirm h2 { margin: 0; color: #153628; font-size: 19px; }
@@ -233,6 +245,23 @@
 .business-document-confirm > footer button { min-height: 44px; border: 1px solid #d5dfd7; border-radius: 10px; color: #20553b; background: #fff; padding: 9px 13px; font-size: 11px; font-weight: 900; }
 .business-document-confirm > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
 .business-document-confirm > footer .business-document-destructive { color: #fff; border-color: #a52b2b; background: #a52b2b; }
+.business-document-delivery-review { display: grid; gap: 11px; margin-top: 13px; }
+.business-document-delivery-review label { color: #344b3d; font-size: 11px; font-weight: 850; }
+.business-document-delivery-review input,
+.business-document-delivery-review textarea { display: block; width: 100%; min-width: 0; margin-top: 5px; padding: 10px; border: 1px solid #d8e2da; border-radius: 10px; color: #24394b; background: #fff; }
+.business-document-delivery-review textarea { min-height: 80px; resize: vertical; }
+.business-document-delivery-review dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 10px; border-radius: 12px; background: #f1f6f1; }
+.business-document-delivery-review dl div { min-width: 0; }
+.business-document-delivery-review dt { color: #64766b; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.business-document-delivery-review dd { margin: 3px 0 0; overflow-wrap: anywhere; color: #20372a; font-size: 10px; font-weight: 850; }
+.business-document-delivery-truth { padding: 9px; border-radius: 10px; color: #586c60 !important; background: #f7f9f7; font-size: 10px !important; }
+.business-document-delivery-error { color: #8b2929 !important; background: #fff0ee; }
+.business-document-delivery-history { max-width: 620px; margin: 10px auto 0; padding: 9px 11px; border: 1px solid #dce6de; border-radius: 11px; color: #284638; background: #fff; font-size: 10px; }
+.business-document-delivery-history summary { cursor: pointer; font-weight: 900; }
+.business-document-delivery-history ul { display: grid; gap: 8px; margin: 9px 0 0; padding: 0; list-style: none; }
+.business-document-delivery-history li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding-top: 7px; border-top: 1px solid #edf1ed; }
+.business-document-delivery-history li span { grid-column: 1; color: #617267; }
+.business-document-delivery-history time { grid-column: 2; grid-row: 1 / span 2; color: #687a70; white-space: nowrap; }
 .business-photo-apply-all { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 13px; padding: 10px; border-radius: 11px; background: #f0f5ef; }
 .business-photo-review-list { display: grid; gap: 10px; margin-top: 12px; }
 .business-photo-review-list article { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 11px; align-items: start; padding: 10px; border: 1px solid #dfe6e0; border-radius: 12px; }
@@ -303,6 +332,9 @@
   .business-document-save-status { flex-basis: 100%; padding-left: 58px; text-align: left; }
   .business-document-confirm { inset: auto 8px max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 16px); padding: 14px; }
   .business-document-confirm > footer { display: grid; grid-template-columns: 1fr; }
+  .business-document-delivery-review dl { grid-template-columns: 1fr; }
+  .business-document-delivery-history li { grid-template-columns: 1fr; }
+  .business-document-delivery-history time { grid-column: 1; grid-row: auto; white-space: normal; }
   .business-photo-apply-all { grid-template-columns: 1fr; }
   .business-photo-review-list article { grid-template-columns: 84px minmax(0, 1fr); }
   .business-photo-review-list img { width: 84px; }

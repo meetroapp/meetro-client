@@ -13206,9 +13206,6 @@ const completedHistoryTruthLanguage = {
     quotePricingPreviewHint:
       "Organize materials, labor, deposit, and terms for this non-binding preview.",
     addPricingBeforeSendingQuote: "Add pricing to complete this preview.",
-    quoteSavingDeliveryUnavailable: "Quote saving and delivery are not available yet.",
-    quoteNotSavedDelivered:
-      "You can prepare and review this quote preview, but it is not saved, issued, or delivered to the customer.",
     returnToWorkCenter: "Return to Work Center",
   },
   es: {
@@ -13260,9 +13257,6 @@ const completedHistoryTruthLanguage = {
     quotePricingPreviewHint:
       "Organiza materiales, mano de obra, depósito y términos para esta vista previa no vinculante.",
     addPricingBeforeSendingQuote: "Agrega precios para completar esta vista previa.",
-    quoteSavingDeliveryUnavailable: "Guardar y entregar cotizaciones aún no está disponible.",
-    quoteNotSavedDelivered:
-      "Puedes preparar y revisar esta vista previa, pero no se guarda, emite ni entrega al cliente.",
     returnToWorkCenter: "Volver al Centro de Trabajo",
   },
   fr: {
@@ -13314,9 +13308,6 @@ const completedHistoryTruthLanguage = {
     quotePricingPreviewHint:
       "Organisez les matériaux, la main-d’œuvre, l’acompte et les conditions pour cet aperçu non contraignant.",
     addPricingBeforeSendingQuote: "Ajoutez les prix pour compléter cet aperçu.",
-    quoteSavingDeliveryUnavailable: "L’enregistrement et la livraison des devis ne sont pas encore disponibles.",
-    quoteNotSavedDelivered:
-      "Vous pouvez préparer et vérifier cet aperçu, mais il n’est ni enregistré, ni émis, ni livré au client.",
     returnToWorkCenter: "Retourner au Centre de Travail",
   },
   "pt-BR": {
@@ -13368,9 +13359,6 @@ const completedHistoryTruthLanguage = {
     quotePricingPreviewHint:
       "Organize materiais, mão de obra, entrada e termos para esta visualização não vinculante.",
     addPricingBeforeSendingQuote: "Adicione preços para concluir esta visualização.",
-    quoteSavingDeliveryUnavailable: "Salvar e entregar orçamentos ainda não está disponível.",
-    quoteNotSavedDelivered:
-      "Você pode preparar e revisar esta visualização, mas ela não é salva, emitida nem entregue ao cliente.",
     returnToWorkCenter: "Voltar ao Centro de Trabalho",
   },
 };

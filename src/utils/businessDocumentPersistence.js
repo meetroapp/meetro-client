@@ -2,6 +2,7 @@ import {
   buildBusinessDocumentConversationPatch,
   reconcileBusinessDocumentInstructions,
 } from "./businessDocumentWorkspace.js";
+import { normalizeBusinessDocumentAgreement } from "./businessDocumentAgreement.js";
 
 export const BUSINESS_DOCUMENT_PHOTO_ROLES = Object.freeze([
   "UNCLASSIFIED", "GENERAL_EVIDENCE", "BEFORE", "AFTER",
@@ -264,6 +265,7 @@ export function buildBusinessDocumentSavePayload({
     jobId: jobId || null,
     content: {
       customerName: content?.customerName || "",
+      customerEmail: content?.customerEmail || "",
       customerLocation: content?.customerLocation || content?.serviceAddress || "",
       serviceLocation: content?.serviceLocation || content?.serviceAddress || "",
       projectTitle: content?.projectTitle || "",
@@ -282,6 +284,7 @@ export function buildBusinessDocumentSavePayload({
       quoteDate: content?.quoteDate || "",
       invoiceDate: content?.invoiceDate || "",
       currency: content?.currency || "USD",
+      agreement: normalizeBusinessDocumentAgreement(content?.agreement),
       lineItems: (content?.lineItems || []).map((item) => ({ ...item })),
       materialItems: (content?.materialItems || []).map((item) => ({ ...item })),
       laborItems: (content?.laborItems || []).map((item) => ({ ...item })),

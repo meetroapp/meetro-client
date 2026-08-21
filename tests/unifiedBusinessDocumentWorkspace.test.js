@@ -112,9 +112,29 @@ test("Quote and Invoice delivery use one menu while PDF remains separate", () =>
   assert.match(workspace, /kind === "quote" \? "Send Quote" : "Send Invoice"/);
   assert.match(workspace, /role="menuitem"[\s\S]*Email/);
   assert.match(workspace, /role="menuitem"[\s\S]*Message/);
-  assert.match(workspace, /Nothing was sent or approved/);
-  assert.doesNotMatch(workspace, /navigator\.share|sendInvoice|sendQuote/);
+  assert.match(workspace, /Save & Continue to Send/);
+  assert.match(workspace, /deliverBusinessDocumentDraft/);
+  assert.match(workspace, /listBusinessDocumentDeliveries/);
+  assert.match(workspace, /PDF included/);
+  assert.match(workspace, /Sending does not issue, accept, approve, pay, or close anything/);
+  assert.doesNotMatch(workspace, /navigator\.share|deliveryUnavailable/);
   assert.doesNotMatch(workspace, />Save \{activeDocument === "quote"/);
+});
+
+test("explicit professional instructions update structured Quote Agreement terms without changing scope", () => {
+  const hidden = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Add standard hidden-condition protection.", current: { projectDescription: "Replace the fan." } });
+  assert.match(hidden.agreement.hiddenConditionsTerms, /Concealed or reasonably undiscoverable conditions/);
+  assert.equal(hidden.projectDescription, undefined);
+  const excluded = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Exclude painting from this Quote.", current: { agreement: {} } });
+  assert.deepEqual(excluded.agreement.exclusions, ["Painting"]);
+  const additional = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Add that extra work requires approval.", current: {} });
+  assert.match(additional.agreement.additionalWorkTerms, /additional authorization/);
+  const diagnostic = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "This is diagnostic work; add diagnostic service terms.", current: {} });
+  assert.match(diagnostic.agreement.diagnosticTerms, /remain due/);
+  const limit = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Additional work up to $150 may proceed without a separate Change Order.", current: {} });
+  assert.equal(limit.agreement.preauthorizedAdditionalWorkLimit, "$150");
+  assert.match(workspace, /Suggested business terms/);
+  assert.match(workspace, /Use hidden-condition protection/);
 });
 
 test("natural language can revise an explicit labor amount without inventing hours", () => {

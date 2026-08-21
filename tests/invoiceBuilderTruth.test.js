@@ -7,6 +7,17 @@ const invoiceSource = readFileSync(
   "utf8"
 );
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const workspaceSource = readFileSync(
+  new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+  "utf8"
+);
+const obsoleteInvoiceAvailabilityPattern = new RegExp(
+  [
+    "Invoice saving and delivery are not available",
+    " yet\\.|not saved or delivered to the ",
+    "customer",
+  ].join("")
+);
 
 test("Invoice Builder seeds draft dates from the local calendar instead of UTC", () => {
   assert.match(invoiceSource, /function todayIsoDate\(now = new Date\(\)\)/);
@@ -38,19 +49,18 @@ test("Invoice Builder cannot simulate delivery or cross-user workflow state", ()
   assert.doesNotMatch(invoiceSource, /Invoice sent|Factura enviada|deliveredAt/);
 });
 
-test("Invoice Builder presents a clear unavailable state and retains truthful review", () => {
-  assert.match(invoiceSource, /Invoice saving and delivery are not available yet\./);
+test("Invoice live route delegates to the governed Unified workspace", () => {
   assert.match(
     invoiceSource,
-    /You can prepare and review this invoice on this page, but it is not saved or delivered to the customer\./
+    /export default function InvoiceBuilder\(\{ setPage \}\) \{[\s\S]*<QuoteBuilder setPage=\{setPage\} initialDocument="invoice" \/>/
   );
-  assert.doesNotMatch(invoiceSource, />\s*Save Invoice\s*</);
-  assert.doesNotMatch(invoiceSource, />\s*Send Invoice\s*</);
-  assert.match(invoiceSource, /Preview Invoice/);
-  assert.match(invoiceSource, /Copy Summary/);
-  assert.match(invoiceSource, /Print Invoice/);
-  assert.match(invoiceSource, /navigator\.clipboard\?\.writeText/);
-  assert.match(invoiceSource, /window\.print/);
+  assert.match(workspaceSource, /kind === "quote" \? "Send Quote" : "Send Invoice"/);
+  assert.match(workspaceSource, /Save & Continue to Send/);
+  assert.match(workspaceSource, /onSelect\("EMAIL"\)/);
+  assert.match(workspaceSource, /onSelect\("MEETRO_MESSAGE"\)/);
+  assert.match(workspaceSource, />Preview PDF</);
+  assert.match(workspaceSource, />Download PDF</);
+  assert.doesNotMatch(invoiceSource, obsoleteInvoiceAvailabilityPattern);
 });
 
 test("Invoice preparation, totals, editing, and responsive containment remain intact", () => {

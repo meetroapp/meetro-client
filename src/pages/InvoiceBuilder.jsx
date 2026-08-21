@@ -790,22 +790,6 @@ ${invoice.customerMessage || "—"}`;
           </div>
         </section>
 
-        <section style={availabilityNotice} role="status">
-          <p style={availabilityEyebrow}>
-            {isSpanish ? "Disponibilidad" : "Availability"}
-          </p>
-          <h2 style={availabilityTitle}>
-            {isSpanish
-              ? "Guardar y entregar facturas aún no está disponible."
-              : "Invoice saving and delivery are not available yet."}
-          </h2>
-          <p style={availabilityText}>
-            {isSpanish
-              ? "Puedes preparar y revisar esta factura en esta página, pero no se guarda ni se entrega al cliente."
-              : "You can prepare and review this invoice on this page, but it is not saved or delivered to the customer."}
-          </p>
-        </section>
-
         <div style={actionsGrid}>
           <button style={secondaryBtn} onClick={() => setPreviewOpen((open) => !open)}>
             {previewOpen ? invoiceCopy.hidePreview : invoiceCopy.previewInvoice}
@@ -1346,36 +1330,6 @@ const chip = {
 const aiSuggestionBox = {
   display: "grid",
   gap: "8px",
-};
-
-const availabilityNotice = {
-  marginTop: "18px",
-  padding: "16px",
-  borderRadius: "18px",
-  border: "1px solid rgba(31,77,52,0.18)",
-  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
-};
-
-const availabilityEyebrow = {
-  margin: "0 0 6px",
-  color: "var(--meetro-color-coffee, #4a3428)",
-  fontSize: "12px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-};
-
-const availabilityTitle = {
-  margin: "0 0 6px",
-  color: "#111827",
-  fontSize: "17px",
-  lineHeight: 1.3,
-};
-
-const availabilityText = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "14px",
-  lineHeight: 1.45,
 };
 
 const actionsGrid = {

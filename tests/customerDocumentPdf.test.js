@@ -180,6 +180,37 @@ test("Quick Quote and Quick Invoice render truthful draft models without canonic
   assert.match(text, /Draft Preview — Not Saved or Issued/);
 });
 
+test("Quick Quote customer model and PDF include only non-empty reviewed agreement sections", () => {
+  const quote = buildQuickQuoteDocumentModel({
+    customerName: "Jack Smith",
+    projectTitle: "Fan replacement",
+    recommendedSolution: "Replace fan.",
+    lineItems: [{ description: "Fan and installation", total: 269.99, pricingPresentation: "flat" }],
+    total: 269.99,
+    terms: "50% deposit required before scheduling.",
+    agreement: {
+      exclusions: ["Painting"],
+      additionalWorkTerms: "Additional work requires authorization.",
+      hiddenConditionsTerms: "Hidden conditions are outside the original price.",
+      diagnosticTerms: "",
+      customerResponsibilities: "Provide safe access.",
+      warrantyTerms: "Workmanship terms apply as stated.",
+      acceptanceTerms: "Acceptance applies to this scope and version.",
+    },
+  }, { branding: { businessName: "Handyman LLC" }, workingDraftStatus: "SAVED" });
+  const text = collectCustomerDocumentText(quote);
+  assert.match(text, /Painting/);
+  assert.match(text, /Hidden conditions are outside the original price/);
+  assert.doesNotMatch(text, /Diagnostic time remains billable/);
+  const commands = renderCustomerDocumentPdf(quote).internal.pages.flat().join("\n");
+  assert.match(commands, /Additional Work \/ Change Orders/);
+  assert.match(commands, /Hidden \/ Unforeseen Conditions/);
+  assert.match(commands, /Customer Responsibilities/);
+  assert.match(commands, /Warranty \/ Workmanship/);
+  assert.match(commands, /Acceptance Terms/);
+  assert.match(commands, /SAVED DRAFT/);
+});
+
 test("branding allowlist accepts safe Cloudinary logos and gracefully falls back to the business name", () => {
   const safe = buildCustomerSafeBusinessBranding({
     businessName: "Handyman LLC", logoUrl: "https://res.cloudinary.com/demo/image/upload/logo.png",

@@ -26,7 +26,14 @@ import {
   getBusinessDocumentDraft,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
+  deliverBusinessDocumentDraft,
+  listBusinessDocumentDeliveries,
 } from "../utils/businessDocumentDraftApi.js";
+import {
+  BUSINESS_DOCUMENT_AGREEMENT_FIELDS,
+  BUSINESS_DOCUMENT_AGREEMENT_PRESETS,
+  normalizeBusinessDocumentAgreement,
+} from "../utils/businessDocumentAgreement.js";
 import {
   clearDeletedBusinessDocumentRecoveryIdentity,
   clearDeletedBusinessDocumentRecoverySnapshot,
@@ -100,13 +107,13 @@ function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles }) {
   );
 }
 
-function DeliveryMenu({ kind, onUnavailable }) {
+function DeliveryMenu({ kind, onSelect }) {
   const [open, setOpen] = useState(false);
   const label = kind === "quote" ? "Send Quote" : "Send Invoice";
   return (
     <div className="business-document-delivery">
       <button type="button" className="business-document-primary" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{label} <span aria-hidden="true">⌄</span></button>
-      {open ? <div role="menu" className="business-document-delivery-menu"><button type="button" role="menuitem" onClick={() => onUnavailable("Email")}>Email</button><button type="button" role="menuitem" onClick={() => onUnavailable("Message")}>Message</button></div> : null}
+      {open ? <div role="menu" className="business-document-delivery-menu"><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("EMAIL"); }}>Email</button><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("MEETRO_MESSAGE"); }}>Message</button></div> : null}
     </div>
   );
 }
@@ -118,6 +125,8 @@ function CustomerPhotoEvidence({ generalPhotos = [], beforePhotos = [], afterPho
 
 function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos }) {
   const rows = quoteRows(quote);
+  const agreement = normalizeBusinessDocumentAgreement(quote.agreement);
+  const agreementSections = BUSINESS_DOCUMENT_AGREEMENT_FIELDS.filter(([key]) => agreement[key]);
   return (
     <article className="business-live-document" aria-label="Live Quote Preview">
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>DRAFT PREVIEW</span></div></header>
@@ -130,6 +139,7 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
         <div className="total" role="row"><span>PROJECT PRICE</span><strong>{quote.total > 0 ? money(quote.total) : "—"}</strong></div>
       </div>
       <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed"}</p></section><section><h3>Acceptance / Status</h3><p>Draft only. Nothing is issued or approved.</p></section></div>
+      {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
   );
@@ -174,15 +184,15 @@ function EditableRows({ title, rows, nameField, onChange }) {
 
 function ManualEditor({ activeDocument, quote, invoice, initialFocus, onApply, onCancel }) {
   const source = activeDocument === "quote" ? quote : invoice;
-  const cloneSource = () => ({ ...source, lineItems: (source.lineItems || []).map((item) => ({ ...item })), materialItems: (source.materialItems || []).map((item) => ({ ...item })), laborItems: (source.laborItems || []).map((item) => ({ ...item })) });
+  const cloneSource = () => ({ ...source, agreement: normalizeBusinessDocumentAgreement(source.agreement), lineItems: (source.lineItems || []).map((item) => ({ ...item })), materialItems: (source.materialItems || []).map((item) => ({ ...item })), laborItems: (source.laborItems || []).map((item) => ({ ...item })) });
   const [original] = useState(cloneSource);
   const [draft, setDraft] = useState(cloneSource);
   const firstInputRef = useRef(null);
   const amountInputRef = useRef(null);
   useEffect(() => { (initialFocus === "amount" ? amountInputRef : firstInputRef).current?.focus(); }, [initialFocus]);
   const fields = activeDocument === "quote"
-    ? [["customerName", "Customer"], ["projectTitle", "Project"], ["projectDescription", "Customer-facing description"], ["recommendedSolution", "Scope of Work"], ["totalOverride", "Customer price"], ["terms", "Payment terms / conditions"], ["estimatedDuration", "Estimated duration"], ["notes", "Customer notes"]]
-    : [["customerName", "Customer"], ["projectTitle", "Job"], ["workPerformed", "Work completed"], ["totalOverride", "Invoice amount"], ["paymentTerms", "Payment terms"], ["dueDate", "Due date"], ["notes", "Customer notes"]];
+    ? [["customerName", "Customer"], ["customerEmail", "Customer email"], ["projectTitle", "Project"], ["projectDescription", "Customer-facing description"], ["recommendedSolution", "Scope of Work"], ["totalOverride", "Customer price"], ["terms", "Deposit / payment terms"], ["estimatedDuration", "Estimated duration"], ["notes", "Customer notes"]]
+    : [["customerName", "Customer"], ["customerEmail", "Customer email"], ["projectTitle", "Job"], ["workPerformed", "Work completed"], ["totalOverride", "Invoice amount"], ["paymentTerms", "Payment terms"], ["dueDate", "Due date"], ["notes", "Customer notes"]];
   const textareas = new Set(["projectDescription", "recommendedSolution", "workPerformed", "terms", "paymentTerms", "notes"]);
   return (
     <><button type="button" className="business-document-manual-backdrop" aria-label="Cancel manual edit" onClick={onCancel} />
@@ -192,6 +202,7 @@ function ManualEditor({ activeDocument, quote, invoice, initialFocus, onApply, o
         <div className="business-document-manual-line-groups">
           {activeDocument === "quote" ? <><EditableRows title="Service items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} /><EditableRows title="Materials" rows={draft.materialItems || []} nameField="name" onChange={(materialItems) => setDraft((current) => ({ ...current, materialItems }))} /><EditableRows title="Labor" rows={draft.laborItems || []} nameField="description" onChange={(laborItems) => setDraft((current) => ({ ...current, laborItems }))} /></> : <EditableRows title="Invoice items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} />}
         </div>
+        {activeDocument === "quote" ? <fieldset className="business-document-agreement-editor"><legend>Suggested business terms</legend><p>Review, edit, or remove every term before sending. Meetro does not provide legal advice.</p><div className="business-document-agreement-presets"><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), additionalWorkTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.additionalWorkTerms } }))}>Use outside-scope protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), hiddenConditionsTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.hiddenConditionsTerms } }))}>Use hidden-condition protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), diagnosticTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.diagnosticTerms } }))}>Use diagnostic terms</button></div><label>Not Included / Exclusions<textarea value={(draft.agreement?.exclusions || []).join("\n")} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), exclusions: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) } }))} /></label>{BUSINESS_DOCUMENT_AGREEMENT_FIELDS.map(([key, label]) => <label key={key}>{label}<textarea value={draft.agreement?.[key] || ""} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), [key]: event.target.value } }))} /></label>)}</fieldset> : null}
         <footer><button type="button" onClick={onCancel}>Cancel</button><button type="button" className="business-document-primary" onClick={() => onApply(draft, original)}>Apply changes</button></footer>
       </section></>
   );
@@ -298,6 +309,19 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
   return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 id={titleId}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
+function DeliveryReviewDialog({ state, onChange, onCancel, onSend }) {
+  const quote = state.documentType === "quote";
+  const email = state.channel === "EMAIL";
+  const label = quote ? "Quote" : "Invoice";
+  const action = state.busy ? "Sending…" : state.failed ? `Retry ${email ? "Email" : "Message"}` : `${state.resend ? "Resend" : "Send"} ${email ? "Email" : "Message"}`;
+  return <WorkspaceDialog titleId="business-document-delivery-review-title" title={`Review ${label} ${email ? "Email" : "Message"}`} onClose={state.busy ? undefined : onCancel} actions={[{ label: "Cancel", onClick: onCancel, disabled: state.busy }, { label: action, primary: true, disabled: state.busy || (email && !state.recipientEmail.trim()), onClick: onSend }]}><div className="business-document-delivery-review">{email ? <label>Recipient<input type="email" autoComplete="email" value={state.recipientEmail} onChange={(event) => onChange("recipientEmail", event.target.value)} /></label> : <p><strong>Recipient</strong><br />Active governed Meetro customer conversation</p>}<label>Subject<input value={state.subject} onChange={(event) => onChange("subject", event.target.value)} /></label><label>Customer message<textarea value={state.customerMessage} onChange={(event) => onChange("customerMessage", event.target.value)} /></label><dl><div><dt>{label} reference</dt><dd>{state.document.reference}</dd></div><div><dt>Exact saved version</dt><dd>{state.document.version}</dd></div><div><dt>{quote ? "Quote amount" : "Total due"}</dt><dd>{money(state.total)}</dd></div><div><dt>Customer document</dt><dd>PDF included</dd></div><div><dt>{quote ? "Quote Agreement / Terms" : "Due terms"}</dt><dd>{state.termsIncluded ? "Included" : "No terms entered"}</dd></div><div><dt>Customer-visible photos</dt><dd>{state.photoCount}</dd></div></dl><p className="business-document-delivery-truth">This sends only the saved customer-facing package. Private reminders, private photos, working conversation, internal costs, and recovery data are excluded. Sending does not issue, accept, approve, pay, or close anything.</p>{state.error ? <p role="alert" className="business-document-delivery-error">{state.error}</p> : null}</div></WorkspaceDialog>;
+}
+
+function DeliveryHistory({ deliveries = [] }) {
+  if (!deliveries.length) return null;
+  return <details className="business-document-delivery-history"><summary>Delivery history ({deliveries.length})</summary><ul>{deliveries.map((delivery) => <li key={delivery.id}><strong>{delivery.state === "FAILED" ? "Failed" : delivery.channel === "EMAIL" ? "Email delivery requested" : "Sent by Meetro Message"}</strong><span>Version {delivery.documentVersion}{delivery.recipientEmail ? ` · ${delivery.recipientEmail}` : ""}</span><time dateTime={delivery.sentAt || delivery.requestedAt || ""}>{delivery.sentAt || delivery.requestedAt ? new Date(delivery.sentAt || delivery.requestedAt).toLocaleString() : "Timestamp pending"}</time></li>)}</ul></details>;
+}
+
 function PhotoWorkspace({ photos, assignments, onChange, onReview }) {
   return <section className="business-document-photo-workspace"><div><strong>Photos added</strong><button type="button" onClick={onReview}>Review photos</button></div><div className="business-document-photo-cards">{photos.map((photo) => { const assignment = assignments[photo.id] || defaultBusinessDocumentPhotoAssignment(); return <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Documented work"} /> : null}<span>{["UNCLASSIFIED", "GENERAL_EVIDENCE"].includes(assignment.role) ? "General" : assignment.role === "BEFORE" ? "Before" : "After"} · {assignment.visibility === "CUSTOMER_VISIBLE" ? "Customer" : "Private"}</span><button type="button" onClick={() => onChange(photo.id)}>Change</button></article>; })}</div><p>{businessDocumentPhotoVisibilityNotice(photos, assignments)}</p></section>;
 }
@@ -345,6 +369,8 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [saveState, setSaveState] = useState({ busy: false, error: "", lastSavedAt: "", documentType: "" });
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const [saveFailureOpen, setSaveFailureOpen] = useState(false);
+  const [deliveryState, setDeliveryState] = useState(null);
+  const [deliveryHistory, setDeliveryHistory] = useState({ quote: [], invoice: [] });
   const [recoveryRecord, setRecoveryRecord] = useState(null);
   const [recovered, setRecovered] = useState(false);
   const [newContentAvailable, setNewContentAvailable] = useState(false);
@@ -512,7 +538,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       const identityKey = getAuthenticatedIdentitySnapshot().userId;
       if (identityKey) await deleteBusinessDocumentRecovery({ identityKey });
       setNotice(`Saved · ${new Date(document.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
-      return true;
+      return document;
     } catch (error) {
       setSaveState({ busy: false, error: error?.message || "We couldn't save your draft right now. Your work is still here.", lastSavedAt: "", documentType });
       if (!suppressFailureDialog) setSaveFailureOpen(true);
@@ -540,6 +566,17 @@ export default function UnifiedBusinessDocumentWorkspace({
     setActiveDocument(type);
     setSavedFilesOpen(false);
     setNotice(`${document.reference} reopened. Continue editing this saved working draft.`);
+    void refreshDeliveryHistory(type, document);
+  }
+
+  async function refreshDeliveryHistory(documentType, document = savedDocuments[documentType]) {
+    if (!document?.id) return;
+    try {
+      const deliveries = await listBusinessDocumentDeliveries({ draftId: document.id, setPage });
+      setDeliveryHistory((current) => ({ ...current, [documentType]: deliveries }));
+    } catch {
+      setNotice("The saved document reopened, but delivery history is temporarily unavailable.");
+    }
   }
 
   async function openSavedDocument(draftId) {
@@ -784,8 +821,85 @@ export default function UnifiedBusinessDocumentWorkspace({
     if (!(await previewCustomerDocumentPdfWithMedia(invoicePdfModel())).ok) setNotice("PDF preview is unavailable. Nothing was saved or sent.");
   }
 
-  function deliveryUnavailable(channel) {
-    setNotice(`${channel} delivery is not available from this working draft. Nothing was sent or approved.`);
+  function deliveryTotal(documentType, content) {
+    const override = Number(content?.totalOverride);
+    if (Number.isFinite(override) && String(content?.totalOverride || "").trim()) return override;
+    if (documentType === "quote") return quoteRows(content).reduce((sum, item) => sum + item.amount, 0);
+    return invoiceTotal(content);
+  }
+
+  function openDeliveryReview(channel, document) {
+    const type = document.documentType.toLowerCase();
+    const content = document.content || currentContent(type);
+    const agreement = normalizeBusinessDocumentAgreement(content.agreement);
+    const history = deliveryHistory[type] || [];
+    setDeliveryState({
+      stage: "review",
+      channel,
+      documentType: type,
+      document,
+      recipientEmail: content.customerEmail || "",
+      subject: `${type === "quote" ? "Quote" : "Invoice"} ${document.reference}`,
+      customerMessage: "Please review the attached customer document.",
+      total: deliveryTotal(type, content),
+      termsIncluded: Boolean(content.terms || content.paymentTerms || agreement.exclusions.length || BUSINESS_DOCUMENT_AGREEMENT_FIELDS.some(([key]) => agreement[key])),
+      photoCount: document.photos.filter((photo) => photo.visibility === "CUSTOMER_VISIBLE" && ["GENERAL_EVIDENCE", "BEFORE", "AFTER"].includes(photo.role)).length,
+      resend: history.some((delivery) => delivery.channel === channel && delivery.documentVersion === document.version && delivery.state !== "FAILED"),
+      idempotencyKey: createBusinessDocumentSaveKey(),
+      busy: false,
+      error: "",
+    });
+  }
+
+  function beginDelivery(channel) {
+    if (!activeSaved || activeDirty) {
+      setDeliveryState({ stage: "saveRequired", channel, documentType: activeDocument, busy: false, error: "" });
+      return;
+    }
+    openDeliveryReview(channel, activeSaved);
+  }
+
+  async function saveAndContinueDelivery() {
+    setDeliveryState((current) => ({ ...current, busy: true, error: "" }));
+    const document = await saveDocument(activeDocument, { suppressFailureDialog: true });
+    if (!document) {
+      setDeliveryState((current) => ({ ...current, busy: false, error: saveState.error || "The draft could not be saved. Nothing was sent." }));
+      return;
+    }
+    openDeliveryReview(deliveryState.channel, document);
+  }
+
+  async function sendCurrentDelivery({ retry = false } = {}) {
+    if (!deliveryState?.document || deliveryState.busy) return;
+    const idempotencyKey = retry ? createBusinessDocumentSaveKey() : deliveryState.idempotencyKey;
+    setDeliveryState((current) => ({ ...current, busy: true, error: "", idempotencyKey }));
+    try {
+      const delivery = await deliverBusinessDocumentDraft({
+        draftId: deliveryState.document.id,
+        expectedVersion: deliveryState.document.version,
+        channel: deliveryState.channel,
+        recipientEmail: deliveryState.recipientEmail,
+        subject: deliveryState.subject,
+        customerMessage: deliveryState.customerMessage,
+        idempotencyKey,
+        setPage,
+      });
+      setDeliveryHistory((current) => ({
+        ...current,
+        [deliveryState.documentType]: [delivery, ...current[deliveryState.documentType].filter((item) => item.id !== delivery.id)],
+      }));
+      setDeliveryState(null);
+      setNotice(delivery.channel === "EMAIL"
+        ? "Email delivery requested for the exact saved document version. No acceptance or payment was inferred."
+        : "Sent in the governed Meetro conversation. No acceptance, payment, or Job closure was inferred.");
+    } catch (error) {
+      setDeliveryState((current) => ({
+        ...current,
+        busy: false,
+        failed: true,
+        error: error?.message || "Delivery failed. The saved document is unchanged.",
+      }));
+    }
   }
 
   function scrollToNewest() {
@@ -820,11 +934,13 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") void onPreviewQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED"); else void previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED") : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onUnavailable={deliveryUnavailable} /></div>{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => { focusPreview(); if (activeDocument === "quote") void onPreviewQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED"); else void previewInvoice(); }}>Preview PDF</button><button type="button" onClick={() => activeDocument === "quote" ? onDownloadQuote(customerPhotoGroups, activeSaved && !activeDirty ? "SAVED" : "UNSAVED") : void downloadInvoice()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
+      {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title="Save changes before sending" onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
+      {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={[{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || "Your work is still here."}</p><p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p></WorkspaceDialog> : null}
       {recoveryRecord ? <WorkspaceDialog titleId="business-document-recovery-title" title="Recover your last unsaved session?" actions={[{ label: "Discard Recovery", onClick: () => void discardRecovery() }, { label: "Continue Where I Left Off", primary: true, onClick: continueRecovery }]}><p>We found changes that were not successfully saved to Meetro. Recovery is device-local and still unsaved.</p></WorkspaceDialog> : null}

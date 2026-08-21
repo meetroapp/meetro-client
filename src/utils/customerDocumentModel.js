@@ -1,3 +1,5 @@
+import { normalizeBusinessDocumentAgreement } from "./businessDocumentAgreement.js";
+
 const SUPPORTED_LANGUAGES = new Set(["en", "es", "fr", "pt-BR"]);
 
 function language(value) {
@@ -239,6 +241,7 @@ function model({
   warrantyNotes,
   customerMessage,
   acceptance,
+  agreement,
   currencyCode,
 }) {
   return Object.freeze({
@@ -273,6 +276,7 @@ function model({
     warrantyNotes: optionalText(warrantyNotes, 3000),
     customerMessage: optionalText(customerMessage, 3000),
     acceptance: optionalText(acceptance, 500),
+    ...(agreement ? { agreement: normalizeBusinessDocumentAgreement(agreement) } : {}),
   });
 }
 
@@ -422,6 +426,7 @@ export function buildQuickQuoteDocumentModel(
     estimatedDuration: draft?.estimatedDuration || draft?.timeline,
     conditions: draft?.conditions || [],
     exclusions: draft?.exclusions || [],
+    agreement: draft?.agreement,
     notes: draft?.notes,
     acceptance: "DRAFT_PREVIEW_NOT_ISSUED",
     currencyCode: safeCurrency,

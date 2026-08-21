@@ -739,6 +739,15 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       request.homeowner_email ||
       ""
   );
+  const [customerEmail, setCustomerEmail] = useState(
+    selectedQuoteForEdit?.customerEmail ||
+      request.customerEmail ||
+      request.homeowner_email ||
+      ""
+  );
+  const [agreement, setAgreement] = useState(
+    selectedQuoteForEdit?.agreement || {}
+  );
   const [customerLocation, setCustomerLocation] = useState(
     selectedQuoteForEdit?.location ||
       selectedQuoteForEdit?.address ||
@@ -1457,6 +1466,7 @@ ${businessIdentity.businessName}`;
       quoteNumber,
       quoteDate,
       customerName,
+      customerEmail,
       customerLocation,
       projectTitle,
       problemFound,
@@ -1503,6 +1513,7 @@ ${businessIdentity.businessName}`;
       paymentTerms: terms,
       estimatedDuration: estimatedDuration || timeline,
       notes,
+      agreement,
       currency: "USD",
     }, { locale: language, branding: businessIdentity, workingDraftStatus }), photoEvidence);
   }
@@ -2778,6 +2789,8 @@ ${businessIdentity.businessName}`;
 
   function applyUnifiedQuotePatch(patch = {}) {
     if (Object.hasOwn(patch, "customerName")) setCustomerName(patch.customerName);
+    if (Object.hasOwn(patch, "customerEmail")) setCustomerEmail(patch.customerEmail);
+    if (Object.hasOwn(patch, "agreement")) setAgreement(patch.agreement);
     if (Object.hasOwn(patch, "customerLocation")) setCustomerLocation(patch.customerLocation);
     if (Object.hasOwn(patch, "projectTitle")) setProjectTitle(patch.projectTitle);
     if (Object.hasOwn(patch, "projectDescription")) setProjectDescription(patch.projectDescription);
@@ -2866,6 +2879,7 @@ ${businessIdentity.businessName}`;
 
   const unifiedQuoteDraft = {
     customerName,
+    customerEmail,
     customerLocation,
     projectTitle,
     projectDescription,
@@ -2880,6 +2894,7 @@ ${businessIdentity.businessName}`;
     terms,
     estimatedDuration,
     notes,
+    agreement,
     canonicalStatus: "DRAFT",
   };
 
@@ -3849,17 +3864,6 @@ ${businessIdentity.businessName}`;
             <pre style={quotePreviewBox}>{buildQuoteShareText()}</pre>
           )}
 
-          <div style={deliveryChoiceBox} role="status">
-            <div>
-              <p style={deliveryEyebrow}>
-                {isSpanish ? "Disponibilidad" : "Availability"}
-              </p>
-              <h3 style={deliveryTitle}>
-                {t("quoteSavingDeliveryUnavailable", language)}
-              </h3>
-              <p style={deliveryText}>{t("quoteNotSavedDelivered", language)}</p>
-            </div>
-          </div>
         </div>
       </div>
         </section>
@@ -4476,37 +4480,6 @@ const quotePreviewBox = {
   lineHeight: 1.5,
   maxWidth: "100%",
   boxSizing: "border-box",
-};
-
-const deliveryChoiceBox = {
-  marginTop: "18px",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-warm, rgba(251,246,237,0.92)), var(--meetro-surface-paper, rgba(255,253,248,0.98)))",
-  border: "1px solid rgba(31,77,52,0.14)",
-  borderRadius: "20px",
-  padding: "16px",
-};
-
-const deliveryEyebrow = {
-  margin: "0 0 6px",
-  color: "var(--meetro-color-coffee, #4a3428)",
-  fontSize: "12px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-};
-
-const deliveryTitle = {
-  margin: "0 0 6px",
-  color: "#111827",
-  fontSize: "17px",
-};
-
-const deliveryText = {
-  margin: 0,
-  color: "#64748b",
-  lineHeight: 1.45,
-  fontSize: "14px",
 };
 
 const externalShareHint = {

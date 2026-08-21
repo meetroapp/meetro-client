@@ -1,4 +1,8 @@
 import { buildQuickQuoteConversationPatch } from "./quickQuoteConversationDraft.js";
+import {
+  buildBusinessDocumentAgreementPatch,
+  normalizeBusinessDocumentAgreement,
+} from "./businessDocumentAgreement.js";
 
 function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -84,7 +88,7 @@ export function buildBusinessDocumentConversationPatch({
     return buildInvoiceConversationPatch({ instruction, current });
   }
 
-  return buildQuickQuoteConversationPatch({
+  const quotePatch = buildQuickQuoteConversationPatch({
     prompt: instruction,
     current,
     revision: revision ?? Boolean(
@@ -92,6 +96,22 @@ export function buildBusinessDocumentConversationPatch({
       cleanText(current.customerName) ||
       cleanText(current.totalOverride)
     ),
+  });
+  const agreementPatch = buildBusinessDocumentAgreementPatch(
+    instruction,
+    current.agreement
+  );
+  const customerQuotePatch = { ...quotePatch };
+  if (Object.keys(agreementPatch).length) {
+    delete customerQuotePatch.projectTitle;
+    delete customerQuotePatch.projectDescription;
+    delete customerQuotePatch.recommendedSolution;
+  }
+  return Object.freeze({
+    ...customerQuotePatch,
+    ...(Object.keys(agreementPatch).length ? {
+      agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), ...agreementPatch },
+    } : {}),
   });
 }
 
@@ -128,6 +148,12 @@ function mergeRows(current = [], incoming = []) {
 
 export function mergeBusinessDocumentDraft(current = {}, patch = {}) {
   const next = { ...current, ...patch };
+  if (Object.hasOwn(patch, "agreement")) {
+    next.agreement = normalizeBusinessDocumentAgreement({
+      ...normalizeBusinessDocumentAgreement(current.agreement),
+      ...patch.agreement,
+    });
+  }
   for (const key of ["lineItems", "materialItems", "laborItems"]) {
     if (Object.hasOwn(patch, key)) next[key] = mergeRows(current[key], patch[key]);
   }
@@ -181,6 +207,7 @@ export function createInvoiceContinuityDraft({ job = {}, quote = {} } = {}) {
 
   return Object.freeze({
     customerName: cleanText(job.customerName || quote.customerName),
+    customerEmail: cleanText(job.customerEmail || quote.customerEmail),
     serviceAddress: cleanText(job.location || quote.customerLocation),
     projectTitle: cleanText(job.title || quote.projectTitle),
     quoteReference: approved ? cleanText(quote.quoteNumber) : "",

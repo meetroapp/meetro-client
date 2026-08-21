@@ -26,6 +26,7 @@ const sources = {
   pricing: readSource("src/pages/PricingLibrary.jsx"),
   quote: readSource("src/pages/QuoteBuilder.jsx"),
   invoice: readSource("src/pages/InvoiceBuilder.jsx"),
+  documentWorkspace: readSource("src/components/UnifiedBusinessDocumentWorkspace.jsx"),
   reports: readSource("src/pages/ReportsCenter.jsx"),
   leads: readSource("src/pages/BusinessLeads.jsx"),
   intelligence: readSource("src/pages/BusinessIntelligence.jsx"),
@@ -64,9 +65,12 @@ test("Business Operations primary actions use forest operational styling", () =>
   });
 
   assert.match(sources.quote, /var\(--meetro-color-forest/);
-  assert.match(sources.quote, /quoteSavingDeliveryUnavailable/);
+  assert.match(sources.quote, /<UnifiedBusinessDocumentWorkspace/);
   assert.match(sources.invoice, /var\(--meetro-color-forest/);
-  assert.match(sources.invoice, /Invoice saving and delivery are not available yet\./);
+  assert.match(sources.invoice, /<QuoteBuilder setPage=\{setPage\} initialDocument="invoice"/);
+  assert.match(sources.documentWorkspace, /kind === "quote" \? "Send Quote" : "Send Invoice"/);
+  assert.match(sources.documentWorkspace, /onSelect\("EMAIL"\)/);
+  assert.match(sources.documentWorkspace, /onSelect\("MEETRO_MESSAGE"\)/);
 });
 
 test("Business Operations removes legacy purple primary treatments", () => {

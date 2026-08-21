@@ -7,6 +7,13 @@ const quoteSource = readFileSync(
   "utf8"
 );
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const workspaceSource = readFileSync(
+  new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+  "utf8"
+);
+const obsoleteQuoteAvailabilityPattern = new RegExp(
+  ["quoteSavingDelivery", "Unavailable|quoteNotSaved", "Delivered"].join("")
+);
 
 test("Quote Builder does not treat browser storage as quote persistence", () => {
   assert.doesNotMatch(quoteSource, /saveDraftQuote|getQuoteHistory|saveQuoteHistory/);
@@ -31,21 +38,22 @@ test("Quote Builder cannot simulate delivery or cross-user workflow state", () =
   assert.doesNotMatch(quoteSource, /Quote ready to share|Quote sent to Meetro Chat/);
 });
 
-test("Quote Builder presents a clear unavailable state and retains truthful review", () => {
-  assert.match(quoteSource, /quoteSavingDeliveryUnavailable/);
-  assert.match(quoteSource, /quoteNotSavedDelivered/);
+test("Quote Builder renders the governed Unified workspace with separate PDF delivery", () => {
+  assert.match(quoteSource, /const unifiedWorkspaceEnabled = true;/);
+  assert.match(quoteSource, /if \(unifiedWorkspaceEnabled\) \{[\s\S]*<UnifiedBusinessDocumentWorkspace/);
+  assert.match(workspaceSource, /kind === "quote" \? "Send Quote" : "Send Invoice"/);
+  assert.match(workspaceSource, /Save & Continue to Send/);
+  assert.match(workspaceSource, /onSelect\("EMAIL"\)/);
+  assert.match(workspaceSource, /onSelect\("MEETRO_MESSAGE"\)/);
+  assert.match(workspaceSource, />Preview PDF</);
+  assert.match(workspaceSource, />Download PDF</);
+  assert.doesNotMatch(quoteSource, obsoleteQuoteAvailabilityPattern);
   assert.match(quoteSource, /ContextualAskMeetro/);
   assert.match(quoteSource, /applyConfirmedQuoteComposition/);
   assert.doesNotMatch(
     quoteSource,
     /Professional-confirmed|confirmed materials|materiales confirmados|After reviewing|Después de revisar/i
   );
-  assert.doesNotMatch(quoteSource, />\s*Save Quote\s*</);
-  assert.doesNotMatch(quoteSource, />\s*Send Through Meetro Chat\s*</);
-  assert.doesNotMatch(quoteSource, />\s*Share Externally\s*</);
-  assert.match(quoteSource, /Preview Quote/);
-  assert.match(quoteSource, /Copy Summary/);
-  assert.match(quoteSource, /navigator\.clipboard\?\.writeText/);
 });
 
 test("Quote preparation, totals, editing, and responsive containment remain intact", () => {

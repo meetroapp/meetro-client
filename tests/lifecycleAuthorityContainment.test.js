@@ -8,6 +8,8 @@ const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf
 const jobUpdate = read("src/pages/JobUpdate.jsx");
 const changeOrder = read("src/pages/ChangeOrderRequest.jsx");
 const quoteBuilder = read("src/pages/QuoteBuilder.jsx");
+const invoiceBuilder = read("src/pages/InvoiceBuilder.jsx");
+const documentWorkspace = read("src/components/UnifiedBusinessDocumentWorkspace.jsx");
 const completionSheet = read("src/pages/CompletionSheet.jsx");
 const completedJobDetails = read("src/pages/CompletedJobDetails.jsx");
 const contractorDashboard = read("src/pages/ContractorDashboard.jsx");
@@ -37,9 +39,14 @@ test("Change Order preserves request context without submission or message autho
   assert.doesNotMatch(changeOrder, /Send Change Request|pending_professional_review/);
 });
 
-test("Quote Builder remains a calculation preview without unsupported evidence or issuance claims", () => {
+test("governed Quote and Invoice delivery cannot issue, accept, pay, complete, or close", () => {
   assert.match(quoteBuilder, /calculateCustomerTotal/);
-  assert.match(quoteBuilder, /quoteNotSavedDelivered/);
+  assert.match(quoteBuilder, /<UnifiedBusinessDocumentWorkspace/);
+  assert.match(invoiceBuilder, /<QuoteBuilder setPage=\{setPage\} initialDocument="invoice"/);
+  assert.match(documentWorkspace, /Save & Continue to Send/);
+  assert.match(documentWorkspace, /Sending does not issue, accept, approve, pay, or close anything\./);
+  assert.match(documentWorkspace, /No acceptance or payment was inferred\./);
+  assert.match(documentWorkspace, /Payment and completion are not inferred\./);
   assert.match(quoteBuilder, /ContextualAskMeetro/);
   assert.match(quoteBuilder, /applyConfirmedQuoteComposition/);
   assert.doesNotMatch(
@@ -47,6 +54,10 @@ test("Quote Builder remains a calculation preview without unsupported evidence o
     /Professional-confirmed|confirmed materials|materiales confirmados|After reviewing|Después de revisar|before sending|antes de enviar/i
   );
   assert.doesNotMatch(quoteBuilder, /runAiQuoteHelp|generateAiDraft|sendQuote|saveDraftQuote/);
+  assert.doesNotMatch(
+    documentWorkspace,
+    /\b(?:issueQuote|acceptQuote|approveQuote|markInvoicePaid|completePayment|completeJob|closeJob)\s*\(/
+  );
 });
 
 test("Completion pages cannot create completion, customer confirmation, closure, or history", () => {
@@ -103,7 +114,6 @@ test("containment copy resolves in EN, ES, FR, and PT-BR", () => {
     "lifecycleLegacyHistoryNotice",
     "quoteDraftHelpBody",
     "addPricingBeforeSendingQuote",
-    "quoteNotSavedDelivered",
   ];
 
   for (const language of ["en", "es", "fr", "pt-BR"]) {

@@ -7,7 +7,9 @@ import {
   BusinessDocumentDraftError,
   createBusinessDocumentDraft,
   deleteBusinessDocumentDraft,
+  deliverBusinessDocumentDraft,
   getBusinessDocumentDraft,
+  listBusinessDocumentDeliveries,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
   validateBusinessDocumentDraft,
@@ -134,6 +136,45 @@ test("draft transport deletes only after an explicit expected-version request", 
   assert.equal(result.deletedDraftId, DRAFT_ID);
   assert.equal(calls[0].options.method, "DELETE");
   assert.deepEqual(JSON.parse(calls[0].options.body), { expectedVersion: 3 });
+});
+
+test("delivery transport binds the exact saved version and restores durable history", async () => {
+  const calls = [];
+  const delivery = {
+    id: "44444444-4444-4444-8444-444444444444",
+    documentId: DRAFT_ID,
+    documentType: "QUOTE",
+    documentReference: "WQ-11111111",
+    documentVersion: 3,
+    channel: "EMAIL",
+    state: "DELIVERY_REQUESTED",
+    recipientEmail: "jack@example.test",
+    requestedAt: "2026-08-21T16:18:00.000Z",
+  };
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    return { response: { ok: true, status: options.method === "POST" ? 202 : 200 }, data: { success: true, delivery, deliveries: [delivery] } };
+  };
+  assert.equal((await deliverBusinessDocumentDraft({
+    draftId: DRAFT_ID,
+    expectedVersion: 3,
+    channel: "EMAIL",
+    recipientEmail: "jack@example.test",
+    subject: "Quote",
+    customerMessage: "Please review.",
+    idempotencyKey: KEY,
+    authFetchImpl,
+  })).documentVersion, 3);
+  assert.equal((await listBusinessDocumentDeliveries({ draftId: DRAFT_ID, authFetchImpl })).length, 1);
+  assert.equal(calls[0].options.headers["Idempotency-Key"], KEY);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    expectedVersion: 3,
+    channel: "EMAIL",
+    recipientEmail: "jack@example.test",
+    subject: "Quote",
+    customerMessage: "Please review.",
+  });
+  assert.match(calls[1].endpoint, /\/deliveries$/);
 });
 
 test("invalid server projections and governed conflicts fail closed", async () => {
@@ -323,6 +364,7 @@ test("save payload preserves instructions, manual overrides, private reminders, 
     photoAssignments: { [photo().id]: { role: "BEFORE", visibility: "PRIVATE_INTERNAL" } },
   });
   assert.equal(payload.jobId, JOB_ID);
+  assert.deepEqual(payload.content.agreement.exclusions, []);
   assert.equal(payload.workspace.instructions[0].revisions, 1);
   assert.equal(payload.workspace.privateReminders[0].text, "Keep this private: bring a ladder");
   assert.equal(payload.photos[0].role, "BEFORE");
