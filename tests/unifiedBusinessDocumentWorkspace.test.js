@@ -465,3 +465,47 @@ test("shortcut focus is explicit without false selected state", () => {
   assert.doesNotMatch(shortcuts, /aria-pressed|aria-selected|className=.*active/);
   assert.match(styles, /business-document-conversation-shortcuts button:focus-visible/);
 });
+
+
+test("unified workspace preserves the private Job Analysis session through save, reopen, and recovery", () => {
+  assert.match(
+    workspace,
+    /const \[jobAnalysisSessionIds, setJobAnalysisSessionIds\]/
+  );
+
+  assert.match(
+    workspace,
+    /jobAnalysisSessionId: jobAnalysisSessionIds\[documentType\]/
+  );
+
+  assert.match(
+    workspace,
+    /jobAnalysisSessionId: jobAnalysisSessionIds\.quote/
+  );
+
+  assert.match(
+    workspace,
+    /jobAnalysisSessionId: jobAnalysisSessionIds\.invoice/
+  );
+
+  assert.match(
+    workspace,
+    /setJobAnalysisSessionIds\(\(current\) => \(\{[\s\S]*\[type\]: restored\.jobAnalysisSessionId \|\| null/
+  );
+
+  assert.match(
+    workspace,
+    /snapshot\.payloads\.quote\?\.workspace\?\.jobAnalysisSessionId/
+  );
+
+  assert.match(
+    workspace,
+    /snapshot\.payloads\.invoice\?\.workspace\?\.jobAnalysisSessionId/
+  );
+
+  // Canonical Job authority remains independent from the private AI session.
+  assert.match(
+    workspace,
+    /jobId: documentJobIds\[documentType\]/
+  );
+});

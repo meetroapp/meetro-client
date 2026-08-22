@@ -382,6 +382,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     quote: job.canonical ? job.id || null : null,
     invoice: job.canonical ? job.id || null : null,
   }));
+  const [jobAnalysisSessionIds, setJobAnalysisSessionIds] = useState({
+    quote: null,
+    invoice: null,
+  });
   const [savedFingerprints, setSavedFingerprints] = useState({ quote: "", invoice: "" });
   const [saveState, setSaveState] = useState({ busy: false, error: "", lastSavedAt: "", documentType: "" });
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
@@ -403,13 +407,17 @@ export default function UnifiedBusinessDocumentWorkspace({
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
     documentType: "quote", content: quote, turns, manualOverrides: manualOverrides.quote,
     photos: photos.filter((photo) => (photoAssignments[photo.id]?.documentType || "quote") === "quote"),
-    photoAssignments, jobId: documentJobIds.quote,
-  }), [documentJobIds.quote, manualOverrides.quote, photoAssignments, photos, quote, turns]);
+    photoAssignments,
+    jobId: documentJobIds.quote,
+    jobAnalysisSessionId: jobAnalysisSessionIds.quote,
+  }), [documentJobIds.quote, jobAnalysisSessionIds.quote, manualOverrides.quote, photoAssignments, photos, quote, turns]);
   const invoicePayload = useMemo(() => buildBusinessDocumentSavePayload({
     documentType: "invoice", content: invoice, turns, manualOverrides: manualOverrides.invoice,
     photos: photos.filter((photo) => photoAssignments[photo.id]?.documentType === "invoice"),
-    photoAssignments, jobId: documentJobIds.invoice,
-  }), [documentJobIds.invoice, invoice, manualOverrides.invoice, photoAssignments, photos, turns]);
+    photoAssignments,
+    jobId: documentJobIds.invoice,
+    jobAnalysisSessionId: jobAnalysisSessionIds.invoice,
+  }), [documentJobIds.invoice, invoice, jobAnalysisSessionIds.invoice, manualOverrides.invoice, photoAssignments, photos, turns]);
   const payloads = { quote: quotePayload, invoice: invoicePayload };
   const fingerprints = {
     quote: businessDocumentSnapshotFingerprint({ payload: quotePayload, recoveryPhotos: recoveryPhotoProjection(photos.filter((photo) => (photoAssignments[photo.id]?.documentType || "quote") === "quote"), photoAssignments) }),
@@ -495,6 +503,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       photos: durablePhotos.filter((photo) => (assignments[photo.id]?.documentType || "quote") === documentType),
       photoAssignments: assignments,
       jobId: documentJobIds[documentType],
+      jobAnalysisSessionId: jobAnalysisSessionIds[documentType],
     });
   }
 
@@ -579,6 +588,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     onRestorePhotos?.(restored.photos, { documentType: type, persisted: true });
     setSavedDocuments((current) => ({ ...current, [type]: document }));
     setDocumentJobIds((current) => ({ ...current, [type]: document.jobId || null }));
+    setJobAnalysisSessionIds((current) => ({
+      ...current,
+      [type]: restored.jobAnalysisSessionId || null,
+    }));
     setSavedFingerprints((current) => ({ ...current, [type]: businessDocumentRestoredSnapshotFingerprint(document) }));
     setActiveDocument(type);
     setSavedFilesOpen(false);
@@ -717,6 +730,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     setDocumentJobIds({
       quote: snapshot.payloads.quote?.jobId || null,
       invoice: snapshot.payloads.invoice?.jobId || null,
+    });
+    setJobAnalysisSessionIds({
+      quote: snapshot.payloads.quote?.workspace?.jobAnalysisSessionId || null,
+      invoice: snapshot.payloads.invoice?.workspace?.jobAnalysisSessionId || null,
     });
     setSavedFingerprints(snapshot.savedFingerprints || { quote: "", invoice: "" });
     setActiveDocument(normalizeBusinessDocumentTab(snapshot.activeDocument));

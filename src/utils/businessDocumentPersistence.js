@@ -249,6 +249,7 @@ export function buildBusinessDocumentSavePayload({
   photos = [],
   photoAssignments = {},
   jobId = null,
+  jobAnalysisSessionId = null,
 } = {}) {
   const type = String(documentType || "").toUpperCase();
   const instructions = turns
@@ -306,6 +307,9 @@ export function buildBusinessDocumentSavePayload({
       instructions,
       manualOverrides: { ...manualOverrides },
       privateReminders: reconciliation.privateReminders.map((item) => ({ ...item })),
+      ...(String(jobAnalysisSessionId || "").trim()
+        ? { jobAnalysisSessionId: String(jobAnalysisSessionId).trim() }
+        : {}),
     },
     photos: photos.map((photo) => savedPhoto(
       photo,
@@ -324,6 +328,7 @@ export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
     ) ||
     payload.workspace?.instructions?.length ||
     payload.workspace?.privateReminders?.length ||
+    payload.workspace?.jobAnalysisSessionId ||
     payload.photos?.length
   );
 }
@@ -369,6 +374,7 @@ export function restoreBusinessDocumentDraft(document) {
     photos,
     photoAssignments,
     jobId: document.jobId || null,
+    jobAnalysisSessionId: document.workspace?.jobAnalysisSessionId || null,
   };
 }
 
@@ -382,6 +388,7 @@ export function businessDocumentRestoredSnapshotFingerprint(document) {
     photos: restored.photos,
     photoAssignments: restored.photoAssignments,
     jobId: restored.jobId,
+    jobAnalysisSessionId: restored.jobAnalysisSessionId,
   });
   return businessDocumentSnapshotFingerprint({
     payload,

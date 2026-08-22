@@ -953,3 +953,75 @@ test("recovery/exit/photo dialogs remain accessible and mobile-contained", () =>
   assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.business-document-confirm/);
   assert.doesNotMatch(styles, /overflow-x:\s*hidden/);
 });
+
+
+test("private Job Analysis session identity survives save, reopen, and rebuild without replacing canonical Job authority", () => {
+  const sessionId = "33333333-3333-4333-8333-333333333333";
+
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: {},
+    turns: [],
+    manualOverrides: {},
+    photos: [],
+    photoAssignments: {},
+    jobId: JOB_ID,
+    jobAnalysisSessionId: sessionId,
+  });
+
+  assert.equal(payload.jobId, JOB_ID);
+  assert.equal(
+    payload.workspace.jobAnalysisSessionId,
+    sessionId
+  );
+
+  const restored = restoreBusinessDocumentDraft({
+    id: "77777777-7777-4777-8777-777777777777",
+    documentType: "QUOTE",
+    jobId: JOB_ID,
+    content: payload.content,
+    workspace: payload.workspace,
+    photos: [],
+  });
+
+  assert.equal(restored.jobId, JOB_ID);
+  assert.equal(
+    restored.jobAnalysisSessionId,
+    sessionId
+  );
+
+  const rebuilt = buildBusinessDocumentSavePayload({
+    documentType: restored.documentType,
+    content: restored.content,
+    turns: restored.turns,
+    manualOverrides: restored.manualOverrides,
+    photos: restored.photos,
+    photoAssignments: restored.photoAssignments,
+    jobId: restored.jobId,
+    jobAnalysisSessionId: restored.jobAnalysisSessionId,
+  });
+
+  assert.equal(rebuilt.jobId, JOB_ID);
+  assert.equal(
+    rebuilt.workspace.jobAnalysisSessionId,
+    sessionId
+  );
+
+  const withoutSession = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: {},
+    turns: [],
+    manualOverrides: {},
+    photos: [],
+    photoAssignments: {},
+    jobId: JOB_ID,
+  });
+
+  assert.equal(
+    Object.hasOwn(
+      withoutSession.workspace,
+      "jobAnalysisSessionId"
+    ),
+    false
+  );
+});
