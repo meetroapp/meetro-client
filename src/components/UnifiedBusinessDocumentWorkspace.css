@@ -121,8 +121,8 @@
 .business-document-entry-choice small { margin-top: 2px; color: #68788d; font-size: 10px; }
 
 .business-document-chat-shell {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: min(62dvh, 620px);
   min-height: 280px;
   min-width: 0;
@@ -130,14 +130,15 @@
 }
 .business-document-turns {
   display: grid;
-  flex: 1 1 0;
-  height: 0;
+  grid-row: 1;
+  height: auto;
   gap: 9px;
   min-height: 0;
   max-height: none;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 5px 2px 12px;
+  padding: 5px 2px 24px;
+  scroll-padding-bottom: 24px;
 }
 .business-document-turns article { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: start; }
 .business-document-turns article > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: #0f6139; font-size: 10px; font-weight: 950; }
@@ -360,9 +361,9 @@
 .business-document-photo-cards article { min-width: 0; padding: 7px; border: 1px solid #e1e7e2; border-radius: 10px; background: #fafcf9; }
 .business-document-photo-cards img { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; }
 .business-document-photo-cards span { display: block; margin: 6px 0; color: #496156; font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
-.business-document-new-message { position: sticky; bottom: 5px; display: block; margin: -4px auto 7px; border: 1px solid #cddbd1; border-radius: 999px; color: #165b3a; background: #fff; padding: 7px 13px; box-shadow: 0 6px 18px rgba(29,55,40,.14); font-size: 10px; font-weight: 900; }
+.business-document-new-message { grid-row: 1; align-self: end; justify-self: center; position: relative; z-index: 2; bottom: auto; display: block; margin: 0 auto 8px; border: 1px solid #cddbd1; border-radius: 999px; color: #165b3a; background: #fff; padding: 7px 13px; box-shadow: 0 6px 18px rgba(29,55,40,.14); font-size: 10px; font-weight: 900; }
 
-.business-document-composer { flex: 0 0 auto; padding: 8px; border: 1px solid #d9e1da; border-radius: 13px; background: #fff; }
+.business-document-composer { grid-row: 2; position: relative; z-index: 3; flex: 0 0 auto; padding: 8px; border: 1px solid #d9e1da; border-radius: 13px; background: #fff; }
 .business-document-composer textarea { display: block; width: 100%; min-height: 74px; resize: vertical; border: 0; outline: none; color: #26384c; background: transparent; line-height: 1.4; }
 .business-document-composer > div { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; border-top: 1px solid #edf0ec; padding-top: 8px; }
 .business-document-composer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #dfe7e0; border-radius: 10px; color: #165b3a; background: #fff; padding: 8px 11px; font-size: 11px; font-weight: 900; }
@@ -571,7 +572,8 @@
   }
 
   .business-document-chat-shell {
-    flex: 1 1 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     height: auto;
     min-height: 0;
     max-height: none;
@@ -579,14 +581,16 @@
   }
 
   .business-document-turns {
-    flex: 1 1 0;
-    height: 0;
+    grid-row: 1;
+    height: auto;
     min-height: 0;
     overflow-y: auto;
   }
 
   .business-document-composer {
-    flex: 0 0 auto;
+    grid-row: 2;
+    position: relative;
+    z-index: 3;
   }
 
   .business-document-evidence-panel {

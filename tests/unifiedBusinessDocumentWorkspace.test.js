@@ -319,22 +319,37 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*auto[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
+    /\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto[\s\S]*overflow:\s*hidden/
   );
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*0[\s\S]*overflow-y:\s*auto/
+    /\.business-document-turns\s*\{[\s\S]*grid-row:\s*1[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*auto[\s\S]*scroll-padding-bottom:\s*24px/
   );
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-composer\s*\{[\s\S]*flex:\s*0 0 auto/
+    /\.business-document-composer\s*\{[\s\S]*grid-row:\s*2[\s\S]*position:\s*relative[\s\S]*z-index:\s*3/
   );
 
   assert.match(
     styles,
-    /\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*0[\s\S]*overflow-y:\s*auto/
+    /\.business-document-new-message\s*\{[\s\S]*grid-row:\s*1[\s\S]*align-self:\s*end/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-turns\s*\{[\s\S]*grid-row:\s*1[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-composer\s*\{[\s\S]*grid-row:\s*2[\s\S]*z-index:\s*3/
   );
 
   assert.match(
