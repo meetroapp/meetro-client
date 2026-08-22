@@ -26,10 +26,23 @@ const QUESTION_LEAD =
 const ANALYSIS_REQUEST =
   /^(?:please\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify)\b/i;
 
-export function classifyBusinessDocumentConversationIntent(instruction) {
+export function classifyBusinessDocumentConversationIntent(
+  instruction,
+  {
+    hasActiveAnalysisSession = false,
+  } = {}
+) {
   const text = cleanText(instruction);
   if (!text) return "EMPTY";
 
+  /*
+   * Explicit document commands always retain deterministic
+   * working-draft authority.
+   *
+   * Once a private Job Analysis conversation exists, ordinary
+   * job context defaults back to Ask Meetro instead of silently
+   * becoming Quote/Invoice content.
+   */
   if (EXPLICIT_DOCUMENT_EDIT_REQUEST.test(text)) {
     return "DOCUMENT_EDIT";
   }
@@ -37,7 +50,8 @@ export function classifyBusinessDocumentConversationIntent(instruction) {
   if (
     text.includes("?") ||
     QUESTION_LEAD.test(text) ||
-    ANALYSIS_REQUEST.test(text)
+    ANALYSIS_REQUEST.test(text) ||
+    hasActiveAnalysisSession
   ) {
     return "ASK_MEETRO";
   }

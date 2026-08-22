@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildBusinessDocumentConversationPatch,
+  classifyBusinessDocumentConversationIntent,
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   reconcileBusinessDocumentInstructions,
@@ -128,6 +129,146 @@ test("explicit document edits still bypass the Ask Meetro question guard", () =>
   });
   assert.equal(scope.projectDescription, "Replace the wall.");
   assert.equal(scope.recommendedSolution, "Replace the wall.");
+});
+
+
+test("active Job Analysis keeps ordinary job context conversational while explicit document commands retain draft authority", () => {
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "I see cracks on the concrete wall.",
+      { hasActiveAnalysisSession: true }
+    ),
+    "ASK_MEETRO"
+  );
+
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "The fan sparked yesterday.",
+      { hasActiveAnalysisSession: true }
+    ),
+    "ASK_MEETRO"
+  );
+
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "That section feels loose.",
+      { hasActiveAnalysisSession: true }
+    ),
+    "ASK_MEETRO"
+  );
+
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "Add the cracks to the scope.",
+      { hasActiveAnalysisSession: true }
+    ),
+    "DOCUMENT_EDIT"
+  );
+
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "Change labor to $225.",
+      { hasActiveAnalysisSession: true }
+    ),
+    "DOCUMENT_EDIT"
+  );
+
+  // Legacy no-session behavior remains unchanged.
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "I see cracks on the concrete wall."
+    ),
+    "DOCUMENT_EDIT"
+  );
+
+  assert.match(
+    workspace,
+    /hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)/
+  );
+});
+
+test("initial Ask Meetro professional input remains visible from server-owned evidence after analysis completes", () => {
+  assert.match(
+    workspace,
+    /jobAnalysisEvidenceVersions/
+  );
+
+  assert.match(
+    workspace,
+    /currentAnalysisEvidenceVersions/
+  );
+
+  assert.match(
+    workspace,
+    /evidence\.professionalInput/
+  );
+
+  assert.match(
+    workspace,
+    /kind: "ANALYSIS_EVIDENCE"/
+  );
+
+  assert.match(
+    workspace,
+    /analysis-evidence-\$\{evidence\.version\}/
+  );
+
+  assert.match(
+    workspace,
+    /setJobAnalysisEvidenceVersions[\s\S]*session\.evidenceVersions/
+  );
+});
+
+test("photo evidence uses a compact keyboard-safe attachment tray instead of consuming conversation scroll space", () => {
+  assert.match(
+    workspace,
+    /function PhotoAttachmentTray/
+  );
+
+  assert.match(
+    workspace,
+    /className="business-document-attachment-tray"/
+  );
+
+  assert.match(
+    workspace,
+    /\{photos\.length\} \{photos\.length === 1 \? "photo" : "photos"\} attached/
+  );
+
+  assert.match(
+    workspace,
+    /<button[\s\S]*onClick=\{onReview\}[\s\S]*>\s*Review\s*<\/button>/
+  );
+
+  assert.doesNotMatch(
+    workspace,
+    /<PhotoWorkspace photos=/
+  );
+
+  assert.match(
+    workspace,
+    /className="business-document-chat-shell"/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-chat-shell\s*\{[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 auto[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    styles,
+    /@media \(max-width:\s*767px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*height:\s*56dvh/
+  );
+
+  assert.match(
+    workspace,
+    /Review document photos/
+  );
 });
 
 test("Speak, Type, Add Photos, and the live document remain reachable without suggestion cards", () => {
@@ -587,7 +728,7 @@ test("Ask Meetro uses the durable governed Job Analysis conversation without dir
 
   assert.match(
     submitBlock,
-    /classifyBusinessDocumentConversationIntent\(instruction\)[\s\S]*ASK_MEETRO[\s\S]*submitAskMeetro\(instruction\)/
+    /classifyBusinessDocumentConversationIntent\([\s\S]*instruction,[\s\S]*hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)[\s\S]*\)[\s\S]*ASK_MEETRO[\s\S]*submitAskMeetro\(instruction\)/
   );
 
   assert.match(

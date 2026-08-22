@@ -413,8 +413,53 @@ function DeliveryHistory({ deliveries = [] }) {
   return <details className="business-document-delivery-history"><summary>Delivery history ({deliveries.length})</summary><ul>{deliveries.map((delivery) => <li key={delivery.id}><strong>{delivery.state === "FAILED" ? "Failed" : delivery.channel === "EMAIL" ? "Email delivery requested" : "Sent by Meetro Message"}</strong><span>Version {delivery.documentVersion}{delivery.recipientEmail ? ` · ${delivery.recipientEmail}` : ""}</span><time dateTime={delivery.sentAt || delivery.requestedAt || ""}>{delivery.sentAt || delivery.requestedAt ? new Date(delivery.sentAt || delivery.requestedAt).toLocaleString() : "Timestamp pending"}</time></li>)}</ul></details>;
 }
 
-function PhotoWorkspace({ photos, assignments, onChange, onReview }) {
-  return <section className="business-document-photo-workspace"><div><strong>Photos added</strong><button type="button" onClick={onReview}>Review photos</button></div><div className="business-document-photo-cards">{photos.map((photo) => { const assignment = assignments[photo.id] || defaultBusinessDocumentPhotoAssignment(); return <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Documented work"} /> : null}<span>{["UNCLASSIFIED", "GENERAL_EVIDENCE"].includes(assignment.role) ? "General" : assignment.role === "BEFORE" ? "Before" : "After"} · {assignment.visibility === "CUSTOMER_VISIBLE" ? "Customer" : "Private"}</span><button type="button" onClick={() => onChange(photo.id)}>Change</button></article>; })}</div><p>{businessDocumentPhotoVisibilityNotice(photos, assignments)}</p></section>;
+function PhotoAttachmentTray({ photos, assignments, onReview }) {
+  const customerCount = photos.filter(
+    (photo) =>
+      (assignments[photo.id] || defaultBusinessDocumentPhotoAssignment())
+        .visibility === "CUSTOMER_VISIBLE"
+  ).length;
+  const privateCount = photos.length - customerCount;
+  const visibilityLabel =
+    privateCount && customerCount
+      ? `${privateCount} private · ${customerCount} customer`
+      : customerCount
+        ? "Customer document"
+        : "Private";
+  const visibilityNotice =
+    businessDocumentPhotoVisibilityNotice(
+      photos,
+      assignments
+    );
+
+  return (
+    <section
+      className="business-document-attachment-tray"
+      aria-label="Attached photos"
+      title={visibilityNotice}
+    >
+      <div>
+        <MeetroIcon
+          name="photoCount"
+          size={18}
+          decorative
+        />
+        <span>
+          <strong>
+            {photos.length} {photos.length === 1 ? "photo" : "photos"} attached
+          </strong>
+          <small>{visibilityLabel}</small>
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={onReview}
+      >
+        Review
+      </button>
+    </section>
+  );
 }
 
 function PhotoReviewDialog({ photos, assignments, onApply, onCancel }) {
@@ -464,6 +509,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     quote: createQuickQuoteAnalysisPresentationState(),
     invoice: createQuickQuoteAnalysisPresentationState(),
   }));
+  const [jobAnalysisEvidenceVersions, setJobAnalysisEvidenceVersions] = useState({
+    quote: [],
+    invoice: [],
+  });
   const [jobAnalysisRequestState, setJobAnalysisRequestState] = useState({
     quote: { busy: false, error: "" },
     invoice: { busy: false, error: "" },
@@ -494,10 +543,45 @@ export default function UnifiedBusinessDocumentWorkspace({
   const currentAnalysisTurns = Array.isArray(currentAnalysisPresentation.turns)
     ? currentAnalysisPresentation.turns
     : [];
+  const currentAnalysisEvidenceVersions = Array.isArray(
+    jobAnalysisEvidenceVersions[activeDocument]
+  )
+    ? jobAnalysisEvidenceVersions[activeDocument]
+    : [];
   const currentAnalysisRequest =
     jobAnalysisRequestState[activeDocument] || { busy: false, error: "" };
   const pendingAnalysisMessage =
     pendingJobAnalysisMessages[activeDocument] || "";
+  const currentAnalysisEvidenceEntries =
+    currentAnalysisEvidenceVersions
+      .filter(
+        (evidence) =>
+          typeof evidence?.professionalInput === "string" &&
+          evidence.professionalInput.trim()
+      )
+      .filter(
+        (evidence) =>
+          !currentAnalysisTurns.some(
+            (turn) =>
+              turn.role === "PROFESSIONAL" &&
+              turn.evidenceVersion === evidence.version &&
+              String(turn.payload?.message || "").trim() ===
+                evidence.professionalInput.trim()
+          )
+      )
+      .map((evidence, index) => ({
+        kind: "ANALYSIS_EVIDENCE",
+        id: `analysis-evidence-${evidence.version}`,
+        timestamp: conversationTimestamp(evidence.createdAt),
+        order: currentInstructions.length + index,
+        turn: {
+          role: "PROFESSIONAL",
+          payload: {
+            message: evidence.professionalInput,
+          },
+        },
+      }));
+
   const currentConversationEntries = [
     ...currentInstructions.map((turn, index) => ({
       kind: "DOCUMENT",
@@ -506,11 +590,15 @@ export default function UnifiedBusinessDocumentWorkspace({
       order: index,
       turn,
     })),
+    ...currentAnalysisEvidenceEntries,
     ...currentAnalysisTurns.map((turn, index) => ({
       kind: "ANALYSIS",
       id: `analysis-${turn.turnId}`,
       timestamp: conversationTimestamp(turn.createdAt),
-      order: currentInstructions.length + index,
+      order:
+        currentInstructions.length +
+        currentAnalysisEvidenceEntries.length +
+        index,
       turn,
     })),
   ].sort(
@@ -718,6 +806,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     }));
 
     if (!sessionId) {
+      setJobAnalysisEvidenceVersions((current) => ({
+        ...current,
+        [documentType]: [],
+      }));
       setJobAnalysisPresentations((current) => ({
         ...current,
         [documentType]: createQuickQuoteAnalysisPresentationState(),
@@ -745,6 +837,11 @@ export default function UnifiedBusinessDocumentWorkspace({
           loaded.session
         );
 
+      setJobAnalysisEvidenceVersions((current) => ({
+        ...current,
+        [documentType]: [...loaded.session.evidenceVersions],
+      }));
+
       setJobAnalysisPresentations((current) => ({
         ...current,
         [documentType]: presentation,
@@ -759,6 +856,10 @@ export default function UnifiedBusinessDocumentWorkspace({
         setJobAnalysisSessionIds((current) => ({
           ...current,
           [documentType]: null,
+        }));
+        setJobAnalysisEvidenceVersions((current) => ({
+          ...current,
+          [documentType]: [],
         }));
         setJobAnalysisPresentations((current) => ({
           ...current,
@@ -1038,6 +1139,10 @@ export default function UnifiedBusinessDocumentWorkspace({
           hydrateQuickQuoteAnalysisPresentationState(
             session
           );
+        setJobAnalysisEvidenceVersions((current) => ({
+          ...current,
+          [documentType]: [...session.evidenceVersions],
+        }));
         sessionId = presentation.sessionId;
 
         setJobAnalysisSessionIds((current) => ({
@@ -1068,6 +1173,11 @@ export default function UnifiedBusinessDocumentWorkspace({
           hydrateQuickQuoteAnalysisPresentationState(
             session
           );
+
+        setJobAnalysisEvidenceVersions((current) => ({
+          ...current,
+          [documentType]: [...session.evidenceVersions],
+        }));
 
         setJobAnalysisPresentations((current) => ({
           ...current,
@@ -1122,6 +1232,11 @@ export default function UnifiedBusinessDocumentWorkspace({
               hydrateQuickQuoteAnalysisPresentationState(
                 session
               );
+
+            setJobAnalysisEvidenceVersions((current) => ({
+              ...current,
+              [documentType]: [...session.evidenceVersions],
+            }));
 
             setJobAnalysisPresentations((current) => ({
               ...current,
@@ -1183,6 +1298,10 @@ export default function UnifiedBusinessDocumentWorkspace({
           ...current,
           [documentType]: null,
         }));
+        setJobAnalysisEvidenceVersions((current) => ({
+          ...current,
+          [documentType]: [],
+        }));
 
         setJobAnalysisPresentations((current) => ({
           ...current,
@@ -1212,8 +1331,13 @@ export default function UnifiedBusinessDocumentWorkspace({
 
     if (
       !existingId &&
-      classifyBusinessDocumentConversationIntent(instruction) ===
-        "ASK_MEETRO"
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        {
+          hasActiveAnalysisSession:
+            Boolean(jobAnalysisSessionIds[activeDocument]),
+        }
+      ) === "ASK_MEETRO"
     ) {
       return submitAskMeetro(instruction);
     }
@@ -1478,10 +1602,12 @@ export default function UnifiedBusinessDocumentWorkspace({
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Questions stay in private Job Analysis. Explicit document instructions and manual edits update the working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
           <div className="business-document-entry-choice"><button type="button" onClick={usePrefill}><MeetroIcon name="assistant" size={18} decorative /><span><strong>Let Meetro prefill the form</strong><small>Use my conversation details</small></span></button><button type="button" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={18} decorative /><span><strong>Fill the form manually</strong><small>I’ll enter details myself</small></span></button></div>
-          <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
-          {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
-          {documentPhotos.length ? <PhotoWorkspace photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onChange={() => setPhotoReviewOpen(true)} /> : null}
-          <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
+          <div className="business-document-chat-shell">
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+            {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
+            {documentPhotos.length ? <PhotoAttachmentTray photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}
+            <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
+          </div>
           <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => setManualState({ focus: "amount" })}>Change Amount</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
           {photoNotice ? <p className="business-document-notice" role="status">{photoNotice}</p> : null}
