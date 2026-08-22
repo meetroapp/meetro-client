@@ -615,3 +615,56 @@ test("Ask Meetro uses the durable governed Job Analysis conversation without dir
     /Thinking…/
   );
 });
+
+
+test("Ask Meetro immediately shows the submitted professional message while governed analysis is pending", () => {
+  assert.match(
+    workspace,
+    /const \[pendingJobAnalysisMessages, setPendingJobAnalysisMessages\]/
+  );
+
+  assert.match(
+    workspace,
+    /const pendingAnalysisMessage =[\s\S]*pendingJobAnalysisMessages\[activeDocument\]/
+  );
+
+  const askBlock = workspace.slice(
+    workspace.indexOf("async function submitAskMeetro"),
+    workspace.indexOf("async function submitInstruction")
+  );
+
+  assert.match(
+    askBlock,
+    /setPendingJobAnalysisMessages\(\(current\) => \(\{[\s\S]*\[documentType\]: instruction/
+  );
+
+  assert.match(
+    workspace,
+    /pendingAnalysisMessage \? <article className="you"><span>You<\/span><p>\{pendingAnalysisMessage\}<\/p><\/article>/
+  );
+
+  assert.match(
+    workspace,
+    /pendingAnalysisMessage[\s\S]*Analyzing the job…/
+  );
+
+  assert.match(
+    askBlock,
+    /catch \(error\)[\s\S]*setPendingJobAnalysisMessages\(\(current\) => \(\{[\s\S]*\[documentType\]: ""/
+  );
+
+  const restoreBlock = workspace.slice(
+    workspace.indexOf("async function restoreJobAnalysisPresentation"),
+    workspace.indexOf("function applyRestoredDocument")
+  );
+
+  assert.match(
+    restoreBlock,
+    /setPendingJobAnalysisMessages\(\(current\) => \(\{[\s\S]*\[documentType\]: ""/
+  );
+
+  // Pending receipt is presentation only.
+  assert.doesNotMatch(askBlock, /reconcileDocument\(/);
+  assert.doesNotMatch(askBlock, /onApplyQuotePatch\(/);
+  assert.doesNotMatch(askBlock, /setInvoice\(/);
+});

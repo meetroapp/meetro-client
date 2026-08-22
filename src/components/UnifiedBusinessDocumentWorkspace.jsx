@@ -468,6 +468,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     quote: { busy: false, error: "" },
     invoice: { busy: false, error: "" },
   });
+  const [pendingJobAnalysisMessages, setPendingJobAnalysisMessages] = useState({
+    quote: "",
+    invoice: "",
+  });
   const [savedFingerprints, setSavedFingerprints] = useState({ quote: "", invoice: "" });
   const [saveState, setSaveState] = useState({ busy: false, error: "", lastSavedAt: "", documentType: "" });
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
@@ -492,6 +496,8 @@ export default function UnifiedBusinessDocumentWorkspace({
     : [];
   const currentAnalysisRequest =
     jobAnalysisRequestState[activeDocument] || { busy: false, error: "" };
+  const pendingAnalysisMessage =
+    pendingJobAnalysisMessages[activeDocument] || "";
   const currentConversationEntries = [
     ...currentInstructions.map((turn, index) => ({
       kind: "DOCUMENT",
@@ -512,7 +518,9 @@ export default function UnifiedBusinessDocumentWorkspace({
       left.timestamp - right.timestamp ||
       left.order - right.order
   );
-  const currentConversationLength = currentConversationEntries.length;
+  const currentConversationLength =
+    currentConversationEntries.length +
+    (pendingAnalysisMessage ? 1 : 0);
   const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
@@ -704,6 +712,11 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   async function restoreJobAnalysisPresentation(documentType, sessionId) {
+    setPendingJobAnalysisMessages((current) => ({
+      ...current,
+      [documentType]: "",
+    }));
+
     if (!sessionId) {
       setJobAnalysisPresentations((current) => ({
         ...current,
@@ -996,6 +1009,10 @@ export default function UnifiedBusinessDocumentWorkspace({
         error: "",
       },
     }));
+    setPendingJobAnalysisMessages((current) => ({
+      ...current,
+      [documentType]: instruction,
+    }));
 
     try {
       const governedPhotos =
@@ -1139,6 +1156,10 @@ export default function UnifiedBusinessDocumentWorkspace({
           error: "",
         },
       }));
+      setPendingJobAnalysisMessages((current) => ({
+        ...current,
+        [documentType]: "",
+      }));
 
       setMessage((current) =>
         current.trim() === instruction
@@ -1152,6 +1173,11 @@ export default function UnifiedBusinessDocumentWorkspace({
 
       return true;
     } catch (error) {
+      setPendingJobAnalysisMessages((current) => ({
+        ...current,
+        [documentType]: "",
+      }));
+
       if (error?.status === 404) {
         setJobAnalysisSessionIds((current) => ({
           ...current,
@@ -1452,7 +1478,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Questions stay in private Job Analysis. Explicit document instructions and manual edits update the working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
           <div className="business-document-entry-choice"><button type="button" onClick={usePrefill}><MeetroIcon name="assistant" size={18} decorative /><span><strong>Let Meetro prefill the form</strong><small>Use my conversation details</small></span></button><button type="button" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={18} decorative /><span><strong>Fill the form manually</strong><small>I’ll enter details myself</small></span></button></div>
-          <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+          <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
           {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
           {documentPhotos.length ? <PhotoWorkspace photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onChange={() => setPhotoReviewOpen(true)} /> : null}
           <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
