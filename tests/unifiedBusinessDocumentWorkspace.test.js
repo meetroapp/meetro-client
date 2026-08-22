@@ -509,3 +509,109 @@ test("unified workspace preserves the private Job Analysis session through save,
     /jobId: documentJobIds\[documentType\]/
   );
 });
+
+
+test("Ask Meetro uses the durable governed Job Analysis conversation without direct working-document mutation", () => {
+  assert.match(
+    workspace,
+    /classifyBusinessDocumentConversationIntent/
+  );
+  assert.match(
+    workspace,
+    /createQuickQuoteAnalysisSession/
+  );
+  assert.match(
+    workspace,
+    /loadQuickQuoteAnalysisSession/
+  );
+  assert.match(
+    workspace,
+    /appendQuickQuoteAnalysisEvidence/
+  );
+  assert.match(
+    workspace,
+    /analyzeQuickQuoteAnalysisSession/
+  );
+  assert.match(
+    workspace,
+    /continueQuickQuoteAnalysisSession/
+  );
+  assert.match(
+    workspace,
+    /applyQuickQuoteAnalysisExecutionToPresentationState/
+  );
+  assert.match(
+    workspace,
+    /hydrateQuickQuoteAnalysisPresentationState/
+  );
+
+  const askBlock = workspace.slice(
+    workspace.indexOf("async function submitAskMeetro"),
+    workspace.indexOf("async function submitInstruction")
+  );
+
+  assert.match(
+    askBlock,
+    /durableJobAnalysisMedia/
+  );
+  assert.match(
+    askBlock,
+    /photosChanged/
+  );
+  assert.match(
+    askBlock,
+    /presentation\.latestProposal\.proposalId/
+  );
+  assert.match(
+    askBlock,
+    /canonicalMutationPerformed|Nothing was applied to the working document/
+  );
+
+  assert.doesNotMatch(
+    askBlock,
+    /reconcileDocument\(/
+  );
+  assert.doesNotMatch(
+    askBlock,
+    /onApplyQuotePatch\(/
+  );
+  assert.doesNotMatch(
+    askBlock,
+    /setInvoice\(/
+  );
+
+  const submitBlock = workspace.slice(
+    workspace.indexOf("async function submitInstruction"),
+    workspace.indexOf("function focusComposer")
+  );
+
+  assert.match(
+    submitBlock,
+    /classifyBusinessDocumentConversationIntent\(instruction\)[\s\S]*ASK_MEETRO[\s\S]*submitAskMeetro\(instruction\)/
+  );
+
+  assert.match(
+    workspace,
+    /turn\?\.role === "PROFESSIONAL"[\s\S]*turn\?\.payload\?\.message/
+  );
+  assert.match(
+    workspace,
+    /turn\?\.role === "MEETRO"[\s\S]*turn\?\.payload\?\.assistantMessage/
+  );
+  assert.match(
+    workspace,
+    /currentConversationEntries/
+  );
+  assert.match(
+    workspace,
+    /restoreJobAnalysisPresentation/
+  );
+  assert.match(
+    workspace,
+    /Analyzing the job…/
+  );
+  assert.match(
+    workspace,
+    /Thinking…/
+  );
+});

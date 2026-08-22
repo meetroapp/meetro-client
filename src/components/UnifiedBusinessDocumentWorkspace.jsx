@@ -4,6 +4,7 @@ import BottomNav from "./BottomNav.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import {
+  classifyBusinessDocumentConversationIntent,
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   normalizeBusinessDocumentTab,
@@ -65,6 +66,16 @@ import {
   restoreBusinessDocumentConversationTurns,
   restoreBusinessDocumentDraft,
 } from "../utils/businessDocumentPersistence.js";
+import {
+  analyzeQuickQuoteAnalysisSession,
+  appendQuickQuoteAnalysisEvidence,
+  applyQuickQuoteAnalysisExecutionToPresentationState,
+  createQuickQuoteAnalysisPresentationState,
+  createQuickQuoteAnalysisSession,
+  continueQuickQuoteAnalysisSession,
+  hydrateQuickQuoteAnalysisPresentationState,
+  loadQuickQuoteAnalysisSession,
+} from "../utils/quickQuoteAnalysisSession.js";
 import { getAuthenticatedIdentitySnapshot } from "../utils/session.js";
 import "./UnifiedBusinessDocumentWorkspace.css";
 
@@ -76,6 +87,69 @@ function money(value) {
 
 function todayLocalIsoDate(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function analysisTurnMessage(turn) {
+  if (
+    turn?.role === "PROFESSIONAL" &&
+    typeof turn?.payload?.message === "string"
+  ) {
+    return turn.payload.message.trim();
+  }
+
+  if (
+    turn?.role === "MEETRO" &&
+    typeof turn?.payload?.assistantMessage === "string"
+  ) {
+    return turn.payload.assistantMessage.trim();
+  }
+
+  return "";
+}
+
+function analysisPhotoSignature(media = []) {
+  return media
+    .map((item) => {
+      const publicId = String(item?.public_id || "").trim();
+      const version = String(item?.version || "").trim();
+      return publicId ? `${publicId}:${version}` : "";
+    })
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function analysisEvidencePhotoSignature(evidence) {
+  return (evidence?.photoReferences || [])
+    .map((item) => {
+      const publicId = String(item?.publicId || "").trim();
+      const version = String(item?.version || "").trim();
+      return publicId ? `${publicId}:${version}` : "";
+    })
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function conversationTimestamp(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed)
+    ? parsed
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function AnalysisConversationTurn({ turn }) {
+  const message = analysisTurnMessage(turn);
+  if (!message) return null;
+
+  const professional = turn.role === "PROFESSIONAL";
+
+  return (
+    <article className={professional ? "you" : "meetro"}>
+      <span>{professional ? "You" : "M"}</span>
+      <p>{message}</p>
+    </article>
+  );
 }
 
 function quoteRows(quote) {
@@ -386,6 +460,14 @@ export default function UnifiedBusinessDocumentWorkspace({
     quote: null,
     invoice: null,
   });
+  const [jobAnalysisPresentations, setJobAnalysisPresentations] = useState(() => ({
+    quote: createQuickQuoteAnalysisPresentationState(),
+    invoice: createQuickQuoteAnalysisPresentationState(),
+  }));
+  const [jobAnalysisRequestState, setJobAnalysisRequestState] = useState({
+    quote: { busy: false, error: "" },
+    invoice: { busy: false, error: "" },
+  });
   const [savedFingerprints, setSavedFingerprints] = useState({ quote: "", invoice: "" });
   const [saveState, setSaveState] = useState({ busy: false, error: "", lastSavedAt: "", documentType: "" });
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
@@ -402,6 +484,35 @@ export default function UnifiedBusinessDocumentWorkspace({
   const beforePhotos = customerPhotoGroups.before;
   const afterPhotos = customerPhotoGroups.after;
   const currentInstructions = turns.filter((turn) => turn.documentType === activeDocument);
+  const currentAnalysisPresentation =
+    jobAnalysisPresentations[activeDocument] ||
+    createQuickQuoteAnalysisPresentationState();
+  const currentAnalysisTurns = Array.isArray(currentAnalysisPresentation.turns)
+    ? currentAnalysisPresentation.turns
+    : [];
+  const currentAnalysisRequest =
+    jobAnalysisRequestState[activeDocument] || { busy: false, error: "" };
+  const currentConversationEntries = [
+    ...currentInstructions.map((turn, index) => ({
+      kind: "DOCUMENT",
+      id: `document-${turn.id}`,
+      timestamp: conversationTimestamp(turn.createdAt || turn.updatedAt),
+      order: index,
+      turn,
+    })),
+    ...currentAnalysisTurns.map((turn, index) => ({
+      kind: "ANALYSIS",
+      id: `analysis-${turn.turnId}`,
+      timestamp: conversationTimestamp(turn.createdAt),
+      order: currentInstructions.length + index,
+      turn,
+    })),
+  ].sort(
+    (left, right) =>
+      left.timestamp - right.timestamp ||
+      left.order - right.order
+  );
+  const currentConversationLength = currentConversationEntries.length;
   const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
@@ -488,7 +599,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     } else {
       setNewContentAvailable(true);
     }
-  }, [currentInstructions.length, documentPhotos.length]);
+  }, [currentConversationLength, documentPhotos.length]);
 
   function currentContent(documentType) {
     return documentType === "quote" ? quote : invoice;
@@ -522,6 +633,26 @@ export default function UnifiedBusinessDocumentWorkspace({
     });
     setPhotoAssignments(assignments);
     return { payload: documentPayload(documentType, { durablePhotos: result.photos, assignments }), durablePhotos: result.photos, assignments };
+  }
+
+  async function durableJobAnalysisMedia(documentType) {
+    const prepared = await durableSaveInput(documentType);
+    const governedPhotos = prepared.durablePhotos
+      .filter(
+        (photo) =>
+          (prepared.assignments[photo.id]?.documentType || "quote") ===
+          documentType
+      )
+      .map((photo) => photo.media)
+      .filter((media) => media?.public_id);
+
+    if (governedPhotos.length > 5) {
+      throw new Error(
+        "Job Analysis can use up to 5 governed photos at a time."
+      );
+    }
+
+    return governedPhotos;
   }
 
   async function saveDocument(documentType, { suppressFailureDialog = false } = {}) {
@@ -572,6 +703,70 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
+  async function restoreJobAnalysisPresentation(documentType, sessionId) {
+    if (!sessionId) {
+      setJobAnalysisPresentations((current) => ({
+        ...current,
+        [documentType]: createQuickQuoteAnalysisPresentationState(),
+      }));
+      setJobAnalysisRequestState((current) => ({
+        ...current,
+        [documentType]: { busy: false, error: "" },
+      }));
+      return;
+    }
+
+    setJobAnalysisRequestState((current) => ({
+      ...current,
+      [documentType]: { busy: true, error: "" },
+    }));
+
+    try {
+      const loaded = await loadQuickQuoteAnalysisSession({
+        sessionId,
+        setPage,
+      });
+
+      const presentation =
+        hydrateQuickQuoteAnalysisPresentationState(
+          loaded.session
+        );
+
+      setJobAnalysisPresentations((current) => ({
+        ...current,
+        [documentType]: presentation,
+      }));
+
+      setJobAnalysisRequestState((current) => ({
+        ...current,
+        [documentType]: { busy: false, error: "" },
+      }));
+    } catch (error) {
+      if (error?.status === 404) {
+        setJobAnalysisSessionIds((current) => ({
+          ...current,
+          [documentType]: null,
+        }));
+        setJobAnalysisPresentations((current) => ({
+          ...current,
+          [documentType]: createQuickQuoteAnalysisPresentationState(),
+        }));
+      }
+
+      setJobAnalysisRequestState((current) => ({
+        ...current,
+        [documentType]: {
+          busy: false,
+          error:
+            error?.status === 404
+              ? "The previous private Job Analysis is no longer available. Send your question again to start a new analysis."
+              : error?.message ||
+                "The private Job Analysis conversation could not be restored.",
+        },
+      }));
+    }
+  }
+
   function applyRestoredDocument(document) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
@@ -592,6 +787,10 @@ export default function UnifiedBusinessDocumentWorkspace({
       ...current,
       [type]: restored.jobAnalysisSessionId || null,
     }));
+    void restoreJobAnalysisPresentation(
+      type,
+      restored.jobAnalysisSessionId || null
+    );
     setSavedFingerprints((current) => ({ ...current, [type]: businessDocumentRestoredSnapshotFingerprint(document) }));
     setActiveDocument(type);
     setSavedFilesOpen(false);
@@ -731,10 +930,17 @@ export default function UnifiedBusinessDocumentWorkspace({
       quote: snapshot.payloads.quote?.jobId || null,
       invoice: snapshot.payloads.invoice?.jobId || null,
     });
-    setJobAnalysisSessionIds({
+    const recoveredAnalysisSessionIds = {
       quote: snapshot.payloads.quote?.workspace?.jobAnalysisSessionId || null,
       invoice: snapshot.payloads.invoice?.workspace?.jobAnalysisSessionId || null,
-    });
+    };
+    setJobAnalysisSessionIds(recoveredAnalysisSessionIds);
+    for (const type of ["quote", "invoice"]) {
+      void restoreJobAnalysisPresentation(
+        type,
+        recoveredAnalysisSessionIds[type]
+      );
+    }
     setSavedFingerprints(snapshot.savedFingerprints || { quote: "", invoice: "" });
     setActiveDocument(normalizeBusinessDocumentTab(snapshot.activeDocument));
     setRecovered(true);
@@ -772,9 +978,220 @@ export default function UnifiedBusinessDocumentWorkspace({
     });
   }
 
-  function submitInstruction(rawInstruction, existingId = null) {
+  async function submitAskMeetro(rawInstruction) {
     const instruction = String(rawInstruction || "").trim();
-    if (!instruction) return;
+    const documentType = activeDocument;
+
+    if (
+      !instruction ||
+      jobAnalysisRequestState[documentType]?.busy
+    ) {
+      return false;
+    }
+
+    setJobAnalysisRequestState((current) => ({
+      ...current,
+      [documentType]: {
+        busy: true,
+        error: "",
+      },
+    }));
+
+    try {
+      const governedPhotos =
+        await durableJobAnalysisMedia(documentType);
+
+      let sessionId =
+        jobAnalysisSessionIds[documentType];
+
+      let session = null;
+      let presentation = null;
+      let execution = null;
+
+      if (!sessionId) {
+        const created =
+          await createQuickQuoteAnalysisSession({
+            professionalInput: instruction,
+            photos: governedPhotos,
+            setPage,
+          });
+
+        session = created.session;
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            session
+          );
+        sessionId = presentation.sessionId;
+
+        setJobAnalysisSessionIds((current) => ({
+          ...current,
+          [documentType]: sessionId,
+        }));
+
+        setJobAnalysisPresentations((current) => ({
+          ...current,
+          [documentType]: presentation,
+        }));
+
+        execution =
+          await analyzeQuickQuoteAnalysisSession({
+            sessionId,
+            locale: language,
+            setPage,
+          });
+      } else {
+        const loaded =
+          await loadQuickQuoteAnalysisSession({
+            sessionId,
+            setPage,
+          });
+
+        session = loaded.session;
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            session
+          );
+
+        setJobAnalysisPresentations((current) => ({
+          ...current,
+          [documentType]: presentation,
+        }));
+
+        const latestEvidence =
+          session.evidenceVersions.at(-1) || null;
+
+        const photosChanged =
+          analysisPhotoSignature(governedPhotos) !==
+          analysisEvidencePhotoSignature(latestEvidence);
+
+        if (
+          presentation.latestProposal &&
+          !presentation.stale &&
+          !photosChanged
+        ) {
+          execution =
+            await continueQuickQuoteAnalysisSession({
+              sessionId,
+              priorProposalId:
+                presentation.latestProposal.proposalId,
+              message: instruction,
+              locale: language,
+              setPage,
+            });
+        } else {
+          const evidenceChanged =
+            photosChanged ||
+            !latestEvidence ||
+            String(
+              latestEvidence.professionalInput || ""
+            ).trim() !== instruction;
+
+          if (evidenceChanged) {
+            await appendQuickQuoteAnalysisEvidence({
+              sessionId,
+              professionalInput: instruction,
+              photos: governedPhotos,
+              setPage,
+            });
+
+            const refreshed =
+              await loadQuickQuoteAnalysisSession({
+                sessionId,
+                setPage,
+              });
+
+            session = refreshed.session;
+            presentation =
+              hydrateQuickQuoteAnalysisPresentationState(
+                session
+              );
+
+            setJobAnalysisPresentations((current) => ({
+              ...current,
+              [documentType]: presentation,
+            }));
+          }
+
+          execution =
+            await analyzeQuickQuoteAnalysisSession({
+              sessionId,
+              locale: language,
+              setPage,
+            });
+        }
+      }
+
+      const nextPresentation =
+        applyQuickQuoteAnalysisExecutionToPresentationState(
+          presentation,
+          execution
+        );
+
+      setJobAnalysisPresentations((current) => ({
+        ...current,
+        [documentType]: nextPresentation,
+      }));
+
+      setJobAnalysisRequestState((current) => ({
+        ...current,
+        [documentType]: {
+          busy: false,
+          error: "",
+        },
+      }));
+
+      setMessage((current) =>
+        current.trim() === instruction
+          ? ""
+          : current
+      );
+
+      setNotice(
+        "Ask Meetro response added. Nothing was applied to the working document."
+      );
+
+      return true;
+    } catch (error) {
+      if (error?.status === 404) {
+        setJobAnalysisSessionIds((current) => ({
+          ...current,
+          [documentType]: null,
+        }));
+
+        setJobAnalysisPresentations((current) => ({
+          ...current,
+          [documentType]: createQuickQuoteAnalysisPresentationState(),
+        }));
+      }
+
+      setJobAnalysisRequestState((current) => ({
+        ...current,
+        [documentType]: {
+          busy: false,
+          error:
+            error?.status === 404
+              ? "The previous private Job Analysis is no longer available. Send your question again to start a new analysis."
+              : error?.message ||
+                "Ask Meetro could not analyze the job right now.",
+        },
+      }));
+
+      return false;
+    }
+  }
+
+  async function submitInstruction(rawInstruction, existingId = null) {
+    const instruction = String(rawInstruction || "").trim();
+    if (!instruction) return false;
+
+    if (
+      !existingId &&
+      classifyBusinessDocumentConversationIntent(instruction) ===
+        "ASK_MEETRO"
+    ) {
+      return submitAskMeetro(instruction);
+    }
+
     const current = activeDocument === "quote" ? quote : invoice;
     let turnId = existingId;
     let nextTurns;
@@ -794,6 +1211,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     assignPhotoIntent(turnId, conversationTurn.patch.photoIntent);
     setMessage("");
     setNotice(conversationTurn.turn.recognized ? "Working draft updated from your instruction." : "Instruction preserved. Use manual edit for any unsupported detail.");
+    return true;
   }
 
   function focusComposer(prefix = "") {
@@ -1032,15 +1450,16 @@ export default function UnifiedBusinessDocumentWorkspace({
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className="business-document-main">
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
-          <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Your words and manual edits update this private working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
+          <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Questions stay in private Job Analysis. Explicit document instructions and manual edits update the working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
           <div className="business-document-entry-choice"><button type="button" onClick={usePrefill}><MeetroIcon name="assistant" size={18} decorative /><span><strong>Let Meetro prefill the form</strong><small>Use my conversation details</small></span></button><button type="button" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={18} decorative /><span><strong>Fill the form manually</strong><small>I’ll enter details myself</small></span></button></div>
-          <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Tell me what you want to change. I’ll keep the working document updated in real time.</p></article>{currentInstructions.map((turn) => <InstructionTurn key={turn.id} turn={turn} onEdit={() => setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, editing: false } : item))} onSave={(value) => submitInstruction(value, turn.id)} />)}</div>
+          <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
           {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
           {documentPhotos.length ? <PhotoWorkspace photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onChange={() => setPhotoReviewOpen(true)} /> : null}
-          <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Tell Meetro what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => submitInstruction(message)} disabled={!message.trim()}>Send</button></div></div>
+          <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => setManualState({ focus: "amount" })}>Change Amount</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
           {photoNotice ? <p className="business-document-notice" role="status">{photoNotice}</p> : null}
+          {currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
