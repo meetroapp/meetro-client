@@ -219,50 +219,80 @@ test("initial Ask Meetro professional input remains visible from server-owned ev
   );
 });
 
-test("photo evidence uses a compact keyboard-safe attachment tray instead of consuming conversation scroll space", () => {
+test("adaptive Job Evidence uses a wide sidecar and inline scrolling phone evidence", () => {
   assert.match(
     workspace,
-    /function PhotoAttachmentTray/
+    /function PhotoConversationEvidence/
   );
 
   assert.match(
     workspace,
-    /className="business-document-attachment-tray"/
+    /function JobEvidencePanel/
   );
 
   assert.match(
     workspace,
-    /\{photos\.length\} \{photos\.length === 1 \? "photo" : "photos"\} attached/
+    /className="business-document-inline-evidence"/
   );
 
   assert.match(
     workspace,
-    /<button[\s\S]*onClick=\{onReview\}[\s\S]*>\s*Review\s*<\/button>/
+    /className="business-document-evidence-panel"/
+  );
+
+  assert.match(
+    workspace,
+    /business-document-main \$\{documentPhotos\.length \? "has-evidence" : ""\}/
   );
 
   assert.doesNotMatch(
     workspace,
-    /<PhotoWorkspace photos=/
+    /PhotoAttachmentTray/
+  );
+
+  const turnsBlock = workspace.slice(
+    workspace.indexOf('ref={turnsRef} className="business-document-turns"'),
+    workspace.indexOf("{newContentAvailable ?")
+  );
+
+  assert.match(
+    turnsBlock,
+    /PhotoConversationEvidence[\s\S]*currentConversationEntries\.map/
   );
 
   assert.match(
     workspace,
-    /className="business-document-chat-shell"/
+    /JobEvidencePanel photos=\{documentPhotos\}/
   );
 
   assert.match(
     styles,
-    /\.business-document-chat-shell\s*\{[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column/
+    /\.business-document-inline-evidence-photos\s*\{[\s\S]*overflow-x:\s*auto/
   );
 
   assert.match(
     styles,
-    /\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 auto[\s\S]*overflow-y:\s*auto/
+    /\.business-document-evidence-panel\s*\{[\s\S]*display:\s*none/
   );
 
   assert.match(
     styles,
-    /@media \(max-width:\s*767px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*height:\s*56dvh/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-main\.has-evidence[\s\S]*grid-template-columns:[\s\S]*minmax\(300px,[\s\S]*minmax\(210px,[\s\S]*minmax\(430px,[\s\S]*\.business-document-evidence-panel\s*\{[\s\S]*display:\s*block[\s\S]*\.business-document-inline-evidence\s*\{[\s\S]*display:\s*none/
+  );
+
+  assert.match(
+    styles,
+    /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\][\s\S]*\.business-document-evidence-panel[\s\S]*display:\s*none[\s\S]*\.business-document-inline-evidence[\s\S]*display:\s*grid/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="mobile"\][\s\S]*\.business-document-evidence-panel[\s\S]*display:\s*none[\s\S]*\.business-document-inline-evidence[\s\S]*display:\s*grid/
+  );
+
+  assert.match(
+    workspace,
+    /Photos stay private unless you explicitly include them on the[\s\S]*customer document/
   );
 
   assert.match(

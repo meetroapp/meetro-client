@@ -413,19 +413,28 @@ function DeliveryHistory({ deliveries = [] }) {
   return <details className="business-document-delivery-history"><summary>Delivery history ({deliveries.length})</summary><ul>{deliveries.map((delivery) => <li key={delivery.id}><strong>{delivery.state === "FAILED" ? "Failed" : delivery.channel === "EMAIL" ? "Email delivery requested" : "Sent by Meetro Message"}</strong><span>Version {delivery.documentVersion}{delivery.recipientEmail ? ` · ${delivery.recipientEmail}` : ""}</span><time dateTime={delivery.sentAt || delivery.requestedAt || ""}>{delivery.sentAt || delivery.requestedAt ? new Date(delivery.sentAt || delivery.requestedAt).toLocaleString() : "Timestamp pending"}</time></li>)}</ul></details>;
 }
 
-function PhotoAttachmentTray({ photos, assignments, onReview }) {
+function photoEvidenceSummary(photos, assignments) {
   const customerCount = photos.filter(
     (photo) =>
       (assignments[photo.id] || defaultBusinessDocumentPhotoAssignment())
         .visibility === "CUSTOMER_VISIBLE"
   ).length;
   const privateCount = photos.length - customerCount;
-  const visibilityLabel =
-    privateCount && customerCount
-      ? `${privateCount} private · ${customerCount} customer`
-      : customerCount
-        ? "Customer document"
-        : "Private";
+
+  return {
+    customerCount,
+    privateCount,
+    visibilityLabel:
+      privateCount && customerCount
+        ? `${privateCount} private · ${customerCount} customer`
+        : customerCount
+          ? "Customer document"
+          : "Private",
+  };
+}
+
+function PhotoConversationEvidence({ photos, assignments, onReview }) {
+  const summary = photoEvidenceSummary(photos, assignments);
   const visibilityNotice =
     businessDocumentPhotoVisibilityNotice(
       photos,
@@ -434,31 +443,138 @@ function PhotoAttachmentTray({ photos, assignments, onReview }) {
 
   return (
     <section
-      className="business-document-attachment-tray"
-      aria-label="Attached photos"
+      className="business-document-inline-evidence"
+      aria-label="Photos attached to this conversation"
       title={visibilityNotice}
     >
-      <div>
-        <MeetroIcon
-          name="photoCount"
-          size={18}
-          decorative
-        />
-        <span>
-          <strong>
-            {photos.length} {photos.length === 1 ? "photo" : "photos"} attached
-          </strong>
-          <small>{visibilityLabel}</small>
-        </span>
-      </div>
+      <header>
+        <div>
+          <MeetroIcon name="photoCount" size={17} decorative />
+          <span>
+            <strong>
+              {photos.length} {photos.length === 1 ? "photo" : "photos"} attached
+            </strong>
+            <small>{summary.visibilityLabel}</small>
+          </span>
+        </div>
 
-      <button
-        type="button"
-        onClick={onReview}
-      >
-        Review
-      </button>
+        <button type="button" onClick={onReview}>
+          Review
+        </button>
+      </header>
+
+      <div className="business-document-inline-evidence-photos">
+        {photos.map((photo, index) => (
+          <figure key={photo.id}>
+            {photo.previewUrl ? (
+              <img
+                src={photo.previewUrl}
+                alt={photo.name || `Job evidence photo ${index + 1}`}
+              />
+            ) : (
+              <div aria-hidden="true">
+                <MeetroIcon name="photoCount" size={20} decorative />
+              </div>
+            )}
+          </figure>
+        ))}
+      </div>
     </section>
+  );
+}
+
+function JobEvidencePanel({
+  photos,
+  assignments,
+  onReview,
+  onAddPhotos,
+  canAddPhotos,
+  busy,
+}) {
+  const summary = photoEvidenceSummary(photos, assignments);
+
+  return (
+    <aside
+      className="business-document-evidence-panel"
+      aria-labelledby="business-document-evidence-title"
+    >
+      <div className="business-document-evidence-inner">
+        <header className="business-document-evidence-heading">
+          <div>
+            <h2 id="business-document-evidence-title">Job Evidence</h2>
+            <p>
+              {photos.length} {photos.length === 1 ? "photo" : "photos"} attached
+            </p>
+          </div>
+
+          <button type="button" onClick={onReview}>
+            Review
+          </button>
+        </header>
+
+        <div className="business-document-evidence-status">
+          <MeetroIcon name="photoCount" size={16} decorative />
+          <span>{summary.visibilityLabel}</span>
+        </div>
+
+        <div className="business-document-evidence-photo-list">
+          {photos.map((photo, index) => {
+            const assignment =
+              assignments[photo.id] ||
+              defaultBusinessDocumentPhotoAssignment();
+
+            const role =
+              ["UNCLASSIFIED", "GENERAL_EVIDENCE"].includes(assignment.role)
+                ? "General"
+                : assignment.role === "BEFORE"
+                  ? "Before"
+                  : "After";
+
+            const visibility =
+              assignment.visibility === "CUSTOMER_VISIBLE"
+                ? "Customer"
+                : "Private";
+
+            return (
+              <figure key={photo.id}>
+                {photo.previewUrl ? (
+                  <img
+                    src={photo.previewUrl}
+                    alt={photo.name || `Job evidence photo ${index + 1}`}
+                  />
+                ) : (
+                  <div className="business-document-evidence-photo-placeholder">
+                    <MeetroIcon name="photoCount" size={24} decorative />
+                  </div>
+                )}
+                <figcaption>
+                  <span>{index + 1}</span>
+                  <small>{role} · {visibility}</small>
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          className="business-document-evidence-add"
+          onClick={onAddPhotos}
+          disabled={!canAddPhotos || busy}
+        >
+          <MeetroIcon name="photoCount" size={17} decorative />
+          {busy ? "Adding…" : "Add more photos"}
+        </button>
+
+        <div className="business-document-evidence-truth">
+          <strong>Private by default</strong>
+          <p>
+            Photos stay private unless you explicitly include them on the
+            customer document.
+          </p>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -1598,14 +1714,13 @@ export default function UnifiedBusinessDocumentWorkspace({
       <header className="business-document-header"><button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button><div><div className="business-document-title-row"><h1>{activeContent.projectTitle || job.title || "Quote & Invoice"}</h1><span>{recovered ? "Recovered · Not saved" : documentJobIds[activeDocument] ? "Job linked" : "Working draft"}</span></div><p>{activeContent.customerName || job.customerName ? `Customer: ${activeContent.customerName || job.customerName}` : "Customer not selected"}{activeContent.customerLocation || job.location ? ` · ${activeContent.customerLocation || job.location}` : ""}</p></div><div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty ? "Unsaved changes" : "Not saved"}</div></header>
       <DocumentTabs activeDocument={activeDocument} onDocumentChange={switchDocument} onSavedFiles={() => setSavedFilesOpen(true)} />
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
-      <main className="business-document-main">
+      <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Questions stay in private Job Analysis. Explicit document instructions and manual edits update the working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
           <div className="business-document-entry-choice"><button type="button" onClick={usePrefill}><MeetroIcon name="assistant" size={18} decorative /><span><strong>Let Meetro prefill the form</strong><small>Use my conversation details</small></span></button><button type="button" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={18} decorative /><span><strong>Fill the form manually</strong><small>I’ll enter details myself</small></span></button></div>
           <div className="business-document-chat-shell">
-            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
-            {documentPhotos.length ? <PhotoAttachmentTray photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}
             <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           </div>
           <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => setManualState({ focus: "amount" })}>Change Amount</button></div>
@@ -1615,6 +1730,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
+        {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
