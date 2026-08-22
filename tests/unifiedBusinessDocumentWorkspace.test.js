@@ -319,7 +319,22 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*flex:\s*1 1 auto[\s\S]*height:\s*auto[\s\S]*min-height:\s*0/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*auto[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*0[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-composer\s*\{[\s\S]*flex:\s*0 0 auto/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-turns\s*\{[\s\S]*flex:\s*1 1 0[\s\S]*height:\s*0[\s\S]*overflow-y:\s*auto/
   );
 
   assert.match(
