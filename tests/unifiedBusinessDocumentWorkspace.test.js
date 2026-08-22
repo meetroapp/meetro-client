@@ -301,6 +301,53 @@ test("adaptive Job Evidence uses a wide sidecar and inline scrolling phone evide
   );
 });
 
+test("wide Quote workspace contains scrolling inside three panes while phone and iPad portrait remain document-flow layouts", () => {
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-workspace\s*\{[\s\S]*grid-template-rows:\s*auto auto minmax\(0,\s*1fr\)[\s\S]*height:\s*100dvh[\s\S]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-main\s*\{[\s\S]*height:\s*100%[\s\S]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation\s*\{[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column[\s\S]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*flex:\s*1 1 auto[\s\S]*height:\s*auto[\s\S]*min-height:\s*0/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-evidence-inner\s*\{[\s\S]*height:\s*100%[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    styles,
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-preview\s*\{[\s\S]*display:\s*flex[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="mobile"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible/
+  );
+
+  assert.match(
+    styles,
+    /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible/
+  );
+
+  assert.match(
+    styles,
+    /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-evidence-panel\s*\{[\s\S]*display:\s*none[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-inline-evidence\s*\{[\s\S]*display:\s*grid/
+  );
+});
+
 test("Speak, Type, Add Photos, and the live document remain reachable without suggestion cards", () => {
   assert.match(workspace, /<WorkflowMicrophoneInput/);
   assert.match(workspace, /<textarea[^>]*id="business-document-message"/);

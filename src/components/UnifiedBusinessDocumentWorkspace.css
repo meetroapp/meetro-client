@@ -532,25 +532,112 @@
 }
 
 @media (min-width: 901px) {
+  /*
+   * Wide workspace containment:
+   * header + document tabs remain in the usable viewport while
+   * Conversation, Job Evidence, and Live Preview own their scrolling.
+   */
+  .business-document-workspace {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 0;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+
+  .business-document-main {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    align-items: stretch;
+  }
+
   .business-document-main.has-evidence {
     grid-template-columns:
       minmax(300px, .80fr)
       minmax(210px, .48fr)
       minmax(430px, 1.32fr);
   }
+
+  .business-document-conversation {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .business-document-chat-shell {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .business-document-turns {
+    min-height: 0;
+  }
+
   .business-document-evidence-panel {
     display: block;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
   }
+
+  .business-document-evidence-inner {
+    position: static;
+    top: auto;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .business-document-preview {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   .business-document-inline-evidence {
     display: none;
+  }
+
+  /*
+   * A mobile layout must never become a fixed three-pane workspace
+   * merely because a browser/emulator reports a wide viewport.
+   */
+  #root[data-app-layout="mobile"] .business-document-workspace {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    padding-bottom:
+      calc(
+        var(--meetro-mobile-bottom-nav-clearance, 96px) +
+        env(safe-area-inset-bottom)
+      );
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  #root[data-app-layout="mobile"] .business-document-main {
+    height: auto;
+    overflow: visible;
   }
 
   #root[data-app-layout="mobile"] .business-document-main.has-evidence {
     grid-template-columns: minmax(290px, .82fr) minmax(430px, 1.38fr);
   }
+
   #root[data-app-layout="mobile"] .business-document-evidence-panel {
     display: none;
   }
+
   #root[data-app-layout="mobile"] .business-document-inline-evidence {
     display: grid;
   }
@@ -629,12 +716,58 @@
 }
 
 @media (orientation: portrait) {
-  #root[data-app-layout="tablet"] .business-document-main.has-evidence {
-    grid-template-columns: minmax(290px, .82fr) minmax(430px, 1.38fr);
+  #root[data-app-layout="tablet"] .business-document-workspace {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    padding-bottom:
+      calc(
+        var(--meetro-mobile-bottom-nav-clearance, 96px) +
+        env(safe-area-inset-bottom)
+      );
+    overflow-x: clip;
+    overflow-y: visible;
   }
+
+  #root[data-app-layout="tablet"] .business-document-mobile-switch {
+    display: grid;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-main,
+  #root[data-app-layout="tablet"] .business-document-main.has-evidence {
+    display: block;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-conversation,
+  #root[data-app-layout="tablet"] .business-document-preview {
+    display: none;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-conversation.mobile-active,
+  #root[data-app-layout="tablet"] .business-document-preview.mobile-active {
+    display: block;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-conversation {
+    border-right: 0;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-chat-shell {
+    display: flex;
+    height: 58dvh;
+    min-height: 260px;
+  }
+
   #root[data-app-layout="tablet"] .business-document-evidence-panel {
     display: none;
   }
+
   #root[data-app-layout="tablet"] .business-document-inline-evidence {
     display: grid;
   }
