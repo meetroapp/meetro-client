@@ -237,7 +237,7 @@ test("Quick Quote customer model and PDF include only non-empty reviewed agreeme
   assert.match(commands, /Customer Responsibilities/);
   assert.match(commands, /Warranty \/ Workmanship/);
   assert.match(commands, /Acceptance Terms/);
-  assert.match(commands, /SAVED DRAFT/);
+  assert.match(commands, /READY FOR CUSTOMER REVIEW/);
 });
 
 test("branding allowlist accepts safe Cloudinary logos and gracefully falls back to the business name", () => {
@@ -496,14 +496,14 @@ test("working Quote and Invoice PDFs distinguish unsaved previews from saved uni
   for (const model of [unsavedQuote, unsavedInvoice]) {
     assert.equal(model.workingDraftStatus, "UNSAVED");
     assert.match(collectCustomerDocumentText(model), /Draft Preview — Not Saved or Issued/);
-    assert.doesNotMatch(collectCustomerDocumentText(model), /Saved Draft — Not Issued/);
+    assert.doesNotMatch(collectCustomerDocumentText(model), /Ready for Customer Review/);
   }
   for (const model of [savedQuote, savedInvoice]) {
     assert.equal(model.workingDraftStatus, "SAVED");
-    assert.match(collectCustomerDocumentText(model), /Saved Draft — Not Issued/);
+    assert.match(collectCustomerDocumentText(model), /Ready for Customer Review/);
     assert.doesNotMatch(collectCustomerDocumentText(model), /Not Saved or Issued/);
     const renderedText = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
-    assert.match(renderedText, /SAVED DRAFT/);
+    assert.match(renderedText, /READY FOR CUSTOMER REVIEW/);
     assert.doesNotMatch(collectCustomerDocumentText(model), /approved|accepted|delivered/i);
   }
 });

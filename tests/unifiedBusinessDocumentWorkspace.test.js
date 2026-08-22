@@ -79,8 +79,8 @@ test("Live Preview keeps customer Observation separate and uses truthful saved f
   assert.match(workspace, /quote\.recommendedSolution && quote\.projectDescription/);
   assert.match(workspace, /Confirm terms before delivery\./);
   assert.match(workspace, /Not confirmed\./);
-  assert.match(workspace, /Saved Draft - Not Issued/);
-  assert.match(workspace, /Saved Draft - Not Issued or Paid/);
+  assert.match(workspace, /Ready for Customer Review/);
+  assert.match(workspace, /READY FOR CUSTOMER REVIEW/);
   for (const label of ["Due Date", "Amount Paid", "Balance Due"]) {
     assert.match(workspace, new RegExp(`<h3>${label}<\\/h3>`));
   }

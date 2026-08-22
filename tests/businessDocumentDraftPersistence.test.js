@@ -203,6 +203,34 @@ test("saved customer PDF transport binds the exact server document reference and
   assert.equal(calls[0].options.responseType, "blob");
 });
 
+test("saved customer PDF fallback filename preserves document type, reference, and version", async () => {
+  const artifact = await getBusinessDocumentCustomerPdf({
+    draftId: DRAFT_ID,
+    expectedVersion: 10,
+    documentType: "QUOTE",
+    reference: "WQ-TEST-PARITY",
+    authFetchImpl: async () => ({
+      response: {
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name) =>
+            name.toLowerCase() === "content-type"
+              ? "application/pdf"
+              : null,
+        },
+      },
+      data: new Blob(["%PDF-saved"], { type: "application/pdf" }),
+    }),
+  });
+
+  assert.equal(
+    artifact.fileName,
+    "quote-WQ-TEST-PARITY-v10.pdf"
+  );
+  assert.equal(artifact.documentVersion, 10);
+});
+
 test("invalid server projections and governed conflicts fail closed", async () => {
   assert.equal(validateBusinessDocumentDraft({ ...draft(), status: "ISSUED" }), null);
   await assert.rejects(

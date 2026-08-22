@@ -131,7 +131,7 @@ function CustomerPhotoEvidence({ generalPhotos = [], beforePhotos = [], afterPho
   return <section className="business-document-proof" aria-label="Customer-visible Project Photos and Evidence">{generalPhotos.length ? <div><h3>Project Photos / Evidence</h3><PhotoStrip photos={generalPhotos} /></div> : null}{beforePhotos.length ? <div><h3>Before</h3><PhotoStrip photos={beforePhotos} /></div> : null}{afterPhotos.length ? <div><h3>After</h3><PhotoStrip photos={afterPhotos} /></div> : null}</section>;
 }
 
-function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false }) {
+function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, reference = "" }) {
   const rows = quoteRows(quote);
   const agreement = normalizeBusinessDocumentAgreement(quote.agreement);
   const agreementSections = BUSINESS_DOCUMENT_AGREEMENT_FIELDS.filter(([key]) => agreement[key]);
@@ -141,8 +141,8 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
     : "";
   return (
     <article className="business-live-document" aria-label="Live Quote Preview">
-      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>DRAFT PREVIEW</span></div></header>
-      <dl className="business-document-meta"><div><dt>Customer</dt><dd>{quote.customerName || "—"}</dd></div><div><dt>Project</dt><dd>{quote.projectTitle || "—"}</dd></div><div><dt>Quote #</dt><dd>{quote.quoteNumber || "Draft"}</dd></div><div><dt>Date</dt><dd>{quote.quoteDate || "—"}</dd></div></dl>
+      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>{saved ? "READY FOR CUSTOMER REVIEW" : "DRAFT PREVIEW"}</span></div></header>
+      <dl className="business-document-meta"><div><dt>Customer</dt><dd>{quote.customerName || "—"}</dd></div><div><dt>Project</dt><dd>{quote.projectTitle || "—"}</dd></div><div><dt>Quote #</dt><dd>{saved && reference ? reference : quote.quoteNumber || "Draft"}</dd></div><div><dt>Date</dt><dd>{quote.quoteDate || "—"}</dd></div></dl>
       {observation ? <section className="business-document-copy"><h3>Observation</h3><p>{observation}</p></section> : null}
       <section className="business-document-copy"><h3>Scope of Work</h3><p>{quote.recommendedSolution || quote.projectDescription || "Tell Meetro about the work to begin this draft."}</p></section>
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
@@ -151,14 +151,14 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
         {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <div role="row"><span>Working draft</span><strong>—</strong></div>}
         <div className="total" role="row"><span>PROJECT PRICE</span><strong>{quote.total > 0 ? money(quote.total) : "—"}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{saved ? "Saved Draft - Not Issued" : "Draft only. Nothing is issued or approved."}</p></section></div>
+      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{saved ? "Ready for Customer Review" : "Draft only. Nothing is issued or approved."}</p></section></div>
       {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
   );
 }
 
-function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterPhotos, saved = false }) {
+function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, reference = "" }) {
   const rows = invoiceRows(invoice);
   const total = invoiceTotal(invoice);
   const paid = Number(invoice.paidAmount || 0) || 0;
@@ -167,8 +167,8 @@ function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterP
     : Math.max(0, total - paid);
   return (
     <article className="business-live-document" aria-label="Live Invoice Preview">
-      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>DRAFT PREVIEW</span></div></header>
-      <dl className="business-document-meta"><div><dt>Bill To</dt><dd>{invoice.customerName || "—"}</dd></div><div><dt>Job</dt><dd>{invoice.projectTitle || "—"}</dd></div><div><dt>Invoice #</dt><dd>{invoice.invoiceNumber || "Draft"}</dd></div><div><dt>Date</dt><dd>{invoice.invoiceDate || "—"}</dd></div><div><dt>Quote reference</dt><dd>{invoice.quoteReference || "Not linked"}</dd></div></dl>
+      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>{saved ? "READY FOR CUSTOMER REVIEW" : "DRAFT PREVIEW"}</span></div></header>
+      <dl className="business-document-meta"><div><dt>Bill To</dt><dd>{invoice.customerName || "—"}</dd></div><div><dt>Job</dt><dd>{invoice.projectTitle || "—"}</dd></div><div><dt>Invoice #</dt><dd>{saved && reference ? reference : invoice.invoiceNumber || "Draft"}</dd></div><div><dt>Date</dt><dd>{invoice.invoiceDate || "—"}</dd></div><div><dt>Quote reference</dt><dd>{invoice.quoteReference || "Not linked"}</dd></div></dl>
       <section className="business-document-copy"><h3>Work Completed</h3><p>{invoice.workPerformed || "Completion details have not been confirmed."}</p></section>
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
       <div className="business-document-table" role="table" aria-label="Invoice summary">
@@ -176,7 +176,7 @@ function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterP
         {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <div role="row"><span>Working draft</span><strong>—</strong></div>}
         <div className="total" role="row"><span>TOTAL DUE</span><strong>{total > 0 ? money(total) : "—"}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{invoice.paymentTerms || "Not confirmed."}</p></section><section><h3>Due Date</h3><p>{invoice.dueDate || "Not confirmed."}</p></section><section><h3>Amount Paid</h3><p>{money(paid)}</p></section><section><h3>Balance Due</h3><p>{money(balance)}</p></section><section><h3>Status</h3><p>{saved ? "Saved Draft - Not Issued or Paid" : "Draft only. Payment and completion are not inferred."}</p></section></div>
+      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{invoice.paymentTerms || "Not confirmed."}</p></section><section><h3>Due Date</h3><p>{invoice.dueDate || "Not confirmed."}</p></section><section><h3>Amount Paid</h3><p>{money(paid)}</p></section><section><h3>Balance Due</h3><p>{money(balance)}</p></section><section><h3>Status</h3><p>{saved ? "Ready for Customer Review" : "Draft only. Payment and completion are not inferred."}</p></section></div>
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
   );
@@ -842,6 +842,8 @@ export default function UnifiedBusinessDocumentWorkspace({
     return getBusinessDocumentCustomerPdf({
       draftId: document.id,
       expectedVersion: document.version,
+      documentType: document.documentType,
+      reference: document.reference,
       setPage,
     });
   }
@@ -1025,7 +1027,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
           <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}

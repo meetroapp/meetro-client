@@ -127,6 +127,8 @@ function responseFilename(response, fallback) {
 export async function getBusinessDocumentCustomerPdf({
   draftId,
   expectedVersion,
+  documentType,
+  reference,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
@@ -143,7 +145,10 @@ export async function getBusinessDocumentCustomerPdf({
   }
   return Object.freeze({
     blob: data,
-    fileName: responseFilename(response, `customer-document-v${expectedVersion}.pdf`),
+    fileName: responseFilename(
+      response,
+      `${String(documentType || "customer-document").toLowerCase()}-${String(reference || "document")}-v${expectedVersion}.pdf`
+    ),
     contentType,
     documentId: draftId,
     documentVersion: Number(expectedVersion),

@@ -35,10 +35,10 @@ const AGREEMENT_LABELS = Object.freeze({
 });
 
 const WORKING_DRAFT_LABELS = Object.freeze({
-  en: Object.freeze({ unsavedLabel: "DRAFT PREVIEW", savedLabel: "SAVED DRAFT", unsavedStatus: "Draft Preview — Not Saved or Issued", savedStatus: "Saved Draft — Not Issued" }),
-  es: Object.freeze({ unsavedLabel: "VISTA PREVIA", savedLabel: "BORRADOR GUARDADO", unsavedStatus: "Vista previa del borrador — No guardado ni emitido", savedStatus: "Borrador guardado — No emitido" }),
-  fr: Object.freeze({ unsavedLabel: "APERCU DU BROUILLON", savedLabel: "BROUILLON ENREGISTRE", unsavedStatus: "Apercu du brouillon — Non enregistre ni emis", savedStatus: "Brouillon enregistre — Non emis" }),
-  "pt-BR": Object.freeze({ unsavedLabel: "PRE-VISUALIZACAO", savedLabel: "RASCUNHO SALVO", unsavedStatus: "Pre-visualizacao do rascunho — Nao salvo nem emitido", savedStatus: "Rascunho salvo — Nao emitido" }),
+  en: Object.freeze({ unsavedLabel: "DRAFT PREVIEW", savedLabel: "READY FOR CUSTOMER REVIEW", unsavedStatus: "Draft Preview — Not Saved or Issued", savedStatus: "Ready for Customer Review" }),
+  es: Object.freeze({ unsavedLabel: "VISTA PREVIA", savedLabel: "LISTO PARA REVISION DEL CLIENTE", unsavedStatus: "Vista previa del borrador — No guardado ni emitido", savedStatus: "Listo para revision del cliente" }),
+  fr: Object.freeze({ unsavedLabel: "APERCU DU BROUILLON", savedLabel: "PRET POUR EXAMEN CLIENT", unsavedStatus: "Apercu du brouillon — Non enregistre ni emis", savedStatus: "Pret pour examen du client" }),
+  "pt-BR": Object.freeze({ unsavedLabel: "PRE-VISUALIZACAO", savedLabel: "PRONTO PARA REVISAO DO CLIENTE", unsavedStatus: "Pre-visualizacao do rascunho — Nao salvo nem emitido", savedStatus: "Pronto para revisao do cliente" }),
 });
 
 function labels(locale) {
