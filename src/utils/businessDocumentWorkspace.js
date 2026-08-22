@@ -17,6 +17,34 @@ export function normalizeBusinessDocumentTab(value) {
   return value === "invoice" ? "invoice" : "quote";
 }
 
+const EXPLICIT_DOCUMENT_EDIT_REQUEST =
+  /^(?:please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\b|^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\b/i;
+
+const QUESTION_LEAD =
+  /^(?:what|why|how|when|where|who|which|do|does|did|can|could|would|will|should|is|are|was|were|may|might|have|has|had)\b/i;
+
+const ANALYSIS_REQUEST =
+  /^(?:please\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify)\b/i;
+
+export function classifyBusinessDocumentConversationIntent(instruction) {
+  const text = cleanText(instruction);
+  if (!text) return "EMPTY";
+
+  if (EXPLICIT_DOCUMENT_EDIT_REQUEST.test(text)) {
+    return "DOCUMENT_EDIT";
+  }
+
+  if (
+    text.includes("?") ||
+    QUESTION_LEAD.test(text) ||
+    ANALYSIS_REQUEST.test(text)
+  ) {
+    return "ASK_MEETRO";
+  }
+
+  return "DOCUMENT_EDIT";
+}
+
 export function buildInvoiceConversationPatch({ instruction } = {}) {
   const text = cleanText(instruction);
   if (!text) return Object.freeze({});
@@ -76,6 +104,10 @@ export function buildBusinessDocumentConversationPatch({
   current = {},
   revision,
 } = {}) {
+  if (classifyBusinessDocumentConversationIntent(instruction) === "ASK_MEETRO") {
+    return Object.freeze({});
+  }
+
   const privateInstruction = /\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b/i.test(
     cleanText(instruction)
   );

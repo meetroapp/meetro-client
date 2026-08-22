@@ -66,6 +66,70 @@ test("conversation and manual entry update one working Quote draft", () => {
   assert.match(workspace, /onClick=\{onCancel\}>Cancel/);
 });
 
+test("Ask Meetro questions and analysis requests cannot silently mutate the working document", () => {
+  for (const instruction of [
+    "Do you find visible damage?",
+    "What do you see in these photos?",
+    "Should I replace the fan or repair it?",
+    "Analyze these photos for damage.",
+    "Assess the condition of this fan.",
+  ]) {
+    assert.deepEqual(
+      buildBusinessDocumentConversationPatch({
+        documentType: "quote",
+        instruction,
+        current: {},
+      }),
+      {},
+      instruction
+    );
+  }
+
+  const baseline = {
+    projectDescription: "Replace the existing fan.",
+    recommendedSolution: "Replace the existing fan.",
+    totalOverride: "289.99",
+  };
+
+  const reconciled = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline,
+    instructions: [
+      { id: "analysis-question", text: "Do you find visible damage?" },
+    ],
+  });
+
+  assert.deepEqual(reconciled.draft, baseline);
+  assert.equal(reconciled.privateReminders.length, 0);
+  assert.equal(reconciled.photoIntents.length, 0);
+});
+
+test("explicit document edits still bypass the Ask Meetro question guard", () => {
+  const labor = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Can you change labor to $225?",
+    current: {},
+  });
+  assert.deepEqual(labor.laborItems, [
+    { description: "labor", total: "225" },
+  ]);
+
+  const privatePatch = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Can you keep this private?",
+    current: {},
+  });
+  assert.equal(privatePatch.privateReminder, "Can you keep this private?");
+
+  const scope = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Replace the wall.",
+    current: {},
+  });
+  assert.equal(scope.projectDescription, "Replace the wall.");
+  assert.equal(scope.recommendedSolution, "Replace the wall.");
+});
+
 test("Speak, Type, Add Photos, and the live document remain reachable without suggestion cards", () => {
   assert.match(workspace, /<WorkflowMicrophoneInput/);
   assert.match(workspace, /<textarea[^>]*id="business-document-message"/);
