@@ -1042,3 +1042,52 @@ test("Ask Meetro immediately shows the submitted professional message while gove
   assert.doesNotMatch(askBlock, /onApplyQuotePatch\(/);
   assert.doesNotMatch(askBlock, /setInvoice\(/);
 });
+
+test("initial Job Analysis timeout keeps its session, evidence, instruction, and governed retry path", () => {
+  const askBlock = workspace.slice(
+    workspace.indexOf("async function submitAskMeetro"),
+    workspace.indexOf("async function submitInstruction")
+  );
+
+  const createStart =
+    askBlock.indexOf("if (!sessionId)");
+  const sessionStored =
+    askBlock.indexOf("setJobAnalysisSessionIds", createStart);
+  const initialAnalyze =
+    askBlock.indexOf("await analyzeQuickQuoteAnalysisSession", sessionStored);
+  const failureStart =
+    askBlock.indexOf("catch (error)");
+
+  assert.ok(createStart >= 0);
+  assert.ok(sessionStored > createStart);
+  assert.ok(initialAnalyze > sessionStored);
+  assert.ok(failureStart > initialAnalyze);
+
+  // A governed provider timeout is not a missing-session response, so the
+  // durable session identity remains available for the next attempt.
+  const failureBlock =
+    askBlock.slice(failureStart);
+  assert.match(
+    failureBlock,
+    /if \(error\?\.status === 404\)[\s\S]*setJobAnalysisSessionIds/
+  );
+  assert.doesNotMatch(
+    failureBlock,
+    /setMessage\(\(current\)/
+  );
+
+  // Reloading the retained session compares the same instruction/photos,
+  // skips evidence append when unchanged, and invokes initial analysis again.
+  assert.match(
+    askBlock,
+    /const evidenceChanged =[\s\S]*String\([\s\S]*latestEvidence\.professionalInput[\s\S]*!== instruction/
+  );
+  assert.match(
+    askBlock,
+    /if \(evidenceChanged\) \{[\s\S]*appendQuickQuoteAnalysisEvidence[\s\S]*\}[\s\S]*await analyzeQuickQuoteAnalysisSession/
+  );
+
+  assert.doesNotMatch(askBlock, /reconcileDocument\(/);
+  assert.doesNotMatch(askBlock, /onApplyQuotePatch\(/);
+  assert.doesNotMatch(askBlock, /setInvoice\(/);
+});
