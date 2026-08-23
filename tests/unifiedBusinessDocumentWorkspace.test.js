@@ -67,6 +67,38 @@ test("conversation and manual entry update one working Quote draft", () => {
   assert.match(workspace, /onClick=\{onCancel\}>Cancel/);
 });
 
+test("manual builder keeps core fields editable, server number read-only, and Business Terms collapsed", () => {
+  assert.match(workspace, /className="business-document-number-field"/);
+  assert.match(workspace, /documentNumber \|\| "Assigned on first save"/);
+  assert.match(workspace, /readOnly aria-readonly="true"/);
+  assert.match(workspace, /<legend>\{activeDocument === "quote" \? "Quote details" : "Invoice details"\}<\/legend>/);
+  assert.match(workspace, /<h3 id="business-document-manual-pricing-title">Pricing<\/h3>/);
+  assert.match(workspace, /<legend>Payment<\/legend>/);
+  assert.match(workspace, /<legend>Customer notes<\/legend>/);
+  assert.match(workspace, /<details className="business-document-agreement-editor"><summary>Business terms<\/summary>/);
+  assert.match(workspace, />Apply changes<\/button>/);
+  assert.match(workspace, /onClick=\{onCancel\}>Cancel<\/button>/);
+  assert.match(workspace, /\["total", "canonicalStatus", "quoteNumber", "invoiceNumber"\]\.includes\(key\)/);
+  assert.match(styles, /\.business-document-number-field input\[readonly\]/);
+  assert.match(styles, /\.business-document-manual-fields > div/);
+});
+
+test("server-owned document number requests remain non-mutating and outside Job Analysis", () => {
+  const instruction = "quote number BG-0001020";
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(instruction, {
+      hasActiveAnalysisSession: true,
+    }),
+    "DOCUMENT_NUMBER_REQUEST"
+  );
+  assert.deepEqual(buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction,
+    current: { projectDescription: "Existing scope", totalOverride: "2650" },
+  }), {});
+  assert.match(persistence, /Document numbers are assigned by Meetro/);
+});
+
 test("compact workspace controls stay outside conversation history and open a non-mutating workflow guide", () => {
   const toolbarStart = workspace.indexOf('className="business-document-control-toolbar"');
   const turnsStart = workspace.indexOf('ref={turnsRef} className="business-document-turns"');
@@ -364,6 +396,43 @@ test("active Job Analysis yields to strong structured professional document inpu
   }
 });
 
+test("same-line colon-labeled Quote facts escape active analysis without broadening ordinary observations", () => {
+  const instruction = "Customer: Jack Smith Scope: Front knee wall reconstruction Price: $2,650 Estimated duration: 3–4 working days";
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(instruction, {
+      hasActiveAnalysisSession: true,
+    }),
+    "DOCUMENT_INPUT"
+  );
+
+  const patch = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction,
+    current: {},
+  });
+  assert.equal(patch.customerName, "Jack Smith");
+  assert.equal(patch.projectDescription, "Front knee wall reconstruction");
+  assert.equal(patch.recommendedSolution, "Front knee wall reconstruction");
+  assert.equal(patch.totalOverride, "2650");
+  assert.equal(patch.estimatedDuration, "3–4 working days");
+  assert.equal(Object.hasOwn(patch, "problemFound"), false);
+
+  for (const observation of [
+    "The material could cost around $400.",
+    "The crack is about 4 feet.",
+    "Do you think this is a $2,000 repair?",
+    "I see cracking near the base.",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(observation, {
+        hasActiveAnalysisSession: true,
+      }),
+      "ASK_MEETRO",
+      observation
+    );
+  }
+});
+
 test("knee-wall document facts update only supported working-draft fields and can alternate with private analysis", () => {
   const instruction = [
     "Customer: Paul Becker",
@@ -640,7 +709,7 @@ test("Live Preview keeps customer Observation separate and uses truthful saved f
   assert.match(workspace, /Confirm terms before delivery\./);
   assert.match(workspace, /Not confirmed\./);
   assert.match(workspace, /Ready for Customer Review/);
-  assert.match(workspace, /READY FOR CUSTOMER REVIEW/);
+  assert.match(workspace, /WORKING DRAFT/);
   for (const label of ["Due Date", "Amount Paid", "Balance Due"]) {
     assert.match(workspace, new RegExp(`<h3>${label}<\\/h3>`));
   }
@@ -706,6 +775,99 @@ test("Quote and Invoice delivery use one menu while PDF remains separate", () =>
   assert.doesNotMatch(workspace, />Save \{activeDocument === "quote"/);
 });
 
+test("numbering setup is a one-time WorkspaceDialog with explicit Quote and Invoice choices", () => {
+  assert.match(workspace, /const \[numberingSetup, setNumberingSetup\] = useState\(null\)/);
+  assert.match(workspace, /function NumberingSetupDialog/);
+  assert.match(workspace, /title=\{`Set up \$\{label\} numbering`\}/);
+  assert.match(workspace, /This is a one-time setup for this business/);
+  assert.match(workspace, /Your current draft has not been sent or issued/);
+  assert.match(workspace, /Start new numbering/);
+  assert.match(workspace, /Continue existing numbering/);
+  assert.match(workspace, /checked=\{state\.mode === "START_NEW"\}/);
+  assert.match(workspace, /checked=\{continueExisting\}/);
+  assert.match(workspace, /state\.checking \? <p role="status">Checking the business numbering status/);
+  assert.match(workspace, /Last \{label\} number/);
+  assert.match(workspace, /placeholder="BG-0001019"/);
+  assert.match(workspace, /role="alert"/);
+  assert.match(workspace, /numberingSetup \? <NumberingSetupDialog/);
+  assert.match(styles, /\.business-document-numbering-setup/);
+  assert.doesNotMatch(workspace, /numbering settings|Manage numbering|Change numbering/);
+});
+
+test("setup-required save preserves the save intent and bypasses the generic failure dialog", () => {
+  const saveBlock = workspace.slice(
+    workspace.indexOf("async function saveDocument"),
+    workspace.indexOf("async function restoreJobAnalysisPresentation")
+  );
+  const successBlock = saveBlock.slice(saveBlock.indexOf("try {"), saveBlock.indexOf("} catch (error)"));
+  const setupBranch = saveBlock.slice(
+    saveBlock.indexOf('if (error?.code === "BUSINESS_DOCUMENT_NUMBERING_SETUP_REQUIRED")'),
+    saveBlock.indexOf("if (!suppressFailureDialog) setSaveFailureOpen(true)")
+  );
+  assert.match(saveBlock, /saveJobId = prepared\.payload\.jobId \|\| null/);
+  assert.match(saveBlock, /idempotencyKey: saveAttemptKeysRef\.current\[documentType\]/);
+  assert.match(setupBranch, /openNumberingSetup\(\{ documentType, jobId: saveJobId, suppressFailureDialog \}\)/);
+  assert.doesNotMatch(setupBranch, /saveAttemptKeysRef\.current\[documentType\] = ""/);
+  assert.doesNotMatch(setupBranch, /setSaveFailureOpen\(true\)/);
+  assert.doesNotMatch(successBlock, /setNumberingSetup|openNumberingSetup/);
+  assert.match(successBlock, /saveAttemptKeysRef\.current\[documentType\] = ""/);
+  assert.match(successBlock, /setSavedDocuments/);
+});
+
+test("numbering setup checks the server, preserves Job context, and retries the original save once", () => {
+  const setupBlock = workspace.slice(
+    workspace.indexOf("async function openNumberingSetup"),
+    workspace.indexOf("async function restoreJobAnalysisPresentation")
+  );
+  assert.match(setupBlock, /getBusinessDocumentNumbering/);
+  assert.match(setupBlock, /documentType: documentType\.toUpperCase\(\)/);
+  assert.match(setupBlock, /jobId: setup\.jobId/);
+  assert.match(setupBlock, /if \(numbering\.initialized\)/);
+  assert.match(setupBlock, /setNumberingSetup\(\{ \.\.\.setup, busy: false, checking: false \}\)/);
+  assert.match(setupBlock, /return saveDocument\(documentType, \{[\s\S]*numberingRetry: true/);
+  assert.match(setupBlock, /initializeBusinessDocumentNumbering/);
+  assert.match(setupBlock, /mode: setup\.mode/);
+  assert.match(setupBlock, /previousDocumentNumber = setup\.previousDocumentNumber\.trim\(\)/);
+  assert.match(setupBlock, /\{ previousDocumentNumber \}/);
+  assert.match(setupBlock, /const saved = await saveDocument\(setup\.documentType/);
+  assert.match(setupBlock, /setNumberingSetup\(null\)/);
+  assert.match(setupBlock, /setNumberingSetup\(\(current\) => current\?\.busy \? current : null\)/);
+  assert.doesNotMatch(setupBlock, /deliverBusinessDocumentDraft|sendCurrentDelivery|beginDelivery|issue|approve|payment|lifecycle|localStorage|sessionStorage/);
+});
+
+test("continuation validation stays in the dialog and the retry guard is bounded", () => {
+  const dialogBlock = workspace.slice(
+    workspace.indexOf("function NumberingSetupDialog"),
+    workspace.indexOf("function DeliveryHistory")
+  );
+  const saveBlock = workspace.slice(
+    workspace.indexOf("async function saveDocument"),
+    workspace.indexOf("async function restoreJobAnalysisPresentation")
+  );
+  assert.match(dialogBlock, /value=\{state\.previousDocumentNumber\}/);
+  assert.match(dialogBlock, /continueExisting && !state\.previousDocumentNumber\.trim\(\)/);
+  assert.match(dialogBlock, /state\.error \? <p className="business-document-numbering-error" role="alert"/);
+  assert.match(saveBlock, /if \(numberingRetry\)/);
+  assert.match(saveBlock, /retryBlocked: true/);
+  assert.match(dialogBlock, /state\.mode && !state\.retryBlocked/);
+  assert.match(workspace, /saved === NUMBERING_SETUP_PENDING/);
+  assert.match(workspace, /document === NUMBERING_SETUP_PENDING/);
+  assert.match(workspace, /Nothing was sent/);
+});
+
+test("numbering setup leaves manual entry recovery and unrelated save failures intact", () => {
+  assert.match(workspace, /if \(!suppressFailureDialog\) setSaveFailureOpen\(true\)/);
+  assert.match(workspace, /title="We couldn't save your draft right now"/);
+  assert.match(workspace, /<ManualEditor/);
+  assert.match(workspace, /Continue Where I Left Off/);
+  assert.match(workspace, /businessDocumentSavedResumeTarget/);
+  const cancelBlock = workspace.slice(
+    workspace.indexOf("function cancelNumberingSetup"),
+    workspace.indexOf("async function submitNumberingSetup")
+  );
+  assert.doesNotMatch(cancelBlock, /setTurns|setInvoice|onApplyQuotePatch|setSavedDocuments|deliverBusinessDocumentDraft/);
+});
+
 test("explicit professional instructions update structured Quote Agreement terms without changing scope", () => {
   const hidden = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Add standard hidden-condition protection.", current: { projectDescription: "Replace the fan." } });
   assert.match(hidden.agreement.hiddenConditionsTerms, /Concealed or reasonably undiscoverable conditions/);
@@ -718,7 +880,7 @@ test("explicit professional instructions update structured Quote Agreement terms
   assert.match(diagnostic.agreement.diagnosticTerms, /remain due/);
   const limit = buildBusinessDocumentConversationPatch({ documentType: "quote", instruction: "Additional work up to $150 may proceed without a separate Change Order.", current: {} });
   assert.equal(limit.agreement.preauthorizedAdditionalWorkLimit, "$150");
-  assert.match(workspace, /Suggested business terms/);
+  assert.match(workspace, /<summary>Business terms<\/summary>/);
   assert.match(workspace, /Use hidden-condition protection/);
 });
 

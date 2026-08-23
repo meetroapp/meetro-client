@@ -21,7 +21,7 @@ function firstMatch(text, patterns) {
 }
 
 const STRUCTURED_QUOTE_FIELD =
-  /(?:^|[\n\r]|[.!?;]\s*)\s*(customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|final\s+price|project\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*/gi;
+  /\b(customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|materials?\s+total|labor\s+total|installation\s+total|tax\s+total|subtotal|final\s+price|project\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*/gi;
 
 function structuredFieldName(value) {
   const label = cleanText(value).toLowerCase();
@@ -120,12 +120,16 @@ function explicitCustomerLocation(text) {
   return cleanText(match?.[1] || "");
 }
 
-function explicitDuration(text) {
-  const match = text.match(/(?:about|around|approximately|duration|takes?|should\s+take|dura(?:ción|ção)?|aproximadamente|environ|durée)?\s*((?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?))/i);
+function normalizeDurationNumberWords(value) {
   const words = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
-  return cleanText(match?.[1] || "")
+  return cleanText(value)
     .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (word) => words[word.toLowerCase()])
     .replace(/^a\s+/i, "1 ");
+}
+
+function explicitDuration(text) {
+  const match = text.match(/(?:about|around|approximately|duration|takes?|should\s+take|dura(?:ción|ção)?|aproximadamente|environ|durée)?\s*((?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?))/i);
+  return normalizeDurationNumberWords(match?.[1] || "");
 }
 
 function replaceExistingDuration(value, duration) {
@@ -335,7 +339,9 @@ export function buildQuickQuoteConversationPatch({
   const laborItems = explicitLaborItems(instruction);
   const customerName = cleanText(structured.customer || explicitCustomerName(instruction));
   const customerLocation = explicitCustomerLocation(instruction);
-  const duration = cleanText(structured.duration || explicitDuration(instruction));
+  const duration = normalizeDurationNumberWords(
+    structured.duration || explicitDuration(instruction)
+  );
   const deposit = explicitDeposit(instruction);
   const note = cleanText(structured.notes || explicitNote(instruction));
   const condition = explicitCondition(instruction);

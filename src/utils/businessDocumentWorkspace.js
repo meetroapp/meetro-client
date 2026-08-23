@@ -26,8 +26,15 @@ const QUESTION_LEAD =
 const ANALYSIS_REQUEST =
   /^(?:please\s+)?(?:(?:help\s+me\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify|review|check)\b|look\s+at\b|tell\s+me\s+what\s+you\s+(?:see|notice|find)\b|i(?:\s+will|['’]ll|\s+am\s+going\s+to)\s+(?:send|share|upload)\b.*\b(?:review|analy[sz]e|assess|inspect|evaluate|diagnose|check)\b)/i;
 
+const SERVER_OWNED_DOCUMENT_NUMBER_REQUEST =
+  /^(?:please\s+)?(?:set|change|update|use)?\s*(?:the\s+)?(?:quote|invoice)\s*(?:number|#)\b/i;
+
+export function isServerOwnedDocumentNumberRequest(instruction) {
+  return SERVER_OWNED_DOCUMENT_NUMBER_REQUEST.test(cleanText(instruction));
+}
+
 const STRONG_DOCUMENT_FIELD_LABEL =
-  /(?:^|[\n\r]|[.!?;]\s*)\s*(?:customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*\S/i;
+  /\b(?:customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*\S/i;
 
 const STRONG_DOCUMENT_FIELD_PHRASE =
   /(?:^|[\n\r.!?;]\s*)(?:(?:final\s+price|project\s+price|quote\s+total|price|total)\s+(?:is|to)\s*\$\s*[\d,.]+|(?:estimated\s+duration|duration)\s+is\s+\S|payment\s+terms?\s+(?:is|are)\s+\S|scope(?:\s+of\s+work)?\s+is\s+\S)/i;
@@ -55,6 +62,10 @@ export function classifyBusinessDocumentConversationIntent(
 ) {
   const text = cleanText(instruction);
   if (!text) return "EMPTY";
+
+  if (isServerOwnedDocumentNumberRequest(text)) {
+    return "DOCUMENT_NUMBER_REQUEST";
+  }
 
   /*
    * Explicit document commands always retain deterministic
@@ -143,6 +154,10 @@ export function buildBusinessDocumentConversationPatch({
   current = {},
   revision,
 } = {}) {
+  if (isServerOwnedDocumentNumberRequest(instruction)) {
+    return Object.freeze({});
+  }
+
   if (classifyBusinessDocumentConversationIntent(instruction) === "ASK_MEETRO") {
     return Object.freeze({});
   }

@@ -1,6 +1,10 @@
 import { authFetch } from "./authFetch.js";
 
 const DOCUMENT_TYPES = new Set(["QUOTE", "INVOICE"]);
+const NUMBERING_INITIALIZATION_MODES = new Set(["START_NEW", "CONTINUE_EXISTING"]);
+const NUMBERING_PREFIX_PATTERN = /^[A-Z]{1,8}$/;
+const DOCUMENT_NUMBER_PATTERN = /^[A-Z]{1,8}-[0-9]{1,12}$/;
+const MAX_SEQUENCE_NUMBER = 999999999999;
 const PHOTO_ROLES = new Set(["UNCLASSIFIED", "GENERAL_EVIDENCE", "BEFORE", "AFTER"]);
 const PHOTO_VISIBILITIES = new Set(["PRIVATE_INTERNAL", "CUSTOMER_VISIBLE"]);
 const PHOTO_INTENTS = new Set(["BEFORE", "AFTER"]);
@@ -28,6 +32,38 @@ export function createBusinessDocumentSaveKey(cryptoProvider = globalThis.crypto
 
 function plain(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validTimestamp(value) {
+  return typeof value === "string" && value.trim() && !Number.isNaN(Date.parse(value));
+}
+
+export function validateBusinessDocumentNumbering(value) {
+  if (!plain(value) || typeof value.initialized !== "boolean" ||
+      !DOCUMENT_TYPES.has(value.documentType)) return null;
+  if (!value.initialized) {
+    return Object.freeze({ initialized: false, documentType: value.documentType });
+  }
+  if (!NUMBERING_PREFIX_PATTERN.test(value.prefix) ||
+      !Number.isSafeInteger(value.width) || value.width < 1 || value.width > 12 ||
+      !Number.isSafeInteger(value.lastNumber) || value.lastNumber < 0 ||
+      value.lastNumber > MAX_SEQUENCE_NUMBER ||
+      (value.nextNumberPreview !== null && !DOCUMENT_NUMBER_PATTERN.test(value.nextNumberPreview)) ||
+      !NUMBERING_INITIALIZATION_MODES.has(value.initializationMode) ||
+      !validTimestamp(value.initializedAt) ||
+      (value.firstAllocatedAt !== undefined && value.firstAllocatedAt !== null &&
+        !validTimestamp(value.firstAllocatedAt))) return null;
+  return Object.freeze({
+    initialized: true,
+    documentType: value.documentType,
+    prefix: value.prefix,
+    width: value.width,
+    lastNumber: value.lastNumber,
+    nextNumberPreview: value.nextNumberPreview,
+    initializationMode: value.initializationMode,
+    initializedAt: value.initializedAt,
+    firstAllocatedAt: value.firstAllocatedAt ?? null,
+  });
 }
 
 function validatePhoto(value) {
@@ -83,6 +119,8 @@ export function validateBusinessDocumentDraft(value) {
       !DOCUMENT_TYPES.has(value.documentType) ||
       value.status !== "WORKING_DRAFT" ||
       typeof value.reference !== "string" ||
+      (value.documentNumber !== undefined && value.documentNumber !== null &&
+        (typeof value.documentNumber !== "string" || !value.documentNumber.trim())) ||
       !Number.isSafeInteger(value.version) || value.version < 1 ||
       !plain(value.content) || !workspace ||
       !Array.isArray(value.photos) || !value.photos.every(validatePhoto) ||
@@ -112,6 +150,55 @@ async function request(endpoint, options, { setPage, authFetchImpl = authFetch }
   const { response, data } = await authFetchImpl(endpoint, options, setPage);
   if (!response?.ok || data?.success !== true) throw apiError(response, data);
   return data;
+}
+
+function validatedNumberingResponse(data, expectedDocumentType) {
+  const numbering = validateBusinessDocumentNumbering(data?.numbering);
+  if (!numbering || numbering.documentType !== expectedDocumentType) {
+    throw new BusinessDocumentDraftError("The server returned invalid business-document numbering.", {
+      code: "BUSINESS_DOCUMENT_NUMBERING_RESPONSE_INVALID",
+    });
+  }
+  return numbering;
+}
+
+export async function getBusinessDocumentNumbering({
+  documentType,
+  jobId,
+  setPage,
+  authFetchImpl,
+} = {}) {
+  const expectedDocumentType = String(documentType || "").trim().toUpperCase();
+  const parameters = new URLSearchParams();
+  parameters.set("documentType", expectedDocumentType);
+  if (String(jobId || "").trim()) parameters.set("jobId", String(jobId).trim());
+  const data = await request(
+    `/business-document-numbering?${parameters.toString()}`,
+    { method: "GET" },
+    { setPage, authFetchImpl }
+  );
+  return validatedNumberingResponse(data, expectedDocumentType);
+}
+
+export async function initializeBusinessDocumentNumbering({
+  payload,
+  setPage,
+  authFetchImpl,
+} = {}) {
+  const data = await request("/business-document-numbering", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }, { setPage, authFetchImpl });
+  const numbering = validatedNumberingResponse(
+    data,
+    String(payload?.documentType || "").trim().toUpperCase()
+  );
+  if (!numbering.initialized) {
+    throw new BusinessDocumentDraftError("The server did not initialize business-document numbering.", {
+      code: "BUSINESS_DOCUMENT_NUMBERING_RESPONSE_INVALID",
+    });
+  }
+  return numbering;
 }
 
 function responseFilename(response, fallback) {
@@ -214,6 +301,8 @@ function validateDelivery(value) {
   if (!plain(value) || !UUID_PATTERN.test(String(value.id || "")) ||
       !UUID_PATTERN.test(String(value.documentId || "")) ||
       !DOCUMENT_TYPES.has(value.documentType) ||
+      (value.documentNumber !== undefined && value.documentNumber !== null &&
+        (typeof value.documentNumber !== "string" || !value.documentNumber.trim())) ||
       !Number.isSafeInteger(value.documentVersion) || value.documentVersion < 1 ||
       !new Set(["EMAIL", "MEETRO_MESSAGE"]).has(value.channel) ||
       !new Set(["REQUESTING", "DELIVERY_REQUESTED", "SENT", "FAILED"]).has(value.state)) return null;

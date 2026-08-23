@@ -1,5 +1,6 @@
 import {
   buildBusinessDocumentConversationPatch,
+  isServerOwnedDocumentNumberRequest,
   reconcileBusinessDocumentInstructions,
 } from "./businessDocumentWorkspace.js";
 import { normalizeBusinessDocumentAgreement } from "./businessDocumentAgreement.js";
@@ -158,6 +159,9 @@ export function businessDocumentPhotoVisibilityNotice(photos = [], assignments =
 
 export function businessDocumentTurnResponse(turn = {}) {
   if (String(turn.responseText || "").trim()) return String(turn.responseText).trim();
+  if (isServerOwnedDocumentNumberRequest(turn.text)) {
+    return "Document numbers are assigned by Meetro when the working document is first saved and cannot be changed in conversation.";
+  }
   if (turn.privateReminder === true) return "Private reminder saved for this working document.";
   if (["before", "after", "BEFORE", "AFTER"].includes(turn.photoIntent)) {
     return "Photo classification updated for this working document.";

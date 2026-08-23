@@ -3,6 +3,7 @@ export const BUSINESS_DOCUMENT_RECOVERY_MAX_BYTES = 25 * 1024 * 1024;
 const DATABASE_NAME = "meetro-business-document-recovery";
 const STORE_NAME = "recovery-sessions";
 const DATABASE_VERSION = 1;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function identity(value) {
   const normalized = String(value || "").trim();
@@ -163,10 +164,14 @@ export function clearDeletedBusinessDocumentRecoverySnapshot(snapshot, draftId) 
   if (!plain(snapshot)) return Object.freeze({ changed: false, snapshot });
   const target = identity(draftId);
   const savedDocuments = plain(snapshot.savedDocuments) ? { ...snapshot.savedDocuments } : {};
+  const savedResume = businessDocumentSavedResumeTarget(snapshot);
   const matchingTypes = Object.entries(savedDocuments)
     .filter(([, document]) => document?.id === target)
     .map(([documentType]) => documentType);
-  if (!target || !matchingTypes.length) return Object.freeze({ changed: false, snapshot });
+  const resumeMatches = savedResume?.draftId === target;
+  if (!target || (!matchingTypes.length && !resumeMatches)) {
+    return Object.freeze({ changed: false, snapshot });
+  }
   const savedFingerprints = plain(snapshot.savedFingerprints)
     ? { ...snapshot.savedFingerprints }
     : {};
@@ -176,8 +181,22 @@ export function clearDeletedBusinessDocumentRecoverySnapshot(snapshot, draftId) 
   }
   return Object.freeze({
     changed: true,
-    snapshot: { ...snapshot, savedDocuments, savedFingerprints },
+    snapshot: {
+      ...snapshot,
+      savedDocuments,
+      savedFingerprints,
+      ...(resumeMatches ? { resume: null } : {}),
+    },
   });
+}
+
+export function businessDocumentSavedResumeTarget(snapshot) {
+  if (!plain(snapshot) || !plain(snapshot.resume) ||
+      snapshot.resume.mode !== "SAVED_SERVER_DOCUMENT") return null;
+  const draftId = identity(snapshot.resume.draftId);
+  const documentType = String(snapshot.resume.documentType || "").toLowerCase();
+  if (!UUID_PATTERN.test(draftId) || !["quote", "invoice"].includes(documentType)) return null;
+  return Object.freeze({ draftId, documentType });
 }
 
 export const businessDocumentRecoveryInternals = Object.freeze({ approximateBytes, identity });

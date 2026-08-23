@@ -496,6 +496,14 @@
 .business-document-manual textarea,
 .business-saved-drawer input { display: block; width: 100%; min-width: 0; margin-top: 5px; padding: 11px; border: 1px solid #dbe3dc; border-radius: 10px; color: #25374a; background: #fff; }
 .business-document-manual textarea { min-height: 84px; resize: vertical; }
+.business-document-number-field { display: block; margin-top: 12px; }
+.business-document-number-field input[readonly] { color: #385347; border-style: dashed; background: #f3f7f3; cursor: default; }
+.business-document-manual-fields,
+.business-document-manual-pricing { min-width: 0; margin: 14px 0 0; padding: 12px; border: 1px solid #dce4dc; border-radius: 13px; }
+.business-document-manual-fields legend,
+.business-document-manual-pricing h3 { padding: 0 6px; color: #145b38; font-size: 12px; font-weight: 900; }
+.business-document-manual-pricing h3 { margin: 0 0 10px; padding: 0; text-transform: uppercase; letter-spacing: .04em; }
+.business-document-manual-fields > div { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .business-document-manual-line-groups { display: grid; gap: 12px; margin-top: 14px; }
 .business-document-manual-rows { min-width: 0; margin: 0; padding: 12px; border: 1px solid #dce4dc; border-radius: 13px; }
 .business-document-manual-rows legend { padding: 0 6px; color: #145b38; font-size: 12px; font-weight: 900; }
@@ -505,8 +513,9 @@
 .business-document-manual > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e3e8e4; }
 .business-document-manual > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
 .business-document-agreement-editor { display: grid; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid #d7e4da; border-radius: 14px; background: #fafcf9; }
-.business-document-agreement-editor legend { padding: 0 6px; color: #145b38; font-size: 13px; font-weight: 900; }
-.business-document-agreement-editor > p { margin: 0; color: #607164; font-size: 10px; line-height: 1.45; }
+.business-document-agreement-editor summary { color: #145b38; font-size: 13px; font-weight: 900; cursor: pointer; }
+.business-document-agreement-editor > div { display: grid; gap: 10px; margin-top: 12px; }
+.business-document-agreement-editor p { margin: 0; color: #607164; font-size: 10px; line-height: 1.45; }
 .business-document-agreement-editor label { display: block; }
 .business-document-agreement-editor textarea { min-height: 72px; }
 .business-document-agreement-presets { display: flex; gap: 7px; flex-wrap: wrap; }
@@ -519,6 +528,17 @@
 .business-document-confirm > footer button { min-height: 44px; border: 1px solid #d5dfd7; border-radius: 10px; color: #20553b; background: #fff; padding: 9px 13px; font-size: 11px; font-weight: 900; }
 .business-document-confirm > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
 .business-document-confirm > footer .business-document-destructive { color: #fff; border-color: #a52b2b; background: #a52b2b; }
+.business-document-numbering-setup { display: grid; gap: 11px; margin-top: 11px; }
+.business-document-numbering-setup p { margin: 0; color: #5b6d80; font-size: 12px; line-height: 1.5; }
+.business-document-numbering-setup fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.business-document-numbering-setup legend { margin-bottom: 5px; color: #344b3d; font-size: 11px; font-weight: 900; }
+.business-document-numbering-setup fieldset label { display: flex; gap: 9px; align-items: flex-start; padding: 11px; border: 1px solid #d8e2da; border-radius: 11px; background: #fff; }
+.business-document-numbering-setup fieldset label:has(input:checked) { border-color: #75a789; background: #f0f7f1; }
+.business-document-numbering-setup fieldset span { display: grid; gap: 3px; }
+.business-document-numbering-setup small { color: #667789; font-size: 10px; line-height: 1.4; }
+.business-document-numbering-setup > label { color: #344b3d; font-size: 11px; font-weight: 850; }
+.business-document-numbering-setup > label input { display: block; width: 100%; min-height: 44px; margin-top: 5px; padding: 10px; border: 1px solid #d8e2da; border-radius: 10px; color: #24394b; background: #fff; }
+.business-document-numbering-setup .business-document-numbering-error { padding: 9px; border-radius: 10px; color: #8b2929; background: #fff0ee; }
 .business-document-delivery-review { display: grid; gap: 11px; margin-top: 13px; }
 .business-document-delivery-review label { color: #344b3d; font-size: 11px; font-weight: 850; }
 .business-document-delivery-review input,
@@ -576,6 +596,7 @@
   .business-document-footer-grid,
   .business-document-proof { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .business-document-manual > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .business-document-manual-fields > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 768px) {

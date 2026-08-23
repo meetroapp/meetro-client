@@ -1027,6 +1027,41 @@ test("multiline labeled Quote facts stay bounded and preserve the professional d
   }
 });
 
+test("same-line and multiline colon-labeled Quote facts produce equivalent bounded patches", () => {
+  const multiline = [
+    "Customer: Jack Smith",
+    "Scope: Front knee wall reconstruction",
+    "Price: $2,650",
+    "Estimated duration: 3–4 working days",
+    "Payment terms: 50% deposit",
+    "Quote note: Protect the existing landscaping",
+  ].join("\n");
+  const sameLine = multiline.replaceAll("\n", " ");
+
+  const multilinePatch = buildQuickQuoteConversationPatch({ prompt: multiline });
+  const sameLinePatch = buildQuickQuoteConversationPatch({ prompt: sameLine });
+
+  assert.deepEqual(sameLinePatch, multilinePatch);
+  assert.equal(sameLinePatch.customerName, "Jack Smith");
+  assert.equal(sameLinePatch.projectDescription, "Front knee wall reconstruction");
+  assert.equal(sameLinePatch.recommendedSolution, "Front knee wall reconstruction");
+  assert.equal(sameLinePatch.totalOverride, "2650");
+  assert.equal(sameLinePatch.estimatedDuration, "3–4 working days");
+  assert.equal(sameLinePatch.terms, "50% deposit");
+  assert.equal(sameLinePatch.notes, "Protect the existing landscaping");
+  assert.equal(Object.hasOwn(sameLinePatch, "problemFound"), false);
+});
+
+test("same-line component totals bound structured scope without gaining overall price authority", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Scope: Replace the wall Materials total: $700 Estimated duration: two days",
+  });
+
+  assert.equal(patch.projectDescription, "Replace the wall");
+  assert.equal(patch.estimatedDuration, "2 days");
+  assert.equal(patch.totalOverride, undefined);
+});
+
 test("structured Scope preserves a distinct existing problem finding", () => {
   const current = {
     projectTitle: "Knee wall repair",

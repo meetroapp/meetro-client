@@ -10,14 +10,18 @@ import {
   deliverBusinessDocumentDraft,
   getBusinessDocumentDraft,
   getBusinessDocumentCustomerPdf,
+  getBusinessDocumentNumbering,
+  initializeBusinessDocumentNumbering,
   listBusinessDocumentDeliveries,
   listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
   validateBusinessDocumentDraft,
+  validateBusinessDocumentNumbering,
 } from "../src/utils/businessDocumentDraftApi.js";
 import {
   BUSINESS_DOCUMENT_RECOVERY_MAX_BYTES,
   BUSINESS_DOCUMENT_RECOVERY_TTL_MS,
+  businessDocumentSavedResumeTarget,
   clearDeletedBusinessDocumentRecoveryIdentity,
   deleteBusinessDocumentRecovery,
   loadBusinessDocumentRecovery,
@@ -88,6 +92,7 @@ function draft(overrides = {}) {
     documentType: "QUOTE",
     status: "WORKING_DRAFT",
     reference: "WQ-11111111",
+    documentNumber: "Q-0001020",
     jobId: JOB_ID,
     version: 1,
     createdAt: "2026-08-21T12:00:00.000Z",
@@ -106,19 +111,187 @@ function successfulFetch(document = draft(), calls = []) {
   };
 }
 
+function numbering(overrides = {}) {
+  return {
+    initialized: true,
+    documentType: "QUOTE",
+    prefix: "Q",
+    width: 7,
+    lastNumber: 0,
+    nextNumberPreview: "Q-0000001",
+    initializationMode: "START_NEW",
+    initializedAt: "2026-08-23T12:00:00.000Z",
+    firstAllocatedAt: null,
+    ...overrides,
+  };
+}
+
 test("draft transport creates, updates, lists, and reopens governed server projections", async () => {
   const calls = [];
   const authFetchImpl = successfulFetch(draft(), calls);
   const payload = { documentType: "QUOTE", jobId: JOB_ID, content: {}, workspace: {}, photos: [] };
   assert.equal((await createBusinessDocumentDraft({ payload, idempotencyKey: KEY, authFetchImpl })).id, DRAFT_ID);
   assert.equal((await updateBusinessDocumentDraft({ draftId: DRAFT_ID, expectedVersion: 1, payload, idempotencyKey: KEY, authFetchImpl })).version, 1);
-  assert.equal((await getBusinessDocumentDraft({ draftId: DRAFT_ID, authFetchImpl })).reference, "WQ-11111111");
+  const reopened = await getBusinessDocumentDraft({ draftId: DRAFT_ID, authFetchImpl });
+  assert.equal(reopened.reference, "WQ-11111111");
+  assert.equal(reopened.documentNumber, "Q-0001020");
   assert.equal((await listBusinessDocumentDrafts({ search: "Jack Smith", type: "QUOTE", authFetchImpl })).length, 1);
   assert.equal(calls[0].endpoint, "/business-document-drafts");
   assert.equal(calls[0].options.headers["Idempotency-Key"], KEY);
   assert.match(calls[1].endpoint, new RegExp(DRAFT_ID));
   assert.equal(JSON.parse(calls[1].options.body).expectedVersion, 1);
   assert.match(calls[3].endpoint, /search=Jack\+Smith/);
+});
+
+test("numbering GET sends the governed document and optional Job context", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    const documentType = endpoint.includes("INVOICE") ? "INVOICE" : "QUOTE";
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        numbering: documentType === "INVOICE"
+          ? { initialized: false, documentType }
+          : numbering(),
+      },
+    };
+  };
+  const quote = await getBusinessDocumentNumbering({
+    documentType: "quote",
+    jobId: JOB_ID,
+    authFetchImpl,
+  });
+  const invoice = await getBusinessDocumentNumbering({
+    documentType: "INVOICE",
+    authFetchImpl,
+  });
+  assert.equal(quote.nextNumberPreview, "Q-0000001");
+  assert.deepEqual(invoice, { initialized: false, documentType: "INVOICE" });
+  assert.equal(calls[0].endpoint, `/business-document-numbering?documentType=QUOTE&jobId=${JOB_ID}`);
+  assert.equal(calls[1].endpoint, "/business-document-numbering?documentType=INVOICE");
+  assert.doesNotMatch(calls[1].endpoint, /jobId/);
+  assert.equal(calls[0].options.method, "GET");
+});
+
+test("numbering validator accepts governed initialized and uninitialized states only", () => {
+  assert.equal(validateBusinessDocumentNumbering(numbering())?.prefix, "Q");
+  assert.deepEqual(
+    validateBusinessDocumentNumbering({
+      initialized: false,
+      documentType: "INVOICE",
+      arbitrary: "discarded",
+    }),
+    { initialized: false, documentType: "INVOICE" }
+  );
+  for (const invalid of [
+    { ...numbering(), initialized: "true" },
+    { ...numbering(), documentType: "ESTIMATE" },
+    { ...numbering(), prefix: "quote" },
+    { ...numbering(), width: 0 },
+    { ...numbering(), lastNumber: -1 },
+    { ...numbering(), nextNumberPreview: "Draft" },
+    { ...numbering(), initializationMode: "INFERRED" },
+    { ...numbering(), initializedAt: "not-a-date" },
+  ]) {
+    assert.equal(validateBusinessDocumentNumbering(invalid), null);
+  }
+});
+
+test("numbering POST sends exact Start New and Continue Existing payloads", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    const payload = JSON.parse(options.body);
+    const continued = payload.mode === "CONTINUE_EXISTING";
+    return {
+      response: { ok: true, status: 201 },
+      data: {
+        success: true,
+        numbering: numbering({
+          documentType: payload.documentType,
+          prefix: continued ? "BG" : payload.documentType === "INVOICE" ? "INV" : "Q",
+          lastNumber: continued ? 1019 : 0,
+          nextNumberPreview: continued ? "BG-0001020" : payload.documentType === "INVOICE" ? "INV-0000001" : "Q-0000001",
+          initializationMode: payload.mode,
+        }),
+      },
+    };
+  };
+  const startPayload = {
+    documentType: "INVOICE",
+    jobId: null,
+    mode: "START_NEW",
+  };
+  const continuePayload = {
+    documentType: "QUOTE",
+    jobId: JOB_ID,
+    mode: "CONTINUE_EXISTING",
+    previousDocumentNumber: "BG-0001019",
+  };
+  assert.equal((await initializeBusinessDocumentNumbering({ payload: startPayload, authFetchImpl })).nextNumberPreview, "INV-0000001");
+  assert.equal((await initializeBusinessDocumentNumbering({ payload: continuePayload, authFetchImpl })).nextNumberPreview, "BG-0001020");
+  assert.equal(calls[0].endpoint, "/business-document-numbering");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), startPayload);
+  assert.deepEqual(JSON.parse(calls[1].options.body), continuePayload);
+});
+
+test("numbering transport rejects malformed success responses", async () => {
+  await assert.rejects(
+    getBusinessDocumentNumbering({
+      documentType: "QUOTE",
+      authFetchImpl: async () => ({
+        response: { ok: true, status: 200 },
+        data: { success: true, numbering: { ...numbering(), initializedAt: null } },
+      }),
+    }),
+    (error) => error instanceof BusinessDocumentDraftError &&
+      error.code === "BUSINESS_DOCUMENT_NUMBERING_RESPONSE_INVALID"
+  );
+  await assert.rejects(
+    getBusinessDocumentNumbering({
+      documentType: "QUOTE",
+      authFetchImpl: async () => ({
+        response: { ok: true, status: 200 },
+        data: { success: true, numbering: numbering({ documentType: "INVOICE" }) },
+      }),
+    }),
+    (error) => error instanceof BusinessDocumentDraftError &&
+      error.code === "BUSINESS_DOCUMENT_NUMBERING_RESPONSE_INVALID"
+  );
+  await assert.rejects(
+    initializeBusinessDocumentNumbering({
+      payload: { documentType: "QUOTE", jobId: null, mode: "START_NEW" },
+      authFetchImpl: async () => ({
+        response: { ok: true, status: 200 },
+        data: { success: true, numbering: { initialized: false, documentType: "QUOTE" } },
+      }),
+    }),
+    (error) => error instanceof BusinessDocumentDraftError &&
+      error.code === "BUSINESS_DOCUMENT_NUMBERING_RESPONSE_INVALID"
+  );
+});
+
+test("numbering server failures preserve governed status code and message", async () => {
+  await assert.rejects(
+    getBusinessDocumentNumbering({
+      documentType: "QUOTE",
+      authFetchImpl: async () => ({
+        response: { ok: false, status: 409 },
+        data: {
+          success: false,
+          code: "BUSINESS_DOCUMENT_PROFILE_AMBIGUOUS",
+          message: "Select a Job to identify which business owns this document.",
+        },
+      }),
+    }),
+    (error) => error instanceof BusinessDocumentDraftError &&
+      error.status === 409 &&
+      error.code === "BUSINESS_DOCUMENT_PROFILE_AMBIGUOUS" &&
+      error.message === "Select a Job to identify which business owns this document."
+  );
 });
 
 test("draft transport deletes only after an explicit expected-version request", async () => {
@@ -146,6 +319,7 @@ test("delivery transport binds the exact saved version and restores durable hist
     documentId: DRAFT_ID,
     documentType: "QUOTE",
     documentReference: "WQ-11111111",
+    documentNumber: "Q-0001020",
     documentVersion: 3,
     channel: "EMAIL",
     state: "DELIVERY_REQUESTED",
@@ -166,7 +340,9 @@ test("delivery transport binds the exact saved version and restores durable hist
     idempotencyKey: KEY,
     authFetchImpl,
   })).documentVersion, 3);
-  assert.equal((await listBusinessDocumentDeliveries({ draftId: DRAFT_ID, authFetchImpl })).length, 1);
+  const history = await listBusinessDocumentDeliveries({ draftId: DRAFT_ID, authFetchImpl });
+  assert.equal(history.length, 1);
+  assert.equal(history[0].documentNumber, "Q-0001020");
   assert.equal(calls[0].options.headers["Idempotency-Key"], KEY);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     expectedVersion: 3,
@@ -233,6 +409,8 @@ test("saved customer PDF fallback filename preserves document type, reference, a
 
 test("invalid server projections and governed conflicts fail closed", async () => {
   assert.equal(validateBusinessDocumentDraft({ ...draft(), status: "ISSUED" }), null);
+  assert.equal(validateBusinessDocumentDraft({ ...draft(), documentNumber: 1020 }), null);
+  assert.ok(validateBusinessDocumentDraft({ ...draft(), documentNumber: undefined }));
   await assert.rejects(
     createBusinessDocumentDraft({
       payload: {}, idempotencyKey: KEY,
@@ -393,6 +571,7 @@ test("deleting a saved target clears only that recovery identity", async () => {
         invoice: { id: "33333333-3333-4333-8333-333333333333" },
       },
       savedFingerprints: { quote: "quote-saved", invoice: "invoice-saved" },
+      resume: { mode: "SAVED_SERVER_DOCUMENT", draftId: DRAFT_ID, documentType: "quote" },
     },
   });
   assert.equal(await clearDeletedBusinessDocumentRecoveryIdentity({
@@ -404,6 +583,20 @@ test("deleting a saved target clears only that recovery identity", async () => {
   assert.equal(record.snapshot.savedDocuments.invoice.id, "33333333-3333-4333-8333-333333333333");
   assert.equal(record.snapshot.savedFingerprints.invoice, "invoice-saved");
   assert.equal(record.snapshot.payloads.quote.content.customerName, "Jack Smith");
+  assert.equal(record.snapshot.resume, null);
+});
+
+test("saved resume target is a navigation pointer to one exact governed server document", () => {
+  const target = businessDocumentSavedResumeTarget({
+    resume: {
+      mode: "SAVED_SERVER_DOCUMENT",
+      draftId: DRAFT_ID,
+      documentType: "invoice",
+    },
+  });
+  assert.deepEqual(target, { draftId: DRAFT_ID, documentType: "invoice" });
+  assert.equal(businessDocumentSavedResumeTarget({ resume: { mode: "LOCAL", draftId: DRAFT_ID, documentType: "quote" } }), null);
+  assert.equal(businessDocumentSavedResumeTarget({ resume: { mode: "SAVED_SERVER_DOCUMENT", draftId: "invalid", documentType: "quote" } }), null);
 });
 
 test("save payload preserves instructions, manual overrides, private reminders, Job, and separate photo authority", () => {
@@ -912,8 +1105,18 @@ test("workspace exposes real save/list/restore/exit/recovery flows without confl
   assert.match(workspace, /Exit with Recovery/);
   assert.match(workspace, /function keepEditingAfterSaveFailure\(\)[\s\S]*pendingExitRef\.current = null/);
   assert.match(workspace, /function retryFailedSave\(\)[\s\S]*pendingExitRef\.current\)[\s\S]*saveAllAndExit\(\)/);
-  assert.match(workspace, /Recover your last unsaved session\?/);
+  assert.match(workspace, /Continue where you left off\?/);
   assert.match(workspace, /Continue Where I Left Off/);
+  assert.match(workspace, /mode: "SAVED_SERVER_DOCUMENT"/);
+  assert.match(workspace, /function discardAndExit\(\)[\s\S]*rememberSavedWorkspaceAndExit\(action\)/);
+  const continueBlock = workspace.slice(
+    workspace.indexOf("async function continueRecovery"),
+    workspace.indexOf("async function discardRecovery")
+  );
+  assert.match(continueBlock, /getBusinessDocumentDraft/);
+  assert.match(continueBlock, /applyRestoredDocument/);
+  assert.match(continueBlock, /setSavedFilesOpen\(true\)/);
+  assert.doesNotMatch(continueBlock, /createBusinessDocumentDraft|createQuickQuoteAnalysisSession/);
   assert.match(workspace, /Send Quote/);
   assert.match(workspace, /Save keeps this private working document for your business\. It does not send or issue anything\./);
   assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document\./);
