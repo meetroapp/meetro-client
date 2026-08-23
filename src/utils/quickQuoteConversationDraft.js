@@ -20,9 +20,45 @@ function firstMatch(text, patterns) {
   return null;
 }
 
+const STRUCTURED_QUOTE_FIELD =
+  /(?:^|[\n\r]|[.!?;]\s*)\s*(customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|final\s+price|project\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*/gi;
+
+function structuredFieldName(value) {
+  const label = cleanText(value).toLowerCase();
+  if (["customer", "customer name", "client", "client name"].includes(label)) return "customer";
+  if (label === "project") return "project";
+  if (["scope", "scope of work"].includes(label)) return "scope";
+  if (["final price", "project price", "quote total", "price", "total"].includes(label)) return "price";
+  if (["estimated duration", "duration"].includes(label)) return "duration";
+  if (["payment term", "payment terms"].includes(label)) return "paymentTerms";
+  if (["customer note", "quote note"].includes(label)) return "notes";
+  return "";
+}
+
+function structuredQuoteFields(value) {
+  const text = String(value || "").trim();
+  if (!text) return Object.freeze({});
+
+  const matches = [...text.matchAll(STRUCTURED_QUOTE_FIELD)];
+  const fields = {};
+
+  matches.forEach((match, index) => {
+    const key = structuredFieldName(match[1]);
+    const next = matches[index + 1];
+    const rawValue = text.slice(match.index + match[0].length, next?.index ?? text.length);
+    const fieldValue = cleanText(rawValue)
+      .replace(/^[,;\s]+/, "")
+      .replace(/[.;,\s]+$/, "")
+      .trim();
+    if (key && fieldValue) fields[key] = fieldValue;
+  });
+
+  return Object.freeze(fields);
+}
+
 function explicitFinalPrice(text) {
   const match = firstMatch(text, [
-    /(?:^|[.!?;]\s*)(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
+    /(?:^|[.!?;]\s*)(?:(?:set|change|update|revise)\s+(?:the\s+)?)?(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
     /(?:^|[.!?;]\s*)\$\s*([\d,.]+)\s*(?:final|total)/i,
   ]);
   return match ? parseAmount(match[match.length - 1]) : null;
@@ -256,6 +292,22 @@ function explicitReplacement(text) {
   return cleanText(match?.[1] || "");
 }
 
+function explicitScopeAddition(text) {
+  const match = text.match(
+    /\badd\s+(.+?)\s+to\s+(?:the\s+)?scope\b[.!?]?/i
+  );
+  return cleanText(match?.[1] || "");
+}
+
+function appendScope(value, addition) {
+  const current = cleanText(value);
+  const next = cleanText(addition).replace(/[.!?]+$/, "");
+  if (!next) return current;
+  if (current.toLowerCase().includes(next.toLowerCase())) return current;
+  const sentence = `${capitalizeLabel(next)}.`;
+  return current ? `${current.replace(/\s+$/, "")} ${sentence}` : sentence;
+}
+
 function removeRequestedText(value, instruction) {
   const match = instruction.match(/remove\s+(?:the\s+)?["“]?(.+?)["”]?(?:\.|$)/i);
   const target = cleanText(match?.[1] || "");
@@ -269,28 +321,44 @@ export function buildQuickQuoteConversationPatch({
   current = {},
   revision = false,
 } = {}) {
+  const structured = structuredQuoteFields(prompt);
   const instruction = cleanText(prompt);
   if (!instruction) return Object.freeze({});
 
   const patch = {};
-  const finalPrice = explicitFinalPrice(instruction);
+  const structuredPrice = Object.hasOwn(structured, "price")
+    ? parseAmount(String(structured.price).replace(/^\$\s*/, ""))
+    : null;
+  const finalPrice = structuredPrice ?? explicitFinalPrice(instruction);
   const materialAmount = explicitMaterialAmount(instruction);
   const laborAmount = explicitLaborAmount(instruction);
   const laborItems = explicitLaborItems(instruction);
-  const customerName = explicitCustomerName(instruction);
+  const customerName = cleanText(structured.customer || explicitCustomerName(instruction));
   const customerLocation = explicitCustomerLocation(instruction);
-  const duration = explicitDuration(instruction);
+  const duration = cleanText(structured.duration || explicitDuration(instruction));
   const deposit = explicitDeposit(instruction);
-  const note = explicitNote(instruction);
+  const note = cleanText(structured.notes || explicitNote(instruction));
   const condition = explicitCondition(instruction);
-  const replacement = explicitReplacement(instruction);
-  const scope = cleanScope(replacement || instruction);
+  const structuredScope = cleanText(structured.scope);
+  const replacement = structuredScope ? "" : cleanText(explicitReplacement(instruction));
+  const scopeAddition = explicitScopeAddition(instruction);
+  const scope = structuredScope || replacement || (
+    Object.keys(structured).length
+      ? ""
+      : cleanScope(instruction)
+  );
+
+  if (structured.project) {
+    patch.projectTitle = cleanText(structured.project);
+  }
 
   if (!revision) {
     if (scope) {
       patch.projectDescription = scope;
       patch.recommendedSolution = scope;
-      if (!cleanText(current.projectTitle)) patch.projectTitle = suggestedTitle(scope);
+      if (!cleanText(current.projectTitle) && !structured.project) {
+        patch.projectTitle = suggestedTitle(scope);
+      }
     }
     if (customerName) patch.customerName = customerName;
     if (customerLocation) patch.customerLocation = customerLocation;
@@ -298,10 +366,32 @@ export function buildQuickQuoteConversationPatch({
   if (revision && customerName) patch.customerName = customerName;
   if (revision && customerLocation) patch.customerLocation = customerLocation;
 
+  if (structuredScope) {
+    patch.projectDescription = structuredScope;
+    patch.recommendedSolution = structuredScope;
+    if (!cleanText(current.projectTitle) && !structured.project) {
+      patch.projectTitle = suggestedTitle(structuredScope);
+    }
+  }
+
   if (replacement) {
     patch.projectDescription = replacement;
     patch.problemFound = replacement;
     patch.recommendedSolution = replacement;
+    if (!cleanText(current.projectTitle) && !structured.project) {
+      patch.projectTitle = suggestedTitle(replacement);
+    }
+  }
+
+  if (scopeAddition) {
+    patch.projectDescription = appendScope(
+      current.projectDescription,
+      scopeAddition
+    );
+    patch.recommendedSolution = appendScope(
+      current.recommendedSolution || current.projectDescription,
+      scopeAddition
+    );
   }
 
   if (revision && /\bremove\b/i.test(instruction)) {
@@ -314,7 +404,10 @@ export function buildQuickQuoteConversationPatch({
     patch.timeline = duration;
     patch.estimatedDuration = duration;
     if (revision) {
-      for (const key of ["projectDescription", "problemFound", "recommendedSolution"]) {
+      const durationFields = structuredScope
+        ? ["projectDescription", "recommendedSolution"]
+        : ["projectDescription", "problemFound", "recommendedSolution"];
+      for (const key of durationFields) {
         const revisedValue = replaceExistingDuration(current[key], duration);
         if (revisedValue && revisedValue !== cleanText(current[key])) patch[key] = revisedValue;
       }
@@ -329,6 +422,7 @@ export function buildQuickQuoteConversationPatch({
     patch.depositRequired = "Yes";
     patch.depositTerms = deposit;
   }
+  if (structured.paymentTerms) patch.terms = cleanText(structured.paymentTerms);
   if (note) patch.notes = note;
   if (condition) patch.terms = condition;
 

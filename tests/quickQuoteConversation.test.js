@@ -982,6 +982,99 @@ test("customer-only revisions patch only the customer field", () => {
   assert.deepEqual(patch, { customerName: "Maria Lopez" });
 });
 
+test("multiline labeled Quote facts stay bounded and preserve the professional duration detail", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: [
+      "Customer: Paul Becker",
+      "Project: Knee Wall Repair",
+      "Scope: Front knee wall reconstruction.",
+      "Price: $2,650.00",
+      "Estimated duration: 3–4 working days, with an additional return visit for curing and paint touch-up.",
+      "Payment terms: 50% deposit.",
+      "Customer note: Existing finish is two-tone.",
+    ].join("\n"),
+  });
+
+  assert.equal(patch.customerName, "Paul Becker");
+  assert.equal(patch.projectTitle, "Knee Wall Repair");
+  assert.equal(patch.projectDescription, "Front knee wall reconstruction");
+  assert.equal(patch.recommendedSolution, "Front knee wall reconstruction");
+  assert.equal(Object.hasOwn(patch, "problemFound"), false);
+  assert.equal(patch.totalOverride, "2650");
+  assert.equal(
+    patch.estimatedDuration,
+    "3–4 working days, with an additional return visit for curing and paint touch-up"
+  );
+  assert.equal(patch.terms, "50% deposit");
+  assert.equal(patch.depositTerms, "50% deposit");
+  assert.equal(patch.notes, "Existing finish is two-tone");
+  assert.doesNotMatch(
+    patch.projectDescription,
+    /Paul Becker|Price|duration|deposit|two-tone/i
+  );
+
+  for (const componentTotal of [
+    "Materials total: $700",
+    "Labor total: $1,950",
+    "Installation total: $280",
+    "Tax total: $150",
+  ]) {
+    assert.equal(
+      buildQuickQuoteConversationPatch({ prompt: componentTotal }).totalOverride,
+      undefined,
+      componentTotal
+    );
+  }
+});
+
+test("structured Scope preserves a distinct existing problem finding", () => {
+  const current = {
+    projectTitle: "Knee wall repair",
+    projectDescription: "Existing scope",
+    problemFound: "Water damage observed behind the wall.",
+    recommendedSolution: "Existing recommendation",
+  };
+
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Scope: Front knee wall reconstruction",
+    current,
+    revision: true,
+  });
+
+  assert.equal(patch.projectDescription, "Front knee wall reconstruction");
+  assert.equal(patch.recommendedSolution, "Front knee wall reconstruction");
+  assert.equal(Object.hasOwn(patch, "problemFound"), false);
+
+  const merged = mergeQuickQuoteConversationPatch(current, patch);
+  assert.equal(merged.problemFound, "Water damage observed behind the wall.");
+});
+
+test("explicit price and scope edits remain targeted after structured input support", () => {
+  const current = {
+    projectDescription: "Front knee wall reconstruction.",
+    recommendedSolution: "Front knee wall reconstruction.",
+    totalOverride: "2650",
+    notes: "Protect the landscaping.",
+  };
+
+  const price = buildQuickQuoteConversationPatch({
+    prompt: "Change price to $2,750.",
+    current,
+    revision: true,
+  });
+  assert.deepEqual(price, { totalOverride: "2750" });
+
+  const scope = buildQuickQuoteConversationPatch({
+    prompt: "Add stucco repair to the scope.",
+    current,
+    revision: true,
+  });
+  assert.match(scope.projectDescription, /Front knee wall reconstruction/);
+  assert.match(scope.projectDescription, /Stucco repair/);
+  assert.equal(scope.totalOverride, undefined);
+  assert.equal(scope.notes, undefined);
+});
+
 test("revision changes only explicit targeted fields and professional price wins", () => {
   const current = {
     projectTitle: "Knee wall repair",

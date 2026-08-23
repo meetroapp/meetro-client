@@ -26,6 +26,27 @@ const QUESTION_LEAD =
 const ANALYSIS_REQUEST =
   /^(?:please\s+)?(?:(?:help\s+me\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify|review|check)\b|look\s+at\b|tell\s+me\s+what\s+you\s+(?:see|notice|find)\b|i(?:\s+will|['’]ll|\s+am\s+going\s+to)\s+(?:send|share|upload)\b.*\b(?:review|analy[sz]e|assess|inspect|evaluate|diagnose|check)\b)/i;
 
+const STRONG_DOCUMENT_FIELD_LABEL =
+  /(?:^|[\n\r]|[.!?;]\s*)\s*(?:customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*\S/i;
+
+const STRONG_DOCUMENT_FIELD_PHRASE =
+  /(?:^|[\n\r.!?;]\s*)(?:(?:final\s+price|project\s+price|quote\s+total|price|total)\s+(?:is|to)\s*\$\s*[\d,.]+|(?:estimated\s+duration|duration)\s+is\s+\S|payment\s+terms?\s+(?:is|are)\s+\S|scope(?:\s+of\s+work)?\s+is\s+\S)/i;
+
+const STRONG_CUSTOMER_DECLARATION =
+  /(?:^|[\n\r.!?;]\s*)(?:[Cc]ustomer|[Cc]lient)\s+is\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+){1,3}(?=[.!?;,\n\r]|$|\s+(?:project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:)/;
+
+export function hasStrongBusinessDocumentInput(instruction) {
+  const text = String(instruction || "").trim();
+  return Boolean(
+    text &&
+    (
+      STRONG_DOCUMENT_FIELD_LABEL.test(text) ||
+      STRONG_DOCUMENT_FIELD_PHRASE.test(text) ||
+      STRONG_CUSTOMER_DECLARATION.test(text)
+    )
+  );
+}
+
 export function classifyBusinessDocumentConversationIntent(
   instruction,
   {
@@ -45,6 +66,10 @@ export function classifyBusinessDocumentConversationIntent(
    */
   if (EXPLICIT_DOCUMENT_EDIT_REQUEST.test(text)) {
     return "DOCUMENT_EDIT";
+  }
+
+  if (hasStrongBusinessDocumentInput(instruction)) {
+    return "DOCUMENT_INPUT";
   }
 
   if (

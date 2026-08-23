@@ -421,10 +421,10 @@ function BusinessDocumentWorkflowGuide({ onClose }) {
       <section><h3>QUOTE WORKFLOW</h3>
         <WorkflowGuideStep number="1" title="Start"><p>Chat with Meetro, speak, or upload photos to begin.</p><p>The conversation creates a private working space for the job. Nothing is added to the customer document merely because it was discussed.</p></WorkflowGuideStep>
         <WorkflowGuideStep number="2" title="Ask Meetro"><p>Ask questions about the job, photos, findings, repair options, materials, measurements, recommendations, or other job context.</p><p>Job Analysis stays private unless the professional explicitly chooses what belongs in the working document.</p></WorkflowGuideStep>
-        <WorkflowGuideStep number="3" title="Build or Update Quote"><p>Give Meetro an explicit document instruction or edit the form manually. Only explicit document actions should change the working Quote.</p><ul><li>Add this repair to the scope.</li><li>Change labor to $225.</li><li>Add a customer note.</li><li>Update payment terms.</li></ul></WorkflowGuideStep>
+        <WorkflowGuideStep number="3" title="Build or Update Quote"><p>Questions and photo analysis stay private. Direct Quote facts or explicit document instructions can update the working draft, even while Job Analysis is active.</p><p>Only explicit document actions should change the working Quote. Let Meetro prefill uses eligible professional-provided document facts. Fill form manually always remains available.</p><ul><li>Customer: Paul Becker</li><li>Scope: Add this repair.</li><li>Price: $2,650.</li><li>Payment terms: 50% deposit.</li></ul></WorkflowGuideStep>
         <WorkflowGuideStep number="4" title="Review Job Evidence"><p>Photos and analysis are private working evidence by default. The professional decides what, if anything, should become customer-visible.</p><p>Photo role and photo visibility remain separate.</p></WorkflowGuideStep>
         <WorkflowGuideStep number="5" title="Review the Quote"><p>The Live Quote Preview stays visible while the professional works. Nothing is issued merely because the preview changes.</p><ul><li>Customer and scope</li><li>Line items and price</li><li>Payment terms and estimated duration</li><li>Customer-facing notes</li><li>Agreement and status information</li></ul></WorkflowGuideStep>
-        <WorkflowGuideStep number="6" title="Save, Preview or Send Quote"><p>Save Draft, Preview PDF, Download PDF, and Send Quote remain separate actions. Sending uses the existing governed delivery flow. Nothing is automatically approved.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="6" title="Save, Preview or Send Quote"><p>Save Draft, Preview PDF, Download PDF, and Send Quote remain separate actions. Nothing is sent automatically, and sending uses the existing governed delivery flow. Nothing is automatically approved.</p></WorkflowGuideStep>
       </section>
       <section><h3>INVOICE WORKFLOW</h3>
         <WorkflowGuideStep number="7" title="Create Invoice"><p>When the Quote or work reaches the appropriate stage, switch to the Invoice tab. Use the same workspace and job context to prepare and refine the Invoice.</p><p>Creating an Invoice does not mean it has been sent or paid.</p></WorkflowGuideStep>
@@ -1536,7 +1536,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       setNotice("Prefill refreshed from your saved conversation instructions.");
       return;
     }
-    setNotice("Describe the customer, work, and pricing below, then send it to prefill the draft.");
+    setNotice("Enter direct document facts or an explicit edit below, then send it to prefill the working draft.");
     requestAnimationFrame(() => messageRef.current?.focus());
   }
 

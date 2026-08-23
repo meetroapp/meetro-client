@@ -133,6 +133,11 @@ test("How It Works consolidates Quote, Invoice, continuity, and private-control 
   assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document/);
   assert.match(workspace, /Nothing in this workspace automatically accepts a Quote/);
   assert.match(workspace, /The professional remains in control/);
+  assert.match(workspace, /Questions and photo analysis stay private/);
+  assert.match(workspace, /Direct Quote facts or explicit document instructions can update the working draft/);
+  assert.match(workspace, /Let Meetro prefill uses eligible professional-provided document facts/);
+  assert.match(workspace, /Fill form manually always remains available/);
+  assert.match(workspace, /Nothing is sent automatically/);
 });
 
 test("normal conversation surface removes permanent explanatory clutter", () => {
@@ -296,6 +301,123 @@ test("active Job Analysis keeps ordinary job context conversational while explic
     workspace,
     /hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)/
   );
+});
+
+test("active Job Analysis yields to strong structured professional document input before the conversational fallback", () => {
+  for (const instruction of [
+    "Customer: Paul Becker",
+    "Customer is Maria Lopez",
+    "Price: $2,650",
+    "Estimated duration: 3–4 working days",
+    "Payment terms: 50% deposit",
+    "Scope: Front knee wall reconstruction",
+    "Project: Front knee wall reconstruction",
+    "Customer note: Existing finish is two-tone.",
+    "Quote note: Protect the existing landscaping.",
+    "Customer: Paul Becker\nPrice: $2,650\nEstimated duration: 3–4 working days",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        { hasActiveAnalysisSession: true }
+      ),
+      "DOCUMENT_INPUT",
+      instruction
+    );
+  }
+
+  for (const instruction of [
+    "I see cracking near the base",
+    "The material could cost around $400",
+    "Do you think this is a $2,000 repair?",
+    "Does this look structural?",
+    "The crack is about 4 feet.",
+    "It may take several days.",
+    "The fan cost 89.99 when I bought it.",
+    "Materials total: $700",
+    "Labor total: $1,950",
+    "Tax total: $150",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        { hasActiveAnalysisSession: true }
+      ),
+      "ASK_MEETRO",
+      instruction
+    );
+  }
+
+  for (const instruction of [
+    "Add the cracks to the scope",
+    "Change price to $2,750",
+    "Set payment terms to 50% deposit",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        { hasActiveAnalysisSession: true }
+      ),
+      "DOCUMENT_EDIT",
+      instruction
+    );
+  }
+});
+
+test("knee-wall document facts update only supported working-draft fields and can alternate with private analysis", () => {
+  const instruction = [
+    "Customer: Paul Becker",
+    "Scope: Front knee wall reconstruction.",
+    "Price: $2,650.00",
+    "Estimated duration: 3–4 working days, with an additional return visit as needed for proper curing, finishing, and paint touch-up.",
+  ].join("\n");
+
+  const patch = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction,
+    current: {},
+  });
+
+  assert.equal(patch.customerName, "Paul Becker");
+  assert.equal(patch.projectDescription, "Front knee wall reconstruction");
+  assert.equal(patch.recommendedSolution, "Front knee wall reconstruction");
+  assert.equal(Object.hasOwn(patch, "problemFound"), false);
+  assert.equal(patch.totalOverride, "2650");
+  assert.equal(
+    patch.estimatedDuration,
+    "3–4 working days, with an additional return visit as needed for proper curing, finishing, and paint touch-up"
+  );
+
+  for (const forbidden of [
+    "canonicalStatus",
+    "issuedAt",
+    "approvedAt",
+    "acceptedAt",
+    "paidAt",
+    "completedAt",
+    "lifecycleStatus",
+  ]) {
+    assert.equal(Object.hasOwn(patch, forbidden), false, forbidden);
+  }
+
+  assert.equal(patch.photoIntent, undefined);
+  assert.doesNotMatch(JSON.stringify(patch), /additional damage|private analysis/i);
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(
+      "Do you see any additional damage?",
+      { hasActiveAnalysisSession: true }
+    ),
+    "ASK_MEETRO"
+  );
+
+  const revised = buildBusinessDocumentConversationPatch({
+    documentType: "quote",
+    instruction: "Add stucco repair to the scope.",
+    current: patch,
+  });
+  assert.match(revised.projectDescription, /Front knee wall reconstruction/);
+  assert.match(revised.projectDescription, /Stucco repair/);
+  assert.equal(revised.totalOverride, undefined);
 });
 
 test("initial Ask Meetro professional input remains visible from server-owned evidence after analysis completes", () => {
@@ -817,7 +939,9 @@ test("private instruction editing remains private and outside customer-visible d
 
 test("prefill manual amount shortcuts and governed photo input are functional shared-draft affordances", () => {
   assert.match(workspace, /function usePrefill/);
+  assert.match(workspace, /if \(message\.trim\(\)\) return submitInstruction\(message\)/);
   assert.match(workspace, /Prefill refreshed from your saved conversation instructions/);
+  assert.match(workspace, /Enter direct document facts or an explicit edit below/);
   assert.match(workspace, /messageRef\.current\?\.focus/);
   assert.match(workspace, /setManualState\(\{ focus: "amount" \}\)/);
   assert.match(workspace, /role="dialog" aria-modal="true"/);
@@ -829,6 +953,15 @@ test("prefill manual amount shortcuts and governed photo input are functional sh
   assert.match(workspace, /businessDocumentPhotoVisibilityNotice/);
   assert.match(workspace, /customerPhotoGroups\.before/);
   assert.match(workspace, /customerPhotoGroups\.after/);
+
+  const prefillBlock = workspace.slice(
+    workspace.indexOf("function usePrefill"),
+    workspace.indexOf("function switchDocument")
+  );
+  assert.doesNotMatch(
+    prefillBlock,
+    /currentAnalysisTurns|currentAnalysisEvidenceVersions|latestProposal|reviewedResult/
+  );
 });
 
 test("shortcut focus is explicit without false selected state", () => {
