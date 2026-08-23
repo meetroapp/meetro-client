@@ -105,6 +105,44 @@ test("Ask Meetro questions and analysis requests cannot silently mutate the work
   assert.equal(reconciled.photoIntents.length, 0);
 });
 
+test("photo review language routes to Ask Meetro while explicit document edits retain authority", () => {
+  for (const instruction of [
+    "Help me diagnose the photos",
+    "I will send you some photos to review",
+    "Review these photos for damage",
+    "Check these pictures",
+    "Look at these images",
+    "Tell me what you see",
+    "Tell me what you see in these photos",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(instruction),
+      "ASK_MEETRO",
+      instruction
+    );
+    assert.deepEqual(
+      buildBusinessDocumentConversationPatch({
+        documentType: "quote",
+        instruction,
+        current: {},
+      }),
+      {},
+      instruction
+    );
+  }
+
+  for (const instruction of [
+    "Add these photos to the Quote",
+    "Make these photos customer visible",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(instruction),
+      "DOCUMENT_EDIT",
+      instruction
+    );
+  }
+});
+
 test("explicit document edits still bypass the Ask Meetro question guard", () => {
   const labor = buildBusinessDocumentConversationPatch({
     documentType: "quote",
@@ -133,45 +171,36 @@ test("explicit document edits still bypass the Ask Meetro question guard", () =>
 
 
 test("active Job Analysis keeps ordinary job context conversational while explicit document commands retain draft authority", () => {
-  assert.equal(
-    classifyBusinessDocumentConversationIntent(
-      "I see cracks on the concrete wall.",
-      { hasActiveAnalysisSession: true }
-    ),
-    "ASK_MEETRO"
-  );
+  for (const instruction of [
+    "Knee wall has a crack line and needs further evaluation",
+    "The fan is running with no problem",
+    "I see cracks on the concrete wall",
+    "The fan sparked yesterday.",
+    "That section feels loose.",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        { hasActiveAnalysisSession: true }
+      ),
+      "ASK_MEETRO",
+      instruction
+    );
+  }
 
-  assert.equal(
-    classifyBusinessDocumentConversationIntent(
-      "The fan sparked yesterday.",
-      { hasActiveAnalysisSession: true }
-    ),
-    "ASK_MEETRO"
-  );
-
-  assert.equal(
-    classifyBusinessDocumentConversationIntent(
-      "That section feels loose.",
-      { hasActiveAnalysisSession: true }
-    ),
-    "ASK_MEETRO"
-  );
-
-  assert.equal(
-    classifyBusinessDocumentConversationIntent(
-      "Add the cracks to the scope.",
-      { hasActiveAnalysisSession: true }
-    ),
-    "DOCUMENT_EDIT"
-  );
-
-  assert.equal(
-    classifyBusinessDocumentConversationIntent(
-      "Change labor to $225.",
-      { hasActiveAnalysisSession: true }
-    ),
-    "DOCUMENT_EDIT"
-  );
+  for (const instruction of [
+    "Add the cracks to the scope",
+    "Change labor to $225",
+  ]) {
+    assert.equal(
+      classifyBusinessDocumentConversationIntent(
+        instruction,
+        { hasActiveAnalysisSession: true }
+      ),
+      "DOCUMENT_EDIT",
+      instruction
+    );
+  }
 
   // Legacy no-session behavior remains unchanged.
   assert.equal(
@@ -314,7 +343,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation\s*\{[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column[\s\S]*overflow:\s*hidden/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation,[\s\S]*\.business-document-conversation\.mobile-active\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*auto auto minmax\(0,\s*1fr\)[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
   );
 
   assert.match(
@@ -339,7 +368,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto[\s\S]*height:\s*100%[\s\S]*min-height:\s*0/
   );
 
   assert.match(
@@ -359,12 +388,12 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-preview\s*\{[\s\S]*display:\s*flex[\s\S]*overflow-y:\s*auto/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-preview,[\s\S]*\.business-document-preview\.mobile-active\s*\{[\s\S]*display:\s*flex[\s\S]*overflow-y:\s*auto/
   );
 
   assert.match(
     styles,
-    /#root\[data-app-layout="mobile"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible/
+    /#root\[data-app-layout="mobile"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-conversation,[\s\S]*overflow:\s*visible[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*height:\s*56dvh/
   );
 
   assert.match(
@@ -374,7 +403,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-evidence-panel\s*\{[\s\S]*display:\s*none[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-inline-evidence\s*\{[\s\S]*display:\s*grid/
+    /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*height:\s*58dvh[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-evidence-panel\s*\{[\s\S]*display:\s*none[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-inline-evidence\s*\{[\s\S]*display:\s*grid/
   );
 });
 

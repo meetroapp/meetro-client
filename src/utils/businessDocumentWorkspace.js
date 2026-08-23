@@ -24,7 +24,7 @@ const QUESTION_LEAD =
   /^(?:what|why|how|when|where|who|which|do|does|did|can|could|would|will|should|is|are|was|were|may|might|have|has|had)\b/i;
 
 const ANALYSIS_REQUEST =
-  /^(?:please\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify)\b/i;
+  /^(?:please\s+)?(?:(?:help\s+me\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify|review|check)\b|look\s+at\b|tell\s+me\s+what\s+you\s+(?:see|notice|find)\b|i(?:\s+will|['’]ll|\s+am\s+going\s+to)\s+(?:send|share|upload)\b.*\b(?:review|analy[sz]e|assess|inspect|evaluate|diagnose|check)\b)/i;
 
 export function classifyBusinessDocumentConversationIntent(
   instruction,
