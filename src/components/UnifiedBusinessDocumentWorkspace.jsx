@@ -400,6 +400,48 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
   return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 id={titleId}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
+function WorkflowGuideStep({ number, title, children }) {
+  return <article className="business-document-workflow-step"><span aria-hidden="true">{number}</span><div><h4>{title}</h4>{children}</div></article>;
+}
+
+function BusinessDocumentWorkflowGuide({ onClose }) {
+  const closeRef = useRef(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    function escape(event) { if (event.key === "Escape") onClose(); }
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [onClose]);
+
+  return <>
+    <button type="button" className="business-document-workflow-backdrop" aria-label="Close workflow guide" onClick={onClose} />
+    <aside id="business-document-workflow-guide" className="business-document-workflow-guide" role="dialog" aria-labelledby="business-document-workflow-title">
+      <header><h2 id="business-document-workflow-title">How Quote &amp; Invoice workflow works</h2><button ref={closeRef} type="button" onClick={onClose} aria-label="Close workflow guide">×</button></header>
+      <section><h3>QUOTE WORKFLOW</h3>
+        <WorkflowGuideStep number="1" title="Start"><p>Chat with Meetro, speak, or upload photos to begin.</p><p>The conversation creates a private working space for the job. Nothing is added to the customer document merely because it was discussed.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="2" title="Ask Meetro"><p>Ask questions about the job, photos, findings, repair options, materials, measurements, recommendations, or other job context.</p><p>Job Analysis stays private unless the professional explicitly chooses what belongs in the working document.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="3" title="Build or Update Quote"><p>Give Meetro an explicit document instruction or edit the form manually. Only explicit document actions should change the working Quote.</p><ul><li>Add this repair to the scope.</li><li>Change labor to $225.</li><li>Add a customer note.</li><li>Update payment terms.</li></ul></WorkflowGuideStep>
+        <WorkflowGuideStep number="4" title="Review Job Evidence"><p>Photos and analysis are private working evidence by default. The professional decides what, if anything, should become customer-visible.</p><p>Photo role and photo visibility remain separate.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="5" title="Review the Quote"><p>The Live Quote Preview stays visible while the professional works. Nothing is issued merely because the preview changes.</p><ul><li>Customer and scope</li><li>Line items and price</li><li>Payment terms and estimated duration</li><li>Customer-facing notes</li><li>Agreement and status information</li></ul></WorkflowGuideStep>
+        <WorkflowGuideStep number="6" title="Save, Preview or Send Quote"><p>Save Draft, Preview PDF, Download PDF, and Send Quote remain separate actions. Sending uses the existing governed delivery flow. Nothing is automatically approved.</p></WorkflowGuideStep>
+      </section>
+      <section><h3>INVOICE WORKFLOW</h3>
+        <WorkflowGuideStep number="7" title="Create Invoice"><p>When the Quote or work reaches the appropriate stage, switch to the Invoice tab. Use the same workspace and job context to prepare and refine the Invoice.</p><p>Creating an Invoice does not mean it has been sent or paid.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="8" title="Review Invoice"><p>Review billable line items, totals, customer information, notes, payment information, and any applicable approved changes.</p><p>Quote and Invoice remain distinct business documents.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="9" title="Send Invoice"><p>Invoice delivery remains a separate governed action. Preview, download, and send behavior continues using the existing Invoice controls.</p><p>Sending an Invoice does not mean payment was received.</p></WorkflowGuideStep>
+      </section>
+      <section><h3>SAVED FILES / CONTINUITY</h3>
+        <WorkflowGuideStep number="10" title="Saved Files"><p>Saved Quotes and Invoices can be reopened from Saved Files. Reopening restores the existing saved workspace context.</p></WorkflowGuideStep>
+      </section>
+      <section><h3>PRIVACY &amp; CONTROL</h3>
+        <WorkflowGuideStep number="11" title="Private by default"><p>Photos, Job Analysis, recommendations, private costs, and private reminders remain internal unless the professional explicitly chooses otherwise.</p><p>Nothing here issues, sends, approves, pays, or completes a document. Nothing in this workspace automatically accepts a Quote, records payment, closes a Job, or changes lifecycle state. The professional remains in control.</p></WorkflowGuideStep>
+      </section>
+      <footer>Need help? Ask Meetro in the conversation.</footer>
+    </aside>
+  </>;
+}
+
 function DeliveryReviewDialog({ state, onChange, onCancel, onSend }) {
   const quote = state.documentType === "quote";
   const email = state.channel === "EMAIL";
@@ -588,13 +630,14 @@ function PhotoReviewDialog({ photos, assignments, onApply, onCancel }) {
 export default function UnifiedBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", job = {}, quote,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
-  photoNotice = "", onDownloadQuote, onPreviewQuote, onBack,
+  onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
 }) {
   const [activeDocument, setActiveDocument] = useState(() => normalizeBusinessDocumentTab(initialDocument));
   const [mobilePane, setMobilePane] = useState("conversation");
   const [savedFilesOpen, setSavedFilesOpen] = useState(false);
   const [manualState, setManualState] = useState(null);
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
   const [photoAssignments, setPhotoAssignments] = useState({});
@@ -605,6 +648,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [manualOverrides, setManualOverrides] = useState({ quote: {}, invoice: {} });
   const turnIdRef = useRef(0);
   const messageRef = useRef(null);
+  const howItWorksTriggerRef = useRef(null);
   const previewRef = useRef(null);
   const turnsRef = useRef(null);
   const nearNewestRef = useRef(true);
@@ -1705,6 +1749,11 @@ export default function UnifiedBusinessDocumentWorkspace({
     setNewContentAvailable(false);
   }
 
+  function closeHowItWorks() {
+    setHowItWorksOpen(false);
+    requestAnimationFrame(() => howItWorksTriggerRef.current?.focus());
+  }
+
   const guardedSetPage = (page) => requestExit(() => setPage(page));
   const activeSavePresentation = savePresentations[activeDocument];
   const saveLabel = activeSavePresentation.label;
@@ -1716,8 +1765,8 @@ export default function UnifiedBusinessDocumentWorkspace({
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
-          <div className="business-document-conversation-heading"><div><h2 id="business-document-conversation-title">{activeDocument === "quote" ? "Work with Meetro" : "Ask Meetro"}</h2><p>Chat, speak, or upload photos. The working {activeDocument} stays visible.</p></div><button type="button" onClick={() => setNotice("Questions stay in private Job Analysis. Explicit document instructions and manual edits update the working draft. Customer delivery and PDF actions remain separate.")}>How it works</button></div>
-          <div className="business-document-entry-choice"><button type="button" onClick={usePrefill}><MeetroIcon name="assistant" size={18} decorative /><span><strong>Let Meetro prefill the form</strong><small>Use my conversation details</small></span></button><button type="button" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={18} decorative /><span><strong>Fill the form manually</strong><small>I’ll enter details myself</small></span></button></div>
+          <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
+          <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
           <div className="business-document-chat-shell">
             <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
@@ -1725,10 +1774,8 @@ export default function UnifiedBusinessDocumentWorkspace({
           </div>
           <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => setManualState({ focus: "amount" })}>Change Amount</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
-          {photoNotice ? <p className="business-document-notice" role="status">{photoNotice}</p> : null}
           {currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
-          <p className="business-document-draft-truth">This is a working draft only. Private costs and reminders stay internal. Nothing here issues, sends, approves, pays, or completes a document.</p>
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} reference={activeSaved?.reference || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>

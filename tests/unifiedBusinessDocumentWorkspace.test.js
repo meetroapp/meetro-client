@@ -67,6 +67,88 @@ test("conversation and manual entry update one working Quote draft", () => {
   assert.match(workspace, /onClick=\{onCancel\}>Cancel/);
 });
 
+test("compact workspace controls stay outside conversation history and open a non-mutating workflow guide", () => {
+  const toolbarStart = workspace.indexOf('className="business-document-control-toolbar"');
+  const turnsStart = workspace.indexOf('ref={turnsRef} className="business-document-turns"');
+  const turnsEnd = workspace.indexOf("{newContentAvailable ?", turnsStart);
+  const turnsBlock = workspace.slice(turnsStart, turnsEnd);
+
+  assert.ok(toolbarStart > 0);
+  assert.ok(toolbarStart < turnsStart);
+  assert.match(workspace, /const \[howItWorksOpen, setHowItWorksOpen\] = useState\(false\)/);
+  assert.match(workspace, /aria-label="Let Meetro prefill the form"/);
+  assert.match(workspace, /aria-label="Fill the form manually"/);
+  assert.match(workspace, /aria-expanded=\{howItWorksOpen\}/);
+  assert.match(workspace, /setHowItWorksOpen\(\(open\) => !open\)/);
+  assert.match(workspace, /howItWorksOpen \? <BusinessDocumentWorkflowGuide onClose=\{closeHowItWorks\}/);
+  assert.match(workspace, /function closeHowItWorks\(\)[\s\S]*setHowItWorksOpen\(false\)[\s\S]*howItWorksTriggerRef\.current\?\.focus/);
+  assert.doesNotMatch(turnsBlock, /Let Meetro prefill|Fill form manually|How it works/);
+
+  const guideBlock = workspace.slice(
+    workspace.indexOf("function BusinessDocumentWorkflowGuide"),
+    workspace.indexOf("function DeliveryReviewDialog")
+  );
+  assert.match(guideBlock, /role="dialog"/);
+  assert.match(guideBlock, /aria-label="Close workflow guide"/);
+  assert.match(guideBlock, /event\.key === "Escape"/);
+  assert.doesNotMatch(
+    guideBlock,
+    /reconcileDocument\(|onApplyQuotePatch\(|setInvoice\(|beginDelivery\(|sendCurrentDelivery\(|lifecycle[A-Za-z]*\(/
+  );
+});
+
+test("How It Works consolidates Quote, Invoice, continuity, and private-control guidance", () => {
+  for (const heading of [
+    "How Quote &amp; Invoice workflow works",
+    "QUOTE WORKFLOW",
+    "INVOICE WORKFLOW",
+    "SAVED FILES / CONTINUITY",
+    "PRIVACY &amp; CONTROL",
+  ]) {
+    assert.match(workspace, new RegExp(heading.replace(/[&/]/g, "\\$&")));
+  }
+
+  for (const step of [
+    "Start",
+    "Ask Meetro",
+    "Build or Update Quote",
+    "Review Job Evidence",
+    "Review the Quote",
+    "Save, Preview or Send Quote",
+    "Create Invoice",
+    "Review Invoice",
+    "Send Invoice",
+    "Saved Files",
+    "Private by default",
+  ]) {
+    assert.match(workspace, new RegExp(`title="${step}"`));
+  }
+
+  assert.match(workspace, /Nothing is added to the customer document merely because it was discussed/);
+  assert.match(workspace, /Only explicit document actions should change the working Quote/);
+  assert.match(workspace, /Photo role and photo visibility remain separate/);
+  assert.match(workspace, /Nothing is automatically approved/);
+  assert.match(workspace, /Creating an Invoice does not mean it has been sent or paid/);
+  assert.match(workspace, /Sending an Invoice does not mean payment was received/);
+  assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document/);
+  assert.match(workspace, /Nothing in this workspace automatically accepts a Quote/);
+  assert.match(workspace, /The professional remains in control/);
+});
+
+test("normal conversation surface removes permanent explanatory clutter", () => {
+  const conversation = workspace.slice(
+    workspace.indexOf("<section className={`business-document-conversation"),
+    workspace.indexOf("{documentPhotos.length ? <JobEvidencePanel")
+  );
+
+  assert.doesNotMatch(conversation, /business-document-conversation-heading/);
+  assert.doesNotMatch(conversation, /photoNotice \?/);
+  assert.doesNotMatch(conversation, /business-document-draft-truth/);
+  assert.doesNotMatch(conversation, /Chat, speak, or upload photos\. The working/);
+  assert.doesNotMatch(conversation, /Questions stay in private Job Analysis/);
+  assert.doesNotMatch(conversation, /Nothing here issues, sends, approves, pays, or completes/);
+});
+
 test("Ask Meetro questions and analysis requests cannot silently mutate the working document", () => {
   for (const instruction of [
     "Do you find visible damage?",
@@ -343,7 +425,12 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation,[\s\S]*\.business-document-conversation\.mobile-active\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*auto auto minmax\(0,\s*1fr\)[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation,[\s\S]*\.business-document-conversation\.mobile-active\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\)[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-workflow-guide\s*\{[\s\S]*position:\s*absolute[\s\S]*max-height:[\s\S]*overflow-y:\s*auto/
   );
 
   assert.match(
@@ -398,12 +485,22 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
+    /@media \(max-width:\s*767px\)[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-workflow-backdrop\s*\{[\s\S]*position:\s*fixed[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-workflow-guide\s*\{[\s\S]*position:\s*fixed[\s\S]*max-height:\s*min\(82dvh,\s*720px\)/
+  );
+
+  assert.match(
+    styles,
     /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible/
   );
 
   assert.match(
     styles,
     /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*height:\s*58dvh[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-evidence-panel\s*\{[\s\S]*display:\s*none[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-inline-evidence\s*\{[\s\S]*display:\s*grid/
+  );
+
+  assert.match(
+    styles,
+    /@media \(max-width:\s*900px\) and \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-workflow-guide\s*\{[\s\S]*position:\s*fixed[\s\S]*max-height:\s*min\(82dvh,\s*720px\)/
   );
 });
 
@@ -462,8 +559,8 @@ test("private reminders, costs, and photos do not enter customer-visible models"
 
 test("Internal Estimate and Solution Ready are not mandatory visible workspace steps", () => {
   assert.doesNotMatch(workspace, /Analyze Job|Continue with My Details|Confirm Amounts|Internal Estimate|Solution Ready/);
-  assert.match(workspace, /working draft only/);
-  assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes/);
+  assert.match(workspace, /private working space for the job/);
+  assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document/);
 });
 
 test("Quote and Invoice delivery use one menu while PDF remains separate", () => {

@@ -89,7 +89,6 @@
 .business-document-conversation {
   padding: 14px 0 0;
 }
-.business-document-conversation-heading,
 .business-document-preview > header {
   display: flex;
   align-items: flex-start;
@@ -97,28 +96,90 @@
   gap: 12px;
   margin-bottom: 12px;
 }
-.business-document-conversation-heading h2,
 .business-document-preview > header h2 { margin: 0; color: #122a20; font-size: 17px; }
-.business-document-conversation-heading p { margin: 3px 0 0; color: #607086; font-size: 12px; line-height: 1.4; }
-.business-document-conversation-heading button { flex: 0 0 auto; border: 1px solid #dce5de; border-radius: 12px; color: #335347; background: #fff; padding: 8px 11px; font-size: 11px; font-weight: 850; }
-
-.business-document-entry-choice { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 14px; }
-.business-document-entry-choice button {
-  display: flex;
+.business-document-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.business-document-control-toolbar {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+  margin-bottom: 10px;
+  overflow: visible;
+}
+.business-document-control-toolbar > button {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   min-width: 0;
-  padding: 11px;
+  padding: 9px 8px;
   border: 1px solid #e1e6df;
-  border-radius: 13px;
+  border-radius: 11px;
   color: #153d2a;
   background: #fff;
-  text-align: left;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: center;
 }
-.business-document-entry-choice button:first-child { background: #eaf4e9; }
-.business-document-entry-choice span { display: grid; min-width: 0; }
-.business-document-entry-choice strong { font-size: 12px; }
-.business-document-entry-choice small { margin-top: 2px; color: #68788d; font-size: 10px; }
+.business-document-control-toolbar > button:first-child { background: #eaf4e9; }
+.business-document-control-toolbar > button[aria-expanded="true"] { border-color: #9fc4aa; color: #0f6139; background: #f4faf4; }
+.business-document-control-toolbar > button:focus-visible { outline: 3px solid #77a98a; outline-offset: 2px; }
+.business-document-control-toolbar > button span { min-width: 0; overflow-wrap: anywhere; }
+.business-document-control-toolbar > [hidden] { display: none !important; }
+.business-document-control-toolbar > .business-document-workflow-backdrop { display: none; }
+.business-document-workflow-guide {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 100%;
+  max-height: min(680px, calc(100dvh - 250px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid #d9e3db;
+  border-radius: 14px;
+  color: #24374a;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(20,39,29,.16);
+}
+.business-document-workflow-guide > header {
+  position: sticky;
+  z-index: 1;
+  top: -12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -12px -12px 10px;
+  padding: 12px;
+  border-bottom: 1px solid #e7ece8;
+  background: #fff;
+}
+.business-document-workflow-guide > header h2 { margin: 0; color: #122a20; font-size: 13px; line-height: 1.3; }
+.business-document-workflow-guide > header button { flex: 0 0 34px; min-height: 34px; border: 0; border-radius: 9px; color: #355246; background: #f2f6f2; font-size: 18px; }
+.business-document-workflow-guide > section + section { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e7ece8; }
+.business-document-workflow-guide h3 { margin: 0 0 8px; color: #0f6139; font-size: 9px; font-weight: 950; letter-spacing: .06em; }
+.business-document-workflow-step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start; }
+.business-document-workflow-step + .business-document-workflow-step { margin-top: 10px; }
+.business-document-workflow-step > span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #0f6139; background: #e9f4eb; font-size: 9px; font-weight: 950; }
+.business-document-workflow-step h4 { margin: 2px 0 3px; color: #173d2b; font-size: 11px; }
+.business-document-workflow-step p { margin: 3px 0 0; color: #536579; font-size: 9px; line-height: 1.45; }
+.business-document-workflow-step ul { margin: 5px 0 0; padding-left: 16px; color: #536579; font-size: 9px; line-height: 1.45; }
+.business-document-workflow-guide > footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e7ece8; color: #2c5b43; font-size: 9px; font-weight: 850; text-align: center; }
 
 .business-document-chat-shell {
   display: grid;
@@ -377,8 +438,6 @@
 .business-private-reminders strong { font-size: 12px; }
 .business-private-reminders p { margin: 6px 0; font-size: 11px; }
 .business-private-reminders small { color: #71613e; font-size: 10px; }
-.business-document-draft-truth { margin: 10px 0 0; color: #68788c; font-size: 10px; line-height: 1.4; text-align: center; }
-
 .business-document-preview { padding: 14px 0 0; }
 .business-document-preview > header span { color: #16844a; font-size: 10px; font-weight: 850; }
 .business-live-document { min-width: 0; padding: clamp(13px, 2.2vw, 24px); border: 1px solid #dbe2dc; border-radius: 6px; color: #172844; background: #fff; box-shadow: 0 8px 24px rgba(44,50,39,.06); }
@@ -513,7 +572,6 @@
 .business-saved-empty p { margin: 0; color: #68798b; font-size: 11px; line-height: 1.5; }
 
 @media (min-width: 560px) {
-  .business-document-entry-choice { grid-template-columns: 1fr 1fr; }
   .business-document-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .business-document-footer-grid,
   .business-document-proof { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -566,7 +624,7 @@
   .business-document-conversation,
   .business-document-conversation.mobile-active {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-auto-rows: auto;
     min-height: 0;
     height: 100%;
@@ -667,6 +725,26 @@
     min-height: 220px;
   }
 
+  #root[data-app-layout="mobile"] .business-document-workflow-backdrop {
+    position: fixed;
+    z-index: 10032;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15,26,20,.24);
+  }
+
+  #root[data-app-layout="mobile"] .business-document-workflow-guide {
+    position: fixed;
+    z-index: 10033;
+    inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(82dvh, 720px);
+    border-radius: 18px;
+  }
+
   #root[data-app-layout="mobile"] .business-document-main.has-evidence {
     grid-template-columns: minmax(290px, .82fr) minmax(430px, 1.38fr);
   }
@@ -701,6 +779,26 @@
   .business-document-composer textarea {
     min-height: 58px;
     max-height: 120px;
+  }
+  .business-document-control-toolbar { gap: 4px; }
+  .business-document-control-toolbar > button { gap: 5px; padding: 8px 5px; font-size: 9px; }
+  #root[data-app-layout="mobile"] .business-document-workflow-backdrop {
+    position: fixed;
+    z-index: 10032;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15,26,20,.24);
+  }
+  #root[data-app-layout="mobile"] .business-document-workflow-guide {
+    position: fixed;
+    z-index: 10033;
+    inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(82dvh, 720px);
+    border-radius: 18px;
   }
   .business-document-tabs button { font-size: 11px; gap: 5px; }
   .business-document-actions { padding-bottom: 4px; }
@@ -749,6 +847,26 @@
   .business-document-chat-shell {
     height: 58dvh;
     min-height: 260px;
+  }
+
+  #root[data-app-layout="tablet"] .business-document-workflow-backdrop {
+    position: fixed;
+    z-index: 10032;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15,26,20,.24);
+  }
+
+  #root[data-app-layout="tablet"] .business-document-workflow-guide {
+    position: fixed;
+    z-index: 10033;
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(82dvh, 720px);
+    border-radius: 18px;
   }
 }
 
