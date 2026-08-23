@@ -896,6 +896,20 @@ test("postfix component totals are not overall quote authority", () => {
   assert.equal(buildQuickQuoteConversationPatch({ prompt: "$2,650 total." }).totalOverride, "2650");
 });
 
+test("natural scope pricing does not promote a component-price suffix to the project total", () => {
+  for (const prompt of [
+    "Repair the wall with materials for $700.",
+    "Rebuild the wall with labor for $1,950.",
+    "Repair the entry with installation for $280.",
+  ]) {
+    assert.equal(
+      buildQuickQuoteConversationPatch({ prompt }).totalOverride,
+      undefined,
+      prompt
+    );
+  }
+});
+
 test("component total clauses are removed completely from clean scope", () => {
   const patch = buildQuickQuoteConversationPatch({ prompt: "Replace the wall. Materials total is $700." });
   assert.match(patch.projectDescription, /Replace the wall/);

@@ -8,6 +8,7 @@ import {
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   reconcileBusinessDocumentInstructions,
+  resolveBusinessDocumentConversationMessage,
 } from "../src/utils/businessDocumentWorkspace.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -96,7 +97,69 @@ test("server-owned document number requests remain non-mutating and outside Job 
     instruction,
     current: { projectDescription: "Existing scope", totalOverride: "2650" },
   }), {});
+  for (const [documentType, request] of [
+    ["quote", "quote number BG-0001020"],
+    ["quote", "change the quote number"],
+    ["invoice", "set the invoice number INV-0001234"],
+  ]) {
+    const resolution = resolveBusinessDocumentConversationMessage({
+      documentType,
+      instruction: request,
+      current: documentType === "quote"
+        ? { quoteNumber: "BG-0001000" }
+        : { invoiceNumber: "INV-0001000" },
+      hasActiveAnalysisSession: true,
+    });
+    assert.equal(resolution.capability, "DOCUMENT_NUMBER_REQUEST", request);
+    assert.deepEqual(resolution.patch, {}, request);
+  }
   assert.match(persistence, /Document numbers are assigned by Meetro/);
+});
+
+test("composer intercepts server-owned number requests before chat or durable document work", () => {
+  const submitBlock = workspace.slice(
+    workspace.indexOf("async function submitInstruction"),
+    workspace.indexOf("function focusComposer")
+  );
+  const numberGuardStart = submitBlock.indexOf(
+    'resolution.capability === "DOCUMENT_NUMBER_REQUEST"'
+  );
+  const askGuardStart = submitBlock.indexOf(
+    'resolution.capability === "ASK_MEETRO"'
+  );
+  const existingTurnStart = submitBlock.indexOf("if (existingId)");
+
+  assert.ok(numberGuardStart >= 0);
+  assert.ok(askGuardStart > numberGuardStart);
+  assert.ok(existingTurnStart > numberGuardStart);
+
+  const numberGuard = submitBlock.slice(numberGuardStart, askGuardStart);
+  assert.match(
+    numberGuard,
+    /activeDocument === "quote"[\s\S]*Quote numbers are assigned by Meetro when the document is first saved and cannot be changed manually\.[\s\S]*Invoice numbers are assigned by Meetro when the document is first saved and cannot be changed manually\./
+  );
+  assert.match(numberGuard, /setMessage\(""\)/);
+  assert.match(numberGuard, /return true/);
+  assert.doesNotMatch(numberGuard, /submitAskMeetro/);
+  assert.doesNotMatch(numberGuard, /buildBusinessDocumentConversationTurn/);
+  assert.doesNotMatch(numberGuard, /setTurns/);
+  assert.doesNotMatch(numberGuard, /reconcileDocument/);
+  assert.doesNotMatch(numberGuard, /assignPhotoIntent/);
+  assert.doesNotMatch(numberGuard, /onApplyQuotePatch|setInvoice|setSavedDocuments/);
+  assert.doesNotMatch(numberGuard, /JobAnalysis|AnalysisSession/);
+
+  // The unconditional early return also protects edits of existing turns.
+  assert.ok(numberGuardStart < existingTurnStart);
+
+  // Existing routing remains intact on either side of document mutation.
+  assert.match(
+    submitBlock,
+    /!existingId[\s\S]*resolution\.capability === "ASK_MEETRO"[\s\S]*return submitAskMeetro\(instruction\)/
+  );
+  assert.equal(
+    (submitBlock.match(/nextTurns = \[\.\.\.turns, conversationTurn\.turn\]/g) || []).length,
+    1
+  );
 });
 
 test("compact workspace controls stay outside conversation history and open a non-mutating workflow guide", () => {
@@ -289,7 +352,7 @@ test("explicit document edits still bypass the Ask Meetro question guard", () =>
 });
 
 
-test("active Job Analysis keeps ordinary job context conversational while explicit document commands retain draft authority", () => {
+test("ordinary job context stays conversational while explicit document commands retain draft authority", () => {
   for (const instruction of [
     "Knee wall has a crack line and needs further evaluation",
     "The fan is running with no problem",
@@ -321,18 +384,45 @@ test("active Job Analysis keeps ordinary job context conversational while explic
     );
   }
 
-  // Legacy no-session behavior remains unchanged.
+  // A missing analysis session no longer turns arbitrary statements into scope.
   assert.equal(
     classifyBusinessDocumentConversationIntent(
       "I see cracks on the concrete wall."
     ),
-    "DOCUMENT_EDIT"
+    "ASK_MEETRO"
   );
 
   assert.match(
     workspace,
-    /hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)/
+    /resolveBusinessDocumentConversationMessage\([\s\S]*hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)/
   );
+});
+
+test("per-message resolution validates structured mutation before choosing a capability", () => {
+  const quote = { customerName: "Jack Smith", totalOverride: "2650" };
+  assert.equal(resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "Change the amount.",
+    current: quote,
+    hasActiveAnalysisSession: true,
+  }).capability, "ASK_MEETRO");
+  assert.deepEqual(resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "Change the amount.",
+    current: quote,
+    hasActiveAnalysisSession: true,
+  }).patch, {});
+
+  const naturalQuote = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "fan replacement for Jack Smith. fan cost 89.99 installation cost 180.00",
+    current: {},
+    hasActiveAnalysisSession: true,
+  });
+  assert.equal(naturalQuote.capability, "DOCUMENT_MUTATION");
+  assert.equal(naturalQuote.patch.customerName, "Jack Smith");
+  assert.equal(naturalQuote.patch.materialItems[0].total, "89.99");
+  assert.equal(naturalQuote.patch.laborItems[0].total, "180");
 });
 
 test("active Job Analysis yields to strong structured professional document input before the conversational fallback", () => {
@@ -641,7 +731,17 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /\.business-document-new-message\s*\{[\s\S]*grid-row:\s*1[\s\S]*align-self:\s*end/
+    /\.business-document-new-message\s*\{[\s\S]*grid-row:\s*1[\s\S]*align-self:\s*end[\s\S]*width:\s*max-content[\s\S]*max-width:\s*calc\(100% - 16px\)/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-turns\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/
+  );
+
+  assert.match(
+    styles,
+    /\.business-document-composer\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/
   );
 
   assert.match(
@@ -1183,7 +1283,7 @@ test("unified workspace preserves the private Job Analysis session through save,
 test("Ask Meetro uses the durable governed Job Analysis conversation without direct working-document mutation", () => {
   assert.match(
     workspace,
-    /classifyBusinessDocumentConversationIntent/
+    /resolveBusinessDocumentConversationMessage/
   );
   assert.match(
     workspace,
@@ -1256,7 +1356,7 @@ test("Ask Meetro uses the durable governed Job Analysis conversation without dir
 
   assert.match(
     submitBlock,
-    /classifyBusinessDocumentConversationIntent\([\s\S]*instruction,[\s\S]*hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)[\s\S]*\)[\s\S]*ASK_MEETRO[\s\S]*submitAskMeetro\(instruction\)/
+    /resolveBusinessDocumentConversationMessage\([\s\S]*instruction,[\s\S]*hasActiveAnalysisSession:[\s\S]*Boolean\(jobAnalysisSessionIds\[activeDocument\]\)[\s\S]*\)[\s\S]*resolution\.capability === "ASK_MEETRO"[\s\S]*submitAskMeetro\(instruction\)/
   );
 
   assert.match(

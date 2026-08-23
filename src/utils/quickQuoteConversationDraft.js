@@ -64,6 +64,19 @@ function explicitFinalPrice(text) {
   return match ? parseAmount(match[match.length - 1]) : null;
 }
 
+function explicitContractorProjectPrice(text) {
+  const scopeAuthority =
+    /^(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b/i.test(text) ||
+    /^(?:[A-Za-z][\w'’-]*\s+){0,7}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b(?=\s*(?:,|[.!?]|$))/i.test(text) ||
+    /^(?:please\s+)?add\s+(?:labor|labour)\s+and\s+materials?\s+for\b/i.test(text);
+  if (!scopeAuthority) return null;
+  if (/\b(?:materials?|labor|labour|installation|tax|subtotal)\s+for\s+\$\s*[\d,.]+\s*[.!]?$/i.test(text)) {
+    return null;
+  }
+  const match = text.match(/(?:\s+for\s+|,\s*)\$\s*([\d,.]+)\s*[.!]?$/i);
+  return match ? parseAmount(match[1]) : null;
+}
+
 function explicitMaterialAmount(text) {
   const match = firstMatch(text, [
     /(?:use|set|materials?|materiales|matériaux|materiais)\s*(?:(?:are|is|costs?|to|at|de|a)|:)?\s*\$\s*([\d,.]+)/i,
@@ -279,6 +292,7 @@ function cleanScope(text) {
   scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:note|condition)\s*:\s*[^.!?]+[.!]?/gi, "");
   scope = scope.replace(/(^|[.!?;,]\s*)(?:the\s+)?[A-Za-z][\w -]{0,38}?\s+(?:costs?|is)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "$1");
+  scope = scope.replace(/(?:\s+for\s+|,\s*)\$\s*[\d,.]+\s*[.!]?$/i, "");
   return cleanText(scope)
     .replace(/\s+([.!?])/g, "$1")
     .replace(/\.{2,}/g, ".")
@@ -296,11 +310,20 @@ function explicitReplacement(text) {
   return cleanText(match?.[1] || "");
 }
 
+function naturalScopeDeclaration(text) {
+  return (
+    /^(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b/i.test(text) ||
+    /^(?:[A-Za-z][\w'’-]*\s+){0,7}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b(?=\s*(?:,|[.!?]|$))/i.test(text)
+  );
+}
+
 function explicitScopeAddition(text) {
   const match = text.match(
     /\badd\s+(.+?)\s+to\s+(?:the\s+)?scope\b[.!?]?/i
   );
-  return cleanText(match?.[1] || "");
+  if (match) return cleanText(match[1]);
+  const standalone = text.match(/^(?:please\s+)?add\s+(?!\$)(.+?)[.!?]?$/i);
+  return standalone ? cleanScope(standalone[1]) : "";
 }
 
 function appendScope(value, addition) {
@@ -333,7 +356,7 @@ export function buildQuickQuoteConversationPatch({
   const structuredPrice = Object.hasOwn(structured, "price")
     ? parseAmount(String(structured.price).replace(/^\$\s*/, ""))
     : null;
-  const finalPrice = structuredPrice ?? explicitFinalPrice(instruction);
+  const finalPrice = structuredPrice ?? explicitFinalPrice(instruction) ?? explicitContractorProjectPrice(instruction);
   const materialAmount = explicitMaterialAmount(instruction);
   const laborAmount = explicitLaborAmount(instruction);
   const laborItems = explicitLaborItems(instruction);
@@ -380,6 +403,14 @@ export function buildQuickQuoteConversationPatch({
     }
   }
 
+  if (revision && !structuredScope && !replacement && !scopeAddition && naturalScopeDeclaration(instruction) && scope) {
+    patch.projectDescription = scope;
+    patch.recommendedSolution = scope;
+    if (!cleanText(current.projectTitle) && !structured.project) {
+      patch.projectTitle = suggestedTitle(scope);
+    }
+  }
+
   if (replacement) {
     patch.projectDescription = replacement;
     patch.problemFound = replacement;
@@ -400,7 +431,7 @@ export function buildQuickQuoteConversationPatch({
     );
   }
 
-  if (revision && /\bremove\b/i.test(instruction)) {
+  if (revision && /^(?:please\s+)?remove\b/i.test(instruction)) {
     patch.projectDescription = removeRequestedText(current.projectDescription, instruction);
     patch.problemFound = removeRequestedText(current.problemFound, instruction);
     patch.recommendedSolution = removeRequestedText(current.recommendedSolution, instruction);

@@ -182,11 +182,14 @@ export function buildBusinessDocumentConversationTurn({
   instruction,
   current = {},
   previousTurn = null,
+  resolvedPatch = null,
   now = new Date().toISOString(),
 } = {}) {
   const text = String(instruction || "").trim();
   const type = String(documentType || "").toLowerCase();
-  const patch = buildBusinessDocumentConversationPatch({ documentType: type, instruction: text, current });
+  const patch = resolvedPatch === null
+    ? buildBusinessDocumentConversationPatch({ documentType: type, instruction: text, current })
+    : Object.freeze({ ...resolvedPatch });
   const recognized = Object.keys(patch).length > 0;
   const timestamp = validTimestamp(now) || new Date().toISOString();
   const createdAt = previousTurn ? validTimestamp(previousTurn.createdAt) : timestamp;

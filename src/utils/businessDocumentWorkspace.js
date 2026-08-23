@@ -26,6 +26,9 @@ const QUESTION_LEAD =
 const ANALYSIS_REQUEST =
   /^(?:please\s+)?(?:(?:help\s+me\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify|review|check)\b|look\s+at\b|tell\s+me\s+what\s+you\s+(?:see|notice|find)\b|i(?:\s+will|['’]ll|\s+am\s+going\s+to)\s+(?:send|share|upload)\b.*\b(?:review|analy[sz]e|assess|inspect|evaluate|diagnose|check)\b)/i;
 
+const CONVERSATIONAL_REQUEST =
+  /^(?:please\s+)?(?:ask|help|explain|recommend|suggest|tell\s+me|walk\s+me\s+through|thanks?\b|thank\s+you\b|okay\b|ok\b|got\s+it\b)/i;
+
 const SERVER_OWNED_DOCUMENT_NUMBER_REQUEST =
   /^(?:please\s+)?(?:set|change|update|use)?\s*(?:the\s+)?(?:quote|invoice)\s*(?:number|#)\b/i;
 
@@ -42,6 +45,18 @@ const STRONG_DOCUMENT_FIELD_PHRASE =
 const STRONG_CUSTOMER_DECLARATION =
   /(?:^|[\n\r.!?;]\s*)(?:[Cc]ustomer|[Cc]lient)\s+is\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+){1,3}(?=[.!?;,\n\r]|$|\s+(?:project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:)/;
 
+const DECLARATIVE_DURATION_INPUT =
+  /^(?:about\s+|around\s+|approximately\s+)?(?:should\s+take\s+|takes?\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s+(?:hours?|hrs?|days?|weeks?)\.?$/i;
+
+const IMPLICIT_DOCUMENT_INPUT =
+  /^(?:(?:customer|client)(?:\s+name)?\s+(?:is\s+)?[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+|(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b|(?:[A-Za-z][\w'’-]*\s+){0,5}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b(?=\s+for\b|[,;.!?]|$)|(?:materials?|labor|labour|installation|project\s+price|price|total|amount)\s+(?:(?:costs?|is|are|to|at)\s+)?\$?\s*[\d,.]+\b|(?:[A-Za-z][\w'’ -]{0,38})\s+(?:costs?|is)\s+\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?\s*$|(?:charge|add)\s+\$?\s*[\d,.]+\b|\d{1,3}\s*%\s+deposit\b|(?:note|condition)\s*:)/i;
+
+const PRIVATE_OR_PHOTO_DOCUMENT_INPUT =
+  /\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b|\b(?:these|those|the)\s+(?:photos?|images?)\s+(?:are|as)\s+(?:before|after)\b|\buse\s+(?:these|those|the|quote)\s+(?:photos?|images?)\s+as\s+(?:before|after)\b/i;
+
+const INCOMPLETE_DOCUMENT_MUTATION =
+  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\s+(?:the\s+)?(?:amount|price|total|customer|client|project|scope|labor|labour|installation|materials?|duration|payment\s+terms?|note|photos?|it|this|that)(?:\s+again)?[.!?]*$/i;
+
 export function hasStrongBusinessDocumentInput(instruction) {
   const text = String(instruction || "").trim();
   return Boolean(
@@ -54,11 +69,18 @@ export function hasStrongBusinessDocumentInput(instruction) {
   );
 }
 
+export function hasImplicitBusinessDocumentInput(instruction) {
+  const text = cleanText(instruction);
+  if (!text) return false;
+  if (DECLARATIVE_DURATION_INPUT.test(text)) return true;
+  if (/^(?:i|we)\b|\b(?:could|might|maybe|roughly)\b|\bwhen\s+i\s+(?:bought|paid)\b/i.test(text)) {
+    return false;
+  }
+  return IMPLICIT_DOCUMENT_INPUT.test(text);
+}
+
 export function classifyBusinessDocumentConversationIntent(
-  instruction,
-  {
-    hasActiveAnalysisSession = false,
-  } = {}
+  instruction
 ) {
   const text = cleanText(instruction);
   if (!text) return "EMPTY";
@@ -67,14 +89,8 @@ export function classifyBusinessDocumentConversationIntent(
     return "DOCUMENT_NUMBER_REQUEST";
   }
 
-  /*
-   * Explicit document commands always retain deterministic
-   * working-draft authority.
-   *
-   * Once a private Job Analysis conversation exists, ordinary
-   * job context defaults back to Ask Meetro instead of silently
-   * becoming Quote/Invoice content.
-   */
+  // Document commands are candidates here. Their structured patch is
+  // validated by resolveBusinessDocumentConversationMessage before mutation.
   if (EXPLICIT_DOCUMENT_EDIT_REQUEST.test(text)) {
     return "DOCUMENT_EDIT";
   }
@@ -84,15 +100,28 @@ export function classifyBusinessDocumentConversationIntent(
   }
 
   if (
+    PRIVATE_OR_PHOTO_DOCUMENT_INPUT.test(text) ||
+    Object.keys(buildBusinessDocumentAgreementPatch(text)).length > 0
+  ) {
+    return "DOCUMENT_INPUT";
+  }
+
+  if (DECLARATIVE_DURATION_INPUT.test(text)) {
+    return "DOCUMENT_INPUT";
+  }
+
+  if (
     text.includes("?") ||
     QUESTION_LEAD.test(text) ||
     ANALYSIS_REQUEST.test(text) ||
-    hasActiveAnalysisSession
+    CONVERSATIONAL_REQUEST.test(text)
   ) {
     return "ASK_MEETRO";
   }
 
-  return "DOCUMENT_EDIT";
+  return hasImplicitBusinessDocumentInput(text)
+    ? "DOCUMENT_INPUT"
+    : "ASK_MEETRO";
 }
 
 export function buildInvoiceConversationPatch({ instruction } = {}) {
@@ -148,20 +177,12 @@ export function buildInvoiceConversationPatch({ instruction } = {}) {
   return Object.freeze(patch);
 }
 
-export function buildBusinessDocumentConversationPatch({
+function buildBusinessDocumentMutationPatch({
   documentType,
   instruction,
   current = {},
   revision,
 } = {}) {
-  if (isServerOwnedDocumentNumberRequest(instruction)) {
-    return Object.freeze({});
-  }
-
-  if (classifyBusinessDocumentConversationIntent(instruction) === "ASK_MEETRO") {
-    return Object.freeze({});
-  }
-
   const privateInstruction = /\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b/i.test(
     cleanText(instruction)
   );
@@ -199,6 +220,56 @@ export function buildBusinessDocumentConversationPatch({
       agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), ...agreementPatch },
     } : {}),
   });
+}
+
+export function resolveBusinessDocumentConversationMessage({
+  documentType,
+  instruction,
+  current = {},
+  revision,
+  hasActiveAnalysisSession = false,
+} = {}) {
+  const text = cleanText(instruction);
+  const analysisSessionActive = hasActiveAnalysisSession === true;
+  const intent = classifyBusinessDocumentConversationIntent(text);
+
+  if (intent === "EMPTY") {
+    return Object.freeze({ capability: "EMPTY", intent, patch: Object.freeze({}), analysisSessionActive });
+  }
+
+  if (intent === "DOCUMENT_NUMBER_REQUEST") {
+    return Object.freeze({
+      capability: "DOCUMENT_NUMBER_REQUEST",
+      intent,
+      patch: Object.freeze({}),
+      analysisSessionActive,
+    });
+  }
+
+  if (intent === "ASK_MEETRO") {
+    return Object.freeze({ capability: "ASK_MEETRO", intent, patch: Object.freeze({}), analysisSessionActive });
+  }
+
+  const patch = buildBusinessDocumentMutationPatch({
+    documentType,
+    instruction: text,
+    current,
+    revision,
+  });
+  const validMutation =
+    Object.keys(patch).length > 0 &&
+    !INCOMPLETE_DOCUMENT_MUTATION.test(text);
+
+  return Object.freeze({
+    capability: validMutation ? "DOCUMENT_MUTATION" : "ASK_MEETRO",
+    intent: validMutation ? intent : "CLARIFICATION_REQUIRED",
+    patch: validMutation ? patch : Object.freeze({}),
+    analysisSessionActive,
+  });
+}
+
+export function buildBusinessDocumentConversationPatch(options = {}) {
+  return resolveBusinessDocumentConversationMessage(options).patch;
 }
 
 function hasRowValue(row = {}) {
@@ -263,7 +334,6 @@ export function reconcileBusinessDocumentInstructions({
       documentType,
       instruction,
       current: draft,
-      revision: index > 0,
     });
     const { privateReminder, photoIntent, ...documentPatch } = patch;
     if (privateReminder) privateReminders.push({ id: entry?.id || `instruction-${index}`, text: privateReminder });

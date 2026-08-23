@@ -4,11 +4,11 @@ import BottomNav from "./BottomNav.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import {
-  classifyBusinessDocumentConversationIntent,
   createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   normalizeBusinessDocumentTab,
   reconcileBusinessDocumentInstructions,
+  resolveBusinessDocumentConversationMessage,
 } from "../utils/businessDocumentWorkspace.js";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
@@ -1701,31 +1701,42 @@ export default function UnifiedBusinessDocumentWorkspace({
     const instruction = String(rawInstruction || "").trim();
     if (!instruction) return false;
 
+    const current = activeDocument === "quote" ? quote : invoice;
+    const resolution = resolveBusinessDocumentConversationMessage({
+      documentType: activeDocument,
+      instruction,
+      current,
+      hasActiveAnalysisSession: Boolean(jobAnalysisSessionIds[activeDocument]),
+    });
+
+    if (resolution.capability === "DOCUMENT_NUMBER_REQUEST") {
+      setMessage("");
+      setNotice(
+        activeDocument === "quote"
+          ? "Quote numbers are assigned by Meetro when the document is first saved and cannot be changed manually."
+          : "Invoice numbers are assigned by Meetro when the document is first saved and cannot be changed manually."
+      );
+      return true;
+    }
+
     if (
       !existingId &&
-      classifyBusinessDocumentConversationIntent(
-        instruction,
-        {
-          hasActiveAnalysisSession:
-            Boolean(jobAnalysisSessionIds[activeDocument]),
-        }
-      ) === "ASK_MEETRO"
+      resolution.capability === "ASK_MEETRO"
     ) {
       return submitAskMeetro(instruction);
     }
 
-    const current = activeDocument === "quote" ? quote : invoice;
     let turnId = existingId;
     let nextTurns;
     let conversationTurn;
     if (existingId) {
       const previousTurn = turns.find((turn) => turn.id === existingId);
-      conversationTurn = buildBusinessDocumentConversationTurn({ id: existingId, documentType: activeDocument, instruction, current, previousTurn });
+      conversationTurn = buildBusinessDocumentConversationTurn({ id: existingId, documentType: activeDocument, instruction, current, previousTurn, resolvedPatch: resolution.patch });
       nextTurns = turns.map((turn) => turn.id === existingId ? conversationTurn.turn : turn);
     } else {
       turnIdRef.current += 1;
       turnId = `professional-instruction-${Date.now()}-${turnIdRef.current}`;
-      conversationTurn = buildBusinessDocumentConversationTurn({ id: turnId, documentType: activeDocument, instruction, current });
+      conversationTurn = buildBusinessDocumentConversationTurn({ id: turnId, documentType: activeDocument, instruction, current, resolvedPatch: resolution.patch });
       nextTurns = [...turns, conversationTurn.turn];
     }
     setTurns(nextTurns);
