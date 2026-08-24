@@ -69,10 +69,24 @@ import {
 } from "../utils/accountProfileScope";
 import {
   CONTACT_IMPORT_TYPE_OPTIONS,
-  buildImportedContactRelationship,
   normalizeImportedContact,
   parseImportedContactsFromText,
 } from "../utils/contactImport";
+import {
+  BUSINESS_CONTACT_ROLE_LABELS,
+  BUSINESS_CONTACT_ROLES,
+  archiveBusinessContact,
+  createBusinessContactCommandKey,
+  createBusinessContactWithRole,
+  createDeterministicBusinessContactKey,
+  getBusinessContactRoleForType,
+  importBusinessContacts,
+  listBusinessContacts,
+  loadBusinessContactProfileId,
+  projectBusinessContactRecord,
+  reconcileBusinessContactRoles,
+  updateBusinessContact,
+} from "../utils/businessContactsApi";
 import {
   CONTACTS_ACCESS_OFF_MESSAGE,
   getNativePhoneContacts,
@@ -461,6 +475,16 @@ function normalizeRelationshipId(value = "") {
     .replace(/^_+|_+$/g, "");
 }
 
+function describeBusinessContactDuplicateCandidates(candidates = []) {
+  const labels = (Array.isArray(candidates) ? candidates : [])
+    .map((candidate) =>
+      String(candidate?.displayName || candidate?.companyName || candidate?.id || "").trim()
+    )
+    .filter(Boolean);
+  if (labels.length === 0) return "";
+  return ` Possible duplicate${labels.length === 1 ? "" : "s"}: ${labels.join(", ")}. Nothing was merged.`;
+}
+
 const RELATIONSHIP_VIEW_OPTIONS = [
   ["all", "messagesViewAllRelationships"],
   ["customer", "messagesViewCustomers"],
@@ -553,6 +577,8 @@ function createEmptyComposer(type = "customer", label = "New Relationship") {
     email: "",
     address: "",
     note: "",
+    partyType: "PERSON",
+    commandKey: "",
   };
 }
 
@@ -570,7 +596,7 @@ function createEmptyConversationStarter(mode = "single") {
 }
 
 function getDefaultImportType(activeMode = "business") {
-  return activeMode === "business" ? "customer" : "vendor";
+  return activeMode === "business" ? "customer" : "professional";
 }
 
 function createEmptyContactImport(activeMode = "business") {
@@ -630,6 +656,9 @@ function MessagesInbox({ setPage, currentPage }) {
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
+  const activeContactProfileScope = getActiveProfileScopeDescriptor({
+    activeAccountMode,
+  });
   const emergencyContextAccountModeRef = useRef(activeAccountMode);
   const [compactContextOpen, setCompactContextOpen] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
@@ -706,6 +735,11 @@ function MessagesInbox({ setPage, currentPage }) {
   const [activeContactCardSnapshot, setActiveContactCardSnapshot] = useState(null);
   const [contactInviteOptionsId, setContactInviteOptionsId] = useState("");
   const [contactEditDraft, setContactEditDraft] = useState(null);
+  const [durableBusinessContacts, setDurableBusinessContacts] = useState([]);
+  const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
+  const [businessContactsLoading, setBusinessContactsLoading] = useState(false);
+  const [businessContactSaving, setBusinessContactSaving] = useState(false);
+  const businessContactLoadSequenceRef = useRef(0);
   const contactImportFileRef = useRef(null);
   const relationshipIdentityReturnScrollRef = useRef(0);
   const activeContactCard = activeContactCardSnapshot;
@@ -979,6 +1013,36 @@ function MessagesInbox({ setPage, currentPage }) {
   }, [activeAccountMode, language]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (activeAccountMode === "business") {
+        void loadDurableBusinessContacts(
+          messageSection === "contacts" ? searchQuery : ""
+        );
+      } else {
+        businessContactLoadSequenceRef.current += 1;
+        setDurableBusinessContacts([]);
+        setBusinessContactProfileId(null);
+        setBusinessContactsLoading(false);
+      }
+    }, messageSection === "contacts" && searchQuery ? 180 : 0);
+    const refreshContacts = () => {
+      if (activeAccountMode === "business") {
+        void loadDurableBusinessContacts(
+          messageSection === "contacts" ? searchQuery : ""
+        );
+      }
+    };
+    window.addEventListener("focus", refreshContacts);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("focus", refreshContacts);
+    };
+    // The loader owns request sequencing and the current authenticated business.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountMode, messageSection, searchQuery]);
+
+  useEffect(() => {
     writeUnreadConversationCount(quotes);
 
     window.dispatchEvent(
@@ -1234,6 +1298,49 @@ function MessagesInbox({ setPage, currentPage }) {
         conversationFetchInFlightRef.current = false;
         hasLoadedConversationProjectionRef.current = true;
         setLoading(false);
+      }
+    }
+  }
+
+  async function resolveBusinessContactProfileId() {
+    const scopedId = Number(activeContactProfileScope.profileId);
+    if (Number.isSafeInteger(scopedId) && scopedId > 0) {
+      setBusinessContactProfileId(scopedId);
+      return scopedId;
+    }
+    if (businessContactProfileId) return businessContactProfileId;
+    const loadedId = await loadBusinessContactProfileId({ setPage });
+    setBusinessContactProfileId(loadedId);
+    return loadedId;
+  }
+
+  async function loadDurableBusinessContacts(search = "") {
+    if (activeAccountMode !== "business") return [];
+    const requestSequence = ++businessContactLoadSequenceRef.current;
+    setBusinessContactsLoading(true);
+
+    try {
+      const contractorProfileId = await resolveBusinessContactProfileId();
+      const contacts = await listBusinessContacts({
+        contractorProfileId,
+        search,
+        status: "ALL",
+        setPage,
+      });
+      if (requestSequence !== businessContactLoadSequenceRef.current) return contacts;
+      setDurableBusinessContacts(contacts);
+      return contacts;
+    } catch (error) {
+      if (requestSequence !== businessContactLoadSequenceRef.current) return [];
+      if (messageSection === "contacts") {
+        setRelationshipNotice(
+          error?.message || "Saved business Contacts could not be loaded."
+        );
+      }
+      return [];
+    } finally {
+      if (requestSequence === businessContactLoadSequenceRef.current) {
+        setBusinessContactsLoading(false);
       }
     }
   }
@@ -2035,11 +2142,11 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const normalizedSearchQuery = normalizeMessageSearchText(searchQuery);
   const activeViewerRole = activeAccountMode === "business" ? "business" : "homeowner";
-  const activeContactProfileScope = getActiveProfileScopeDescriptor({
-    activeAccountMode,
-  });
   const liveIdentityQuotes = quotes.map((quote) =>
     applyLiveConversationAvatar(quote, activeViewerRole)
+  );
+  liveIdentityQuotes.push(
+    ...durableBusinessContacts.map(projectBusinessContactRecord)
   );
   const savedHistoryQuotes = liveIdentityQuotes
     .filter(isSavedChatHistoryConversation)
@@ -2790,6 +2897,12 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function getContactTypeLabel(relationship = {}) {
     const record = getRelationshipContactRecord(relationship);
+    if (record.durableBusinessContact) {
+      return (record.businessContactRoles || [])
+        .map((role) => BUSINESS_CONTACT_ROLE_LABELS[role])
+        .filter(Boolean)
+        .join(" · ") || t("messagesContact", language);
+    }
     const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
       (option) =>
         option.id === record.contactImportType ||
@@ -2797,7 +2910,7 @@ function MessagesInbox({ setPage, currentPage }) {
     );
 
     return (
-      (typeOption ? t(`messagesContactType_${typeOption.id}`, language) : "") ||
+      typeOption?.label ||
       relationship.typeLabel ||
       t("messagesContact", language)
     );
@@ -3210,6 +3323,19 @@ function MessagesInbox({ setPage, currentPage }) {
       phone: contact.phone || record.phone || "",
       email: contact.email || record.email || "",
       address: contact.address || record.address || record.location || "",
+      privateNote: record.privateNote || "",
+      partyType: record.businessContactPartyType || "PERSON",
+      roles: record.durableBusinessContact
+        ? [...(record.businessContactRoles || [])]
+        : [],
+      contactId: record.businessContactId || "",
+      version: record.businessContactVersion || null,
+      roleAssignments: record.businessContactRoleAssignments || [],
+      durable: record.durableBusinessContact === true,
+      commandKey:
+        record.durableBusinessContact === true
+          ? createBusinessContactCommandKey()
+          : "",
     });
   }
 
@@ -3219,7 +3345,53 @@ function MessagesInbox({ setPage, currentPage }) {
     );
   }
 
-  function saveContactEdit(event) {
+  function toggleContactEditRole(role) {
+    setContactEditDraft((current) => {
+      if (!current) return current;
+      const roles = new Set(current.roles || []);
+      if (roles.has(role)) roles.delete(role);
+      else roles.add(role);
+      return { ...current, roles: [...roles] };
+    });
+  }
+
+  async function archiveDurableContact(relationship) {
+    const record = getRelationshipContactRecord(relationship);
+    if (!record.durableBusinessContact || record.archived) return;
+    if (!window.confirm(`Archive ${relationship.name}? The Contact history will be preserved.`)) {
+      return;
+    }
+
+    setBusinessContactSaving(true);
+    setRelationshipNotice("");
+    try {
+      const archived = await archiveBusinessContact({
+        contactId: record.businessContactId,
+        expectedVersion: record.businessContactVersion,
+        idempotencyKey: createDeterministicBusinessContactKey(
+          `archive:${record.businessContactId}:${record.businessContactVersion}`
+        ),
+        setPage,
+      });
+      upsertDurableBusinessContact(archived);
+      const projected = projectBusinessContactRecord(archived);
+      setActiveContactCardSnapshot((current) => current ? {
+        ...current,
+        primaryContactRecord: projected,
+        contactRecord: projected,
+        archived: true,
+        isArchivedOnly: true,
+      } : current);
+      setContactEditDraft(null);
+      setRelationshipNotice(`${relationship.name} was archived. History was preserved.`);
+    } catch (error) {
+      setRelationshipNotice(error?.message || "The Contact could not be archived.");
+    } finally {
+      setBusinessContactSaving(false);
+    }
+  }
+
+  async function saveContactEdit(event) {
     event.preventDefault();
     if (!activeContactCard || !contactEditDraft) return;
 
@@ -3227,6 +3399,84 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (!name) {
       setRelationshipNotice("Add a name before saving this contact.");
+      return;
+    }
+
+    if (contactEditDraft.durable) {
+      if (contactEditDraft.roles.length === 0) {
+        setRelationshipNotice("Keep at least one role on this Contact.");
+        return;
+      }
+      setBusinessContactSaving(true);
+      setRelationshipNotice("");
+      try {
+        const updated = await updateBusinessContact({
+          contactId: contactEditDraft.contactId,
+          expectedVersion: contactEditDraft.version,
+          patch: {
+            partyType: contactEditDraft.partyType,
+            displayName: name,
+            companyName:
+              contactEditDraft.partyType === "ORGANIZATION" ? name : null,
+            phone: contactEditDraft.phone.trim() || null,
+            email: contactEditDraft.email.trim() || null,
+            address: contactEditDraft.address.trim() || null,
+            privateNote: contactEditDraft.privateNote.trim() || null,
+          },
+          idempotencyKey: contactEditDraft.commandKey,
+          setPage,
+        });
+        const reconciled = await reconcileBusinessContactRoles({
+          contact: updated,
+          desiredRoles: contactEditDraft.roles,
+          commandSeed: contactEditDraft.commandKey,
+          setPage,
+        });
+        upsertDurableBusinessContact(reconciled);
+        const projected = projectBusinessContactRecord(reconciled);
+        setActiveContactCardSnapshot((current) => current ? {
+          ...current,
+          name: projected.displayName,
+          type: projected.relationshipType,
+          typeLabel: BUSINESS_CONTACT_ROLE_LABELS[projected.businessContactRoles[0]] || current.typeLabel,
+          primaryContactRecord: projected,
+          contactRecord: projected,
+          primaryConversation: null,
+          savedToContacts: true,
+          archived: projected.archived,
+        } : current);
+        setContactEditDraft(null);
+        setRelationshipNotice(`${name} was updated.`);
+      } catch (error) {
+        if (error?.code === "BUSINESS_CONTACT_VERSION_CONFLICT") {
+          setRelationshipNotice(
+            "This Contact changed elsewhere. The latest saved version was reloaded; review your changes and try again."
+          );
+          const contacts = await loadDurableBusinessContacts("");
+          const latest = contacts.find(
+            (contact) => String(contact.id) === String(contactEditDraft.contactId)
+          );
+          if (latest) {
+            const projected = projectBusinessContactRecord(latest);
+            setActiveContactCardSnapshot((current) => current ? {
+              ...current,
+              name: projected.displayName,
+              primaryContactRecord: projected,
+              contactRecord: projected,
+            } : current);
+            setContactEditDraft((current) => current ? {
+              ...current,
+              version: latest.version,
+              roleAssignments: latest.roles,
+              commandKey: createBusinessContactCommandKey(),
+            } : current);
+          }
+        } else {
+          setRelationshipNotice(error?.message || "The Contact could not be updated.");
+        }
+      } finally {
+        setBusinessContactSaving(false);
+      }
       return;
     }
 
@@ -3715,6 +3965,10 @@ function MessagesInbox({ setPage, currentPage }) {
     setContactEntryMode(messageSection === "contacts" ? "manual" : "closed");
     setRelationshipComposer({
       ...createEmptyComposer(type, label),
+      commandKey:
+        messageSection === "contacts" && activeAccountMode === "business"
+          ? createBusinessContactCommandKey()
+          : "",
       section: messageSection,
     });
   }
@@ -3780,6 +4034,8 @@ function MessagesInbox({ setPage, currentPage }) {
         activeAccountMode === "business" ? "customer" : "professional",
         "Add Contact"
       ),
+      commandKey:
+        activeAccountMode === "business" ? createBusinessContactCommandKey() : "",
       section: "contacts",
       returnToStarter: true,
     });
@@ -4100,7 +4356,7 @@ function MessagesInbox({ setPage, currentPage }) {
     });
   }
 
-  function saveContactImport() {
+  async function saveContactImport() {
     if (!contactImport) return;
 
     const selectedIds = new Set(contactImport.selectedIds);
@@ -4113,25 +4369,70 @@ function MessagesInbox({ setPage, currentPage }) {
       return;
     }
 
-    const records = selectedContacts.map((contact, index) =>
-      buildImportedContactRelationship(contact, {
-        activeMode: activeAccountMode,
-        defaultType: contactImport.defaultType,
-        index,
-        createdAt: new Date(Date.now() + index).toISOString(),
-      })
-    );
+    if (activeAccountMode !== "business") {
+      updateContactImport({
+        notice: "Switch to your business profile to import durable business Contacts.",
+      });
+      return;
+    }
 
-    records.forEach(saveConversationRegistryItem);
-    setQuotes((current) => dedupeConversations([...records, ...current]));
-    setMessageSection("contacts");
-    setContactImport(null);
-    setRelationshipNotice(
-      `${records.length} contact${records.length === 1 ? "" : "s"} imported as relationship row${records.length === 1 ? "" : "s"}.`
-    );
+    setBusinessContactSaving(true);
+    updateContactImport({ notice: "Saving selected Contacts…", importFailures: [] });
+    try {
+      const contractorProfileId = await resolveBusinessContactProfileId();
+      const result = await importBusinessContacts({
+        contractorProfileId,
+        contacts: selectedContacts,
+        setPage,
+      });
+      result.successes.forEach(({ contact }) => upsertDurableBusinessContact(contact));
+      result.failures.forEach(({ createdContact }) => {
+        if (createdContact) upsertDurableBusinessContact(createdContact);
+      });
+      const duplicateCandidates = [
+        ...result.successes.flatMap((item) => item.duplicateCandidates),
+        ...result.failures.flatMap((item) => item.duplicateCandidates),
+      ];
+      const duplicateNotice = describeBusinessContactDuplicateCandidates(
+        duplicateCandidates
+      );
+
+      if (result.failures.length > 0) {
+        const failedIds = new Set(result.failures.map(({ source }) => source.id));
+        setContactImport((current) => current ? {
+          ...current,
+          step: "review",
+          contacts: current.contacts.filter((contact) => failedIds.has(contact.id)),
+          selectedIds: [...failedIds],
+          importFailures: result.failures,
+          notice: `${result.successes.length} completed; ${result.failures.length} incomplete. Failed Contacts remain below for review and retry.${duplicateNotice}`,
+        } : current);
+      } else {
+        setMessageSection("contacts");
+        setContactImport(null);
+        setContactEntryMode("closed");
+        setRelationshipNotice(
+          `${result.successes.length} durable business Contact${result.successes.length === 1 ? "" : "s"} imported.${duplicateNotice}`
+        );
+      }
+    } catch (error) {
+      updateContactImport({
+        notice: error?.message || "The selected Contacts could not be imported.",
+      });
+    } finally {
+      setBusinessContactSaving(false);
+    }
   }
 
-  function saveRelationshipComposer(event) {
+  function upsertDurableBusinessContact(contact) {
+    if (!contact?.id) return;
+    setDurableBusinessContacts((current) => [
+      contact,
+      ...current.filter((item) => String(item.id) !== String(contact.id)),
+    ]);
+  }
+
+  async function saveRelationshipComposer(event) {
     event.preventDefault();
     if (!relationshipComposer) return;
 
@@ -4245,6 +4546,75 @@ function MessagesInbox({ setPage, currentPage }) {
       !["invite", "import", "space", "hiring", "emergency"].includes(
         relationshipComposer.type
       );
+    if (createsContactPlaceholder) {
+      if (activeAccountMode !== "business") {
+        setRelationshipNotice(
+          "Switch to your business profile to save a durable business Contact."
+        );
+        return;
+      }
+      const role = getBusinessContactRoleForType(relationshipComposer.type);
+      if (!role) {
+        setRelationshipNotice("Choose a supported Contact role before saving.");
+        return;
+      }
+
+      setBusinessContactSaving(true);
+      setRelationshipNotice("");
+      try {
+        const contractorProfileId = await resolveBusinessContactProfileId();
+        const result = await createBusinessContactWithRole({
+          contact: {
+            contractorProfileId,
+            partyType: relationshipComposer.partyType,
+            displayName: name,
+            companyName:
+              relationshipComposer.partyType === "ORGANIZATION" ? name : undefined,
+            phone: relationshipComposer.phone.trim(),
+            email,
+            address: relationshipComposer.address.trim(),
+            privateNote: relationshipComposer.note.trim(),
+          },
+          role,
+          idempotencyKey: relationshipComposer.commandKey,
+          setPage,
+        });
+        upsertDurableBusinessContact(result.contact);
+        setMessageSection("contacts");
+        setRelationshipComposer(null);
+        setContactEntryMode("closed");
+        if (shouldReturnToStarter) {
+          setConversationStarter((current) => ({
+            ...(current || createEmptyConversationStarter("single")),
+            step: "select",
+            source: "contacts",
+            notice: `${name} was saved. Invite them to Meetro before starting a conversation.`,
+          }));
+        } else {
+          const projected = projectBusinessContactRecord(result.contact);
+          setActiveContactCardSnapshot(null);
+          setActiveContactCardId(normalizeRelationshipId(projected.relationshipId));
+        }
+        const duplicateNotice = describeBusinessContactDuplicateCandidates(
+          result.duplicateCandidates
+        );
+        setRelationshipNotice(
+          `${name} was saved as a business Contact.${duplicateNotice}`
+        );
+      } catch (error) {
+        if (error?.createdContact) {
+          upsertDurableBusinessContact(error.createdContact);
+          setRelationshipNotice(
+            `${name} was saved, but its role was not assigned. Retry Save Contact to complete it. ${error.message || ""}`.trim()
+          );
+        } else {
+          setRelationshipNotice(error?.message || "The business Contact could not be saved.");
+        }
+      } finally {
+        setBusinessContactSaving(false);
+      }
+      return;
+    }
     const relationshipType =
       relationshipComposer.type === "hiring"
         ? "employee"
@@ -4380,7 +4750,7 @@ function MessagesInbox({ setPage, currentPage }) {
     const record = getRelationshipContactRecord(relationship);
     const contact = getRelationshipContact(relationship);
     const isLinked = record.meetroAccountLinked === true || relationship.meetroAccountLinked === true;
-    const isProfessionalBusinessContact = ["professional", "vendor", "business"].includes(
+    const isProfessionalBusinessContact = !record.durableBusinessContact && ["professional", "vendor", "business"].includes(
       relationship.type || record.relationshipType || record.contactImportType
     );
     const contactTypeLabel = isProfessionalBusinessContact
@@ -4392,13 +4762,20 @@ function MessagesInbox({ setPage, currentPage }) {
       viewerRole: activeAccountMode === "business" ? "business" : "homeowner",
       isLinked,
       typeLabel: contactTypeLabel,
-      status: isLinked
+      status: record.archived
+        ? "Archived business Contact"
+        : isLinked
         ? t("messagesConnectedInMeetro", language)
+        : record.durableBusinessContact
+        ? "Saved business Contact · Meetro account not linked"
         : t("messagesInviteWhenReady", language),
     });
     const locationContactRow = getContactLocationFact(relationship);
     const contactRows = [
       { label: t("messagesType", language), value: contactTypeLabel },
+      ...(record.durableBusinessContact
+        ? [{ label: "Party", value: record.businessContactPartyType === "ORGANIZATION" ? "Organization" : "Person" }]
+        : []),
       { label: t("messagesPhone", language), value: contact.phone || t("messagesNotAdded", language) },
       { label: t("messagesEmail", language), value: contact.email || t("messagesNotAdded", language), span: "wide" },
       locationContactRow,
@@ -4424,7 +4801,9 @@ function MessagesInbox({ setPage, currentPage }) {
       {
         title: t("messagesNotes", language),
         empty: t("messagesNoNotes", language),
-        items: [],
+        items: record.privateNote
+          ? [{ title: record.privateNote, meta: "Private business note" }]
+          : [],
         span: "wide",
       },
       {
@@ -4435,7 +4814,13 @@ function MessagesInbox({ setPage, currentPage }) {
       },
     ];
 
-    const actions = isLinked
+    const actions = record.durableBusinessContact && record.archived
+      ? [
+          { label: t("messagesTextAction", language), onClick: () => textRelationship(relationship) },
+          { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
+          { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
+        ]
+      : isLinked
       ? [
           {
             label: t("messagesMeetroChat", language),
@@ -4460,6 +4845,9 @@ function MessagesInbox({ setPage, currentPage }) {
           { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
           { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
           { label: t("messagesEditContact", language), onClick: () => openEditContact(relationship) },
+          ...(record.durableBusinessContact && !record.archived
+            ? [{ label: "Archive Contact", onClick: () => archiveDurableContact(relationship) }]
+            : []),
         ];
     const relationshipPanels = (
       <>
@@ -4511,21 +4899,50 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={relationshipInput}
                 />
               </label>
-              <label style={relationshipField}>
-                <span>{t("messagesType", language)}</span>
-                <select
-                  value={contactEditDraft.type}
-                  onChange={(event) => updateContactEditDraft("type", event.target.value)}
-                  style={relationshipInput}
-                >
-                  {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {t(`messagesContactType_${option.id}`, language)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {contactEditDraft.durable ? (
+                <label style={relationshipField}>
+                  <span>Person or organization</span>
+                  <select
+                    value={contactEditDraft.partyType}
+                    onChange={(event) => updateContactEditDraft("partyType", event.target.value)}
+                    style={relationshipInput}
+                  >
+                    <option value="PERSON">Person</option>
+                    <option value="ORGANIZATION">Organization</option>
+                  </select>
+                </label>
+              ) : (
+                <label style={relationshipField}>
+                  <span>{t("messagesType", language)}</span>
+                  <select
+                    value={contactEditDraft.type}
+                    onChange={(event) => updateContactEditDraft("type", event.target.value)}
+                    style={relationshipInput}
+                  >
+                    {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
+            {contactEditDraft.durable && (
+              <fieldset style={relationshipRoleFieldset}>
+                <legend>Contact roles</legend>
+                <div style={relationshipRoleOptions}>
+                  {BUSINESS_CONTACT_ROLES.map((role) => (
+                    <label key={role} style={relationshipRoleOption}>
+                      <input
+                        type="checkbox"
+                        checked={contactEditDraft.roles.includes(role)}
+                        onChange={() => toggleContactEditRole(role)}
+                      />
+                      <span>{BUSINESS_CONTACT_ROLE_LABELS[role]}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
                 <span>{t("messagesPhone", language)}</span>
@@ -4552,9 +4969,24 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={relationshipInput}
               />
             </label>
+            {contactEditDraft.durable && (
+              <label style={relationshipField}>
+                <span>Private Note</span>
+                <textarea
+                  value={contactEditDraft.privateNote}
+                  onChange={(event) => updateContactEditDraft("privateNote", event.target.value)}
+                  style={relationshipTextarea}
+                />
+              </label>
+            )}
             <div style={contactCardActionRow}>
-              <button type="submit" style={relationshipPrimaryAction}>
-                {t("messagesSaveContact", language)}
+              <button
+                type="submit"
+                disabled={businessContactSaving}
+                aria-disabled={businessContactSaving}
+                style={relationshipPrimaryAction}
+              >
+                {businessContactSaving ? "Saving…" : t("messagesSaveContact", language)}
               </button>
               <button
                 type="button"
@@ -5101,7 +5533,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 >
                   {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {t(`messagesContactType_${option.id}`, language)}
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -5200,9 +5632,20 @@ function MessagesInbox({ setPage, currentPage }) {
                         >
                           {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                             <option key={option.id} value={option.id}>
-                              {t(`messagesContactType_${option.id}`, language)}
+                              {option.label}
                             </option>
                           ))}
+                        </select>
+                        <select
+                          value={contact.partyType || "PERSON"}
+                          onChange={(event) =>
+                            updateImportedContact(contact.id, "partyType", event.target.value)
+                          }
+                          style={contactImportTypeSelect}
+                          aria-label={`Party type for ${contact.name || contact.email || contact.phone}`}
+                        >
+                          <option value="PERSON">Person</option>
+                          <option value="ORGANIZATION">Organization</option>
                         </select>
                       </div>
                     ))}
@@ -5231,9 +5674,10 @@ function MessagesInbox({ setPage, currentPage }) {
                   const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
                     (option) => option.id === contact.type
                   );
-                  const typeLabel = typeOption
-                    ? t(`messagesContactType_${typeOption.id}`, language)
-                    : t("messagesRelationship", language);
+                  const typeLabel = typeOption?.label || t("messagesRelationship", language);
+                  const failure = contactImport.importFailures?.find(
+                    (item) => item.source.id === contact.id
+                  );
 
                   return (
                     <div key={contact.id} style={contactImportReviewRow}>
@@ -5243,7 +5687,7 @@ function MessagesInbox({ setPage, currentPage }) {
                       >
                         <strong>{contact.name || contact.email || contact.phone}</strong>
                         <span>
-                          {typeLabel}
+                          {typeLabel} · {contact.partyType === "ORGANIZATION" ? "Organization" : "Person"}
                           {[contact.phone, contact.email, contact.address]
                             .filter(Boolean)
                             .length
@@ -5252,6 +5696,9 @@ function MessagesInbox({ setPage, currentPage }) {
                                 .join(" · ")}`
                             : ""}
                         </span>
+                        {failure && (
+                          <span role="alert">Not saved: {failure.message}</span>
+                        )}
                       </span>
                     </div>
                   );
@@ -5268,8 +5715,8 @@ function MessagesInbox({ setPage, currentPage }) {
                 </button>
                 <button
                   type="button"
-                  disabled={selectedImportContacts.length === 0}
-                  aria-disabled={selectedImportContacts.length === 0}
+                  disabled={selectedImportContacts.length === 0 || businessContactSaving}
+                  aria-disabled={selectedImportContacts.length === 0 || businessContactSaving}
                   style={{
                     ...relationshipPrimaryAction,
                     ...(selectedImportContacts.length === 0
@@ -5278,7 +5725,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   }}
                   onClick={saveContactImport}
                 >
-                  {t("messagesImportContacts", language)}
+                  {businessContactSaving ? "Saving…" : t("messagesImportContacts", language)}
                 </button>
               </div>
             </div>
@@ -5451,6 +5898,19 @@ function MessagesInbox({ setPage, currentPage }) {
               </label>
             ) : (
               <>
+                {relationshipComposer.section === "contacts" && (
+                  <label style={relationshipField}>
+                    <span>Person or organization</span>
+                    <select
+                      value={relationshipComposer.partyType}
+                      onChange={(event) => updateRelationshipComposer("partyType", event.target.value)}
+                      style={relationshipInput}
+                    >
+                      <option value="PERSON">Person</option>
+                      <option value="ORGANIZATION">Organization</option>
+                    </select>
+                  </label>
+                )}
                 <label style={relationshipField}>
                   <span>{t("messagesName", language)}</span>
                   <input
@@ -5501,8 +5961,15 @@ function MessagesInbox({ setPage, currentPage }) {
               </>
             )}
 
-            <button type="submit" style={relationshipPrimaryAction}>
-              {relationshipComposer.type === "invite"
+            <button
+              type="submit"
+              disabled={businessContactSaving}
+              aria-disabled={businessContactSaving}
+              style={relationshipPrimaryAction}
+            >
+              {businessContactSaving
+                ? "Saving…"
+                : relationshipComposer.type === "invite"
                 ? t("messagesStartInvite", language)
                 : relationshipComposer.type === "space"
                 ? t("messagesStartConversation", language)
@@ -5669,7 +6136,13 @@ function MessagesInbox({ setPage, currentPage }) {
         }
       >
         <div style={isSplitPane ? splitListPane : undefined}>
-          {(messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
+          {messageSection === "contacts" && businessContactsLoading && (
+            <div role="status" aria-live="polite" style={relationshipNoticeCard}>
+              Loading saved business Contacts…
+            </div>
+          )}
+          {(!businessContactsLoading || messageSection !== "contacts") &&
+            (messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
             <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
               <div style={emptyIcon} aria-hidden="true">MSG</div>
 
@@ -7122,6 +7595,31 @@ const relationshipField = {
   minWidth: 0,
   maxWidth: "100%",
   overflowWrap: "anywhere",
+};
+
+const relationshipRoleFieldset = {
+  minWidth: 0,
+  margin: 0,
+  padding: "10px 12px 12px",
+  border: "1px solid rgba(148,163,184,0.32)",
+  borderRadius: "14px",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const relationshipRoleOptions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px 14px",
+  marginTop: "6px",
+};
+
+const relationshipRoleOption = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
 };
 
 const relationshipInput = {

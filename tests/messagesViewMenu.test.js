@@ -336,7 +336,8 @@ test("Messages exposes Import Contacts as a reviewable relationship flow", () =>
   assert.match(messagesSource, /messagesSelectAllContacts/);
   assert.match(messagesSource, /messagesReviewBeforeImport/);
   assert.match(messagesSource, /messagesImportDescription/);
-  assert.match(messagesSource, /buildImportedContactRelationship/);
+  assert.match(messagesSource, /importBusinessContacts/);
+  assert.doesNotMatch(messagesSource, /buildImportedContactRelationship/);
   assert.match(messagesSource, /setMessageSection\("contacts"\)/);
 });
 
