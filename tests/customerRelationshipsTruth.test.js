@@ -6,6 +6,10 @@ const pageSource = readFileSync(
   new URL("../src/pages/CustomerRelationshipsCenter.jsx", import.meta.url),
   "utf8"
 );
+const workspaceSource = readFileSync(
+  new URL("../src/utils/customerRelationshipsWorkspace.js", import.meta.url),
+  "utf8"
+);
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const navSource = readFileSync(
   new URL("../src/components/BottomNav.jsx", import.meta.url),
@@ -16,26 +20,29 @@ const businessToolsSource = readFileSync(
   "utf8"
 );
 
-test("Customer Relationships production route has no fixture registry", () => {
+test("Customer Relationships production route reads canonical server relationships without fixtures", () => {
   assert.equal(existsSync("src/utils/customerRelationshipsRegistry.js"), false);
-  assert.doesNotMatch(pageSource, /customerRelationshipsRegistry/);
-  assert.doesNotMatch(pageSource, /getCustomerRelationships/);
-  assert.doesNotMatch(pageSource, /localStorage|sessionStorage|authFetch|fetch\(/);
+  assert.match(pageSource, /loadCustomerRelationshipDirectory/);
+  assert.match(workspaceSource, /listBusinessCustomerRelationships/);
+  assert.match(workspaceSource, /getBusinessCustomerRelationshipByContact/);
+  assert.doesNotMatch(pageSource, /Customer relationships are not available yet/);
+  assert.doesNotMatch(pageSource, /Sarah|William|Jack Lindstrom|relationship\.timeline/);
 });
 
-test("Customer Relationships renders a truthful unavailable state", () => {
-  assert.match(pageSource, /Customer relationships are not available yet\./);
-  assert.match(pageSource, /connected to production data/);
-  assert.doesNotMatch(pageSource, /No customers yet/i);
-  assert.doesNotMatch(pageSource, /Active Jobs|Closed Jobs|Last Activity/);
-  assert.doesNotMatch(pageSource, /Communication History|Work History|Relationship History/);
+test("Customer Relationships workspace is read-only and does not establish continuity while viewing", () => {
+  assert.doesNotMatch(workspaceSource, /establishBusinessCustomerRelationship/);
+  assert.doesNotMatch(workspaceSource, /createBusinessContact|assignBusinessContactRole/);
+  assert.doesNotMatch(workspaceSource, /method:\s*["']POST["']/);
+  assert.match(pageSource, /copy\.readOnly/);
+  assert.match(pageSource, /copy\.noRelationshipText/);
 });
 
-test("Customer Relationships source contains no former production fixtures", () => {
-  assert.doesNotMatch(pageSource, /Sarah/);
-  assert.doesNotMatch(pageSource, /William/);
-  assert.doesNotMatch(pageSource, /Jack Lindstrom|jack_lindstrom/);
-  assert.doesNotMatch(pageSource, /relationship\.timeline|communicationSummary|workSummary/);
+test("Customer Relationships presents Contact authority without fabricated history or CRM fields", () => {
+  assert.match(workspaceSource, /getBusinessContact/);
+  assert.match(pageSource, /copy\.currentContact/);
+  assert.doesNotMatch(pageSource, /Work History|Invoice History|Documents \/ Photos|Relationship Memory/);
+  assert.doesNotMatch(pageSource, /relationshipScore|customerHealth|lifetimeValue|leadStage|salesStage|followUpUrgency|engagementLevel|projectCount/);
+  assert.doesNotMatch(pageSource, /request_relationship/);
 });
 
 test("Customer Relationships direct route and professional navigation remain safe", () => {
@@ -43,19 +50,26 @@ test("Customer Relationships direct route and professional navigation remain saf
   assert.match(appSource, /"customerRelationshipsCenter"[\s\S]*"invoiceBuilder"/);
   assert.match(navSource, /page: "customerRelationshipsCenter"/);
   assert.match(businessToolsSource, /setPage\("customerRelationshipsCenter"\)/);
-  assert.match(pageSource, /setPage\("businessCommandCenter"\)/);
+  assert.match(pageSource, /setPage\(navigationContext\?\.returnPage \|\| "businessCommandCenter"\)/);
   assert.match(
     pageSource,
     /<BottomNav setPage=\{setPage\} currentPage="customerRelationshipsCenter" \/>/
   );
 });
 
-test("Customer Relationships unavailable state remains viewport contained", () => {
+test("Customer Relationships loading, empty, error, archived, and external states remain accessible and contained", () => {
+  assert.match(pageSource, /status === "loading"/);
+  assert.match(pageSource, /status === "error"/);
+  assert.match(pageSource, /relationships\.length === 0/);
+  assert.match(pageSource, /contact\.status === "ARCHIVED"/);
+  assert.match(pageSource, /copy\.externalContact/);
+  assert.match(pageSource, /role="status"/);
+  assert.match(pageSource, /role="alert"/);
+  assert.match(pageSource, /aria-label=/);
   assert.match(pageSource, /className="app-page meetro-responsive-page"/);
   assert.match(pageSource, /maxWidth: "100%"/);
   assert.match(pageSource, /minWidth: 0/);
   assert.match(pageSource, /overflowX: "hidden"/);
   assert.match(pageSource, /env\(safe-area-inset-right/);
-  assert.match(pageSource, /env\(safe-area-inset-bottom/);
-  assert.match(pageSource, /minHeight: "48px"/);
+  assert.match(pageSource, /minHeight: "46px"/);
 });

@@ -88,6 +88,10 @@ import {
   updateBusinessContact,
 } from "../utils/businessContactsApi";
 import {
+  clearCustomerRelationshipContactReturn,
+  readCustomerRelationshipContactReturn,
+} from "../utils/customerRelationshipsWorkspace.js";
+import {
   CONTACTS_ACCESS_OFF_MESSAGE,
   getNativePhoneContacts,
   isNativeContactsAvailable,
@@ -737,6 +741,11 @@ function MessagesInbox({ setPage, currentPage }) {
   const [contactEditDraft, setContactEditDraft] = useState(null);
   const [durableBusinessContacts, setDurableBusinessContacts] = useState([]);
   const [activeDurableBusinessContacts, setActiveDurableBusinessContacts] = useState([]);
+  const customerRelationshipReturnContactRef = useRef(
+    readCustomerRelationshipContactReturn(
+      typeof window === "undefined" ? null : window.localStorage
+    )
+  );
   const [contactStatusFilter, setContactStatusFilter] = useState("ACTIVE");
   const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
   const [businessContactsLoading, setBusinessContactsLoading] = useState(false);
@@ -1049,6 +1058,49 @@ function MessagesInbox({ setPage, currentPage }) {
     // The loader owns request sequencing and the current authenticated business.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccountMode, contactStatusFilter, messageSection, searchQuery]);
+
+  useEffect(() => {
+    const target = customerRelationshipReturnContactRef.current;
+    if (
+      !target ||
+      activeAccountMode !== "business" ||
+      businessContactsLoading
+    ) {
+      return;
+    }
+    if (contactStatusFilter !== target.status) {
+      setContactStatusFilter(target.status);
+      return;
+    }
+    const savedContact = durableBusinessContacts.find(
+      (contact) => String(contact?.id || "") === target.businessContactId
+    );
+    if (!savedContact) return;
+
+    const contactRelationship = createRelationshipLayerModel(
+      [projectBusinessContactRecord(savedContact)],
+      {
+        viewerRole: "business",
+        activeMode: "business",
+        activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
+      }
+    ).relationships[0];
+    if (!contactRelationship) return;
+
+    setActiveContactCardSnapshot(contactRelationship);
+    setActiveContactCardId(contactRelationship.id);
+    customerRelationshipReturnContactRef.current = null;
+    if (typeof window !== "undefined") {
+      clearCustomerRelationshipContactReturn(window.localStorage);
+    }
+    // The return target is a one-shot navigation hint; Contact data remains server-owned.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeAccountMode,
+    businessContactsLoading,
+    contactStatusFilter,
+    durableBusinessContacts,
+  ]);
 
   useEffect(() => {
     writeUnreadConversationCount(quotes);
@@ -3557,6 +3609,7 @@ function MessagesInbox({ setPage, currentPage }) {
     const contact = getRelationshipContact(relationship);
     const relationshipContext = {
       relationshipId: relationship.id || record.relationshipId || record.id || "",
+      businessContactId: record.businessContactId || "",
       relationshipType: relationship.type || record.relationshipType || "",
       displayName:
         relationship.name ||
@@ -4894,6 +4947,12 @@ function MessagesInbox({ setPage, currentPage }) {
             ? [{ label: "Archive Contact", onClick: () => archiveDurableContact(relationship) }]
             : []),
         ];
+    if (record.durableBusinessContact) {
+      actions.unshift({
+        label: t("messagesCustomerRelationship", language),
+        onClick: () => openRelationshipHistory(relationship, "relationship"),
+      });
+    }
     const relationshipPanels = (
       <>
         {contactInviteOptionsId === relationship.id && (

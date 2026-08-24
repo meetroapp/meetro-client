@@ -770,6 +770,7 @@ test("Relationship identity resolver is the canonical source for avatar and acti
 
 test("Relationship detail labels exist in supported languages", () => {
   for (const language of ["en", "es", "fr", "pt-BR"]) {
+    assert.notEqual(t("messagesCustomerRelationship", language), "messagesCustomerRelationship");
     assert.notEqual(t("relationshipDetails", language), "relationshipDetails");
     assert.notEqual(t("viewRelationshipIdentity", language), "viewRelationshipIdentity");
     assert.notEqual(t("relationshipIdentityIntro", language), "relationshipIdentityIntro");

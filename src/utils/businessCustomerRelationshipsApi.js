@@ -65,6 +65,18 @@ function validContactId(value) {
   return id;
 }
 
+function validRelationshipId(value) {
+  const id = text(value).toLowerCase();
+  if (!UUID_PATTERN.test(id)) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ID_INVALID",
+      message: "A valid Customer Relationship identity is required.",
+    });
+  }
+  return id;
+}
+
 export function createBusinessCustomerRelationshipCommandKey(
   cryptoProvider = globalThis.crypto
 ) {
@@ -93,6 +105,53 @@ export async function getBusinessCustomerRelationshipByContact({
     }
     throw error;
   }
+}
+
+export async function getBusinessCustomerRelationship({
+  relationshipId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  return validatedRelationship(data.relationship);
+}
+
+export async function listBusinessCustomerRelationships({
+  contractorProfileId,
+  limit = 100,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const profileId = positiveInteger(contractorProfileId);
+  const requestedLimit = positiveInteger(limit);
+  if (!profileId || !requestedLimit || requestedLimit > 200) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_QUERY_INVALID",
+      message: "A valid business is required before loading Customer Relationships.",
+    });
+  }
+  const params = new URLSearchParams({
+    contractorProfileId: String(profileId),
+    limit: String(requestedLimit),
+  });
+  const data = await request(
+    `/business-customer-relationships?${params.toString()}`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  if (!Array.isArray(data.relationships)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_RESPONSE_INVALID",
+      message: "The server returned an invalid Customer Relationship list.",
+    });
+  }
+  return Object.freeze(data.relationships.map(validatedRelationship));
 }
 
 export async function establishBusinessCustomerRelationship({
