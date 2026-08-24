@@ -523,14 +523,14 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       selectedQuoteForEdit?.date ||
       todayLocalIsoDate()
   );
-  const [labor] = useState(
+  const [labor, setLabor] = useState(
     stringifySavedAmount(
       selectedQuoteForEdit?.laborAmount ??
         selectedQuoteForEdit?.pricingBreakdown?.laborAmount ??
         selectedQuoteForEdit?.labor
     )
   );
-  const [materials] = useState(
+  const [materials, setMaterials] = useState(
     stringifySavedAmount(
       selectedQuoteForEdit?.materialsAmount ??
         selectedQuoteForEdit?.pricingBreakdown?.materialsAmount ??
@@ -2812,6 +2812,8 @@ ${businessIdentity.businessName}`;
     if (Object.hasOwn(patch, "problemFound")) setProblemFound(patch.problemFound);
     if (Object.hasOwn(patch, "recommendedSolution")) setRecommendedSolution(patch.recommendedSolution);
     if (Object.hasOwn(patch, "timeline")) setTimeline(patch.timeline);
+    if (Object.hasOwn(patch, "labor")) setLabor(patch.labor);
+    if (Object.hasOwn(patch, "materials")) setMaterials(patch.materials);
     if (Object.hasOwn(patch, "estimatedDuration")) setEstimatedDuration(patch.estimatedDuration);
     if (Object.hasOwn(patch, "totalOverride")) setTotalOverride(patch.totalOverride);
     if (Object.hasOwn(patch, "notes")) setNotes(patch.notes);
@@ -2819,6 +2821,12 @@ ${businessIdentity.businessName}`;
     if (Object.hasOwn(patch, "quoteNumber")) setQuoteNumber(patch.quoteNumber);
     if (Object.hasOwn(patch, "quoteDate")) setQuoteDate(patch.quoteDate);
     if (Object.hasOwn(patch, "depositRequired")) setDepositRequired(patch.depositRequired);
+    if (Object.hasOwn(patch, "depositAmount")) setDepositAmount(patch.depositAmount);
+    if (Object.hasOwn(patch, "discount")) setDiscount(patch.discount);
+    if (Object.hasOwn(patch, "tax")) setTax(patch.tax);
+    if (Object.hasOwn(patch, "travelFee")) setTravelFee(patch.travelFee);
+    if (Object.hasOwn(patch, "disposalFee")) setDisposalFee(patch.disposalFee);
+    if (Object.hasOwn(patch, "startDate")) setStartDate(patch.startDate);
     if (patch.depositTerms) {
       setTerms((current) => {
         const existing = cleanText(current);

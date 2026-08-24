@@ -328,6 +328,56 @@ export function buildBusinessDocumentSavePayload({
   };
 }
 
+export function buildNewBusinessDocumentDraftPayload({
+  documentType,
+  documentDate = "",
+} = {}) {
+  const type = String(documentType || "").trim().toLowerCase();
+  if (!["quote", "invoice"].includes(type)) {
+    const error = new Error("A Quote or Invoice type is required to start a new working document.");
+    error.code = "BUSINESS_DOCUMENT_NEW_TYPE_INVALID";
+    throw error;
+  }
+
+  return buildBusinessDocumentSavePayload({
+    documentType: type,
+    content: type === "quote"
+      ? { quoteDate: String(documentDate || "").trim() }
+      : { invoiceDate: String(documentDate || "").trim() },
+    turns: [],
+    manualOverrides: {},
+    photos: [],
+    photoAssignments: {},
+    jobId: null,
+    jobAnalysisSessionId: null,
+    customerParty: null,
+  });
+}
+
+export function validateNewBusinessDocumentDraft({
+  documentType,
+  previousDocument,
+  nextDocument,
+} = {}) {
+  const expectedType = String(documentType || "").trim().toUpperCase();
+  const previousNumber = String(previousDocument?.documentNumber || "").trim();
+  const nextNumber = String(nextDocument?.documentNumber || "").trim();
+  if (
+    !previousDocument?.id ||
+    !nextDocument?.id ||
+    nextDocument.documentType !== expectedType ||
+    nextDocument.id === previousDocument.id ||
+    !previousNumber ||
+    !nextNumber ||
+    nextNumber === previousNumber
+  ) {
+    const error = new Error("Meetro could not verify a distinct new working-document identity. The current document remains open.");
+    error.code = "BUSINESS_DOCUMENT_NEW_IDENTITY_INVALID";
+    throw error;
+  }
+  return nextDocument;
+}
+
 export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
   const content = payload.content || {};
   return Boolean(

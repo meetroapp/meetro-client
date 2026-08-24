@@ -7,6 +7,7 @@ import { dailyWorkflowLanguage } from "./dailyWorkflowLanguage.js";
 import { professionalScheduleLanguage } from "./professionalScheduleLanguage.js";
 import { customerQuoteLanguage } from "./customerQuoteLanguage.js";
 import { businessDocumentCustomerLanguage } from "./businessDocumentCustomerLanguage.js";
+import { businessDocumentWorkflowLanguage } from "./businessDocumentWorkflowLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -14073,6 +14074,10 @@ Object.entries(customerQuoteLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(businessDocumentCustomerLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(businessDocumentWorkflowLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
