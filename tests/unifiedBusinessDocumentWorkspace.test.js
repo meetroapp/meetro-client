@@ -64,7 +64,7 @@ test("conversation and manual entry update one working Quote draft", () => {
   assert.match(workspace, /onApplyQuotePatch\(\{ \.\.\.result\.draft, replaceCollections: true \}\)/);
   assert.match(workspace, /Let Meetro prefill the form/);
   assert.match(workspace, /Fill the form manually/);
-  assert.match(workspace, />Apply changes</);
+  assert.match(workspace, /businessDocumentApplyChanges/);
   assert.match(workspace, /onClick=\{onCancel\}>Cancel/);
 });
 
@@ -72,12 +72,13 @@ test("manual builder keeps core fields editable, server number read-only, and Bu
   assert.match(workspace, /className="business-document-number-field"/);
   assert.match(workspace, /documentNumber \|\| "Assigned on first save"/);
   assert.match(workspace, /readOnly aria-readonly="true"/);
-  assert.match(workspace, /<legend>\{activeDocument === "quote" \? "Quote details" : "Invoice details"\}<\/legend>/);
+  assert.match(workspace, /businessDocumentQuoteDetails/);
+  assert.match(workspace, /businessDocumentInvoiceDetails/);
   assert.match(workspace, /<h3 id="business-document-manual-pricing-title">Pricing<\/h3>/);
   assert.match(workspace, /<legend>Payment<\/legend>/);
   assert.match(workspace, /<legend>Customer notes<\/legend>/);
   assert.match(workspace, /<details className="business-document-agreement-editor"><summary>Business terms<\/summary>/);
-  assert.match(workspace, />Apply changes<\/button>/);
+  assert.match(workspace, /businessDocumentApplyChanges/);
   assert.match(workspace, /onClick=\{onCancel\}>Cancel<\/button>/);
   assert.match(workspace, /\["total", "canonicalStatus", "quoteNumber", "invoiceNumber"\]\.includes\(key\)/);
   assert.match(styles, /\.business-document-number-field input\[readonly\]/);
@@ -1227,11 +1228,12 @@ test("private instruction editing remains private and outside customer-visible d
 
 test("prefill manual amount shortcuts and governed photo input are functional shared-draft affordances", () => {
   assert.match(workspace, /function usePrefill/);
+  assert.match(workspace, /mode: "prefill"/);
   assert.match(workspace, /if \(message\.trim\(\)\) return submitInstruction\(message\)/);
-  assert.match(workspace, /Prefill refreshed from your saved conversation instructions/);
-  assert.match(workspace, /Enter direct document facts or an explicit edit below/);
-  assert.match(workspace, /messageRef\.current\?\.focus/);
-  assert.match(workspace, /setManualState\(\{ focus: "amount" \}\)/);
+  assert.match(workspace, /businessDocumentPrefillRefreshed/);
+  assert.match(workspace, /businessDocumentPrefillReviewHelp/);
+  assert.match(workspace, /business-document-prefill-details/);
+  assert.match(workspace, /openManualEditor\("amount"\)/);
   assert.match(workspace, /role="dialog" aria-modal="true"/);
   assert.match(workspace, /manualOverrides/);
   assert.match(quoteBuilder, /ref=\{quickQuotePhotoInputRef\}[\s\S]*onChange=\{handleQuickQuotePhotoInput\}[\s\S]*<UnifiedBusinessDocumentWorkspace/);
@@ -1256,7 +1258,7 @@ test("shortcut focus is explicit without false selected state", () => {
   const shortcuts = workspace.slice(workspace.indexOf("business-document-conversation-shortcuts"), workspace.indexOf("business-private-reminders"));
   assert.match(shortcuts, /focusComposer\("Note: "\)/);
   assert.match(shortcuts, /focusComposer\("Keep this private: "\)/);
-  assert.match(shortcuts, /setManualState\(\{ focus: "amount" \}\)/);
+  assert.match(shortcuts, /openManualEditor\("amount"\)/);
   assert.doesNotMatch(shortcuts, /aria-pressed|aria-selected|className=.*active/);
   assert.match(styles, /business-document-conversation-shortcuts button:focus-visible/);
 });

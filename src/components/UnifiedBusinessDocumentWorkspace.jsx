@@ -46,6 +46,11 @@ import {
   normalizeBusinessDocumentAgreement,
 } from "../utils/businessDocumentAgreement.js";
 import {
+  businessDocumentDetailFields,
+  cloneBusinessDocumentEditorSource,
+  mergeBusinessDocumentEditorSource,
+} from "../utils/businessDocumentEditor.js";
+import {
   businessDocumentSavedResumeTarget,
   clearDeletedBusinessDocumentRecoveryIdentity,
   clearDeletedBusinessDocumentRecoverySnapshot,
@@ -330,17 +335,32 @@ function EditableRows({ title, rows, nameField, onChange }) {
   );
 }
 
-function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, onApply, onCancel }) {
+function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", onApply, onCancel, onModeChange }) {
   const source = activeDocument === "quote" ? quote : invoice;
-  const cloneSource = () => ({ ...source, agreement: normalizeBusinessDocumentAgreement(source.agreement), lineItems: (source.lineItems || []).map((item) => ({ ...item })), materialItems: (source.materialItems || []).map((item) => ({ ...item })), laborItems: (source.laborItems || []).map((item) => ({ ...item })) });
-  const [original] = useState(cloneSource);
-  const [draft, setDraft] = useState(cloneSource);
+  const initialSourceRef = useRef(null);
+  if (!initialSourceRef.current) {
+    initialSourceRef.current = cloneBusinessDocumentEditorSource(source);
+  }
+  const originalRef = useRef(initialSourceRef.current);
+  const sourceFingerprintRef = useRef(JSON.stringify(source));
+  const [draft, setDraft] = useState(initialSourceRef.current);
   const firstInputRef = useRef(null);
   const amountInputRef = useRef(null);
   useEffect(() => { (initialFocus === "amount" ? amountInputRef : firstInputRef).current?.focus(); }, [initialFocus]);
-  const detailFields = activeDocument === "quote"
-    ? [["customerName", "Customer"], ["customerEmail", "Customer email"], ["customerPhone", "Customer phone"], ["customerAddress", "Customer address"], ["projectTitle", "Project"], ["recommendedSolution", "Scope of Work"], ["projectDescription", "Customer-facing description"], ["estimatedDuration", "Estimated duration"]]
-    : [["customerName", "Customer"], ["customerEmail", "Customer email"], ["customerPhone", "Customer phone"], ["customerAddress", "Customer address"], ["projectTitle", "Job"], ["workPerformed", "Work completed"], ["dueDate", "Due date"]];
+  const sourceFingerprint = JSON.stringify(source);
+  useEffect(() => {
+    if (sourceFingerprintRef.current === sourceFingerprint) return;
+    const nextSource = cloneBusinessDocumentEditorSource(source);
+    setDraft((current) => mergeBusinessDocumentEditorSource({
+      draft: current,
+      previousSource: originalRef.current,
+      nextSource,
+    }));
+    originalRef.current = nextSource;
+    sourceFingerprintRef.current = sourceFingerprint;
+  }, [source, sourceFingerprint]);
+  const detailFields = businessDocumentDetailFields(activeDocument)
+    .map(([fieldName, labelKey]) => [fieldName, t(labelKey, language)]);
   const paymentFields = activeDocument === "quote"
     ? [["terms", "Deposit / payment terms"]]
     : [["paymentTerms", "Payment terms"]];
@@ -351,19 +371,36 @@ function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialF
       : <input ref={field === "customerName" ? firstInputRef : field === "totalOverride" ? amountInputRef : undefined} type={field === "dueDate" ? "date" : "text"} inputMode={field === "totalOverride" ? "decimal" : undefined} value={draft[field] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} />;
     return <label key={field}>{label}{control}</label>;
   }
+  const detailFieldset = <fieldset className="business-document-manual-fields"><legend>{t(activeDocument === "quote" ? "businessDocumentQuoteDetails" : "businessDocumentInvoiceDetails", language)}</legend><div>{detailFields.map(field)}</div></fieldset>;
+  if (mode === "prefill") {
+    return <section id="business-document-prefill-details" className="business-document-prefill-details" aria-labelledby="business-document-prefill-details-title">
+      <details open>
+        <summary id="business-document-prefill-details-title">{t(activeDocument === "quote" ? "businessDocumentPrefillQuoteDetails" : "businessDocumentPrefillInvoiceDetails", language)}</summary>
+        <div>
+          <p>{t("businessDocumentPrefillDetailsHelp", language)}</p>
+          {detailFieldset}
+          <footer>
+            <button type="button" onClick={onCancel}>{t("businessDocumentCloseDetails", language)}</button>
+            <button type="button" onClick={() => onModeChange("manual")}>{t("businessDocumentOpenManualEntry", language)}</button>
+            <button type="button" className="business-document-primary" onClick={() => onApply(draft, originalRef.current)}>{t("businessDocumentApplyChanges", language)}</button>
+          </footer>
+        </div>
+      </details>
+    </section>;
+  }
   return (
     <><button type="button" className="business-document-manual-backdrop" aria-label="Cancel manual edit" onClick={onCancel} />
       <section className="business-document-manual" role="dialog" aria-modal="true" aria-labelledby="business-document-manual-title">
         <header><div><span>Manual entry</span><h2 id="business-document-manual-title">Edit the live {activeDocument}</h2></div><button type="button" onClick={onCancel}>Cancel</button></header>
         <label className="business-document-number-field">{activeDocument === "quote" ? "Quote number" : "Invoice number"}<input value={documentNumber || "Assigned on first save"} readOnly aria-readonly="true" /></label>
-        <fieldset className="business-document-manual-fields"><legend>{activeDocument === "quote" ? "Quote details" : "Invoice details"}</legend><div>{detailFields.map(field)}</div></fieldset>
+        {detailFieldset}
         <section className="business-document-manual-pricing" aria-labelledby="business-document-manual-pricing-title"><h3 id="business-document-manual-pricing-title">Pricing</h3>{field(["totalOverride", activeDocument === "quote" ? "Customer price" : "Invoice amount"])}<div className="business-document-manual-line-groups">
           {activeDocument === "quote" ? <><EditableRows title="Service items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} /><EditableRows title="Materials" rows={draft.materialItems || []} nameField="name" onChange={(materialItems) => setDraft((current) => ({ ...current, materialItems }))} /><EditableRows title="Labor" rows={draft.laborItems || []} nameField="description" onChange={(laborItems) => setDraft((current) => ({ ...current, laborItems }))} /></> : <EditableRows title="Invoice items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} />}
         </div></section>
         <fieldset className="business-document-manual-fields"><legend>Payment</legend><div>{paymentFields.map(field)}</div></fieldset>
         <fieldset className="business-document-manual-fields"><legend>Customer notes</legend><div>{field(["notes", "Notes shown to the customer"])}</div></fieldset>
         {activeDocument === "quote" ? <details className="business-document-agreement-editor"><summary>Business terms</summary><div><p>Review, edit, or remove every term before sending. Meetro does not provide legal advice.</p><div className="business-document-agreement-presets"><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), additionalWorkTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.additionalWorkTerms } }))}>Use outside-scope protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), hiddenConditionsTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.hiddenConditionsTerms } }))}>Use hidden-condition protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), diagnosticTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.diagnosticTerms } }))}>Use diagnostic terms</button></div><label>Not Included / Exclusions<textarea value={(draft.agreement?.exclusions || []).join("\n")} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), exclusions: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) } }))} /></label>{BUSINESS_DOCUMENT_AGREEMENT_FIELDS.map(([key, label]) => <label key={key}>{label}<textarea value={draft.agreement?.[key] || ""} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), [key]: event.target.value } }))} /></label>)}</div></details> : null}
-        <footer><button type="button" onClick={onCancel}>Cancel</button><button type="button" className="business-document-primary" onClick={() => onApply(draft, original)}>Apply changes</button></footer>
+        <footer><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onModeChange("prefill")}>{t("businessDocumentBackToPrefill", language)}</button><button type="button" className="business-document-primary" onClick={() => onApply(draft, originalRef.current)}>{t("businessDocumentApplyChanges", language)}</button></footer>
       </section></>
   );
 }
@@ -2360,14 +2397,28 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function usePrefill() {
+    setManualState((current) => current
+      ? { ...current, mode: "prefill", focus: "first" }
+      : { mode: "prefill", focus: "first" });
     if (message.trim()) return submitInstruction(message);
     if (currentInstructions.length) {
       reconcileDocument(activeDocument, turns);
-      setNotice("Prefill refreshed from your saved conversation instructions.");
+      setNotice(t("businessDocumentPrefillRefreshed", language));
       return;
     }
-    setNotice("Enter direct document facts or an explicit edit below, then send it to prefill the working draft.");
-    requestAnimationFrame(() => messageRef.current?.focus());
+    setNotice(t("businessDocumentPrefillReviewHelp", language));
+  }
+
+  function openManualEditor(focus = "first") {
+    setManualState((current) => current
+      ? { ...current, mode: "manual", focus }
+      : { mode: "manual", focus });
+  }
+
+  function changeEditorMode(mode) {
+    setManualState((current) => current
+      ? { ...current, mode, focus: "first" }
+      : { mode, focus: "first" });
   }
 
   function switchDocument(documentType) {
@@ -2625,13 +2676,14 @@ export default function UnifiedBusinessDocumentWorkspace({
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
-          <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" onClick={() => setManualState({ focus: "first" })}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
+          <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
+          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
             <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
             <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           </div>
-          <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => setManualState({ focus: "amount" })}>Change Amount</button></div>
+          <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>Change Amount</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
           {currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
@@ -2639,7 +2691,6 @@ export default function UnifiedBusinessDocumentWorkspace({
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
-      {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
