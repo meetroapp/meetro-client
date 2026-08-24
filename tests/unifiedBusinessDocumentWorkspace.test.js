@@ -129,12 +129,14 @@ test("composer intercepts server-owned number requests before chat or durable do
     'resolution.capability === "ASK_MEETRO"'
   );
   const existingTurnStart = submitBlock.indexOf("if (existingId)");
+  const turnRegistrationStart = submitBlock.indexOf("let turnId = existingId");
 
   assert.ok(numberGuardStart >= 0);
   assert.ok(askGuardStart > numberGuardStart);
   assert.ok(existingTurnStart > numberGuardStart);
+  assert.ok(turnRegistrationStart > numberGuardStart);
 
-  const numberGuard = submitBlock.slice(numberGuardStart, askGuardStart);
+  const numberGuard = submitBlock.slice(numberGuardStart, turnRegistrationStart);
   assert.match(
     numberGuard,
     /activeDocument === "quote"[\s\S]*Quote numbers are assigned by Meetro when the document is first saved and cannot be changed manually\.[\s\S]*Invoice numbers are assigned by Meetro when the document is first saved and cannot be changed manually\./
@@ -152,10 +154,15 @@ test("composer intercepts server-owned number requests before chat or durable do
   // The unconditional early return also protects edits of existing turns.
   assert.ok(numberGuardStart < existingTurnStart);
 
-  // Existing routing remains intact on either side of document mutation.
+  // Existing non-number messages share stable turn registration before their
+  // intent-specific routing, including the first professional message.
   assert.match(
     submitBlock,
-    /!existingId[\s\S]*resolution\.capability === "ASK_MEETRO"[\s\S]*return submitAskMeetro\(instruction\)/
+    /setTurns\(nextTurns\)[\s\S]*resolution\.capability === "ASK_MEETRO"[\s\S]*return submitAskMeetro\(instruction\)/
+  );
+  assert.doesNotMatch(
+    submitBlock,
+    /!existingId[\s\S]*resolution\.capability === "ASK_MEETRO"/
   );
   assert.equal(
     (submitBlock.match(/nextTurns = \[\.\.\.turns, conversationTurn\.turn\]/g) || []).length,
@@ -602,9 +609,14 @@ test("ambiguous statements require clarification instead of silently starting Jo
   );
   assert.ok(clarificationStart >= 0);
   assert.ok(clarificationStart < askStart);
+  assert.ok(submitBlock.indexOf("setTurns(nextTurns)") < clarificationStart);
   const clarificationGuard = submitBlock.slice(clarificationStart, askStart);
   assert.match(clarificationGuard, /businessDocumentClarificationNeeded/);
-  assert.doesNotMatch(clarificationGuard, /submitAskMeetro|buildBusinessDocumentConversationTurn|reconcileDocument/);
+  assert.doesNotMatch(clarificationGuard, /submitAskMeetro/);
+  assert.match(
+    workspace,
+    /instructions: nextTurns\.filter\([\s\S]*turn\.recognized !== false/
+  );
 });
 
 test("knee-wall document facts update only supported working-draft fields and can alternate with private analysis", () => {
@@ -1520,12 +1532,12 @@ test("Ask Meetro immediately shows the submitted professional message while gove
 
   assert.match(
     workspace,
-    /pendingAnalysisMessage \? <article className="you"><span>You<\/span><p>\{pendingAnalysisMessage\}<\/p><\/article>/
+    /pendingAnalysisMessageVisible \? <article className="you"><span>You<\/span><p>\{pendingAnalysisMessage\}<\/p><\/article>/
   );
 
   assert.match(
     workspace,
-    /pendingAnalysisMessage[\s\S]*Analyzing the job…/
+    /pendingAnalysisMessageVisible[\s\S]*Analyzing the job…/
   );
 
   assert.match(

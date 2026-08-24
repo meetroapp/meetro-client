@@ -200,6 +200,14 @@ function conversationTimestamp(value) {
     : Number.MAX_SAFE_INTEGER;
 }
 
+function conversationTurnMessageHistory(turn = {}) {
+  return [
+    turn.text,
+    turn.originalText,
+    ...(Array.isArray(turn.revisionHistory) ? turn.revisionHistory : []),
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+}
+
 function AnalysisConversationTurn({ turn }) {
   const message = analysisTurnMessage(turn);
   if (!message) return null;
@@ -410,9 +418,9 @@ function InstructionEditor({ turn, onSave, onCancel }) {
   return <article className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
 }
 
-function InstructionTurn({ turn, onSave, onCancel, onEdit }) {
+function InstructionTurn({ turn, onSave, onCancel, onEdit, showResponse = true }) {
   if (turn.editing) return <InstructionEditor turn={turn} onSave={onSave} onCancel={onCancel} />;
-  return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article><article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article></>;
+  return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article>{showResponse ? <article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article> : null}</>;
 }
 
 function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, setPage }) {
@@ -959,14 +967,10 @@ export default function UnifiedBusinessDocumentWorkspace({
         },
       }));
 
-  const currentConversationEntries = [
-    ...currentInstructions.map((turn, index) => ({
-      kind: "DOCUMENT",
-      id: `document-${turn.id}`,
-      timestamp: conversationTimestamp(turn.createdAt || turn.updatedAt),
-      order: index,
-      turn,
-    })),
+  const representedProfessionalMessages = new Set(
+    currentInstructions.flatMap(conversationTurnMessageHistory)
+  );
+  const analysisConversationEntries = [
     ...currentAnalysisEvidenceEntries,
     ...currentAnalysisTurns.map((turn, index) => ({
       kind: "ANALYSIS",
@@ -978,6 +982,32 @@ export default function UnifiedBusinessDocumentWorkspace({
         index,
       turn,
     })),
+  ];
+  const analysisProfessionalMessages = new Set([
+    pendingAnalysisMessage,
+    ...analysisConversationEntries
+      .filter((entry) => entry.turn.role === "PROFESSIONAL")
+      .map((entry) => analysisTurnMessage(entry.turn)),
+  ].map((value) => String(value || "").trim()).filter(Boolean));
+  const visibleAnalysisConversationEntries = analysisConversationEntries.filter(
+    (entry) => entry.turn.role !== "PROFESSIONAL" ||
+      !representedProfessionalMessages.has(analysisTurnMessage(entry.turn))
+  );
+  const pendingAnalysisMessageVisible = Boolean(
+    pendingAnalysisMessage &&
+    !representedProfessionalMessages.has(pendingAnalysisMessage)
+  );
+
+  const currentConversationEntries = [
+    ...currentInstructions.map((turn, index) => ({
+      kind: "DOCUMENT",
+      id: `document-${turn.id}`,
+      timestamp: conversationTimestamp(turn.createdAt || turn.updatedAt),
+      order: index,
+      analysisRouted: analysisProfessionalMessages.has(String(turn.text || "").trim()),
+      turn,
+    })),
+    ...visibleAnalysisConversationEntries,
   ].sort(
     (left, right) =>
       left.timestamp - right.timestamp ||
@@ -985,7 +1015,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   );
   const currentConversationLength =
     currentConversationEntries.length +
-    (pendingAnalysisMessage ? 1 : 0);
+    (pendingAnalysisMessageVisible ? 1 : 0);
   const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
@@ -2085,7 +2115,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function reconcileDocument(documentType, nextTurns, overrides = manualOverrides[documentType]) {
-    const result = reconcileBusinessDocumentInstructions({ documentType, baseline: documentType === "quote" ? quoteBaseline : invoiceBaseline, instructions: nextTurns.filter((turn) => turn.documentType === documentType), manualOverrides: overrides });
+    const result = reconcileBusinessDocumentInstructions({ documentType, baseline: documentType === "quote" ? quoteBaseline : invoiceBaseline, instructions: nextTurns.filter((turn) => turn.documentType === documentType && turn.recognized !== false), manualOverrides: overrides });
     if (documentType === "quote") onApplyQuotePatch({ ...result.draft, replaceCollections: true });
     else setInvoice(result.draft);
     return result;
@@ -2363,18 +2393,6 @@ export default function UnifiedBusinessDocumentWorkspace({
       return true;
     }
 
-    if (resolution.capability === "CLARIFICATION_REQUIRED") {
-      setNotice(t("businessDocumentClarificationNeeded", language));
-      return false;
-    }
-
-    if (
-      !existingId &&
-      resolution.capability === "ASK_MEETRO"
-    ) {
-      return submitAskMeetro(instruction);
-    }
-
     let turnId = existingId;
     let nextTurns;
     let conversationTurn;
@@ -2392,6 +2410,16 @@ export default function UnifiedBusinessDocumentWorkspace({
     reconcileDocument(activeDocument, nextTurns);
     assignPhotoIntent(turnId, conversationTurn.patch.photoIntent);
     setMessage("");
+
+    if (resolution.capability === "CLARIFICATION_REQUIRED") {
+      setNotice(t("businessDocumentClarificationNeeded", language));
+      return true;
+    }
+
+    if (resolution.capability === "ASK_MEETRO") {
+      return submitAskMeetro(instruction);
+    }
+
     setNotice(conversationTurn.turn.recognized ? "Working draft updated from your instruction." : "Instruction preserved. Use manual edit for any unsupported detail.");
     return true;
   }
@@ -2684,7 +2712,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
           {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
-            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessage ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
             <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           </div>
