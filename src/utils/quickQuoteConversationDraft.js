@@ -382,7 +382,7 @@ export function buildQuickQuoteConversationPatch({
   }
 
   if (!revision) {
-    if (scope) {
+    if (scope && !scopeAddition) {
       patch.projectDescription = scope;
       patch.recommendedSolution = scope;
       if (!cleanText(current.projectTitle) && !structured.project) {

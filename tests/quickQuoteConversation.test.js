@@ -996,6 +996,22 @@ test("customer-only revisions patch only the customer field", () => {
   assert.deepEqual(patch, { customerName: "Maria Lopez" });
 });
 
+test("explicit customer-name mutation language preserves the full professional name", () => {
+  for (const prompt of [
+    "Set the customer to Jack A Smith.",
+    "Set the customer name to Jack A Smith.",
+    "Customer is Jack A Smith.",
+    "Change the customer to Jack A Smith.",
+  ]) {
+    const patch = buildQuickQuoteConversationPatch({
+      prompt,
+      current: { customerName: "Jack Smith" },
+      revision: true,
+    });
+    assert.deepEqual(patch, { customerName: "Jack A Smith" }, prompt);
+  }
+});
+
 test("multiline labeled Quote facts stay bounded and preserve the professional duration detail", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt: [
@@ -1122,6 +1138,63 @@ test("explicit price and scope edits remain targeted after structured input supp
   assert.match(scope.projectDescription, /Stucco repair/);
   assert.equal(scope.totalOverride, undefined);
   assert.equal(scope.notes, undefined);
+});
+
+test("scope additions preserve an existing Project and never invent one when blank", () => {
+  const current = {
+    customerName: "Jack Smith",
+    projectTitle: "Knee Wall Repair",
+    projectDescription: "Repair the damaged knee wall.",
+    recommendedSolution: "Repair the damaged knee wall.",
+    totalOverride: "2650",
+  };
+
+  for (const prompt of [
+    "Add full reconstruction to the scope.",
+    "Add demolition and debris removal to the scope.",
+    "Add demolition and debris removal.",
+  ]) {
+    const patch = buildQuickQuoteConversationPatch({
+      prompt,
+      current,
+      revision: true,
+    });
+    const revised = mergeQuickQuoteConversationPatch(current, patch);
+    const addition = prompt.includes("full reconstruction")
+      ? "Full reconstruction"
+      : "Demolition and debris removal";
+    assert.equal(revised.projectTitle, "Knee Wall Repair", prompt);
+    assert.equal(Object.hasOwn(patch, "projectTitle"), false, prompt);
+    assert.equal(revised.customerName, "Jack Smith", prompt);
+    assert.equal(revised.totalOverride, "2650", prompt);
+    assert.equal(
+      (revised.projectDescription.match(new RegExp(addition, "gi")) || []).length,
+      1,
+      prompt
+    );
+    assert.doesNotMatch(revised.projectDescription, /Add .* to the scope/i, prompt);
+  }
+
+  const blankProject = buildQuickQuoteConversationPatch({
+    prompt: "Add full reconstruction to the scope.",
+    current: {},
+  });
+  assert.equal(Object.hasOwn(blankProject, "projectTitle"), false);
+  assert.equal(blankProject.projectDescription, "Full reconstruction.");
+  assert.equal(blankProject.recommendedSolution, "Full reconstruction.");
+
+  const replay = mergeQuickQuoteConversationPatch(
+    blankProject,
+    buildQuickQuoteConversationPatch({
+      prompt: "Add full reconstruction to the scope.",
+      current: blankProject,
+      revision: true,
+    })
+  );
+  assert.equal(
+    (replay.projectDescription.match(/Full reconstruction/gi) || []).length,
+    1
+  );
 });
 
 test("revision changes only explicit targeted fields and professional price wins", () => {

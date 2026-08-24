@@ -1073,6 +1073,32 @@ test("mobile Conversation and Preview switch without horizontal overflow", () =>
   assert.match(styles, /\.business-saved-drawer \{ width: 100vw; \}/);
 });
 
+test("Review document photos opens at the top and resets there on every reopen", () => {
+  const dialogBlock = workspace.slice(
+    workspace.indexOf("function WorkspaceDialog"),
+    workspace.indexOf("function WorkflowGuideStep")
+  );
+  const photoDialogBlock = workspace.slice(
+    workspace.indexOf("function PhotoReviewDialog"),
+    workspace.indexOf("export default function UnifiedBusinessDocumentWorkspace")
+  );
+
+  assert.match(dialogBlock, /openAtTop = false/);
+  assert.match(dialogBlock, /requestAnimationFrame/);
+  assert.match(dialogBlock, /dialogRef\.current\.scrollTop = 0/g);
+  assert.match(dialogBlock, /headingRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(dialogBlock, /tabIndex=\{openAtTop \? -1 : undefined\}/);
+  assert.match(photoDialogBlock, /title="Review document photos"[\s\S]*openAtTop/);
+  assert.match(
+    workspace,
+    /photoReviewOpen && documentPhotos\.length \? <PhotoReviewDialog/
+  );
+  assert.match(
+    workspace,
+    /onCancel=\{\(\) => setPhotoReviewOpen\(false\)\}/
+  );
+});
+
 test("live customer documents show the canonical business identity field", () => {
   assert.match(workspace, /branding\.businessName/);
   assert.doesNotMatch(workspace, /branding\.name/);

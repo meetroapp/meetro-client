@@ -410,15 +410,28 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
   </>;
 }
 
-function WorkspaceDialog({ titleId, title, children, actions, onClose }) {
+function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop = false }) {
   const firstRef = useRef(null);
+  const dialogRef = useRef(null);
+  const headingRef = useRef(null);
   useEffect(() => {
-    firstRef.current?.focus();
+    const frame = requestAnimationFrame(() => {
+      if (openAtTop) {
+        if (dialogRef.current) dialogRef.current.scrollTop = 0;
+        headingRef.current?.focus({ preventScroll: true });
+        if (dialogRef.current) dialogRef.current.scrollTop = 0;
+      } else {
+        firstRef.current?.focus();
+      }
+    });
     function escape(event) { if (event.key === "Escape") onClose?.(); }
     document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [onClose]);
-  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 id={titleId}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [onClose, openAtTop]);
+  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
 function WorkflowGuideStep({ number, title, children }) {
@@ -661,7 +674,7 @@ function PhotoReviewDialog({ photos, assignments, onApply, onCancel }) {
   const [draft, setDraft] = useState(() => Object.fromEntries(photos.map((photo) => [photo.id, normalizeBusinessDocumentPhotoAssignment(assignments[photo.id] || defaultBusinessDocumentPhotoAssignment())])));
   function update(id, field, value) { setDraft((current) => ({ ...current, [id]: normalizeBusinessDocumentPhotoAssignment({ ...current[id], [field]: value }) })); }
   function applyAll(field, value) { setDraft((current) => Object.fromEntries(Object.entries(current).map(([id, assignment]) => [id, normalizeBusinessDocumentPhotoAssignment({ ...assignment, [field]: value })]))); }
-  return <WorkspaceDialog titleId="business-photo-review-title" title="Review document photos" onClose={onCancel} actions={[{ label: "Cancel", onClick: onCancel }, { label: "Apply photo choices", primary: true, onClick: () => onApply(draft) }]}><p>Role and customer visibility are separate. Before or After remains private unless you explicitly include it.</p>{photos.length > 1 ? <div className="business-photo-apply-all"><label>Apply role to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("role", event.target.value)}><option value="">Choose…</option><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Apply visibility to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("visibility", event.target.value)}><option value="">Choose…</option><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Customer document</option></select></label></div> : null}<div className="business-photo-review-list">{photos.map((photo) => <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Selected photo"} /> : null}<div><label>Role<select value={draft[photo.id]?.role || "UNCLASSIFIED"} onChange={(event) => update(photo.id, "role", event.target.value)}><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Visibility<select value={draft[photo.id]?.visibility || "PRIVATE_INTERNAL"} onChange={(event) => update(photo.id, "visibility", event.target.value)}><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Include on customer document</option></select></label></div></article>)}</div></WorkspaceDialog>;
+  return <WorkspaceDialog titleId="business-photo-review-title" title="Review document photos" onClose={onCancel} openAtTop actions={[{ label: "Cancel", onClick: onCancel }, { label: "Apply photo choices", primary: true, onClick: () => onApply(draft) }]}><p>Role and customer visibility are separate. Before or After remains private unless you explicitly include it.</p>{photos.length > 1 ? <div className="business-photo-apply-all"><label>Apply role to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("role", event.target.value)}><option value="">Choose…</option><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Apply visibility to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("visibility", event.target.value)}><option value="">Choose…</option><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Customer document</option></select></label></div> : null}<div className="business-photo-review-list">{photos.map((photo) => <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Selected photo"} /> : null}<div><label>Role<select value={draft[photo.id]?.role || "UNCLASSIFIED"} onChange={(event) => update(photo.id, "role", event.target.value)}><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Visibility<select value={draft[photo.id]?.visibility || "PRIVATE_INTERNAL"} onChange={(event) => update(photo.id, "visibility", event.target.value)}><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Include on customer document</option></select></label></div></article>)}</div></WorkspaceDialog>;
 }
 
 export default function UnifiedBusinessDocumentWorkspace({

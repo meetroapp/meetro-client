@@ -224,6 +224,84 @@ test("prevalidated first edit and durable replay use the same existing-draft rev
   assert.equal(replayed.draft.recommendedSolution, resolution.patch.recommendedSolution);
 });
 
+test("editing the same customer instruction replaces its effect and survives save and reopen", () => {
+  const originalResolution = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "Set customer to Jack Smith",
+    current: {},
+  });
+  const original = buildBusinessDocumentConversationTurn({
+    id: "customer-turn",
+    documentType: "quote",
+    instruction: "Set customer to Jack Smith",
+    current: {},
+    resolvedPatch: originalResolution.patch,
+    now: "2026-08-23T12:00:00.000Z",
+  }).turn;
+  const originalDraft = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline: {},
+    instructions: [original],
+  }).draft;
+
+  const editedResolution = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "Set the customer name to Jack A Smith",
+    current: originalDraft,
+  });
+  const edited = buildBusinessDocumentConversationTurn({
+    id: original.id,
+    documentType: "quote",
+    instruction: "Set the customer name to Jack A Smith",
+    current: originalDraft,
+    previousTurn: original,
+    resolvedPatch: editedResolution.patch,
+    now: "2026-08-23T12:01:00.000Z",
+  }).turn;
+  const turns = [edited];
+  const replayed = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline: {},
+    instructions: turns,
+  });
+
+  assert.equal(editedResolution.capability, "DOCUMENT_MUTATION");
+  assert.equal(edited.id, original.id);
+  assert.equal(turns.length, 1);
+  assert.equal(replayed.draft.customerName, "Jack A Smith");
+  assert.equal(edited.revisions, 1);
+  assert.deepEqual(edited.revisionHistory, ["Set customer to Jack Smith"]);
+
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: replayed.draft,
+    turns,
+    jobId: "job-1",
+    jobAnalysisSessionId: "analysis-1",
+  });
+  const restored = restoreBusinessDocumentDraft({
+    id: "quote-1",
+    documentType: "QUOTE",
+    jobId: "job-1",
+    content: payload.content,
+    workspace: payload.workspace,
+    photos: [],
+  });
+  const reopened = reconcileBusinessDocumentInstructions({
+    documentType: "quote",
+    baseline: {},
+    instructions: restored.turns,
+  });
+
+  assert.equal(restored.turns.length, 1);
+  assert.equal(restored.turns[0].id, "customer-turn");
+  assert.equal(restored.turns[0].text, "Set the customer name to Jack A Smith");
+  assert.equal(restored.content.customerName, "Jack A Smith");
+  assert.equal(reopened.draft.customerName, "Jack A Smith");
+  assert.equal(restored.jobId, "job-1");
+  assert.equal(restored.jobAnalysisSessionId, "analysis-1");
+});
+
 test("incomplete Quote mutation remains an accepted conversational clarification", () => {
   const state = createConversationState({
     analysisSessionId: "analysis-1",
