@@ -102,7 +102,12 @@ function canonicalFingerprintRows(key, rows) {
     };
   }).filter((row) => {
     if (key === "materialItems") return row.name || row.cost || row.total || row.notes;
-    if (key === "laborItems") return row.description !== "Labor" || row.hours || row.rate || row.total;
+    if (key === "laborItems") {
+      const defaultLaborLabel = /^(?:labor|labour|mano de obra|main-d['’]oeuvre|mão de obra)$/i.test(
+        row.description
+      );
+      return !defaultLaborLabel || row.hours || row.rate || row.total;
+    }
     return row.description || row.unitPrice || row.total;
   });
 }
@@ -380,15 +385,69 @@ export function validateNewBusinessDocumentDraft({
 
 export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
   const content = payload.content || {};
+  const meaningfulScalarFields = [
+    "customerName",
+    "customerEmail",
+    "customerPhone",
+    "customerAddress",
+    "customerLocation",
+    "serviceLocation",
+    "projectTitle",
+    "projectDescription",
+    "recommendedSolution",
+    "workPerformed",
+    "totalOverride",
+    "subtotal",
+    "discount",
+    "tax",
+    "fees",
+    "paidAmount",
+    "balanceDue",
+    "terms",
+    "paymentTerms",
+    "estimatedDuration",
+    "dueDate",
+    "notes",
+    "warrantyNotes",
+    "customerMessage",
+    "quoteReference",
+  ];
+  const hasMeaningfulAgreement = Object.values(
+    normalizeBusinessDocumentAgreement(content.agreement)
+  ).some((value) => Array.isArray(value)
+    ? value.some((item) => fingerprintText(item))
+    : fingerprintText(value));
+  const hasMeaningfulRows = ["lineItems", "materialItems", "laborItems"]
+    .some((key) => canonicalFingerprintRows(key, content[key] || []).length > 0);
+  const hasMeaningfulCollections = ["conditions", "exclusions"]
+    .some((key) => (content[key] || []).some((item) => fingerprintText(item)));
+  const hasMeaningfulManualOverrides = Object.entries(
+    payload.workspace?.manualOverrides || {}
+  ).some(([key, value]) => {
+    if (["lineItems", "materialItems", "laborItems"].includes(key)) {
+      return canonicalFingerprintRows(key, Array.isArray(value) ? value : []).length > 0;
+    }
+    if (key === "agreement") {
+      return Object.values(normalizeBusinessDocumentAgreement(value)).some((item) =>
+        Array.isArray(item)
+          ? item.some((entry) => fingerprintText(entry))
+          : fingerprintText(item)
+      );
+    }
+    return Array.isArray(value)
+      ? value.some((item) => fingerprintText(item))
+      : fingerprintText(value);
+  });
   return Boolean(
-    Object.entries(content).some(([key, value]) =>
-      Array.isArray(value)
-        ? value.some((row) => Object.values(row || {}).some((item) => String(item || "").trim()))
-        : key !== "currency" && String(value || "").trim()
-    ) ||
+    meaningfulScalarFields.some((key) => fingerprintText(content[key])) ||
+    hasMeaningfulAgreement ||
+    hasMeaningfulRows ||
+    hasMeaningfulCollections ||
+    normalizeBusinessDocumentCustomerParty(payload.customerParty) ||
     payload.workspace?.instructions?.length ||
     payload.workspace?.privateReminders?.length ||
     payload.workspace?.jobAnalysisSessionId ||
+    hasMeaningfulManualOverrides ||
     payload.photos?.length
   );
 }
