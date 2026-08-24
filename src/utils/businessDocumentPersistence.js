@@ -4,6 +4,7 @@ import {
   reconcileBusinessDocumentInstructions,
 } from "./businessDocumentWorkspace.js";
 import { normalizeBusinessDocumentAgreement } from "./businessDocumentAgreement.js";
+import { normalizeBusinessDocumentCustomerParty } from "./businessDocumentCustomerParty.js";
 
 export const BUSINESS_DOCUMENT_PHOTO_ROLES = Object.freeze([
   "UNCLASSIFIED", "GENERAL_EVIDENCE", "BEFORE", "AFTER",
@@ -257,6 +258,7 @@ export function buildBusinessDocumentSavePayload({
   photoAssignments = {},
   jobId = null,
   jobAnalysisSessionId = null,
+  customerParty = null,
 } = {}) {
   const type = String(documentType || "").toUpperCase();
   const instructions = turns
@@ -271,6 +273,7 @@ export function buildBusinessDocumentSavePayload({
   return {
     documentType: type,
     jobId: jobId || null,
+    customerParty: normalizeBusinessDocumentCustomerParty(customerParty),
     content: {
       customerName: content?.customerName || "",
       customerEmail: content?.customerEmail || "",
@@ -382,6 +385,7 @@ export function restoreBusinessDocumentDraft(document) {
     photoAssignments,
     jobId: document.jobId || null,
     jobAnalysisSessionId: document.workspace?.jobAnalysisSessionId || null,
+    customerParty: normalizeBusinessDocumentCustomerParty(document.customerParty),
   };
 }
 
@@ -396,6 +400,7 @@ export function businessDocumentRestoredSnapshotFingerprint(document) {
     photoAssignments: restored.photoAssignments,
     jobId: restored.jobId,
     jobAnalysisSessionId: restored.jobAnalysisSessionId,
+    customerParty: restored.customerParty,
   });
   return businessDocumentSnapshotFingerprint({
     payload,

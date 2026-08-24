@@ -6,6 +6,7 @@ import { coreRouteParityLanguage } from "./coreRouteParityLanguage.js";
 import { dailyWorkflowLanguage } from "./dailyWorkflowLanguage.js";
 import { professionalScheduleLanguage } from "./professionalScheduleLanguage.js";
 import { customerQuoteLanguage } from "./customerQuoteLanguage.js";
+import { businessDocumentCustomerLanguage } from "./businessDocumentCustomerLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -14068,6 +14069,10 @@ Object.entries(professionalScheduleLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(customerQuoteLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(businessDocumentCustomerLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 

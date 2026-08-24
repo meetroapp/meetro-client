@@ -745,6 +745,19 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       request.homeowner_email ||
       ""
   );
+  const [customerPhone, setCustomerPhone] = useState(
+    selectedQuoteForEdit?.customerPhone ||
+      request.customerPhone ||
+      request.phone ||
+      ""
+  );
+  const [customerAddress, setCustomerAddress] = useState(
+    selectedQuoteForEdit?.customerAddress ||
+      selectedQuoteForEdit?.address ||
+      request.customerAddress ||
+      request.address ||
+      ""
+  );
   const [agreement, setAgreement] = useState(
     selectedQuoteForEdit?.agreement || {}
   );
@@ -2790,6 +2803,8 @@ ${businessIdentity.businessName}`;
   function applyUnifiedQuotePatch(patch = {}) {
     if (Object.hasOwn(patch, "customerName")) setCustomerName(patch.customerName);
     if (Object.hasOwn(patch, "customerEmail")) setCustomerEmail(patch.customerEmail);
+    if (Object.hasOwn(patch, "customerPhone")) setCustomerPhone(patch.customerPhone);
+    if (Object.hasOwn(patch, "customerAddress")) setCustomerAddress(patch.customerAddress);
     if (Object.hasOwn(patch, "agreement")) setAgreement(patch.agreement);
     if (Object.hasOwn(patch, "customerLocation")) setCustomerLocation(patch.customerLocation);
     if (Object.hasOwn(patch, "projectTitle")) setProjectTitle(patch.projectTitle);
@@ -2880,6 +2895,8 @@ ${businessIdentity.businessName}`;
   const unifiedQuoteDraft = {
     customerName,
     customerEmail,
+    customerPhone,
+    customerAddress,
     customerLocation,
     projectTitle,
     projectDescription,

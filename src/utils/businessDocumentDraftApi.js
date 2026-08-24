@@ -76,6 +76,33 @@ function validatePhoto(value) {
     PHOTO_VISIBILITIES.has(value.visibility);
 }
 
+function validateCustomerParty(value) {
+  if (value == null) return null;
+  if (!plain(value) ||
+      !Object.keys(value).every((key) => [
+        "businessContactId",
+        "customerRelationshipId",
+        "contractorProfileId",
+        "jobId",
+        "linkedAt",
+      ].includes(key)) ||
+      !UUID_PATTERN.test(String(value.businessContactId || "")) ||
+      !UUID_PATTERN.test(String(value.customerRelationshipId || "")) ||
+      (value.contractorProfileId !== undefined &&
+        (!Number.isSafeInteger(Number(value.contractorProfileId)) || Number(value.contractorProfileId) < 1)) ||
+      (value.jobId !== undefined && !UUID_PATTERN.test(String(value.jobId || ""))) ||
+      (value.linkedAt !== undefined && !validTimestamp(value.linkedAt))) return undefined;
+  return Object.freeze({
+    businessContactId: String(value.businessContactId).toLowerCase(),
+    customerRelationshipId: String(value.customerRelationshipId).toLowerCase(),
+    ...(value.contractorProfileId !== undefined
+      ? { contractorProfileId: Number(value.contractorProfileId) }
+      : {}),
+    ...(value.jobId !== undefined ? { jobId: String(value.jobId).toLowerCase() } : {}),
+    ...(value.linkedAt !== undefined ? { linkedAt: value.linkedAt } : {}),
+  });
+}
+
 function validateInstruction(value, documentType) {
   const validOptionalTimestamp = (timestamp) =>
     timestamp === undefined ||
@@ -114,6 +141,7 @@ function validateWorkspace(value, documentType) {
 
 export function validateBusinessDocumentDraft(value) {
   const workspace = plain(value) ? validateWorkspace(value.workspace, value.documentType) : null;
+  const customerParty = plain(value) ? validateCustomerParty(value.customerParty) : undefined;
   if (!plain(value) ||
       !UUID_PATTERN.test(String(value.id || "")) ||
       !DOCUMENT_TYPES.has(value.documentType) ||
@@ -124,12 +152,14 @@ export function validateBusinessDocumentDraft(value) {
       !Number.isSafeInteger(value.version) || value.version < 1 ||
       !plain(value.content) || !workspace ||
       !Array.isArray(value.photos) || !value.photos.every(validatePhoto) ||
+      customerParty === undefined ||
       Number.isNaN(Date.parse(value.createdAt)) || Number.isNaN(Date.parse(value.updatedAt))) {
     return null;
   }
   return Object.freeze({
     ...value,
     content: Object.freeze({ ...value.content }),
+    customerParty,
     workspace,
     photos: Object.freeze(value.photos.map((photo) => Object.freeze({ ...photo, media: Object.freeze({ ...photo.media }) }))),
   });

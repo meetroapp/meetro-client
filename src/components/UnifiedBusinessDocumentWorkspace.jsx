@@ -80,9 +80,55 @@ import {
   loadQuickQuoteAnalysisSession,
 } from "../utils/quickQuoteAnalysisSession.js";
 import { getAuthenticatedIdentitySnapshot } from "../utils/session.js";
+import {
+  assignBusinessContactRole,
+  createBusinessContact,
+  createBusinessContactCommandKey,
+  createDeterministicBusinessContactKey,
+  getBusinessContact,
+  getBusinessContactActiveRoles,
+  listBusinessContacts,
+  loadBusinessContactProfileId,
+} from "../utils/businessContactsApi.js";
+import {
+  createBusinessCustomerRelationshipCommandKey,
+  establishBusinessCustomerRelationship,
+  getBusinessCustomerRelationshipByContact,
+} from "../utils/businessCustomerRelationshipsApi.js";
+import {
+  applyBusinessContactToDocumentSnapshot,
+  businessContactDisplayName,
+  completeBusinessDocumentCustomerWorkflow,
+  filterBusinessDocumentCustomerContacts,
+  findBusinessContactDuplicateCandidates,
+  hasBusinessDocumentCustomerSnapshot,
+  normalizeBusinessDocumentCustomerParty,
+} from "../utils/businessDocumentCustomerParty.js";
+import { t } from "../utils/language.js";
 import "./UnifiedBusinessDocumentWorkspace.css";
 
 const NUMBERING_SETUP_PENDING = Symbol("BUSINESS_DOCUMENT_NUMBERING_SETUP_PENDING");
+
+function emptyCustomerControl() {
+  return {
+    open: false,
+    mode: "choose",
+    search: "",
+    contacts: [],
+    selectedId: "",
+    busy: false,
+    error: "",
+    confirmReplacement: false,
+    duplicateCandidates: [],
+    duplicateConfirmed: false,
+    replaceSnapshot: false,
+    partyType: "PERSON",
+    pendingContact: null,
+    pendingRelationship: null,
+    retryPhase: "",
+    createKey: "",
+  };
+}
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -291,8 +337,8 @@ function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialF
   const amountInputRef = useRef(null);
   useEffect(() => { (initialFocus === "amount" ? amountInputRef : firstInputRef).current?.focus(); }, [initialFocus]);
   const detailFields = activeDocument === "quote"
-    ? [["customerName", "Customer"], ["customerEmail", "Customer email"], ["projectTitle", "Project"], ["recommendedSolution", "Scope of Work"], ["projectDescription", "Customer-facing description"], ["estimatedDuration", "Estimated duration"]]
-    : [["customerName", "Customer"], ["customerEmail", "Customer email"], ["projectTitle", "Job"], ["workPerformed", "Work completed"], ["dueDate", "Due date"]];
+    ? [["customerName", "Customer"], ["customerEmail", "Customer email"], ["customerPhone", "Customer phone"], ["customerAddress", "Customer address"], ["projectTitle", "Project"], ["recommendedSolution", "Scope of Work"], ["projectDescription", "Customer-facing description"], ["estimatedDuration", "Estimated duration"]]
+    : [["customerName", "Customer"], ["customerEmail", "Customer email"], ["customerPhone", "Customer phone"], ["customerAddress", "Customer address"], ["projectTitle", "Job"], ["workPerformed", "Work completed"], ["dueDate", "Due date"]];
   const paymentFields = activeDocument === "quote"
     ? [["terms", "Deposit / payment terms"]]
     : [["paymentTerms", "Payment terms"]];
@@ -677,6 +723,76 @@ function PhotoReviewDialog({ photos, assignments, onApply, onCancel }) {
   return <WorkspaceDialog titleId="business-photo-review-title" title="Review document photos" onClose={onCancel} openAtTop actions={[{ label: "Cancel", onClick: onCancel }, { label: "Apply photo choices", primary: true, onClick: () => onApply(draft) }]}><p>Role and customer visibility are separate. Before or After remains private unless you explicitly include it.</p>{photos.length > 1 ? <div className="business-photo-apply-all"><label>Apply role to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("role", event.target.value)}><option value="">Choose…</option><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Apply visibility to all<select defaultValue="" onChange={(event) => event.target.value && applyAll("visibility", event.target.value)}><option value="">Choose…</option><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Customer document</option></select></label></div> : null}<div className="business-photo-review-list">{photos.map((photo) => <article key={photo.id}>{photo.previewUrl ? <img src={photo.previewUrl} alt={photo.name || "Selected photo"} /> : null}<div><label>Role<select value={draft[photo.id]?.role || "UNCLASSIFIED"} onChange={(event) => update(photo.id, "role", event.target.value)}><option value="UNCLASSIFIED">General / Unclassified</option><option value="GENERAL_EVIDENCE">General evidence</option><option value="BEFORE">Before</option><option value="AFTER">After</option></select></label><label>Visibility<select value={draft[photo.id]?.visibility || "PRIVATE_INTERNAL"} onChange={(event) => update(photo.id, "visibility", event.target.value)}><option value="PRIVATE_INTERNAL">Private</option><option value="CUSTOMER_VISIBLE">Include on customer document</option></select></label></div></article>)}</div></WorkspaceDialog>;
 }
 
+function CustomerPartyControl({
+  language,
+  content,
+  customerParty,
+  linkedContact,
+  linkedDurably,
+  control,
+  onOpen,
+  onClose,
+  onSearch,
+  onSelect,
+  onUse,
+  onSaveContact,
+  onPartyType,
+  onRetry,
+  onCreateAnyway,
+}) {
+  const visibleContacts = filterBusinessDocumentCustomerContacts(
+    control.contacts,
+    control.search
+  );
+  const selected = control.contacts.find((contact) => contact.id === control.selectedId);
+  const durableContact = linkedContact || control.pendingContact;
+  const status = linkedDurably
+    ? t("businessDocumentCustomerLinked", language)
+    : customerParty || durableContact
+      ? t("businessDocumentCustomerSavedContact", language)
+      : t("businessDocumentCustomerNotLinked", language);
+  const linkedName = durableContact
+    ? businessContactDisplayName(durableContact)
+    : content.customerName;
+
+  return <section className="business-document-customer-control" aria-labelledby="business-document-customer-title">
+    <div className="business-document-customer-summary">
+      <div>
+        <span id="business-document-customer-title">{t("businessDocumentCustomerTitle", language)}</span>
+        <strong>{linkedName || t("businessDocumentCustomerNotLinked", language)}</strong>
+        <small>{status}{durableContact?.status === "ARCHIVED" ? ` · ${t("businessDocumentCustomerArchived", language)}` : ""}</small>
+      </div>
+      <div>
+        <button type="button" onClick={() => onOpen("choose")}>{t("businessDocumentCustomerChoose", language)}</button>
+        <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button>
+      </div>
+    </div>
+    {!customerParty ? <p>{t("businessDocumentCustomerNotLinkedHelp", language)}</p> : null}
+    {control.open ? <div className="business-document-customer-panel">
+      <header>
+        <strong>{control.mode === "save" ? t("businessDocumentCustomerSave", language) : t("businessDocumentCustomerChoose", language)}</strong>
+        <button type="button" onClick={onClose} aria-label={t("businessDocumentCustomerClose", language)}>×</button>
+      </header>
+      {control.mode === "choose" ? <>
+        <label>{t("businessDocumentCustomerSearch", language)}<input type="search" value={control.search} placeholder={t("businessDocumentCustomerSearchPlaceholder", language)} onChange={(event) => onSearch(event.target.value)} /></label>
+        {control.busy ? <p role="status">{t("businessDocumentCustomerLoading", language)}</p> : null}
+        {!control.busy && !visibleContacts.length ? <p role="status">{t("businessDocumentCustomerEmpty", language)}</p> : null}
+        <div className="business-document-customer-results" role="listbox" aria-label={t("businessDocumentCustomerSearch", language)}>
+          {visibleContacts.map((contact) => <button type="button" role="option" aria-selected={control.selectedId === contact.id} className={control.selectedId === contact.id ? "selected" : ""} key={contact.id} onClick={() => onSelect(contact.id)}><strong>{businessContactDisplayName(contact)}</strong><small>{[contact.companyName, contact.email, contact.phone].filter(Boolean).join(" · ")}</small></button>)}
+        </div>
+        {selected && control.confirmReplacement ? <div className="business-document-customer-confirm" role="alert"><p>{t("businessDocumentCustomerReplaceWarning", language)}</p><button type="button" onClick={() => onUse(false)}>{t("businessDocumentCustomerKeep", language)}</button><button type="button" onClick={() => onUse(true)}>{t("businessDocumentCustomerReplace", language)}</button></div> : selected ? <button type="button" className="primary" onClick={() => onUse(false)}>{t("businessDocumentCustomerUse", language)}</button> : null}
+      </> : <>
+        <p>{t("businessDocumentCustomerSaveHelp", language)}</p>
+        <label>{t("businessDocumentCustomerType", language)}<select value={control.partyType} onChange={(event) => onPartyType(event.target.value)}><option value="PERSON">{t("businessDocumentCustomerPerson", language)}</option><option value="ORGANIZATION">{t("businessDocumentCustomerOrganization", language)}</option></select></label>
+        {control.duplicateCandidates.length ? <div className="business-document-customer-duplicates" role="alert"><strong>{t("businessDocumentCustomerDuplicateTitle", language)}</strong><p>{t("businessDocumentCustomerDuplicateHelp", language)}</p>{control.duplicateCandidates.map((contact) => <button type="button" key={contact.id} onClick={() => onSelect(contact.id)}>{businessContactDisplayName(contact)}{contact.email ? ` · ${contact.email}` : ""}</button>)}<button type="button" onClick={onCreateAnyway}>{t("businessDocumentCustomerCreateAnyway", language)}</button></div> : <button type="button" className="primary" onClick={onSaveContact}>{t("businessDocumentCustomerCreate", language)}</button>}
+      </>}
+      {control.retryPhase ? <button type="button" className="primary" onClick={onRetry}>{t("businessDocumentCustomerRetry", language)}</button> : null}
+      {control.busy ? <p role="status">{t("businessDocumentCustomerWorking", language)}</p> : null}
+      {control.error ? <p role="alert" className="business-document-customer-error">{control.error}</p> : null}
+    </div> : null}
+  </section>;
+}
+
 export default function UnifiedBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", job = {}, quote,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
@@ -741,6 +857,11 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [recoveryRecord, setRecoveryRecord] = useState(null);
   const [recovered, setRecovered] = useState(false);
   const [newContentAvailable, setNewContentAvailable] = useState(false);
+  const [customerParties, setCustomerParties] = useState({ quote: null, invoice: null });
+  const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
+  const [customerControl, setCustomerControl] = useState(() => emptyCustomerControl());
+  const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
+  const relationshipCommandKeysRef = useRef(new Map());
   const branding = useMemo(() => getBusinessIdentityProjection({}, { fallbackName: "Meetro Professional" }), []);
   const documentPhotos = photos.filter((photo) => (photoAssignments[photo.id]?.documentType || activeDocument) === activeDocument);
   const customerPhotoGroups = customerVisibleBusinessDocumentPhotoGroups(documentPhotos, photoAssignments);
@@ -828,14 +949,16 @@ export default function UnifiedBusinessDocumentWorkspace({
     photoAssignments,
     jobId: documentJobIds.quote,
     jobAnalysisSessionId: jobAnalysisSessionIds.quote,
-  }), [documentJobIds.quote, jobAnalysisSessionIds.quote, manualOverrides.quote, photoAssignments, photos, quote, turns]);
+    customerParty: customerParties.quote,
+  }), [customerParties.quote, documentJobIds.quote, jobAnalysisSessionIds.quote, manualOverrides.quote, photoAssignments, photos, quote, turns]);
   const invoicePayload = useMemo(() => buildBusinessDocumentSavePayload({
     documentType: "invoice", content: invoice, turns, manualOverrides: manualOverrides.invoice,
     photos: photos.filter((photo) => photoAssignments[photo.id]?.documentType === "invoice"),
     photoAssignments,
     jobId: documentJobIds.invoice,
     jobAnalysisSessionId: jobAnalysisSessionIds.invoice,
-  }), [documentJobIds.invoice, invoice, jobAnalysisSessionIds.invoice, manualOverrides.invoice, photoAssignments, photos, turns]);
+    customerParty: customerParties.invoice,
+  }), [customerParties.invoice, documentJobIds.invoice, invoice, jobAnalysisSessionIds.invoice, manualOverrides.invoice, photoAssignments, photos, turns]);
   const payloads = { quote: quotePayload, invoice: invoicePayload };
   const fingerprints = {
     quote: businessDocumentSnapshotFingerprint({ payload: quotePayload, recoveryPhotos: recoveryPhotoProjection(photos.filter((photo) => (photoAssignments[photo.id]?.documentType || "quote") === "quote"), photoAssignments) }),
@@ -852,6 +975,8 @@ export default function UnifiedBusinessDocumentWorkspace({
   const activeDirty = dirty[activeDocument];
   const activeSaved = savedDocuments[activeDocument];
   const activeContent = activeDocument === "quote" ? quote : invoice;
+  const activeCustomerParty = customerParties[activeDocument];
+  const activeLinkedCustomer = linkedCustomerContacts[activeDocument];
 
   useEffect(() => {
     const additions = photos.filter((photo) => !seenPhotoIdsRef.current.has(photo.id));
@@ -912,24 +1037,30 @@ export default function UnifiedBusinessDocumentWorkspace({
     return documentType === "quote" ? quote : invoice;
   }
 
-  function documentPayload(documentType, { durablePhotos = photos, assignments = photoAssignments } = {}) {
+  function documentPayload(documentType, {
+    durablePhotos = photos,
+    assignments = photoAssignments,
+    content = currentContent(documentType),
+    customerParty = customerParties[documentType],
+  } = {}) {
     return buildBusinessDocumentSavePayload({
       documentType,
-      content: currentContent(documentType),
+      content,
       turns,
       manualOverrides: manualOverrides[documentType],
       photos: durablePhotos.filter((photo) => (assignments[photo.id]?.documentType || "quote") === documentType),
       photoAssignments: assignments,
       jobId: documentJobIds[documentType],
       jobAnalysisSessionId: jobAnalysisSessionIds[documentType],
+      customerParty,
     });
   }
 
-  async function durableSaveInput(documentType) {
+  async function durableSaveInput(documentType, overrides = {}) {
     const pending = photos.filter((photo) =>
       (photoAssignments[photo.id]?.documentType || "quote") === documentType && !photo.media?.public_id
     );
-    if (!pending.length) return { payload: documentPayload(documentType), durablePhotos: photos, assignments: photoAssignments };
+    if (!pending.length) return { payload: documentPayload(documentType, overrides), durablePhotos: photos, assignments: photoAssignments };
     if (typeof onEnsurePhotosDurable !== "function") throw new Error("Pending photos must finish uploading before this draft can be saved.");
     const result = await onEnsurePhotosDurable(pending);
     if (!result?.ok) throw new Error("One or more photos are not uploaded yet. Your work is still here.");
@@ -939,7 +1070,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       delete assignments[oldId];
     });
     setPhotoAssignments(assignments);
-    return { payload: documentPayload(documentType, { durablePhotos: result.photos, assignments }), durablePhotos: result.photos, assignments };
+    return { payload: documentPayload(documentType, { ...overrides, durablePhotos: result.photos, assignments }), durablePhotos: result.photos, assignments };
   }
 
   async function durableJobAnalysisMedia(documentType) {
@@ -965,12 +1096,19 @@ export default function UnifiedBusinessDocumentWorkspace({
   async function saveDocument(documentType, {
     suppressFailureDialog = false,
     numberingRetry = false,
+    contentOverride,
+    customerPartyOverride,
   } = {}) {
     if (saveState.busy) return false;
     setSaveState((current) => ({ ...current, busy: true, error: "", documentType }));
     let saveJobId = documentJobIds[documentType] || null;
     try {
-      const prepared = await durableSaveInput(documentType);
+      const prepared = await durableSaveInput(documentType, {
+        ...(contentOverride ? { content: contentOverride } : {}),
+        ...(customerPartyOverride !== undefined
+          ? { customerParty: customerPartyOverride }
+          : {}),
+      });
       saveJobId = prepared.payload.jobId || null;
       if (!saveAttemptKeysRef.current[documentType]) saveAttemptKeysRef.current[documentType] = createBusinessDocumentSaveKey();
       const existing = savedDocuments[documentType];
@@ -999,6 +1137,10 @@ export default function UnifiedBusinessDocumentWorkspace({
         throw new Error("The saved draft response did not match the editable workspace. Reopen Saved Files before retrying.");
       }
       setSavedDocuments((current) => ({ ...current, [documentType]: document }));
+      setCustomerParties((current) => ({
+        ...current,
+        [documentType]: normalizeBusinessDocumentCustomerParty(document.customerParty),
+      }));
       setSavedFingerprints((current) => ({ ...current, [documentType]: restoredFingerprint }));
       saveAttemptKeysRef.current[documentType] = "";
       setSaveState({ busy: false, error: "", lastSavedAt: document.updatedAt, documentType });
@@ -1218,6 +1360,8 @@ export default function UnifiedBusinessDocumentWorkspace({
     restored.photos.forEach((photo) => seenPhotoIdsRef.current.add(photo.id));
     onRestorePhotos?.(restored.photos, { documentType: type, persisted: true });
     setSavedDocuments((current) => ({ ...current, [type]: document }));
+    setCustomerParties((current) => ({ ...current, [type]: restored.customerParty }));
+    void hydrateLinkedCustomer(type, restored.customerParty);
     setDocumentJobIds((current) => ({ ...current, [type]: document.jobId || null }));
     setJobAnalysisSessionIds((current) => ({
       ...current,
@@ -1251,6 +1395,265 @@ export default function UnifiedBusinessDocumentWorkspace({
     } catch (error) {
       setNotice(error?.message || "The saved document could not be opened.");
     }
+  }
+
+  function updateCustomerControl(patch) {
+    setCustomerControl((current) => ({ ...current, ...patch }));
+  }
+
+  async function resolveBusinessProfileId() {
+    if (businessContactProfileId) return businessContactProfileId;
+    const profileId = await loadBusinessContactProfileId({ setPage });
+    setBusinessContactProfileId(profileId);
+    return profileId;
+  }
+
+  async function openCustomerControl(mode) {
+    const createKey = mode === "save" ? createBusinessContactCommandKey() : "";
+    setCustomerControl({
+      ...emptyCustomerControl(),
+      open: true,
+      mode,
+      busy: true,
+      createKey,
+    });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const contacts = await listBusinessContacts({
+        contractorProfileId,
+        status: "ACTIVE",
+        setPage,
+      });
+      updateCustomerControl({ contacts, busy: false, error: "" });
+    } catch (error) {
+      updateCustomerControl({
+        busy: false,
+        error: error?.message || t("businessDocumentCustomerLoadFailed", language),
+      });
+    }
+  }
+
+  async function hydrateLinkedCustomer(documentType, customerParty) {
+    const party = normalizeBusinessDocumentCustomerParty(customerParty);
+    if (!party) {
+      setLinkedCustomerContacts((current) => ({ ...current, [documentType]: null }));
+      return;
+    }
+    try {
+      const contact = await getBusinessContact({
+        contactId: party.businessContactId,
+        setPage,
+      });
+      setLinkedCustomerContacts((current) => ({ ...current, [documentType]: contact }));
+    } catch {
+      setLinkedCustomerContacts((current) => ({ ...current, [documentType]: null }));
+    }
+  }
+
+  function relationshipCommandKey(contactId) {
+    if (!relationshipCommandKeysRef.current.has(contactId)) {
+      relationshipCommandKeysRef.current.set(
+        contactId,
+        createBusinessCustomerRelationshipCommandKey()
+      );
+    }
+    return relationshipCommandKeysRef.current.get(contactId);
+  }
+
+  async function resolveOrEstablishCustomerRelationship(contact) {
+    const existing = await getBusinessCustomerRelationshipByContact({
+      businessContactId: contact.id,
+      setPage,
+    });
+    if (existing) return existing;
+    const contractorProfileId = await resolveBusinessProfileId();
+    return establishBusinessCustomerRelationship({
+      contractorProfileId,
+      businessContactId: contact.id,
+      idempotencyKey: relationshipCommandKey(contact.id),
+      setPage,
+    });
+  }
+
+  function applyCustomerSnapshot(documentType, nextContent) {
+    if (documentType === "quote") {
+      onApplyQuotePatch({ ...nextContent, replaceCollections: true });
+    } else {
+      setInvoice(nextContent);
+    }
+  }
+
+  async function persistCustomerLink(contact, relationship, { replace = false } = {}) {
+    const documentType = activeDocument;
+    const customerParty = normalizeBusinessDocumentCustomerParty({
+      businessContactId: contact.id,
+      customerRelationshipId: relationship.id,
+    });
+    const nextContent = applyBusinessContactToDocumentSnapshot({
+      content: activeContent,
+      contact,
+      replace,
+    });
+    applyCustomerSnapshot(documentType, nextContent);
+    setCustomerParties((current) => ({ ...current, [documentType]: customerParty }));
+    setLinkedCustomerContacts((current) => ({ ...current, [documentType]: contact }));
+    const saved = await saveDocument(documentType, {
+      suppressFailureDialog: true,
+      contentOverride: nextContent,
+      customerPartyOverride: customerParty,
+    });
+    if (!saved || saved === NUMBERING_SETUP_PENDING) {
+      updateCustomerControl({
+        open: true,
+        busy: false,
+        pendingContact: contact,
+        pendingRelationship: relationship,
+        retryPhase: "LINK",
+        error: t("businessDocumentCustomerLinkFailed", language),
+      });
+      return false;
+    }
+    setCustomerControl(emptyCustomerControl());
+    setNotice(t("businessDocumentCustomerLinkedNotice", language, {
+      name: businessContactDisplayName(contact),
+      document: t(
+        documentType === "quote"
+          ? "businessDocumentCustomerQuoteLabel"
+          : "businessDocumentCustomerInvoiceLabel",
+        language
+      ),
+    }));
+    return true;
+  }
+
+  async function applySavedCustomer(replace = false, explicitContact = null) {
+    const contact = explicitContact || customerControl.contacts.find(
+      (item) => item.id === customerControl.selectedId
+    ) || customerControl.pendingContact;
+    if (!contact) return;
+    const switchingContact = activeCustomerParty?.businessContactId !== contact.id;
+    if (
+      switchingContact &&
+      hasBusinessDocumentCustomerSnapshot(activeContent) &&
+      !customerControl.confirmReplacement &&
+      explicitContact === null
+    ) {
+      updateCustomerControl({ confirmReplacement: true });
+      return;
+    }
+    updateCustomerControl({
+      busy: true,
+      error: "",
+      confirmReplacement: false,
+      replaceSnapshot: replace,
+    });
+    try {
+      const relationship = customerControl.pendingRelationship ||
+        await resolveOrEstablishCustomerRelationship(contact);
+      updateCustomerControl({ pendingContact: contact, pendingRelationship: relationship });
+      await persistCustomerLink(contact, relationship, { replace });
+    } catch (error) {
+      updateCustomerControl({
+        busy: false,
+        pendingContact: contact,
+        retryPhase: "RELATIONSHIP",
+        error: error?.message || t("businessDocumentCustomerRelationshipFailed", language),
+      });
+    }
+  }
+
+  async function saveCurrentCustomerAsContact({ bypassDuplicates = false } = {}) {
+    if (!String(activeContent.customerName || "").trim()) {
+      updateCustomerControl({ error: t("businessDocumentCustomerRequired", language) });
+      return;
+    }
+    const candidates = findBusinessContactDuplicateCandidates(
+      customerControl.contacts,
+      activeContent
+    );
+    if (candidates.length && !bypassDuplicates && !customerControl.duplicateConfirmed) {
+      updateCustomerControl({ duplicateCandidates: candidates, error: "" });
+      return;
+    }
+    updateCustomerControl({ busy: true, error: "", duplicateCandidates: [] });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      await completeBusinessDocumentCustomerWorkflow({
+        contact: customerControl.pendingContact,
+        relationship: customerControl.pendingRelationship,
+        createContact: async () => {
+          const result = await createBusinessContact({
+            contractorProfileId,
+            partyType: customerControl.partyType,
+            displayName: activeContent.customerName,
+            companyName: customerControl.partyType === "ORGANIZATION"
+              ? activeContent.customerName
+              : undefined,
+            email: activeContent.customerEmail,
+            phone: activeContent.customerPhone,
+            address: activeContent.customerAddress || activeContent.customerLocation,
+            idempotencyKey: customerControl.createKey || createBusinessContactCommandKey(),
+            setPage,
+          });
+          updateCustomerControl({ pendingContact: result.contact });
+          return result.contact;
+        },
+        assignCustomerRole: async (contact) => {
+          if (getBusinessContactActiveRoles(contact).includes("CUSTOMER")) return contact;
+          const assigned = await assignBusinessContactRole({
+            contactId: contact.id,
+            expectedVersion: contact.version,
+            role: "CUSTOMER",
+            idempotencyKey: createDeterministicBusinessContactKey(
+              `${customerControl.createKey}:assign:CUSTOMER`
+            ),
+            setPage,
+          });
+          updateCustomerControl({ pendingContact: assigned });
+          return assigned;
+        },
+        resolveRelationship: async (contact) => {
+          const relationship = await resolveOrEstablishCustomerRelationship(contact);
+          updateCustomerControl({ pendingContact: contact, pendingRelationship: relationship });
+          return relationship;
+        },
+        linkDocument: (contact, relationship) =>
+          persistCustomerLink(contact, relationship, { replace: false }),
+      });
+    } catch (error) {
+      const contactPersisted = error?.contact || error?.createdContact || null;
+      updateCustomerControl({
+        busy: false,
+        pendingContact: contactPersisted || null,
+        pendingRelationship: error?.relationship || customerControl.pendingRelationship,
+        retryPhase: error?.phase || (contactPersisted ? "RELATIONSHIP" : "CONTACT"),
+        error: error?.phase === "LINK"
+          ? t("businessDocumentCustomerLinkFailed", language)
+          : error?.message || (contactPersisted
+            ? t("businessDocumentCustomerRelationshipFailed", language)
+            : t("businessDocumentCustomerCreateFailed", language)),
+      });
+    }
+  }
+
+  async function retryCustomerWorkflow() {
+    if (customerControl.retryPhase === "LINK" && customerControl.pendingContact && customerControl.pendingRelationship) {
+      updateCustomerControl({ busy: true, error: "" });
+      await persistCustomerLink(
+        customerControl.pendingContact,
+        customerControl.pendingRelationship,
+        { replace: false }
+      );
+      return;
+    }
+    if (customerControl.mode === "save") {
+      await saveCurrentCustomerAsContact({ bypassDuplicates: true });
+      return;
+    }
+    await applySavedCustomer(
+      customerControl.replaceSnapshot,
+      customerControl.pendingContact
+    );
   }
 
   async function handleDeletedDocument(document) {
@@ -1425,6 +1828,14 @@ export default function UnifiedBusinessDocumentWorkspace({
     setPhotoAssignments(Object.fromEntries(Object.entries(snapshot.photoAssignments || {}).map(([id, assignment]) => [id, normalizeBusinessDocumentPhotoAssignment(assignment)])));
     onRestorePhotos?.(recoveredPhotos, { replaceAll: true, persisted: false });
     setSavedDocuments(snapshot.savedDocuments || { quote: null, invoice: null });
+    const recoveredCustomerParties = {
+      quote: normalizeBusinessDocumentCustomerParty(snapshot.payloads.quote?.customerParty),
+      invoice: normalizeBusinessDocumentCustomerParty(snapshot.payloads.invoice?.customerParty),
+    };
+    setCustomerParties(recoveredCustomerParties);
+    for (const type of ["quote", "invoice"]) {
+      void hydrateLinkedCustomer(type, recoveredCustomerParties[type]);
+    }
     setDocumentJobIds({
       quote: snapshot.payloads.quote?.jobId || null,
       invoice: snapshot.payloads.invoice?.jobId || null,
@@ -1779,6 +2190,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   function switchDocument(documentType) {
     setActiveDocument(normalizeBusinessDocumentTab(documentType));
     setManualState(null);
+    setCustomerControl(emptyCustomerControl());
     setNotice("");
     nearNewestRef.current = true;
   }
@@ -2018,7 +2430,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header>{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}

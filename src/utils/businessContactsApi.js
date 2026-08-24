@@ -240,6 +240,27 @@ export async function listBusinessContacts({
     : contacts.filter((contact) => contact?.status === requestedStatus);
 }
 
+export async function getBusinessContact({
+  contactId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = text(contactId);
+  if (!UUID_PATTERN.test(id)) {
+    throw new BusinessContactApiError({
+      status: 400,
+      code: "BUSINESS_CONTACT_ID_INVALID",
+      message: "A valid Contact identity is required.",
+    });
+  }
+  const data = await requestBusinessContact(
+    `/business-contacts/${encodeURIComponent(id)}`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  return data.contact;
+}
+
 export async function createBusinessContact({
   contractorProfileId,
   partyType = "PERSON",
