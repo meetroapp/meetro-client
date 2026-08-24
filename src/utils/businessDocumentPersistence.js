@@ -57,7 +57,9 @@ function fingerprintText(value) {
 
 function fingerprintTotal(total, quantity, price) {
   const saved = fingerprintText(total);
-  if (saved) return saved;
+  // QuoteBuilder projects untouched placeholder rows with a numeric zero total.
+  // That zero is calculated system state, not professional-authored pricing.
+  if (saved && Number(saved) !== 0) return saved;
   const quantityNumber = Number(fingerprintText(quantity));
   const priceNumber = Number(fingerprintText(price));
   return Number.isFinite(quantityNumber) && Number.isFinite(priceNumber) &&

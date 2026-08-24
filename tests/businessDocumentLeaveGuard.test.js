@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createServer } from "vite";
 
 import {
   buildBusinessDocumentSavePayload,
@@ -8,9 +11,11 @@ import {
   businessDocumentSnapshotFingerprint,
   hasMeaningfulBusinessDocumentDraft,
 } from "../src/utils/businessDocumentPersistence.js";
+import { createInvoiceContinuityDraft } from "../src/utils/businessDocumentWorkspace.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workspace = read("src/components/UnifiedBusinessDocumentWorkspace.jsx");
+const quoteBuilder = read("src/pages/QuoteBuilder.jsx");
 
 const CONTACT_ID = "11111111-1111-4111-8111-111111111111";
 const RELATIONSHIP_ID = "22222222-2222-4222-8222-222222222222";
@@ -50,6 +55,116 @@ function blankInvoicePayload(overrides = {}) {
   });
 }
 
+function initializedWorkspaceQuote() {
+  return {
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    customerAddress: "",
+    customerLocation: "",
+    projectTitle: "",
+    projectDescription: "",
+    recommendedSolution: "",
+    quoteNumber: "",
+    quoteDate: "2026-08-24",
+    lineItems: [{ id: "quote-line-0", description: "", quantity: "1", unitPrice: "", total: 0 }],
+    materialItems: [{ id: "material-line-0", name: "", quantity: "", cost: "", total: 0, notes: "" }],
+    laborItems: [{ id: "labor-line-0", description: "Labor", hours: "", rate: "", total: 0 }],
+    total: 0,
+    totalOverride: "",
+    terms: "",
+    estimatedDuration: "",
+    notes: "",
+    agreement: {},
+    canonicalStatus: "DRAFT",
+  };
+}
+
+function initializedWorkspaceDirtyState(quote) {
+  const invoice = {
+    ...createInvoiceContinuityDraft({ job: {}, quote }),
+    invoiceNumber: "",
+    invoiceDate: "2026-08-24",
+    lineItems: [],
+  };
+  const quotePayload = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: quote,
+  });
+  const invoicePayload = buildBusinessDocumentSavePayload({
+    documentType: "invoice",
+    content: invoice,
+  });
+  return {
+    quote: businessDocumentSavePresentation({
+      hasMeaningfulContent: hasMeaningfulBusinessDocumentDraft(quotePayload),
+    }).dirty,
+    invoice: businessDocumentSavePresentation({
+      hasMeaningfulContent: hasMeaningfulBusinessDocumentDraft(invoicePayload),
+    }).dirty,
+  };
+}
+
+test("actual initialized Quote and Invoice workspaces render clean and leave unguarded", async () => {
+  assert.match(
+    quoteBuilder,
+    /lineItems: lineItems\.map\(\(item\) => \(\{ \.\.\.item, total: getEditableRowTotal\(item\) \}\)\)/
+  );
+  const quote = initializedWorkspaceQuote();
+  const dirty = initializedWorkspaceDirtyState(quote);
+  assert.deepEqual(dirty, { quote: false, invoice: false });
+
+  const previousStorage = globalThis.localStorage;
+  const storage = new Map([["activeAccountMode", "business"]]);
+  globalThis.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, String(value)),
+    removeItem: (key) => storage.delete(key),
+  };
+  const vite = await createServer({
+    appType: "custom",
+    logLevel: "silent",
+    server: { middlewareMode: true, hmr: false },
+  });
+
+  try {
+    const { default: Workspace } = await vite.ssrLoadModule(
+      "/src/components/UnifiedBusinessDocumentWorkspace.jsx"
+    );
+    const renderWorkspace = (initialDocument, workspaceQuote = quote) => renderToStaticMarkup(
+      React.createElement(Workspace, {
+        setPage: () => {},
+        initialDocument,
+        job: {},
+        quote: workspaceQuote,
+        onApplyQuotePatch: () => {},
+        onAddPhotos: () => {},
+        onBack: () => {},
+      })
+    );
+
+    for (const documentType of ["quote", "invoice"]) {
+      const markup = renderWorkspace(documentType);
+      assert.match(markup, /business-document-save-status[^>]*>Not saved<\/div>/);
+      assert.doesNotMatch(markup, /Unsaved changes/);
+      assert.doesNotMatch(markup, /Save changes before leaving\?/);
+    }
+
+    const editedMarkup = renderWorkspace("quote", {
+      ...quote,
+      projectDescription: "Repair the damaged section.",
+    });
+    assert.match(
+      editedMarkup,
+      /business-document-save-status[^>]*>Unsaved changes<\/div>/
+    );
+  } finally {
+    await vite.close();
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
+});
+
 test("untouched blank Quote and Invoice remain clean despite system initialization", () => {
   const quote = blankQuotePayload();
   const invoice = blankInvoicePayload();
@@ -78,6 +193,7 @@ test("meaningful document fields and semantic rows trigger the unsaved guard", (
     blankQuotePayload({ content: { totalOverride: "100" } }),
     blankQuotePayload({ content: { agreement: { exclusions: ["Painting"] } } }),
     blankQuotePayload({ content: { lineItems: [{ id: "quote-line-0", description: "Repair", quantity: "1", unitPrice: "100", total: "100" }] } }),
+    blankQuotePayload({ content: { lineItems: [{ id: "quote-line-0", description: "No-charge inspection", quantity: "1", unitPrice: "", total: 0 }] } }),
     blankInvoicePayload({ content: { paymentTerms: "Due on receipt" } }),
   ]) {
     assert.equal(hasMeaningfulBusinessDocumentDraft(payload), true);
