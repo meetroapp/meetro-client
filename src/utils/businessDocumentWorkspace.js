@@ -45,6 +45,35 @@ const STRONG_DOCUMENT_FIELD_PHRASE =
 const STRONG_CUSTOMER_DECLARATION =
   /(?:^|[\n\r.!?;]\s*)(?:[Cc]ustomer|[Cc]lient)\s+is\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+){1,3}(?=[.!?;,\n\r]|$|\s+(?:project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:)/;
 
+const NATURAL_DOCUMENT_SCOPE_FACT =
+  /(?:^|[.!?]\s+)(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b/i;
+const NATURAL_DOCUMENT_EMAIL_FACT = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const NATURAL_DOCUMENT_PHONE_FACT = /(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}/;
+const NATURAL_DOCUMENT_PRICE_FACT =
+  /(?:^|[.!?;]\s*)(?:final\s+(?:price|quote)|quote\s+total|project\s+price|price|total|amount)\s*(?:is|to|:)?\s*\$?\s*[\d,.]+/i;
+const NATURAL_DOCUMENT_DURATION_FACT =
+  /(?:^|[.!?;]\s*)(?:about\s+|around\s+|approximately\s+)?(?:should\s+take\s+|takes?\s+|(?:estimated\s+)?duration\s*(?:is|:)?\s*)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s+(?:hours?|hrs?|days?|weeks?)/i;
+
+function hasNaturalBusinessDocumentFactBundle(instruction) {
+  const text = String(instruction || "").trim();
+  if (
+    !text ||
+    text.includes("?") ||
+    QUESTION_LEAD.test(text) ||
+    ANALYSIS_REQUEST.test(text)
+  ) {
+    return false;
+  }
+  if (!NATURAL_DOCUMENT_SCOPE_FACT.test(text)) return false;
+  const suppliedFacts = [
+    NATURAL_DOCUMENT_EMAIL_FACT,
+    NATURAL_DOCUMENT_PHONE_FACT,
+    NATURAL_DOCUMENT_PRICE_FACT,
+    NATURAL_DOCUMENT_DURATION_FACT,
+  ].filter((pattern) => pattern.test(text)).length;
+  return suppliedFacts >= 2;
+}
+
 const DECLARATIVE_DURATION_INPUT =
   /^(?:about\s+|around\s+|approximately\s+)?(?:should\s+take\s+|takes?\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s+(?:hours?|hrs?|days?|weeks?)\.?$/i;
 
@@ -64,7 +93,8 @@ export function hasStrongBusinessDocumentInput(instruction) {
     (
       STRONG_DOCUMENT_FIELD_LABEL.test(text) ||
       STRONG_DOCUMENT_FIELD_PHRASE.test(text) ||
-      STRONG_CUSTOMER_DECLARATION.test(text)
+      STRONG_CUSTOMER_DECLARATION.test(text) ||
+      hasNaturalBusinessDocumentFactBundle(text)
     )
   );
 }
@@ -247,7 +277,23 @@ export function resolveBusinessDocumentConversationMessage({
   }
 
   if (intent === "ASK_MEETRO") {
-    return Object.freeze({ capability: "ASK_MEETRO", intent, patch: Object.freeze({}), analysisSessionActive });
+    const explicitAnalysisOrQuestion =
+      text.includes("?") ||
+      QUESTION_LEAD.test(text) ||
+      ANALYSIS_REQUEST.test(text) ||
+      CONVERSATIONAL_REQUEST.test(text);
+    return Object.freeze({
+      capability:
+        analysisSessionActive || explicitAnalysisOrQuestion
+          ? "ASK_MEETRO"
+          : "CLARIFICATION_REQUIRED",
+      intent:
+        analysisSessionActive || explicitAnalysisOrQuestion
+          ? intent
+          : "CLARIFICATION_REQUIRED",
+      patch: Object.freeze({}),
+      analysisSessionActive,
+    });
   }
 
   const patch = buildBusinessDocumentMutationPatch({
@@ -261,7 +307,7 @@ export function resolveBusinessDocumentConversationMessage({
     !INCOMPLETE_DOCUMENT_MUTATION.test(text);
 
   return Object.freeze({
-    capability: validMutation ? "DOCUMENT_MUTATION" : "ASK_MEETRO",
+    capability: validMutation ? "DOCUMENT_MUTATION" : "CLARIFICATION_REQUIRED",
     intent: validMutation ? intent : "CLARIFICATION_REQUIRED",
     patch: validMutation ? patch : Object.freeze({}),
     analysisSessionActive,

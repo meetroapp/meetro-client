@@ -79,7 +79,7 @@ test("required alternating Meetro and Quote sequence stays in one conversation",
     "ASK_MEETRO",
     "DOCUMENT_MUTATION",
     "ASK_MEETRO",
-    "ASK_MEETRO",
+    "CLARIFICATION_REQUIRED",
     "ASK_MEETRO",
   ];
 
@@ -99,7 +99,7 @@ test("required alternating Meetro and Quote sequence stays in one conversation",
 
   assert.deepEqual(capabilities, expectedCapabilities);
   assert.equal(state.acceptedMessages.length, messages.length);
-  assert.equal(state.assistantReplies, 5);
+  assert.equal(state.assistantReplies, 4);
   assert.equal(state.documentMutations, 3);
   assert.equal(state.draft.customerName, "Jack Smith");
   assert.equal(state.draft.totalOverride, "2650");
@@ -302,7 +302,7 @@ test("editing the same customer instruction replaces its effect and survives sav
   assert.equal(restored.jobAnalysisSessionId, "analysis-1");
 });
 
-test("incomplete Quote mutation remains an accepted conversational clarification", () => {
+test("incomplete Quote mutation requests clarification without silently starting Job Analysis", () => {
   const state = createConversationState({
     analysisSessionId: "analysis-1",
     draft: { customerName: "Jack Smith", totalOverride: "2650" },
@@ -315,11 +315,11 @@ test("incomplete Quote mutation remains an accepted conversational clarification
     hasActiveAnalysisSession: true,
   });
 
-  assert.equal(next.lastCapability, "ASK_MEETRO");
+  assert.equal(next.lastCapability, "CLARIFICATION_REQUIRED");
   assert.equal(resolution.intent, "CLARIFICATION_REQUIRED");
   assert.equal(resolution.analysisSessionActive, true);
   assert.equal(next.acceptedMessages.length, 1);
-  assert.equal(next.assistantReplies, 1);
+  assert.equal(next.assistantReplies, 0);
   assert.deepEqual(next.draft, state.draft);
   assert.equal(next.documentMutations, 0);
 });

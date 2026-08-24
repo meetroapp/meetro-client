@@ -406,7 +406,7 @@ test("per-message resolution validates structured mutation before choosing a cap
     instruction: "Change the amount.",
     current: quote,
     hasActiveAnalysisSession: true,
-  }).capability, "ASK_MEETRO");
+  }).capability, "CLARIFICATION_REQUIRED");
   assert.deepEqual(resolveBusinessDocumentConversationMessage({
     documentType: "quote",
     instruction: "Change the amount.",
@@ -522,6 +522,89 @@ test("same-line colon-labeled Quote facts escape active analysis without broaden
       observation
     );
   }
+});
+
+test("natural multi-field Quote facts stay in Build Quote while actual analysis requests stay governed", () => {
+  const instruction = "Carlos Rivera QA, 239-555-0174, carlos.rivera.qa@example.test, Cape Coral QA. Repair the damaged section. Price $100. Should take about one day.";
+
+  assert.equal(
+    classifyBusinessDocumentConversationIntent(instruction),
+    "DOCUMENT_INPUT"
+  );
+  const resolution = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction,
+    current: {},
+    hasActiveAnalysisSession: false,
+  });
+  assert.equal(resolution.capability, "DOCUMENT_MUTATION");
+  assert.equal(resolution.analysisSessionActive, false);
+  assert.deepEqual(resolution.patch, {
+    projectDescription: "Repair the damaged section.",
+    recommendedSolution: "Repair the damaged section.",
+    projectTitle: "Repair the damaged section",
+    customerName: "Carlos Rivera QA",
+    customerEmail: "carlos.rivera.qa@example.test",
+    customerPhone: "239-555-0174",
+    customerAddress: "Cape Coral QA",
+    customerLocation: "Cape Coral QA",
+    timeline: "1 day",
+    estimatedDuration: "1 day",
+    totalOverride: "100",
+  });
+
+  for (const request of [
+    "What do you think is wrong here?",
+    "Analyze these photos.",
+    "What materials would I need?",
+    "How should this be repaired?",
+    "What still needs verification?",
+  ]) {
+    const analysis = resolveBusinessDocumentConversationMessage({
+      documentType: "quote",
+      instruction: request,
+      current: resolution.patch,
+      hasActiveAnalysisSession: false,
+    });
+    assert.equal(analysis.capability, "ASK_MEETRO", request);
+    assert.deepEqual(analysis.patch, {}, request);
+  }
+});
+
+test("ambiguous statements require clarification instead of silently starting Job Analysis", () => {
+  const resolution = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "The wall may need work.",
+    current: { projectDescription: "Existing scope." },
+    hasActiveAnalysisSession: false,
+  });
+  assert.equal(resolution.capability, "CLARIFICATION_REQUIRED");
+  assert.equal(resolution.intent, "CLARIFICATION_REQUIRED");
+  assert.deepEqual(resolution.patch, {});
+
+  const activeContinuation = resolveBusinessDocumentConversationMessage({
+    documentType: "quote",
+    instruction: "The wall may need work.",
+    current: { projectDescription: "Existing scope." },
+    hasActiveAnalysisSession: true,
+  });
+  assert.equal(activeContinuation.capability, "ASK_MEETRO");
+
+  const submitBlock = workspace.slice(
+    workspace.indexOf("async function submitInstruction"),
+    workspace.indexOf("function focusComposer")
+  );
+  const clarificationStart = submitBlock.indexOf(
+    'resolution.capability === "CLARIFICATION_REQUIRED"'
+  );
+  const askStart = submitBlock.indexOf(
+    'resolution.capability === "ASK_MEETRO"'
+  );
+  assert.ok(clarificationStart >= 0);
+  assert.ok(clarificationStart < askStart);
+  const clarificationGuard = submitBlock.slice(clarificationStart, askStart);
+  assert.match(clarificationGuard, /businessDocumentClarificationNeeded/);
+  assert.doesNotMatch(clarificationGuard, /submitAskMeetro|buildBusinessDocumentConversationTurn|reconcileDocument/);
 });
 
 test("knee-wall document facts update only supported working-draft fields and can alternate with private analysis", () => {

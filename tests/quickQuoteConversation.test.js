@@ -1354,6 +1354,38 @@ test("duration, generic materials, final price, and targeted material revisions 
   assert.equal(revision.totalOverride, undefined);
 });
 
+test("one natural professional fact bundle maps contact and Quote facts without polluting scope", () => {
+  const prompt = "Carlos Rivera QA, 239-555-0174, carlos.rivera.qa@example.test, Cape Coral QA. Repair the damaged section. Price $100. Should take about one day.";
+  const patch = buildQuickQuoteConversationPatch({ prompt });
+
+  assert.equal(patch.customerName, "Carlos Rivera QA");
+  assert.equal(patch.customerPhone, "239-555-0174");
+  assert.equal(patch.customerEmail, "carlos.rivera.qa@example.test");
+  assert.equal(patch.customerAddress, "Cape Coral QA");
+  assert.equal(patch.customerLocation, "Cape Coral QA");
+  assert.equal(patch.projectDescription, "Repair the damaged section.");
+  assert.equal(patch.recommendedSolution, "Repair the damaged section.");
+  assert.equal(patch.totalOverride, "100");
+  assert.equal(patch.estimatedDuration, "1 day");
+
+  const scope = `${patch.projectDescription} ${patch.recommendedSolution}`;
+  assert.doesNotMatch(scope, /Carlos Rivera|239-555-0174|example\.test|Cape Coral/i);
+  for (const unresolved of ["materialItems", "laborItems", "depositTerms", "terms", "notes"]) {
+    assert.equal(Object.hasOwn(patch, unresolved), false, unresolved);
+  }
+});
+
+test("targeted customer mutation remains supported after natural fact-bundle restoration", () => {
+  const patch = buildQuickQuoteConversationPatch({
+    prompt: "Customer Carlos Rivera",
+    current: { projectDescription: "Existing scope.", totalOverride: "100" },
+    revision: true,
+  });
+  assert.equal(patch.customerName, "Carlos Rivera");
+  assert.equal(patch.totalOverride, undefined);
+  assert.equal(patch.projectDescription, undefined);
+});
+
 test("secondary door conversation keeps material and installation rows distinct", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt: "Quote for Bob Hamel. Replace the front door. Door costs $450 and installation is $280. Should take one day. 50% deposit.",

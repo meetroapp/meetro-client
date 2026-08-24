@@ -126,6 +126,7 @@ test("Prefill field parity copy is complete in every supported language", () => 
     "businessDocumentPrefillQuoteDetails",
     "businessDocumentPrefillInvoiceDetails",
     "businessDocumentPrefillDetailsHelp",
+    "businessDocumentClarificationNeeded",
     "businessDocumentFieldCustomer",
     "businessDocumentFieldCustomerEmail",
     "businessDocumentFieldCustomerPhone",

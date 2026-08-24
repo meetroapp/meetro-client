@@ -133,6 +133,60 @@ function explicitCustomerLocation(text) {
   return cleanText(match?.[1] || "");
 }
 
+const CUSTOMER_EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const CUSTOMER_PHONE_PATTERN = /(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}/;
+const NATURAL_SCOPE_START = /(?:^|[.!?]\s+)((?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b[\s\S]*)/i;
+
+function naturalProfessionalFactBundle(text) {
+  const scopeMatch = text.match(NATURAL_SCOPE_START);
+  if (!scopeMatch) return Object.freeze({});
+
+  const scopeStart = scopeMatch.index + scopeMatch[0].indexOf(scopeMatch[1]);
+  const contactText = cleanText(text.slice(0, scopeStart)).replace(/[.!?;]+$/, "");
+  const email = cleanText(contactText.match(CUSTOMER_EMAIL_PATTERN)?.[0] || "");
+  const phone = cleanText(contactText.match(CUSTOMER_PHONE_PATTERN)?.[0] || "");
+  if (!email || !phone) return Object.freeze({});
+
+  const parts = contactText
+    .split(",")
+    .map((part) => cleanText(part).replace(/^[.!?;\s]+|[.!?;\s]+$/g, ""))
+    .filter(Boolean)
+    .filter((part) => !CUSTOMER_EMAIL_PATTERN.test(part) && !CUSTOMER_PHONE_PATTERN.test(part));
+  if (parts.length < 2) return Object.freeze({});
+
+  const customerName = parts[0];
+  const nameWords = customerName.match(/[A-Za-zÀ-ÖØ-öø-ÿ'’-]+/g) || [];
+  if (nameWords.length < 2 || nameWords.length > 4 || /\d/.test(customerName)) {
+    return Object.freeze({});
+  }
+
+  const customerAddress = cleanText(parts.slice(1).join(", "));
+  if (!customerAddress) return Object.freeze({});
+
+  return Object.freeze({
+    customerName,
+    customerEmail: email,
+    customerPhone: phone,
+    customerAddress,
+    scopeText: cleanText(text.slice(scopeStart)),
+  });
+}
+
+function explicitCustomerEmail(text) {
+  return cleanText(text.match(CUSTOMER_EMAIL_PATTERN)?.[0] || "");
+}
+
+function explicitCustomerPhone(text) {
+  return cleanText(text.match(CUSTOMER_PHONE_PATTERN)?.[0] || "");
+}
+
+function explicitCustomerAddress(text) {
+  const match = text.match(
+    /\b(?:customer\s+address|service\s+(?:address|area)|address|location)\s*(?:is|:)?\s*([^.!?;]+)/i
+  );
+  return cleanText(match?.[1] || "");
+}
+
 function normalizeDurationNumberWords(value) {
   const words = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
   return cleanText(value)
@@ -259,6 +313,9 @@ function explicitLaborItems(text) {
 
 function cleanScope(text) {
   let scope = text;
+  scope = scope.replace(CUSTOMER_EMAIL_PATTERN, "");
+  scope = scope.replace(CUSTOMER_PHONE_PATTERN, "");
+  scope = scope.replace(/\b(?:customer\s+address|service\s+(?:address|area)|address|location)\s*(?:is|:)?\s*[^.!?;]+[.!?;]?/gi, "");
   scope = scope.replace(/\b(?:set|change)\s+(?:the\s+)?(?:customer|client)(?:\s+name)?\s+to\s+[^.!?;]+[.!?;]?/i, "");
   scope = scope.replace(/\b(?:quote\s+for|customer(?:\s+name)?\s*(?:is|:)|client(?:\s+name)?\s*(?:is|:))\s+[^.!?;]+[.!?;]?/i, "");
   scope = scope.replace(/\b(?:customer|client)\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=[.!?;]|$)/i, "");
@@ -287,7 +344,7 @@ function cleanScope(text) {
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|de|a|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:estimated\s+)?duration\s+(?:is|:)?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
-  scope = scope.replace(/\b(?:about|around|approximately|should\s+take|takes?)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
+  scope = scope.replace(/\b(?:(?:should\s+take|takes?)\s+)?(?:about\s+|around\s+|approximately\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
   scope = scope.replace(/\b\d{1,3}\s*%\s*(?:deposit|depósito|acompte|entrada|sinal)(?:\s+required)?[.!]?/gi, "");
   scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:note|condition)\s*:\s*[^.!?]+[.!]?/gi, "");
@@ -360,7 +417,13 @@ export function buildQuickQuoteConversationPatch({
   const materialAmount = explicitMaterialAmount(instruction);
   const laborAmount = explicitLaborAmount(instruction);
   const laborItems = explicitLaborItems(instruction);
-  const customerName = cleanText(structured.customer || explicitCustomerName(instruction));
+  const naturalFacts = naturalProfessionalFactBundle(instruction);
+  const customerName = cleanText(
+    structured.customer || explicitCustomerName(instruction) || naturalFacts.customerName
+  );
+  const customerEmail = explicitCustomerEmail(instruction) || naturalFacts.customerEmail || "";
+  const customerPhone = explicitCustomerPhone(instruction) || naturalFacts.customerPhone || "";
+  const customerAddress = explicitCustomerAddress(instruction) || naturalFacts.customerAddress || "";
   const customerLocation = explicitCustomerLocation(instruction);
   const duration = normalizeDurationNumberWords(
     structured.duration || explicitDuration(instruction)
@@ -374,7 +437,7 @@ export function buildQuickQuoteConversationPatch({
   const scope = structuredScope || replacement || (
     Object.keys(structured).length
       ? ""
-      : cleanScope(instruction)
+      : cleanScope(naturalFacts.scopeText || instruction)
   );
 
   if (structured.project) {
@@ -390,9 +453,17 @@ export function buildQuickQuoteConversationPatch({
       }
     }
     if (customerName) patch.customerName = customerName;
+    if (customerEmail) patch.customerEmail = customerEmail;
+    if (customerPhone) patch.customerPhone = customerPhone;
+    if (customerAddress) patch.customerAddress = customerAddress;
+    if (customerAddress && !customerLocation) patch.customerLocation = customerAddress;
     if (customerLocation) patch.customerLocation = customerLocation;
   }
   if (revision && customerName) patch.customerName = customerName;
+  if (revision && customerEmail) patch.customerEmail = customerEmail;
+  if (revision && customerPhone) patch.customerPhone = customerPhone;
+  if (revision && customerAddress) patch.customerAddress = customerAddress;
+  if (revision && customerAddress && !customerLocation) patch.customerLocation = customerAddress;
   if (revision && customerLocation) patch.customerLocation = customerLocation;
 
   if (structuredScope) {

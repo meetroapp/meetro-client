@@ -2363,6 +2363,11 @@ export default function UnifiedBusinessDocumentWorkspace({
       return true;
     }
 
+    if (resolution.capability === "CLARIFICATION_REQUIRED") {
+      setNotice(t("businessDocumentClarificationNeeded", language));
+      return false;
+    }
+
     if (
       !existingId &&
       resolution.capability === "ASK_MEETRO"
