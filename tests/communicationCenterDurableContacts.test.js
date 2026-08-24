@@ -10,13 +10,69 @@ const apiSource = readFileSync(
   new URL("../src/utils/businessContactsApi.js", import.meta.url),
   "utf8"
 );
+const messagesLanguageSource = readFileSync(
+  new URL("../src/utils/messagesWorkflowLanguage.js", import.meta.url),
+  "utf8"
+);
 
 test("Communication Center loads durable business Contacts alongside unchanged conversations", () => {
   assert.match(messagesSource, /listBusinessContacts\(\{/);
-  assert.match(messagesSource, /status: "ALL"/);
+  assert.match(messagesSource, /messageSection === "contacts" \? contactStatusFilter : "ACTIVE"/);
+  assert.match(messagesSource, /status,/);
   assert.match(messagesSource, /messageSection === "contacts" \? searchQuery : ""/);
   assert.match(messagesSource, /const liveIdentityQuotes = quotes\.map/);
-  assert.match(messagesSource, /durableBusinessContacts\.map\(projectBusinessContactRecord\)/);
+  assert.match(messagesSource, /contactsForCurrentWorkspace\.map\(projectBusinessContactRecord\)/);
+});
+
+test("Contacts default to ACTIVE and expose a bounded ARCHIVED directory", () => {
+  assert.match(messagesSource, /useState\("ACTIVE"\)/);
+  assert.match(messagesSource, /\["ACTIVE", "messagesActiveContacts"\]/);
+  assert.match(messagesSource, /\["ARCHIVED", "messagesArchivedContacts"\]/);
+  assert.match(messagesSource, /aria-pressed=\{contactStatusFilter === status\}/);
+  assert.match(messagesSource, /onClick=\{\(\) => setContactStatusFilter\(status\)\}/);
+  assert.match(messagesSource, /setActiveDurableBusinessContacts\(contacts\)/);
+  assert.match(messagesSource, /activeContactRelationshipLayer\.relationships/);
+  assert.match(messagesSource, /contactStatusFilter, messageSection, searchQuery/);
+  assert.match(apiSource, /status = "ACTIVE"/);
+  assert.match(apiSource, /contact\?\.status === requestedStatus/);
+});
+
+test("archived Contact detail remains readable without another Archive action", () => {
+  assert.match(messagesSource, /record\.durableBusinessContact && record\.archived/);
+  assert.match(messagesSource, /Archived business Contact/);
+  assert.match(messagesSource, /record\.durableBusinessContact && !record\.archived[\s\S]*Archive Contact/);
+  assert.doesNotMatch(apiSource, /unarchive|restoreBusinessContact|deleteBusinessContact/);
+});
+
+test("Saved Conversation History is conversation-scoped and placed before lists", () => {
+  assert.match(
+    messagesSource,
+    /const savedHistoryVisible =\s*messageSection === "conversations" && savedHistoryOpen;/
+  );
+  assert.match(
+    messagesSource,
+    /messageSection === "conversations" && !savedHistoryVisible/
+  );
+  assert.match(messagesSource, /data-conversation-history-navigation="true"/);
+  assert.match(messagesSource, /\{savedHistoryVisible && \(/);
+  assert.doesNotMatch(messagesSource, /\{savedHistoryOpen && \(/);
+  assert.ok(
+    messagesSource.indexOf('data-conversation-history-navigation="true"') <
+      messagesSource.indexOf("<div style={conversationList}>")
+  );
+});
+
+test("Import Contacts describes durable Contacts rather than relationships", () => {
+  assert.match(
+    messagesLanguageSource,
+    /Import creates a saved business Contact\. You can invite them to Meetro separately\./
+  );
+  assert.doesNotMatch(messagesLanguageSource, /relationship placeholder/i);
+  assert.match(
+    messagesSource,
+    /<p style=\{filterEyebrow\}>\{t\("messagesSectionContacts", language\)\}<\/p>[\s\S]*messagesImportDescription/
+  );
+  assert.doesNotMatch(messagesSource, /Review these relationship placeholders/);
 });
 
 test("new manual Contacts use governed create and role assignment without registry persistence", () => {

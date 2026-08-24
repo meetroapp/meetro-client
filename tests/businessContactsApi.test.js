@@ -83,6 +83,43 @@ test("durable Contact list uses the governed business-owned search contract", as
   assert.equal(calls[0][1].method, "GET");
 });
 
+test("durable Contact list defaults to ACTIVE and excludes archived records", async () => {
+  const calls = [];
+  const contacts = await listBusinessContacts({
+    contractorProfileId: 12,
+    fetcher: async (...args) => {
+      calls.push(args);
+      return response({
+        success: true,
+        contacts: [contact(), contact({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", status: "ARCHIVED" })],
+      });
+    },
+  });
+
+  assert.equal(contacts.length, 1);
+  assert.equal(contacts[0].status, "ACTIVE");
+  assert.match(calls[0][0], /status=ACTIVE/);
+});
+
+test("durable Contact list requests and returns ARCHIVED records explicitly", async () => {
+  const calls = [];
+  const contacts = await listBusinessContacts({
+    contractorProfileId: 12,
+    status: "ARCHIVED",
+    fetcher: async (...args) => {
+      calls.push(args);
+      return response({
+        success: true,
+        contacts: [contact(), contact({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", status: "ARCHIVED" })],
+      });
+    },
+  });
+
+  assert.equal(contacts.length, 1);
+  assert.equal(contacts[0].status, "ARCHIVED");
+  assert.match(calls[0][0], /status=ARCHIVED/);
+});
+
 test("Add Customer creates a durable Contact and explicitly assigns CUSTOMER", async () => {
   const calls = [];
   const fetcher = async (endpoint, options) => {

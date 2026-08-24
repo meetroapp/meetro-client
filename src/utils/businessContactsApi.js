@@ -201,7 +201,7 @@ export async function loadBusinessContactProfileId({ setPage, fetcher = authFetc
 export async function listBusinessContacts({
   contractorProfileId,
   search = "",
-  status = "ALL",
+  status = "ACTIVE",
   role = "",
   limit = 100,
   setPage,
@@ -215,9 +215,14 @@ export async function listBusinessContacts({
       message: "Your business profile is required before loading Contacts.",
     });
   }
+  const requestedStatus = ["ACTIVE", "ARCHIVED", "ALL"].includes(
+    text(status).toUpperCase()
+  )
+    ? text(status).toUpperCase()
+    : "ACTIVE";
   const params = new URLSearchParams({
     contractorProfileId: String(profileId),
-    status: text(status) || "ALL",
+    status: requestedStatus,
     limit: String(limit),
   });
   if (text(search)) params.set("search", text(search));
@@ -228,7 +233,11 @@ export async function listBusinessContacts({
     { setPage, fetcher }
   );
 
-  return Array.isArray(data.contacts) ? data.contacts : [];
+  const contacts = Array.isArray(data.contacts) ? data.contacts : [];
+
+  return requestedStatus === "ALL"
+    ? contacts
+    : contacts.filter((contact) => contact?.status === requestedStatus);
 }
 
 export async function createBusinessContact({

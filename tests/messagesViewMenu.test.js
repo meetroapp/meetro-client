@@ -313,7 +313,7 @@ test("Messages page wrappers initialize before relationship identity render can 
   );
 });
 
-test("Messages exposes Import Contacts as a reviewable relationship flow", () => {
+test("Messages exposes Import Contacts as a reviewable durable Contact flow", () => {
   const conversationActionsBlock = messagesSource.slice(
     messagesSource.indexOf("const CONVERSATION_SECTION_ACTIONS"),
     messagesSource.indexOf("const CONTACTS_SECTION_ACTIONS")
@@ -336,6 +336,8 @@ test("Messages exposes Import Contacts as a reviewable relationship flow", () =>
   assert.match(messagesSource, /messagesSelectAllContacts/);
   assert.match(messagesSource, /messagesReviewBeforeImport/);
   assert.match(messagesSource, /messagesImportDescription/);
+  assert.match(messagesSource, /messagesSectionContacts/);
+  assert.doesNotMatch(messagesSource, /relationship placeholders/);
   assert.match(messagesSource, /importBusinessContacts/);
   assert.doesNotMatch(messagesSource, /buildImportedContactRelationship/);
   assert.match(messagesSource, /setMessageSection\("contacts"\)/);
@@ -345,6 +347,8 @@ test("Messages keeps Saved Conversation History as secondary history, not a sect
   assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "messagesSavedHistoryTitle"\]/);
   assert.match(messagesSource, /messagesSecondaryActionsAria/);
   assert.match(messagesSource, /style=\{savedHistorySecondaryButton\}/);
+  assert.match(messagesSource, /messageSection === "conversations" && !savedHistoryVisible/);
+  assert.match(messagesSource, /data-conversation-history-navigation="true"/);
   assert.match(messagesSource, /SAVED_HISTORY_ACTION\[0\][\s\S]*t\(SAVED_HISTORY_ACTION\[1\], language\)/);
   assert.match(messagesSource, /messagesSavedManually/);
   assert.doesNotMatch(messagesSource, /return \[\.\.CONVERSATION_SECTION_ACTIONS, SAVED_HISTORY_ACTION\]/);
@@ -497,7 +501,7 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /setSavedHistoryOpen\(true\)/);
   assert.match(messagesSource, /messagesSavedHistoryTitle/);
   assert.match(messagesSource, /savedHistoryQuotes\.map/);
-  assert.match(messagesSource, /!savedHistoryOpen && \(/);
+  assert.match(messagesSource, /!savedHistoryVisible && \(/);
 });
 
 test("Messages renders an adaptive workspace without changing mobile conversation routing", () => {

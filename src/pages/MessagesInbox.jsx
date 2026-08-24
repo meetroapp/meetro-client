@@ -736,6 +736,8 @@ function MessagesInbox({ setPage, currentPage }) {
   const [contactInviteOptionsId, setContactInviteOptionsId] = useState("");
   const [contactEditDraft, setContactEditDraft] = useState(null);
   const [durableBusinessContacts, setDurableBusinessContacts] = useState([]);
+  const [activeDurableBusinessContacts, setActiveDurableBusinessContacts] = useState([]);
+  const [contactStatusFilter, setContactStatusFilter] = useState("ACTIVE");
   const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
   const [businessContactsLoading, setBusinessContactsLoading] = useState(false);
   const [businessContactSaving, setBusinessContactSaving] = useState(false);
@@ -743,12 +745,14 @@ function MessagesInbox({ setPage, currentPage }) {
   const contactImportFileRef = useRef(null);
   const relationshipIdentityReturnScrollRef = useRef(0);
   const activeContactCard = activeContactCardSnapshot;
+  const savedHistoryVisible =
+    messageSection === "conversations" && savedHistoryOpen;
   const focusedMessagesFlowOpen = Boolean(
     conversationStarter ||
       relationshipComposer ||
       contactImport ||
       ticketComposer ||
-      savedHistoryOpen ||
+      savedHistoryVisible ||
       activeContactCardId
   );
   const focusedConversationFlowOpen = Boolean(
@@ -841,6 +845,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setRelationshipComposer(null);
     setContactImport(null);
     setTicketComposer(null);
+    if (nextSection === "contacts") setContactStatusFilter("ACTIVE");
     localStorage.removeItem("meetroMessagesOpenSavedHistory");
     setSavedHistoryOpen(false);
   };
@@ -1016,11 +1021,13 @@ function MessagesInbox({ setPage, currentPage }) {
     const timeoutId = window.setTimeout(() => {
       if (activeAccountMode === "business") {
         void loadDurableBusinessContacts(
-          messageSection === "contacts" ? searchQuery : ""
+          messageSection === "contacts" ? searchQuery : "",
+          messageSection === "contacts" ? contactStatusFilter : "ACTIVE"
         );
       } else {
         businessContactLoadSequenceRef.current += 1;
         setDurableBusinessContacts([]);
+        setActiveDurableBusinessContacts([]);
         setBusinessContactProfileId(null);
         setBusinessContactsLoading(false);
       }
@@ -1028,7 +1035,8 @@ function MessagesInbox({ setPage, currentPage }) {
     const refreshContacts = () => {
       if (activeAccountMode === "business") {
         void loadDurableBusinessContacts(
-          messageSection === "contacts" ? searchQuery : ""
+          messageSection === "contacts" ? searchQuery : "",
+          messageSection === "contacts" ? contactStatusFilter : "ACTIVE"
         );
       }
     };
@@ -1040,7 +1048,7 @@ function MessagesInbox({ setPage, currentPage }) {
     };
     // The loader owns request sequencing and the current authenticated business.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountMode, messageSection, searchQuery]);
+  }, [activeAccountMode, contactStatusFilter, messageSection, searchQuery]);
 
   useEffect(() => {
     writeUnreadConversationCount(quotes);
@@ -1314,7 +1322,7 @@ function MessagesInbox({ setPage, currentPage }) {
     return loadedId;
   }
 
-  async function loadDurableBusinessContacts(search = "") {
+  async function loadDurableBusinessContacts(search = "", status = "ACTIVE") {
     if (activeAccountMode !== "business") return [];
     const requestSequence = ++businessContactLoadSequenceRef.current;
     setBusinessContactsLoading(true);
@@ -1324,11 +1332,12 @@ function MessagesInbox({ setPage, currentPage }) {
       const contacts = await listBusinessContacts({
         contractorProfileId,
         search,
-        status: "ALL",
+        status,
         setPage,
       });
       if (requestSequence !== businessContactLoadSequenceRef.current) return contacts;
       setDurableBusinessContacts(contacts);
+      if (status === "ACTIVE") setActiveDurableBusinessContacts(contacts);
       return contacts;
     } catch (error) {
       if (requestSequence !== businessContactLoadSequenceRef.current) return [];
@@ -2070,6 +2079,15 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (messageSection === "contacts") {
+      if (
+        activeAccountMode === "business" &&
+        contactStatusFilter === "ARCHIVED"
+      ) {
+        return {
+          title: t("messagesNoArchivedContacts", language),
+          text: t("messagesNoArchivedContactsText", language),
+        };
+      }
       return {
         title: t("messagesNoContacts", language),
         text: t("messagesNoContactsText", language),
@@ -2142,11 +2160,21 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const normalizedSearchQuery = normalizeMessageSearchText(searchQuery);
   const activeViewerRole = activeAccountMode === "business" ? "business" : "homeowner";
+  const contactsForCurrentWorkspace =
+    messageSection === "contacts"
+      ? durableBusinessContacts
+      : activeDurableBusinessContacts;
   const liveIdentityQuotes = quotes.map((quote) =>
     applyLiveConversationAvatar(quote, activeViewerRole)
   );
   liveIdentityQuotes.push(
-    ...durableBusinessContacts.map(projectBusinessContactRecord)
+    ...contactsForCurrentWorkspace.map(projectBusinessContactRecord)
+  );
+  const activeContactIdentityQuotes = quotes.map((quote) =>
+    applyLiveConversationAvatar(quote, activeViewerRole)
+  );
+  activeContactIdentityQuotes.push(
+    ...activeDurableBusinessContacts.map(projectBusinessContactRecord)
   );
   const savedHistoryQuotes = liveIdentityQuotes
     .filter(isSavedChatHistoryConversation)
@@ -2156,6 +2184,14 @@ function MessagesInbox({ setPage, currentPage }) {
     activeMode: activeAccountMode === "business" ? "business" : "personal",
     activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
   });
+  const activeContactRelationshipLayer = createRelationshipLayerModel(
+    activeContactIdentityQuotes,
+    {
+      viewerRole: activeViewerRole,
+      activeMode: activeAccountMode === "business" ? "business" : "personal",
+      activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
+    }
+  );
   const currentSectionShowsCategories = false;
   const sectionRelationships = getMessageSectionRelationships(
     messageSection,
@@ -2811,7 +2847,7 @@ function MessagesInbox({ setPage, currentPage }) {
     if (section === "contacts") {
       return getMessageSectionRelationships(
         section,
-        relationshipLayer.relationships,
+        activeContactRelationshipLayer.relationships,
         { applyCategory: false }
       ).length;
     }
@@ -4352,7 +4388,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
     updateContactImport({
       step: "review",
-      notice: "Review these relationship placeholders before importing.",
+      notice: "Review these business Contacts before importing.",
     });
   }
 
@@ -4426,10 +4462,19 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function upsertDurableBusinessContact(contact) {
     if (!contact?.id) return;
-    setDurableBusinessContacts((current) => [
-      contact,
-      ...current.filter((item) => String(item.id) !== String(contact.id)),
-    ]);
+    const isActive = contact.status === "ACTIVE";
+    const matchesCurrentFilter = contact.status === contactStatusFilter;
+    const withoutContact = (current) =>
+      current.filter((item) => String(item.id) !== String(contact.id));
+
+    setActiveDurableBusinessContacts((current) =>
+      isActive ? [contact, ...withoutContact(current)] : withoutContact(current)
+    );
+    setDurableBusinessContacts((current) =>
+      matchesCurrentFilter
+        ? [contact, ...withoutContact(current)]
+        : withoutContact(current)
+    );
   }
 
   async function saveRelationshipComposer(event) {
@@ -5264,6 +5309,65 @@ function MessagesInbox({ setPage, currentPage }) {
             )}
           </div>
 
+          {messageSection === "contacts" && activeAccountMode === "business" && (
+            <div
+              style={contactStatusNavigation}
+              role="group"
+              aria-label={t("messagesContactStatusAria", language)}
+            >
+              {[
+                ["ACTIVE", "messagesActiveContacts"],
+                ["ARCHIVED", "messagesArchivedContacts"],
+              ].map(([status, label]) => (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={contactStatusFilter === status}
+                  style={{
+                    ...contactStatusButton,
+                    ...(contactStatusFilter === status
+                      ? activeContactStatusButton
+                      : {}),
+                  }}
+                  onClick={() => setContactStatusFilter(status)}
+                >
+                  {t(label, language)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {messageSection === "conversations" && !savedHistoryVisible && (
+            <div
+              data-conversation-history-navigation="true"
+              style={conversationHistoryNavigation}
+              aria-label={t("messagesSecondaryActionsAria", language)}
+            >
+              <button
+                type="button"
+                style={savedHistorySecondaryButton}
+                className="meetro-visual-surface"
+                onClick={() =>
+                  openRelationshipAction(
+                    SAVED_HISTORY_ACTION[0],
+                    t(SAVED_HISTORY_ACTION[1], language)
+                  )
+                }
+              >
+                <span style={savedHistorySecondaryTitle}>
+                  {t("messagesSavedHistoryTitle", language)}
+                </span>
+                <span style={savedHistorySecondaryMeta}>
+                  {savedHistoryQuotes.length > 0
+                    ? t("messagesSavedCount", language, {
+                        count: savedHistoryQuotes.length,
+                      })
+                    : t("messagesSavedManually", language)}
+                </span>
+              </button>
+            </div>
+          )}
+
           {isSplitPane &&
             !isWideWorkspace &&
             !activeEmergencyContextMatchesConversation && (
@@ -5483,7 +5587,7 @@ function MessagesInbox({ setPage, currentPage }) {
         >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>{t("messagesRelationships", language)}</p>
+              <p style={filterEyebrow}>{t("messagesSectionContacts", language)}</p>
               <h2 style={relationshipPanelTitle}>{t("messagesImportContacts", language)}</h2>
               <p style={relationshipSubtitle}>
                 {t("messagesImportDescription", language)}
@@ -6070,7 +6174,7 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {savedHistoryOpen && (
+      {savedHistoryVisible && (
         <section
           style={relationshipPanel}
           aria-label={t("messagesSavedHistoryTitle", language)}
@@ -6123,7 +6227,7 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {!savedHistoryOpen && (
+      {!savedHistoryVisible && (
       <div
         data-communication-columns={isWideWorkspace ? "three" : isSplitPane ? "two" : "one"}
         style={
@@ -6284,27 +6388,6 @@ function MessagesInbox({ setPage, currentPage }) {
               </div>
 	              );
 	            })}
-	          </div>
-
-          <div style={messagesSecondaryActions} aria-label={t("messagesSecondaryActionsAria", language)}>
-	            <button
-	              type="button"
-	              style={savedHistorySecondaryButton}
-                className="meetro-visual-surface"
-	              onClick={() =>
-                    openRelationshipAction(
-                      SAVED_HISTORY_ACTION[0],
-                      t(SAVED_HISTORY_ACTION[1], language)
-                    )
-                  }
-	            >
-              <span style={savedHistorySecondaryTitle}>{t("messagesSavedHistoryTitle", language)}</span>
-	              <span style={savedHistorySecondaryMeta}>
-	                {savedHistoryQuotes.length > 0
-                  ? t("messagesSavedCount", language, { count: savedHistoryQuotes.length })
-                  : t("messagesSavedManually", language)}
-	              </span>
-	            </button>
 	          </div>
 	        </div>
 
@@ -7407,6 +7490,54 @@ const searchClearButton = {
   cursor: "pointer",
 };
 
+const contactStatusNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  marginBottom: "12px",
+  padding: "4px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.62)",
+  border: "1px solid rgba(148,163,184,0.18)",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const contactStatusButton = {
+  ...glassPill,
+  flex: "1 1 120px",
+  minWidth: 0,
+  minHeight: "38px",
+  border: "1px solid transparent",
+  borderRadius: "14px",
+  padding: "8px 12px",
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxSizing: "border-box",
+};
+
+const activeContactStatusButton = {
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+  boxShadow: "0 8px 18px rgba(31,77,52,0.16)",
+};
+
+const conversationHistoryNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  marginBottom: "12px",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
 const filterEyebrow = {
   margin: 0,
   color: "var(--meetro-color-forest, #1f4d34)",
@@ -7806,17 +7937,6 @@ const conversationList = {
   minWidth: 0,
   display: "grid",
   gap: "8px",
-  overflowX: "hidden",
-};
-
-const messagesSecondaryActions = {
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  display: "grid",
-  gap: "8px",
-  marginTop: "14px",
-  paddingBottom: "4px",
   overflowX: "hidden",
 };
 
