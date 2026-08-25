@@ -17,6 +17,9 @@ export const JOB_REQUEST_INTERPRET_PATCH_PATHS = Object.freeze([
   "service.domain",
   "service.specialty",
   "location.affectedArea",
+  "location.city",
+  "location.region",
+  "location.postalCode",
   "timing.urgency",
   "timing.desiredTiming",
   "timing.availability",
@@ -62,6 +65,9 @@ const PATCH_VALUE_LIMITS = Object.freeze({
   "service.domain": 80,
   "service.specialty": 120,
   "location.affectedArea": 200,
+  "location.city": 120,
+  "location.region": 120,
+  "location.postalCode": 32,
   "timing.urgency": 120,
   "timing.desiredTiming": 300,
   "timing.availability": 500,
@@ -180,6 +186,18 @@ export function buildJobRequestInterpretRequest({ text, draft, locale = "en-US" 
           affectedArea: cleanBoundedText(
             draft.location?.affectedArea,
             PATCH_VALUE_LIMITS["location.affectedArea"]
+          ),
+          city: cleanBoundedText(
+            draft.location?.city,
+            PATCH_VALUE_LIMITS["location.city"]
+          ),
+          region: cleanBoundedText(
+            draft.location?.region,
+            PATCH_VALUE_LIMITS["location.region"]
+          ),
+          postalCode: cleanBoundedText(
+            draft.location?.postalCode,
+            PATCH_VALUE_LIMITS["location.postalCode"]
           ),
         },
         timing: {

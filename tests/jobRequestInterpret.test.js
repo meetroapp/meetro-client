@@ -27,6 +27,7 @@ import {
   markJobRequestInterpretIntentAmbiguous,
   requestJobRequestInterpretation,
 } from "../src/utils/jobRequestInterpret.js";
+import { applyHomeownerConversationText } from "../src/utils/jobRequestConversation.js";
 
 const KEY_ONE = "11111111-1111-4111-8111-111111111111";
 const KEY_TWO = "22222222-2222-4222-8222-222222222222";
@@ -71,6 +72,9 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   let draft = createJobRequestDraft({
     draftId: "draft-private-id",
     initialLocation: "101 Private Street, Cape Coral, FL",
+    initialCity: "Cape Coral",
+    initialRegion: "FL",
+    initialPostalCode: "33904",
   });
   draft = applyHomeownerInput(draft, {
     "job.description": "The cabinet is swollen after a leak.",
@@ -99,8 +103,14 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   assert.equal(request.capability, "job_request.interpret");
   assert.equal(request.input.text, "The cabinet under my sink is swollen.");
   assert.equal(request.context.draft.location.affectedArea, "kitchen");
+  assert.deepEqual(request.context.draft.location, {
+    affectedArea: "kitchen",
+    city: "Cape Coral",
+    region: "FL",
+    postalCode: "33904",
+  });
   assert.equal(request.context.draft.photosAttached, true);
-  assert.equal(request.context.draft.fieldState.length, 13);
+  assert.equal(request.context.draft.fieldState.length, 16);
   for (const privateValue of [
     "draft-private-id",
     "101 Private Street",
@@ -113,6 +123,72 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   ]) {
     assert.equal(serialized.includes(privateValue), false, privateValue);
   }
+});
+
+test("one homeowner message produces a reviewable multi-field request proposal without submission authority", () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  const homeownerDraft = applyHomeownerConversationText(
+    createJobRequestDraft(),
+    homeownerText
+  );
+  const fields = [
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({
+      path: "service.category",
+      value: "handyman",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({
+      path: "service.requestCategory",
+      value: "handyman",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({
+      path: "service.domain",
+      value: "home_services",
+      taxonomy: { validated: true, vocabulary: "request_domain" },
+    }),
+    proposal({
+      path: "service.specialty",
+      value: "handyman",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "details.additionalNotes",
+      value: "The section is separating and temporarily braced. The homeowner can add photos.",
+    }),
+  ];
+
+  const result = applyJobRequestInterpretationPatch(
+    homeownerDraft,
+    interpretation(fields)
+  );
+
+  assert.equal(result.draft.job.description, homeownerText);
+  assert.equal(result.draft.job.title, "Repair cracked wall by front entry");
+  assert.equal(result.draft.location.city, "Cape Coral");
+  assert.equal(result.draft.timing.availability, "Available this week");
+  assert.equal(result.draft.media.photos.length, 0);
+  assert.equal(result.draft.submission.status, "idle");
+  assert.equal(result.draft.submission.snapshot, null);
+  assert.equal(
+    fields.some(({ path }) => /price|diagnosis|materials|repairMethod/i.test(path)),
+    false
+  );
+
+  const corrected = applyHomeownerInput(result.draft, {
+    "location.city": "Fort Myers",
+  });
+  const replay = applyJobRequestInterpretationPatch(
+    corrected,
+    interpretation([proposal({ path: "location.city", value: "Cape Coral" })])
+  );
+  assert.equal(replay.draft.location.city, "Fort Myers");
+  assert.equal(replay.rejectedFields[0].reason, "homeowner_value_protected");
 });
 
 test("request builder rejects unsupported versions and non-text draft values", () => {
