@@ -88,6 +88,19 @@ test("creates a local non-canonical draft identity with explicit version and emp
   assert.equal(Object.hasOwn(draft, "postId"), false);
 });
 
+test("homeowner availability satisfies the timing warning without changing submission authority", () => {
+  const draft = applyHomeownerInput(createJobRequestDraft(), {
+    "timing.availability": "Available this week",
+  });
+
+  assert.equal(
+    draft.readiness.warnings.some(({ code }) => code === "timing_missing"),
+    false
+  );
+  assert.equal(draft.submission.status, "idle");
+  assert.equal(draft.submission.snapshot, null);
+});
+
 test("assistant suggestions cannot overwrite homeowner-confirmed fields", () => {
   let draft = createJobRequestDraft();
   draft = applyAssistantSuggestion(draft, {

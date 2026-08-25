@@ -569,7 +569,11 @@ export function getJobRequestDraftReadiness(draft = {}) {
       messageKey: "jobRequestDraftWarningDescriptionMissing",
     });
   }
-  if (!cleanText(draft.timing?.desiredTiming) && !cleanText(draft.timing?.urgency)) {
+  if (
+    !cleanText(draft.timing?.desiredTiming) &&
+    !cleanText(draft.timing?.urgency) &&
+    !cleanText(draft.timing?.availability)
+  ) {
     warnings.push({
       code: "timing_missing",
       field: "timing",

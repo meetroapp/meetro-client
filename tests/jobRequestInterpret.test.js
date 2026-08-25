@@ -27,7 +27,11 @@ import {
   markJobRequestInterpretIntentAmbiguous,
   requestJobRequestInterpretation,
 } from "../src/utils/jobRequestInterpret.js";
-import { applyHomeownerConversationText } from "../src/utils/jobRequestConversation.js";
+import {
+  JOB_REQUEST_INTERPRETATION_FAILURE,
+  applyHomeownerConversationText,
+  classifyInterpretationFailure,
+} from "../src/utils/jobRequestConversation.js";
 
 const KEY_ONE = "11111111-1111-4111-8111-111111111111";
 const KEY_TWO = "22222222-2222-4222-8222-222222222222";
@@ -306,6 +310,88 @@ test("request helper calls only the canonical Gateway and validates its operatio
   assert.equal(calls[0][1].body.includes("/posts"), false);
   assert.equal(result.interpretation.summary, interpretation().summary);
   assert.equal(result.replayed, false);
+});
+
+test("Cape Coral intake survives the governed request path while failures and retry remain explicit", async () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  const draft = applyHomeownerConversationText(createJobRequestDraft(), homeownerText);
+  const intent = createJobRequestInterpretIntent({
+    text: homeownerText,
+    draft,
+    cryptoImpl: { randomUUID: () => KEY_ONE },
+  });
+  const fields = [
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+  ];
+  const calls = [];
+
+  const result = await requestJobRequestInterpretation({
+    intent,
+    authFetchImpl: async (route, options) => {
+      calls.push({ route, options });
+      const body = JSON.parse(options.body);
+      assert.equal(body.input.text, homeownerText);
+      assert.deepEqual(Object.keys(body.context.draft.location).sort(), [
+        "affectedArea",
+        "city",
+        "postalCode",
+        "region",
+      ]);
+      assert.equal(JSON.stringify(body).includes("serviceAddress"), false);
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_OPERATION_COMPLETED",
+          operation: "job_request.interpret",
+          operationId: "operation-cape-coral",
+          correlationId: "correlation-cape-coral",
+          result: interpretation(fields),
+        },
+      };
+    },
+  });
+  const reviewed = applyJobRequestInterpretationPatch(draft, result.interpretation);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].route, JOB_REQUEST_INTERPRET_ROUTE);
+  assert.equal(reviewed.draft.location.city, "Cape Coral");
+  assert.equal(reviewed.draft.timing.availability, "Available this week");
+  assert.equal(reviewed.draft.submission.status, "idle");
+  assert.equal(reviewed.draft.submission.snapshot, null);
+
+  let failure;
+  try {
+    await requestJobRequestInterpretation({
+      intent,
+      authFetchImpl: async () => ({
+        response: { ok: false, status: 403 },
+        data: {
+          success: false,
+          code: "INTELLIGENCE_CAPABILITY_FORBIDDEN",
+        },
+      }),
+    });
+  } catch (error) {
+    failure = error;
+  }
+  assert.equal(
+    classifyInterpretationFailure(failure),
+    JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE
+  );
+
+  const retry = createJobRequestInterpretIntent({
+    text: homeownerText,
+    draft,
+    previousIntent: markJobRequestInterpretIntentAmbiguous(intent),
+    cryptoImpl: { randomUUID: () => KEY_TWO },
+  });
+  assert.equal(retry.idempotencyKey, KEY_ONE);
+  assert.deepEqual(retry.request, intent.request);
 });
 
 test("network ambiguity and Gateway conflict return governed failures without a draft patch", async () => {
