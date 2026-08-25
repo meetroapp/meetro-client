@@ -3622,6 +3622,8 @@ function MessagesInbox({ setPage, currentPage }) {
       focus:
         historyType === "invoice"
           ? "invoices"
+          : historyType === "documents"
+          ? "documents"
           : historyType === "work"
           ? "work"
           : "overview",
@@ -4901,7 +4903,13 @@ function MessagesInbox({ setPage, currentPage }) {
         span: "wide",
         onClick: () => openRelationshipHistory(relationship, "invoice"),
       },
-      { title: t("messagesDocumentsPhotos", language), empty: t("messagesNoDocuments", language), items: [], span: "wide" },
+      {
+        title: t("messagesDocumentsPhotos", language),
+        empty: t("messagesNoDocuments", language),
+        items: [],
+        span: "wide",
+        onClick: () => openRelationshipHistory(relationship, "documents"),
+      },
       {
         title: t("messagesNotes", language),
         empty: t("messagesNoNotes", language),

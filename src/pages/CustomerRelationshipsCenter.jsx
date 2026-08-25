@@ -290,6 +290,7 @@ function CustomerRelationshipsCenter({ setPage }) {
                   ["work", copy.work],
                   ["quotes", copy.quotes],
                   ["invoices", copy.invoices],
+                  ["documents", copy.documentsPhotos],
                 ].map(([focus, label]) => (
                   <button
                     key={focus}
@@ -476,7 +477,137 @@ function RelationshipActivity({ activity, focus, copy, language }) {
           )}
         </section>
       ))}
+      {(focus === "overview" || focus === "documents") && (
+        <RelationshipDocumentsMedia
+          documents={activity.documents}
+          media={activity.media}
+          copy={copy}
+          language={language}
+        />
+      )}
     </div>
+  );
+}
+
+function RelationshipDocumentsMedia({ documents, media, copy, language }) {
+  if (documents.length === 0 && media.length === 0) {
+    return (
+      <section aria-labelledby="relationship-documents-title">
+        <h5 id="relationship-documents-title" style={activitySectionTitle}>
+          {copy.documentsPhotos}
+        </h5>
+        <p style={activityEmpty}>{copy.noDocumentsPhotos}</p>
+      </section>
+    );
+  }
+
+  const groups = new Map();
+  for (const item of [...documents, ...media]) {
+    const parentId = text(item.parentId);
+    const current = groups.get(parentId) || {
+      parentId,
+      jobTitle: text(item.jobTitle),
+      documents: [],
+      media: [],
+    };
+    if (!current.jobTitle) current.jobTitle = text(item.jobTitle);
+    if (item.documentId) current.documents.push(item);
+    if (item.mediaId) current.media.push(item);
+    groups.set(parentId, current);
+  }
+
+  return (
+    <section aria-labelledby="relationship-documents-title">
+      <h5 id="relationship-documents-title" style={activitySectionTitle}>
+        {copy.documentsPhotos}
+      </h5>
+      <div style={documentGroups}>
+        {[...groups.values()].map((group) => (
+          <article key={group.parentId} style={documentGroup}>
+            <div style={documentGroupHeader}>
+              <span style={eyebrow}>{copy.linkedWork}</span>
+              <strong style={activityRowTitle}>
+                {group.jobTitle || `${copy.job} · ${group.parentId}`}
+              </strong>
+            </div>
+
+            {group.documents.length > 0 && (
+              <div style={documentCollection}>
+                <h6 style={collectionTitle}>{copy.documentsLabel}</h6>
+                <div style={activityList}>
+                  {group.documents.map((item) => (
+                    <article key={item.documentId} style={documentCard}>
+                      <div style={activityRowTop}>
+                        <strong style={activityRowTitle}>
+                          {text(item.documentNumber) || (
+                            item.documentType === "QUOTE" ? copy.quote : copy.invoice
+                          )}
+                        </strong>
+                        {text(item.status) && (
+                          <span style={activityStatus}>{item.status}</span>
+                        )}
+                      </div>
+                      <p style={activityMeta}>
+                        {copy.provenance}: {item.provenance === "CANONICAL_QUOTE"
+                          ? copy.canonicalQuote
+                          : copy.canonicalInvoice}
+                      </p>
+                      {(item.lastActivityAt || item.issuedAt || item.createdAt) && (
+                        <p style={activityMeta}>
+                          {copy.latest}: {formatEstablishedDate(
+                            item.lastActivityAt || item.issuedAt || item.createdAt,
+                            language
+                          )}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {group.media.length > 0 && (
+              <div style={documentCollection}>
+                <h6 style={collectionTitle}>{copy.photosLabel}</h6>
+                <div style={mediaGrid}>
+                  {group.media.map((item) => (
+                    <a
+                      key={item.mediaId}
+                      href={item.secureUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={mediaCard}
+                      aria-label={`${copy.openPhoto}: ${group.jobTitle || copy.linkedWork}`}
+                    >
+                      <img
+                        src={item.secureUrl}
+                        alt={copy.requestPhoto}
+                        style={mediaImage}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span style={mediaBody}>
+                        <strong style={activityRowTitle}>{copy.requestPhoto}</strong>
+                        <span style={activityMeta}>
+                          {copy.provenance}: {item.category === "REQUEST_PHOTO"
+                            ? copy.requestPhoto
+                            : text(item.provenance)}
+                        </span>
+                        {item.createdAt && (
+                          <span style={activityMeta}>
+                            {copy.created}: {formatEstablishedDate(item.createdAt, language)}
+                          </span>
+                        )}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -562,6 +693,16 @@ const activityStatus = { maxWidth: "100%", padding: "4px 9px", borderRadius: "99
 const activityMeta = { margin: "9px 0 0", color: "#69766d", fontSize: "13px", lineHeight: 1.4, overflowWrap: "anywhere" };
 const activityAmounts = { display: "flex", flexWrap: "wrap", gap: "10px 22px", marginTop: "11px" };
 const activityAmount = { display: "inline-flex", flexDirection: "column", gap: "2px", minWidth: 0, color: "#25382b" };
+const documentGroups = { display: "grid", gap: "12px" };
+const documentGroup = { minWidth: 0, padding: "15px", border: "1px solid #d9e2d6", borderRadius: "16px", background: "#fafbf8", boxSizing: "border-box" };
+const documentGroupHeader = { display: "flex", minWidth: 0, flexDirection: "column", gap: "5px", paddingBottom: "12px", borderBottom: "1px solid #e1e7df" };
+const documentCollection = { minWidth: 0, marginTop: "14px" };
+const collectionTitle = { margin: "0 0 9px", color: "#31543f", fontSize: "13px", lineHeight: 1.3 };
+const documentCard = { minWidth: 0, padding: "13px", border: "1px solid #e1e7df", borderRadius: "12px", background: "#fff", boxSizing: "border-box" };
+const mediaGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: "10px", minWidth: 0 };
+const mediaCard = { display: "flex", minWidth: 0, minHeight: "88px", overflow: "hidden", border: "1px solid #dfe6dc", borderRadius: "13px", background: "#fff", color: "inherit", textDecoration: "none", boxSizing: "border-box" };
+const mediaImage = { display: "block", flex: "0 0 104px", width: "104px", maxWidth: "42%", aspectRatio: "4 / 3", objectFit: "cover", background: "#edf2ec" };
+const mediaBody = { display: "flex", minWidth: 0, flex: "1 1 auto", flexDirection: "column", justifyContent: "center", padding: "11px", overflowWrap: "anywhere" };
 const sectionHeading = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" };
 const countBadge = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "30px", minHeight: "30px", padding: "3px 8px", borderRadius: "999px", background: "#e7efe5", color: "#1f5d39", fontSize: "13px", fontWeight: 900, boxSizing: "border-box" };
 const relationshipList = { display: "grid", gap: "10px" };

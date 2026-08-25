@@ -241,7 +241,7 @@ test("Customer Relationship workspace copy is complete in all governed languages
   assert.deepEqual(CUSTOMER_RELATIONSHIPS_LANGUAGES, ["en", "es", "fr", "pt-BR"]);
   for (const language of CUSTOMER_RELATIONSHIPS_LANGUAGES) {
     const localized = getCustomerRelationshipsCopy(language);
-    for (const key of ["title", "loading", "loadErrorTitle", "emptyTitle", "relationshipList", "relationshipActivity", "work", "quotes", "invoices", "noWork", "noQuotes", "noInvoices", "noRelationshipText", "externalContact", "readOnly"]) {
+    for (const key of ["title", "loading", "loadErrorTitle", "emptyTitle", "relationshipList", "relationshipActivity", "work", "quotes", "invoices", "documentsPhotos", "noWork", "noQuotes", "noInvoices", "noDocumentsPhotos", "linkedWork", "documentsLabel", "photosLabel", "canonicalQuote", "canonicalInvoice", "requestPhoto", "provenance", "openPhoto", "noRelationshipText", "externalContact", "readOnly"]) {
       assert.equal(typeof localized[key], "string");
       assert.notEqual(localized[key].trim(), "");
     }

@@ -19,6 +19,8 @@ function activity(overrides = {}) {
     work: [{ jobId: "job-1", title: "Fan replacement", status: null, createdAt: "2026-08-24T10:00:00.000Z" }],
     quotes: [{ quoteId: "quote-1", documentNumber: "Q-0000001", status: "ISSUED", customerDecision: null, currency: "USD", totalMinor: 26999 }],
     invoices: [{ invoiceId: "invoice-1", invoiceNumber: "INV-0000001", status: "ISSUED", currency: "USD", totalMinor: 26999, paidMinor: 10000, balanceMinor: 16999 }],
+    documents: [],
+    media: [],
     ...overrides,
   };
 }
@@ -86,11 +88,13 @@ test("relationship detail is activity-first and keeps Contact management in Comm
   assert.match(pageSource, /writeCustomerRelationshipContactReturn/);
 });
 
-test("Contact history actions navigate to Work, Invoices, or relationship overview", () => {
+test("Contact history actions navigate to Work, Invoices, Documents / Photos, or relationship overview", () => {
   assert.match(messagesSource, /historyType === "invoice"[\s\S]*?"invoices"/);
+  assert.match(messagesSource, /historyType === "documents"[\s\S]*?"documents"/);
   assert.match(messagesSource, /historyType === "work"[\s\S]*?"work"[\s\S]*?"overview"/);
   assert.match(messagesSource, /openRelationshipHistory\(relationship, "work"\)/);
   assert.match(messagesSource, /openRelationshipHistory\(relationship, "invoice"\)/);
+  assert.match(messagesSource, /openRelationshipHistory\(relationship, "documents"\)/);
   assert.match(messagesSource, /openRelationshipHistory\(relationship, "relationship"\)/);
 });
 
@@ -112,11 +116,13 @@ test("no-relationship, archived, and external Contact truth remain non-mutating"
   assert.doesNotMatch(pageSource, /establishBusinessCustomerRelationship|method:\s*["']POST["']/);
 });
 
-test("documents, private Contact Notes, and Relationship Memory remain outside activity authority", () => {
+test("canonical documents/media are activity authority while Notes and Relationship Memory remain separate", () => {
   assert.match(messagesSource, /messagesDocumentsPhotos/);
   assert.match(messagesSource, /items:\s*record\.privateNote/);
   assert.match(messagesSource, /messagesRelationshipMemoryLater/);
-  assert.doesNotMatch(pageSource, /documents|photos|privateNote|relationshipMemory/i);
+  assert.match(pageSource, /activity\.documents/);
+  assert.match(pageSource, /activity\.media/);
+  assert.doesNotMatch(pageSource, /privateNote|relationshipMemory/i);
 });
 
 test("activity workspace contains no CRM scoring, pipeline, or follow-up projection", () => {

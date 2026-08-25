@@ -87,12 +87,54 @@ function validatedActivityItem(value, label) {
   return Object.freeze({ ...value });
 }
 
+function validatedDocumentActivityItem(value) {
+  const item = validatedActivityItem(value, "document");
+  if (
+    !text(item.documentId) ||
+    !["QUOTE", "INVOICE"].includes(text(item.documentType)) ||
+    text(item.parentType) !== "JOB" ||
+    !text(item.parentId)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid document activity.",
+    });
+  }
+  return item;
+}
+
+function validatedMediaActivityItem(value) {
+  const item = validatedActivityItem(value, "media");
+  let secureUrl;
+  try {
+    secureUrl = new URL(text(item.secureUrl));
+  } catch {
+    secureUrl = null;
+  }
+  if (
+    !text(item.mediaId) ||
+    text(item.kind) !== "PHOTO" ||
+    text(item.mediaType) !== "IMAGE" ||
+    text(item.parentType) !== "JOB" ||
+    !text(item.parentId) ||
+    secureUrl?.protocol !== "https:" ||
+    secureUrl.hostname !== "res.cloudinary.com"
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid media activity.",
+    });
+  }
+  return item;
+}
+
 function validatedActivity(value, relationshipId) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
       !value.relationship || typeof value.relationship !== "object" ||
       text(value.relationship.id).toLowerCase() !== relationshipId ||
       !Array.isArray(value.work) || !Array.isArray(value.quotes) ||
-      !Array.isArray(value.invoices)) {
+      !Array.isArray(value.invoices) || !Array.isArray(value.documents) ||
+      !Array.isArray(value.media)) {
     throw new BusinessCustomerRelationshipApiError({
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
       message: "The server returned invalid Customer Relationship activity.",
@@ -104,6 +146,8 @@ function validatedActivity(value, relationshipId) {
     work: Object.freeze(value.work.map((item) => validatedActivityItem(item, "work"))),
     quotes: Object.freeze(value.quotes.map((item) => validatedActivityItem(item, "Quote"))),
     invoices: Object.freeze(value.invoices.map((item) => validatedActivityItem(item, "Invoice"))),
+    documents: Object.freeze(value.documents.map(validatedDocumentActivityItem)),
+    media: Object.freeze(value.media.map(validatedMediaActivityItem)),
   });
 }
 

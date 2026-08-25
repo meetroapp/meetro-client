@@ -50,7 +50,7 @@ export function readCustomerRelationshipNavigationContext(storage) {
   if (!businessContactId) return null;
   return Object.freeze({
     businessContactId,
-    focus: ["overview", "work", "invoices"].includes(text(parsed.focus))
+    focus: ["overview", "work", "quotes", "invoices", "documents"].includes(text(parsed.focus))
       ? text(parsed.focus)
       : "overview",
     returnPage: text(parsed.returnPage) === "messagesInbox"
