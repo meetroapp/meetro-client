@@ -81,6 +81,73 @@ function text(value, maximum = 1000) {
   return normalized && normalized.length <= maximum ? normalized : null;
 }
 
+function optionalText(value, maximum) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length <= maximum ? normalized : null;
+}
+
+function normalizeCustomerTermsSnapshot(value) {
+  if (
+    !exactKeys(value, [
+      "schemaVersion",
+      "paymentTerms",
+      "estimatedDuration",
+      "customerNotes",
+      "agreement",
+    ]) ||
+    value.schemaVersion !== 1 ||
+    !exactKeys(value.agreement, [
+      "exclusions",
+      "additionalWorkTerms",
+      "hiddenConditionsTerms",
+      "diagnosticTerms",
+      "customerResponsibilities",
+      "warrantyTerms",
+      "cancellationTerms",
+      "acceptanceTerms",
+      "preauthorizedAdditionalWorkLimit",
+    ]) ||
+    !Array.isArray(value.agreement.exclusions) ||
+    value.agreement.exclusions.length > 100
+  ) return null;
+  const paymentTerms = optionalText(value.paymentTerms, 8000);
+  const estimatedDuration = optionalText(value.estimatedDuration, 240);
+  const customerNotes = optionalText(value.customerNotes, 8000);
+  const agreementLimits = {
+    additionalWorkTerms: 8000,
+    hiddenConditionsTerms: 8000,
+    diagnosticTerms: 8000,
+    customerResponsibilities: 8000,
+    warrantyTerms: 8000,
+    cancellationTerms: 8000,
+    acceptanceTerms: 8000,
+    preauthorizedAdditionalWorkLimit: 240,
+  };
+  const agreement = {};
+  for (const [key, maximum] of Object.entries(agreementLimits)) {
+    agreement[key] = optionalText(value.agreement[key], maximum);
+  }
+  const exclusions = value.agreement.exclusions.map((item) => text(item, 3000));
+  if (
+    paymentTerms == null ||
+    estimatedDuration == null ||
+    customerNotes == null ||
+    Object.values(agreement).some((item) => item == null) ||
+    exclusions.some((item) => !item)
+  ) return null;
+  return Object.freeze({
+    schemaVersion: 1,
+    paymentTerms,
+    estimatedDuration,
+    customerNotes,
+    agreement: Object.freeze({
+      exclusions: Object.freeze(exclusions),
+      ...agreement,
+    }),
+  });
+}
+
 function timestamp(value, { nullable = false } = {}) {
   if (nullable && value == null) return null;
   if (typeof value !== "string" || !value.trim()) return null;
@@ -137,6 +204,7 @@ function normalizeActions(value, businessStatus) {
 }
 
 function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
+  const hasCustomerTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
   if (
     !exactKeys(value, [
       "quoteId",
@@ -154,6 +222,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
       "decidedAt",
       "decisionCommandVersion",
       "actions",
+      ...(hasCustomerTerms ? ["customerTermsSnapshot"] : []),
     ])
   ) {
     return null;
@@ -175,6 +244,9 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
       value.customerDecision === "DECLINED" && Boolean(decidedAt),
   };
   const actions = normalizeActions(value.actions, value.businessStatus);
+  const customerTermsSnapshot = hasCustomerTerms
+    ? normalizeCustomerTermsSnapshot(value.customerTermsSnapshot)
+    : null;
   const scopeItems = Array.isArray(value.scopeItems)
     ? value.scopeItems.map(normalizeScopeItem)
     : [];
@@ -198,6 +270,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
     !issuedAt ||
     !decisionCommandVersion ||
     !actions ||
+    (hasCustomerTerms && !customerTermsSnapshot) ||
     scopeItems.some((item) => !item) ||
     conditions.some((item) => !item) ||
     exclusions.some((item) => !item)
@@ -220,6 +293,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
     issuedAt,
     decidedAt,
     decisionCommandVersion,
+    customerTermsSnapshot,
     actions,
   });
 }

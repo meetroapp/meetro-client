@@ -68,18 +68,20 @@ function timestamp(value, { nullable = false } = {}) {
 }
 
 function normalizeJob(value, expectedJobId) {
-  if (!exactKeys(value, ["id", "requestId", "title", "service"])) return null;
+  if (!exactKeys(value, ["id", "requestId", "title", "service", "issuerName"])) return null;
   const id = uuid(value.id);
   const requestId = positiveInteger(value.requestId);
   const title = text(value.title, 500);
   const service = text(value.service, 200, { nullable: true });
+  const issuerName = text(value.issuerName, 200);
   if (
     id !== expectedJobId ||
     !requestId ||
     !title ||
-    (value.service != null && !service)
+    (value.service != null && !service) ||
+    !issuerName
   ) return null;
-  return Object.freeze({ id, requestId, title, service });
+  return Object.freeze({ id, requestId, title, service, issuerName });
 }
 
 function normalizeActions(value, businessStatus) {

@@ -8,6 +8,23 @@ import {
 
 const QUOTE_ID = "decf3f61-acd2-4756-b5fa-8d610eb9b8d0";
 const JOB_ID = "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+const CUSTOMER_TERMS = Object.freeze({
+  schemaVersion: 1,
+  paymentTerms: "50% deposit; balance due on completion.",
+  estimatedDuration: "3 days",
+  customerNotes: "Protect the existing landscaping.",
+  agreement: Object.freeze({
+    exclusions: Object.freeze(["Permit fees"]),
+    additionalWorkTerms: "Written approval is required.",
+    hiddenConditionsTerms: "Hidden conditions require a revised Quote.",
+    diagnosticTerms: "",
+    customerResponsibilities: "Provide safe access.",
+    warrantyTerms: "One-year workmanship warranty.",
+    cancellationTerms: "Cancellation terms apply.",
+    acceptanceTerms: "Approval accepts this exact issued Quote.",
+    preauthorizedAdditionalWorkLimit: "$0",
+  }),
+});
 
 function quote(overrides = {}) {
   return {
@@ -42,7 +59,9 @@ function payload(overrides = {}) {
 }
 
 test("customer detail accepts and freezes the exact customer-safe contract", () => {
-  const normalized = normalizeCustomerQuoteDetail(payload(), {
+  const normalized = normalizeCustomerQuoteDetail(payload({
+    quote: quote({ customerTermsSnapshot: CUSTOMER_TERMS }),
+  }), {
     quoteId: QUOTE_ID,
     jobId: JOB_ID,
   });
@@ -51,6 +70,11 @@ test("customer detail accepts and freezes the exact customer-safe contract", () 
   assert.equal(normalized.quote.jobId, JOB_ID);
   assert.equal(normalized.quote.scopeItems[0].amountMinor, 265000);
   assert.equal(normalized.quote.decisionCommandVersion, 7);
+  assert.equal(
+    normalized.quote.customerTermsSnapshot.paymentTerms,
+    "50% deposit; balance due on completion."
+  );
+  assert.equal(Object.isFrozen(normalized.quote.customerTermsSnapshot.agreement), true);
   assert.equal(Object.isFrozen(normalized.quote.scopeItems), true);
   assert.equal(Object.isFrozen(normalized.quote.actions), true);
 });
@@ -115,6 +139,13 @@ test("customer detail rejects mismatched identity, drafts, unknown fields, and p
     payload({ quote: quote({ scopeItems: [{ description: "Work", quantity: 1, amountMinor: 1, source: {} }] }) }),
     payload({ quote: quote({ conditions: [{ description: "Internal" }] }) }),
     payload({ quote: quote({ decisionCommandVersion: 0 }) }),
+    payload({ quote: quote({ customerTermsSnapshot: { ...CUSTOMER_TERMS, paid: true } }) }),
+    payload({ quote: quote({
+      customerTermsSnapshot: {
+        ...CUSTOMER_TERMS,
+        agreement: { ...CUSTOMER_TERMS.agreement, paymentState: "PAID" },
+      },
+    }) }),
   ];
   invalid.forEach((value) => {
     assert.equal(

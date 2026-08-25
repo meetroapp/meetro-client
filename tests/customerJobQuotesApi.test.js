@@ -44,6 +44,7 @@ function payload(overrides = {}) {
       requestId: 16,
       title: "Synthetic sink repair",
       service: "Handyman",
+      issuerName: "All Handyman Services",
     },
     quotes: [quote()],
     pagination: { limit: 25, hasMore: false, nextCursor: null },
@@ -55,6 +56,7 @@ test("strict discovery adapter accepts the exact customer allowlisted contract",
   const normalized = normalizeCustomerJobQuotes(payload(), { jobId: IDS.job });
   assert.equal(normalized.source, "CUSTOMER_JOB_QUOTES");
   assert.equal(normalized.job.id, IDS.job);
+  assert.equal(normalized.job.issuerName, "All Handyman Services");
   assert.equal(normalized.quotes[0].quoteId, IDS.quote);
   assert.equal(normalized.quotes[0].actions.canApprove, true);
   assert.equal(Object.isFrozen(normalized.quotes), true);

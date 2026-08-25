@@ -68,6 +68,9 @@ export default function CustomerQuoteReviewPanel({
   const quotes = discovery?.status === "confirmed"
     ? discovery.quotes?.quotes || []
     : [];
+  const job = discovery?.status === "confirmed"
+    ? discovery.quotes?.job || null
+    : null;
   const selectedSummary = quotes.find(
     (quote) => quote.quoteId === selectedQuoteId
   );
@@ -75,6 +78,24 @@ export default function CustomerQuoteReviewPanel({
     detail?.status === "confirmed" && detail.quoteId === selectedQuoteId
       ? detail.detail?.quote
       : null;
+  const customerTermRows = quote?.customerTermsSnapshot
+    ? [
+        ["customerQuotePaymentTerms", quote.customerTermsSnapshot.paymentTerms],
+        ["customerQuoteEstimatedDuration", quote.customerTermsSnapshot.estimatedDuration],
+        ["customerQuoteCustomerNotes", quote.customerTermsSnapshot.customerNotes],
+        ["customerQuoteAdditionalWorkTerms", quote.customerTermsSnapshot.agreement.additionalWorkTerms],
+        ["customerQuoteHiddenConditionsTerms", quote.customerTermsSnapshot.agreement.hiddenConditionsTerms],
+        ["customerQuoteDiagnosticTerms", quote.customerTermsSnapshot.agreement.diagnosticTerms],
+        ["customerQuoteCustomerResponsibilities", quote.customerTermsSnapshot.agreement.customerResponsibilities],
+        ["customerQuoteWarrantyTerms", quote.customerTermsSnapshot.agreement.warrantyTerms],
+        ["customerQuoteCancellationTerms", quote.customerTermsSnapshot.agreement.cancellationTerms],
+        ["customerQuoteAcceptanceTerms", quote.customerTermsSnapshot.agreement.acceptanceTerms],
+        [
+          "customerQuotePreauthorizedAdditionalWorkLimit",
+          quote.customerTermsSnapshot.agreement.preauthorizedAdditionalWorkLimit,
+        ],
+      ].filter(([, value]) => value)
+    : [];
 
   async function confirmDecision() {
     if (!confirmation || !quote || commandState === "saving") return;
@@ -204,8 +225,22 @@ export default function CustomerQuoteReviewPanel({
               <h3 id="customer-quote-detail-title" style={styles.detailTitle}>
                 {statusLabel(quote.businessStatus, language)}
               </h3>
+              {quote.businessStatus === "APPROVED" && (
+                <p style={styles.nextStep}>
+                  {t("customerQuoteAcceptedNext", language)}
+                </p>
+              )}
               <p style={styles.detailDate}>
                 {t("customerQuoteIssued", language)} {date(quote.issuedAt, language)}
+              </p>
+              <p style={styles.detailDate}>
+                {t("customerQuoteProject", language)}: {job?.title || "—"}
+              </p>
+              <p style={styles.detailDate}>
+                {t("customerQuoteIssuedBy", language)}: {job?.issuerName || "—"}
+              </p>
+              <p style={styles.detailDate}>
+                {t("customerQuoteVersion", language)} {quote.decisionCommandVersion}
               </p>
             </div>
             <div style={styles.totalBlock}>
@@ -241,6 +276,34 @@ export default function CustomerQuoteReviewPanel({
                 </ul>
               )}
             </section>
+
+            {quote.customerTermsSnapshot && (
+              <section style={styles.detailSection}>
+                <h4 style={styles.detailSectionTitle}>
+                  {t("customerQuoteTerms", language)}
+                </h4>
+                <dl style={styles.termList}>
+                  {customerTermRows.map(([labelKey, value]) => (
+                    <div key={labelKey}>
+                      <dt style={styles.termLabel}>{t(labelKey, language)}</dt>
+                      <dd style={styles.termValue}>{value}</dd>
+                    </div>
+                  ))}
+                  {quote.customerTermsSnapshot.agreement.exclusions.length > 0 && (
+                    <div>
+                      <dt style={styles.termLabel}>{t("customerQuoteAgreementExclusions", language)}</dt>
+                      <dd style={styles.termValue}>
+                        <ul style={styles.textList}>
+                          {quote.customerTermsSnapshot.agreement.exclusions.map((item, index) => (
+                            <li key={`${item}-${index}`}>{item}</li>
+                          ))}
+                        </ul>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            )}
 
             <section style={styles.detailSection}>
               <h4 style={styles.detailSectionTitle}>
@@ -344,6 +407,13 @@ export default function CustomerQuoteReviewPanel({
                   : "customerQuoteDeclineConfirmBody",
                 language
               )}
+            </p>
+            <p style={styles.dialogContext}>
+              {t("customerQuoteProject", language)}: {job?.title || "—"}
+              <br />
+              {t("customerQuoteIssuedBy", language)}: {job?.issuerName || "—"}
+              <br />
+              {t("customerQuoteVersion", language)} {quote.decisionCommandVersion}
             </p>
             <strong style={styles.dialogTotal}>
               {currency(quote.totalMinor, quote.currency, language)}
@@ -466,6 +536,7 @@ const styles = {
   },
   detailTitle: { margin: "10px 0 0", color: "#18231d", fontSize: 24 },
   detailDate: { margin: "5px 0 0", color: "#67736b", fontSize: 14 },
+  nextStep: { margin: "8px 0 0", color: "#34433a", lineHeight: 1.45 },
   totalBlock: { display: "grid", gap: 3, textAlign: "right", color: "#4f5d54" },
   detailGrid: {
     display: "grid",
@@ -488,6 +559,9 @@ const styles = {
   quantity: { display: "block", marginTop: 3, color: "#67736b" },
   itemAmount: { flexShrink: 0, whiteSpace: "nowrap" },
   textList: { margin: 0, paddingLeft: 20, color: "#435148", lineHeight: 1.55 },
+  termList: { display: "grid", gap: 12, margin: 0, color: "#435148" },
+  termLabel: { fontWeight: 800, color: "#24352b" },
+  termValue: { margin: "3px 0 0", lineHeight: 1.5 },
   noticeSlot: { minHeight: 0 },
   savedNotice: {
     margin: "16px 0 0",
@@ -545,6 +619,7 @@ const styles = {
   },
   dialogTitle: { margin: 0, color: "#18231d", fontSize: 22, outline: "none" },
   dialogBody: { margin: "10px 0", color: "#526057", lineHeight: 1.5 },
+  dialogContext: { margin: "10px 0", color: "#34433a", lineHeight: 1.5 },
   dialogTotal: { display: "block", color: "#18231d", fontSize: 25 },
   dialogStatus: { color: "#526057" },
   dialogActions: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 10, marginTop: 22 },
