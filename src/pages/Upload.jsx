@@ -165,7 +165,7 @@ function getRequestHelpCopy(language) {
       photos: "Fotos",
       addPhoto: "Agregar fotos a la solicitud",
       removePhoto: (position) => `Eliminar foto ${position}`,
-      locationRequired: "Agrega la ubicación donde se necesita el servicio.",
+      locationRequired: "Agrega ciudad, estado o región, código postal y país. La dirección exacta puede esperar hasta la selección.",
       matchRequired: "Elige un servicio compatible de la lista.",
       offline: "No tienes conexión. Vuelve a intentarlo cuando estés en línea.",
       failed: "La solicitud no fue creada. Revisa los detalles e inténtalo de nuevo.",
@@ -183,7 +183,7 @@ function getRequestHelpCopy(language) {
       photos: "Photos",
       addPhoto: "Ajouter des photos à la demande",
       removePhoto: (position) => `Supprimer la photo ${position}`,
-      locationRequired: "Ajoutez le lieu où le service est nécessaire.",
+      locationRequired: "Ajoutez la ville, l’État ou la région, le code postal et le pays. L’adresse exacte peut attendre la sélection.",
       matchRequired: "Choisissez un service pris en charge dans la liste.",
       offline: "Vous êtes hors ligne. Réessayez une fois connecté.",
       failed: "La demande n’a pas été créée. Vérifiez les détails et réessayez.",
@@ -201,7 +201,7 @@ function getRequestHelpCopy(language) {
       photos: "Fotos",
       addPhoto: "Adicionar fotos à solicitação",
       removePhoto: (position) => `Remover foto ${position}`,
-      locationRequired: "Adicione o local onde o serviço é necessário.",
+      locationRequired: "Adicione cidade, estado ou região, código postal e país. O endereço exato pode esperar até a seleção.",
       matchRequired: "Escolha um serviço compatível na lista.",
       offline: "Você está offline. Tente novamente quando estiver conectado.",
       failed: "A solicitação não foi criada. Revise os detalhes e tente novamente.",
@@ -221,7 +221,7 @@ function getRequestHelpCopy(language) {
     photos: "Photos",
     addPhoto: "Add photos to the request",
     removePhoto: (position) => `Remove photo ${position}`,
-    locationRequired: "Add the location where service is needed.",
+    locationRequired: "Add city, state or region, postal code, and country. The exact address can wait until selection.",
     matchRequired: "Choose a supported service from the list.",
     offline: "You are offline. Try again when you are connected.",
     failed: "The request was not created. Review the details and try again.",
@@ -798,7 +798,7 @@ function Upload({ setPage }) {
   function handleReviewRequest(event) {
     event?.preventDefault();
     setRequestMode("manual");
-    setActiveGuidedCard("review");
+    setActiveGuidedCard(firstIncompleteRequiredCard);
     window.setTimeout(() => {
       manualDetailsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     }, 0);
@@ -982,6 +982,7 @@ function Upload({ setPage }) {
 
       if (!requestValidation.ok) {
         setFieldErrors(requestValidation.errors);
+        continueToCard(requestValidation.errors.location ? "location" : "work");
         if (!draft.submission.snapshot) {
           clearSubmissionIntent();
         }
@@ -2605,16 +2606,26 @@ function Upload({ setPage }) {
                 )}
 
                 <div style={requestActionBar}>
+                  {!draftReadiness.isReady && (
+                    <p id="job-request-submit-guidance" style={draftGuidanceText}>
+                      {guidance?.messageKey
+                        ? t(guidance.messageKey)
+                        : t("jobRequestDraftGuidanceLocation")}
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    disabled={creating || uploading}
+                    disabled={!draftReadiness.isReady || creating || uploading}
+                    aria-describedby={!draftReadiness.isReady ? "job-request-submit-guidance" : undefined}
                     className="meetro-visual-primary-button"
                     style={{
                       ...primaryButton,
-                      background: creating || uploading
+                      background: !draftReadiness.isReady || creating || uploading
                         ? "rgba(100, 116, 139, 0.72)"
                         : "var(--meetro-gradient-community-action)",
-                      cursor: creating || uploading ? "not-allowed" : "pointer",
+                      cursor: !draftReadiness.isReady || creating || uploading
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                   >
                     {creating ? t("creating") : t("createPost")}

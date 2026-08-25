@@ -5,6 +5,7 @@ import {
   REQUEST_HELP_ERROR,
   getCanonicalCreatedRequest,
   getSupportedRequestHelpServices,
+  isCanonicalRequestServiceLocationComplete,
   validateRequestHelpSubmission,
 } from "../src/utils/requestHelpSubmission.js";
 
@@ -85,6 +86,37 @@ test("Request Help validates address-after-selection locality without street or 
       },
     }).errors.location,
     REQUEST_HELP_ERROR.LOCATION_REQUIRED
+  );
+});
+
+test("canonical location completeness rejects partial locality and invalid country shapes", () => {
+  const partialLocations = [
+    { city: "Cape Coral" },
+    { city: "Cape Coral", region: "FL" },
+    { city: "Cape Coral", postalCode: "33904" },
+    { region: "FL", postalCode: "33904", countryCode: "US" },
+    { city: "Cape Coral", region: "FL", postalCode: "33904", countryCode: "USA" },
+  ];
+
+  for (const serviceLocation of partialLocations) {
+    assert.equal(
+      isCanonicalRequestServiceLocationComplete({
+        intakeMode: "address_after_selection",
+        ...serviceLocation,
+      }),
+      false
+    );
+  }
+
+  assert.equal(
+    isCanonicalRequestServiceLocationComplete({
+      intakeMode: "address_after_selection",
+      city: "Cape Coral",
+      region: "FL",
+      postalCode: "33904",
+      countryCode: "us",
+    }),
+    true
   );
 });
 

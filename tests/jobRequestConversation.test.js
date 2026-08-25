@@ -338,10 +338,26 @@ test("manual mode is reversible and preserves one shared draft boundary", () => 
   assert.match(uploadSource, /function handleBackToConversation\(\)/);
   assert.match(uploadSource, /setRequestMode\("conversation"\)/);
   assert.match(uploadSource, /function handleReviewRequest\(event\)/);
-  assert.match(uploadSource, /setActiveGuidedCard\("review"\)/);
+  assert.match(uploadSource, /setActiveGuidedCard\(firstIncompleteRequiredCard\)/);
   assert.match(uploadSource, /className="meetro-visual-surface guided-request-builder request-help-manual-form"/);
   assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
   assert.doesNotMatch(uploadSource, /setManualDraft|manualDraft|draftCopy/);
+});
+
+test("incomplete canonical location cannot present an actionable submission", () => {
+  assert.match(
+    uploadSource,
+    /disabled=\{!draftReadiness\.isReady \|\| creating \|\| uploading\}/
+  );
+  assert.match(uploadSource, /id="job-request-submit-guidance"/);
+  assert.match(
+    uploadSource,
+    /continueToCard\(requestValidation\.errors\.location \? "location" : "work"\)/
+  );
+  assert.match(
+    uploadSource,
+    /aria-describedby=\{!draftReadiness\.isReady \? "job-request-submit-guidance" : undefined\}/
+  );
 });
 
 test("new Request Help drafts do not inherit prior workflow address state", () => {
