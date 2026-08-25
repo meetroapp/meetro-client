@@ -162,6 +162,23 @@ test("Upload is the single ordinary Job Request creation workspace", () => {
   assert.doesNotMatch(uploadSource, /createRelationship|Professional Response|conversationParticipants/);
 });
 
+test("Add records exact reviews, applies one patch, confirms it, and never submits", () => {
+  const start = uploadSource.indexOf("async function reviewPendingInterpretation(action)");
+  const end = uploadSource.indexOf("function handleConversationSubmit", start);
+  const boundary = uploadSource.slice(start, end);
+
+  assert.match(boundary, /recordWorkflowReview\(\{/);
+  assert.match(boundary, /elementId: field\.path/);
+  assert.match(boundary, /applyJobRequestInterpretationPatch\(/);
+  assert.match(boundary, /alignAssistantServiceSelection\(patched\.draft\)/);
+  assert.match(
+    boundary,
+    /confirmAppliedJobRequestInterpretationFields\([\s\S]*aligned,[\s\S]*patched\.appliedFields/
+  );
+  assert.match(boundary, /setPendingInterpretation\(null\)/);
+  assert.doesNotMatch(boundary, /handleCreatePost|\/posts|setSubmittedRequest/);
+});
+
 test("new conversational labels exist in supported languages", () => {
   const keys = [
     "jobRequestConversationQuestion",

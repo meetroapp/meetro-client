@@ -68,6 +68,7 @@ import {
 } from "../utils/requestPhotoMedia";
 import {
   applyJobRequestInterpretationPatch,
+  confirmAppliedJobRequestInterpretationFields,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
   requestJobRequestInterpretation,
@@ -899,7 +900,11 @@ function Upload({ setPage }) {
             current,
             pendingInterpretation.interpretation
           );
-          return alignAssistantServiceSelection(patched.draft);
+          const aligned = alignAssistantServiceSelection(patched.draft);
+          return confirmAppliedJobRequestInterpretationFields(
+            aligned,
+            patched.appliedFields
+          );
         });
         appendCreationMessages(
           createInterpretationSuccessMessages({

@@ -347,3 +347,29 @@ test("workflow review requires exact proposal identity and preserves non-canonic
   assert.equal(calls[0].url, `/api/intelligence/proposals/${ids.proposal}/review`);
   assert.equal(JSON.parse(calls[0].options.body).elementId, "customer_notes");
 });
+
+test("workflow review transports exact camelCase Job Request patch paths", async () => {
+  const elementId = "details.additionalNotes";
+  const calls = [];
+  const review = await recordWorkflowReview({
+    proposalId: ids.proposal,
+    elementId,
+    action: "ACCEPTED",
+    idempotencyKey: ids.key,
+    authFetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_REVIEW_RECORDED",
+          canonicalMutationPerformed: false,
+          review: { proposalId: ids.proposal, elementId, action: "ACCEPTED" },
+        },
+      };
+    },
+  });
+
+  assert.equal(review.elementId, elementId);
+  assert.equal(JSON.parse(calls[0].options.body).elementId, elementId);
+});

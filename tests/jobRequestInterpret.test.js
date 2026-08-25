@@ -23,6 +23,7 @@ import {
   JobRequestInterpretError,
   applyJobRequestInterpretationPatch,
   buildJobRequestInterpretRequest,
+  confirmAppliedJobRequestInterpretationFields,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
   requestJobRequestInterpretation,
@@ -180,6 +181,65 @@ test("one homeowner message produces a reviewable multi-field request proposal w
   );
   assert.equal(replay.draft.location.city, "Fort Myers");
   assert.equal(replay.rejectedFields[0].reason, "homeowner_value_protected");
+});
+
+test("accepted Cape Coral proposal updates the same draft and clears its governed review gate", () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  let draft = createJobRequestDraft({
+    initialLocation: "123 Palm Ave",
+    initialCity: "Cape Coral",
+    initialRegion: "FL",
+    initialPostalCode: "33904",
+  });
+  draft = applyHomeownerConversationText(draft, homeownerText);
+  const reviewedInterpretation = interpretation([
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({
+      path: "service.specialty",
+      value: "structural_repairs",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "details.additionalNotes",
+      value: "The section is separating and temporarily braced. Photos can be added.",
+    }),
+  ]);
+  const patched = applyJobRequestInterpretationPatch(
+    draft,
+    reviewedInterpretation
+  );
+  const aligned = setServiceClassification(
+    patched.draft,
+    {
+      category: "structural_repairs",
+      requestCategory: "structural_repairs",
+      domain: "home_services",
+      specialty: "structural_repairs",
+      selectedServiceOptionId: "service:structural_repairs",
+      displayLabel: "Structural Repairs",
+    },
+    { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
+  );
+  const accepted = confirmAppliedJobRequestInterpretationFields(
+    aligned,
+    patched.appliedFields
+  );
+
+  assert.equal(accepted.draftId, draft.draftId);
+  assert.equal(accepted.job.title, "Repair cracked wall by front entry");
+  assert.equal(accepted.job.description, homeownerText);
+  assert.equal(accepted.service.specialty, "structural_repairs");
+  assert.equal(accepted.service.displayLabel, "Structural Repairs");
+  assert.equal(accepted.location.city, "Cape Coral");
+  assert.equal(accepted.timing.availability, "Available this week");
+  assert.equal(accepted.fieldMeta.service.specialty.confirmed, true);
+  assert.equal(accepted.readiness.isReady, true);
+  assert.equal(accepted.submission.status, "idle");
+  assert.equal(accepted.submission.snapshot, null);
 });
 
 test("request builder rejects unsupported versions and non-text draft values", () => {

@@ -3,6 +3,7 @@ import {
   JOB_REQUEST_DRAFT_VERSION,
   JOB_REQUEST_DRAFT_SOURCE,
   JOB_REQUEST_DRAFT_UNCERTAINTY,
+  confirmDraftField,
   updateDraftField,
 } from "./jobRequestDraft.js";
 
@@ -447,4 +448,19 @@ export function applyJobRequestInterpretationPatch(draft, interpretation) {
 
   if (next !== draft) next.submission = originalSubmission;
   return { draft: next, appliedFields, rejectedFields };
+}
+
+export function confirmAppliedJobRequestInterpretationFields(
+  draft,
+  appliedFields = []
+) {
+  if (!draft || typeof draft !== "object" || !Array.isArray(appliedFields)) {
+    throw new TypeError("A draft and applied interpretation fields are required.");
+  }
+
+  return [...new Set(appliedFields)].reduce(
+    (current, path) =>
+      PATCH_PATHS.has(path) ? confirmDraftField(current, path) : current,
+    draft
+  );
 }

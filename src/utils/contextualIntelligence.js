@@ -372,7 +372,7 @@ export async function recordWorkflowReview({
 }) {
   const normalizedProposalId = safeUuid(proposalId);
   const normalizedAction = String(action || "").trim().toUpperCase();
-  if (!normalizedProposalId || !/^[a-z][a-z0-9_.:-]{0,159}$/.test(String(elementId || "")) ||
+  if (!normalizedProposalId || !/^[A-Za-z][A-Za-z0-9_.:-]{0,159}$/.test(String(elementId || "")) ||
       !["ACCEPTED", "EDITED", "REJECTED"].includes(normalizedAction)) {
     throw new TypeError("A governed Ask Meetro review is required.");
   }
