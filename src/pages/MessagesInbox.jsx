@@ -19,6 +19,7 @@ import {
   getRequestCommunicationEndpoint,
   normalizeRequestConversations,
 } from "../utils/requestCommunication";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
 import {
@@ -509,6 +510,48 @@ const MESSAGE_SECTION_OPTIONS = [
   ...COMMUNICATION_SECTION_OPTIONS,
 ];
 
+function getRequesterResponseInboxCopy(language = "en") {
+  const localized = {
+    es: {
+      title: "Respuestas profesionales",
+      count: (value) => `${value} respuesta${value === 1 ? "" : "s"} nueva${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Un profesional"} respondió a tu solicitud`,
+      fallbackRequest: "Solicitud de servicio",
+      review: "Revisar respuesta",
+      conversationReady: "Conversación lista",
+      openConversation: "Abrir conversación",
+    },
+    fr: {
+      title: "Réponses professionnelles",
+      count: (value) => `${value} nouvelle${value === 1 ? "" : "s"} réponse${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Un professionnel"} a répondu à votre demande`,
+      fallbackRequest: "Demande de service",
+      review: "Examiner la réponse",
+      conversationReady: "Conversation prête",
+      openConversation: "Ouvrir la conversation",
+    },
+    "pt-BR": {
+      title: "Respostas profissionais",
+      count: (value) => `${value} nova${value === 1 ? "" : "s"} resposta${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Um profissional"} respondeu à sua solicitação`,
+      fallbackRequest: "Solicitação de serviço",
+      review: "Revisar resposta",
+      conversationReady: "Conversa pronta",
+      openConversation: "Abrir conversa",
+    },
+  };
+
+  return localized[language] || {
+    title: "Professional Responses",
+    count: (value) => `${value} new response${value === 1 ? "" : "s"}`,
+    responded: (name) => `${name || "A professional"} responded to your request`,
+    fallbackRequest: "Service Request",
+    review: "Review Response",
+    conversationReady: "Conversation ready",
+    openConversation: "Open Conversation",
+  };
+}
+
 function normalizeRelationshipView(value) {
   const view = String(value || "all");
 
@@ -649,6 +692,7 @@ function MessagesInbox({ setPage, currentPage }) {
       : "";
 
   const [quotes, setQuotes] = useState([]);
+  const [requestResponses, setRequestResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const conversationFetchInFlightRef = useRef(false);
   const conversationFetchSequenceRef = useRef(0);
@@ -657,6 +701,7 @@ function MessagesInbox({ setPage, currentPage }) {
     getStoredAccountConnectionState()
   );
   const [language, updateLanguage] = useState(getLanguage());
+  const requesterResponseLabels = getRequesterResponseInboxCopy(language);
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
@@ -1000,9 +1045,19 @@ function MessagesInbox({ setPage, currentPage }) {
 
   useEffect(() => {
     fetchConversations("mount");
+    if (activeAccountMode === "personal") {
+      void getRequesterResponseInbox({ setPage }).then((result) => {
+        setRequestResponses(result.ok ? result.responses : []);
+      });
+    }
 
     const refreshMessages = (event) => {
       fetchConversations(event?.type || "event");
+      if (activeAccountMode === "personal") {
+        void getRequesterResponseInbox({ setPage }).then((result) => {
+          if (result.ok) setRequestResponses(result.responses);
+        });
+      }
     };
 
     window.addEventListener("focus", refreshMessages);
@@ -2275,6 +2330,19 @@ function MessagesInbox({ setPage, currentPage }) {
         getConversationSearchText(quote).includes(normalizedSearchQuery)
       )
     : prioritizedVisibleQuotes;
+  const unresolvedRequesterResponses = requestResponses.filter(
+    (response) =>
+      response.unresolved === true &&
+      (!normalizedSearchQuery ||
+        normalizeMessageSearchText(
+          [
+            response.businessName,
+            response.requestTitle,
+            response.introductionText,
+            "professional response",
+          ].filter(Boolean).join(" ")
+        ).includes(normalizedSearchQuery))
+  );
   const activeMessageSectionLabel = t(
     MESSAGE_SECTION_OPTIONS.find(([key]) => key === messageSection)?.[1] ||
       "messagesSectionConversations",
@@ -3644,6 +3712,20 @@ function MessagesInbox({ setPage, currentPage }) {
     setPage(activeAccountMode === "business" ? "customerRelationshipsCenter" : "myRequests");
   }
 
+  function reviewRequesterResponse(response = {}) {
+    if (!response.requestId) return;
+
+    const requestContext = {
+      id: response.requestId,
+      requestId: response.requestId,
+      title: response.requestTitle || requesterResponseLabels.fallbackRequest,
+    };
+    localStorage.setItem("selectedHomeownerRequestId", String(response.requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(requestContext));
+    localStorage.setItem("myRequestsReturnPage", "messagesInbox");
+    setPage("homeownerRequestDetails");
+  }
+
   function getRelationshipPreviewText(relationship = {}) {
     if (isImportedInactiveRelationship(relationship)) {
       return t("messagesSavedContactInvite", language);
@@ -3704,13 +3786,24 @@ function MessagesInbox({ setPage, currentPage }) {
     const conversation = normalizeConversationForOpen(quote);
     if (!conversation) return null;
 
-    const statusChip = options.statusChip || getConversationRowStatusChip(conversation);
+    const isRequesterRequestConversation = Boolean(
+      activeAccountMode === "personal" &&
+        conversation.sourceType === "request" &&
+        conversation.threadType === CONVERSATION_THREAD_TYPES.CANONICAL
+    );
+    const statusChip = options.statusChip ||
+      (isRequesterRequestConversation
+        ? requesterResponseLabels.openConversation
+        : getConversationRowStatusChip(conversation));
     const rowIdentity = resolveRelationshipIdentity({
       record: conversation,
       viewerRole: activeAccountMode === "business" ? "business" : "homeowner",
       isLinked: true,
       typeLabel:
         options.typeLabel ||
+        (isRequesterRequestConversation
+          ? requesterResponseLabels.conversationReady
+          : "") ||
         (isEmergencyConversationType(conversation)
           ? t("emergency", language)
           : isHiringConversation(conversation)
@@ -6319,7 +6412,12 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           )}
           {(!businessContactsLoading || messageSection !== "contacts") &&
-            (messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
+            (messageSection === "contacts"
+              ? searchedRelationships.length
+              : searchedVisibleQuotes.length +
+                (messageSection === "conversations"
+                  ? unresolvedRequesterResponses.length
+                  : 0)) === 0 && (
             <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
               <div style={emptyIcon} aria-hidden="true">MSG</div>
 
@@ -6342,6 +6440,49 @@ function MessagesInbox({ setPage, currentPage }) {
               )}
             </div>
           )}
+
+          {messageSection === "conversations" &&
+            activeAccountMode === "personal" &&
+            unresolvedRequesterResponses.length > 0 && (
+              <section
+                style={requestResponseSection}
+                aria-labelledby="request-response-inbox-title"
+              >
+                <div style={requestResponseHeader}>
+                  <h2 id="request-response-inbox-title" style={requestResponseTitle}>
+                    {requesterResponseLabels.title}
+                  </h2>
+                  <span style={requestResponseCount}>
+                    {requesterResponseLabels.count(unresolvedRequesterResponses.length)}
+                  </span>
+                </div>
+
+                {unresolvedRequesterResponses.map((response) => (
+                  <article
+                    key={response.responseId}
+                    style={requestResponseCard}
+                    className="meetro-visual-surface"
+                  >
+                    <strong style={requestResponseBusiness}>
+                      {requesterResponseLabels.responded(response.businessName)}
+                    </strong>
+                    <span style={requestResponseRequestTitle}>
+                      {response.requestTitle || requesterResponseLabels.fallbackRequest}
+                    </span>
+                    {response.introductionText && (
+                      <p style={requestResponseText}>{response.introductionText}</p>
+                    )}
+                    <button
+                      type="button"
+                      style={requestResponseAction}
+                      onClick={() => reviewRequesterResponse(response)}
+                    >
+                      {requesterResponseLabels.review}
+                    </button>
+                  </article>
+                ))}
+              </section>
+            )}
 
 	          <div style={conversationList}>
 	            {messageSection !== "contacts" ? (
@@ -8246,6 +8387,73 @@ const emergencyStatusBadge = {
   background: "rgba(239,68,68,0.12)",
   color: "#dc2626",
   border: "1px solid rgba(239,68,68,0.18)",
+};
+
+const requestResponseSection = {
+  display: "grid",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const requestResponseHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+};
+
+const requestResponseTitle = {
+  margin: 0,
+  color: "var(--meetro-color-charcoal, #172317)",
+  fontSize: "16px",
+};
+
+const requestResponseCount = {
+  borderRadius: "999px",
+  padding: "5px 9px",
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const requestResponseCard = {
+  display: "grid",
+  gap: "8px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(99, 102, 241, 0.18)",
+  background: "#ffffff",
+};
+
+const requestResponseBusiness = {
+  color: "var(--meetro-color-charcoal, #172317)",
+  fontSize: "14px",
+};
+
+const requestResponseRequestTitle = {
+  color: "var(--meetro-color-wood, #b7791f)",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const requestResponseText = {
+  margin: 0,
+  color: "var(--meetro-color-muted, #5f6b63)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const requestResponseAction = {
+  justifySelf: "start",
+  minHeight: "42px",
+  padding: "9px 13px",
+  border: 0,
+  borderRadius: "12px",
+  background: "var(--meetro-color-charcoal, #172317)",
+  color: "#ffffff",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 export default MessagesInbox;

@@ -212,7 +212,7 @@ export const translations = {
     homeHelpTodaySubtitle:
       "Request service, track active work, continue conversations, and review service history.",
     requestService: "Request Service",
-    homeWorkflowLabel: "Homeowner workflow",
+    homeWorkflowLabel: "Your workflow",
     homeMyProjects: "My Projects",
     homeMyProjectsSubtitle: "Active and completed work in one place.",
     homeMyProjectsActive: "Active",
@@ -4258,8 +4258,8 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Service History",
     myRequestsBack: "Back",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Manage your home projects, requests, quotes, schedule, and history.",
-    myRequestsPerspectiveEyebrow: "Homeowner perspective",
+    myRequestsSubtitle: "Manage your projects, requests, quotes, schedule, and history.",
+    myRequestsPerspectiveEyebrow: "Your projects",
     myRequestsPerspectiveTitle: "How we move forward together",
     myRequestsPerspectiveText:
       "See the current status, the next step, and where the conversation continues for every project.",
@@ -4684,8 +4684,8 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Historial de servicio",
     myRequestsBack: "Volver",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Administra proyectos del hogar, solicitudes, cotizaciones, agenda e historial.",
-    myRequestsPerspectiveEyebrow: "Perspectiva del propietario",
+    myRequestsSubtitle: "Administra tus proyectos, solicitudes, cotizaciones, agenda e historial.",
+    myRequestsPerspectiveEyebrow: "Tus proyectos",
     myRequestsPerspectiveTitle: "Cómo avanzamos juntos",
     myRequestsPerspectiveText:
       "Ve el estado actual, el siguiente paso y dónde continúa la conversación de cada proyecto.",
@@ -5111,8 +5111,8 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Historique du service",
     myRequestsBack: "Retour",
     myRequestsTitle: "Centre de travail",
-    myRequestsSubtitle: "Gérez vos projets de maison, demandes, devis, planning et historique.",
-    myRequestsPerspectiveEyebrow: "Point de vue propriétaire",
+    myRequestsSubtitle: "Gérez vos projets, demandes, devis, planning et historique.",
+    myRequestsPerspectiveEyebrow: "Vos projets",
     myRequestsPerspectiveTitle: "Comment avançons-nous ensemble",
     myRequestsPerspectiveText:
       "Voyez le statut actuel, la prochaine étape et où la conversation continue pour chaque projet.",
@@ -5562,8 +5562,8 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Histórico de serviços",
     myRequestsBack: "Voltar",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Gerencie projetos da casa, solicitações, orçamentos, agenda e histórico.",
-    myRequestsPerspectiveEyebrow: "Perspectiva do proprietário",
+    myRequestsSubtitle: "Gerencie seus projetos, solicitações, orçamentos, agenda e histórico.",
+    myRequestsPerspectiveEyebrow: "Seus projetos",
     myRequestsPerspectiveTitle: "Como avançamos juntos",
     myRequestsPerspectiveText:
       "Veja o status atual, a próxima etapa e onde a conversa continua para cada projeto.",
@@ -13028,9 +13028,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Submit Response",
     professionalResponseSubmitting: "Submitting response…",
     professionalResponseSubmitted: "Response submitted",
-    professionalResponsePendingReview: "Pending homeowner review.",
+    professionalResponsePendingReview: "Waiting for requester review.",
     professionalResponsePreselectionBoundary:
-      "Submitting creates a pending response only. Messaging is not available before homeowner selection.",
+      "Submitting creates a pending response only. Messaging is not available before requester selection.",
     professionalResponseUnavailable:
       "Response unavailable. Meetro could not verify canonical participation state.",
     professionalResponseIntroductionRequired:
@@ -13052,9 +13052,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Enviar respuesta",
     professionalResponseSubmitting: "Enviando respuesta…",
     professionalResponseSubmitted: "Respuesta enviada",
-    professionalResponsePendingReview: "Pendiente de revisión del propietario.",
+    professionalResponsePendingReview: "En espera de la revisión del solicitante.",
     professionalResponsePreselectionBoundary:
-      "El envío crea solo una respuesta pendiente. Los mensajes no están disponibles antes de que el propietario seleccione a un profesional.",
+      "El envío crea solo una respuesta pendiente. Los mensajes no están disponibles antes de la selección del solicitante.",
     professionalResponseUnavailable:
       "Respuesta no disponible. Meetro no pudo verificar el estado canónico de participación.",
     professionalResponseIntroductionRequired:
@@ -13076,9 +13076,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Envoyer la réponse",
     professionalResponseSubmitting: "Envoi de la réponse…",
     professionalResponseSubmitted: "Réponse envoyée",
-    professionalResponsePendingReview: "En attente de l’examen du propriétaire.",
+    professionalResponsePendingReview: "En attente de l’examen du demandeur.",
     professionalResponsePreselectionBoundary:
-      "L’envoi crée uniquement une réponse en attente. La messagerie n’est pas disponible avant la sélection par le propriétaire.",
+      "L’envoi crée uniquement une réponse en attente. La messagerie n’est pas disponible avant la sélection par le demandeur.",
     professionalResponseUnavailable:
       "Réponse indisponible. Meetro n’a pas pu vérifier l’état canonique de participation.",
     professionalResponseIntroductionRequired:
@@ -13100,9 +13100,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Enviar resposta",
     professionalResponseSubmitting: "Enviando resposta…",
     professionalResponseSubmitted: "Resposta enviada",
-    professionalResponsePendingReview: "Aguardando análise do morador.",
+    professionalResponsePendingReview: "Aguardando análise do solicitante.",
     professionalResponsePreselectionBoundary:
-      "O envio cria apenas uma resposta pendente. As mensagens não ficam disponíveis antes da seleção pelo morador.",
+      "O envio cria apenas uma resposta pendente. As mensagens não ficam disponíveis antes da seleção pelo solicitante.",
     professionalResponseUnavailable:
       "Resposta indisponível. O Meetro não conseguiu verificar o estado canônico de participação.",
     professionalResponseIntroductionRequired:

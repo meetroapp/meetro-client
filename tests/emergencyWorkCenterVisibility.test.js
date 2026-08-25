@@ -426,10 +426,14 @@ test("Emergency Work Center uses the reusable full canonical timeline", () => {
   );
 });
 
-test("Emergency Work Center adds no conversation-list dependency or direct polling loop", () => {
+test("standard Request presentation may read canonical conversations without changing Emergency or adding polling", () => {
   assert.doesNotMatch(
-    myRequestsSource,
+    emergencyCardSource,
     /fetchCanonicalConversations|getRequestCommunicationEndpoint|\/conversations\?/
+  );
+  assert.match(
+    myRequestsSource,
+    /fetchCanonicalConversations\("personal", \{ setPage \}\)/
   );
   assert.doesNotMatch(
     myRequestsSource,

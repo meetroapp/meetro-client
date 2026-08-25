@@ -60,13 +60,14 @@ test("Homeowner Work Center routes compact cards to a dedicated canonical detail
 });
 
 test("ordinary cards remain compact while full sections render only in detail mode", () => {
-  assert.match(myRequestsSource, /\{!isDetailView && \(\s*<button[\s\S]*Review Details/);
+  assert.match(myRequestsSource, /\{!isDetailView && \(\s*<button[\s\S]*canonicalPresentation\?\.ctaLabel/);
   assert.match(myRequestsSource, /\{showsDedicatedDetail && \(\s*<div[\s\S]*data-homeowner-request-details-id/);
   assert.match(myRequestsSource, /const showsDedicatedDetail =[\s\S]*isDetailView && requestId === selectedRequestId/);
   assert.match(myRequestsSource, /<HomeownerWorkflowHub/);
   assert.match(myRequestsSource, /<HomeownerRequestModificationPanel/);
   assert.match(myRequestsSource, /<PhotoStrip/);
   assert.match(myRequestsSource, /<HomeownerProfessionalResponseReview/);
+  assert.doesNotMatch(myRequestsSource, /Selected request|Solicitud seleccionada/);
 });
 
 test("detail navigation, edit containment, cancellation, and Emergency routes stay explicit", () => {

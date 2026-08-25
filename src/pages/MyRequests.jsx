@@ -31,6 +31,12 @@ import { getEmergencyRequests } from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
+import { fetchCanonicalConversations } from "../utils/requestCommunication";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
+import {
+  deriveRequestPresentationState,
+  REQUEST_PRESENTATION_STATES,
+} from "../utils/requestPresentationState";
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
@@ -345,12 +351,17 @@ function getQuoteNotesText(quote) {
 function HomeownerWorkflowHub({
   request,
   language,
+  presentationState,
   linkedAppointment,
   onOpenConversation,
+  onReviewResponse,
   onPrimaryAction,
   hideCommunicationAction = false,
 }) {
   const workflow = getHomeownerWorkflowPresentation(request, language);
+  const canonicalPresentation = presentationState?.applicable
+    ? presentationState
+    : null;
   const timeline = getHomeownerWorkflowTimeline(request, language);
   const hasQuote = Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0;
   const hasPayment = Boolean(
@@ -409,13 +420,18 @@ function HomeownerWorkflowHub({
     ? CONVERSATION_ACTION_STAGE.HISTORY
     : CONVERSATION_ACTION_STAGE.ACTIVE;
   const submittedOnly = workflow.key === "request";
+  const responseReceived =
+    canonicalPresentation?.key === REQUEST_PRESENTATION_STATES.RESPONSE_RECEIVED;
+  const professionalSelected =
+    canonicalPresentation?.key === REQUEST_PRESENTATION_STATES.PROFESSIONAL_SELECTED;
   const hasAuthoritativeConversation = Boolean(
     !submittedOnly &&
       request.conversation_available === true &&
       getCanonicalConversationActionTarget(request).ok
   );
-  const showPrimaryAction =
-    !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
+  const showPrimaryAction = canonicalPresentation
+    ? responseReceived || professionalSelected
+    : !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
 
   return (
     <div style={workflowHubCard}>
@@ -424,14 +440,18 @@ function HomeownerWorkflowHub({
           <span style={workflowHubEyebrow}>
             {t("myRequestsWorkflow", language)}
           </span>
-          <h3 style={workflowHubTitle}>{workflow.statusLabel}</h3>
+          <h3 style={workflowHubTitle}>
+            {canonicalPresentation?.statusLabel || workflow.statusLabel}
+          </h3>
         </div>
-        <span style={workflowHubStatusBadge}>{workflow.progressHint}</span>
+        <span style={workflowHubStatusBadge}>
+          {canonicalPresentation?.nextActionLabel || workflow.progressHint}
+        </span>
       </div>
 
       <div style={workflowHubNextStep}>
         <span>{t("myRequestsNextStep", language)}</span>
-        <strong>{workflow.nextAction}</strong>
+        <strong>{canonicalPresentation?.guidance || workflow.nextAction}</strong>
       </div>
 
       <div style={workflowTimelineRow}>
@@ -463,13 +483,17 @@ function HomeownerWorkflowHub({
         {showPrimaryAction && <button
           type="button"
           style={workflowHubPrimaryButton}
-          onClick={() =>
-            primaryIsConversation
+          onClick={() => {
+            if (responseReceived) return onReviewResponse?.();
+            if (professionalSelected) return onOpenConversation?.();
+            return primaryIsConversation
               ? onOpenConversation?.()
-              : onPrimaryAction?.(workflow, request)
-          }
+              : onPrimaryAction?.(workflow, request);
+          }}
         >
-          {primaryIsConversation
+          {canonicalPresentation
+            ? canonicalPresentation.ctaLabel
+            : primaryIsConversation
             ? getConversationActionLabel(
                 conversationActionStage,
                 language
@@ -646,6 +670,9 @@ function MyRequests({ setPage, view = "list" }) {
     REQUEST_COLLECTION_STATUS.LOADING
   );
   const [requestReloadKey, setRequestReloadKey] = useState(0);
+  const [canonicalRequesterResponses, setCanonicalRequesterResponses] = useState([]);
+  const [canonicalRequesterConversations, setCanonicalRequesterConversations] = useState([]);
+  const [confirmationResponseId, setConfirmationResponseId] = useState(null);
   const [requestMutationStatus, setRequestMutationStatus] = useState("idle");
   const [requestMutationError, setRequestMutationError] = useState("");
   const [customerQuoteDiscovery, setCustomerQuoteDiscovery] = useState(null);
@@ -761,6 +788,41 @@ function MyRequests({ setPage, view = "list" }) {
   }, [requestReloadKey, setPage]);
 
   useEffect(() => {
+    if (canReadLegacyWorkflowStorage()) return undefined;
+
+    let active = true;
+    const loadCanonicalPresentationSources = () => {
+      void Promise.all([
+        getRequesterResponseInbox({ setPage }),
+        fetchCanonicalConversations("personal", { setPage }),
+      ]).then(([responseResult, conversationResult]) => {
+        if (!active) return;
+        if (responseResult.ok) {
+          setCanonicalRequesterResponses(responseResult.responses);
+        }
+        if (conversationResult.ok) {
+          setCanonicalRequesterConversations(conversationResult.conversations);
+        }
+      });
+    };
+    loadCanonicalPresentationSources();
+    window.addEventListener("focus", loadCanonicalPresentationSources);
+    window.addEventListener(
+      "meetro-messages-updated",
+      loadCanonicalPresentationSources
+    );
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadCanonicalPresentationSources);
+      window.removeEventListener(
+        "meetro-messages-updated",
+        loadCanonicalPresentationSources
+      );
+    };
+  }, [requestReloadKey, setPage]);
+
+  useEffect(() => {
     const refreshCoordinator =
       createEmergencyRefreshCoordinator({
         load: async () => {
@@ -868,6 +930,19 @@ function MyRequests({ setPage, view = "list" }) {
       ? [selectedRequest]
       : []
     : sortedRequests;
+
+  function getPresentationForRequest(request = {}) {
+    return deriveRequestPresentationState({
+      request,
+      responses: canonicalRequesterResponses,
+      conversations: canonicalRequesterConversations,
+      confirmationResponseId:
+        String(request.requestId || request.id) === String(selectedRequestId)
+          ? confirmationResponseId
+          : null,
+      language,
+    });
+  }
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
     if (!canReadLegacyWorkflowStorage()) return false;
@@ -1384,12 +1459,17 @@ function MyRequests({ setPage, view = "list" }) {
             const unsupportedWorkflow = truthfulRequest !== request;
             const unavailableCopy = getApprovalSchedulingUnavailableCopy(language);
             const lifecycle = getHomeownerLifecycleStage(truthfulRequest, language);
+            const requestPresentation = getPresentationForRequest(truthfulRequest);
+            const canonicalPresentation = requestPresentation.applicable
+              ? requestPresentation
+              : null;
             const linkedAppointment = null;
             const hasQuoteReview =
               Array.isArray(truthfulRequest.quotesReceived) &&
               truthfulRequest.quotesReceived.length > 0;
-            const conversationAvailable =
-              getCanonicalConversationActionTarget(request).ok;
+            const conversationAvailable = canonicalPresentation
+              ? canonicalPresentation.canOpenConversation
+              : getCanonicalConversationActionTarget(request).ok;
 
             const authoritativeCounts = getAuthoritativeHomeownerRequestCounts(request);
 
@@ -1423,15 +1503,9 @@ function MyRequests({ setPage, view = "list" }) {
                   >
                     <div style={{ flex: 1 }}>
                       <div style={cardPillRow}>
-                        <span style={statusPill}>{lifecycle.stageLabel}</span>
-
-                        {isDetailView && (
-                          <span style={selectedPill}>
-                            {language === "es"
-                              ? "Solicitud seleccionada"
-                              : "Selected request"}
-                          </span>
-                        )}
+                        <span style={statusPill}>
+                          {canonicalPresentation?.statusLabel || lifecycle.stageLabel}
+                        </span>
                       </div>
 
                       <h3
@@ -1444,6 +1518,12 @@ function MyRequests({ setPage, view = "list" }) {
                       >
                         {requestTitle}
                       </h3>
+
+                      {canonicalPresentation?.businessName && (
+                        <strong style={selectedBusinessName}>
+                          {canonicalPresentation.businessName}
+                        </strong>
+                      )}
 
                       <p
                         style={{
@@ -1489,7 +1569,7 @@ function MyRequests({ setPage, view = "list" }) {
                         lineHeight: 1.35,
                       }}
                     >
-                      {lifecycle.nextStep}
+                      {canonicalPresentation?.guidance || lifecycle.nextStep}
                     </strong>
                   </div>
 
@@ -1530,6 +1610,10 @@ function MyRequests({ setPage, view = "list" }) {
                           : `Review details for ${requestTitle}`
                       }
                       onClick={() => {
+                        if (canonicalPresentation?.canOpenConversation) {
+                          openRequestConversation(request, canonicalPresentation);
+                          return;
+                        }
                         setSelectedRequestId(requestId);
                         localStorage.setItem(
                           "selectedHomeownerRequestId",
@@ -1538,9 +1622,8 @@ function MyRequests({ setPage, view = "list" }) {
                         setPage("homeownerRequestDetails");
                       }}
                     >
-                      {language === "es"
-                        ? "Ver detalles"
-                        : "Review Details"}
+                      {canonicalPresentation?.ctaLabel ||
+                        (language === "es" ? "Ver detalles" : "Review Details")}
                     </button>
                   )}
                 </div>
@@ -1602,8 +1685,16 @@ function MyRequests({ setPage, view = "list" }) {
                     <HomeownerWorkflowHub
                       request={truthfulRequest}
                       language={language}
+                      presentationState={canonicalPresentation}
                       linkedAppointment={linkedAppointment}
-                      onOpenConversation={() => openRequestConversation(request)}
+                      onOpenConversation={() =>
+                        openRequestConversation(request, canonicalPresentation || {})
+                      }
+                      onReviewResponse={() =>
+                        document
+                          .getElementById(`professional-responses-${requestId}`)
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
                       onPrimaryAction={(workflow) =>
                         workflow.key === "cancelled"
                           ? setPage("upload")
@@ -1674,6 +1765,10 @@ function MyRequests({ setPage, view = "list" }) {
                       requestId={requestId}
                       language={language}
                       setPage={setPage}
+                      onSelectionStateChange={setConfirmationResponseId}
+                      onSelectionConfirmed={() =>
+                        setRequestReloadKey((value) => value + 1)
+                      }
                     />
 
                     {unsupportedWorkflow && (
@@ -2623,14 +2718,12 @@ const statusPill = {
   fontSize: "12px",
 };
 
-const selectedPill = {
-  display: "inline-flex",
-  background: "#ecfdf5",
+const selectedBusinessName = {
+  display: "block",
+  marginTop: "8px",
   color: "#047857",
-  padding: "7px 11px",
-  borderRadius: "999px",
   fontWeight: "900",
-  fontSize: "12px",
+  fontSize: "15px",
 };
 
 const swipeGalleryWrap = {

@@ -14,6 +14,11 @@ import {
   resolveHomeownerConversationEntry,
   stageHomeownerCanonicalConversation,
 } from "../utils/homeownerConversationEntry";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
+import {
+  deriveRequestPresentationState,
+  REQUEST_PRESENTATION_STATES,
+} from "../utils/requestPresentationState";
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
@@ -209,6 +214,7 @@ function Home({ setPage }) {
     HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
   );
   const [conversationReloadKey, setConversationReloadKey] = useState(0);
+  const [canonicalRequesterResponses, setCanonicalRequesterResponses] = useState([]);
   const canonicalConversationLoadRef = useRef({
     identity: "",
     records: [],
@@ -304,6 +310,27 @@ function Home({ setPage }) {
       active = false;
     };
   }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
+
+  useEffect(() => {
+    if (legacyWorkflowStorageEnabled) return undefined;
+
+    let active = true;
+    const loadRequesterResponses = () => {
+      void getRequesterResponseInbox({ setPage }).then((result) => {
+        if (!active) return;
+        if (result.ok) setCanonicalRequesterResponses(result.responses);
+      });
+    };
+    loadRequesterResponses();
+    window.addEventListener("focus", loadRequesterResponses);
+    window.addEventListener("meetro-messages-updated", loadRequesterResponses);
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadRequesterResponses);
+      window.removeEventListener("meetro-messages-updated", loadRequesterResponses);
+    };
+  }, [legacyWorkflowStorageEnabled, requestReloadKey, conversationReloadKey, setPage]);
 
   const loadCanonicalHomeownerConversations = useCallback(
     ({ force = false } = {}) => {
@@ -560,6 +587,15 @@ function Home({ setPage }) {
     });
   }
 
+  function getPresentationForRequest(request = {}) {
+    return deriveRequestPresentationState({
+      request,
+      responses: canonicalRequesterResponses,
+      conversations: canonicalHomeownerConversations,
+      language,
+    });
+  }
+
   function stageHomeownerRequestContext(request = {}) {
     const requestId = request.requestId ?? request.id;
     if (requestId != null && requestId !== "") {
@@ -613,7 +649,18 @@ function Home({ setPage }) {
 
   function openHomeownerProject(request = {}) {
     setActiveAccountMode("personal");
+    const presentation = getPresentationForRequest(request);
     const decision = getConversationEntryForRequest(request);
+
+    if (
+      presentation.applicable &&
+      presentation.key === REQUEST_PRESENTATION_STATES.RESPONSE_RECEIVED
+    ) {
+      stageHomeownerRequestContext(request);
+      clearSelectedConversationContext();
+      setPage("homeownerRequestDetails");
+      return;
+    }
 
     if (
       decision.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
@@ -805,6 +852,7 @@ function Home({ setPage }) {
                   request={request}
                   language={language}
                   conversationEntry={getConversationEntryForRequest(request)}
+                  presentationState={getPresentationForRequest(request)}
                   onClick={() => openHomeownerProject(request)}
                 />
               ))}
@@ -970,6 +1018,7 @@ function Home({ setPage }) {
                     request={request}
                     language={language}
                     conversationEntry={getConversationEntryForRequest(request)}
+                    presentationState={getPresentationForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -1013,6 +1062,7 @@ function Home({ setPage }) {
                     request={request}
                     language={language}
                     conversationEntry={getConversationEntryForRequest(request)}
+                    presentationState={getPresentationForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -1733,22 +1783,16 @@ function ToolCard({ icon, title, text, onClick }) {
   );
 }
 
-function ProjectCard({ request, language, conversationEntry, onClick }) {
+function ProjectCard({ request, language, conversationEntry, presentationState, onClick }) {
   const journey = getHomeownerProjectJourney(request, language);
-  const professionalName =
-    conversationEntry?.action ===
-    HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
-      ? conversationEntry.conversation?.businessName ||
-        conversationEntry.conversation?.business_name ||
-        ""
-      : "";
-  const actionLabel = getHomeProjectEntryActionLabel(
-    request,
-    journey,
-    conversationEntry,
-    language
+  const canonicalPresentation = presentationState?.applicable ? presentationState : null;
+  const professionalName = canonicalPresentation?.businessName || "";
+  const actionLabel = canonicalPresentation?.ctaLabel || getHomeProjectEntryActionLabel(
+    request, journey, conversationEntry, language
   );
-  const nextStepCopy = getHomeProjectNextStepCopy(request, journey, language);
+  const nextStepCopy = canonicalPresentation?.guidance ||
+    getHomeProjectNextStepCopy(request, journey, language);
+  const statusLabel = canonicalPresentation?.statusLabel || journey.currentTitle;
 
   return (
     <div style={projectCard}>
@@ -1759,7 +1803,7 @@ function ProjectCard({ request, language, conversationEntry, onClick }) {
               request.category ||
               t("homeServiceRequest", language)}
           </h3>
-          <span style={projectBadge}>{journey.currentTitle}</span>
+          <span style={projectBadge}>{statusLabel}</span>
         </div>
       </div>
 
