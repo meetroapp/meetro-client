@@ -131,6 +131,43 @@ test("professional response identifiers remain opaque beyond JavaScript's safe i
   );
 });
 
+test("selection transport preserves an opaque PostgreSQL BIGINT response identifier", async () => {
+  const responseId = "9007199254740993";
+  const calls = [];
+  const result = await selectHomeownerProfessionalResponse(
+    {
+      requestId: 41,
+      responseId,
+      idempotencyKey: "request-selection:opaque-transport",
+    },
+    {
+      authFetchImpl: async (...args) => {
+        calls.push(args);
+        return {
+          response: { ok: true, status: 201 },
+          data: selectionPayload({
+            selection: {
+              ...selectionPayload().selection,
+              response_id: responseId,
+            },
+            response: {
+              ...selectionPayload().response,
+              id: responseId,
+            },
+          }),
+        };
+      },
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    calls[0][0],
+    `/posts/41/professional-responses/${responseId}/select`
+  );
+  assert.equal(result.selection.responseId, responseId);
+});
+
 test("homeowner response normalization preserves separate response, relationship, and conversation truth", () => {
   const submitted = responseRow();
   const selected = responseRow({

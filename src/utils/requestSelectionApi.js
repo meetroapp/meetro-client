@@ -298,7 +298,7 @@ export async function selectHomeownerProfessionalResponse(
   { authFetchImpl = authFetch, setPage } = {}
 ) {
   const requestId = positiveCanonicalId(command?.requestId);
-  const responseId = positiveCanonicalId(command?.responseId);
+  const responseId = positiveOpaqueId(command?.responseId);
   const idempotencyKey = command?.idempotencyKey;
   if (
     !requestId ||
