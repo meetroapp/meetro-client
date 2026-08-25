@@ -69,11 +69,16 @@ import {
 import {
   applyJobRequestInterpretationPatch,
   confirmAppliedJobRequestInterpretationFields,
+  createJobRequestInterpretationReviewKeys,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
+  recordJobRequestInterpretationReviews,
   requestJobRequestInterpretation,
 } from "../utils/jobRequestInterpret";
-import { recordWorkflowReview } from "../utils/contextualIntelligence";
+import {
+  createIntelligenceKey,
+  recordWorkflowReview,
+} from "../utils/contextualIntelligence";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
 import WorkflowMicrophoneInput from "../components/WorkflowMicrophoneInput.jsx";
 import {
@@ -839,6 +844,10 @@ function Upload({ setPage }) {
       setPendingInterpretation({
         operationId: result.operationId,
         interpretation: result.interpretation,
+        reviewKeys: createJobRequestInterpretationReviewKeys(
+          result.interpretation.draftPatch.fields,
+          { createKey: createIntelligenceKey }
+        ),
       });
       setEditingInterpretation(false);
       setInterpretIntent({
@@ -885,15 +894,15 @@ function Upload({ setPage }) {
     setInterpretationFailure(null);
     try {
       const fields = pendingInterpretation.interpretation.draftPatch.fields;
-      await Promise.all(fields.map((field) => recordWorkflowReview({
-        proposalId: pendingInterpretation.operationId,
-        elementId: field.path,
+      await recordJobRequestInterpretationReviews({
+        operationId: pendingInterpretation.operationId,
+        fields,
         action,
-        editedValue: action === "EDITED" ? field.value : undefined,
-        reasonCategory: action === "REJECTED" ? "HOMEOWNER_DISMISSED" : undefined,
+        reviewKeys: pendingInterpretation.reviewKeys,
+        recordReview: recordWorkflowReview,
         setPage,
         authFetchImpl: authFetch,
-      })));
+      });
       if (action !== "REJECTED") {
         setDraft((current) => {
           const patched = applyJobRequestInterpretationPatch(

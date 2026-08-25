@@ -24,8 +24,10 @@ import {
   applyJobRequestInterpretationPatch,
   buildJobRequestInterpretRequest,
   confirmAppliedJobRequestInterpretationFields,
+  createJobRequestInterpretationReviewKeys,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
+  recordJobRequestInterpretationReviews,
   requestJobRequestInterpretation,
 } from "../src/utils/jobRequestInterpret.js";
 import {
@@ -196,6 +198,10 @@ test("accepted Cape Coral proposal updates the same draft and clears its governe
   const reviewedInterpretation = interpretation([
     proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
     proposal({
+      path: "job.description",
+      value: "Inspect and repair or rebuild the cracked, separating front entry wall.",
+    }),
+    proposal({
       path: "service.specialty",
       value: "structural_repairs",
       taxonomy: { validated: true, vocabulary: "request_service" },
@@ -203,6 +209,10 @@ test("accepted Cape Coral proposal updates the same draft and clears its governe
     proposal({ path: "location.affectedArea", value: "front entry wall" }),
     proposal({ path: "location.city", value: "Cape Coral" }),
     proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "details.expectations",
+      value: "Inspect the damaged area and repair or rebuild it as needed.",
+    }),
     proposal({
       path: "details.additionalNotes",
       value: "The section is separating and temporarily braced. Photos can be added.",
@@ -240,6 +250,84 @@ test("accepted Cape Coral proposal updates the same draft and clears its governe
   assert.equal(accepted.readiness.isReady, true);
   assert.equal(accepted.submission.status, "idle");
   assert.equal(accepted.submission.snapshot, null);
+});
+
+test("exact Cape Coral review keys make partial concurrent ACCEPTED retries safe", async () => {
+  const operationId = "33333333-3333-4333-8333-333333333333";
+  const fields = interpretation([
+    proposal({ path: "job.title", value: "Front Entry Wall Repair or Rebuild" }),
+    proposal({ path: "job.description", value: "Inspect and repair the damaged wall." }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "service.specialty",
+      value: "structural_repairs",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "Front entry wall" }),
+    proposal({ path: "details.expectations", value: "Inspect and repair or rebuild." }),
+    proposal({ path: "details.additionalNotes", value: "Photos can be added." }),
+  ]).draftPatch.fields;
+  let sequence = 0;
+  const reviewKeys = createJobRequestInterpretationReviewKeys(fields, {
+    createKey: () =>
+      `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
+  });
+  const ledger = new Map();
+  let rejectCamelCase = true;
+  let patchApplications = 0;
+  const recordReview = async (command) => {
+    if (
+      rejectCamelCase &&
+      ["location.affectedArea", "details.additionalNotes"].includes(command.elementId)
+    ) {
+      throw new Error("simulated lowercase ledger constraint");
+    }
+    const identity = `${command.elementId}:${command.idempotencyKey}`;
+    if (ledger.has(identity)) return { ...command, replayed: true };
+    ledger.set(identity, command);
+    return { ...command, replayed: false };
+  };
+  const add = async () => {
+    const reviews = await recordJobRequestInterpretationReviews({
+      operationId,
+      fields,
+      action: "ACCEPTED",
+      reviewKeys,
+      recordReview,
+    });
+    patchApplications += 1;
+    return reviews;
+  };
+
+  await assert.rejects(add, /lowercase ledger constraint/);
+  assert.equal(ledger.size, 6);
+  assert.equal(patchApplications, 0);
+
+  rejectCamelCase = false;
+  const retried = await add();
+  assert.equal(ledger.size, 8);
+  assert.equal(retried.filter((review) => review.replayed).length, 6);
+  assert.equal(retried.filter((review) => !review.replayed).length, 2);
+  assert.equal(patchApplications, 1);
+  assert.deepEqual(
+    retried.map((review) => review.elementId),
+    fields.map((field) => field.path)
+  );
+  assert.equal(
+    new Set(retried.map((review) => review.idempotencyKey)).size,
+    fields.length
+  );
+});
+
+test("Job Request review orchestration rejects forged proposal paths", async () => {
+  assert.throws(
+    () => createJobRequestInterpretationReviewKeys(
+      [{ path: "details.privateNotes", value: "unsafe" }],
+      { createKey: () => "44444444-4444-4444-8444-444444444444" }
+    ),
+    /fields are invalid/
+  );
 });
 
 test("request builder rejects unsupported versions and non-text draft values", () => {

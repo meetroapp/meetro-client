@@ -167,8 +167,10 @@ test("Add records exact reviews, applies one patch, confirms it, and never submi
   const end = uploadSource.indexOf("function handleConversationSubmit", start);
   const boundary = uploadSource.slice(start, end);
 
-  assert.match(boundary, /recordWorkflowReview\(\{/);
-  assert.match(boundary, /elementId: field\.path/);
+  assert.match(boundary, /recordJobRequestInterpretationReviews\(\{/);
+  assert.match(boundary, /reviewKeys: pendingInterpretation\.reviewKeys/);
+  assert.match(boundary, /recordReview: recordWorkflowReview/);
+  assert.match(boundary, /await recordJobRequestInterpretationReviews[\s\S]*applyJobRequestInterpretationPatch/);
   assert.match(boundary, /applyJobRequestInterpretationPatch\(/);
   assert.match(boundary, /alignAssistantServiceSelection\(patched\.draft\)/);
   assert.match(
