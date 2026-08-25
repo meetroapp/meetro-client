@@ -3619,6 +3619,12 @@ function MessagesInbox({ setPage, currentPage }) {
         record.professionalName ||
         "",
       historyType,
+      focus:
+        historyType === "invoice"
+          ? "invoices"
+          : historyType === "work"
+          ? "work"
+          : "overview",
       phone: contact.phone || record.phone || "",
       email: contact.email || record.email || "",
       source: "messages_relationship_identity",

@@ -37,10 +37,10 @@ test("Customer Relationships workspace is read-only and does not establish conti
   assert.match(pageSource, /copy\.noRelationshipText/);
 });
 
-test("Customer Relationships presents Contact authority without fabricated history or CRM fields", () => {
+test("Customer Relationships presents compact Contact authority with canonical activity and no CRM fields", () => {
   assert.match(workspaceSource, /getBusinessContact/);
-  assert.match(pageSource, /copy\.currentContact/);
-  assert.doesNotMatch(pageSource, /Work History|Invoice History|Documents \/ Photos|Relationship Memory/);
+  assert.match(pageSource, /copy\.relationshipActivity/);
+  assert.doesNotMatch(pageSource, /<ContactFact|copy\.currentContact/);
   assert.doesNotMatch(pageSource, /relationshipScore|customerHealth|lifetimeValue|leadStage|salesStage|followUpUrgency|engagementLevel|projectCount/);
   assert.doesNotMatch(pageSource, /request_relationship/);
 });

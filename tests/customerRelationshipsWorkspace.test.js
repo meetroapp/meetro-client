@@ -216,6 +216,7 @@ test("Contact navigation carries only stable Contact identity and resolves throu
   });
   assert.deepEqual(readCustomerRelationshipNavigationContext(sourceStorage), {
     businessContactId: CONTACT_ID,
+    focus: "overview",
     returnPage: "messagesInbox",
   });
   assert.match(messagesSource, /businessContactId: record\.businessContactId \|\| ""/);
@@ -240,15 +241,15 @@ test("Customer Relationship workspace copy is complete in all governed languages
   assert.deepEqual(CUSTOMER_RELATIONSHIPS_LANGUAGES, ["en", "es", "fr", "pt-BR"]);
   for (const language of CUSTOMER_RELATIONSHIPS_LANGUAGES) {
     const localized = getCustomerRelationshipsCopy(language);
-    for (const key of ["title", "loading", "loadErrorTitle", "emptyTitle", "relationshipList", "currentContact", "noRelationshipText", "externalContact", "readOnly"]) {
+    for (const key of ["title", "loading", "loadErrorTitle", "emptyTitle", "relationshipList", "relationshipActivity", "work", "quotes", "invoices", "noWork", "noQuotes", "noInvoices", "noRelationshipText", "externalContact", "readOnly"]) {
       assert.equal(typeof localized[key], "string");
       assert.notEqual(localized[key].trim(), "");
     }
   }
 });
 
-test("workspace contains no history fabrication, request authority, or CRM pipeline projection", () => {
+test("workspace contains no browser history fabrication, request authority, or CRM pipeline projection", () => {
   assert.doesNotMatch(pageSource, /request_relationship/);
-  assert.doesNotMatch(pageSource, /jobHistory|invoiceHistory|documentHistory|photoHistory|relationshipMemory/);
+  assert.doesNotMatch(pageSource, /documentHistory|photoHistory|relationshipMemory|localHistory|browserHistory/);
   assert.doesNotMatch(pageSource, /score|lifetimeValue|leadStage|salesStage|conversionProbability|followUp/);
 });

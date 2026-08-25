@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import { getLanguage } from "../utils/language";
 import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLanguage.js";
 import {
   clearCustomerRelationshipNavigationContext,
+  loadCustomerRelationshipActivity,
   loadCustomerRelationshipDetail,
   loadCustomerRelationshipDirectory,
   loadCustomerRelationshipForContact,
@@ -28,13 +29,28 @@ function contactName(contact = {}, fallback = "") {
 }
 
 function formatEstablishedDate(value, language) {
-  const date = value ? new Date(value) : null;
+  const source = text(value);
+  const date = source
+    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(source) ? `${source}T12:00:00` : source)
+    : null;
   if (!date || Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(DATE_LOCALES[language] || DATE_LOCALES.en, {
     year: "numeric",
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function formatMoney(value, currency, language) {
+  if (!Number.isSafeInteger(value) || value < 0) return "";
+  try {
+    return new Intl.NumberFormat(DATE_LOCALES[language] || DATE_LOCALES.en, {
+      style: "currency",
+      currency: text(currency) || "USD",
+    }).format(value / 100);
+  } catch {
+    return "";
+  }
 }
 
 function CustomerRelationshipsCenter({ setPage }) {
@@ -51,6 +67,37 @@ function CustomerRelationshipsCenter({ setPage }) {
     detail: null,
     error: "",
   });
+  const [activityFocus, setActivityFocus] = useState(
+    navigationContext?.focus || "overview"
+  );
+  const [activityState, setActivityState] = useState({
+    status: "idle",
+    activity: null,
+    error: "",
+  });
+  const activityRequestRef = useRef(0);
+
+  const loadActivity = useCallback(async (relationshipId) => {
+    if (!relationshipId) return;
+    const requestId = activityRequestRef.current + 1;
+    activityRequestRef.current = requestId;
+    setActivityState((current) => ({ ...current, status: "loading", error: "" }));
+    try {
+      const activity = await loadCustomerRelationshipActivity({
+        relationshipId,
+        setPage,
+      });
+      if (activityRequestRef.current !== requestId) return;
+      setActivityState({ status: "ready", activity, error: "" });
+    } catch (error) {
+      if (activityRequestRef.current !== requestId) return;
+      setActivityState((current) => ({
+        ...current,
+        status: "error",
+        error: error?.message || copy.activityErrorText,
+      }));
+    }
+  }, [copy.activityErrorText, setPage]);
 
   const loadInitialWorkspace = useCallback(async () => {
     setWorkspaceState((current) => ({ ...current, status: "loading", error: "" }));
@@ -87,7 +134,18 @@ function CustomerRelationshipsCenter({ setPage }) {
     void loadInitialWorkspace();
   }, [loadInitialWorkspace]);
 
+  const loadedRelationshipId = workspaceState.detail?.relationship?.id || "";
+  useEffect(() => {
+    if (loadedRelationshipId) {
+      void loadActivity(loadedRelationshipId);
+    } else {
+      activityRequestRef.current += 1;
+      setActivityState({ status: "idle", activity: null, error: "" });
+    }
+  }, [loadActivity, loadedRelationshipId]);
+
   async function openRelationship(relationshipId) {
+    setActivityFocus("overview");
     setWorkspaceState((current) => ({ ...current, status: "loading", error: "" }));
     try {
       const detail = await loadCustomerRelationshipDetail({
@@ -121,6 +179,7 @@ function CustomerRelationshipsCenter({ setPage }) {
   }
 
   function showDirectory() {
+    setActivityFocus("overview");
     setWorkspaceState((current) => ({ ...current, detail: null }));
   }
 
@@ -199,40 +258,21 @@ function CustomerRelationshipsCenter({ setPage }) {
                 {contactName(contact, "C").slice(0, 1).toUpperCase()}
               </div>
               <div style={minWidthZero}>
-                <p style={eyebrow}>{copy.relationshipEstablished}</p>
                 <h3 id="customer-relationship-detail-title" style={detailTitle}>
                   {contactName(contact, copy.contactName)}
                 </h3>
                 {text(contact.companyName) && (
                   <p style={mutedText}>{contact.companyName}</p>
                 )}
+                <p style={relationshipSummary}>
+                  {copy.customerSince} {formatEstablishedDate(relationship.createdAt, language) || copy.relationshipEstablished}
+                </p>
               </div>
               <span style={contact.status === "ARCHIVED" ? archivedBadge : activeBadge}>
                 {contact.status === "ARCHIVED" ? copy.archived : copy.active}
               </span>
             </div>
 
-            <div style={relationshipFact}>
-              <span>{copy.established}</span>
-              <strong>
-                {formatEstablishedDate(relationship.createdAt, language) || copy.relationshipEstablished}
-              </strong>
-            </div>
-
-            <h4 style={sectionTitle}>{copy.currentContact}</h4>
-            <dl style={contactGrid}>
-              <ContactFact label={copy.contactName} value={contactName(contact, copy.notAdded)} />
-              <ContactFact
-                label={copy.partyType}
-                value={contact.partyType === "ORGANIZATION" ? copy.organization : copy.person}
-              />
-              <ContactFact label={copy.email} value={text(contact.email) || copy.notAdded} />
-              <ContactFact label={copy.phone} value={text(contact.phone) || copy.notAdded} />
-              <ContactFact label={copy.address} value={text(contact.address) || copy.notAdded} />
-              <ContactFact label={copy.serviceArea} value={text(contact.serviceArea) || copy.notAdded} />
-            </dl>
-
-            <p style={externalNote}>{copy.externalContact}</p>
             <div style={actionRow}>
               <button type="button" style={primaryButton} onClick={() => openContact(contact)}>
                 {copy.viewContact}
@@ -241,6 +281,56 @@ function CustomerRelationshipsCenter({ setPage }) {
                 {copy.backToRelationships}
               </button>
             </div>
+
+            <div style={activityHeader}>
+              <h4 style={activityTitle}>{copy.relationshipActivity}</h4>
+              <div style={activityNavigation} aria-label={copy.relationshipActivity}>
+                {[
+                  ["overview", copy.overview],
+                  ["work", copy.work],
+                  ["quotes", copy.quotes],
+                  ["invoices", copy.invoices],
+                ].map(([focus, label]) => (
+                  <button
+                    key={focus}
+                    type="button"
+                    style={activityFocus === focus ? activityTabActive : activityTab}
+                    aria-pressed={activityFocus === focus}
+                    onClick={() => setActivityFocus(focus)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activityState.status === "loading" && (
+              <div style={activityStateCard} role="status" aria-live="polite">
+                {copy.loadingActivity}
+              </div>
+            )}
+            {activityState.status === "error" && (
+              <div style={activityStateCard} role="alert">
+                <strong>{copy.activityErrorTitle}</strong>
+                <p style={noticeText}>{activityState.error || copy.activityErrorText}</p>
+                <button
+                  type="button"
+                  style={secondaryButton}
+                  onClick={() => void loadActivity(relationship.id)}
+                >
+                  {copy.retry}
+                </button>
+              </div>
+            )}
+            {activityState.status === "ready" && activityState.activity && (
+              <RelationshipActivity
+                activity={activityState.activity}
+                focus={activityFocus}
+                copy={copy}
+                language={language}
+              />
+            )}
+            <p style={externalNote}>{copy.externalContact}</p>
           </section>
         )}
 
@@ -310,12 +400,111 @@ function CustomerRelationshipsCenter({ setPage }) {
   );
 }
 
-function ContactFact({ label, value }) {
+function RelationshipActivity({ activity, focus, copy, language }) {
+  const sections = [
+    {
+      id: "work",
+      title: copy.work,
+      items: activity.work,
+      empty: copy.noWork,
+      render: (item) => (
+        <ActivityRow
+          key={item.jobId}
+          title={text(item.title) || text(item.service) || copy.job}
+          status={text(item.status)}
+          dateLabel={item.completedAt ? copy.completed : copy.created}
+          dateValue={item.completedAt || item.createdAt || item.linkedAt}
+          language={language}
+        />
+      ),
+    },
+    {
+      id: "quotes",
+      title: copy.quotes,
+      items: activity.quotes,
+      empty: copy.noQuotes,
+      render: (item) => (
+        <ActivityRow
+          key={item.quoteId}
+          title={text(item.documentNumber) || copy.quote}
+          status={text(item.status)}
+          secondaryStatus={text(item.customerDecision)}
+          secondaryStatusLabel={copy.decision}
+          money={[copy.total, formatMoney(item.totalMinor, item.currency, language)]}
+          dateLabel={item.issuedAt ? copy.issued : copy.latest}
+          dateValue={item.issuedAt || item.lastActivityAt || item.updatedAt || item.createdAt}
+          language={language}
+        />
+      ),
+    },
+    {
+      id: "invoices",
+      title: copy.invoices,
+      items: activity.invoices,
+      empty: copy.noInvoices,
+      render: (item) => (
+        <ActivityRow
+          key={item.invoiceId}
+          title={text(item.invoiceNumber) || copy.invoice}
+          status={text(item.status)}
+          money={[
+            [copy.total, formatMoney(item.totalMinor, item.currency, language)],
+            [copy.paid, formatMoney(item.paidMinor, item.currency, language)],
+            [copy.balance, formatMoney(item.balanceMinor, item.currency, language)],
+          ]}
+          dateLabel={item.issuedAt ? copy.issued : copy.latest}
+          dateValue={item.issuedAt || item.invoiceDate || item.lastActivityAt || item.updatedAt || item.createdAt}
+          language={language}
+        />
+      ),
+    },
+  ];
+  const visible = focus === "overview"
+    ? sections
+    : sections.filter((section) => section.id === focus);
   return (
-    <div style={contactFact}>
-      <dt style={factLabel}>{label}</dt>
-      <dd style={factValue}>{value}</dd>
+    <div style={activitySections}>
+      {visible.map((section) => (
+        <section key={section.id} aria-labelledby={`relationship-${section.id}-title`}>
+          <h5 id={`relationship-${section.id}-title`} style={activitySectionTitle}>
+            {section.title}
+          </h5>
+          {section.items.length === 0 ? (
+            <p style={activityEmpty}>{section.empty}</p>
+          ) : (
+            <div style={activityList}>{section.items.map(section.render)}</div>
+          )}
+        </section>
+      ))}
     </div>
+  );
+}
+
+function ActivityRow({ title, status, secondaryStatus, secondaryStatusLabel, money, dateLabel, dateValue, language }) {
+  const amounts = Array.isArray(money?.[0]) ? money : money ? [money] : [];
+  return (
+    <article style={activityRow}>
+      <div style={activityRowTop}>
+        <strong style={activityRowTitle}>{title}</strong>
+        {status && <span style={activityStatus}>{status}</span>}
+      </div>
+      {secondaryStatus && (
+        <p style={activityMeta}>{secondaryStatusLabel}: {secondaryStatus}</p>
+      )}
+      {amounts.some(([, value]) => value) && (
+        <div style={activityAmounts}>
+          {amounts.filter(([, value]) => value).map(([label, value]) => (
+            <span key={label} style={activityAmount}>
+              <small>{label}</small>
+              <strong>{value}</strong>
+            </span>
+          ))}
+        </div>
+      )}
+      {dateValue && (
+        <p style={activityMeta}>{dateLabel}: {formatEstablishedDate(dateValue, language)}</p>
+      )}
+    </article>
   );
 }
 
@@ -348,18 +537,31 @@ const detailTitle = { margin: "4px 0 0", color: "#14251a", fontSize: "clamp(22px
 const mutedText = { margin: "5px 0 0", color: "#627166", fontSize: "14px", overflowWrap: "anywhere" };
 const activeBadge = { display: "inline-flex", alignItems: "center", minHeight: "30px", padding: "4px 10px", borderRadius: "999px", background: "#e5f4e8", color: "#176039", fontSize: "12px", fontWeight: 900 };
 const archivedBadge = { ...activeBadge, background: "#f1eee8", color: "#6b6256" };
-const relationshipFact = { display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginTop: "24px", padding: "16px", borderRadius: "14px", background: "#f1f6ef", color: "#254332", fontSize: "14px" };
 const sectionTitle = { margin: "24px 0 12px", color: "#173b27", fontSize: "18px", lineHeight: 1.3 };
-const contactGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "10px", margin: 0 };
-const contactFact = { minWidth: 0, padding: "14px", borderRadius: "13px", border: "1px solid #e0e6dc", background: "#ffffff", boxSizing: "border-box" };
-const factLabel = { margin: 0, color: "#6b786e", fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em" };
-const factValue = { margin: "6px 0 0", color: "#1e3024", fontSize: "15px", lineHeight: 1.4, overflowWrap: "anywhere" };
+const relationshipSummary = { margin: "7px 0 0", color: "#52655a", fontSize: "14px", lineHeight: 1.4 };
 const externalNote = { margin: "18px 0 0", color: "#5f6f62", fontSize: "14px", lineHeight: 1.5 };
 const noticeCard = { marginTop: "22px", padding: "18px", borderRadius: "14px", border: "1px solid #dfe6d9", background: "#f5f8f2", color: "#24402f" };
 const noticeText = { margin: "8px 0 0", color: "#5d6c61", fontSize: "14px", lineHeight: 1.5 };
 const actionRow = { display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "22px" };
 const primaryButton = { minHeight: "46px", maxWidth: "100%", padding: "11px 16px", borderRadius: "13px", border: "1px solid var(--meetro-color-forest, #1f4d34)", background: "var(--meetro-color-forest, #1f4d34)", color: "#fff", fontSize: "14px", fontWeight: 900, cursor: "pointer", overflowWrap: "anywhere" };
 const secondaryButton = { ...primaryButton, background: "#fff", color: "var(--meetro-color-forest, #1f4d34)" };
+const activityHeader = { marginTop: "28px", paddingTop: "22px", borderTop: "1px solid #dfe6d9" };
+const activityTitle = { margin: 0, color: "#173b27", fontSize: "20px", lineHeight: 1.3 };
+const activityNavigation = { display: "flex", gap: "8px", width: "100%", marginTop: "14px", paddingBottom: "2px", overflowX: "auto", WebkitOverflowScrolling: "touch" };
+const activityTab = { flex: "0 0 auto", minHeight: "44px", padding: "9px 14px", border: "1px solid #cfdacf", borderRadius: "999px", background: "#fff", color: "#31543f", fontSize: "14px", fontWeight: 800, cursor: "pointer" };
+const activityTabActive = { ...activityTab, borderColor: "#1f4d34", background: "#1f4d34", color: "#fff" };
+const activityStateCard = { marginTop: "18px", padding: "18px", border: "1px solid #dfe6d9", borderRadius: "14px", background: "#f7f9f5", color: "#405449", lineHeight: 1.5 };
+const activitySections = { display: "grid", gap: "24px", marginTop: "20px" };
+const activitySectionTitle = { margin: "0 0 10px", color: "#1d492f", fontSize: "16px" };
+const activityList = { display: "grid", gap: "9px" };
+const activityEmpty = { margin: 0, padding: "16px", border: "1px solid #e1e7df", borderRadius: "13px", background: "#fafbf8", color: "#66736a", fontSize: "14px" };
+const activityRow = { minWidth: 0, padding: "15px", border: "1px solid #dfe6dc", borderRadius: "14px", background: "#fff", boxSizing: "border-box" };
+const activityRowTop = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" };
+const activityRowTitle = { minWidth: 0, color: "#1d3023", fontSize: "15px", overflowWrap: "anywhere" };
+const activityStatus = { maxWidth: "100%", padding: "4px 9px", borderRadius: "999px", background: "#edf4ec", color: "#245b39", fontSize: "11px", fontWeight: 900, overflowWrap: "anywhere" };
+const activityMeta = { margin: "9px 0 0", color: "#69766d", fontSize: "13px", lineHeight: 1.4, overflowWrap: "anywhere" };
+const activityAmounts = { display: "flex", flexWrap: "wrap", gap: "10px 22px", marginTop: "11px" };
+const activityAmount = { display: "inline-flex", flexDirection: "column", gap: "2px", minWidth: 0, color: "#25382b" };
 const sectionHeading = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" };
 const countBadge = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "30px", minHeight: "30px", padding: "3px 8px", borderRadius: "999px", background: "#e7efe5", color: "#1f5d39", fontSize: "13px", fontWeight: 900, boxSizing: "border-box" };
 const relationshipList = { display: "grid", gap: "10px" };

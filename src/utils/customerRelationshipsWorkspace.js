@@ -1,5 +1,6 @@
 import {
   getBusinessCustomerRelationship,
+  getBusinessCustomerRelationshipActivity,
   getBusinessCustomerRelationshipByContact,
   listBusinessCustomerRelationships,
 } from "./businessCustomerRelationshipsApi.js";
@@ -49,9 +50,24 @@ export function readCustomerRelationshipNavigationContext(storage) {
   if (!businessContactId) return null;
   return Object.freeze({
     businessContactId,
+    focus: ["overview", "work", "invoices"].includes(text(parsed.focus))
+      ? text(parsed.focus)
+      : "overview",
     returnPage: text(parsed.returnPage) === "messagesInbox"
       ? "messagesInbox"
       : "businessCommandCenter",
+  });
+}
+
+export async function loadCustomerRelationshipActivity({
+  relationshipId,
+  setPage,
+  fetcher,
+} = {}) {
+  return getBusinessCustomerRelationshipActivity({
+    relationshipId,
+    setPage,
+    fetcher,
   });
 }
 

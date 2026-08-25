@@ -77,6 +77,36 @@ function validRelationshipId(value) {
   return id;
 }
 
+function validatedActivityItem(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: `The server returned invalid ${label} activity.`,
+    });
+  }
+  return Object.freeze({ ...value });
+}
+
+function validatedActivity(value, relationshipId) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !value.relationship || typeof value.relationship !== "object" ||
+      text(value.relationship.id).toLowerCase() !== relationshipId ||
+      !Array.isArray(value.work) || !Array.isArray(value.quotes) ||
+      !Array.isArray(value.invoices)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid Customer Relationship activity.",
+    });
+  }
+  return Object.freeze({
+    ...value,
+    relationship: Object.freeze({ ...value.relationship }),
+    work: Object.freeze(value.work.map((item) => validatedActivityItem(item, "work"))),
+    quotes: Object.freeze(value.quotes.map((item) => validatedActivityItem(item, "Quote"))),
+    invoices: Object.freeze(value.invoices.map((item) => validatedActivityItem(item, "Invoice"))),
+  });
+}
+
 export function createBusinessCustomerRelationshipCommandKey(
   cryptoProvider = globalThis.crypto
 ) {
@@ -119,6 +149,20 @@ export async function getBusinessCustomerRelationship({
     { setPage, fetcher }
   );
   return validatedRelationship(data.relationship);
+}
+
+export async function getBusinessCustomerRelationshipActivity({
+  relationshipId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}/activity`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  return validatedActivity(data.activity, id);
 }
 
 export async function listBusinessCustomerRelationships({
