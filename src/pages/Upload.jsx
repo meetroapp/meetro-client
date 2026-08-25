@@ -1530,21 +1530,60 @@ function Upload({ setPage }) {
                 <section style={assistantFallbackCard} aria-label={getAskMeetroWorkflowCopy(language).title}>
                   <strong>{pendingInterpretation.interpretation.summary}</strong>
                   <div style={liveDraftSectionList}>
-                    {pendingInterpretation.interpretation.draftPatch.fields.map((field) => (
-                      <label key={field.path} style={liveDraftSection}>
-                        <span style={liveDraftSectionTitle}>{field.path.split(".").join(" / ")}</span>
-                        {editingInterpretation ? (
-                          <textarea
-                            style={composerInput}
-                            value={field.value}
-                            maxLength={4000}
-                            onChange={(event) => updatePendingInterpretationField(field.path, event.target.value)}
-                          />
-                        ) : (
-                          <span>{field.value}</span>
-                        )}
-                      </label>
-                    ))}
+                    {pendingInterpretation.interpretation.draftPatch.fields.map((field) => {
+                      const isServiceRecommendation = field.path === "service.specialty";
+                      const serviceOption = isServiceRecommendation
+                        ? serviceSelectorOptions.find(
+                            (option) => option.serviceSpecialty === field.value
+                          )
+                        : null;
+                      return (
+                        <label key={field.path} style={liveDraftSection}>
+                          <span style={liveDraftSectionTitle}>
+                            {isServiceRecommendation
+                              ? t("jobRequestTechnicalServiceType", language)
+                              : field.path.split(".").join(" / ")}
+                          </span>
+                          {editingInterpretation ? (
+                            isServiceRecommendation ? (
+                              <select
+                                style={compactInputStyle}
+                                value={field.value}
+                                onChange={(event) =>
+                                  updatePendingInterpretationField(
+                                    field.path,
+                                    event.target.value
+                                  )
+                                }
+                              >
+                                {serviceSelectorOptions.map((option) => (
+                                  <option
+                                    key={option.value}
+                                    value={option.serviceSpecialty}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <textarea
+                                style={composerInput}
+                                value={field.value}
+                                maxLength={4000}
+                                onChange={(event) =>
+                                  updatePendingInterpretationField(
+                                    field.path,
+                                    event.target.value
+                                  )
+                                }
+                              />
+                            )
+                          ) : (
+                            <span>{serviceOption?.label || field.value}</span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                   <p style={emptyDraftText}>{getAskMeetroWorkflowCopy(language).noSilentChanges}</p>
                   <div style={fallbackActions}>

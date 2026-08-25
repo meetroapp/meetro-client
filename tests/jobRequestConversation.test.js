@@ -301,6 +301,12 @@ test("customer-first intake keeps technical Service Type selection behind sugges
   assert.match(uploadSource, /jobRequestAcceptSuggestion/);
   assert.match(uploadSource, /jobRequestChangeSuggestion/);
   assert.match(uploadSource, /setServiceSelectorOpen\(true\)/);
+  assert.match(uploadSource, /field\.path === "service\.specialty"/);
+  assert.match(uploadSource, /serviceOption\?\.label \|\| field\.value/);
+  assert.match(uploadSource, /value=\{option\.serviceSpecialty\}/);
+  assert.match(uploadSource, /updatePendingInterpretationField\([\s\S]*field\.path,[\s\S]*event\.target\.value/);
+  assert.match(uploadSource, /if \(action !== "REJECTED"\)/);
+  assert.match(uploadSource, /alignAssistantServiceSelection\(patched\.draft\)/);
   const manualSelectionSource = uploadSource.slice(
     uploadSource.indexOf("function selectServiceOption"),
     uploadSource.indexOf("function acceptAssistantServiceSuggestion")

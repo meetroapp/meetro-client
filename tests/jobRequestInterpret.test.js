@@ -139,23 +139,8 @@ test("one homeowner message produces a reviewable multi-field request proposal w
   const fields = [
     proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
     proposal({
-      path: "service.category",
-      value: "handyman",
-      taxonomy: { validated: true, vocabulary: "request_service" },
-    }),
-    proposal({
-      path: "service.requestCategory",
-      value: "handyman",
-      taxonomy: { validated: true, vocabulary: "request_service" },
-    }),
-    proposal({
-      path: "service.domain",
-      value: "home_services",
-      taxonomy: { validated: true, vocabulary: "request_domain" },
-    }),
-    proposal({
       path: "service.specialty",
-      value: "handyman",
+      value: "structural_repairs",
       taxonomy: { validated: true, vocabulary: "request_service" },
     }),
     proposal({ path: "location.affectedArea", value: "front entry wall" }),
@@ -174,6 +159,8 @@ test("one homeowner message produces a reviewable multi-field request proposal w
 
   assert.equal(result.draft.job.description, homeownerText);
   assert.equal(result.draft.job.title, "Repair cracked wall by front entry");
+  assert.equal(result.draft.service.specialty, "structural_repairs");
+  assert.equal(result.draft.fieldMeta.service.specialty.confirmed, false);
   assert.equal(result.draft.location.city, "Cape Coral");
   assert.equal(result.draft.timing.availability, "Available this week");
   assert.equal(result.draft.media.photos.length, 0);
