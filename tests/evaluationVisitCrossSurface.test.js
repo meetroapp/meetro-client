@@ -35,6 +35,8 @@ test("customer alternate time and opposite-party approval use exact versioned Vi
   assert.match(visitCard, /Propose New Time/);
   assert.match(visitCard, /Approve New Time/);
   assert.match(visitCard, /STALE_VISIT_VERSION/);
+  assert.match(visitCard, /Coordination note \(optional\)/);
+  assert.match(visitCard, /reason: form\.note\.trim\(\) \|\| null/);
   assert.doesNotMatch(visitCard, /message\.text|Tuesday works|chat.*state/i);
 });
 

@@ -566,6 +566,49 @@ test("mutual confirmation and customer alternate-time commands target one exact 
   ]);
 });
 
+test("customer exact alternate schedule permits an explicitly empty coordination note", async () => {
+  let request = null;
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "change-request",
+    visit: visit(),
+    schedule: {
+      scheduledStartAt: "2026-08-16T14:00:00.000Z",
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    },
+    reason: null,
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl: async (endpoint, options) => {
+      request = { endpoint, body: JSON.parse(options.body) };
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          visit: visit({
+            currentVersion: 2,
+            state: "PROPOSED",
+            scheduledStartAt: "2026-08-16T14:00:00.000Z",
+            scheduledEndAt: null,
+          }),
+        },
+      };
+    },
+  });
+  assert.deepEqual(request, {
+    endpoint: `/jobs/${ids.job}/visits/${ids.visit}/change-request`,
+    body: {
+      expectedVersion: 1,
+      scheduledStartAt: "2026-08-16T14:00:00.000Z",
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+      reason: null,
+    },
+  });
+});
+
 test("malformed command subjects fail before any network request", async () => {
   let calls = 0;
   await assert.rejects(
