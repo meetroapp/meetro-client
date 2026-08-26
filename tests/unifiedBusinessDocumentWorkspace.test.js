@@ -217,7 +217,7 @@ test("How It Works consolidates Quote, Invoice, continuity, and private-control 
     "Build or Update Quote",
     "Review Job Evidence",
     "Review the Quote",
-    "Save, Issue and Send Quote",
+    "Save and Send Quote",
     "Create Invoice",
     "Review Invoice",
     "Send Invoice",
@@ -233,13 +233,13 @@ test("How It Works consolidates Quote, Invoice, continuity, and private-control 
   assert.match(workspace, /Customer acceptance remains separate/);
   assert.match(workspace, /Creating an Invoice does not mean it has been sent or paid/);
   assert.match(workspace, /Sending an Invoice does not mean payment was received/);
-  assert.match(workspace, /Only the explicit governed Issue &amp; Send Quote action creates an issued commercial offer/);
+  assert.match(workspace, /Only the explicit Send Quote to Customer action makes the saved Quote available for customer review/);
   assert.match(workspace, /Nothing automatically accepts a Quote, records payment, schedules work, creates an Invoice, or closes a Job/);
   assert.match(workspace, /Questions and photo analysis stay private/);
   assert.match(workspace, /Direct Quote facts or explicit document instructions can update the working draft/);
   assert.match(workspace, /Let Meetro prefill uses eligible professional-provided document facts/);
   assert.match(workspace, /Fill form manually always remains available/);
-  assert.match(workspace, /Save Draft, Preview PDF, and Download PDF do not create commercial authority/);
+  assert.match(workspace, /Save Draft, Preview PDF, and Download PDF keep the Quote in your private workspace/);
 });
 
 test("normal conversation surface removes permanent explanatory clutter", () => {
@@ -946,7 +946,7 @@ test("private reminders, costs, and photos do not enter customer-visible models"
 test("Internal Estimate and Solution Ready are not mandatory visible workspace steps", () => {
   assert.doesNotMatch(workspace, /Analyze Job|Continue with My Details|Confirm Amounts|Internal Estimate|Solution Ready/);
   assert.match(workspace, /private working space for the job/);
-  assert.match(workspace, /Editing, saving, previewing, and downloading do not issue or send anything/);
+  assert.match(workspace, /Editing, saving, previewing, and downloading do not send anything/);
 });
 
 test("Quote and Invoice delivery use one menu while PDF remains separate", () => {

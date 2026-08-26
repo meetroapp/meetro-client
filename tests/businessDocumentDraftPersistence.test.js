@@ -1119,7 +1119,7 @@ test("workspace exposes real save/list/restore/exit/recovery flows without confl
   assert.doesNotMatch(continueBlock, /createBusinessDocumentDraft|createQuickQuoteAnalysisSession/);
   assert.match(workspace, /Send Quote/);
   assert.match(workspace, /Save keeps this private working document for your business\. It does not send or issue anything\./);
-  assert.match(workspace, /Only the explicit governed Issue &amp; Send Quote action creates an issued commercial offer\./);
+  assert.match(workspace, /Only the explicit Send Quote to Customer action makes the saved Quote available for customer review\./);
   assert.match(workspace, /Nothing automatically accepts a Quote, records payment, schedules work, creates an Invoice, or closes a Job\./);
 });
 

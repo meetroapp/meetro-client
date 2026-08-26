@@ -120,6 +120,12 @@ export function filterAuthorizedProfessionalJobs(jobs, query) {
   );
 }
 
+export function findAuthorizedProfessionalJob(jobs, jobId) {
+  const normalizedJobId = String(jobId || "").trim().toLowerCase();
+  if (!UUID_PATTERN.test(normalizedJobId) || !Array.isArray(jobs)) return null;
+  return jobs.find((job) => job?.jobId === normalizedJobId) || null;
+}
+
 export async function fetchAuthorizedProfessionalJobs({
   setPage,
   authFetchImpl = authFetch,

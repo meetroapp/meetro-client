@@ -6,6 +6,7 @@ import {
   buildQuickQuoteEstimateInput,
   fetchAuthorizedProfessionalJobs,
   filterAuthorizedProfessionalJobs,
+  findAuthorizedProfessionalJob,
   normalizeAuthorizedProfessionalJobs,
 } from "../src/utils/professionalJobPicker.js";
 
@@ -81,6 +82,19 @@ test("compact Job filtering distinguishes title, customer, specialty, city, and 
     assert.equal(filterAuthorizedProfessionalJobs(jobs, query).length, 1, query);
   }
   assert.deepEqual(filterAuthorizedProfessionalJobs(jobs, "plumbing"), []);
+});
+
+test("exact authorized Job lookup binds review identity to one canonical Job", () => {
+  const jobs = normalizeAuthorizedProfessionalJobs(payload());
+  assert.deepEqual(findAuthorizedProfessionalJob(jobs, JOB_ID), jobs[0]);
+  assert.equal(
+    findAuthorizedProfessionalJob(
+      jobs,
+      "22222222-2222-4222-8222-222222222222"
+    ),
+    null
+  );
+  assert.equal(findAuthorizedProfessionalJob(jobs, "not-a-job"), null);
 });
 
 test("selected canonical Job builds the existing Estimate input with exact professional text", () => {
