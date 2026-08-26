@@ -34,6 +34,10 @@ import {
   listBusinessDocumentDeliveries,
 } from "../utils/businessDocumentDraftApi.js";
 import {
+  createWorkingQuoteCommandKeys,
+  issueAndSendWorkingQuote,
+} from "../utils/workingQuoteCanonicalIssue.js";
+import {
   copyBusinessDocumentShareMessage,
   downloadBusinessDocumentPdfArtifact,
   openBusinessDocumentEmailDraft,
@@ -275,7 +279,7 @@ function CustomerPhotoEvidence({ generalPhotos = [], beforePhotos = [], afterPho
   return <section className="business-document-proof" aria-label="Customer-visible Project Photos and Evidence">{generalPhotos.length ? <div><h3>Project Photos / Evidence</h3><PhotoStrip photos={generalPhotos} /></div> : null}{beforePhotos.length ? <div><h3>Before</h3><PhotoStrip photos={beforePhotos} /></div> : null}{afterPhotos.length ? <div><h3>After</h3><PhotoStrip photos={afterPhotos} /></div> : null}</section>;
 }
 
-function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
+function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "", authorityState = null }) {
   const rows = quoteRows(quote);
   const agreement = normalizeBusinessDocumentAgreement(quote.agreement);
   const agreementSections = BUSINESS_DOCUMENT_AGREEMENT_FIELDS.filter(([key]) => agreement[key]);
@@ -285,7 +289,7 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
     : "";
   return (
     <article className="business-live-document" aria-label="Live Quote Preview">
-      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>WORKING DRAFT</span></div></header>
+      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>{authorityState?.status === "ISSUED" ? "ISSUED" : "WORKING DRAFT"}</span></div></header>
       <dl className="business-document-meta"><div><dt>Customer</dt><dd>{quote.customerName || "—"}</dd></div><div><dt>Project</dt><dd>{quote.projectTitle || "—"}</dd></div><div><dt>Quote #</dt><dd>{documentNumber || "Assigned on first save"}</dd></div><div><dt>Date</dt><dd>{quote.quoteDate || "—"}</dd></div></dl>
       {observation ? <section className="business-document-copy"><h3>Observation</h3><p>{observation}</p></section> : null}
       <section className="business-document-copy"><h3>Scope of Work</h3><p>{quote.recommendedSolution || quote.projectDescription || "Tell Meetro about the work to begin this draft."}</p></section>
@@ -295,7 +299,7 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
         {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <div role="row"><span>Working draft</span><strong>—</strong></div>}
         <div className="total" role="row"><span>PROJECT PRICE</span><strong>{quote.total > 0 ? money(quote.total) : "—"}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{saved ? "Ready for Customer Review" : "Draft only. Nothing is issued or approved."}</p></section></div>
+      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? `Issued version ${authorityState.currentVersion} · Waiting for customer decision` : saved ? "Saved working draft · Not issued" : "Draft only. Nothing is issued or approved."}</p></section></div>
       {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
@@ -551,7 +555,7 @@ function BusinessDocumentWorkflowGuide({ onClose }) {
         <WorkflowGuideStep number="3" title="Build or Update Quote"><p>Questions and photo analysis stay private. Direct Quote facts or explicit document instructions can update the working draft, even while Job Analysis is active.</p><p>Only explicit document actions should change the working Quote. Let Meetro prefill uses eligible professional-provided document facts. Fill form manually always remains available.</p><ul><li>Customer: Paul Becker</li><li>Scope: Add this repair.</li><li>Price: $2,650.</li><li>Payment terms: 50% deposit.</li></ul></WorkflowGuideStep>
         <WorkflowGuideStep number="4" title="Review Job Evidence"><p>Photos and analysis are private working evidence by default. The professional decides what, if anything, should become customer-visible.</p><p>Photo role and photo visibility remain separate.</p></WorkflowGuideStep>
         <WorkflowGuideStep number="5" title="Review the Quote"><p>The Live Quote Preview stays visible while the professional works. Nothing is issued merely because the preview changes.</p><ul><li>Customer and scope</li><li>Line items and price</li><li>Payment terms and estimated duration</li><li>Customer-facing notes</li><li>Agreement and status information</li></ul></WorkflowGuideStep>
-        <WorkflowGuideStep number="6" title="Save, Preview or Send Quote"><p>Save Draft, Preview PDF, Download PDF, and Send Quote remain separate actions. Nothing is sent automatically, and sending uses the existing governed delivery flow. Nothing is automatically approved.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="6" title="Save, Issue and Send Quote"><p>Save Draft, Preview PDF, and Download PDF do not create commercial authority. For a Job-linked Quote, Issue &amp; Send Quote imports the exact saved version, issues its canonical version, then sends that issued Quote through the governed Meetro conversation. Customer acceptance remains separate.</p></WorkflowGuideStep>
       </section>
       <section><h3>INVOICE WORKFLOW</h3>
         <WorkflowGuideStep number="7" title="Create Invoice"><p>When the Quote or work reaches the appropriate stage, switch to the Invoice tab. Use the same workspace and job context to prepare and refine the Invoice.</p><p>Creating an Invoice does not mean it has been sent or paid.</p></WorkflowGuideStep>
@@ -562,7 +566,7 @@ function BusinessDocumentWorkflowGuide({ onClose }) {
         <WorkflowGuideStep number="10" title="Saved Files"><p>Saved Quotes and Invoices can be reopened from Saved Files. Reopening restores the existing saved workspace context.</p></WorkflowGuideStep>
       </section>
       <section><h3>PRIVACY &amp; CONTROL</h3>
-        <WorkflowGuideStep number="11" title="Private by default"><p>Photos, Job Analysis, recommendations, private costs, and private reminders remain internal unless the professional explicitly chooses otherwise.</p><p>Nothing here issues, sends, approves, pays, or completes a document. Nothing in this workspace automatically accepts a Quote, records payment, closes a Job, or changes lifecycle state. The professional remains in control.</p></WorkflowGuideStep>
+        <WorkflowGuideStep number="11" title="Private by default"><p>Photos, Job Analysis, recommendations, private costs, and private reminders remain internal unless the professional explicitly chooses otherwise.</p><p>Editing, saving, previewing, and downloading do not issue or send anything. Only the explicit governed Issue &amp; Send Quote action creates an issued commercial offer. Nothing automatically accepts a Quote, records payment, schedules work, creates an Invoice, or closes a Job.</p></WorkflowGuideStep>
       </section>
       <footer>Need help? Ask Meetro in the conversation.</footer>
     </aside>
@@ -575,6 +579,54 @@ function DeliveryReviewDialog({ state, onChange, onCancel, onSend }) {
   const label = quote ? "Quote" : "Invoice";
   const action = state.busy ? "Sending…" : state.failed ? `Retry ${email ? "Email" : "Message"}` : `${state.resend ? "Resend" : "Send"} ${email ? "Email" : "Message"}`;
   return <WorkspaceDialog titleId="business-document-delivery-review-title" title={`Review ${label} ${email ? "Email" : "Message"}`} onClose={state.busy ? undefined : onCancel} actions={[{ label: "Cancel", onClick: onCancel, disabled: state.busy }, { label: action, primary: true, disabled: state.busy || (email && !state.recipientEmail.trim()), onClick: onSend }]}><div className="business-document-delivery-review">{email ? <label>Recipient<input type="email" autoComplete="email" value={state.recipientEmail} onChange={(event) => onChange("recipientEmail", event.target.value)} /></label> : <p><strong>Recipient</strong><br />Active governed Meetro customer conversation</p>}<label>Subject<input value={state.subject} onChange={(event) => onChange("subject", event.target.value)} /></label><label>Customer message<textarea value={state.customerMessage} onChange={(event) => onChange("customerMessage", event.target.value)} /></label><dl><div><dt>{label} number</dt><dd>{displayDocumentNumber(state.document)}</dd></div><div><dt>Exact saved version</dt><dd>{state.document.version}</dd></div><div><dt>{quote ? "Quote amount" : "Total due"}</dt><dd>{money(state.total)}</dd></div><div><dt>Customer document</dt><dd>PDF included</dd></div><div><dt>{quote ? "Quote Agreement / Terms" : "Due terms"}</dt><dd>{state.termsIncluded ? "Included" : "No terms entered"}</dd></div><div><dt>Customer-visible photos</dt><dd>{state.photoCount}</dd></div></dl><p className="business-document-delivery-truth">This sends only the saved customer-facing package. Private reminders, private photos, working conversation, internal costs, and recovery data are excluded. Sending does not issue, accept, approve, pay, or close anything.</p>{state.error ? <p role="alert" className="business-document-delivery-error">{state.error}</p> : null}</div></WorkspaceDialog>;
+}
+
+function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
+  const issuedQuote = state.result?.issuedQuote || state.checkpoint?.issuedQuote || null;
+  const deliveryRetry = state.errorPhase === "DELIVERY" && Boolean(issuedQuote);
+  const success = state.stage === "success" && Boolean(issuedQuote);
+  const actionLabel = state.busy
+    ? deliveryRetry
+      ? "Retrying delivery…"
+      : "Issuing…"
+    : deliveryRetry
+      ? "Retry Delivery"
+      : "Issue & Send Quote";
+  const actions = success
+    ? [{ label: "Close", primary: true, onClick: onCancel }]
+    : [
+        { label: "Cancel", onClick: onCancel, disabled: state.busy },
+        { label: actionLabel, primary: true, onClick: onConfirm, disabled: state.busy || !state.document },
+      ];
+  return (
+    <WorkspaceDialog
+      titleId="business-document-quote-issue-title"
+      title={success ? "Quote issued and sent" : deliveryRetry ? "Quote issued — delivery needs attention" : "Review Issue & Send Quote"}
+      onClose={state.busy ? undefined : onCancel}
+      actions={actions}
+    >
+      <div className="business-document-delivery-review">
+        <p>
+          {success
+            ? "The exact canonical Quote was issued and sent through the governed Meetro conversation."
+            : deliveryRetry
+              ? "Commercial issuance succeeded. Retry only the governed delivery; this will not issue another Quote version."
+              : "This imports the exact saved Working Quote as a canonical Draft, issues its governed version, then sends that issued Quote through the existing customer conversation."}
+        </p>
+        <dl>
+          <div><dt>Working Quote</dt><dd>{state.document ? displayDocumentNumber(state.document) : "Save required"}</dd></div>
+          <div><dt>Exact saved version</dt><dd>{state.document?.version || "—"}</dd></div>
+          <div><dt>Quote amount</dt><dd>{money(state.total)}</dd></div>
+          {issuedQuote ? <div><dt>Canonical Quote</dt><dd>{issuedQuote.id}</dd></div> : null}
+          {issuedQuote ? <div><dt>Exact issued version</dt><dd>{issuedQuote.currentVersion}</dd></div> : null}
+        </dl>
+        <p className="business-document-delivery-truth">
+          Issuance creates the customer-facing commercial offer. Delivery does not accept it, collect payment, schedule work, create an Invoice, or close the Job.
+        </p>
+        {state.error ? <p role="alert" className="business-document-delivery-error">{state.error}</p> : null}
+      </div>
+    </WorkspaceDialog>
+  );
 }
 
 function NumberingSetupDialog({ state, onModeChange, onPreviousNumberChange, onCancel, onSubmit }) {
@@ -870,6 +922,8 @@ export default function UnifiedBusinessDocumentWorkspace({
   const saveAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const saveInFlightRef = useRef({ quote: null, invoice: null });
   const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
+  const quoteIssueAttemptRef = useRef(null);
+  const quoteIssueInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
   const pendingExitRef = useRef(null);
@@ -906,6 +960,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [saveFailureOpen, setSaveFailureOpen] = useState(false);
   const [numberingSetup, setNumberingSetup] = useState(null);
   const [deliveryState, setDeliveryState] = useState(null);
+  const [quoteIssueState, setQuoteIssueState] = useState(null);
   const [deliveryHistory, setDeliveryHistory] = useState({ quote: [], invoice: [] });
   const [recoveryRecord, setRecoveryRecord] = useState(null);
   const [recovered, setRecovered] = useState(false);
@@ -1506,6 +1561,9 @@ export default function UnifiedBusinessDocumentWorkspace({
     );
     setSavedFingerprints((current) => ({ ...current, [type]: businessDocumentRestoredSnapshotFingerprint(document) }));
     setDeliveryHistory((current) => ({ ...current, [type]: [] }));
+    setQuoteIssueState(null);
+    quoteIssueAttemptRef.current = null;
+    quoteIssueInFlightRef.current = false;
     setActiveDocument(type);
     setSavedFilesOpen(false);
     setNotice(noticeMessage || `${displayDocumentNumber(document)} reopened. Continue editing this saved working draft.`);
@@ -1547,6 +1605,9 @@ export default function UnifiedBusinessDocumentWorkspace({
     setPhotoReviewOpen(false);
     setCustomerControl(emptyCustomerControl());
     setDeliveryState(null);
+    setQuoteIssueState(null);
+    quoteIssueAttemptRef.current = null;
+    quoteIssueInFlightRef.current = false;
     setRecoveryRecord(null);
     setRecovered(false);
     setNewContentAvailable(false);
@@ -2584,6 +2645,100 @@ export default function UnifiedBusinessDocumentWorkspace({
     openDeliveryReview(channel, activeSaved);
   }
 
+  async function beginGovernedQuoteIssue() {
+    if (quoteIssueState?.busy || activeDocument !== "quote") return;
+    setQuoteIssueState({ stage: "saving", busy: true, error: "", errorPhase: "", checkpoint: {}, result: null, document: activeSaved, total: deliveryTotal("quote", quote) });
+    const document = await ensureCurrentDocumentSaved("quote");
+    if (document === NUMBERING_SETUP_PENDING) {
+      setQuoteIssueState({
+        stage: "review",
+        busy: false,
+        error: "Finish the one-time numbering setup and save this Working Quote before issuance.",
+        errorPhase: "BRIDGE",
+        checkpoint: {},
+        result: null,
+        document: activeSaved,
+        total: deliveryTotal("quote", quote),
+      });
+      return;
+    }
+    if (!document) {
+      setQuoteIssueState({
+        stage: "review",
+        busy: false,
+        error: saveState.error || "The Working Quote could not be saved. Nothing was issued or sent.",
+        errorPhase: "BRIDGE",
+        checkpoint: {},
+        result: null,
+        document: activeSaved,
+        total: deliveryTotal("quote", quote),
+      });
+      return;
+    }
+    const attemptIdentity = `${document.id}:${document.version}`;
+    if (quoteIssueAttemptRef.current?.identity !== attemptIdentity) {
+      quoteIssueAttemptRef.current = {
+        identity: attemptIdentity,
+        commandKeys: createWorkingQuoteCommandKeys(),
+      };
+    }
+    setQuoteIssueState({
+      stage: "review",
+      busy: false,
+      error: "",
+      errorPhase: "",
+      checkpoint: {},
+      result: null,
+      document,
+      total: deliveryTotal("quote", document.content || quote),
+      commandKeys: quoteIssueAttemptRef.current.commandKeys,
+    });
+  }
+
+  async function confirmGovernedQuoteIssue() {
+    const current = quoteIssueState;
+    if (!current?.document || !current.commandKeys || current.busy || quoteIssueInFlightRef.current) return;
+    quoteIssueInFlightRef.current = true;
+    setQuoteIssueState((state) => ({ ...state, busy: true, error: "" }));
+    try {
+      const result = await issueAndSendWorkingQuote({
+        document: current.document,
+        jobId: documentJobIds.quote,
+        commandKeys: current.commandKeys,
+        checkpoint: current.checkpoint,
+        setPage,
+      });
+      setQuoteIssueState((state) => ({
+        ...state,
+        stage: "success",
+        busy: false,
+        error: "",
+        errorPhase: "",
+        checkpoint: {
+          canonicalQuote: result.canonicalQuote,
+          issuedQuote: result.issuedQuote,
+          delivery: result.delivery,
+        },
+        result,
+      }));
+      setNotice(`Quote issued as exact version ${result.issuedQuote.currentVersion} and sent in the governed Meetro conversation. Customer acceptance is still pending.`);
+    } catch (error) {
+      const issuedQuote = error?.checkpoint?.issuedQuote;
+      setQuoteIssueState((state) => ({
+        ...state,
+        stage: "review",
+        busy: false,
+        errorPhase: error?.phase || "BRIDGE",
+        checkpoint: error?.checkpoint || {},
+        error: issuedQuote
+          ? `${error?.message || "Delivery failed."} The Quote remains issued as version ${issuedQuote.currentVersion}; retrying will not reissue it.`
+          : error?.message || "The Quote was not issued or sent.",
+      }));
+    } finally {
+      quoteIssueInFlightRef.current = false;
+    }
+  }
+
   async function shareSavedDocument(document) {
     const type = document.documentType.toLowerCase();
     const content = document.content || currentContent(type);
@@ -2675,6 +2830,15 @@ export default function UnifiedBusinessDocumentWorkspace({
 
   const guardedSetPage = (page) => requestExit(() => setPage(page));
   const activeSavePresentation = savePresentations[activeDocument];
+  const issuedQuotePresentation = quoteIssueState?.result?.issuedQuote ||
+    quoteIssueState?.checkpoint?.issuedQuote || null;
+  const activeIssuedQuote =
+    activeDocument === "quote" &&
+    activeSaved &&
+    quoteIssueState?.document?.id === activeSaved.id &&
+    quoteIssueState.document.version === activeSaved.version
+      ? issuedQuotePresentation
+      : null;
   const saveLabel = activeSavePresentation.label;
   const startNewLabel = t(
     startNewState.busy && startNewState.documentType === activeDocument
@@ -2722,13 +2886,14 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button><DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} /></div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityState={activeIssuedQuote} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || Boolean(activeIssuedQuote)} onClick={() => void beginGovernedQuoteIssue()}>{activeIssuedQuote ? "Quote Issued & Sent" : quoteIssueState?.busy ? "Preparing…" : "Issue & Send Quote"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
       {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
       {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
+      {quoteIssueState && quoteIssueState.stage !== "saving" ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={() => setQuoteIssueState(null)} onConfirm={() => void confirmGovernedQuoteIssue()} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {numberingSetup ? <NumberingSetupDialog state={numberingSetup} onModeChange={chooseNumberingMode} onPreviousNumberChange={(value) => setNumberingSetup((current) => current ? { ...current, previousDocumentNumber: value } : current)} onCancel={cancelNumberingSetup} onSubmit={() => void submitNumberingSetup()} /> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={startNewSaveFailure ? [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Try Again", primary: true, onClick: retryFailedSave }] : [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || startNewState.error || "Your work is still here."}</p>{startNewSaveFailure ? <p>No new document was created. The current working document remains open.</p> : <p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p>}</WorkspaceDialog> : null}

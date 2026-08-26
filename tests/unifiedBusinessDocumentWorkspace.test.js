@@ -217,7 +217,7 @@ test("How It Works consolidates Quote, Invoice, continuity, and private-control 
     "Build or Update Quote",
     "Review Job Evidence",
     "Review the Quote",
-    "Save, Preview or Send Quote",
+    "Save, Issue and Send Quote",
     "Create Invoice",
     "Review Invoice",
     "Send Invoice",
@@ -230,17 +230,16 @@ test("How It Works consolidates Quote, Invoice, continuity, and private-control 
   assert.match(workspace, /Nothing is added to the customer document merely because it was discussed/);
   assert.match(workspace, /Only explicit document actions should change the working Quote/);
   assert.match(workspace, /Photo role and photo visibility remain separate/);
-  assert.match(workspace, /Nothing is automatically approved/);
+  assert.match(workspace, /Customer acceptance remains separate/);
   assert.match(workspace, /Creating an Invoice does not mean it has been sent or paid/);
   assert.match(workspace, /Sending an Invoice does not mean payment was received/);
-  assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document/);
-  assert.match(workspace, /Nothing in this workspace automatically accepts a Quote/);
-  assert.match(workspace, /The professional remains in control/);
+  assert.match(workspace, /Only the explicit governed Issue &amp; Send Quote action creates an issued commercial offer/);
+  assert.match(workspace, /Nothing automatically accepts a Quote, records payment, schedules work, creates an Invoice, or closes a Job/);
   assert.match(workspace, /Questions and photo analysis stay private/);
   assert.match(workspace, /Direct Quote facts or explicit document instructions can update the working draft/);
   assert.match(workspace, /Let Meetro prefill uses eligible professional-provided document facts/);
   assert.match(workspace, /Fill form manually always remains available/);
-  assert.match(workspace, /Nothing is sent automatically/);
+  assert.match(workspace, /Save Draft, Preview PDF, and Download PDF do not create commercial authority/);
 });
 
 test("normal conversation surface removes permanent explanatory clutter", () => {
@@ -947,7 +946,7 @@ test("private reminders, costs, and photos do not enter customer-visible models"
 test("Internal Estimate and Solution Ready are not mandatory visible workspace steps", () => {
   assert.doesNotMatch(workspace, /Analyze Job|Continue with My Details|Confirm Amounts|Internal Estimate|Solution Ready/);
   assert.match(workspace, /private working space for the job/);
-  assert.match(workspace, /Nothing here issues, sends, approves, pays, or completes a document/);
+  assert.match(workspace, /Editing, saving, previewing, and downloading do not issue or send anything/);
 });
 
 test("Quote and Invoice delivery use one menu while PDF remains separate", () => {
