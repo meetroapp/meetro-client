@@ -9,6 +9,7 @@ import {
   loadCanonicalEvaluationForRecord,
   saveCanonicalEvaluationDraft,
 } from "../utils/evaluationAuthorityController.js";
+import { fetchCanonicalVisits } from "../utils/canonicalVisitProjection.js";
 import { getEfrCopy } from "../utils/efrLanguage.js";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
 import {
@@ -151,6 +152,11 @@ export default function CanonicalJobEvaluation({
     error: "",
     notice: "",
   });
+  const [evaluationVisitState, setEvaluationVisitState] = useState({
+    status: "loading",
+    completedVisitId: "",
+    activeState: "",
+  });
   const [editing, setEditing] = useState(false);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -269,9 +275,38 @@ export default function CanonicalJobEvaluation({
     return () => { active = false; };
   }, [copy, environmentEnabled, jobId, relationshipId, refresh, requestId, setPage]);
 
+  useEffect(() => {
+    let active = true;
+    if (!environmentEnabled || !jobId) {
+      setEvaluationVisitState({ status: "unavailable", completedVisitId: "", activeState: "" });
+      return () => { active = false; };
+    }
+    setEvaluationVisitState((current) => ({ ...current, status: "loading" }));
+    void fetchCanonicalVisits({ jobId, purpose: "EVALUATION", setPage })
+      .then((visits) => {
+        if (!active) return;
+        const completed = [...visits]
+          .filter((visit) => visit.state === "COMPLETED")
+          .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))[0];
+        const current = [...visits]
+          .sort((left, right) => Date.parse(right.versionCreatedAt) - Date.parse(left.versionCreatedAt))[0];
+        setEvaluationVisitState({
+          status: "ready",
+          completedVisitId: completed?.id || "",
+          activeState: current?.state || "",
+        });
+      })
+      .catch(() => {
+        if (active) setEvaluationVisitState({ status: "error", completedVisitId: "", activeState: "" });
+      });
+    return () => { active = false; };
+  }, [environmentEnabled, jobId, refresh, setPage]);
+
   const evaluation = loadState.evaluation;
   const actionCodes = new Set(availableActions.map((action) => String(action?.code || "")));
-  const canStart = actionCodes.has("START_EVALUATION");
+  const canStart =
+    actionCodes.has("START_EVALUATION") &&
+    Boolean(evaluationVisitState.completedVisitId);
   const canEdit = actionCodes.has("EDIT_EVALUATION") && evaluation?.evaluation?.capabilities?.canEditDraft === true;
   const canComplete = actionCodes.has("COMPLETE_EVALUATION") && evaluation?.evaluation?.capabilities?.canComplete === true;
   const editingAllowed = evaluation ? canEdit : canStart;
@@ -846,7 +881,13 @@ export default function CanonicalJobEvaluation({
         )}
         {loadState.status === "ready" && !evaluation && !editing && (
           <div style={styles.emptyState}>
-            <p style={styles.message}>{copy.noEvaluationBody}</p>
+            <p style={styles.message}>
+              {evaluationVisitState.completedVisitId
+                ? "Evaluation Visit completed. Document the Evaluation from this Visit."
+                : evaluationVisitState.activeState === "SCHEDULED"
+                  ? "Evaluation visit scheduled. Complete the Visit before documenting the assessment."
+                  : "Complete the evaluation visit before documenting the assessment."}
+            </p>
             {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>{copy.startEvaluation}</button>}
           </div>
         )}

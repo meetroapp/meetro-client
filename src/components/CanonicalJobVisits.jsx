@@ -24,6 +24,7 @@ const AUTHORITY_LABELS = Object.freeze({
 
 const EVENT_LABELS = Object.freeze({
   VISIT_PROPOSED: "Visit proposed",
+  VISIT_SCHEDULE_PROPOSED: "New schedule proposed",
   VISIT_CONFIRMED: "Customer confirmed",
   VISIT_CHANGE_REQUESTED: "Customer requested a schedule change",
   VISIT_RESCHEDULED: "Visit rescheduled",
@@ -42,12 +43,10 @@ function initialSchedule(visit = null) {
   const start = visit?.scheduledStartAt
     ? new Date(visit.scheduledStartAt)
     : new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const end = visit?.scheduledEndAt
-    ? new Date(visit.scheduledEndAt)
-    : new Date(start.getTime() + 60 * 60 * 1000);
+  const end = visit?.scheduledEndAt ? new Date(visit.scheduledEndAt) : null;
   return {
     scheduledStartAt: localInputValue(start),
-    scheduledEndAt: localInputValue(end),
+    scheduledEndAt: end ? localInputValue(end) : "",
     timeZone:
       visit?.timeZone ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
@@ -74,10 +73,10 @@ function formatVisitInstant(value, timeZone) {
 }
 
 function visitSchedule(visit) {
-  return `${formatVisitInstant(visit.scheduledStartAt, visit.timeZone)} – ${formatVisitInstant(
-    visit.scheduledEndAt,
-    visit.timeZone
-  )}`;
+  const start = formatVisitInstant(visit.scheduledStartAt, visit.timeZone);
+  return visit.scheduledEndAt
+    ? `${start} – ${formatVisitInstant(visit.scheduledEndAt, visit.timeZone)}`
+    : start;
 }
 
 function unresolvedChangeRequest(visit) {
@@ -100,17 +99,19 @@ function unresolvedChangeRequest(visit) {
 
 function schedulePayload(form) {
   const scheduledStartAt = new Date(form.scheduledStartAt);
-  const scheduledEndAt = new Date(form.scheduledEndAt);
+  const scheduledEndAt = form.scheduledEndAt
+    ? new Date(form.scheduledEndAt)
+    : null;
   if (
     Number.isNaN(scheduledStartAt.getTime()) ||
-    Number.isNaN(scheduledEndAt.getTime()) ||
-    scheduledEndAt <= scheduledStartAt
+    (scheduledEndAt && Number.isNaN(scheduledEndAt.getTime())) ||
+    (scheduledEndAt && scheduledEndAt <= scheduledStartAt)
   ) {
     return null;
   }
   return {
     scheduledStartAt: scheduledStartAt.toISOString(),
-    scheduledEndAt: scheduledEndAt.toISOString(),
+    scheduledEndAt: scheduledEndAt ? scheduledEndAt.toISOString() : null,
     timeZone: form.timeZone,
     locationMode: form.locationMode,
   };
@@ -238,6 +239,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
       mode,
       purpose: subject.purpose,
       subjectId: subject.subjectId,
+      evaluationId: subject.evaluationId || null,
       approvedQuoteDecisionId: subject.authority?.approvedQuoteDecisionId || null,
       visit,
     });
@@ -289,7 +291,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
         visit: editor.visit,
         purpose: editor.purpose,
         evaluationId:
-          editor.purpose === "EVALUATION" ? editor.subjectId : null,
+          editor.purpose === "EVALUATION" ? editor.evaluationId : null,
         approvedQuoteDecisionId: editor.approvedQuoteDecisionId,
         schedule,
         reason: form.reason.trim() || null,
@@ -350,6 +352,29 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     }
   }
 
+  async function confirmVisit(subject, visit) {
+    const key = `${subjectKey(subject)}:confirm:${visit.id}`;
+    setRunningKey(key);
+    setNotice("");
+    setCommandError("");
+    try {
+      await runCanonicalVisitCommand({
+        jobId,
+        command: "confirm",
+        visit,
+        setPage,
+      });
+      setNotice("The customer’s exact proposed time is confirmed.");
+      reload();
+      notifyCanonicalVisitChanged(jobId, visit.id);
+    } catch (error) {
+      if (error?.code === "STALE_VISIT_VERSION") reload();
+      setCommandError(getCanonicalVisitErrorMessage(error));
+    } finally {
+      setRunningKey("");
+    }
+  }
+
   if (!environmentEnabled || !jobId) return null;
 
   return (
@@ -381,8 +406,8 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
         <div style={styles.emptyState}>
           <strong>Scheduling is not available yet.</strong>
           <span>
-            Add an evaluation before scheduling an evaluation visit. Work can be
-            scheduled after the customer approves an issued quote.
+            Evaluation Visits become available after professional Selection. Work
+            Visits remain unavailable until the customer approves an issued quote.
           </span>
           {workspace.quoteDecisionSummary.pending > 0 && (
             <span>Waiting for the customer’s quote decision before work can be scheduled.</span>
@@ -478,7 +503,11 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                       return (
                         <section key={visit.id} style={styles.visitCard}>
                           <div style={styles.visitHeader}>
-                            <strong>{STATE_LABELS[visit.state]}</strong>
+                            <strong>
+                              {visit.state === "PROPOSED" && visit.actions.canConfirm
+                                ? "Change Requested"
+                                : STATE_LABELS[visit.state]}
+                            </strong>
                             <span style={styles.version}>Version {visit.currentVersion}</span>
                           </div>
                           <p style={styles.schedule}>{visitSchedule(visit)}</p>
@@ -490,7 +519,9 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
 
                           {visit.state === "PROPOSED" && (
                             <p style={styles.pendingNotice}>
-                              Waiting for the customer to confirm or request a schedule change.
+                              {visit.actions.canConfirm
+                                ? "Customer proposed a new time. Approve this exact version or edit it."
+                                : "Waiting for the customer to confirm or propose a new time."}
                             </p>
                           )}
                           {changeRequest && (
@@ -510,6 +541,18 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                           )}
 
                           <div style={styles.actionRow}>
+                            {visit.actions.canConfirm === true && (
+                              <button
+                                type="button"
+                                style={styles.primaryButton}
+                                disabled={Boolean(runningKey)}
+                                onClick={() => confirmVisit(subject, visit)}
+                              >
+                                {runningKey === `${key}:confirm:${visit.id}`
+                                  ? "Confirming…"
+                                  : "Approve New Time"}
+                              </button>
+                            )}
                             {visit.actions.canReschedule === true && (
                               <button
                                 type="button"
@@ -596,9 +639,8 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                             />
                           </label>
                           <label style={styles.label}>
-                            End
+                            Arrival window end (optional)
                             <input
-                              required
                               type="datetime-local"
                               style={styles.input}
                               value={form.scheduledEndAt}

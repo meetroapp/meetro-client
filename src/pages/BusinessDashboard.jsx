@@ -6,7 +6,6 @@ import { authFetch } from "../utils/authFetch";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
-import { getNotifications } from "../utils/notifications";
 import {
   getStoredProfessionalMatchProfile,
   inferRequestCategory,
@@ -29,6 +28,11 @@ import {
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
 } from "../utils/professionalOpportunityCoordinator";
+import {
+  fetchProfessionalSchedule,
+  getProfessionalScheduleCounts,
+  groupProfessionalSchedule,
+} from "../utils/professionalScheduleProjection";
 
 const profileLoadText = {
   en: {
@@ -65,6 +69,7 @@ function BusinessDashboard({ setPage }) {
   const [availableNow, setAvailableNow] = useState(false);
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
+  const [canonicalSchedule, setCanonicalSchedule] = useState(null);
   const legacyEmergencyAuthorityEnabled =
     canReadLegacyWorkflowStorage();
 
@@ -167,6 +172,19 @@ function BusinessDashboard({ setPage }) {
     });
 
     return unsubscribe;
+  }, [profile?.id, setPage]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+    let active = true;
+    void fetchProfessionalSchedule({ view: "active", limit: 50, setPage })
+      .then((schedule) => {
+        if (active) setCanonicalSchedule(schedule);
+      })
+      .catch(() => {
+        if (active) setCanonicalSchedule(null);
+      });
+    return () => { active = false; };
   }, [profile?.id, setPage]);
 
   async function fetchProfile() {
@@ -327,8 +345,28 @@ function BusinessDashboard({ setPage }) {
       dispatchStatus
     );
 
-  const businessSchedule = professionalMetrics.scheduleItems;
-  const todayScheduleCount = professionalMetrics.scheduledJobsCount;
+  const canonicalScheduleGroups = canonicalSchedule
+    ? groupProfessionalSchedule(canonicalSchedule)
+    : null;
+  const canonicalScheduleCounts = canonicalSchedule
+    ? getProfessionalScheduleCounts(canonicalSchedule)
+    : null;
+  const businessSchedule = (canonicalScheduleGroups?.today || []).map((visit) => ({
+    id: visit.id,
+    canonicalVisitId: visit.id,
+    canonicalVisitVersion: visit.currentVersion,
+    title: `${visit.purpose === "EVALUATION" ? "Evaluation Visit" : "Work Visit"} · ${visit.customer.displayName}`,
+    service: visit.job.title,
+    status: "confirmed",
+    dateLabel: "today",
+    time: new Intl.DateTimeFormat(language, {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: visit.timeZone,
+    }).format(new Date(visit.scheduledStartAt)),
+    location: visit.job.title,
+  }));
+  const todayScheduleCount = canonicalScheduleCounts?.today || 0;
 
   const homeownerRequests =
     getStoredHomeownerRequests();
@@ -337,14 +375,11 @@ function BusinessDashboard({ setPage }) {
   const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
   const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
 
-  const scheduleResponseAlertCount = getNotifications().filter(
-    (notice) =>
-      !notice.read &&
-      (notice.targetRole === "professional" || notice.targetRole === "all") &&
-      ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
-        notice.type
-      )
-  ).length;
+  const canonicalScheduleAttentionCount = canonicalScheduleCounts
+    ? canonicalScheduleCounts.needsScheduling +
+      canonicalScheduleCounts.waiting +
+      canonicalScheduleCounts.changeRequested
+    : 0;
 
   function openWorkCenterSection(section, options = {}) {
     localStorage.setItem("meetroWorkCenterTab", section);
@@ -710,6 +745,24 @@ function BusinessDashboard({ setPage }) {
               quoteStatusFilter:
                 quoteResponseAlertCount > 0 ? "accepted" : undefined,
             }),
+        }
+      : (canonicalScheduleCounts?.changeRequested || 0) > 0
+      ? {
+          label: "Review customer’s new time",
+          note: "Customer proposed a new time",
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.needsScheduling || 0) > 0
+      ? {
+          label: "Schedule Evaluation Visit",
+          note: `${canonicalScheduleCounts.needsScheduling} visits need scheduling`,
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.waiting || 0) > 0
+      ? {
+          label: "Review Schedule",
+          note: `${canonicalScheduleCounts.waiting} visit waiting for customer`,
+          onClick: () => openWorkCenterSection("schedule"),
         }
       : todayScheduleCount > 0
       ? {
@@ -1108,7 +1161,7 @@ function BusinessDashboard({ setPage }) {
             <div className="business-dashboard-glance-grid" style={glanceGrid}>
               <div
                 style={
-                  scheduleResponseAlertCount > 0
+                  canonicalScheduleAttentionCount > 0
                     ? pendingQuoteGlowWrap
                     : {}
                 }
@@ -1117,10 +1170,12 @@ function BusinessDashboard({ setPage }) {
                   title={text.todayJobs}
                   value={todayScheduleCount}
                   note={
-                    scheduleResponseAlertCount > 0
-                      ? language === "es"
-                        ? "Respuesta de cita"
-                        : "Appointment response"
+                    canonicalScheduleAttentionCount > 0
+                      ? (canonicalScheduleCounts?.changeRequested || 0) > 0
+                        ? "Customer proposed a new time"
+                        : (canonicalScheduleCounts?.needsScheduling || 0) > 0
+                          ? `${canonicalScheduleCounts.needsScheduling} visits need scheduling`
+                          : `${canonicalScheduleCounts?.waiting || 0} visit waiting for customer`
                       : text.scheduledToday
                   }
                   onClick={openFirstScheduledConversation}

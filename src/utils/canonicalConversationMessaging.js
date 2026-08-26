@@ -152,11 +152,23 @@ export function normalizeCanonicalConversationDetail(payload = {}, expectedId) {
     !Array.isArray(payload.permissions)
       ? payload.permissions
       : {};
-  const relationship =
+  const rawRelationship =
     payload.relationship &&
     typeof payload.relationship === "object"
       ? payload.relationship
       : {};
+  const relationship = conversationType === "request"
+    ? {
+        id: normalizeCanonicalConversationId(rawRelationship.id),
+        requestId: normalizeCanonicalConversationId(rawRelationship.requestId),
+        jobId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          String(rawRelationship.jobId || "").trim()
+        )
+          ? String(rawRelationship.jobId).trim().toLowerCase()
+          : null,
+        title: String(rawRelationship.title || "").trim(),
+      }
+    : rawRelationship;
   const location =
     conversationType === "emergency" &&
     payload.location &&

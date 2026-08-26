@@ -227,8 +227,11 @@ test("Work Center mission counts use shared professional metrics", () => {
 
   assert.match(source, /const professionalWorkMetrics = getProfessionalWorkMetrics/);
   assert.match(source, /professionalWorkMetrics\.newLeadCount/);
-  assert.match(source, /professionalScheduleSource\.confirmed\?\.summary/);
-  assert.match(source, /const upcomingScheduleCount = serverScheduleSummary\?\.upcoming/);
+  assert.match(source, /getProfessionalScheduleCounts\(professionalScheduleSource\.confirmed\)/);
+  assert.match(
+    source,
+    /const upcomingScheduleCount =\s*\(serverScheduleSummary\?\.today \?\? 0\) \+ \(serverScheduleSummary\?\.upcoming \?\? 0\)/
+  );
   assert.match(source, /professionalWorkMetrics\.pendingQuoteCount/);
   assert.match(source, /professionalWorkMetrics\.quoteResponseAlertCount/);
   assert.match(source, /const activeWorkCount = professionalWorkMetrics\.activeWorkCount/);

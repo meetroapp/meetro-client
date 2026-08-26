@@ -122,6 +122,7 @@ import { hasCanonicalLiveJobAction } from "../utils/canonicalLiveJobProjection";
 import {
   createProfessionalScheduleSourceState,
   fetchProfessionalSchedule,
+  getProfessionalScheduleCounts,
   reduceProfessionalScheduleSourceState,
 } from "../utils/professionalScheduleProjection";
 import {
@@ -7033,7 +7034,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
     professionalWorkMetrics.newLeadCount + (hasPendingRequest ? 1 : 0);
   const hasNewWorkCenterOpportunities =
     opportunitiesCount > 0 && opportunitiesCount > viewedOpportunityCount;
-  const serverScheduleSummary = professionalScheduleSource.confirmed?.summary;
+  const canonicalScheduleCounts = professionalScheduleSource.confirmed
+    ? getProfessionalScheduleCounts(professionalScheduleSource.confirmed)
+    : null;
+  const serverScheduleSummary = canonicalScheduleCounts
+    ? {
+        readyToSchedule: canonicalScheduleCounts.needsScheduling,
+        waitingOnCustomer: canonicalScheduleCounts.waiting,
+        changeRequested: canonicalScheduleCounts.changeRequested,
+        today: canonicalScheduleCounts.today,
+        upcoming: canonicalScheduleCounts.upcoming,
+      }
+    : null;
   const serverQuotesSummary = professionalQuotesSource.confirmed?.summary;
   const serverQuotesTotal = serverQuotesSummary
     ? serverQuotesSummary.drafts +
@@ -7041,7 +7053,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       serverQuotesSummary.approved +
       serverQuotesSummary.declined
     : 0;
-  const upcomingScheduleCount = serverScheduleSummary?.upcoming ?? 0;
+  const upcomingScheduleCount =
+    (serverScheduleSummary?.today ?? 0) + (serverScheduleSummary?.upcoming ?? 0);
   const quoteAttentionCount =
     professionalWorkMetrics.pendingQuoteCount +
     professionalWorkMetrics.quoteResponseAlertCount;
@@ -8540,6 +8553,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 translate("professionalScheduleChangeCount", activeLanguage, {
                   count: serverScheduleSummary?.changeRequested ?? 0,
                 }),
+                `${serverScheduleSummary?.today ?? 0} ${translate("today", activeLanguage)}`,
                 translate("professionalScheduleUpcomingCount", activeLanguage, {
                   count: serverScheduleSummary?.upcoming ?? 0,
                 }),
@@ -10210,9 +10224,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
           ? translate("workCenterViewSchedule", activeLanguage)
           : translate("professionalScheduleRetry", activeLanguage),
       primaryAction: translate("workCenterViewSchedule", activeLanguage),
-      badge: translate("professionalScheduleReadyCount", activeLanguage, {
-        count: serverScheduleSummary?.readyToSchedule ?? 0,
-      }),
+      badge: `${serverScheduleSummary?.readyToSchedule ?? 0} visits need scheduling`,
       isPriority: (serverScheduleSummary?.changeRequested ?? 0) > 0,
       tone: "#eff6ff",
       accent: "#2563eb",

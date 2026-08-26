@@ -4,7 +4,7 @@ function sameOpportunity(candidate, opportunity) {
     candidate?.purpose !== opportunity?.purpose
   ) return false;
   return opportunity.purpose === "EVALUATION"
-    ? candidate.evaluationId === opportunity.evaluationId
+    ? candidate.jobId === opportunity.jobId
     : candidate.approvedQuoteDecisionId === opportunity.approvedQuoteDecisionId;
 }
 

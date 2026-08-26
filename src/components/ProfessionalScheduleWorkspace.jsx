@@ -7,6 +7,7 @@ import {
   buildProfessionalScheduleCommandSchedule,
   fetchProfessionalSchedule,
   formatProfessionalScheduleTimeZone,
+  getProfessionalScheduleCounts,
   groupProfessionalSchedule,
   resolveProfessionalScheduleTimeZone,
 } from "../utils/professionalScheduleProjection.js";
@@ -132,7 +133,7 @@ function ScheduleCard({
   const visit = item.kind === "visit";
   const shareable = shareTruthCurrent && isCanonicalScheduleShareable(item);
   return (
-    <article style={styles.card} data-schedule-identity={visit ? item.id : `${item.purpose}:${item.evaluationId || item.approvedQuoteDecisionId}`}>
+    <article style={styles.card} data-schedule-identity={visit ? item.id : `${item.purpose}:${item.jobId}`}>
       <div style={styles.cardHeader}>
         <div style={styles.cardMain}>
           <span style={styles.eyebrow}>{purposeLabel(item, language)}</span>
@@ -143,7 +144,7 @@ function ScheduleCard({
           {item.semanticState === "WAITING_FOR_CUSTOMER"
             ? t("professionalScheduleWaitingMessage", language)
             : item.semanticState === "CHANGE_REQUESTED"
-              ? t("professionalScheduleChangeMessage", language)
+              ? "Customer proposed a new time"
               : item.semanticState === "COMPLETED"
                 ? t("professionalScheduleCompleted", language)
                 : item.semanticState === "CANCELLED"
@@ -175,6 +176,11 @@ function ScheduleCard({
         {visit && item.actions.canReschedule && (
           <button type="button" style={styles.primaryButton} disabled={running} onClick={() => onAction("reschedule", item)}>
             {t("professionalScheduleReschedule", language)}
+          </button>
+        )}
+        {visit && item.actions.canConfirm && (
+          <button type="button" style={styles.primaryButton} disabled={running} onClick={() => onAction("confirm", item)}>
+            Approve New Time
           </button>
         )}
         {visit && item.actions.canCancel && (
@@ -327,7 +333,7 @@ export default function ProfessionalScheduleWorkspace({
       await startScheduling(item);
       return;
     }
-    openEditor("complete", item);
+    openEditor(mode, item);
   }
 
   async function shareSchedule(mode, item, conversationTarget = null) {
@@ -385,7 +391,7 @@ export default function ProfessionalScheduleWorkspace({
       locationMode: form.locationMode,
     });
     if (
-      !["cancel", "complete"].includes(editor.mode) &&
+      !["cancel", "complete", "confirm"].includes(editor.mode) &&
       !schedule
     ) {
       setError(t("professionalScheduleInvalidTime", language));
@@ -405,7 +411,7 @@ export default function ProfessionalScheduleWorkspace({
           item.purpose === "APPROVED_WORK"
             ? item.approvedQuoteDecisionId || item.approvedQuoteDecisionEvidence?.decisionId
             : null,
-        schedule: ["cancel", "complete"].includes(editor.mode)
+        schedule: ["cancel", "complete", "confirm"].includes(editor.mode)
           ? null
           : schedule,
         setPage,
@@ -458,6 +464,7 @@ export default function ProfessionalScheduleWorkspace({
   }
 
   const canonicalGroups = groupProfessionalSchedule(confirmed);
+  const canonicalCounts = getProfessionalScheduleCounts(confirmed);
   const groups = [
     {
       key: "ready",
@@ -475,13 +482,18 @@ export default function ProfessionalScheduleWorkspace({
       items: canonicalGroups.waitingOnCustomer,
     },
     {
+      key: "today",
+      title: t("today", language),
+      items: canonicalGroups.today,
+    },
+    {
       key: "upcoming",
       title: t("professionalScheduleUpcoming", language),
       items: canonicalGroups.upcoming,
     },
   ];
   const activeCount = confirmed.opportunities.length + confirmed.visits.length;
-  const editorShowsEndTime = editor?.item?.purpose === "APPROVED_WORK";
+  const editorShowsEndTime = Boolean(editor?.item);
   const editorTimeZoneLabel = editor
     ? formatProfessionalScheduleTimeZone(form.timeZone, language) ||
       t("professionalScheduleLocalTime", language)
@@ -509,10 +521,11 @@ export default function ProfessionalScheduleWorkspace({
       <WorkCenterMetricGrid
         ariaLabel={t("professionalScheduleTitle", language)}
         metrics={[
-          { key: "ready", icon: "schedule", label: t("professionalScheduleReadyCount", language, { count: "" }).trim(), value: confirmed.summary.readyToSchedule },
-          { key: "waiting", icon: "history", tone: "warning", label: t("professionalScheduleWaitingCount", language, { count: "" }).trim(), value: confirmed.summary.waitingOnCustomer },
-          { key: "change", icon: "warning", tone: "warning", label: t("professionalScheduleChangeCount", language, { count: "" }).trim(), value: confirmed.summary.changeRequested },
-          { key: "upcoming", icon: "completion", tone: "success", label: t("professionalScheduleUpcomingCount", language, { count: "" }).trim(), value: confirmed.summary.upcoming },
+          { key: "ready", icon: "schedule", label: "Visits need scheduling", value: canonicalCounts.needsScheduling },
+          { key: "waiting", icon: "history", tone: "warning", label: t("professionalScheduleWaitingCount", language, { count: "" }).trim(), value: canonicalCounts.waiting },
+          { key: "change", icon: "warning", tone: "warning", label: t("professionalScheduleChangeCount", language, { count: "" }).trim(), value: canonicalCounts.changeRequested },
+          { key: "today", icon: "schedule", tone: "success", label: t("today", language), value: canonicalCounts.today },
+          { key: "upcoming", icon: "completion", tone: "success", label: t("professionalScheduleUpcomingCount", language, { count: "" }).trim(), value: canonicalCounts.upcoming },
         ]}
       />
 
@@ -535,7 +548,7 @@ export default function ProfessionalScheduleWorkspace({
             <div style={styles.grid}>
               {group.items.map((item) => (
                 <ScheduleCard
-                  key={item.kind === "visit" ? item.id : `${item.purpose}:${item.evaluationId || item.approvedQuoteDecisionId}`}
+                  key={item.kind === "visit" ? item.id : `${item.purpose}:${item.jobId}`}
                   item={item}
                   language={language}
                   running={running}
@@ -595,6 +608,8 @@ export default function ProfessionalScheduleWorkspace({
               <h3 id="schedule-editor-title" style={styles.groupTitle}>
                 {editor.mode === "reschedule"
                   ? t("professionalScheduleReschedule", language)
+                  : editor.mode === "confirm"
+                    ? "Approve customer’s proposed time?"
                   : editor.mode === "cancel"
                     ? t("professionalScheduleCancel", language)
                     : editor.mode === "complete"
@@ -610,7 +625,7 @@ export default function ProfessionalScheduleWorkspace({
                 {t("professionalScheduleCancelEdit", language)}
               </button>
             </div>
-            {!["cancel", "complete"].includes(editor.mode) && (
+            {!["cancel", "complete", "confirm"].includes(editor.mode) && (
               <>
                 <p style={styles.editorContext}>
                   {editor.item.customer.displayName} · {editor.item.job.title}
@@ -650,9 +665,16 @@ export default function ProfessionalScheduleWorkspace({
                 </p>
               </>
             )}
+            {editor.mode === "confirm" && (
+              <p style={styles.editorContext}>
+                Confirm version {editor.item.currentVersion} for {formatVisitTime(editor.item, language)}. Only this exact canonical Visit version will be scheduled.
+              </p>
+            )}
             <button type="submit" style={styles.primaryButton} disabled={running}>
               {running ? t("professionalScheduleSaving", language) : editor.mode === "cancel"
                 ? t("professionalScheduleCancel", language)
+                : editor.mode === "confirm"
+                  ? "Approve New Time"
                 : editor.mode === "complete"
                   ? t("professionalScheduleComplete", language)
                 : t("professionalScheduleSave", language)}

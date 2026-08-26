@@ -155,7 +155,12 @@ function detail(overrides = {}) {
       homeowner: { id: 7, displayName: "Jordan" },
       business: { id: 9, name: "Door Pro" },
     },
-    relationship: { id: 21, requestId: 71, title: "Repair entry door" },
+    relationship: {
+      id: 21,
+      requestId: 71,
+      jobId: "11111111-1111-4111-8111-111111111111",
+      title: "Repair entry door",
+    },
     permissions: { canSendMessages: true },
     ...overrides,
   };
@@ -411,7 +416,9 @@ test("canonical conversation IDs do not parse decimal or symbolic text", () => {
 });
 
 test("canonical detail accepts only matching authoritative identity", () => {
-  assert.equal(normalizeCanonicalConversationDetail(detail(), 91)?.conversationId, 91);
+  const normalized = normalizeCanonicalConversationDetail(detail(), 91);
+  assert.equal(normalized?.conversationId, 91);
+  assert.equal(normalized?.relationship.jobId, "11111111-1111-4111-8111-111111111111");
   assert.equal(normalizeCanonicalConversationDetail(detail(), 92), null);
   assert.equal(
     normalizeCanonicalConversationDetail(
@@ -419,6 +426,13 @@ test("canonical detail accepts only matching authoritative identity", () => {
       91
     )?.conversationId,
     91
+  );
+  assert.equal(
+    normalizeCanonicalConversationDetail(
+      detail({ relationship: { id: 21, requestId: 71, jobId: "browser-job", title: "Repair" } }),
+      91
+    )?.relationship.jobId,
+    null
   );
 });
 

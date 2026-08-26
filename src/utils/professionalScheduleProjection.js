@@ -128,7 +128,7 @@ function normalizeOpportunity(value) {
     !location ||
     actions?.canStartScheduling !== true ||
     typeof actions?.canViewJob !== "boolean" ||
-    (source.purpose === "EVALUATION" && (!evaluationId || quoteId || decisionId)) ||
+    (source.purpose === "EVALUATION" && (quoteId || decisionId)) ||
     (source.purpose === "APPROVED_WORK" && (evaluationId || !quoteId || !decisionId))
   ) return null;
   return Object.freeze({
@@ -201,19 +201,18 @@ function normalizeVisit(value) {
     !createdAt ||
     !versionCreatedAt ||
     !actions ||
-    ["canReschedule", "canCancel", "canComplete", "canViewJob"].some(
+    ["canConfirm", "canReschedule", "canCancel", "canComplete", "canViewJob"].some(
       (key) => typeof actions[key] !== "boolean"
     ) ||
     (source.cancellationReason != null && !cancellationReason) ||
     (source.cancelledAt != null && !cancelledAt) ||
     (source.completedAt != null && !completedAt) ||
     (source.latestCustomerChangeRequest != null && !latestCustomerChangeRequest) ||
-    (source.purpose === "EVALUATION" && (!evaluationId || approvedEvidence)) ||
+    (source.purpose === "EVALUATION" && approvedEvidence) ||
     (source.purpose === "APPROVED_WORK" &&
       (evaluationId || !approvedDecisionId || approvedEvidence?.decision !== "APPROVED")) ||
     (source.semanticState === "WAITING_FOR_CUSTOMER" && source.state !== "PROPOSED") ||
-    (source.semanticState === "CHANGE_REQUESTED" &&
-      (source.state !== "PROPOSED" || !latestCustomerChangeRequest)) ||
+    (source.semanticState === "CHANGE_REQUESTED" && source.state !== "PROPOSED") ||
     (["SCHEDULED", "CANCELLED", "COMPLETED"].includes(source.semanticState) &&
       source.semanticState !== source.state)
   ) return null;
@@ -243,6 +242,7 @@ function normalizeVisit(value) {
     createdAt,
     versionCreatedAt,
     actions: Object.freeze({
+      canConfirm: actions.canConfirm === true,
       canReschedule: actions.canReschedule === true,
       canCancel: actions.canCancel === true,
       canComplete: actions.canComplete === true,
@@ -400,8 +400,34 @@ export function reduceProfessionalScheduleSourceState(state, action) {
   return current;
 }
 
-export function groupProfessionalSchedule(schedule) {
+function zonedDateKey(value, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(value));
+    const fields = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${fields.year}-${fields.month}-${fields.day}`;
+  } catch {
+    return null;
+  }
+}
+
+export function groupProfessionalSchedule(schedule, { now = new Date() } = {}) {
   if (schedule?.source !== "PROFESSIONAL_SCHEDULE") return null;
+  const scheduled = schedule.visits.filter(
+    (item) => item.semanticState === "SCHEDULED"
+  );
+  const today = [];
+  const upcoming = [];
+  for (const item of scheduled) {
+    const visitDay = zonedDateKey(item.scheduledStartAt, item.timeZone);
+    const todayDay = zonedDateKey(now, item.timeZone);
+    if (visitDay && visitDay === todayDay) today.push(item);
+    else if (Date.parse(item.scheduledStartAt) > now.getTime()) upcoming.push(item);
+  }
   return Object.freeze({
     needsScheduling: schedule.opportunities,
     changeRequested: Object.freeze(
@@ -410,9 +436,20 @@ export function groupProfessionalSchedule(schedule) {
     waitingOnCustomer: Object.freeze(
       schedule.visits.filter((item) => item.semanticState === "WAITING_FOR_CUSTOMER")
     ),
-    upcoming: Object.freeze(
-      schedule.visits.filter((item) => item.semanticState === "SCHEDULED")
-    ),
+    today: Object.freeze(today),
+    upcoming: Object.freeze(upcoming),
+  });
+}
+
+export function getProfessionalScheduleCounts(schedule, options) {
+  const groups = groupProfessionalSchedule(schedule, options);
+  if (!groups) return null;
+  return Object.freeze({
+    needsScheduling: groups.needsScheduling.length,
+    waiting: groups.waitingOnCustomer.length,
+    changeRequested: groups.changeRequested.length,
+    today: groups.today.length,
+    upcoming: groups.upcoming.length,
   });
 }
 
@@ -485,8 +522,7 @@ export function buildProfessionalScheduleCommandSchedule({
     time: startTime,
     timeZone,
   });
-  const hasOptionalEnd =
-    purpose === "APPROVED_WORK" && Boolean(String(endTime || "").trim());
+  const hasOptionalEnd = Boolean(String(endTime || "").trim());
   const scheduledEndAt = hasOptionalEnd
     ? wallTimeToInstant({ date, time: endTime, timeZone })
     : null;

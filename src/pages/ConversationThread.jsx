@@ -42,6 +42,7 @@ import RevisedQuoteWorkflowPresentation from "../components/workflows/presentati
 import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
 import ConversationQuoteCard from "../components/ConversationQuoteCard";
 import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
+import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
 import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
 import {
@@ -729,6 +730,7 @@ function ConversationThreadInner({
     useState(false);
   const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
     useState("");
+  const [canonicalVisitEditorToken, setCanonicalVisitEditorToken] = useState(0);
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -4728,6 +4730,16 @@ const handleImageUpload = (event) => {
     setActiveMessageId(null);
     setShowMobileSheet(false);
 
+    if (
+      isCanonicalThread &&
+      !isCanonicalEmergencyThread &&
+      currentViewerRole === "business" &&
+      canonicalConversationDetail?.relationship?.jobId
+    ) {
+      setCanonicalVisitEditorToken((value) => value + 1);
+      return;
+    }
+
     if (currentViewerRole !== "business") {
       setSaveNotice(
         t("conversationSchedulingIsManagedByTheProfessionalYouCanMessageThemAboutThe", language)
@@ -5628,6 +5640,18 @@ const handleImageUpload = (event) => {
               </div>
             )}
 
+            {isCanonicalThread &&
+              !isCanonicalEmergencyThread &&
+              currentViewerRole === "business" &&
+              canonicalConversationDetail?.relationship?.jobId && (
+                <div style={menuSection}>
+                  <div style={menuSectionTitle}>Evaluation Visit</div>
+                  <button style={threadMenuBtn} onClick={openChatScheduleModal}>
+                    Schedule Evaluation Visit
+                  </button>
+                </div>
+              )}
+
             <div style={menuSection}>
               <div style={menuSectionTitle}>
                 {t("conversationConversationKicker", language)}
@@ -6214,6 +6238,25 @@ const handleImageUpload = (event) => {
               </div>
             </div>
           )}
+
+          {isCanonicalThread &&
+            !isCanonicalEmergencyThread &&
+            canonicalConversationDetail?.relationship?.jobId && (
+              <CanonicalConversationVisitCard
+                jobId={canonicalConversationDetail.relationship.jobId}
+                viewerRole={
+                  currentViewerRole === "business" ? "professional" : "customer"
+                }
+                language={language}
+                setPage={setPage}
+                displayMode={
+                  embedded || appLayoutMetrics.layoutWidth >= 768
+                    ? "project-panel"
+                    : "inline"
+                }
+                openEditorToken={canonicalVisitEditorToken}
+              />
+            )}
 
           <div className="chat-messages conversation-messages" style={messagesScroll}>
             <div style={threadSearchRow}>

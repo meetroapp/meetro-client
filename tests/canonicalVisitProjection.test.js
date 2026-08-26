@@ -259,6 +259,8 @@ test("Visit DTO is allowlisted and drops actor identity and sentinel fields", ()
   assert.equal(normalized.createdByParticipantId, undefined);
   assert.equal(normalized.recordedByParticipantId, undefined);
   assert.deepEqual(normalized.actions, {
+    canConfirm: false,
+    canRequestChange: false,
     canReschedule: false,
     canCancel: true,
     canComplete: false,
@@ -332,7 +334,7 @@ test("authority reads and activation use exact canonical routes", async () => {
   assert.match(calls[1].options.headers["Idempotency-Key"], /^visit:activate-authority:/);
 });
 
-test("Evaluation and Approved Work Visit lists use their certified read paths", async () => {
+test("Evaluation and Approved Work Visit lists share the canonical Job read path", async () => {
   const calls = [];
   const authFetchImpl = async (endpoint) => {
     calls.push(endpoint);
@@ -340,9 +342,7 @@ test("Evaluation and Approved Work Visit lists use their certified read paths", 
       response: { ok: true, status: 200 },
       data: {
         success: true,
-        visits: endpoint.includes("/evaluations/")
-          ? [visit()]
-          : [approvedVisit()],
+        visits: [visit(), approvedVisit()],
       },
     };
   };
@@ -360,7 +360,7 @@ test("Evaluation and Approved Work Visit lists use their certified read paths", 
   });
   assert.equal(evaluationVisits.length, 1);
   assert.equal(approvedVisits.length, 1);
-  assert.equal(calls[0], `/jobs/${ids.job}/evaluations/${ids.evaluation}/visits`);
+  assert.equal(calls[0], `/jobs/${ids.job}/visits`);
   assert.equal(calls[1], `/jobs/${ids.job}/visits`);
 });
 
@@ -444,6 +444,31 @@ test("Evaluation propose sends the certified nullable end-time contract", async 
   assert.equal(requestBody.timeZone, "America/New_York");
 });
 
+test("professional proposal carries an optional bounded customer note as Visit event evidence", async () => {
+  let requestBody;
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "propose",
+    purpose: "EVALUATION",
+    reason: "Please use the side entrance when you arrive.",
+    schedule: {
+      scheduledStartAt: startAt,
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    },
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl: async (_endpoint, options) => {
+      requestBody = JSON.parse(options.body);
+      return {
+        response: { ok: true, status: 201 },
+        data: { success: true, visit: visit({ scheduledEndAt: null }) },
+      };
+    },
+  });
+  assert.equal(requestBody.reason, "Please use the side entrance when you arrive.");
+});
+
 test("version commands send exact current version and never silently retry", async () => {
   let calls = 0;
   await assert.rejects(
@@ -476,6 +501,71 @@ test("version commands send exact current version and never silently retry", asy
   assert.equal(calls, 1);
 });
 
+test("mutual confirmation and customer alternate-time commands target one exact Visit version", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, body: JSON.parse(options.body) });
+    const changed = endpoint.endsWith("/change-request");
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        visit: visit({
+          currentVersion: 2,
+          state: changed ? "PROPOSED" : "SCHEDULED",
+          scheduledStartAt: changed ? "2026-08-15T14:00:00.000Z" : startAt,
+          scheduledEndAt: changed ? null : endAt,
+          actions: {
+            canConfirm: false,
+            canRequestChange: true,
+            canReschedule: false,
+            canCancel: false,
+            canComplete: false,
+          },
+        }),
+      },
+    };
+  };
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "confirm",
+    visit: visit(),
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl,
+  });
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "change-request",
+    visit: visit(),
+    schedule: {
+      scheduledStartAt: "2026-08-15T14:00:00.000Z",
+      scheduledEndAt: null,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    },
+    reason: "Later works better",
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl,
+  });
+  assert.deepEqual(calls, [
+    {
+      endpoint: `/jobs/${ids.job}/visits/${ids.visit}/confirm`,
+      body: { expectedVersion: 1 },
+    },
+    {
+      endpoint: `/jobs/${ids.job}/visits/${ids.visit}/change-request`,
+      body: {
+        expectedVersion: 1,
+        scheduledStartAt: "2026-08-15T14:00:00.000Z",
+        scheduledEndAt: null,
+        timeZone: "America/New_York",
+        locationMode: "JOB_SERVICE_LOCATION",
+        reason: "Later works better",
+      },
+    },
+  ]);
+});
+
 test("malformed command subjects fail before any network request", async () => {
   let calls = 0;
   await assert.rejects(
@@ -499,7 +589,7 @@ test("malformed command subjects fail before any network request", async () => {
   assert.equal(calls, 0);
 });
 
-test("workspace exposes Evaluation AVAILABLE without inventing Visit records", async () => {
+test("workspace exposes selected-Job Evaluation Visit authority before Evaluation creation", async () => {
   let visitReads = 0;
   const workspace = await loadCanonicalVisitWorkspace({
     record: record(),
@@ -518,9 +608,9 @@ test("workspace exposes Evaluation AVAILABLE without inventing Visit records", a
       fetchDetail: async () => null,
     },
   });
-  assert.equal(workspace.evaluation.authority.state, "AVAILABLE");
+  assert.equal(workspace.evaluation.authority.state, "ACTIVE");
   assert.equal(workspace.evaluation.visits.length, 0);
-  assert.equal(visitReads, 0);
+  assert.equal(visitReads, 1);
 });
 
 test("workspace exposes Approved Work only for exact ISSUED + APPROVED Quote truth", async () => {
@@ -590,7 +680,7 @@ test("Current Job Visit presentation is bounded, professional-only, and fail-clo
   assert.match(componentSource, /visit\.actions\.canReschedule === true/);
   assert.match(componentSource, /visit\.actions\.canCancel === true/);
   assert.match(componentSource, /visit\.actions\.canComplete === true/);
-  assert.doesNotMatch(componentSource, /canConfirm|canRequestChange/);
+  assert.match(componentSource, /visit\.actions\.canConfirm === true/);
   assert.doesNotMatch(componentSource, /localStorage|sessionStorage/);
   assert.doesNotMatch(componentSource, /dispatch board|crew assignment|route optimization|GPS|geofenc|self-booking/i);
   assert.match(componentSource, /repeat\(auto-fit, minmax\(min\(100%, 280px\), 1fr\)\)/);
@@ -608,7 +698,7 @@ test("presentation language keeps Visit completion separate from lifecycle compl
   assert.match(componentSource, /Schedule Evaluation/);
   assert.match(componentSource, /Schedule Work/);
   assert.match(componentSource, /Ready to schedule/);
-  assert.match(componentSource, /Waiting for the customer to confirm or request a schedule change/);
+  assert.match(componentSource, /Waiting for the customer to confirm or propose a new time/);
   assert.match(componentSource, /Customer requested a schedule change/);
   assert.match(componentSource, /latest visit details were reloaded; no change was retried/);
   assert.doesNotMatch(componentSource, /Canonical Visit authority|Activate Visit Scheduling/);

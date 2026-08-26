@@ -5,6 +5,8 @@ import {
   buildProfessionalScheduleCommandSchedule,
   fetchProfessionalSchedule,
   formatProfessionalScheduleTimeZone,
+  getProfessionalScheduleCounts,
+  groupProfessionalSchedule,
   normalizeProfessionalSchedule,
   createProfessionalScheduleSourceState,
   reduceProfessionalScheduleSourceState,
@@ -34,10 +36,10 @@ function payload(overrides = {}) {
         semanticState: "READY_TO_SCHEDULE",
         jobId: IDS.job,
         purpose: "EVALUATION",
-        evaluationId: IDS.evaluation,
+        evaluationId: null,
         quoteId: null,
         approvedQuoteDecisionId: null,
-        authority: { state: "AVAILABLE", rawGrantRows: ["ignored"] },
+        authority: { state: "ACTIVE", rawGrantRows: ["ignored"] },
         job: { id: IDS.job, title: "Synthetic repair", category: "Handyman", internal: true },
         customer: { displayName: "QA Customer", email: "private@example.test" },
         location: { mode: "JOB_SERVICE_LOCATION", serviceArea: "Brooklyn, NY", address: null },
@@ -63,7 +65,7 @@ function payload(overrides = {}) {
         cancellationReason: null,
         cancelledAt: null,
         completedAt: null,
-        evaluationId: IDS.evaluation,
+        evaluationId: null,
         approvedQuoteDecisionEvidence: null,
         latestCustomerChangeRequest: null,
         job: { id: IDS.job, title: "Synthetic repair", category: "Handyman" },
@@ -71,6 +73,7 @@ function payload(overrides = {}) {
         createdAt: "2026-08-13T12:00:00.000Z",
         versionCreatedAt: "2026-08-13T12:00:00.000Z",
         actions: {
+          canConfirm: false,
           canReschedule: false,
           canCancel: true,
           canComplete: false,
@@ -171,6 +174,35 @@ test("confirmed canonical empty remains distinct from unavailable", () => {
   assert.equal(state.confirmed.opportunities.length + state.confirmed.visits.length, 0);
 });
 
+test("shared Schedule groups and counts separate Today from Upcoming in each Visit timezone", () => {
+  const response = payload();
+  const first = response.schedule.visits[0];
+  Object.assign(first, {
+    state: "SCHEDULED",
+    semanticState: "SCHEDULED",
+    scheduledStartAt: "2026-08-20T14:00:00.000Z",
+    scheduledEndAt: null,
+  });
+  response.schedule.visits.push({
+    ...first,
+    id: "30000000-0000-4000-8000-000000000004",
+    scheduledStartAt: "2026-08-21T14:00:00.000Z",
+  });
+  const schedule = normalizeProfessionalSchedule(response);
+  const options = { now: new Date("2026-08-20T12:00:00.000Z") };
+  const groups = groupProfessionalSchedule(schedule, options);
+  const counts = getProfessionalScheduleCounts(schedule, options);
+  assert.equal(groups.today[0].id, IDS.visit);
+  assert.equal(groups.upcoming[0].id, "30000000-0000-4000-8000-000000000004");
+  assert.deepEqual(counts, {
+    needsScheduling: 1,
+    waiting: 0,
+    changeRequested: 0,
+    today: 1,
+    upcoming: 1,
+  });
+});
+
 test("wall-clock Schedule input becomes an explicit instant in the selected IANA timezone", () => {
   assert.equal(
     wallTimeToInstant({
@@ -190,7 +222,7 @@ test("wall-clock Schedule input becomes an explicit instant in the selected IANA
   );
 });
 
-test("Evaluation requires arrival truth but never fabricates an end time", () => {
+test("Evaluation requires arrival truth and preserves only an explicitly supplied arrival window", () => {
   assert.deepEqual(
     buildProfessionalScheduleCommandSchedule({
       purpose: "EVALUATION",
@@ -202,7 +234,7 @@ test("Evaluation requires arrival truth but never fabricates an end time", () =>
     }),
     {
       scheduledStartAt: "2026-08-20T13:30:00.000Z",
-      scheduledEndAt: null,
+      scheduledEndAt: "2026-08-20T14:30:00.000Z",
       timeZone: "America/New_York",
       locationMode: "JOB_SERVICE_LOCATION",
     }

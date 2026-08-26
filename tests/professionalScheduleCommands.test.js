@@ -46,7 +46,7 @@ test("ACTIVE authority never reactivates and a failed activation gate remains cl
 test("canonical subject identity prevents a refreshed opportunity collision", async () => {
   const collision = {
     ...opportunity,
-    evaluationId: "20000000-0000-4000-8000-000000000099",
+    jobId: "10000000-0000-4000-8000-000000000099",
     authority: { state: "ACTIVE" },
   };
   assert.equal(await prepareProfessionalSchedulingOpportunity({

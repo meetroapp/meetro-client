@@ -9,7 +9,10 @@ import {
   loadCanonicalEvaluationForRecord,
   saveCanonicalEvaluationDraft,
 } from "../src/utils/evaluationAuthorityController.js";
-import { canonicalEvaluationFixture } from "./canonicalEvaluation.test.js";
+import {
+  canonicalEvaluationFixture,
+  ordinaryCanonicalEvaluationFixture,
+} from "./canonicalEvaluation.test.js";
 
 const root = join(import.meta.dirname, "..");
 const dashboardSource = readFileSync(join(root, "src/pages/ContractorDashboard.jsx"), "utf8");
@@ -106,6 +109,72 @@ test("ambiguous ordinary/project records and browser media fail before any API c
       (error) => error.code === "EVALUATION_MEDIA_UNSUPPORTED"
     );
     assert.equal(browser.calls.length, 0);
+  } finally {
+    browser.restore();
+  }
+});
+
+test("ordinary Evaluation creation resolves and submits the completed canonical Evaluation Visit", async () => {
+  const ordinary = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const jobId = ordinary.aggregate.sourceContext.jobId;
+  const visitId = "99999999-9999-4999-8999-999999999999";
+  const browser = installBrowser([
+    { status: 200, body: { success: true, evaluations: [] } },
+    {
+      status: 200,
+      body: {
+        success: true,
+        visits: [{
+          id: visitId,
+          jobId,
+          purpose: "EVALUATION",
+          state: "COMPLETED",
+          currentVersion: 3,
+          scheduledStartAt: "2026-08-25T14:00:00.000Z",
+          scheduledEndAt: null,
+          timeZone: "America/New_York",
+          locationMode: "JOB_SERVICE_LOCATION",
+          cancellationReason: null,
+          cancelledAt: null,
+          completedAt: "2026-08-25T15:00:00.000Z",
+          evaluationId: null,
+          workstreamIds: [],
+          approvedQuoteDecisionEvidence: null,
+          createdByParticipantId: "77777777-7777-4777-8777-777777777777",
+          recordedByParticipantId: "77777777-7777-4777-8777-777777777777",
+          createdAt: "2026-08-24T14:00:00.000Z",
+          versionCreatedAt: "2026-08-25T15:00:00.000Z",
+          actions: {
+            canConfirm: false,
+            canRequestChange: false,
+            canReschedule: false,
+            canCancel: false,
+            canComplete: false,
+          },
+        }],
+      },
+    },
+    { status: 201, body: { success: true, ...ordinary } },
+  ]);
+  try {
+    const record = {
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      jobId,
+      requestId: 41,
+      relationshipId: 72,
+    };
+    const created = await saveCanonicalEvaluationDraft({
+      record,
+      form: form(),
+      createIdempotencyKey: () => "evaluation-create-from-visit",
+    });
+    assert.equal(created.evaluation.id, ordinary.evaluation.id);
+    assert.match(browser.calls[1].url, new RegExp(`/jobs/${jobId}/visits$`));
+    assert.equal(JSON.parse(browser.calls[2].options.body).visitId, visitId);
+    assert.doesNotMatch(browser.calls.map((call) => call.url).join("\n"), /quotes|workstreams|payments|invoices/);
   } finally {
     browser.restore();
   }

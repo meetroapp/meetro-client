@@ -108,6 +108,55 @@ async function loadSubject({
   }
 }
 
+async function loadEvaluationVisitSubject({
+  jobId,
+  evaluationId = null,
+  setPage,
+  fetchVisits,
+  fetchDetail,
+}) {
+  try {
+    const visits = await fetchVisits({
+      jobId,
+      purpose: "EVALUATION",
+      evaluationId,
+      setPage,
+    });
+    const details = await loadVisitDetails({
+      jobId,
+      purpose: "EVALUATION",
+      evaluationId,
+      visits,
+      setPage,
+      fetchDetail,
+    });
+    return {
+      status: "ready",
+      purpose: "EVALUATION",
+      subjectId: evaluationId || jobId,
+      evaluationId,
+      authority: {
+        authoritySource: "CANONICAL_JOB_EVALUATION_VISIT_AUTHORITY",
+        state: "ACTIVE",
+        actions: { canActivate: false, canPropose: details.length === 0 },
+      },
+      visits: details,
+      error: "",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      purpose: "EVALUATION",
+      subjectId: evaluationId || jobId,
+      evaluationId,
+      authority: null,
+      visits: [],
+      error: visitErrorMessage(error),
+      errorCode: error?.code || "CANONICAL_VISIT_LOAD_FAILED",
+    };
+  }
+}
+
 export async function loadCanonicalVisitWorkspace({
   record,
   setPage,
@@ -159,17 +208,13 @@ export async function loadCanonicalVisitWorkspace({
     };
 
     const [evaluationSubject, approvedWork] = await Promise.all([
-      evaluation?.evaluation?.id
-        ? loadSubject({
-            jobId: context.jobId,
-            purpose: "EVALUATION",
-            subjectId: evaluation.evaluation.id,
-            setPage,
-            fetchAuthority,
-            fetchVisits,
-            fetchDetail,
-          })
-        : Promise.resolve(null),
+      loadEvaluationVisitSubject({
+        jobId: context.jobId,
+        evaluationId: evaluation?.evaluation?.id || null,
+        setPage,
+        fetchVisits,
+        fetchDetail,
+      }),
       Promise.all(
         approvedQuotes.map((quote) =>
           loadSubject({

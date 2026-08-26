@@ -13,6 +13,7 @@ import {
   listEvaluationsForJob,
   updateEvaluationDraft,
 } from "./evaluationApi.js";
+import { fetchCanonicalVisits } from "./canonicalVisitProjection.js";
 
 function hasBrowserMedia(form = {}) {
   if (Array.isArray(form.photos) && form.photos.length > 0) return true;
@@ -75,14 +76,31 @@ export async function saveCanonicalEvaluationDraft({
       : buildCanonicalEvaluationContent(form);
   if (!confirmed) {
     const idempotencyKey = createIdempotencyKey("create");
-    return sourceContext.type === "ordinary_job"
-      ? createOrdinaryJobEvaluation({
+    if (sourceContext.type === "ordinary_job") {
+      const visits = await fetchCanonicalVisits({
+        jobId: sourceContext.jobId,
+        purpose: "EVALUATION",
+        setPage,
+      });
+      const completedVisit = [...visits]
+        .filter((visit) => visit.state === "COMPLETED" && !visit.evaluationId)
+        .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))[0];
+      if (!completedVisit) {
+        throw new EvaluationApiError({
+          status: 409,
+          code: "COMPLETED_EVALUATION_VISIT_REQUIRED",
+          message: "Complete the evaluation visit before documenting the assessment.",
+        });
+      }
+      return createOrdinaryJobEvaluation({
           jobId: sourceContext.jobId,
+          visitId: completedVisit.id,
           content,
           idempotencyKey,
           setPage,
-        })
-      : createEvaluation({
+        });
+    }
+    return createEvaluation({
           sourceContext,
           content,
           idempotencyKey,

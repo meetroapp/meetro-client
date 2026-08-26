@@ -104,6 +104,40 @@ test("ordinary canonical Evaluation creates and versions through backend command
   });
   const browser = installBrowser([
     { status: 200, body: { success: true, evaluations: [] } },
+    {
+      status: 200,
+      body: {
+        success: true,
+        visits: [{
+          id: "99999999-9999-4999-8999-999999999999",
+          jobId,
+          purpose: "EVALUATION",
+          state: "COMPLETED",
+          currentVersion: 3,
+          scheduledStartAt: "2026-08-25T14:00:00.000Z",
+          scheduledEndAt: null,
+          timeZone: "America/New_York",
+          locationMode: "JOB_SERVICE_LOCATION",
+          cancellationReason: null,
+          cancelledAt: null,
+          completedAt: "2026-08-25T15:00:00.000Z",
+          evaluationId: null,
+          workstreamIds: [],
+          approvedQuoteDecisionEvidence: null,
+          createdByParticipantId: "77777777-7777-4777-8777-777777777777",
+          recordedByParticipantId: "77777777-7777-4777-8777-777777777777",
+          createdAt: "2026-08-24T14:00:00.000Z",
+          versionCreatedAt: "2026-08-25T15:00:00.000Z",
+          actions: {
+            canConfirm: false,
+            canRequestChange: false,
+            canReschedule: false,
+            canCancel: false,
+            canComplete: false,
+          },
+        }],
+      },
+    },
     { status: 201, body: { success: true, ...version1 } },
     { status: 200, body: { success: true, ...version2 } },
   ]);
@@ -126,10 +160,11 @@ test("ordinary canonical Evaluation creates and versions through backend command
     assert.equal(updated.aggregate.version, 2);
     assert.deepEqual(
       browser.calls.map((call) => call.options.method),
-      ["GET", "POST", "PATCH"]
+      ["GET", "GET", "POST", "PATCH"]
     );
-    const createBody = JSON.parse(browser.calls[1].options.body);
-    const updateBody = JSON.parse(browser.calls[2].options.body);
+    const createBody = JSON.parse(browser.calls[2].options.body);
+    const updateBody = JSON.parse(browser.calls[3].options.body);
+    assert.equal(createBody.visitId, "99999999-9999-4999-8999-999999999999");
     assert.deepEqual(createBody.content.findings, []);
     assert.deepEqual(createBody.content.scopeRecommendations, []);
     assert.equal(Object.hasOwn(createBody.content, "customerConcern"), false);

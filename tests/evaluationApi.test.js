@@ -117,6 +117,7 @@ test("get and list reconstruct backend truth without unsupported calls", async (
 test("ordinary Job create and list use the existing job-scoped canonical routes", async () => {
   const fixture = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
   const jobId = fixture.aggregate.sourceContext.jobId;
+  const visitId = "99999999-9999-4999-8999-999999999999";
   const browser = installBrowser({ responses: [
     { status: 201, body: { success: true, ...fixture } },
     { status: 200, body: { success: true, evaluations: [fixture] } },
@@ -124,6 +125,7 @@ test("ordinary Job create and list use the existing job-scoped canonical routes"
   try {
     await createOrdinaryJobEvaluation({
       jobId,
+      visitId,
       content: fixture.evaluation.content,
       idempotencyKey: "ordinary-create-key",
     });
@@ -133,6 +135,7 @@ test("ordinary Job create and list use the existing job-scoped canonical routes"
     assert.match(browser.calls[0].url, new RegExp(`/jobs/${jobId}/evaluations$`));
     assert.equal(browser.calls[0].options.method, "POST");
     assert.deepEqual(JSON.parse(browser.calls[0].options.body), {
+      visitId,
       content: fixture.evaluation.content,
       expectedVersion: 0,
     });

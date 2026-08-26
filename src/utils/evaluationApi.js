@@ -70,6 +70,7 @@ export function createEvaluation({ sourceContext, content, idempotencyKey, setPa
 
 export function createOrdinaryJobEvaluation({
   jobId,
+  visitId,
   content,
   idempotencyKey,
   setPage,
@@ -79,7 +80,7 @@ export function createOrdinaryJobEvaluation({
     {
       method: "POST",
       headers: mutationHeaders(idempotencyKey),
-      body: JSON.stringify({ content, expectedVersion: 0 }),
+      body: JSON.stringify({ visitId, content, expectedVersion: 0 }),
     },
     setPage
   );

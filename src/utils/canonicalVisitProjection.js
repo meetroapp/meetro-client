@@ -16,6 +16,7 @@ const VISIT_LOCATION_MODES = Object.freeze([
 ]);
 const VISIT_EVENT_TYPES = Object.freeze([
   "VISIT_PROPOSED",
+  "VISIT_SCHEDULE_PROPOSED",
   "VISIT_CONFIRMED",
   "VISIT_CHANGE_REQUESTED",
   "VISIT_RESCHEDULED",
@@ -137,6 +138,8 @@ function normalizeVisitActions(value) {
   ];
   if (keys.some((key) => typeof value[key] !== "boolean")) return null;
   return Object.freeze({
+    canConfirm: value.canConfirm === true,
+    canRequestChange: value.canRequestChange === true,
     canReschedule: value.canReschedule === true,
     canCancel: value.canCancel === true,
     canComplete: value.canComplete === true,
@@ -291,7 +294,7 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     !createdAt ||
     !versionCreatedAt ||
     !actions ||
-    (value.purpose === "EVALUATION" && (!evaluationId || approvedEvidence)) ||
+    (value.purpose === "EVALUATION" && approvedEvidence) ||
     (value.purpose === "APPROVED_WORK" &&
       (evaluationId ||
         !approvedEvidence?.decisionId ||
@@ -543,7 +546,6 @@ export async function fetchCanonicalVisits({
   if (
     !canonicalUuid(jobId) ||
     !VISIT_PURPOSES.includes(purpose) ||
-    (purpose === "EVALUATION" && !canonicalUuid(evaluationId)) ||
     (purpose === "APPROVED_WORK" && !canonicalUuid(approvedQuoteDecisionId))
   ) {
     throw new CanonicalVisitError({
@@ -552,9 +554,7 @@ export async function fetchCanonicalVisits({
       message: "The Visit read subject is invalid.",
     });
   }
-  const endpoint = purpose === "EVALUATION"
-    ? `/jobs/${encodeURIComponent(jobId)}/evaluations/${encodeURIComponent(evaluationId)}/visits`
-    : `/jobs/${encodeURIComponent(jobId)}/visits`;
+  const endpoint = `/jobs/${encodeURIComponent(jobId)}/visits`;
   const data = await request({
     endpoint,
     options: { method: "GET", cache: "no-store" },
@@ -566,12 +566,16 @@ export async function fetchCanonicalVisits({
     .map((visit) => normalizeCanonicalVisit(visit, { jobId }))
     .filter((visit) =>
       purpose === "EVALUATION"
-        ? visit?.purpose === purpose && visit.evaluationId === evaluationId
+        ? visit?.purpose === purpose &&
+          (evaluationId == null || visit.evaluationId === canonicalUuid(evaluationId))
         : visit?.purpose === purpose &&
           visit.approvedQuoteDecisionEvidence?.decisionId === approvedQuoteDecisionId
     );
   if (visits.length !== data.visits.filter((visit) => {
-    if (purpose === "EVALUATION") return visit?.purpose === purpose;
+    if (purpose === "EVALUATION") {
+      return visit?.purpose === purpose &&
+        (evaluationId == null || visit?.evaluationId === canonicalUuid(evaluationId));
+    }
     return visit?.purpose === purpose &&
       visit?.approvedQuoteDecisionEvidence?.decisionId === approvedQuoteDecisionId;
   }).length) {
@@ -592,7 +596,7 @@ export async function fetchCanonicalVisitDetail({
     !canonicalUuid(jobId) ||
     !canonicalUuid(visitId) ||
     !VISIT_PURPOSES.includes(purpose) ||
-    (purpose === "EVALUATION" && !canonicalUuid(evaluationId))
+    (evaluationId != null && !canonicalUuid(evaluationId))
   ) {
     throw new CanonicalVisitError({
       status: 400,
@@ -600,9 +604,7 @@ export async function fetchCanonicalVisitDetail({
       message: "The Visit read subject is invalid.",
     });
   }
-  const endpoint = purpose === "EVALUATION"
-    ? `/jobs/${encodeURIComponent(jobId)}/evaluations/${encodeURIComponent(evaluationId)}/visits/${encodeURIComponent(visitId)}`
-    : `/jobs/${encodeURIComponent(jobId)}/visits/${encodeURIComponent(visitId)}`;
+  const endpoint = `/jobs/${encodeURIComponent(jobId)}/visits/${encodeURIComponent(visitId)}`;
   const data = await request({
     endpoint,
     options: { method: "GET", cache: "no-store" },
@@ -614,7 +616,7 @@ export async function fetchCanonicalVisitDetail({
     !visit ||
     visit.id !== canonicalUuid(visitId) ||
     visit.purpose !== purpose ||
-    (purpose === "EVALUATION" && visit.evaluationId !== canonicalUuid(evaluationId))
+    (evaluationId != null && visit.evaluationId !== canonicalUuid(evaluationId))
   ) {
     throw invalidResponse();
   }
@@ -650,22 +652,32 @@ export async function runCanonicalVisitCommand({
       timeZone: normalizedSchedule?.timeZone,
       locationMode: normalizedSchedule?.locationMode,
       evaluationId:
-        purpose === "EVALUATION" ? canonicalUuid(evaluationId) : null,
+        purpose === "EVALUATION" && evaluationId
+          ? canonicalUuid(evaluationId)
+          : null,
       workstreamIds: [],
       approvedQuoteDecisionId:
         purpose === "APPROVED_WORK"
           ? canonicalUuid(approvedQuoteDecisionId)
           : null,
     };
+    if (normalizedReason) body.reason = normalizedReason;
   } else {
     endpoint = `/jobs/${encodeURIComponent(normalizedJobId)}/visits/${encodeURIComponent(normalizedVisitId)}/${command}`;
     body = { expectedVersion };
-    if (command === "reschedule") {
+    if (["reschedule", "change-request"].includes(command)) {
       Object.assign(body, normalizedSchedule, { reason: normalizedReason });
     }
     if (command === "cancel") body.reason = normalizedReason;
   }
-  const allowed = ["propose", "reschedule", "cancel", "complete"];
+  const allowed = [
+    "propose",
+    "confirm",
+    "change-request",
+    "reschedule",
+    "cancel",
+    "complete",
+  ];
   if (
     !normalizedJobId ||
     !allowed.includes(command) ||
@@ -673,10 +685,9 @@ export async function runCanonicalVisitCommand({
     (command === "propose" &&
       (!VISIT_PURPOSES.includes(purpose) ||
         !normalizedSchedule ||
-        (purpose === "EVALUATION" && !canonicalUuid(evaluationId)) ||
         (purpose === "APPROVED_WORK" &&
           !canonicalUuid(approvedQuoteDecisionId)))) ||
-    (command === "reschedule" && !normalizedSchedule) ||
+    (["reschedule", "change-request"].includes(command) && !normalizedSchedule) ||
     (reason != null && !normalizedReason)
   ) {
     throw new CanonicalVisitError({
