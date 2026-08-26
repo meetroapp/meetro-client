@@ -211,6 +211,72 @@ function validateDocument(document, jobId) {
   return Object.freeze({ documentId, documentVersion, jobId: normalizedJobId });
 }
 
+export function normalizeWorkingQuoteReviewIdentity(value, {
+  documentId,
+  documentVersion,
+  jobId,
+} = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const normalized = {
+    documentId: uuid(value.documentId),
+    documentVersion: positiveInteger(value.documentVersion),
+    jobId: uuid(value.jobId),
+    requestId: positiveInteger(value.requestId),
+    relationshipId: positiveInteger(value.relationshipId),
+    customerName: typeof value.customerName === "string"
+      ? value.customerName.trim()
+      : "",
+    projectTitle: typeof value.projectTitle === "string"
+      ? value.projectTitle.trim()
+      : "",
+  };
+  if (
+    Object.keys(value).sort().join(",") !==
+      "customerName,documentId,documentVersion,jobId,projectTitle,relationshipId,requestId" ||
+    normalized.documentId !== uuid(documentId) ||
+    normalized.documentVersion !== positiveInteger(documentVersion) ||
+    normalized.jobId !== uuid(jobId) ||
+    !normalized.requestId ||
+    !normalized.relationshipId ||
+    !normalized.customerName ||
+    normalized.customerName.length > 200 ||
+    !normalized.projectTitle ||
+    normalized.projectTitle.length > 500
+  ) return null;
+  return Object.freeze(normalized);
+}
+
+export async function fetchWorkingQuoteReviewIdentity({
+  document,
+  jobId,
+  setPage,
+  authFetchImpl = authFetch,
+} = {}) {
+  const identity = validateDocument(document, jobId);
+  const result = await authFetchImpl(
+    `/business-document-drafts/${encodeURIComponent(identity.documentId)}/quote-review?version=${encodeURIComponent(identity.documentVersion)}`,
+    { method: "GET", cache: "no-store" },
+    setPage
+  );
+  if (!result?.response?.ok || result?.data?.success !== true) {
+    throw commandError(
+      result,
+      "IDENTITY",
+      {},
+      "WORKING_QUOTE_REVIEW_IDENTITY_FAILED",
+      "The customer and project for this quote could not be verified."
+    );
+  }
+  const review = normalizeWorkingQuoteReviewIdentity(result.data.review, identity);
+  if (!review) {
+    throw new WorkingQuoteCanonicalIssueError(
+      "The working Quote review identity did not match the exact saved document and Job.",
+      { code: "UNSAFE_WORKING_QUOTE_REVIEW_IDENTITY", phase: "IDENTITY" }
+    );
+  }
+  return review;
+}
+
 export async function importWorkingQuoteAsCanonicalDraft({
   document,
   jobId,

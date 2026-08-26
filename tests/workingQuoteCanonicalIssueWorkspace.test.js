@@ -34,15 +34,14 @@ test("workspace saves first, then delegates bridge, issue, and exact canonical d
   assert.doesNotMatch(confirm, /approve|decline|payment|schedule|workstream|invoice|completeJob/);
 });
 
-test("review identity comes from the exact authorized Job projection, never draft labels", () => {
+test("review identity comes from the exact-version Working Quote authority projection, never draft labels", () => {
   const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
-  assert.match(begin, /fetchAuthorizedProfessionalJobs\(\{ setPage \}\)/);
-  assert.match(begin, /findAuthorizedProfessionalJob\([\s\S]*documentJobIds\.quote/);
-  assert.match(begin, /customerName: authorizedJob\.customerLabel/);
-  assert.match(begin, /projectTitle: authorizedJob\.title/);
-  assert.match(begin, /jobId: authorizedJob\.jobId/);
+  assert.match(begin, /fetchWorkingQuoteReviewIdentity\(\{/);
+  assert.match(begin, /document,/);
+  assert.match(begin, /jobId: documentJobIds\.quote/);
   assert.doesNotMatch(begin, /customerName: (?:quote|document)/);
   assert.doesNotMatch(begin, /projectTitle: (?:quote|document)/);
+  assert.doesNotMatch(begin, /fetchAuthorizedProfessionalJobs|findAuthorizedProfessionalJob/);
 });
 
 test("review dialog shows customer, project, Quote, version, and USD total in business language", () => {

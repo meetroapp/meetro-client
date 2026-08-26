@@ -35,12 +35,9 @@ import {
 } from "../utils/businessDocumentDraftApi.js";
 import {
   createWorkingQuoteCommandKeys,
+  fetchWorkingQuoteReviewIdentity,
   issueAndSendWorkingQuote,
 } from "../utils/workingQuoteCanonicalIssue.js";
-import {
-  fetchAuthorizedProfessionalJobs,
-  findAuthorizedProfessionalJob,
-} from "../utils/professionalJobPicker.js";
 import {
   copyBusinessDocumentShareMessage,
   downloadBusinessDocumentPdfArtifact,
@@ -2686,16 +2683,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
     let identity;
     try {
-      const jobs = await fetchAuthorizedProfessionalJobs({ setPage });
-      const authorizedJob = findAuthorizedProfessionalJob(
-        jobs,
-        documentJobIds.quote
-      );
-      if (!authorizedJob) throw new Error("AUTHORIZED_JOB_NOT_FOUND");
-      identity = Object.freeze({
-        jobId: authorizedJob.jobId,
-        customerName: authorizedJob.customerLabel,
-        projectTitle: authorizedJob.title,
+      identity = await fetchWorkingQuoteReviewIdentity({
+        document,
+        jobId: documentJobIds.quote,
+        setPage,
       });
     } catch {
       setQuoteIssueState({

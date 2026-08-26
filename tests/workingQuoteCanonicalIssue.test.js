@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   createWorkingQuoteCommandKeys,
+  fetchWorkingQuoteReviewIdentity,
   importWorkingQuoteAsCanonicalDraft,
   issueAndSendWorkingQuote,
+  normalizeWorkingQuoteReviewIdentity,
 } from "../src/utils/workingQuoteCanonicalIssue.js";
 
 const IDS = Object.freeze({
@@ -90,6 +92,74 @@ function deliveryEvidence() {
     replayed: false,
   });
 }
+
+function reviewIdentity(overrides = {}) {
+  return {
+    documentId: IDS.document,
+    documentVersion: 3,
+    jobId: IDS.job,
+    requestId: 18,
+    relationshipId: 340,
+    customerName: "Meetro Stage B 20260705172957",
+    projectTitle: "Slice 004 Recommendation staging certification",
+    ...overrides,
+  };
+}
+
+test("exact-version review identity is loaded from the owned Working Quote projection", async () => {
+  const calls = [];
+  const identity = await fetchWorkingQuoteReviewIdentity({
+    document,
+    jobId: IDS.job,
+    authFetchImpl: async (...args) => {
+      calls.push(args);
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "BUSINESS_DOCUMENT_QUOTE_REVIEW_LOADED",
+          review: reviewIdentity(),
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(calls, [[
+    `/business-document-drafts/${IDS.document}/quote-review?version=3`,
+    { method: "GET", cache: "no-store" },
+    undefined,
+  ]]);
+  assert.equal(identity.customerName, "Meetro Stage B 20260705172957");
+  assert.equal(identity.projectTitle, "Slice 004 Recommendation staging certification");
+});
+
+test("review identity fails closed on document, version, Job, or shape drift", async () => {
+  for (const unsafe of [
+    reviewIdentity({ documentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
+    reviewIdentity({ documentVersion: 2 }),
+    reviewIdentity({ jobId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+    { ...reviewIdentity(), exactAddress: "1 Private Street" },
+  ]) {
+    assert.equal(normalizeWorkingQuoteReviewIdentity(unsafe, {
+      documentId: IDS.document,
+      documentVersion: 3,
+      jobId: IDS.job,
+    }), null);
+  }
+
+  await assert.rejects(() => fetchWorkingQuoteReviewIdentity({
+    document,
+    jobId: IDS.job,
+    authFetchImpl: async () => ({
+      response: { ok: true, status: 200 },
+      data: { success: true, review: reviewIdentity({ documentVersion: 2 }) },
+    }),
+  }), (error) => {
+    assert.equal(error.phase, "IDENTITY");
+    assert.equal(error.code, "UNSAFE_WORKING_QUOTE_REVIEW_IDENTITY");
+    return true;
+  });
+});
 
 function commandTransport(calls, { bridgeStatus = 201, issueStatus = 200 } = {}) {
   return async (endpoint, options) => {
