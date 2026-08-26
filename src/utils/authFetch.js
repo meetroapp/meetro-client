@@ -1,5 +1,8 @@
 import API_URL from "../api.js";
-import { getAccountConnectionStateFromAuthResult } from "./accountConnection.js";
+import {
+  getAccountConnectionStateFromAuthResult,
+  shouldAnnounceAccountConnectionIssue,
+} from "./accountConnection.js";
 import { clearAccountWorkflowData } from "./accountStorage.js";
 import { clearAuthenticatedIdentity } from "./session.js";
 
@@ -120,7 +123,7 @@ export async function authFetch(endpoint, options = {}, setPage) {
     const accountConnectionState =
       getAccountConnectionStateFromAuthResult({ response, data });
 
-    if (!accountConnectionState.connected) {
+    if (shouldAnnounceAccountConnectionIssue(accountConnectionState)) {
       announceAccountConnectionIssue(accountConnectionState);
     }
   }

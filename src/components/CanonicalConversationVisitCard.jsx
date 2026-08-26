@@ -8,6 +8,7 @@ import {
   buildProfessionalScheduleCommandSchedule,
   resolveProfessionalScheduleTimeZone,
 } from "../utils/professionalScheduleProjection.js";
+import { getConversationVisitReadFailureCopy } from "../utils/conversationVisitReadFailure.js";
 
 function tomorrow() {
   const value = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -179,7 +180,7 @@ export default function CanonicalConversationVisitCard({
         setState({
           phase: "error",
           visit: null,
-          error: error?.message || "Visit scheduling is temporarily unavailable.",
+          error: getConversationVisitReadFailureCopy(error),
         });
       }
     });
