@@ -158,6 +158,12 @@ import {
   isLegacyWorkCenterCommandSurfaceContained,
 } from "../utils/workCenterLegacyAuthority";
 import {
+  clearPendingEvaluationVisitHandoff,
+  EVALUATION_VISIT_HANDOFF_EVENT,
+  normalizeEvaluationVisitHandoff,
+  readPendingEvaluationVisitHandoff,
+} from "../utils/evaluationVisitHandoff.js";
+import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
   shouldWarnBeforeAction,
@@ -348,6 +354,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
   );
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
   const [selectedJobDetailView, setSelectedJobDetailView] = useState("");
+  const [pendingEvaluationVisitHandoff, setPendingEvaluationVisitHandoff] =
+    useState(() => readPendingEvaluationVisitHandoff());
+  const [evaluationVisitHandoffFocus, setEvaluationVisitHandoffFocus] =
+    useState(null);
+  const appliedEvaluationVisitHandoffRef = useRef("");
   const [selectedWorkCenterQuoteId, setSelectedWorkCenterQuoteId] = useState("");
   const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
   const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
@@ -591,6 +602,24 @@ function ContractorDashboard({ setPage, language = "en" }) {
       window.removeEventListener(
         "meetro-canonical-visit-changed",
         handleJobScheduleChanged
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleEvaluationVisitHandoff(event) {
+      const intent = normalizeEvaluationVisitHandoff(event?.detail);
+      if (intent) setPendingEvaluationVisitHandoff(intent);
+    }
+
+    window.addEventListener(
+      EVALUATION_VISIT_HANDOFF_EVENT,
+      handleEvaluationVisitHandoff
+    );
+    return () => {
+      window.removeEventListener(
+        EVALUATION_VISIT_HANDOFF_EVENT,
+        handleEvaluationVisitHandoff
       );
     };
   }, []);
@@ -8480,6 +8509,78 @@ function ContractorDashboard({ setPage, language = "en" }) {
     canonicalWorkCenterHydration.entries
   );
 
+  useEffect(() => {
+    if (!pendingEvaluationVisitHandoff) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (
+        appliedEvaluationVisitHandoffRef.current ===
+        pendingEvaluationVisitHandoff.token
+      ) {
+        clearPendingEvaluationVisitHandoff();
+        setPendingEvaluationVisitHandoff(null);
+        return;
+      }
+
+      const exactJob = workCenterJobs.find(
+        (job) =>
+          isCanonicalWorkCenterEntry(job) &&
+          String(job?.jobId || "") === pendingEvaluationVisitHandoff.jobId
+      );
+      if (!exactJob) return;
+
+      appliedEvaluationVisitHandoffRef.current =
+        pendingEvaluationVisitHandoff.token;
+      localStorage.setItem("meetroWorkCenterTab", "currentJobs");
+      localStorage.setItem("activeWorkCenterTab", "currentJobs");
+      setActiveTab("currentJobs");
+      setIsWorkCenterSectionOpen(false);
+      setSelectedJobDetailView("");
+      setIsJobHistoryMode(false);
+      setSelectedWorkCenterJob(exactJob);
+      setEvaluationVisitHandoffFocus(pendingEvaluationVisitHandoff);
+      clearPendingEvaluationVisitHandoff();
+      setPendingEvaluationVisitHandoff(null);
+    });
+    return () => { active = false; };
+  }, [pendingEvaluationVisitHandoff, workCenterJobs]);
+
+  useEffect(() => {
+    if (!evaluationVisitHandoffFocus) return undefined;
+    const projectedJobId = String(
+      workCenterLifecycleProjection.projection?.job?.id ||
+      workCenterLifecycleProjection.projection?.liveJob?.jobId ||
+      ""
+    );
+    if (
+      String(selectedWorkCenterJob?.jobId || "") !==
+        evaluationVisitHandoffFocus.jobId ||
+      workCenterLifecycleProjection.status !== "ready" ||
+      projectedJobId !== evaluationVisitHandoffFocus.jobId
+    ) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const heading = document.getElementById(
+        "canonical-job-evaluation-title"
+      );
+      if (!heading) return;
+      heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      heading.focus({ preventScroll: true });
+      setEvaluationVisitHandoffFocus(null);
+    }, 100);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    evaluationVisitHandoffFocus,
+    selectedWorkCenterJob,
+    workCenterLifecycleProjection.projection?.job?.id,
+    workCenterLifecycleProjection.projection?.liveJob?.jobId,
+    workCenterLifecycleProjection.status,
+  ]);
+
   const workCenterActiveJobs = workCenterJobs.filter(
     (job) => getWorkCenterJobStage(job) !== "closed"
   );
@@ -10744,6 +10845,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 canonicalLiveJob?.nextAction?.label
               );
               const canonicalAutoOpenToken = `${canonicalLiveJob?.jobId || "job"}:${canonicalLiveJob?.nextAction?.code || "unavailable"}`;
+              const canonicalEvaluationHandoffIsCurrent = Boolean(
+                evaluationVisitHandoffFocus &&
+                evaluationVisitHandoffFocus.jobId ===
+                  String(canonicalLiveJob?.jobId || "")
+              );
+              const canonicalEvaluationAutoOpenToken =
+                canonicalEvaluationHandoffIsCurrent
+                  ? `evaluation-start:${evaluationVisitHandoffFocus.token}`
+                  : canonicalAutoOpenToken;
               const canMessageCanonicalCustomer =
                 !isJobHistoryMode &&
                 hasCanonicalLiveJobAction(
@@ -11100,8 +11210,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             icon="evaluationNotes"
                             title={workCenterWorkspaceCopy.evaluation}
                             summary={workCenterWorkspaceCopy.evaluationSummary}
-                            defaultOpen={["evaluation", "findings"].includes(canonicalNextActionSection)}
-                            autoOpenToken={canonicalAutoOpenToken}
+                            defaultOpen={
+                              canonicalEvaluationHandoffIsCurrent ||
+                              ["evaluation", "findings"].includes(
+                                canonicalNextActionSection
+                              )
+                            }
+                            autoOpenToken={canonicalEvaluationAutoOpenToken}
                           >
                             <CanonicalJobEvaluation
                               record={{

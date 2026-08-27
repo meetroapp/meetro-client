@@ -8,6 +8,7 @@ import {
   loadCanonicalVisitWorkspace,
 } from "../utils/canonicalVisitController.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
+import { requestEvaluationVisitHandoff } from "../utils/evaluationVisitHandoff.js";
 
 const STATE_LABELS = Object.freeze({
   PROPOSED: "Pending customer confirmation",
@@ -360,7 +361,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     setNotice("");
     setCommandError("");
     try {
-      await runCanonicalVisitCommand({
+      const updated = await runCanonicalVisitCommand({
         jobId,
         command: "start",
         visit,
@@ -370,6 +371,11 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
       setNotice("Visit started. Evaluation documentation is now available.");
       reload();
       notifyCanonicalVisitChanged(jobId, visit.id);
+      requestEvaluationVisitHandoff({
+        jobId,
+        visit: updated,
+        source: "job-overview",
+      });
     } catch (error) {
       if (
         error?.code === "VISIT_START_ACKNOWLEDGMENT_REQUIRED" &&

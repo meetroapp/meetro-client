@@ -876,7 +876,13 @@ export default function CanonicalJobEvaluation({
         <div style={styles.header}>
           <div>
             <span style={styles.eyebrow}>{copy.assessment}</span>
-            <h3 id="canonical-job-evaluation-title" style={styles.title}>{copy.evaluation}</h3>
+            <h3
+              id="canonical-job-evaluation-title"
+              tabIndex={-1}
+              style={{ ...styles.title, scrollMarginTop: 88 }}
+            >
+              {copy.evaluation}
+            </h3>
           </div>
           <span style={styles.statusBadge}>{statusLabel}</span>
         </div>

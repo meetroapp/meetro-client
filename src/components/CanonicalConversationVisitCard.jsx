@@ -9,6 +9,7 @@ import {
   resolveProfessionalScheduleTimeZone,
 } from "../utils/professionalScheduleProjection.js";
 import { getConversationVisitReadFailureCopy } from "../utils/conversationVisitReadFailure.js";
+import { requestEvaluationVisitHandoff } from "../utils/evaluationVisitHandoff.js";
 
 function tomorrow() {
   const value = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -239,6 +240,14 @@ export default function CanonicalConversationVisitCard({
       window.dispatchEvent(new CustomEvent("meetro-canonical-visit-changed", {
         detail: { jobId, visitId: updated.id, source: "conversation" },
       }));
+      if (commandName === "start") {
+        const handoff = requestEvaluationVisitHandoff({
+          jobId,
+          visit: updated,
+          source: "conversation",
+        });
+        if (handoff) setPage("workCenter");
+      }
     } catch (error) {
       if (error?.code === "STALE_VISIT_VERSION") {
         setEditor(null);

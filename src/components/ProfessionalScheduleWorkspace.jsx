@@ -21,6 +21,7 @@ import {
 } from "../utils/canonicalScheduleShare.js";
 import { t } from "../utils/language.js";
 import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
+import { requestEvaluationVisitHandoff } from "../utils/evaluationVisitHandoff.js";
 import {
   WorkCenterEmptyState,
   WorkCenterMetricGrid,
@@ -414,7 +415,7 @@ export default function ProfessionalScheduleWorkspace({
     setError("");
     setNotice("");
     try {
-      await runCanonicalVisitCommand({
+      const updated = await runCanonicalVisitCommand({
         jobId: item.jobId,
         command: editor.mode,
         visit: item.kind === "visit" ? item : null,
@@ -450,6 +451,13 @@ export default function ProfessionalScheduleWorkspace({
           source: "professional-schedule",
         },
       }));
+      if (editor.mode === "start") {
+        requestEvaluationVisitHandoff({
+          jobId: item.jobId,
+          visit: updated,
+          source: "professional-schedule",
+        });
+      }
     } catch (commandError) {
       let resolvedCommandError = commandError;
       if (
@@ -460,7 +468,7 @@ export default function ProfessionalScheduleWorkspace({
         )
       ) {
         try {
-          await runCanonicalVisitCommand({
+          const updated = await runCanonicalVisitCommand({
             jobId: item.jobId,
             command: "start",
             visit: item,
@@ -473,6 +481,11 @@ export default function ProfessionalScheduleWorkspace({
           window.dispatchEvent(new CustomEvent("meetro-canonical-visit-changed", {
             detail: { jobId: item.jobId, visitId: item.id, source: "professional-schedule" },
           }));
+          requestEvaluationVisitHandoff({
+            jobId: item.jobId,
+            visit: updated,
+            source: "professional-schedule",
+          });
           return;
         } catch (acknowledgedError) {
           resolvedCommandError = acknowledgedError;
