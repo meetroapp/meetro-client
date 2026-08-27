@@ -68,6 +68,32 @@ function fingerprintTotal(total, quantity, price) {
     : "";
 }
 
+function isEmptyPersistedQuoteLineSeed(row = {}) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+  const allowed = new Set([
+    "id", "description", "label", "title", "name", "quantity", "qty",
+    "unitPrice", "rate", "price", "total", "amount", "lineTotal", "notes",
+  ]);
+  if (Object.entries(row).some(([key, value]) =>
+    !allowed.has(key) && fingerprintText(value)
+  )) return false;
+
+  if (fingerprintText(row.description ?? row.label ?? row.title ?? row.name)) return false;
+  if (fingerprintText(row.notes)) return false;
+  if (fingerprintText(row.unitPrice ?? row.rate ?? row.price)) return false;
+
+  const quantity = fingerprintText(row.quantity ?? row.qty);
+  if (quantity && quantity !== "1") return false;
+
+  for (const value of [row.total, row.amount, row.lineTotal]) {
+    const text = fingerprintText(value);
+    if (!text) continue;
+    const numeric = Number(text.replace(/^\$/, "").replaceAll(",", ""));
+    if (!Number.isFinite(numeric) || numeric !== 0) return false;
+  }
+  return true;
+}
+
 function canonicalFingerprintRows(key, rows) {
   return rows.map((item, index) => {
     if (key === "materialItems") {
@@ -320,7 +346,9 @@ export function buildBusinessDocumentSavePayload({
       invoiceDate: content?.invoiceDate || "",
       currency: content?.currency || "USD",
       agreement: normalizeBusinessDocumentAgreement(content?.agreement),
-      lineItems: (content?.lineItems || []).map((item) => ({ ...item })),
+      lineItems: (content?.lineItems || [])
+        .filter((item) => !isEmptyPersistedQuoteLineSeed(item))
+        .map((item) => ({ ...item })),
       materialItems: (content?.materialItems || []).map((item) => ({ ...item })),
       laborItems: (content?.laborItems || []).map((item) => ({ ...item })),
     },

@@ -625,6 +625,58 @@ test("save payload preserves instructions, manual overrides, private reminders, 
   assert.equal(hasMeaningfulBusinessDocumentDraft(payload), true);
 });
 
+test("durable Quote save omits only empty generic UI seeds while preserving editor and pricing truth", () => {
+  const historicalContent = {
+    customerName: "Antony Guzman",
+    projectTitle: "Inspect damaged cabinet door and trim",
+    currency: "USD",
+    pricingDisplayMode: "TOTAL_ONLY",
+    materialsDisplayMode: "INCLUDED_IN_TOTAL",
+    depositMode: "PERCENT",
+    depositPercent: "75",
+    terms: "75% deposit",
+    laborItems: [{ id: "labor-line-0", description: "Labor", hours: "", rate: "", total: "500" }],
+    materialItems: [{ id: "material-line-1", name: "Materials", quantity: "", cost: "", total: "180", notes: "" }],
+    lineItems: [
+      { id: "quote-line-0", description: "", quantity: "1", unitPrice: "", total: 0 },
+      { id: "arbitrary-generated-id", description: "", quantity: "", unitPrice: "", total: "$0.00" },
+    ],
+  };
+  const reopened = restoreBusinessDocumentDraft(draft({ content: historicalContent }));
+  assert.equal(reopened.content.lineItems.length, 2);
+  assert.equal(reopened.content.laborItems[0].total, "500");
+  assert.equal(reopened.content.materialItems[0].total, "180");
+
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: reopened.content,
+  });
+  assert.deepEqual(payload.content.lineItems, []);
+  assert.equal(payload.content.laborItems[0].total, "500");
+  assert.equal(payload.content.materialItems[0].total, "180");
+  assert.equal(payload.content.pricingDisplayMode, "TOTAL_ONLY");
+  assert.equal(payload.content.materialsDisplayMode, "INCLUDED_IN_TOTAL");
+  assert.equal(payload.content.depositMode, "PERCENT");
+  assert.equal(payload.content.depositPercent, "75");
+  assert.match(quoteBuilder, /return \[normalizeQuoteLineItem\(\{\}, 0\)\]/);
+});
+
+test("durable Quote save preserves every partially authored or malformed generic row", () => {
+  const rows = [
+    { id: "description", description: "Repair", quantity: "1", unitPrice: "", total: "" },
+    { id: "quantity", description: "", quantity: "2", unitPrice: "", total: "0" },
+    { id: "unit-price", description: "", quantity: "1", unitPrice: "5", total: "0" },
+    { id: "positive-total", description: "", quantity: "1", unitPrice: "", total: "5" },
+    { id: "malformed", description: "", quantity: "1", unitPrice: "", total: "not-money" },
+    { id: "notes", description: "", quantity: "1", unitPrice: "", total: "0", notes: "Customer requested this item" },
+  ];
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: "quote",
+    content: { customerName: "Customer", projectTitle: "Project", lineItems: rows },
+  });
+  assert.deepEqual(payload.content.lineItems, rows);
+});
+
 test("restore resumes exact content, instructions, manual state, and durable photo association", () => {
   const restored = restoreBusinessDocumentDraft(draft());
   assert.equal(restored.documentType, "quote");
