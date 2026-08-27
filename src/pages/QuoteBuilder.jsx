@@ -55,6 +55,11 @@ import {
   fetchAuthorizedProfessionalJobs,
 } from "../utils/professionalJobPicker.js";
 import {
+  buildJobLinkedQuotePrefill,
+  fetchJobLinkedQuoteContext,
+  jobLinkedQuoteHasExistingContent,
+} from "../utils/jobLinkedQuoteContext.js";
+import {
   extractProfessionalCategoryCostCandidates,
 } from "../utils/quickQuoteProfessionalCategoryCosts.js";
 import {
@@ -456,6 +461,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     quoteBuilderSource === "desktop_sidebar_quick_quote";
   const workCenterReturnCustomer =
     localStorage.getItem("workCenterReturnCustomer") || "";
+  const routeCanonicalJobId = getCanonicalJobIdFromRoute(window.location.hash);
 
   const revisedQuoteContext = safeJson(
     localStorage.getItem("meetroRevisedQuoteContext")
@@ -489,7 +495,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     selectedWorkCenterRequest?.id ||
     "";
 
-  const request = isUniversalQuickQuote
+  const request = routeCanonicalJobId || isUniversalQuickQuote
     ? {}
     : isRevisedQuoteFlow
     ? {
@@ -902,6 +908,13 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const [quickQuoteContinuationNotice, setQuickQuoteContinuationNotice] =
     useState("");
   const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
+  const [jobLinkedQuoteContext, setJobLinkedQuoteContext] = useState(() => ({
+    status: routeCanonicalJobId ? "loading" : "standalone",
+    reason: "",
+    context: null,
+    existingQuoteProtected: false,
+  }));
+  const jobLinkedQuoteHydrationRef = useRef("");
   const [quickQuoteJobConnection, setQuickQuoteJobConnection] = useState({
     stage: "idle",
     busy: false,
@@ -1021,11 +1034,68 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     });
   }
 
-  const routeCanonicalJobId =
-    getCanonicalJobIdFromRoute(window.location.hash) ||
-    cleanText(request.jobId || request.job_id);
+  const requestedCanonicalJobId =
+    routeCanonicalJobId || cleanText(request.jobId || request.job_id);
   const canonicalJobId =
-    quickQuoteAttachedJob?.jobId || routeCanonicalJobId;
+    quickQuoteAttachedJob?.jobId || requestedCanonicalJobId;
+
+  useEffect(() => {
+    if (!routeCanonicalJobId) return undefined;
+    let active = true;
+    setJobLinkedQuoteContext({
+      status: "loading",
+      reason: "",
+      context: null,
+      existingQuoteProtected: false,
+    });
+    void fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId, setPage })
+      .then((result) => {
+        if (!active) return;
+        if (result.status !== "ready" || !result.context) {
+          setJobLinkedQuoteContext({
+            status: result.status,
+            reason: result.reason,
+            context: null,
+            existingQuoteProtected: false,
+          });
+          return;
+        }
+        const context = result.context;
+        const existingQuoteProtected = jobLinkedQuoteHasExistingContent(context);
+        setQuickQuoteAttachedJob({
+          jobId: context.job.jobId,
+          title: context.job.title,
+          customerLabel: context.customer.displayName,
+          customerConcern: context.project.customerConcern,
+          evaluation: context.evaluation,
+        });
+        if (
+          !existingQuoteProtected &&
+          jobLinkedQuoteHydrationRef.current !== context.job.jobId
+        ) {
+          const prefill = buildJobLinkedQuotePrefill(context);
+          if (prefill) {
+            jobLinkedQuoteHydrationRef.current = context.job.jobId;
+            setCustomerName(prefill.customerName);
+            setCustomerEmail(prefill.customerEmail);
+            setCustomerPhone(prefill.customerPhone);
+            setCustomerLocation(prefill.customerLocation);
+            setProjectTitle(prefill.projectTitle);
+            setProjectDescription(prefill.projectDescription);
+            setRecommendedSolution(prefill.recommendedSolution);
+          }
+        }
+        setJobLinkedQuoteContext({
+          status: existingQuoteProtected ? "protected" : "ready",
+          reason: "",
+          context,
+          existingQuoteProtected,
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [routeCanonicalJobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function inputKey(prefix, index) {
     return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
@@ -2926,6 +2996,43 @@ ${businessIdentity.businessName}`;
   const unifiedWorkspaceEnabled = true;
 
   if (unifiedWorkspaceEnabled) {
+    if (routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Loading the authorized Job, customer, and Evaluation context…</p>
+        </div>
+      );
+    }
+    if (
+      routeCanonicalJobId &&
+      !["ready", "protected"].includes(jobLinkedQuoteContext.status)
+    ) {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Job context unavailable</h1>
+          <p>
+            Meetro could not verify this Job and its customer for the signed-in
+            professional. No customer information was shown and no Quote was created.
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <h1>Existing Quote protected</h1>
+          <p>
+            This Job already has saved Quote work. Open it from Saved Files so fresh
+            Job or Evaluation context does not replace professional-entered content.
+          </p>
+          <button type="button" onClick={() => setPage("quoteBuilder")}>
+            Open Quote &amp; Invoice
+          </button>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
     return (
       <>
         <input
@@ -2943,9 +3050,23 @@ ${businessIdentity.businessName}`;
           initialDocument={initialDocument}
           job={{
             id: canonicalJobId || null,
+            requestId: jobLinkedQuoteContext.context?.job.requestId || null,
+            relationshipId:
+              jobLinkedQuoteContext.context?.job.relationshipId || null,
             title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
             customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
-            location: activeJobSnapshot?.location || customerLocation,
+            location: routeCanonicalJobId
+              ? customerLocation
+              : activeJobSnapshot?.location || customerLocation,
+            customerConcern:
+              jobLinkedQuoteContext.context?.project.customerConcern || "",
+            evaluation: jobLinkedQuoteContext.context?.evaluation || null,
+            findings: jobLinkedQuoteContext.context?.findings || [],
+            recommendations:
+              jobLinkedQuoteContext.context?.recommendations || [],
+            customerLinkedFromJob:
+              jobLinkedQuoteContext.status === "ready" &&
+              Boolean(jobLinkedQuoteContext.context?.customer.displayName),
             canonical: Boolean(canonicalJobId),
           }}
           quote={unifiedQuoteDraft}

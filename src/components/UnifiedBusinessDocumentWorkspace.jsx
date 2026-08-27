@@ -280,7 +280,7 @@ function CustomerPhotoEvidence({ generalPhotos = [], beforePhotos = [], afterPho
   return <section className="business-document-proof" aria-label="Customer-visible Project Photos and Evidence">{generalPhotos.length ? <div><h3>Project Photos / Evidence</h3><PhotoStrip photos={generalPhotos} /></div> : null}{beforePhotos.length ? <div><h3>Before</h3><PhotoStrip photos={beforePhotos} /></div> : null}{afterPhotos.length ? <div><h3>After</h3><PhotoStrip photos={afterPhotos} /></div> : null}</section>;
 }
 
-function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "", authorityState = null }) {
+function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "", authorityState = null, jobLinked = false }) {
   const rows = quoteRows(quote);
   const agreement = normalizeBusinessDocumentAgreement(quote.agreement);
   const agreementSections = BUSINESS_DOCUMENT_AGREEMENT_FIELDS.filter(([key]) => agreement[key]);
@@ -292,7 +292,7 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
     <article className="business-live-document" aria-label="Live Quote Preview">
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>{authorityState?.status === "ISSUED" ? "SENT" : "WORKING DRAFT"}</span></div></header>
       <dl className="business-document-meta"><div><dt>Customer</dt><dd>{quote.customerName || "—"}</dd></div><div><dt>Project</dt><dd>{quote.projectTitle || "—"}</dd></div><div><dt>Quote #</dt><dd>{documentNumber || "Assigned on first save"}</dd></div><div><dt>Date</dt><dd>{quote.quoteDate || "—"}</dd></div></dl>
-      {observation ? <section className="business-document-copy"><h3>Observation</h3><p>{observation}</p></section> : null}
+      {observation ? <section className="business-document-copy">{jobLinked ? <h3>Customer concern</h3> : <h3>Observation</h3>}<p>{observation}</p></section> : null}
       <section className="business-document-copy"><h3>Scope of Work</h3><p>{quote.recommendedSolution || quote.projectDescription || "Tell Meetro about the work to begin this draft."}</p></section>
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
       <div className="business-document-table" role="table" aria-label="Quote line items">
@@ -830,6 +830,7 @@ function CustomerPartyControl({
   language,
   content,
   customerParty,
+  jobLinked = false,
   linkedContact,
   linkedDurably,
   control,
@@ -843,6 +844,12 @@ function CustomerPartyControl({
   onRetry,
   onCreateAnyway,
 }) {
+  const jobLinkedLabel = ({
+    en: "Linked from Job",
+    es: "Vinculado desde el trabajo",
+    fr: "Lié depuis le travail",
+    "pt-BR": "Vinculado a partir do trabalho",
+  })[language] || "Linked from Job";
   const visibleContacts = filterBusinessDocumentCustomerContacts(
     control.contacts,
     control.search
@@ -851,6 +858,8 @@ function CustomerPartyControl({
   const durableContact = linkedContact || control.pendingContact;
   const status = linkedDurably
     ? t("businessDocumentCustomerLinked", language)
+    : jobLinked
+      ? jobLinkedLabel
     : customerParty || durableContact
       ? t("businessDocumentCustomerSavedContact", language)
       : t("businessDocumentCustomerNotLinked", language);
@@ -866,11 +875,11 @@ function CustomerPartyControl({
         <small>{status}{durableContact?.status === "ARCHIVED" ? ` · ${t("businessDocumentCustomerArchived", language)}` : ""}</small>
       </div>
       <div>
-        <button type="button" onClick={() => onOpen("choose")}>{t("businessDocumentCustomerChoose", language)}</button>
+        {!jobLinked ? <button type="button" onClick={() => onOpen("choose")}>{t("businessDocumentCustomerChoose", language)}</button> : null}
         <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button>
       </div>
     </div>
-    {!customerParty ? <p>{t("businessDocumentCustomerNotLinkedHelp", language)}</p> : null}
+    {!customerParty && !jobLinked ? <p>{t("businessDocumentCustomerNotLinkedHelp", language)}</p> : null}
     {control.open ? <div className="business-document-customer-panel">
       <header>
         <strong>{control.mode === "save" ? t("businessDocumentCustomerSave", language) : t("businessDocumentCustomerChoose", language)}</strong>
@@ -894,6 +903,25 @@ function CustomerPartyControl({
       {control.error ? <p role="alert" className="business-document-customer-error">{control.error}</p> : null}
     </div> : null}
   </section>;
+}
+
+function JobLinkedQuoteContext({ job }) {
+  if (!job?.customerLinkedFromJob) return null;
+  const evaluation = job.evaluation;
+  return (
+    <aside className="business-document-job-context" aria-label="Job-linked Quote context">
+      <header>
+        <strong>Linked from Job</strong>
+        <span>Read-only source context</span>
+      </header>
+      {job.customerConcern ? <section><h3>Customer concern</h3><p>{job.customerConcern}</p></section> : null}
+      {evaluation ? <>
+        <section><h3>Evaluation</h3><p>{evaluation.status === "completed" ? "Completed Evaluation" : "Saved Evaluation draft"} · Version {evaluation.version}</p></section>
+        {evaluation.observations ? <section><h3>Professional observations</h3><p>{evaluation.observations}</p></section> : null}
+        {evaluation.diagnosisSummary ? <section><h3>Professional recommendation</h3><p>{evaluation.diagnosisSummary}</p></section> : null}
+      </> : <section><h3>Evaluation</h3><p>No saved Evaluation context is available. Quote preparation remains available.</p></section>}
+    </aside>
+  );
 }
 
 export default function UnifiedBusinessDocumentWorkspace({
@@ -2904,7 +2932,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         </div>
         <div className="business-document-header-actions">
           <button type="button" className="business-document-start-new" disabled={startNewState.busy} aria-busy={startNewState.busy && startNewState.documentType === activeDocument} onClick={() => void startNewDocument(activeDocument)}>{startNewLabel}</button>
-          <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty ? "Unsaved changes" : "Not saved"}</div>
+          <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : "Not saved"}</div>
           {startNewState.error && startNewState.documentType === activeDocument ? <p className="business-document-start-new-error" role="alert">{startNewState.error}</p> : null}
         </div>
       </header>
@@ -2914,6 +2942,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
+          {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
           {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
             <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
@@ -2926,7 +2955,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityState={activeIssuedQuote} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || Boolean(activeIssuedQuote)} onClick={() => void beginGovernedQuoteIssue()}>{activeIssuedQuote ? "Quote Sent" : quoteIssueState?.busy ? "Preparing…" : "Send Quote to Customer"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean(activeDocument === "quote" && job.customerLinkedFromJob)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityState={activeIssuedQuote} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || Boolean(activeIssuedQuote)} onClick={() => void beginGovernedQuoteIssue()}>{activeIssuedQuote ? "Quote Sent" : quoteIssueState?.busy ? "Preparing…" : "Send Quote to Customer"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}

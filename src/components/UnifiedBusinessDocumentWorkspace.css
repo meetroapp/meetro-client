@@ -196,6 +196,62 @@
 .business-document-control-toolbar > button span { min-width: 0; overflow-wrap: anywhere; }
 .business-document-control-toolbar > [hidden] { display: none !important; }
 .business-document-control-toolbar > .business-document-workflow-backdrop { display: none; }
+
+.business-document-job-context {
+  display: grid;
+  gap: 10px;
+  margin: 0 14px 12px;
+  padding: 12px;
+  border: 1px solid #cfe0d3;
+  border-radius: 12px;
+  background: #f6faf7;
+  color: #1f3d2b;
+}
+.business-document-job-context header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.business-document-job-context header span,
+.business-document-job-context section p {
+  color: #516458;
+}
+.business-document-job-context section h3,
+.business-document-job-context section p {
+  margin: 0;
+}
+.business-document-job-context section h3 {
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+.business-document-job-context section p {
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.business-document-context-gate {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 14px;
+  min-height: 70dvh;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 28px;
+}
+.business-document-context-gate h1,
+.business-document-context-gate p { margin: 0; }
+.business-document-context-gate button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #9db7a5;
+  border-radius: 10px;
+  background: #fff;
+  color: #174f31;
+  font-weight: 700;
+}
 .business-document-workflow-guide {
   position: absolute;
   z-index: 40;
