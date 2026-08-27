@@ -7,6 +7,7 @@ import {
   importWorkingQuoteAsCanonicalDraft,
   issueAndSendWorkingQuote,
   normalizeWorkingQuoteReviewIdentity,
+  workingQuoteSendReadiness,
 } from "../src/utils/workingQuoteCanonicalIssue.js";
 
 const IDS = Object.freeze({
@@ -105,6 +106,114 @@ function reviewIdentity(overrides = {}) {
     ...overrides,
   };
 }
+
+test("saved Job-linked Quote readiness is one exact authoritative projection", () => {
+  const savedQuote = {
+    ...document,
+    version: 1,
+    documentNumber: "Q-0000001",
+    content: {
+      customerName: "Antony Guzman",
+      projectTitle: "Inspect damaged cabinet door and trim",
+      labor: "500",
+      materials: "180",
+      customerPricingMode: "TOTAL_ONLY",
+      materialsPresentation: "INCLUDED_IN_TOTAL",
+      depositPercent: "75",
+    },
+  };
+  const readiness = workingQuoteSendReadiness({
+    document: savedQuote,
+    identity: reviewIdentity({
+      documentVersion: 1,
+      customerName: "Antony Guzman",
+      projectTitle: "Inspect damaged cabinet door and trim",
+    }),
+    jobId: IDS.job,
+    total: 680,
+  });
+
+  assert.deepEqual(readiness, {
+    ready: true,
+    customerName: "Antony Guzman",
+    projectTitle: "Inspect damaged cabinet door and trim",
+    jobId: IDS.job,
+    documentId: IDS.document,
+    documentNumber: "Q-0000001",
+    documentVersion: 1,
+    total: 680,
+    currency: "USD",
+    missing: [],
+    message: "",
+  });
+  assert.equal(Object.hasOwn(readiness, "businessContactId"), false);
+  assert.doesNotMatch(JSON.stringify(readiness), /labor|materials|deposit/i);
+});
+
+test("send readiness fails closed for every missing saved authority prerequisite", () => {
+  const identity = reviewIdentity();
+  const cases = [
+    {
+      name: "saved document",
+      input: { document: null, identity, jobId: IDS.job, total: 680 },
+      missing: "savedDocument",
+    },
+    {
+      name: "latest saved content",
+      input: { document, identity, jobId: IDS.job, total: 680, exactSavedContent: false },
+      missing: "exactSavedContent",
+    },
+    {
+      name: "server Quote number",
+      input: { document: { ...document, documentNumber: null }, identity, jobId: IDS.job, total: 680 },
+      missing: "documentNumber",
+    },
+    {
+      name: "exact saved version",
+      input: { document: { ...document, version: null }, identity, jobId: IDS.job, total: 680 },
+      missing: "documentVersion",
+    },
+    {
+      name: "customer",
+      input: { document, identity: reviewIdentity({ customerName: "" }), jobId: IDS.job, total: 680 },
+      missing: "customer",
+    },
+    {
+      name: "project",
+      input: { document, identity: reviewIdentity({ projectTitle: "" }), jobId: IDS.job, total: 680 },
+      missing: "project",
+    },
+    {
+      name: "total",
+      input: { document, identity, jobId: IDS.job, total: Number.NaN },
+      missing: "total",
+    },
+    {
+      name: "Job authority",
+      input: { document, identity, jobId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", total: 680 },
+      missing: "authority",
+    },
+  ];
+
+  for (const scenario of cases) {
+    const readiness = workingQuoteSendReadiness(scenario.input);
+    assert.equal(readiness.ready, false, scenario.name);
+    assert.ok(readiness.missing.includes(scenario.missing), scenario.name);
+    assert.ok(readiness.message, scenario.name);
+  }
+});
+
+test("standalone saved Quote cannot enter the Job-governed send path without canonical Job authority", () => {
+  const readiness = workingQuoteSendReadiness({
+    document: { ...document, jobId: null },
+    identity: null,
+    jobId: null,
+    total: 680,
+  });
+  assert.equal(readiness.ready, false);
+  assert.ok(readiness.missing.includes("savedDocument"));
+  assert.ok(readiness.missing.includes("authority"));
+});
 
 test("exact-version review identity is loaded from the owned Working Quote projection", async () => {
   const calls = [];

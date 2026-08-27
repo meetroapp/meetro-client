@@ -46,6 +46,7 @@ import {
   createWorkingQuoteCommandKeys,
   fetchWorkingQuoteReviewIdentity,
   issueAndSendWorkingQuote,
+  workingQuoteSendReadiness,
 } from "../utils/workingQuoteCanonicalIssue.js";
 import {
   copyBusinessDocumentShareMessage,
@@ -710,6 +711,7 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
   const issuedQuote = state.result?.issuedQuote || state.checkpoint?.issuedQuote || null;
   const deliveryRetry = state.errorPhase === "DELIVERY" && Boolean(issuedQuote);
   const success = state.stage === "success" && Boolean(issuedQuote);
+  const readiness = state.readiness || null;
   const actionLabel = state.busy
     ? deliveryRetry
       ? "Retrying…"
@@ -721,9 +723,9 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
     ? [{ label: "Close", primary: true, onClick: onCancel }]
     : [
         { label: "Cancel", onClick: onCancel, disabled: state.busy },
-        { label: actionLabel, primary: true, onClick: onConfirm, disabled: state.busy || !state.document || !state.identity },
+        { label: actionLabel, primary: true, onClick: onConfirm, disabled: state.busy || readiness?.ready !== true },
       ];
-  const documentNumber = state.document ? displayDocumentNumber(state.document) : "Save required";
+  const documentNumber = readiness?.documentNumber || "Save required";
   return (
     <WorkspaceDialog
       titleId="business-document-quote-issue-title"
@@ -740,11 +742,11 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
               : "Review the details below before sending this quote to the customer."}
         </p>
         <dl>
-          <div><dt>Customer</dt><dd>{state.identity?.customerName || "Unavailable"}</dd></div>
-          <div><dt>Project</dt><dd>{state.identity?.projectTitle || "Unavailable"}</dd></div>
+          <div><dt>Customer</dt><dd>{readiness?.customerName || "Unavailable"}</dd></div>
+          <div><dt>Project</dt><dd>{readiness?.projectTitle || "Unavailable"}</dd></div>
           <div><dt>Quote</dt><dd>{documentNumber}</dd></div>
-          <div><dt>Version</dt><dd>{state.document?.version || "—"}</dd></div>
-          <div><dt>Total</dt><dd>{money(state.total)} USD</dd></div>
+          <div><dt>Version</dt><dd>{readiness?.documentVersion || "—"}</dd></div>
+          <div><dt>Total</dt><dd>{money(readiness?.total)} USD</dd></div>
         </dl>
         <p className="business-document-delivery-truth">
           {success
@@ -1085,6 +1087,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
   const pendingExitRef = useRef(null);
+  const savedDocumentsRef = useRef({ quote: null, invoice: null });
   const [invoice, setInvoice] = useState(invoiceBaseline);
   const [savedDocuments, setSavedDocuments] = useState({ quote: null, invoice: null });
   const [documentJobIds, setDocumentJobIds] = useState(() => ({
@@ -1419,7 +1422,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       });
       saveJobId = prepared.payload.jobId || null;
       if (!saveAttemptKeysRef.current[documentType]) saveAttemptKeysRef.current[documentType] = createBusinessDocumentSaveKey();
-      const existing = savedDocuments[documentType];
+      const existing = savedDocumentsRef.current[documentType] || savedDocuments[documentType];
       const document = existing
         ? await updateBusinessDocumentDraft({
             draftId: existing.id,
@@ -1444,6 +1447,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       if (fingerprint !== restoredFingerprint) {
         throw new Error("The saved draft response did not match the editable workspace. Reopen Saved Files before retrying.");
       }
+      savedDocumentsRef.current[documentType] = document;
       setSavedDocuments((current) => ({ ...current, [documentType]: document }));
       setCustomerParties((current) => ({
         ...current,
@@ -1705,6 +1709,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     }));
     restored.photos.forEach((photo) => seenPhotoIdsRef.current.add(photo.id));
     onRestorePhotos?.(restored.photos, { documentType: type, persisted: true });
+    savedDocumentsRef.current[type] = document;
     setSavedDocuments((current) => ({ ...current, [type]: document }));
     setCustomerParties((current) => ({ ...current, [type]: restored.customerParty }));
     setLinkedCustomerContacts((current) => ({ ...current, [type]: null }));
@@ -2123,6 +2128,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   async function handleDeletedDocument(document) {
     const type = document.documentType.toLowerCase();
     if (savedDocuments[type]?.id === document.id) {
+      savedDocumentsRef.current[type] = null;
       setSavedDocuments((current) => ({ ...current, [type]: null }));
       setSavedFingerprints((current) => ({ ...current, [type]: "" }));
       saveAttemptKeysRef.current[type] = "";
@@ -2297,7 +2303,9 @@ export default function UnifiedBusinessDocumentWorkspace({
     recoveredPhotos.forEach((photo) => seenPhotoIdsRef.current.add(photo.id));
     setPhotoAssignments(Object.fromEntries(Object.entries(snapshot.photoAssignments || {}).map(([id, assignment]) => [id, normalizeBusinessDocumentPhotoAssignment(assignment)])));
     onRestorePhotos?.(recoveredPhotos, { replaceAll: true, persisted: false });
-    setSavedDocuments(snapshot.savedDocuments || { quote: null, invoice: null });
+    const recoveredSavedDocuments = snapshot.savedDocuments || { quote: null, invoice: null };
+    savedDocumentsRef.current = { ...recoveredSavedDocuments };
+    setSavedDocuments(recoveredSavedDocuments);
     const recoveredCustomerParties = {
       quote: normalizeBusinessDocumentCustomerParty(snapshot.payloads.quote?.customerParty),
       invoice: normalizeBusinessDocumentCustomerParty(snapshot.payloads.invoice?.customerParty),
@@ -2912,36 +2920,108 @@ export default function UnifiedBusinessDocumentWorkspace({
 
   async function beginGovernedQuoteIssue() {
     if (quoteIssueState?.busy || activeDocument !== "quote") return;
-    setQuoteIssueState({ stage: "saving", busy: true, error: "", errorPhase: "", checkpoint: {}, result: null, document: activeSaved, identity: null, total: deliveryTotal("quote", quote) });
-    const document = await ensureCurrentDocumentSaved("quote");
-    if (document === NUMBERING_SETUP_PENDING) {
+    const savedCandidate = savedDocumentsRef.current.quote || activeSaved || null;
+    const localTotal = deliveryTotal("quote", quote);
+    setQuoteIssueState({
+      stage: "hydrating",
+      busy: true,
+      error: "",
+      errorPhase: "",
+      checkpoint: {},
+      result: null,
+      document: savedCandidate,
+      identity: null,
+      readiness: workingQuoteSendReadiness({
+        document: savedCandidate,
+        identity: null,
+        jobId: documentJobIds.quote,
+        total: localTotal,
+      }),
+      total: localTotal,
+    });
+
+    if (!savedCandidate) {
+      const readiness = workingQuoteSendReadiness({
+        document: null,
+        identity: null,
+        jobId: documentJobIds.quote,
+        total: localTotal,
+      });
       setQuoteIssueState({
         stage: "review",
         busy: false,
-        error: "Finish the one-time numbering setup and save this quote before sending it.",
+        error: readiness.message,
         errorPhase: "IDENTITY",
         checkpoint: {},
         result: null,
-        document: activeSaved,
+        document: null,
         identity: null,
-        total: deliveryTotal("quote", quote),
+        readiness,
+        total: localTotal,
       });
       return;
     }
-    if (!document) {
+
+    let document;
+    try {
+      document = await getBusinessDocumentDraft({
+        draftId: savedCandidate.id,
+        setPage,
+      });
+    } catch {
+      const readiness = workingQuoteSendReadiness({
+        document: savedCandidate,
+        identity: null,
+        jobId: documentJobIds.quote,
+        total: deliveryTotal("quote", savedCandidate.content || quote),
+      });
       setQuoteIssueState({
         stage: "review",
         busy: false,
-        error: saveState.error || "The quote could not be saved. Nothing was sent.",
+        error: "We couldn't reload the exact saved quote. Nothing was sent.",
         errorPhase: "IDENTITY",
         checkpoint: {},
         result: null,
-        document: activeSaved,
+        document: savedCandidate,
         identity: null,
-        total: deliveryTotal("quote", quote),
+        readiness,
+        total: readiness.total,
       });
       return;
     }
+
+    const exactSavedContent =
+      fingerprints.quote === businessDocumentRestoredSnapshotFingerprint(document);
+    const savedTotal = deliveryTotal("quote", document.content || quote);
+    if (!exactSavedContent) {
+      const readiness = workingQuoteSendReadiness({
+        document,
+        identity: null,
+        jobId: documentJobIds.quote,
+        total: savedTotal,
+        exactSavedContent: false,
+      });
+      setQuoteIssueState({
+        stage: "review",
+        busy: false,
+        error: readiness.message,
+        errorPhase: "IDENTITY",
+        checkpoint: {},
+        result: null,
+        document,
+        identity: null,
+        readiness,
+        total: savedTotal,
+      });
+      return;
+    }
+
+    savedDocumentsRef.current.quote = document;
+    setSavedDocuments((current) => ({ ...current, quote: document }));
+    setSavedFingerprints((current) => ({
+      ...current,
+      quote: businessDocumentRestoredSnapshotFingerprint(document),
+    }));
     let identity;
     try {
       identity = await fetchWorkingQuoteReviewIdentity({
@@ -2950,21 +3030,34 @@ export default function UnifiedBusinessDocumentWorkspace({
         setPage,
       });
     } catch {
+      const readiness = workingQuoteSendReadiness({
+        document,
+        identity: null,
+        jobId: documentJobIds.quote,
+        total: savedTotal,
+      });
       setQuoteIssueState({
         stage: "review",
         busy: false,
-        error: "We couldn't verify the customer and project for this quote. Nothing was sent.",
+        error: readiness.message,
         errorPhase: "IDENTITY",
         checkpoint: {},
         result: null,
         document,
         identity: null,
-        total: deliveryTotal("quote", document.content || quote),
+        readiness,
+        total: savedTotal,
       });
       return;
     }
+    const readiness = workingQuoteSendReadiness({
+      document,
+      identity,
+      jobId: documentJobIds.quote,
+      total: savedTotal,
+    });
     const attemptIdentity = `${document.id}:${document.version}`;
-    if (quoteIssueAttemptRef.current?.identity !== attemptIdentity) {
+    if (readiness.ready && quoteIssueAttemptRef.current?.identity !== attemptIdentity) {
       quoteIssueAttemptRef.current = {
         identity: attemptIdentity,
         commandKeys: createWorkingQuoteCommandKeys(),
@@ -2973,21 +3066,25 @@ export default function UnifiedBusinessDocumentWorkspace({
     setQuoteIssueState({
       stage: "review",
       busy: false,
-      error: "",
-      errorPhase: "",
+      error: readiness.message,
+      errorPhase: readiness.ready ? "" : "IDENTITY",
       checkpoint: {},
       result: null,
       document,
       identity,
-      total: deliveryTotal("quote", document.content || quote),
-      commandKeys: quoteIssueAttemptRef.current.commandKeys,
+      readiness,
+      total: savedTotal,
+      commandKeys: readiness.ready
+        ? quoteIssueAttemptRef.current.commandKeys
+        : null,
     });
   }
 
   async function confirmGovernedQuoteIssue() {
     const current = quoteIssueState;
     if (
-      !current?.document ||
+      current?.readiness?.ready !== true ||
+      !current.document ||
       !current.identity ||
       current.identity.jobId !== documentJobIds.quote ||
       !current.commandKeys ||
@@ -3195,7 +3292,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
       {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
       {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
-      {quoteIssueState && quoteIssueState.stage !== "saving" ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={() => setQuoteIssueState(null)} onConfirm={() => void confirmGovernedQuoteIssue()} /> : null}
+      {quoteIssueState && quoteIssueState.stage !== "hydrating" ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={() => setQuoteIssueState(null)} onConfirm={() => void confirmGovernedQuoteIssue()} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {numberingSetup ? <NumberingSetupDialog state={numberingSetup} onModeChange={chooseNumberingMode} onPreviousNumberChange={(value) => setNumberingSetup((current) => current ? { ...current, previousDocumentNumber: value } : current)} onCancel={cancelNumberingSetup} onSubmit={() => void submitNumberingSetup()} /> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={startNewSaveFailure ? [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Try Again", primary: true, onClick: retryFailedSave }] : [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || startNewState.error || "Your work is still here."}</p>{startNewSaveFailure ? <p>No new document was created. The current working document remains open.</p> : <p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p>}</WorkspaceDialog> : null}

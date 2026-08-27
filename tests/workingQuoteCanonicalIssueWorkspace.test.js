@@ -6,6 +6,10 @@ const workspace = readFileSync(
   new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
   "utf8"
 );
+const styles = readFileSync(
+  new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+  "utf8"
+);
 
 function block(start, end) {
   return workspace.slice(workspace.indexOf(start), workspace.indexOf(end));
@@ -19,12 +23,16 @@ test("Job-linked Quote workspace exposes one reviewed business-facing send actio
   assert.match(workspace, /Review the details below before sending this quote to the customer/);
 });
 
-test("workspace saves first, then delegates bridge, issue, and exact canonical delivery to one bounded orchestrator", () => {
+test("workspace re-reads the exact saved Quote without saving, then delegates governed send once", () => {
   const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
   const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
-  assert.match(begin, /ensureCurrentDocumentSaved\("quote"\)/);
+  assert.match(begin, /savedDocumentsRef\.current\.quote \|\| activeSaved/);
+  assert.match(begin, /getBusinessDocumentDraft\(\{/);
+  assert.ok(begin.indexOf("getBusinessDocumentDraft") < begin.indexOf("fetchWorkingQuoteReviewIdentity"));
+  assert.doesNotMatch(begin, /ensureCurrentDocumentSaved|saveDocument\(|createBusinessDocumentDraft|updateBusinessDocumentDraft|initializeBusinessDocumentNumbering/);
   assert.match(begin, /document\.id.*document\.version/s);
   assert.match(begin, /createWorkingQuoteCommandKeys/);
+  assert.match(begin, /workingQuoteSendReadiness/);
   assert.match(confirm, /issueAndSendWorkingQuote/);
   assert.match(confirm, /document: current\.document/);
   assert.match(confirm, /checkpoint: current\.checkpoint/);
@@ -49,23 +57,39 @@ test("review dialog shows customer, project, Quote, version, and USD total in bu
   for (const label of ["Customer", "Project", "Quote", "Version", "Total"]) {
     assert.match(dialog, new RegExp(`<dt>${label}</dt>`));
   }
-  assert.match(dialog, /state\.identity\?\.customerName/);
-  assert.match(dialog, /state\.identity\?\.projectTitle/);
-  assert.match(dialog, /displayDocumentNumber\(state\.document\)/);
-  assert.match(dialog, /state\.document\?\.version/);
-  assert.match(dialog, /money\(state\.total\).*USD/);
+  assert.match(dialog, /readiness\?\.customerName/);
+  assert.match(dialog, /readiness\?\.projectTitle/);
+  assert.match(dialog, /readiness\?\.documentNumber/);
+  assert.match(dialog, /readiness\?\.documentVersion/);
+  assert.match(dialog, /money\(readiness\?\.total\).*USD/);
   assert.match(dialog, /Once sent, this quote will be available for the customer to review and accept/);
   assert.match(dialog, /Sending the quote does not mean the customer has accepted it or made a payment/);
   assert.doesNotMatch(dialog, /canonical Draft|governed version|commercial offer|Canonical Quote|Exact issued version/);
 });
 
-test("confirmation fails closed without authoritative identity and Cancel has no command authority", () => {
+test("dialog and handler share one fail-closed readiness gate while Cancel has no command authority", () => {
   const dialog = block("function QuoteIssueReviewDialog", "function NumberingSetupDialog");
   const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
-  assert.match(dialog, /disabled: state\.busy \|\| !state\.document \|\| !state\.identity/);
+  assert.match(dialog, /disabled: state\.busy \|\| readiness\?\.ready !== true/);
   assert.match(dialog, /label: "Cancel", onClick: onCancel/);
   assert.doesNotMatch(dialog, /issueAndSendWorkingQuote|authFetch|fetch\(/);
+  assert.match(confirm, /current\?\.readiness\?\.ready !== true/);
   assert.match(confirm, /current\.identity\.jobId !== documentJobIds\.quote/);
+  assert.match(styles, /business-document-confirm > footer button:disabled[^{]*\{[^}]*opacity:/);
+});
+
+test("saved review hydration cannot reuse the stale numbering warning or expose internal pricing", () => {
+  const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
+  const dialog = block("function QuoteIssueReviewDialog", "function NumberingSetupDialog");
+  assert.doesNotMatch(begin, /Finish the one-time numbering setup/);
+  assert.doesNotMatch(begin, /NUMBERING_SETUP_PENDING/);
+  assert.doesNotMatch(dialog, /labor|materials|internal cost|deposit due/i);
+});
+
+test("post-save reference is retained synchronously for immediate review and restored drafts", () => {
+  assert.match(workspace, /savedDocumentsRef\.current\[documentType\] = document;[\s\S]*setSavedDocuments/);
+  assert.match(workspace, /savedDocumentsRef\.current\[type\] = document;[\s\S]*setSavedDocuments/);
+  assert.match(workspace, /businessDocumentRestoredSnapshotFingerprint\(document\)/);
 });
 
 test("issued result is canonical server evidence, not browser-local lifecycle authority", () => {

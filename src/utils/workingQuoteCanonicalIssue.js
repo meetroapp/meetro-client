@@ -7,6 +7,7 @@ import {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH_PATTERN = /^[0-9a-f]{64}$/i;
+const DOCUMENT_NUMBER_PATTERN = /^[A-Z]{1,8}-[0-9]{1,12}$/;
 
 export class WorkingQuoteCanonicalIssueError extends Error {
   constructor(message, {
@@ -209,6 +210,87 @@ function validateDocument(document, jobId) {
     );
   }
   return Object.freeze({ documentId, documentVersion, jobId: normalizedJobId });
+}
+
+function workingQuoteReadinessMessage(missing) {
+  if (missing.includes("savedDocument")) {
+    return "Save this quote before sending it.";
+  }
+  if (missing.includes("exactSavedContent")) {
+    return "Save your latest quote changes before sending it.";
+  }
+  if (missing.includes("documentNumber")) {
+    return "A server-assigned Quote number is required before sending.";
+  }
+  if (missing.includes("documentVersion")) {
+    return "The exact saved Quote version is required before sending.";
+  }
+  if (missing.includes("authority")) {
+    return "The customer and project for this quote could not be verified. Nothing was sent.";
+  }
+  if (missing.includes("customer")) {
+    return "The customer for this quote could not be verified. Nothing was sent.";
+  }
+  if (missing.includes("project")) {
+    return "The project for this quote could not be verified. Nothing was sent.";
+  }
+  if (missing.includes("total")) {
+    return "The saved Quote total could not be verified. Nothing was sent.";
+  }
+  return "";
+}
+
+export function workingQuoteSendReadiness({
+  document,
+  identity,
+  jobId,
+  total,
+  exactSavedContent = true,
+} = {}) {
+  let documentIdentity = null;
+  try {
+    documentIdentity = validateDocument(document, jobId);
+  } catch {
+    // The readiness result is presentation-only and must fail closed, not throw.
+  }
+
+  const documentNumber = typeof document?.documentNumber === "string"
+    ? document.documentNumber.trim()
+    : "";
+  const documentVersion = positiveInteger(document?.version);
+  const hasTotal = total !== null && total !== undefined &&
+    !(typeof total === "string" && !total.trim());
+  const normalizedTotal = hasTotal ? Number(total) : Number.NaN;
+  const exactIdentity = documentIdentity
+    ? normalizeWorkingQuoteReviewIdentity(identity, documentIdentity)
+    : null;
+  const missing = [];
+
+  if (!documentIdentity) missing.push("savedDocument");
+  if (exactSavedContent !== true) missing.push("exactSavedContent");
+  if (!DOCUMENT_NUMBER_PATTERN.test(documentNumber)) missing.push("documentNumber");
+  if (!documentVersion) missing.push("documentVersion");
+  if (!exactIdentity?.customerName) missing.push("customer");
+  if (!exactIdentity?.projectTitle) missing.push("project");
+  if (!Number.isFinite(normalizedTotal) || normalizedTotal < 0) missing.push("total");
+  if (!exactIdentity) missing.push("authority");
+
+  const uniqueMissing = Object.freeze([...new Set(missing)]);
+  return Object.freeze({
+    ready: uniqueMissing.length === 0,
+    customerName: exactIdentity?.customerName || "",
+    projectTitle: exactIdentity?.projectTitle || "",
+    jobId: documentIdentity?.jobId || null,
+    documentId: documentIdentity?.documentId || null,
+    documentNumber,
+    documentVersion,
+    total: Number.isFinite(normalizedTotal) && normalizedTotal >= 0
+      ? normalizedTotal
+      : null,
+    currency: "USD",
+    missing: uniqueMissing,
+    message: workingQuoteReadinessMessage(uniqueMissing),
+  });
 }
 
 export function normalizeWorkingQuoteReviewIdentity(value, {
