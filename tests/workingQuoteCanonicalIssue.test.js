@@ -80,6 +80,7 @@ function delivery() {
     },
     canSendInMeetro: true,
     conversationId: 341,
+    existingDelivery: null,
   });
 }
 
@@ -270,13 +271,13 @@ test("review identity fails closed on document, version, Job, or shape drift", a
   });
 });
 
-function commandTransport(calls, { bridgeStatus = 201, issueStatus = 200 } = {}) {
+function commandTransport(calls, { bridgeStatus = 201, issueStatus = 200, bridgeQuote = canonicalQuote() } = {}) {
   return async (endpoint, options) => {
     calls.push({ endpoint, options });
     if (endpoint.endsWith("/canonical-quote")) {
       return bridgeStatus >= 400
         ? { response: { ok: false, status: bridgeStatus }, data: { code: "BRIDGE_BLOCKED", message: "Bridge blocked" } }
-        : { response: { ok: true, status: bridgeStatus }, data: { success: true, quote: canonicalQuote() } };
+        : { response: { ok: true, status: bridgeStatus }, data: { success: true, quote: bridgeQuote } };
     }
     if (endpoint.endsWith("/issue")) {
       return issueStatus >= 400
@@ -402,6 +403,35 @@ test("delivery retry after issuance reuses the same key and never bridges or iss
   assert.equal(attempts, 2);
   assert.deepEqual(sentKeys, [keys.delivery, keys.delivery]);
   assert.equal(retried.issuedQuote.currentVersion, 2);
+});
+
+test("hard-refresh recovery recognizes an existing delivery and cannot duplicate the message", async () => {
+  const calls = [];
+  let sendCalls = 0;
+  const existingDelivery = { ...deliveryEvidence(), replayed: true };
+  const result = await issueAndSendWorkingQuote({
+    document,
+    jobId: IDS.job,
+    commandKeys: keys,
+    authFetchImpl: commandTransport(calls, {
+      bridgeQuote: canonicalQuote({ status: "ISSUED", currentVersion: 2 }),
+    }),
+    fetchDeliveryImpl: async () => ({
+      ...delivery(),
+      existingDelivery,
+    }),
+    sendDeliveryImpl: async () => {
+      sendCalls += 1;
+      throw new Error("already-delivered recovery must not send again");
+    },
+  });
+  assert.deepEqual(calls.map(({ endpoint }) => endpoint), [
+    `/business-document-drafts/${IDS.document}/canonical-quote`,
+  ]);
+  assert.equal(result.issuedQuote.status, "ISSUED");
+  assert.equal(result.deliveryEvidence.messageId, existingDelivery.messageId);
+  assert.equal(result.deliveryEvidence.replayed, true);
+  assert.equal(sendCalls, 0);
 });
 
 test("bridge fails closed when an existing mapping does not match the reviewed Working Quote version", async () => {

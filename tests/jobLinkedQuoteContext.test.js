@@ -8,6 +8,7 @@ import {
   fetchJobLinkedQuoteContext,
   jobLinkedQuoteHasExistingContent,
   normalizeJobLinkedQuoteRouteJobId,
+  resolveJobLinkedSavedQuoteResume,
 } from "../src/utils/jobLinkedQuoteContext.js";
 
 const JOB_ID = "072c8736-5d97-4253-ba3e-dd1bce281a20";
@@ -234,6 +235,27 @@ test("saved working or canonical Quote state prevents fresh Evaluation prefill",
   ]);
 });
 
+test("exact saved Quote resume requires the same canonical Job authority and customer", () => {
+  const context = buildJobLinkedQuoteContext(
+    contextInput({
+      savedDocuments: [{
+        id: "44444444-4444-4444-8444-444444444444",
+        documentType: "QUOTE",
+        status: "WORKING_DRAFT",
+        jobId: JOB_ID,
+      }],
+    })
+  );
+  assert.deepEqual(resolveJobLinkedSavedQuoteResume(context), {
+    jobId: JOB_ID,
+    documentId: "44444444-4444-4444-8444-444444444444",
+    customerName: "Meetro Stage B",
+  });
+  assert.equal(resolveJobLinkedSavedQuoteResume({ ...context, authoritySource: "BROWSER_DRAFT" }), null);
+  assert.equal(resolveJobLinkedSavedQuoteResume({ ...context, customer: { displayName: "" } }), null);
+  assert.equal(resolveJobLinkedSavedQuoteResume({ ...context, existingQuote: { workingDocumentId: null } }), null);
+});
+
 test("unauthorized Job stops before lifecycle, Evaluation, saved document, or Quote reads", async () => {
   let downstreamReads = 0;
   const result = await fetchJobLinkedQuoteContext({
@@ -357,4 +379,56 @@ test("opening a Job-linked Quote does not call save, issue, Invoice, payment, or
   assert.match(hydrationEffect, /setCustomerName/);
   assert.match(hydrationEffect, /setProjectDescription/);
   assert.match(hydrationEffect, /setRecommendedSolution/);
+});
+
+test("hard-refresh protection opens the exact saved Quote instead of routing to the same page", () => {
+  const quoteBuilder = readFileSync(
+    new URL("../src/pages/QuoteBuilder.jsx", import.meta.url),
+    "utf8"
+  );
+  const workspace = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+  const protection = quoteBuilder.slice(
+    quoteBuilder.indexOf("if (routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected)"),
+    quoteBuilder.indexOf("return (\n      <>\n        <input")
+  );
+  assert.match(protection, /resolveJobLinkedSavedQuoteResume/);
+  assert.match(protection, /Open Saved Quote/);
+  assert.match(protection, /onClick=\{openProtectedJobLinkedQuote\}/);
+  assert.doesNotMatch(protection, /setPage\("quoteBuilder"\)/);
+  assert.match(quoteBuilder, /initialSavedDocumentId=\{jobLinkedQuoteContext\.reopenDocumentId\}/);
+  assert.match(workspace, /getBusinessDocumentDraft\(\{ draftId, setPage \}\)/);
+  assert.match(workspace, /expectedJobId: job\.id/);
+  assert.match(workspace, /expectedDocumentType: "QUOTE"/);
+  assert.match(workspace, /document\?\.status !== "WORKING_DRAFT"/);
+  const directReopenEffect = workspace.slice(
+    workspace.indexOf("const documentId = String(initialSavedDocumentId"),
+    workspace.indexOf("function connectionRestored")
+  );
+  assert.doesNotMatch(
+    directReopenEffect,
+    /saveDocument\(|createBusinessDocumentDraft|updateBusinessDocumentDraft|issueAndSendWorkingQuote|initializeBusinessDocumentNumbering/
+  );
+});
+
+test("Job customer remains presentation authority while CRM persistence stays optional", () => {
+  const workspace = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+  assert.match(workspace, /const linkedName = jobLinked[\s\S]*\? content\.customerName/);
+  assert.match(workspace, /!jobLinked \? <button[^>]+onClick=\{\(\) => onOpen\("choose"\)\}/);
+  assert.match(workspace, /Save as Customer Contact|businessDocumentCustomerSave/);
+  assert.match(workspace, /lockedCustomerName=\{activeDocument === "quote" \? jobLinkedCustomerName : ""\}/);
+  assert.match(workspace, /job\.customerLinkedFromJob &&[\s\S]*key === "customerName"/);
+  assert.match(workspace, /if \(job\.customerLinkedFromJob\) delete durablePatch\.customerName/);
+  assert.doesNotMatch(
+    workspace.slice(
+      workspace.indexOf("useEffect(() => {\n    const documentId = String(initialSavedDocumentId"),
+      workspace.indexOf("function connectionRestored")
+    ),
+    /createBusinessContact|createBusinessCustomerRelationship/
+  );
 });

@@ -240,6 +240,7 @@ export function normalizeProfessionalQuoteDelivery(
       "snapshot",
       "actions",
       "conversation",
+      "existingDelivery",
     ])
   ) return null;
 
@@ -259,6 +260,20 @@ export function normalizeProfessionalQuoteDelivery(
     : exactKeys(delivery.conversation, ["id"])
       ? positiveInteger(delivery.conversation.id)
       : null;
+  const existingDelivery = delivery.existingDelivery == null
+    ? null
+    : normalizeQuoteDeliveryEvidence(
+        {
+          success: true,
+          code: "QUOTE_SENT_IN_MEETRO",
+          delivery: delivery.existingDelivery,
+        },
+        {
+          quoteId: expectedQuoteId,
+          jobId: expectedJobId,
+          conversationId,
+        }
+      );
 
   if (
     normalizedQuoteId !== expectedQuoteId ||
@@ -269,7 +284,8 @@ export function normalizeProfessionalQuoteDelivery(
     !actions ||
     typeof actions.canSendInMeetro !== "boolean" ||
     (actions.canSendInMeetro && !conversationId) ||
-    (!actions.canSendInMeetro && delivery.conversation != null)
+    (!actions.canSendInMeetro && delivery.conversation != null) ||
+    (delivery.existingDelivery != null && !existingDelivery)
   ) return null;
 
   return Object.freeze({
@@ -280,6 +296,7 @@ export function normalizeProfessionalQuoteDelivery(
     snapshot,
     canSendInMeetro: actions.canSendInMeetro,
     conversationId,
+    existingDelivery,
   });
 }
 
@@ -397,6 +414,7 @@ export async function sendProfessionalQuoteInMeetro({
   ) {
     throw new QuoteDeliveryError({ status: 400, code: "INVALID_QUOTE_DELIVERY" });
   }
+  if (delivery.existingDelivery) return delivery.existingDelivery;
   const result = await authFetchImpl(
     `/professional/quotes/${delivery.quoteId}/send-in-meetro`,
     {

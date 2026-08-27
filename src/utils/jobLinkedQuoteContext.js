@@ -360,3 +360,18 @@ export function jobLinkedQuoteHasExistingContent(context) {
       context?.existingQuote?.canonicalQuoteIds?.length
   );
 }
+
+export function resolveJobLinkedSavedQuoteResume(context) {
+  if (context?.authoritySource !== "CANONICAL_JOB_LINKED_QUOTE_READ") {
+    return null;
+  }
+  const jobId = canonicalUuid(context?.job?.jobId);
+  const documentId = canonicalUuid(context?.existingQuote?.workingDocumentId);
+  const customerName = cleanText(context?.customer?.displayName, 200);
+  if (!jobId || !documentId || !customerName) return null;
+  return Object.freeze({
+    jobId,
+    documentId,
+    customerName,
+  });
+}

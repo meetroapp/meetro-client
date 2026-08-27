@@ -40,6 +40,7 @@ function payload(overrides = {}) {
       },
       actions: { canSendInMeetro: true },
       conversation: { id: 17 },
+      existingDelivery: null,
       ...overrides,
     },
   };
@@ -73,6 +74,7 @@ test("strict professional delivery projection accepts only exact customer-safe t
   assert.equal(delivery.expectedIssuedVersion, 3);
   assert.equal(delivery.canSendInMeetro, true);
   assert.equal(delivery.conversationId, 17);
+  assert.equal(delivery.existingDelivery, null);
   assert.equal(delivery.snapshot.totalMinor, 92000);
   assert.equal(JSON.stringify(delivery).includes("materialsSubtotalMinor"), false);
 
@@ -135,6 +137,26 @@ test("send command uses exact version and caller-owned retry key without optimis
     assert.equal(call.options.headers["Idempotency-Key"], key);
     assert.deepEqual(JSON.parse(call.options.body), { expectedIssuedVersion: 3 });
   }
+});
+
+test("already-delivered read evidence completes recovery without another POST", async () => {
+  const recoveredEvidence = evidence({ replayed: true }).delivery;
+  const delivery = normalizeProfessionalQuoteDelivery(
+    payload({ existingDelivery: recoveredEvidence }),
+    { quoteId: QUOTE_ID, jobId: JOB_ID }
+  );
+  let calls = 0;
+  const result = await sendProfessionalQuoteInMeetro({
+    delivery,
+    idempotencyKey: "quote-delivery-new-browser-key",
+    authFetchImpl: async () => {
+      calls += 1;
+      throw new Error("an already-delivered Quote must not POST again");
+    },
+  });
+  assert.equal(result.messageId, 71);
+  assert.equal(result.replayed, true);
+  assert.equal(calls, 0);
 });
 
 test("delivery evidence requires exact Quote, Job, Conversation and canonical state", () => {

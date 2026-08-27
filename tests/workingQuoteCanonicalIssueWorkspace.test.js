@@ -104,6 +104,8 @@ test("issued result is canonical server evidence, not browser-local lifecycle au
 
 test("failure and success copy remain truthful without exposing orchestration terminology", () => {
   assert.match(workspace, /We couldn't prepare this quote for sending/);
+  assert.match(workspace, /Nothing was sent\. Your saved quote is unchanged\./);
+  assert.match(workspace, /errorCode: error\?\.code \|\| "WORKING_QUOTE_CANONICAL_ISSUE_FAILED"/);
   assert.match(workspace, /The quote could not be sent yet/);
   assert.match(workspace, /prepared successfully, but sending it to the customer needs to be retried/);
   assert.match(workspace, /Retry Sending/);

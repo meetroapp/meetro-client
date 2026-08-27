@@ -567,6 +567,14 @@ export async function issueAndSendWorkingQuote({
         }
       );
     }
+    if (delivery.existingDelivery) {
+      return Object.freeze({
+        canonicalQuote,
+        issuedQuote,
+        delivery,
+        deliveryEvidence: delivery.existingDelivery,
+      });
+    }
     const deliveryEvidence = await sendDeliveryImpl({
       delivery,
       idempotencyKey: commandKeys.delivery,

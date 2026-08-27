@@ -410,7 +410,7 @@ function EditableRows({ title, rows, nameField, onChange }) {
   );
 }
 
-function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", onApply, onCancel, onModeChange }) {
+function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", lockedCustomerName = "", onApply, onCancel, onModeChange }) {
   const source = activeDocument === "quote" ? quote : invoice;
   const initialSourceRef = useRef(null);
   if (!initialSourceRef.current) {
@@ -441,9 +441,15 @@ function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialF
     : [["paymentTerms", "Payment terms"]];
   const textareas = new Set(["projectDescription", "recommendedSolution", "workPerformed", "terms", "paymentTerms", "notes"]);
   function field([field, label]) {
+    const customerLocked = field === "customerName" && Boolean(lockedCustomerName);
+    const value = customerLocked ? lockedCustomerName : draft[field] || "";
+    const update = (event) => {
+      if (customerLocked) return;
+      setDraft((current) => ({ ...current, [field]: event.target.value }));
+    };
     const control = textareas.has(field)
-      ? <textarea ref={field === "customerName" ? firstInputRef : undefined} value={draft[field] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} />
-      : <input ref={field === "customerName" ? firstInputRef : field === "totalOverride" ? amountInputRef : undefined} type={field === "dueDate" ? "date" : "text"} inputMode={field === "totalOverride" ? "decimal" : undefined} value={draft[field] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} />;
+      ? <textarea ref={field === "customerName" ? firstInputRef : undefined} value={value} readOnly={customerLocked} aria-readonly={customerLocked || undefined} onChange={update} />
+      : <input ref={field === "customerName" ? firstInputRef : field === "totalOverride" ? amountInputRef : undefined} type={field === "dueDate" ? "date" : "text"} inputMode={field === "totalOverride" ? "decimal" : undefined} value={value} readOnly={customerLocked} aria-readonly={customerLocked || undefined} onChange={update} />;
     return <label key={field}>{label}{control}</label>;
   }
   const pricingSettings = normalizeQuotePricingSettings(draft);
@@ -982,16 +988,18 @@ function CustomerPartyControl({
   );
   const selected = control.contacts.find((contact) => contact.id === control.selectedId);
   const durableContact = linkedContact || control.pendingContact;
-  const status = linkedDurably
-    ? t("businessDocumentCustomerLinked", language)
-    : jobLinked
-      ? jobLinkedLabel
+  const status = jobLinked
+    ? jobLinkedLabel
+    : linkedDurably
+      ? t("businessDocumentCustomerLinked", language)
     : customerParty || durableContact
       ? t("businessDocumentCustomerSavedContact", language)
       : t("businessDocumentCustomerNotLinked", language);
-  const linkedName = durableContact
-    ? businessContactDisplayName(durableContact)
-    : content.customerName;
+  const linkedName = jobLinked
+    ? content.customerName
+    : durableContact
+      ? businessContactDisplayName(durableContact)
+      : content.customerName;
 
   return <section className="business-document-customer-control" aria-labelledby="business-document-customer-title">
     <div className="business-document-customer-summary">
@@ -1051,7 +1059,7 @@ function JobLinkedQuoteContext({ job }) {
 }
 
 export default function UnifiedBusinessDocumentWorkspace({
-  setPage, language = "en", initialDocument = "quote", job = {}, quote,
+  setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null, job = {}, quote,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
@@ -1083,6 +1091,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const quoteIssueAttemptRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
+  const initialSavedDocumentOpenRef = useRef("");
   const quoteProposalApplyInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
@@ -1266,7 +1275,14 @@ export default function UnifiedBusinessDocumentWorkspace({
   };
   const activeDirty = dirty[activeDocument];
   const activeSaved = savedDocuments[activeDocument];
-  const activeContent = activeDocument === "quote" ? quote : invoice;
+  const jobLinkedCustomerName = job.customerLinkedFromJob
+    ? String(job.customerName || "").trim()
+    : "";
+  const activeContent = activeDocument === "quote"
+    ? jobLinkedCustomerName
+      ? { ...quote, customerName: jobLinkedCustomerName }
+      : quote
+    : invoice;
   const activeCustomerParty = customerParties[activeDocument];
   const activeLinkedCustomer = linkedCustomerContacts[activeDocument];
   const activeJobContext = documentJobIds[activeDocument] ? job : {};
@@ -1304,6 +1320,16 @@ export default function UnifiedBusinessDocumentWorkspace({
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const documentId = String(initialSavedDocumentId || "").trim().toLowerCase();
+    if (!documentId || initialSavedDocumentOpenRef.current === documentId) return;
+    initialSavedDocumentOpenRef.current = documentId;
+    void openSavedDocument(documentId, {
+      expectedJobId: job.id,
+      expectedDocumentType: "QUOTE",
+    });
+  }, [initialSavedDocumentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function connectionRestored() {
@@ -1744,12 +1770,28 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
-  async function openSavedDocument(draftId) {
+  async function openSavedDocument(draftId, {
+    expectedJobId = "",
+    expectedDocumentType = "",
+  } = {}) {
     try {
       const document = await getBusinessDocumentDraft({ draftId, setPage });
+      const normalizedExpectedJobId = String(expectedJobId || "").trim().toLowerCase();
+      const normalizedDocumentJobId = String(document?.jobId || "").trim().toLowerCase();
+      if (
+        (expectedDocumentType && document?.documentType !== expectedDocumentType) ||
+        (normalizedExpectedJobId && normalizedDocumentJobId !== normalizedExpectedJobId) ||
+        (expectedDocumentType === "QUOTE" && document?.status !== "WORKING_DRAFT")
+      ) {
+        throw new Error(
+          "The exact saved working Quote no longer matches this Job. Nothing was opened or changed."
+        );
+      }
       applyRestoredDocument(document);
+      return true;
     } catch (error) {
       setNotice(error?.message || "The saved document could not be opened.");
+      return false;
     }
   }
 
@@ -2712,6 +2754,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     const durablePatch = Object.fromEntries(
       Object.entries(patch).filter(([key]) => durableKeys.has(key))
     );
+    if (job.customerLinkedFromJob) delete durablePatch.customerName;
     if (patch.depositTerms) {
       const existingTerms = String(current.terms || "").trim();
       durablePatch.terms = existingTerms.toLowerCase().includes(patch.depositTerms.toLowerCase())
@@ -2800,6 +2843,11 @@ export default function UnifiedBusinessDocumentWorkspace({
     const overrides = { ...manualOverrides[activeDocument] };
     for (const [key, value] of Object.entries(draft)) {
       if (["total", "canonicalStatus", "quoteNumber", "invoiceNumber"].includes(key)) continue;
+      if (
+        activeDocument === "quote" &&
+        job.customerLinkedFromJob &&
+        key === "customerName"
+      ) continue;
       if (JSON.stringify(value) !== JSON.stringify(original[key])) overrides[key] = value;
     }
     setManualOverrides((current) => ({ ...current, [activeDocument]: overrides }));
@@ -3092,7 +3140,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       quoteIssueInFlightRef.current
     ) return;
     quoteIssueInFlightRef.current = true;
-    setQuoteIssueState((state) => ({ ...state, busy: true, error: "" }));
+    setQuoteIssueState((state) => ({ ...state, busy: true, error: "", errorCode: "" }));
     try {
       const result = await issueAndSendWorkingQuote({
         document: current.document,
@@ -3107,6 +3155,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         busy: false,
         error: "",
         errorPhase: "",
+        errorCode: "",
         checkpoint: {
           canonicalQuote: result.canonicalQuote,
           issuedQuote: result.issuedQuote,
@@ -3122,13 +3171,14 @@ export default function UnifiedBusinessDocumentWorkspace({
         : error?.code === "QUOTE_EVALUATION_REQUIRED"
           ? "Complete and save the evaluation for this project before sending the quote."
           : error?.phase === "BRIDGE"
-            ? "We couldn't prepare this quote for sending."
+            ? "We couldn't prepare this quote for sending. Nothing was sent. Your saved quote is unchanged."
             : "The quote could not be sent yet.";
       setQuoteIssueState((state) => ({
         ...state,
         stage: "review",
         busy: false,
         errorPhase: error?.phase || "BRIDGE",
+        errorCode: error?.code || "WORKING_QUOTE_CANONICAL_ISSUE_FAILED",
         checkpoint: error?.checkpoint || {},
         error: errorMessage,
       }));
@@ -3258,7 +3308,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         <button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button>
         <div>
           <div className="business-document-title-row"><h1>{activeContent.projectTitle || activeJobContext.title || "Quote & Invoice"}</h1><span>{recovered ? "Recovered · Not saved" : documentJobIds[activeDocument] ? "Job linked" : "Working draft"}</span></div>
-          <p>{activeContent.customerName || activeJobContext.customerName ? `Customer: ${activeContent.customerName || activeJobContext.customerName}` : "Customer not selected"}{activeContent.customerLocation || activeJobContext.location ? ` · ${activeContent.customerLocation || activeJobContext.location}` : ""}</p>
+          <p>{jobLinkedCustomerName || activeContent.customerName || activeJobContext.customerName ? `Customer: ${jobLinkedCustomerName || activeContent.customerName || activeJobContext.customerName}` : "Customer not selected"}{activeContent.customerLocation || activeJobContext.location ? ` · ${activeContent.customerLocation || activeJobContext.location}` : ""}</p>
         </div>
         <div className="business-document-header-actions">
           <button type="button" className="business-document-start-new" disabled={startNewState.busy} aria-busy={startNewState.busy && startNewState.documentType === activeDocument} onClick={() => void startNewDocument(activeDocument)}>{startNewLabel}</button>
@@ -3273,7 +3323,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
           {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
-          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
+          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
             <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
