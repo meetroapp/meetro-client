@@ -17,7 +17,6 @@ import {
 import {
   normalizeQuotePricingSettings,
   quoteCustomerPricingProjection,
-  quoteDepositTerms,
 } from "../utils/quotePricingPresentation.js";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
@@ -286,6 +285,20 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
     String(quote.recommendedSolution).trim() !== String(quote.projectDescription).trim()
     ? quote.projectDescription
     : "";
+  const deposit = pricing.deposit;
+  const generatedDepositTerm = deposit.mode === "PERCENT"
+    ? `${deposit.percent}% deposit`
+    : deposit.mode === "FIXED"
+      ? `$${Number(quote.depositFixedAmount ?? quote.depositAmount ?? deposit.due)} deposit`
+      : "";
+  const paymentTerms = String(quote.terms || "")
+    .split("·")
+    .map((term) => term.trim())
+    .filter((term) => term && term.toLowerCase() !== generatedDepositTerm.toLowerCase())
+    .join(" · ");
+  const depositHeading = deposit.mode === "PERCENT"
+    ? `${deposit.percent}% deposit`
+    : "Deposit";
   return (
     <article className="business-live-document" aria-label="Live Quote Preview">
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>{authorityState?.status === "ISSUED" ? "SENT" : "WORKING DRAFT"}</span></div></header>
@@ -299,11 +312,64 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
         <div className="total" role="row"><span>{pricing.pricingDisplayMode === "TOTAL_ONLY" ? "TOTAL PROJECT PRICE" : "PROJECT PRICE"}</span><strong>{pricing.total > 0 ? money(pricing.total) : "—"}</strong></div>
       </div>
       {pricing.inclusionNote ? <p className="business-document-pricing-note">{pricing.inclusionNote}</p> : null}
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{[quote.terms, quoteDepositTerms(quote, pricing.total)].filter(Boolean).join(" · ") || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
+      <div className="business-document-footer-grid"><section className="business-document-payment-summary"><h3>Payment Terms</h3>{paymentTerms ? <p>{paymentTerms}</p> : null}{deposit.mode !== "NONE" && deposit.valid ? <div><strong>{depositHeading}</strong><span>{money(deposit.due)} due on approval</span><span>{money(deposit.remaining)} remaining</span></div> : !paymentTerms ? <p>Confirm terms before delivery.</p> : null}</section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
       {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
   );
+}
+
+const QUOTE_PROPOSAL_CUSTOMER_LABELS = Object.freeze({
+  TOTAL_ONLY: "Total project price",
+  CATEGORY_BREAKDOWN: "Labor/material breakdown",
+  DETAILED_LINE_ITEMS: "Detailed line items",
+  INCLUDED_IN_TOTAL: "Included in total",
+  SHOW_SEPARATELY: "Show separately",
+  CUSTOMER_PROVIDES: "Customer provides materials",
+});
+
+function QuoteProposalRows({ title, rows }) {
+  if (!rows.length) return null;
+  return <section className="business-document-proposal-section"><h4>{title}</h4><dl>{rows.map((row) => <div key={row.key}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></section>;
+}
+
+function quoteProposalReviewSections(proposal, pricing, patch) {
+  const changes = new Map(proposal.recognizedChanges.map((change) => [change.field, change]));
+  const pricingRows = [];
+  if (changes.has("laborItems")) pricingRows.push({ key: "labor", label: "Labor", value: money((patch.laborItems || []).reduce((sum, row) => sum + (Number(row.total) || 0), 0)) });
+  if (changes.has("materialItems")) pricingRows.push({ key: "materials", label: "Materials", value: money((patch.materialItems || []).reduce((sum, row) => sum + (Number(row.total) || 0), 0)) });
+  if (["laborItems", "materialItems", "totalOverride", "calculatedTotal"].some((field) => changes.has(field))) {
+    pricingRows.push({ key: "project-total", label: "Project total", value: money(pricing.total) });
+  }
+
+  const customerRows = [];
+  if (changes.has("pricingDisplayMode")) customerRows.push({ key: "customer-pricing", label: "Pricing", value: QUOTE_PROPOSAL_CUSTOMER_LABELS[patch.pricingDisplayMode] || patch.pricingDisplayMode });
+  if (changes.has("materialsDisplayMode")) customerRows.push({ key: "customer-materials", label: "Materials", value: QUOTE_PROPOSAL_CUSTOMER_LABELS[patch.materialsDisplayMode] || patch.materialsDisplayMode });
+
+  const paymentRows = [];
+  if (changes.has("depositPercent")) paymentRows.push({ key: "deposit", label: "Deposit", value: `${patch.depositPercent}%` });
+  else if (changes.has("depositFixedAmount")) paymentRows.push({ key: "deposit", label: "Deposit", value: money(patch.depositFixedAmount) });
+  else if (changes.has("depositMode")) paymentRows.push({ key: "deposit", label: "Deposit", value: patch.depositMode === "NONE" ? "None" : patch.depositMode });
+  if (pricing.deposit.mode !== "NONE" && pricing.deposit.valid && paymentRows.length) {
+    paymentRows.push({ key: "deposit-due", label: "Deposit due", value: money(pricing.deposit.due) });
+    paymentRows.push({ key: "remaining", label: "Remaining balance", value: money(pricing.deposit.remaining) });
+  }
+
+  const groupedFields = new Set([
+    "laborItems", "materialItems", "totalOverride", "calculatedTotal",
+    "pricingDisplayMode", "materialsDisplayMode", "depositPercent",
+    "depositFixedAmount", "depositMode", "depositDue", "remainingBalance",
+  ]);
+  const otherRows = proposal.recognizedChanges
+    .filter((change) => !groupedFields.has(change.field))
+    .map((change) => ({
+      key: change.field,
+      label: change.label,
+      value: typeof change.value === "number"
+        ? money(change.value)
+        : String(change.value).replaceAll("_", " "),
+    }));
+  return { pricingRows, customerRows, paymentRows, otherRows };
 }
 
 function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
@@ -457,6 +523,7 @@ function QuoteProposalReview({ proposal, onApply, onDismiss }) {
   const [editing, setEditing] = useState(false);
   const [patch, setPatch] = useState(() => ({ ...proposal.patch }));
   const pricing = quoteCustomerPricingProjection({ ...proposal.baseline, ...patch });
+  const sections = quoteProposalReviewSections(proposal, pricing, patch);
   function update(field, value) {
     setPatch((current) => ({ ...current, [field]: value }));
   }
@@ -470,9 +537,9 @@ function QuoteProposalReview({ proposal, onApply, onDismiss }) {
       }],
     }));
   }
-  return <article className="business-document-proposal" aria-label="Proposed Quote changes">
-    <header><div><span>Meetro proposal</span><strong>Proposed Quote changes</strong></div><small>Nothing changes until you apply.</small></header>
-    <blockquote>{proposal.instruction}</blockquote>
+  return <article className="business-document-proposal" aria-labelledby={`proposal-title-${proposal.id}`}>
+    <header><span>Meetro proposal</span><h3 id={`proposal-title-${proposal.id}`}>Proposed Quote changes</h3><p>Nothing changes until you apply.</p></header>
+    <blockquote aria-label="Instruction being reviewed">{proposal.instruction}</blockquote>
     {editing ? <div className="business-document-proposal-editor">
       {patch.laborItems?.length ? <label>Labor<input inputMode="decimal" value={patch.laborItems[0]?.total || ""} onChange={(event) => updateRow("laborItems", "description", event.target.value)} /></label> : null}
       {(patch.materialItems?.length || Object.hasOwn(patch, "materialAmount")) ? <label>Materials<input inputMode="decimal" value={patch.materialItems?.[0]?.total || patch.materialAmount || ""} onChange={(event) => { updateRow("materialItems", "name", event.target.value); update("materialAmount", event.target.value); }} /></label> : null}
@@ -483,10 +550,9 @@ function QuoteProposalReview({ proposal, onApply, onDismiss }) {
       {patch.pricingDisplayMode ? <label>Customer pricing display<select value={patch.pricingDisplayMode} onChange={(event) => update("pricingDisplayMode", event.target.value)}><option value="TOTAL_ONLY">Total project price</option><option value="CATEGORY_BREAKDOWN">Labor/material breakdown</option><option value="DETAILED_LINE_ITEMS">Detailed line items</option></select></label> : null}
       {patch.materialsDisplayMode ? <label>Materials on customer Quote<select value={patch.materialsDisplayMode} onChange={(event) => update("materialsDisplayMode", event.target.value)}><option value="INCLUDED_IN_TOTAL">Included in total</option><option value="SHOW_SEPARATELY">Show separately</option><option value="CUSTOMER_PROVIDES">Customer provides materials</option></select></label> : null}
       {(patch.recommendedSolution || patch.projectDescription) ? <label>Scope of Work<textarea value={patch.recommendedSolution || patch.projectDescription || ""} onChange={(event) => { update("recommendedSolution", event.target.value); update("projectDescription", event.target.value); }} /></label> : null}
-    </div> : <dl>{proposal.recognizedChanges.map((change) => <div key={`${change.field}-${change.label}`}><dt>{change.label}</dt><dd>{typeof change.value === "number" ? money(change.value) : String(change.value).replaceAll("_", " ")}</dd></div>)}</dl>}
-    {proposal.unrecognizedSegments.length ? <aside role="status"><strong>Not applied or understood</strong>{proposal.unrecognizedSegments.map((segment) => <p key={segment}>{segment}</p>)}</aside> : null}
-    <div className="business-document-proposal-total"><span>Customer project total</span><strong>{money(pricing.total)}</strong>{pricing.deposit.mode !== "NONE" && pricing.deposit.valid ? <small>Deposit {money(pricing.deposit.due)} · Remaining {money(pricing.deposit.remaining)}</small> : null}</div>
-    <footer><button type="button" onClick={onDismiss}>Dismiss</button><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Review" : "Edit"}</button><button type="button" className="business-document-primary" onClick={() => onApply(patch)}>Apply</button></footer>
+    </div> : <div className="business-document-proposal-sections"><QuoteProposalRows title="Pricing" rows={sections.pricingRows} /><QuoteProposalRows title="Customer Quote" rows={sections.customerRows} /><QuoteProposalRows title="Payment" rows={sections.paymentRows} /><QuoteProposalRows title="Other changes" rows={sections.otherRows} /></div>}
+    {proposal.unrecognizedSegments.length ? <aside role="status"><strong>Not applied</strong>{proposal.unrecognizedSegments.map((segment) => <p key={segment}>{segment}</p>)}</aside> : null}
+    <footer><button type="button" className="business-document-primary" onClick={() => onApply(patch)}>Apply</button><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Review" : "Edit"}</button><button type="button" onClick={onDismiss}>Dismiss</button></footer>
   </article>;
 }
 

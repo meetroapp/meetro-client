@@ -554,37 +554,43 @@
 .business-private-reminders small { color: #71613e; font-size: 10px; }
 .business-document-preview { padding: 14px 0 0; }
 .business-document-preview > header span { color: #16844a; font-size: 10px; font-weight: 850; }
-.business-live-document { min-width: 0; padding: clamp(13px, 2.2vw, 24px); border: 1px solid #dbe2dc; border-radius: 6px; color: #172844; background: #fff; box-shadow: 0 8px 24px rgba(44,50,39,.06); }
-.business-document-preview-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid #e6eae6; }
-.business-document-preview-heading > strong { font-size: 17px; }
+.business-live-document { min-width: 0; padding: clamp(16px, 2.4vw, 26px); border: 1px solid #dbe2dc; border-radius: 6px; color: #172844; background: #fff; box-shadow: 0 8px 24px rgba(44,50,39,.06); }
+.business-document-preview-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding-bottom: 15px; border-bottom: 1px solid #dce3dd; }
+.business-document-preview-heading > strong { font-size: 18px; line-height: 1.3; }
 .business-document-preview-heading > div { display: grid; text-align: right; }
 .business-document-preview-heading b { color: #0c6c3a; font-size: 18px; }
-.business-document-preview-heading span { color: #1e8a4d; font-size: 8px; font-weight: 950; }
-.business-document-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 13px 0; padding: 10px; border-radius: 5px; background: #f7f9f7; }
+.business-document-preview-heading span { color: #176f40; font-size: 10px; font-weight: 950; }
+.business-document-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin: 16px 0; padding: 13px; border-radius: 6px; background: #f5f8f5; }
 .business-document-meta div { min-width: 0; }
-.business-document-meta dt { color: #6b7890; font-size: 8px; font-weight: 950; text-transform: uppercase; }
-.business-document-meta dd { margin: 3px 0 0; font-size: 10px; font-weight: 850; overflow-wrap: anywhere; }
+.business-document-meta dt { color: #526277; font-size: 10px; font-weight: 950; letter-spacing: .025em; text-transform: uppercase; }
+.business-document-meta dd { margin: 4px 0 0; color: #1f3148; font-size: 13px; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; }
 .business-document-copy h3,
 .business-document-proof h3,
-.business-document-footer-grid h3 { margin: 0 0 5px; font-size: 10px; }
+.business-document-footer-grid h3 { margin: 0 0 6px; color: #173a2a; font-size: 13px; font-weight: 900; line-height: 1.3; }
+.business-document-copy { margin-top: 16px; }
 .business-document-copy p,
-.business-document-footer-grid p { margin: 0; color: #46566c; font-size: 10px; line-height: 1.45; }
-.business-document-table { margin-top: 13px; border: 1px solid #d7dee0; }
-.business-document-table > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(72px, auto); gap: 10px; padding: 7px 9px; border-top: 1px solid #e4e8e9; font-size: 10px; }
+.business-document-footer-grid p { margin: 0; color: #34465c; font-size: 13.5px; line-height: 1.5; }
+.business-document-table { margin-top: 17px; border: 1px solid #cfd8d3; }
+.business-document-table > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(88px, auto); gap: 12px; padding: 9px 11px; border-top: 1px solid #e0e6e2; font-size: 12.5px; line-height: 1.4; }
 .business-document-table > div:first-child { border-top: 0; }
 .business-document-table > div span:last-child,
 .business-document-table > div strong { text-align: right; }
-.business-document-table .head { color: #405066; background: #f4f7f5; font-weight: 950; text-transform: uppercase; }
-.business-document-table .total { color: #122d21; border: 1px solid #718297; background: #fafcfb; font-size: 12px; font-weight: 950; }
-.business-document-footer-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 13px; }
-.business-document-footer-grid section { min-width: 0; padding-right: 9px; border-right: 1px solid #e3e8e4; }
-.business-live-document > footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 15px; padding-top: 8px; border-top: 1px solid #e3e7e3; color: #66768b; font-size: 8px; }
+.business-document-table .head { color: #33475d; background: #f1f5f2; font-weight: 950; text-transform: uppercase; }
+.business-document-table .total { padding-block: 13px; color: #0f2c1f; border: 1px solid #60786b; background: #f8fbf9; font-size: 15px; font-weight: 950; }
+.business-document-table .total strong { color: #0b5833; font-size: 18px; }
+.business-document-footer-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 17px; }
+.business-document-footer-grid section { min-width: 0; padding: 12px; border: 1px solid #dce4df; border-radius: 7px; background: #fbfcfb; }
+.business-live-document > footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; padding-top: 10px; border-top: 1px solid #dbe2dc; color: #52647a; font-size: 10.5px; line-height: 1.4; }
 .business-document-proof { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 13px; }
 .business-document-agreement-preview { display: grid; gap: 9px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8e3; }
-.business-document-agreement-preview > h3 { margin: 0; color: #145b38; font-size: 12px; }
-.business-document-agreement-preview strong { display: block; color: #263e31; font-size: 9px; }
+.business-document-agreement-preview > h3 { margin: 0; color: #145b38; font-size: 14px; }
+.business-document-agreement-preview strong { display: block; color: #263e31; font-size: 12.5px; }
 .business-document-agreement-preview p,
-.business-document-agreement-preview ul { margin: 4px 0 0; color: #506276; font-size: 9px; line-height: 1.45; }
+.business-document-agreement-preview ul { margin: 5px 0 0; color: #3b4e63; font-size: 13px; line-height: 1.5; }
+
+.business-document-payment-summary > div { display: grid; gap: 3px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #dce4df; }
+.business-document-payment-summary > div strong { color: #173a2a; font-size: 13.5px; }
+.business-document-payment-summary > div span { color: #253d52; font-size: 13.5px; line-height: 1.45; }
 
 .business-document-actions { display: flex; align-items: flex-start; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .business-document-actions > button,
@@ -1105,12 +1111,13 @@
 }
 .business-document-pricing-note {
   margin: 0;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border: 1px solid #d8e7de;
   border-radius: 10px;
   background: #f5fbf7;
-  color: #244f35;
-  font-size: 0.9rem;
+  color: #1e4930;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
 .business-document-pricing-options {
@@ -1124,10 +1131,16 @@
   font-weight: 700;
 }
 
-.business-document-pricing-options > div,
-.business-document-proposal-editor {
+.business-document-pricing-options > div {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.business-document-proposal-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 12px;
 }
@@ -1150,60 +1163,95 @@
 
 .business-document-proposal {
   align-self: stretch;
+  container-type: inline-size;
   margin: 8px 0;
-  padding: 16px;
+  padding: 15px;
   border: 1px solid #b8d6c2;
   border-radius: 14px;
   background: #f7fcf8;
   color: #173c25;
 }
 
-.business-document-proposal > header,
-.business-document-proposal > footer,
-.business-document-proposal-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+.business-document-proposal > header {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
-.business-document-proposal > header div,
-.business-document-proposal-total {
+.business-document-proposal > header span { color: #28704a; font-size: 0.72rem; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.business-document-proposal > header h3 { margin: 0; color: #153b27; font-size: 1rem; line-height: 1.3; overflow-wrap: normal; word-break: normal; }
+.business-document-proposal > header p { margin: 0; color: #425b4b; font-size: 0.8rem; line-height: 1.45; }
+
+.business-document-proposal > footer {
   display: grid;
-  gap: 2px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.business-document-proposal > footer button {
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid #bed1c4;
+  border-radius: 9px;
+  color: #28513a;
+  background: #fff;
+  font-weight: 850;
+}
+
+.business-document-proposal > footer .business-document-primary {
+  color: #fff;
+  border-color: #0c6238;
+  background: #0c6238;
 }
 
 .business-document-proposal blockquote {
-  margin: 12px 0;
+  margin: 13px 0;
   padding-left: 12px;
   border-left: 3px solid #6da47d;
   color: #45614d;
+  font-size: 0.82rem;
+  line-height: 1.48;
+  overflow-wrap: anywhere;
 }
 
-.business-document-proposal dl {
+.business-document-proposal-sections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 13px;
 }
 
-.business-document-proposal dl div {
-  padding: 10px;
-  border-radius: 9px;
-  background: #fff;
+.business-document-proposal-section { min-width: 0; padding-top: 11px; border-top: 1px solid #d9e6dc; }
+.business-document-proposal-section:first-child { padding-top: 0; border-top: 0; }
+.business-document-proposal-section h4 { margin: 0 0 7px; color: #173c25; font-size: 0.82rem; line-height: 1.3; }
+.business-document-proposal-section dl { display: grid; gap: 7px; margin: 0; }
+.business-document-proposal-section dl div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
 }
 
 .business-document-proposal dt {
-  font-size: 0.75rem;
-  color: #5c6f62;
+  color: #53695a;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .business-document-proposal dd {
-  margin: 3px 0 0;
-  font-weight: 750;
+  margin: 0;
+  color: #173c25;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .business-document-proposal aside {
-  margin: 10px 0;
+  margin: 14px 0 0;
   padding: 10px;
   border-radius: 9px;
   background: #fff7e8;
@@ -1214,10 +1262,8 @@
   margin: 4px 0 0;
 }
 
-.business-document-proposal-total {
-  margin: 12px 0;
-}
-
-.business-document-proposal > footer {
-  justify-content: flex-end;
+@container (max-width: 280px) {
+  .business-document-proposal-section dl div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .business-document-proposal dd { text-align: left; }
+  .business-document-proposal > footer { grid-template-columns: minmax(0, 1fr); }
 }

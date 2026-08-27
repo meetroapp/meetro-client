@@ -660,16 +660,18 @@ test("metadata box grows around wrapped Project values and contains Scope of Wor
   const metadataRect = rectangles.find(([, , width, , style]) => width === 516 && style === "FD");
   assert.ok(metadataRect);
   assert.ok(metadataRect[3] > 34);
-  const projectText = texts.find(([value]) => Array.isArray(value) && value.includes("Reconstruct the damaged"));
+  const projectText = texts.find(([value]) =>
+    Array.isArray(value) && value.join(" ").includes("Reconstruct the damaged")
+  );
   assert.ok(projectText);
   assert.ok(projectText[0].length >= 2);
-  assert.ok(projectText[2] + (projectText[0].length - 1) * 8.5 * 1.25 < metadataRect[1] + metadataRect[3]);
+  assert.ok(projectText[2] + (projectText[0].length - 1) * 9.5 * 1.25 < metadataRect[1] + metadataRect[3]);
   const scopeText = texts.find(([value]) => Array.isArray(value) && value[0] === "Scope of Work");
   assert.ok(scopeText);
   assert.ok(scopeText[2] > metadataRect[1] + metadataRect[3]);
 });
 
-test("single-line metadata keeps the original 34pt box height", () => {
+test("single-line metadata uses the readable 37pt box height", () => {
   const model = buildQuickQuoteDocumentModel({
     customerName: "Paul Becker", projectTitle: "Repair", quoteDate: "2026-08-16",
     lineItems: [], subtotal: 0, total: 100,
@@ -687,7 +689,7 @@ test("single-line metadata keeps the original 34pt box height", () => {
   }
   renderCustomerDocumentPdf(model, { jsPDFImpl: RecordingJsPDF });
   const metadataRect = rectangles.find(([, , width, , style]) => width === 516 && style === "FD");
-  assert.equal(metadataRect[3], 34);
+  assert.equal(metadataRect[3], 37);
 });
 
 test("customer document actions have EN ES FR PT-BR parity and Quick controls remain bounded", () => {

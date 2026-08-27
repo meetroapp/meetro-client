@@ -211,22 +211,22 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   function section(title, body) {
     if (!body) return;
     const bodyLines = doc.splitTextToSize(String(body), contentWidth);
-    const height = 28 + bodyLines.length * 13;
+    const height = 30 + bodyLines.length * 14;
     ensureSpace(Math.min(height, 180));
-    y = addText(doc, title, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
-    y = addText(doc, body, PAGE.margin, y + 3, { size: 9.5, maxWidth: contentWidth });
-    y += 8;
+    y = addText(doc, title, PAGE.margin, y, { size: 12.5, color: COLOR.ink, style: "bold" });
+    y = addText(doc, body, PAGE.margin, y + 4, { size: 10.5, maxWidth: contentWidth });
+    y += 9;
   }
 
   function bulletSection(title, values) {
     if (!values?.length) return;
     ensureSpace(50);
-    y = addText(doc, title, PAGE.margin, y, { size: 12, color: COLOR.ink, style: "bold" });
+    y = addText(doc, title, PAGE.margin, y, { size: 12.5, color: COLOR.ink, style: "bold" });
     for (const value of values) {
       const lines = doc.splitTextToSize(String(value), contentWidth - 16);
-      ensureSpace(lines.length * 13 + 5);
-      addText(doc, "-", PAGE.margin + 4, y + 3, { size: 9.5 });
-      y = addText(doc, value, PAGE.margin + 16, y + 3, { size: 9.5, maxWidth: contentWidth - 16 });
+      ensureSpace(lines.length * 14 + 5);
+      addText(doc, "-", PAGE.margin + 4, y + 3, { size: 10.5 });
+      y = addText(doc, value, PAGE.margin + 16, y + 3, { size: 10.5, maxWidth: contentWidth - 16 });
     }
     y += 8;
   }
@@ -309,14 +309,14 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     ...meta.map(([, value]) => doc.splitTextToSize(String(value || ""), metaValueWidth).length),
     1
   );
-  const metaHeight = 34 + Math.max(0, maxMetaValueLines - 1) * 8.5 * 1.25;
+  const metaHeight = 37 + Math.max(0, maxMetaValueLines - 1) * 9.5 * 1.25;
   doc.setFillColor(...COLOR.fill);
   doc.setDrawColor(...COLOR.line);
   doc.rect(PAGE.margin, y, contentWidth, metaHeight, "FD");
   meta.forEach(([label, value], index) => {
     const x = PAGE.margin + metaWidth * index + 8;
-    addText(doc, label.toUpperCase(), x, y + 11, { size: 6.8, color: COLOR.muted, style: "bold" });
-    addText(doc, value, x, y + 25, { size: 8.5, color: COLOR.text, style: "bold", maxWidth: metaValueWidth });
+    addText(doc, label.toUpperCase(), x, y + 12, { size: 7.5, color: COLOR.muted, style: "bold" });
+    addText(doc, value, x, y + 27, { size: 9.5, color: COLOR.text, style: "bold", maxWidth: metaValueWidth });
   });
   y += metaHeight + 14;
 
@@ -352,26 +352,26 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     doc.setFillColor(...COLOR.fill);
     doc.rect(PAGE.margin, y + 3, contentWidth, 22, "F");
     addText(doc, copy.description, columns.description + 7, y + 17, {
-      size: 7.5,
+      size: 8.5,
       color: COLOR.muted,
       style: "bold",
     });
 
     if (showUnitPricingColumns) {
       addText(doc, copy.quantity, columns.quantity, y + 17, {
-        size: 7.5,
+        size: 8.5,
         color: COLOR.muted,
         style: "bold",
       });
       addText(doc, copy.unit, columns.unit, y + 17, {
-        size: 7.5,
+        size: 8.5,
         color: COLOR.muted,
         style: "bold",
       });
     }
 
     addText(doc, copy.amount, columns.amount, y + 17, {
-      size: 7.5,
+      size: 8.5,
       color: COLOR.muted,
       style: "bold",
     });
@@ -383,17 +383,17 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
         item.description,
         descriptionWidth
       );
-      const rowHeight = Math.max(22, descriptionLines.length * 12 + 8);
+      const rowHeight = Math.max(25, descriptionLines.length * 13.5 + 9);
       ensureSpace(rowHeight + 4);
 
       addText(doc, item.description, columns.description + 7, y + 10, {
-        size: 8.8,
+        size: 9.5,
         maxWidth: descriptionWidth,
       });
 
       if (item.pricingPresentation !== "flat") {
         addText(doc, String(item.quantity), columns.quantity, y + 10, {
-          size: 8.8,
+          size: 9.5,
         });
         addText(
           doc,
@@ -406,7 +406,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
               ),
           columns.unit,
           y + 10,
-          { size: 8.3 }
+          { size: 9.25 }
         );
       }
 
@@ -419,7 +419,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
         ),
         columns.amount,
         y + 10,
-        { size: 8.3, style: "bold" }
+        { size: 9.25, style: "bold" }
       );
 
       doc.setDrawColor(...COLOR.line);
@@ -441,7 +441,7 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   doc.setFillColor(...COLOR.fill);
   doc.setLineWidth(1.2);
   doc.rect(PAGE.margin, y, contentWidth, 48, "FD");
-  addText(doc, totalLabel, PAGE.margin + 28, y + 29, { size: 11, color: COLOR.ink, style: "bold" });
+  addText(doc, totalLabel, PAGE.margin + 28, y + 29, { size: 12, color: COLOR.ink, style: "bold" });
   addText(doc, formatMoney(model.kind === "INVOICE" ? model.balanceMinor ?? model.totalMinor : model.totalMinor, model.currency, model.locale), PAGE.width - PAGE.margin - 28, y + 31, { size: 22, color: COLOR.ink, style: "bold", align: "right" });
   y += 62;
   const financialRows = [
@@ -453,9 +453,9 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
   ].filter(Boolean);
   for (const [label, amount] of financialRows) {
     ensureSpace(18);
-    addText(doc, label, PAGE.margin + 300, y, { size: 8.5, color: COLOR.muted });
-    addText(doc, formatMoney(amount, model.currency, model.locale), PAGE.width - PAGE.margin, y, { size: 8.5, style: "bold", align: "right" });
-    y += 16;
+    addText(doc, label, PAGE.margin + 300, y, { size: 9.5, color: COLOR.muted });
+    addText(doc, formatMoney(amount, model.currency, model.locale), PAGE.width - PAGE.margin, y, { size: 9.5, style: "bold", align: "right" });
+    y += 17;
   }
   y += 4;
 
@@ -495,8 +495,8 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     doc.setPage(pageNumber);
     doc.setDrawColor(...COLOR.line);
     doc.line(PAGE.margin, PAGE.footerY - 10, PAGE.width - PAGE.margin, PAGE.footerY - 10);
-    addText(doc, model.branding.name, PAGE.margin, PAGE.footerY, { size: 7, color: COLOR.muted });
-    addText(doc, `${copy.preparedWith}  |  ${pageNumber} / ${pages}`, PAGE.width - PAGE.margin, PAGE.footerY, { size: 7, color: COLOR.muted, align: "right" });
+    addText(doc, model.branding.name, PAGE.margin, PAGE.footerY, { size: 7.8, color: COLOR.muted });
+    addText(doc, `${copy.preparedWith}  |  ${pageNumber} / ${pages}`, PAGE.width - PAGE.margin, PAGE.footerY, { size: 7.8, color: COLOR.muted, align: "right" });
   }
   doc.setProperties({
     title: `${model.kind === "QUOTE" ? copy.quote : copy.invoice} ${model.documentNumber || ""}`.trim(),
