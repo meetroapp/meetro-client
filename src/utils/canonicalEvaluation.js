@@ -150,6 +150,12 @@ export function validateCanonicalEvaluationProjection(value) {
   if (!authority.ok || authority.value.aggregate.type !== "evaluation") return null;
   if (!isPlainObject(value.evaluation)) return null;
 
+  const sourceContext = value.aggregate?.sourceContext;
+  if (
+    sourceContext?.type === "ordinary_job" &&
+    !Object.hasOwn(sourceContext, "evaluationVisitId")
+  ) return null;
+
   const evaluation = value.evaluation;
   const id = canonicalUuid(evaluation.id);
   const createdAt = canonicalTimestamp(evaluation.createdAt);

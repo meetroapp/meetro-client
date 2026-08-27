@@ -82,20 +82,34 @@ function normalizeSourceContext(value) {
   if (value.type === "ordinary_job") {
     const jobId = canonicalUuid(value.jobId);
     const requestId = positiveInteger(value.requestId);
+    const hasEvaluationVisitId = Object.hasOwn(value, "evaluationVisitId");
+    const evaluationVisitId = hasEvaluationVisitId
+      ? value.evaluationVisitId == null
+        ? null
+        : canonicalUuid(value.evaluationVisitId)
+      : undefined;
     const allowed = new Set([
       "type",
       "jobId",
       "requestId",
       "relationshipId",
+      "evaluationVisitId",
     ]);
     if (
       !jobId ||
       !requestId ||
+      (hasEvaluationVisitId && value.evaluationVisitId != null && !evaluationVisitId) ||
       Object.keys(value).some((key) => !allowed.has(key))
     ) {
       return null;
     }
-    return { type: value.type, jobId, requestId, relationshipId };
+    return {
+      type: value.type,
+      jobId,
+      requestId,
+      relationshipId,
+      ...(hasEvaluationVisitId ? { evaluationVisitId } : {}),
+    };
   }
 
   if (value.type === "emergency_request") {

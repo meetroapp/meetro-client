@@ -64,7 +64,22 @@ test("direct Quote entry warns truthfully while governed send remains explicit",
   assert.match(evaluation, /Continue to Quote/);
   assert.match(evaluation, /return to Evaluation/i);
   assert.match(evaluation, /onPrepareQuote\(\)/);
+  assert.match(evaluation, /evaluation\?\.evaluation\?\.status !== "completed"/);
   assert.doesNotMatch(evaluation, /createOrdinaryJobEvaluation[\s\S]*prepareQuoteDirectly/);
   assert.match(quoteWorkspace, /Send Quote to Customer/);
   assert.match(quoteWorkspace, /beginGovernedQuoteIssue/);
+});
+
+test("completed Visit with a draft Evaluation is a dismissible reminder, not a lock", () => {
+  assert.match(evaluation, /Evaluation documentation not complete/);
+  assert.match(
+    evaluation,
+    /This Evaluation is still in draft\. You can finish it now or return later\./
+  );
+  assert.match(evaluation, /Continue Evaluation/);
+  assert.match(evaluation, /Do this later/);
+  assert.match(evaluation, /onClick=\{beginEditing\}/);
+  assert.match(evaluation, /setDocumentationReminderDismissed\(true\)/);
+  assert.doesNotMatch(evaluation, /Do this later[\s\S]{0,160}completeEvaluation/);
+  assert.match(workCenterVisits, /evaluationVisitCompleted[\s\S]*STATE_LABELS\.COMPLETED/);
 });

@@ -159,6 +159,7 @@ export default function CanonicalJobEvaluation({
     activeState: "",
   });
   const [editing, setEditing] = useState(false);
+  const [documentationReminderDismissed, setDocumentationReminderDismissed] = useState(false);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [assistant, setAssistant] = useState({
@@ -248,6 +249,7 @@ export default function CanonicalJobEvaluation({
   useEffect(() => {
     let active = true;
     setEditing(false);
+    setDocumentationReminderDismissed(false);
     setConfirmingCompletion(false);
     setAssistantEvaluationEdit(null);
     if (!environmentEnabled || !jobId || !requestId) {
@@ -552,6 +554,7 @@ export default function CanonicalJobEvaluation({
     : `${selectedPhotoCount} photo${selectedPhotoCount === 1 ? "" : "s"} selected for analysis`;
 
   function beginEditing() {
+    if (!editingAllowed) return;
     setLoadState((current) => ({ ...current, error: "", notice: "" }));
     setForm(formForEvaluation(evaluation));
     setAssistantEvaluationEdit(null);
@@ -862,7 +865,7 @@ export default function CanonicalJobEvaluation({
           ? evaluation.evaluation.status === "completed"
             ? copy.completed
             : evaluationVisitState.completedVisitId
-              ? "Visit completed — Finalize Evaluation"
+              ? "Evaluation documentation not complete"
               : evaluationVisitState.activeState === "STARTED"
                 ? "Evaluation Visit In Progress"
               : evaluationVisitState.activeState === "SCHEDULED"
@@ -894,7 +897,7 @@ export default function CanonicalJobEvaluation({
         {loadState.status === "loading" && <p role="status" style={styles.message}>{copy.loadingEvaluation}</p>}
         {loadState.error && <p role="alert" style={styles.error}>{loadState.error}</p>}
         {loadState.notice && <p role="status" style={styles.success}>{loadState.notice}</p>}
-        {typeof onPrepareQuote === "function" && !evaluationVisitState.completedVisitId && (
+        {typeof onPrepareQuote === "function" && evaluation?.evaluation?.status !== "completed" && (
           <div style={styles.directQuoteNotice}>
             <strong>Need to prepare a Quote without a completed Evaluation?</strong>
             <span>Meetro will warn you and keep the Quote as an explicit working draft.</span>
@@ -948,15 +951,37 @@ export default function CanonicalJobEvaluation({
             {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>Fill manually</button>}
           </div>
         )}
+        {loadState.status === "ready" &&
+          evaluation?.evaluation?.status === "draft" &&
+          evaluationVisitState.completedVisitId &&
+          !editing &&
+          !documentationReminderDismissed && (
+            <div role="status" style={styles.documentationReminder}>
+              <strong>Evaluation documentation not complete</strong>
+              <p style={styles.message}>
+                This Evaluation is still in draft. You can finish it now or return later.
+              </p>
+              <div style={styles.actions}>
+                <button type="button" style={styles.primaryButton} onClick={beginEditing}>
+                  Continue Evaluation
+                </button>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={() => setDocumentationReminderDismissed(true)}
+                >
+                  Do this later
+                </button>
+              </div>
+            </div>
+          )}
         {evaluation && !editing && (
           <div style={styles.readView}>
-            {evaluation.evaluation.status === "draft" && (
+            {evaluation.evaluation.status === "draft" && !evaluationVisitState.completedVisitId && (
               <p style={styles.message}>
-                {evaluationVisitState.completedVisitId
-                  ? "The Evaluation Visit is complete. Review your findings and finalize the assessment when ready."
-                  : evaluationVisitState.activeState === "STARTED"
-                    ? "Document the assessment now. Finalize it only after the Visit is completed."
-                    : "Evaluation documentation is unavailable until the scheduled Visit starts."}
+                {evaluationVisitState.activeState === "STARTED"
+                  ? "Document the assessment now. Finalize it only after the Visit is completed."
+                  : "Evaluation documentation is unavailable until the scheduled Visit starts."}
               </p>
             )}
             <div style={styles.readField}>
@@ -1162,6 +1187,7 @@ const styles = {
   error: { margin: 0, padding: 10, borderLeft: "3px solid #b91c1c", color: "#991b1b", background: "#fef2f2" },
   success: { margin: 0, padding: 10, borderLeft: "3px solid #15803d", color: "#166534", background: "#f0fdf4" },
   directQuoteNotice: { display: "grid", gap: 8, justifyItems: "start", padding: 12, border: "1px solid #d6b45b", borderRadius: 8, background: "#fffbeb", color: "#6b4f11" },
+  documentationReminder: { display: "grid", gap: 10, justifyItems: "start", padding: 12, border: "1px solid #d6b45b", borderRadius: 8, background: "#fffbeb", color: "#6b4f11" },
   emptyState: { display: "grid", gap: 12, justifyItems: "start" },
   readView: { display: "grid", gap: 14 },
   readField: { display: "grid", gap: 5 },

@@ -147,6 +147,29 @@ test("ordinary Job create and list use the existing job-scoped canonical routes"
   }
 });
 
+test("ordinary Job get and update accept the same linked canonical Evaluation contract", async () => {
+  const fixture = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const browser = installBrowser({ responses: [
+    { status: 200, body: { success: true, ...fixture } },
+    { status: 200, body: { success: true, ...fixture, aggregate: { ...fixture.aggregate, version: 2 } } },
+  ] });
+  try {
+    const found = await getEvaluation({ evaluationId: fixture.evaluation.id });
+    const updated = await updateEvaluationDraft({
+      evaluationId: fixture.evaluation.id,
+      expectedVersion: found.aggregate.version,
+      content: fixture.evaluation.content,
+      idempotencyKey: "ordinary-update-key",
+    });
+    assert.equal(found.aggregate.sourceContext.evaluationVisitId, "99999999-9999-4999-8999-999999999999");
+    assert.equal(updated.aggregate.version, 2);
+    assert.deepEqual(browser.calls.map((call) => call.options.method), ["GET", "PATCH"]);
+    assert.equal(JSON.parse(browser.calls[1].options.body).expectedVersion, 1);
+  } finally {
+    browser.restore();
+  }
+});
+
 test("stale, unavailable, invalid, and malformed responses fail closed", async () => {
   const fixture = canonicalEvaluationFixture();
   const browser = installBrowser({ responses: [

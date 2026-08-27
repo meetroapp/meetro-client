@@ -466,6 +466,9 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
           {subjects.map((subject) => {
             const key = subjectKey(subject);
             const authority = subject.authority;
+            const evaluationVisitCompleted =
+              subject.purpose === "EVALUATION" &&
+              subject.visits.some((visit) => visit.state === "COMPLETED");
             return (
               <article key={key} style={styles.subjectCard}>
                 <div style={styles.subjectHeader}>
@@ -482,7 +485,9 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                     </strong>
                   </div>
                   <span style={styles.stateBadge}>
-                    {authority
+                    {evaluationVisitCompleted
+                      ? STATE_LABELS.COMPLETED
+                      : authority
                       ? AUTHORITY_LABELS[authority.state] || authority.state
                       : "Unavailable"}
                   </span>

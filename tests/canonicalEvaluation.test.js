@@ -89,6 +89,7 @@ export function ordinaryCanonicalEvaluationFixture(overrides = {}) {
         jobId: "66666666-6666-4666-8666-666666666666",
         requestId: 41,
         relationshipId: 72,
+        evaluationVisitId: "99999999-9999-4999-8999-999999999999",
       },
       ...(overrides.aggregate || {}),
     },
@@ -192,9 +193,53 @@ test("ordinary Evaluation content cannot overwrite Customer Concern or activate 
   assert.equal(canonical.aggregate.sourceContext.type, "ordinary_job");
   assert.equal(canonical.aggregate.sourceContext.requestId, 41);
   assert.equal(
+    canonical.aggregate.sourceContext.evaluationVisitId,
+    "99999999-9999-4999-8999-999999999999"
+  );
+  assert.equal(
     ordinaryCanonicalEvaluationContentToForm(canonical).observations,
     "Visible water damage is present around the cabinet base."
   );
+});
+
+test("ordinary Evaluation Visit provenance is strict, nullable, and required", () => {
+  const physical = ordinaryCanonicalEvaluationFixture();
+  assert.ok(validateCanonicalEvaluationProjection(physical));
+
+  const preVisit = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        ...physical.aggregate.sourceContext,
+        evaluationVisitId: null,
+      },
+    },
+  });
+  assert.equal(
+    validateCanonicalEvaluationProjection(preVisit).aggregate.sourceContext.evaluationVisitId,
+    null
+  );
+
+  const missing = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        type: "ordinary_job",
+        jobId: physical.aggregate.sourceContext.jobId,
+        requestId: 41,
+        relationshipId: 72,
+      },
+    },
+  });
+  assert.equal(validateCanonicalEvaluationProjection(missing), null);
+
+  const malformed = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        ...physical.aggregate.sourceContext,
+        evaluationVisitId: "browser-visit",
+      },
+    },
+  });
+  assert.equal(validateCanonicalEvaluationProjection(malformed), null);
 });
 
 test("canonical Evaluation routes are refresh-safe and reject malformed source identity", () => {

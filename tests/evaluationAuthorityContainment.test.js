@@ -115,7 +115,16 @@ test("ambiguous ordinary/project records and browser media fail before any API c
 });
 
 test("ordinary Evaluation creation is available before a canonical Evaluation Visit", async () => {
-  const ordinary = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const fixture = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const ordinary = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      version: 1,
+      sourceContext: {
+        ...fixture.aggregate.sourceContext,
+        evaluationVisitId: null,
+      },
+    },
+  });
   const jobId = ordinary.aggregate.sourceContext.jobId;
   const browser = installBrowser([
     { status: 200, body: { success: true, evaluations: [] } },

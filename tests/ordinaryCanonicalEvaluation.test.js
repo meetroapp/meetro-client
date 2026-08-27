@@ -90,10 +90,62 @@ test("ordinary canonical Evaluation reads no-Evaluation and existing-Evaluation 
   }
 });
 
+test("live-compatible linked draft hydrates canonical content and repeated reads stay read-only", async () => {
+  const fixture = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      version: 1,
+      sourceContext: {
+        type: "ordinary_job",
+        jobId,
+        requestId: 41,
+        relationshipId: 72,
+        evaluationVisitId: "76a1797d-e6f2-4ceb-989e-3a1c40a3240a",
+      },
+    },
+    evaluation: {
+      status: "draft",
+      completedAt: null,
+      content: {
+        observations: "Water damage inside cabinet holding door, all 3 trims are also damage",
+        diagnosisSummary: "Replacement of all water damage area and inspect for mold and drywall repair as needed",
+        findings: [],
+        scopeRecommendations: [],
+      },
+    },
+  });
+  const browser = installBrowser([
+    { status: 200, body: { success: true, evaluations: [fixture] } },
+    { status: 200, body: { success: true, evaluations: [fixture] } },
+  ]);
+  try {
+    const first = await loadCanonicalEvaluationForRecord({ record: ordinaryRecord });
+    const second = await loadCanonicalEvaluationForRecord({ record: ordinaryRecord });
+
+    assert.equal(first.aggregate.version, 1);
+    assert.equal(first.evaluation.status, "draft");
+    assert.equal(first.evaluation.content.observations, fixture.evaluation.content.observations);
+    assert.equal(first.evaluation.content.diagnosisSummary, fixture.evaluation.content.diagnosisSummary);
+    assert.deepEqual(second, first);
+    assert.deepEqual(browser.calls.map((call) => call.options.method), ["GET", "GET"]);
+    assert.ok(browser.calls.every((call) => call.options.body == null));
+  } finally {
+    browser.restore();
+  }
+});
+
 test("ordinary canonical Evaluation creates a pre-Visit draft and versions through backend commands only", async () => {
-  const version1 = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const preVisitSourceContext = {
+    type: "ordinary_job",
+    jobId,
+    requestId: 41,
+    relationshipId: 72,
+    evaluationVisitId: null,
+  };
+  const version1 = ordinaryCanonicalEvaluationFixture({
+    aggregate: { version: 1, sourceContext: preVisitSourceContext },
+  });
   const version2 = ordinaryCanonicalEvaluationFixture({
-    aggregate: { version: 2 },
+    aggregate: { version: 2, sourceContext: preVisitSourceContext },
     evaluation: {
       content: {
         observations: "Updated professional observations.",
@@ -222,4 +274,10 @@ test("bounded component keeps concern read-only and uses canonical EFR commands"
     dashboardSource,
     /isCanonicalReadOnlyJob[\s\S]*CanonicalJobEvaluation/
   );
+  assert.match(componentSource, /Evaluation documentation not complete/);
+  assert.match(componentSource, /This Evaluation is still in draft\. You can finish it now or return later\./);
+  assert.match(componentSource, /Continue Evaluation/);
+  assert.match(componentSource, /Do this later/);
+  assert.match(componentSource, /setDocumentationReminderDismissed\(true\)/);
+  assert.match(componentSource, /evaluation\?\.evaluation\?\.status !== "completed"/);
 });
