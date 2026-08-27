@@ -10,6 +10,15 @@ import {
   reconcileBusinessDocumentInstructions,
   resolveBusinessDocumentConversationMessage,
 } from "../utils/businessDocumentWorkspace.js";
+import {
+  buildQuickQuoteConversationProposal,
+  quoteConversationProposalFingerprint,
+} from "../utils/quickQuoteConversationDraft.js";
+import {
+  normalizeQuotePricingSettings,
+  quoteCustomerPricingProjection,
+  quoteDepositTerms,
+} from "../utils/quotePricingPresentation.js";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
   attachCustomerDocumentPhotoEvidence,
@@ -227,18 +236,6 @@ function AnalysisConversationTurn({ turn }) {
   );
 }
 
-function quoteRows(quote) {
-  return [
-    ...(quote.lineItems || []).map((item) => ({ id: item.id, description: item.description, amount: Number(item.total || 0) })),
-    ...(quote.materialItems || []).map((item) => ({ id: item.id, description: item.name, amount: Number(item.total || 0) })),
-    ...(quote.laborItems || []).map((item) => ({
-      id: item.id,
-      description: item.description,
-      amount: Number(item.total || (Number(item.hours || 0) * Number(item.rate || 0))),
-    })),
-  ].filter((item) => item.description && item.amount > 0);
-}
-
 function invoiceRows(invoice) {
   return (invoice.lineItems || []).map((item) => ({
     ...item,
@@ -281,7 +278,8 @@ function CustomerPhotoEvidence({ generalPhotos = [], beforePhotos = [], afterPho
 }
 
 function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "", authorityState = null, jobLinked = false }) {
-  const rows = quoteRows(quote);
+  const pricing = quoteCustomerPricingProjection(quote);
+  const rows = pricing.customerRows;
   const agreement = normalizeBusinessDocumentAgreement(quote.agreement);
   const agreementSections = BUSINESS_DOCUMENT_AGREEMENT_FIELDS.filter(([key]) => agreement[key]);
   const observation = quote.recommendedSolution && quote.projectDescription &&
@@ -297,10 +295,11 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
       <div className="business-document-table" role="table" aria-label="Quote line items">
         <div className="head" role="row"><span>Description</span><span>Amount</span></div>
-        {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <div role="row"><span>Working draft</span><strong>—</strong></div>}
-        <div className="total" role="row"><span>PROJECT PRICE</span><strong>{quote.total > 0 ? money(quote.total) : "—"}</strong></div>
+        {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : pricing.total > 0 ? null : <div role="row"><span>Working draft</span><strong>—</strong></div>}
+        <div className="total" role="row"><span>{pricing.pricingDisplayMode === "TOTAL_ONLY" ? "TOTAL PROJECT PRICE" : "PROJECT PRICE"}</span><strong>{pricing.total > 0 ? money(pricing.total) : "—"}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{quote.terms || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
+      {pricing.inclusionNote ? <p className="business-document-pricing-note">{pricing.inclusionNote}</p> : null}
+      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{[quote.terms, quoteDepositTerms(quote, pricing.total)].filter(Boolean).join(" · ") || "Confirm terms before delivery."}</p></section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
       {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
@@ -384,6 +383,26 @@ function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialF
       : <input ref={field === "customerName" ? firstInputRef : field === "totalOverride" ? amountInputRef : undefined} type={field === "dueDate" ? "date" : "text"} inputMode={field === "totalOverride" ? "decimal" : undefined} value={draft[field] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} />;
     return <label key={field}>{label}{control}</label>;
   }
+  const pricingSettings = normalizeQuotePricingSettings(draft);
+  const depositChoice = pricingSettings.depositMode === "NONE"
+    ? "NONE"
+    : pricingSettings.depositMode === "FIXED"
+      ? "FIXED"
+      : [25, 50, 75].includes(pricingSettings.depositPercent)
+        ? `PERCENT_${pricingSettings.depositPercent}`
+        : "CUSTOM_PERCENT";
+  function setDepositChoice(value) {
+    if (value === "NONE") {
+      setDraft((current) => ({ ...current, depositMode: "NONE", depositPercent: "", depositFixedAmount: "", depositRequired: "No", depositAmount: "" }));
+      return;
+    }
+    if (value === "FIXED") {
+      setDraft((current) => ({ ...current, depositMode: "FIXED", depositPercent: "", depositRequired: "Yes" }));
+      return;
+    }
+    const preset = value.match(/^PERCENT_(25|50|75)$/)?.[1];
+    setDraft((current) => ({ ...current, depositMode: "PERCENT", depositPercent: preset || current.depositPercent || "", depositFixedAmount: "", depositAmount: "", depositRequired: "Yes" }));
+  }
   const detailFieldset = <fieldset className="business-document-manual-fields"><legend>{t(activeDocument === "quote" ? "businessDocumentQuoteDetails" : "businessDocumentInvoiceDetails", language)}</legend><div>{detailFields.map(field)}</div></fieldset>;
   if (mode === "prefill") {
     return <section id="business-document-prefill-details" className="business-document-prefill-details" aria-labelledby="business-document-prefill-details-title">
@@ -409,7 +428,13 @@ function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialF
         {detailFieldset}
         <section className="business-document-manual-pricing" aria-labelledby="business-document-manual-pricing-title"><h3 id="business-document-manual-pricing-title">Pricing</h3>{field(["totalOverride", activeDocument === "quote" ? "Customer price" : "Invoice amount"])}<div className="business-document-manual-line-groups">
           {activeDocument === "quote" ? <><EditableRows title="Service items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} /><EditableRows title="Materials" rows={draft.materialItems || []} nameField="name" onChange={(materialItems) => setDraft((current) => ({ ...current, materialItems }))} /><EditableRows title="Labor" rows={draft.laborItems || []} nameField="description" onChange={(laborItems) => setDraft((current) => ({ ...current, laborItems }))} /></> : <EditableRows title="Invoice items" rows={draft.lineItems || []} nameField="description" onChange={(lineItems) => setDraft((current) => ({ ...current, lineItems }))} />}
-        </div></section>
+        </div>{activeDocument === "quote" ? <details className="business-document-pricing-options"><summary>Pricing &amp; display options</summary><div>
+          <label>Customer pricing display<select value={pricingSettings.pricingDisplayMode} onChange={(event) => setDraft((current) => ({ ...current, pricingDisplayMode: event.target.value }))}><option value="TOTAL_ONLY">Total project price</option><option value="CATEGORY_BREAKDOWN">Show labor/material breakdown</option><option value="DETAILED_LINE_ITEMS">Show detailed line items</option></select></label>
+          <label>Materials on customer Quote<select value={pricingSettings.materialsDisplayMode} onChange={(event) => setDraft((current) => ({ ...current, materialsDisplayMode: event.target.value }))}><option value="INCLUDED_IN_TOTAL">Included in total</option><option value="SHOW_SEPARATELY">Show separately</option><option value="CUSTOMER_PROVIDES">Customer provides materials</option></select></label>
+          <label>Deposit<select value={depositChoice} onChange={(event) => setDepositChoice(event.target.value)}><option value="NONE">None</option><option value="PERCENT_25">25%</option><option value="PERCENT_50">50%</option><option value="PERCENT_75">75%</option><option value="CUSTOM_PERCENT">Custom %</option><option value="FIXED">Fixed amount</option></select></label>
+          {depositChoice === "CUSTOM_PERCENT" ? <label>Custom deposit %<input inputMode="decimal" value={draft.depositPercent || ""} onChange={(event) => setDraft((current) => ({ ...current, depositMode: "PERCENT", depositPercent: event.target.value, depositRequired: "Yes" }))} /></label> : null}
+          {depositChoice === "FIXED" ? <label>Fixed deposit amount<input inputMode="decimal" value={draft.depositFixedAmount || ""} onChange={(event) => setDraft((current) => ({ ...current, depositMode: "FIXED", depositFixedAmount: event.target.value, depositAmount: event.target.value, depositRequired: "Yes" }))} /></label> : null}
+        </div></details> : null}</section>
         <fieldset className="business-document-manual-fields"><legend>Payment</legend><div>{paymentFields.map(field)}</div></fieldset>
         <fieldset className="business-document-manual-fields"><legend>Customer notes</legend><div>{field(["notes", "Notes shown to the customer"])}</div></fieldset>
         {activeDocument === "quote" ? <details className="business-document-agreement-editor"><summary>Business terms</summary><div><p>Review, edit, or remove every term before sending. Meetro does not provide legal advice.</p><div className="business-document-agreement-presets"><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), additionalWorkTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.additionalWorkTerms } }))}>Use outside-scope protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), hiddenConditionsTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.hiddenConditionsTerms } }))}>Use hidden-condition protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), diagnosticTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.diagnosticTerms } }))}>Use diagnostic terms</button></div><label>Not Included / Exclusions<textarea value={(draft.agreement?.exclusions || []).join("\n")} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), exclusions: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) } }))} /></label>{BUSINESS_DOCUMENT_AGREEMENT_FIELDS.map(([key, label]) => <label key={key}>{label}<textarea value={draft.agreement?.[key] || ""} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), [key]: event.target.value } }))} /></label>)}</div></details> : null}
@@ -426,6 +451,43 @@ function InstructionEditor({ turn, onSave, onCancel }) {
 function InstructionTurn({ turn, onSave, onCancel, onEdit, showResponse = true }) {
   if (turn.editing) return <InstructionEditor turn={turn} onSave={onSave} onCancel={onCancel} />;
   return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article>{showResponse ? <article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article> : null}</>;
+}
+
+function QuoteProposalReview({ proposal, onApply, onDismiss }) {
+  const [editing, setEditing] = useState(false);
+  const [patch, setPatch] = useState(() => ({ ...proposal.patch }));
+  const pricing = quoteCustomerPricingProjection({ ...proposal.baseline, ...patch });
+  function update(field, value) {
+    setPatch((current) => ({ ...current, [field]: value }));
+  }
+  function updateRow(field, descriptionField, value) {
+    setPatch((current) => ({
+      ...current,
+      [field]: [{
+        ...(current[field]?.[0] || {}),
+        [descriptionField]: current[field]?.[0]?.[descriptionField] || (field === "laborItems" ? "Labor" : "Materials"),
+        total: value,
+      }],
+    }));
+  }
+  return <article className="business-document-proposal" aria-label="Proposed Quote changes">
+    <header><div><span>Meetro proposal</span><strong>Proposed Quote changes</strong></div><small>Nothing changes until you apply.</small></header>
+    <blockquote>{proposal.instruction}</blockquote>
+    {editing ? <div className="business-document-proposal-editor">
+      {patch.laborItems?.length ? <label>Labor<input inputMode="decimal" value={patch.laborItems[0]?.total || ""} onChange={(event) => updateRow("laborItems", "description", event.target.value)} /></label> : null}
+      {(patch.materialItems?.length || Object.hasOwn(patch, "materialAmount")) ? <label>Materials<input inputMode="decimal" value={patch.materialItems?.[0]?.total || patch.materialAmount || ""} onChange={(event) => { updateRow("materialItems", "name", event.target.value); update("materialAmount", event.target.value); }} /></label> : null}
+      {Object.hasOwn(patch, "totalOverride") ? <label>Customer project price<input inputMode="decimal" value={patch.totalOverride || ""} onChange={(event) => update("totalOverride", event.target.value)} /></label> : null}
+      {patch.estimatedDuration ? <label>Estimated duration<input value={patch.estimatedDuration} onChange={(event) => { update("estimatedDuration", event.target.value); update("timeline", event.target.value); }} /></label> : null}
+      {patch.depositMode === "PERCENT" ? <label>Deposit %<input inputMode="decimal" value={patch.depositPercent || ""} onChange={(event) => update("depositPercent", event.target.value)} /></label> : null}
+      {patch.depositMode === "FIXED" ? <label>Fixed deposit<input inputMode="decimal" value={patch.depositFixedAmount || ""} onChange={(event) => { update("depositFixedAmount", event.target.value); update("depositAmount", event.target.value); }} /></label> : null}
+      {patch.pricingDisplayMode ? <label>Customer pricing display<select value={patch.pricingDisplayMode} onChange={(event) => update("pricingDisplayMode", event.target.value)}><option value="TOTAL_ONLY">Total project price</option><option value="CATEGORY_BREAKDOWN">Labor/material breakdown</option><option value="DETAILED_LINE_ITEMS">Detailed line items</option></select></label> : null}
+      {patch.materialsDisplayMode ? <label>Materials on customer Quote<select value={patch.materialsDisplayMode} onChange={(event) => update("materialsDisplayMode", event.target.value)}><option value="INCLUDED_IN_TOTAL">Included in total</option><option value="SHOW_SEPARATELY">Show separately</option><option value="CUSTOMER_PROVIDES">Customer provides materials</option></select></label> : null}
+      {(patch.recommendedSolution || patch.projectDescription) ? <label>Scope of Work<textarea value={patch.recommendedSolution || patch.projectDescription || ""} onChange={(event) => { update("recommendedSolution", event.target.value); update("projectDescription", event.target.value); }} /></label> : null}
+    </div> : <dl>{proposal.recognizedChanges.map((change) => <div key={`${change.field}-${change.label}`}><dt>{change.label}</dt><dd>{typeof change.value === "number" ? money(change.value) : String(change.value).replaceAll("_", " ")}</dd></div>)}</dl>}
+    {proposal.unrecognizedSegments.length ? <aside role="status"><strong>Not applied or understood</strong>{proposal.unrecognizedSegments.map((segment) => <p key={segment}>{segment}</p>)}</aside> : null}
+    <div className="business-document-proposal-total"><span>Customer project total</span><strong>{money(pricing.total)}</strong>{pricing.deposit.mode !== "NONE" && pricing.deposit.valid ? <small>Deposit {money(pricing.deposit.due)} · Remaining {money(pricing.deposit.remaining)}</small> : null}</div>
+    <footer><button type="button" onClick={onDismiss}>Dismiss</button><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Review" : "Edit"}</button><button type="button" className="business-document-primary" onClick={() => onApply(patch)}>Apply</button></footer>
+  </article>;
 }
 
 function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, setPage }) {
@@ -940,6 +1002,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [photoAssignments, setPhotoAssignments] = useState({});
   const [photoReviewOpen, setPhotoReviewOpen] = useState(false);
   const [turns, setTurns] = useState([]);
+  const [pendingQuoteProposal, setPendingQuoteProposal] = useState(null);
   const [quoteBaseline, setQuoteBaseline] = useState(() => quote);
   const [invoiceBaseline, setInvoiceBaseline] = useState(() => ({ ...createInvoiceContinuityDraft({ job, quote }), invoiceNumber: "", invoiceDate: todayLocalIsoDate(), lineItems: [] }));
   const initialDocumentBaselinesRef = useRef({ quote: quoteBaseline, invoice: invoiceBaseline });
@@ -956,6 +1019,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const quoteIssueAttemptRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
+  const quoteProposalApplyInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
   const pendingExitRef = useRef(null);
@@ -1102,7 +1166,8 @@ export default function UnifiedBusinessDocumentWorkspace({
   );
   const currentConversationLength =
     currentConversationEntries.length +
-    (pendingAnalysisMessageVisible ? 1 : 0);
+    (pendingAnalysisMessageVisible ? 1 : 0) +
+    (pendingQuoteProposal && activeDocument === "quote" ? 1 : 0);
   const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
@@ -2486,6 +2551,29 @@ export default function UnifiedBusinessDocumentWorkspace({
       return true;
     }
 
+    if (
+      activeDocument === "quote" &&
+      resolution.capability === "DOCUMENT_MUTATION"
+    ) {
+      const proposal = buildQuickQuoteConversationProposal({
+        prompt: instruction,
+        current,
+        revision: true,
+      });
+      if (proposal.recognizedChanges.length) {
+        quoteProposalApplyInFlightRef.current = false;
+        setPendingQuoteProposal({
+          ...proposal,
+          id: `quote-proposal-${Date.now()}`,
+          existingId,
+          baseline: current,
+        });
+        setMessage("");
+        setNotice("Review Meetro’s proposed Quote changes. Nothing has been applied or saved.");
+        return true;
+      }
+    }
+
     let turnId = existingId;
     let nextTurns;
     let conversationTurn;
@@ -2515,6 +2603,89 @@ export default function UnifiedBusinessDocumentWorkspace({
 
     setNotice(conversationTurn.turn.recognized ? "Working draft updated from your instruction." : "Instruction preserved. Use manual edit for any unsupported detail.");
     return true;
+  }
+
+  function dismissQuoteProposal() {
+    quoteProposalApplyInFlightRef.current = false;
+    setPendingQuoteProposal(null);
+    setNotice("Proposal dismissed. The working Quote is unchanged.");
+  }
+
+  function applyQuoteProposal(editedPatch) {
+    if (quoteProposalApplyInFlightRef.current) return;
+    const proposal = pendingQuoteProposal;
+    if (!proposal) return;
+    const current = quote;
+    if (quoteConversationProposalFingerprint(current) !== proposal.baselineFingerprint) {
+      setNotice("This proposal is stale because the working Quote changed. Dismiss it and send the instruction again.");
+      return;
+    }
+    const pricing = quoteCustomerPricingProjection({ ...current, ...editedPatch });
+    if (pricing.deposit.mode !== "NONE" && !pricing.deposit.valid) {
+      setNotice("Review the deposit. Percentages must be 0–100 and a fixed deposit cannot exceed the project total.");
+      return;
+    }
+    quoteProposalApplyInFlightRef.current = true;
+
+    const patch = { ...editedPatch };
+    delete patch.privateReminder;
+    delete patch.photoIntent;
+    const durableKeys = new Set([
+      "customerName", "customerEmail", "customerPhone", "customerAddress",
+      "customerLocation", "projectTitle", "projectDescription",
+      "recommendedSolution", "totalOverride", "terms", "paymentTerms",
+      "estimatedDuration", "notes", "agreement", "lineItems",
+      "materialItems", "laborItems", "pricingDisplayMode",
+      "materialsDisplayMode", "depositMode", "depositPercent",
+      "depositFixedAmount",
+    ]);
+    const durablePatch = Object.fromEntries(
+      Object.entries(patch).filter(([key]) => durableKeys.has(key))
+    );
+    if (patch.depositTerms) {
+      const existingTerms = String(current.terms || "").trim();
+      durablePatch.terms = existingTerms.toLowerCase().includes(patch.depositTerms.toLowerCase())
+        ? existingTerms
+        : [existingTerms, patch.depositTerms].filter(Boolean).join(" · ");
+    }
+    const overrides = { ...manualOverrides.quote, ...durablePatch };
+
+    let turnId = proposal.existingId;
+    let nextTurns;
+    if (turnId) {
+      const previousTurn = turns.find((turn) => turn.id === turnId);
+      const built = buildBusinessDocumentConversationTurn({
+        id: turnId,
+        documentType: "quote",
+        instruction: proposal.instruction,
+        current,
+        previousTurn,
+        resolvedPatch: patch,
+      });
+      nextTurns = turns.map((turn) => turn.id === turnId
+        ? { ...built.turn, recognized: false, responseText: "Quote proposal applied to the unsaved working document. Nothing was saved or sent." }
+        : turn);
+    } else {
+      turnIdRef.current += 1;
+      turnId = `professional-instruction-${Date.now()}-${turnIdRef.current}`;
+      const built = buildBusinessDocumentConversationTurn({
+        id: turnId,
+        documentType: "quote",
+        instruction: proposal.instruction,
+        current,
+        resolvedPatch: patch,
+      });
+      nextTurns = [...turns, {
+        ...built.turn,
+        recognized: false,
+        responseText: "Quote proposal applied to the unsaved working document. Nothing was saved or sent.",
+      }];
+    }
+    setTurns(nextTurns);
+    setManualOverrides((all) => ({ ...all, quote: overrides }));
+    onApplyQuotePatch({ ...patch, ...durablePatch });
+    setPendingQuoteProposal(null);
+    setNotice("Proposed Quote changes applied. The Quote remains unsaved.");
   }
 
   function focusComposer(prefix = "") {
@@ -2635,9 +2806,9 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function deliveryTotal(documentType, content) {
+    if (documentType === "quote") return quoteCustomerPricingProjection(content).total;
     const override = Number(content?.totalOverride);
     if (Number.isFinite(override) && String(content?.totalOverride || "").trim()) return override;
-    if (documentType === "quote") return quoteRows(content).reduce((sum, item) => sum + item.amount, 0);
     return invoiceTotal(content);
   }
 
@@ -2945,7 +3116,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
           {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
-            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
             <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           </div>

@@ -58,6 +58,9 @@ function structuredQuoteFields(value) {
 
 function explicitFinalPrice(text) {
   const match = firstMatch(text, [
+    /\btotal\s+project\s+price\s*(?:is|to|:)?\s*\$?\s*([\d,.]+)/i,
+    /\b(?:make|set|change|update)\s+(?:the\s+)?total\s*(?:is|to|:)?\s*\$?\s*([\d,.]+)/i,
+    /\b(?:quote\s+customer|customer\s+quote)\s+\$?\s*([\d,.]+)\s+total\b/i,
     /(?:^|[.!?;]\s*)(?:(?:set|change|update|revise)\s+(?:the\s+)?)?(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
     /(?:^|[.!?;]\s*)\$\s*([\d,.]+)\s*(?:final|total)/i,
   ]);
@@ -81,6 +84,7 @@ function explicitMaterialAmount(text) {
   const match = firstMatch(text, [
     /(?:use|set|materials?|materiales|matériaux|materiais)\s*(?:(?:are|is|costs?|to|at|de|a)|:)?\s*\$\s*([\d,.]+)/i,
     /(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
+    /(?:materials?|materiales|matériaux|materiais)\s+([\d,.]+)\b(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
     /\$\s*([\d,.]+)\s+(?:for\s+)?(?:materials?|materiales|matériaux|materiais)/i,
   ]);
   return match ? parseAmount(match[1]) : null;
@@ -191,10 +195,13 @@ function normalizeDurationNumberWords(value) {
   const words = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
   return cleanText(value)
     .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (word) => words[word.toLowerCase()])
+    .replace(/^(\d+)\s*-\s*(hours?|hrs?|days?|weeks?)\b/i, "$1 $2")
     .replace(/^a\s+/i, "1 ");
 }
 
 function explicitDuration(text) {
+  const hyphenated = text.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)[- ](hours?|hrs?|days?|weeks?)\s+job\b/i);
+  if (hyphenated) return normalizeDurationNumberWords(`${hyphenated[1]} ${hyphenated[2]}`);
   const match = text.match(/(?:about|around|approximately|duration|takes?|should\s+take|dura(?:ción|ção)?|aproximadamente|environ|durée)?\s*((?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?|horas?|días?|dias?|semaines?|jours?|semanas?))/i);
   return normalizeDurationNumberWords(match?.[1] || "");
 }
@@ -213,8 +220,74 @@ function explicitDeposit(text) {
     /(\d{1,3})\s*%\s*(?:deposit|depósito|acompte|entrada|sinal)/i
   );
   if (!match) return "";
-  const percent = Math.min(Number(match[1]), 100);
-  return Number.isFinite(percent) ? `${percent}% deposit` : "";
+  const percent = Number(match[1]);
+  return Number.isFinite(percent) && percent >= 0 && percent <= 100
+    ? `${percent}% deposit`
+    : "";
+}
+
+function quotePricingInstructionPatch(text) {
+  const patch = {};
+  const percentMatch = text.match(/(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)\s*(?:deposit|down\s+payment)/i);
+  const percent = percentMatch ? Number(percentMatch[1]) : null;
+  if (Number.isFinite(percent) && percent >= 0 && percent <= 100) {
+    patch.depositRequired = "Yes";
+    patch.depositMode = "PERCENT";
+    patch.depositPercent = String(percent);
+    patch.depositFixedAmount = "";
+    patch.depositTerms = `${percent}% deposit`;
+  }
+  const fixedMatch = text.match(/\b(?:fixed\s+)?deposit\s*(?:of|is|:)?\s*\$\s*([\d,.]+)/i);
+  const fixed = fixedMatch ? parseAmount(fixedMatch[1]) : null;
+  if (fixed !== null) {
+    patch.depositRequired = "Yes";
+    patch.depositMode = "FIXED";
+    patch.depositPercent = "";
+    patch.depositFixedAmount = String(fixed);
+    patch.depositAmount = String(fixed);
+    patch.depositTerms = `$${fixed} deposit`;
+  }
+  if (/\b(?:no|without)\s+(?:deposit|down\s+payment)\b/i.test(text)) {
+    patch.depositRequired = "No";
+    patch.depositMode = "NONE";
+    patch.depositPercent = "";
+    patch.depositFixedAmount = "";
+    patch.depositAmount = "";
+    patch.depositTerms = "";
+  }
+
+  if (/\b(?:don['’]t|do\s+not|without)\s+show\s+(?:the\s+)?(?:price\s+)?breakdown\b/i.test(text) ||
+      /\b(?:total|single)\s+(?:project\s+)?price\s+(?:only|presentation)\b/i.test(text)) {
+    patch.pricingDisplayMode = "TOTAL_ONLY";
+  } else if (/\bshow\s+(?:labor|labour)(?:\s+and|\s*\/)?\s+materials?\s+separately\b/i.test(text) ||
+      /\bshow\s+them\s+separately\b/i.test(text) ||
+      /\bshow\s+(?:the\s+)?breakdown\b/i.test(text)) {
+    patch.pricingDisplayMode = "CATEGORY_BREAKDOWN";
+  } else if (/\bshow\s+(?:the\s+)?detailed\s+line\s+items?\b/i.test(text)) {
+    patch.pricingDisplayMode = "DETAILED_LINE_ITEMS";
+  }
+
+  if (/\bcustomer\s+(?:will\s+)?provide(?:s)?\s+(?:the\s+)?materials?\b/i.test(text)) {
+    patch.materialsDisplayMode = "CUSTOMER_PROVIDES";
+  } else if (/\b(?:labor|labour)\s+and\s+(?:standard\s+)?materials?\s+included\b/i.test(text) ||
+      /\binclude\s+materials?\s+in\s+(?:the\s+)?total\b/i.test(text) ||
+      /\b(?:don['’]t|do\s+not)\s+show\s+materials?\s+separately\b/i.test(text)) {
+    patch.materialsDisplayMode = "INCLUDED_IN_TOTAL";
+  } else if (/\bshow\s+(?:the\s+)?materials?\s+separately\b/i.test(text)) {
+    patch.materialsDisplayMode = "SHOW_SEPARATELY";
+  }
+
+  if (patch.pricingDisplayMode === "CATEGORY_BREAKDOWN" &&
+      /\b(?:materials?|them)\b/i.test(text) &&
+      !patch.materialsDisplayMode) {
+    patch.materialsDisplayMode = "SHOW_SEPARATELY";
+  }
+
+  if (patch.pricingDisplayMode === "TOTAL_ONLY" && !patch.materialsDisplayMode &&
+      /\bmaterials?\b/i.test(text)) {
+    patch.materialsDisplayMode = "INCLUDED_IN_TOTAL";
+  }
+  return patch;
 }
 
 function explicitNote(text) {
@@ -410,6 +483,7 @@ export function buildQuickQuoteConversationPatch({
   if (!instruction) return Object.freeze({});
 
   const patch = {};
+  const pricingPatch = quotePricingInstructionPatch(instruction);
   const structuredPrice = Object.hasOwn(structured, "price")
     ? parseAmount(String(structured.price).replace(/^\$\s*/, ""))
     : null;
@@ -534,9 +608,108 @@ export function buildQuickQuoteConversationPatch({
   if (note) patch.notes = note;
   if (condition) patch.terms = condition;
 
+  Object.assign(patch, pricingPatch);
+
   return Object.freeze(patch);
+}
+
+const RECOGNIZED_QUOTE_INSTRUCTION_PATTERNS = Object.freeze([
+  /\b(?:labor|labour|installation)\s*(?:is|are|costs?|to|at|:)?\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?\b/gi,
+  /\bmaterials?\s*(?:are|is|costs?|to|at|:)?\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?\b/gi,
+  /\b(?:make|set|change|update)\s+(?:the\s+)?total\s*(?:is|to|:)?\s*\$?\s*[\d,.]+\b/gi,
+  /\b(?:total\s+project\s+price|project\s+price|quote\s+total|final\s+price|total|price)\s*(?:is|to|:)?\s*\$?\s*[\d,.]+\b/gi,
+  /\b(?:quote\s+customer|customer\s+quote)\s+\$?\s*[\d,.]+\s+total\b/gi,
+  /\b\d{1,3}(?:\.\d+)?\s*(?:%|percent)\s*(?:deposit|down\s+payment)\b/gi,
+  /\b(?:fixed\s+)?deposit\s*(?:of|is|:)?\s*\$\s*[\d,.]+\b/gi,
+  /\b(?:no|without)\s+(?:deposit|down\s+payment)\b/gi,
+  /\b(?:about|around|approximately|duration|takes?|should\s+take)?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)\b/gi,
+  /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[- ](?:hours?|hrs?|days?|weeks?)\s+job\b/gi,
+  /\b(?:don['’]t|do\s+not|without)\s+show\s+(?:the\s+)?(?:price\s+)?breakdown\b/gi,
+  /\b(?:don['’]t|do\s+not)\s+show\s+materials?\s+separately\b/gi,
+  /\bshow\s+(?:(?:labor|labour)(?:\s+and|\s*\/)?\s+materials?|materials?|them|the\s+breakdown)\s+separately\b/gi,
+  /\bshow\s+(?:the\s+)?detailed\s+line\s+items?\b/gi,
+  /\bcustomer\s+(?:will\s+)?provide(?:s)?\s+(?:the\s+)?materials?\b/gi,
+  /\b(?:labor|labour)\s+and\s+(?:standard\s+)?materials?\s+included\b/gi,
+  /\binclude\s+materials?\s+in\s+(?:the\s+)?total\b/gi,
+  /\b(?:scope(?:\s+of\s+work)?\s*(?:is|:)|add\s+.+?\s+to\s+(?:the\s+)?scope|(?:replace|repair|install|rebuild|paint|seal|service|clean)\b[^,.;]*)/gi,
+]);
+
+function quoteProposalChanges(patch, current) {
+  const changes = [];
+  const add = (field, label, value) => changes.push(Object.freeze({ field, label, value }));
+  if (patch.laborItems?.length) {
+    const value = patch.laborItems.reduce((sum, row) => sum + (parseAmount(row.total) || 0), 0);
+    add("laborItems", "Labor", value);
+  }
+  if (patch.materialItems?.length || patch.materialAmount) {
+    const value = patch.materialItems?.length
+      ? patch.materialItems.reduce((sum, row) => sum + (parseAmount(row.total) || 0), 0)
+      : parseAmount(patch.materialAmount);
+    add("materialItems", "Materials", value || 0);
+  }
+  if (Object.hasOwn(patch, "totalOverride")) add("totalOverride", "Customer project price", parseAmount(patch.totalOverride) || 0);
+  if (patch.estimatedDuration) add("estimatedDuration", "Estimated duration", patch.estimatedDuration);
+  if (patch.depositMode === "PERCENT") add("depositPercent", "Deposit", `${patch.depositPercent}%`);
+  if (patch.depositMode === "FIXED") add("depositFixedAmount", "Deposit", `$${patch.depositFixedAmount}`);
+  if (patch.depositMode === "NONE") add("depositMode", "Deposit", "None");
+  if (patch.pricingDisplayMode) add("pricingDisplayMode", "Customer pricing display", patch.pricingDisplayMode);
+  if (patch.materialsDisplayMode) add("materialsDisplayMode", "Materials on customer Quote", patch.materialsDisplayMode);
+  if (["projectDescription", "recommendedSolution"].some((key) => Object.hasOwn(patch, key))) {
+    add("scope", "Scope of Work", patch.recommendedSolution || patch.projectDescription);
+  }
+  if (patch.terms && !patch.depositTerms) add("terms", "Payment / project terms", patch.terms);
+  if (patch.notes) add("notes", "Customer note", patch.notes);
+
+  const projected = quoteCustomerPricingProjection({ ...current, ...patch });
+  if (changes.some((change) => ["laborItems", "materialItems", "totalOverride"].includes(change.field))) {
+    add("calculatedTotal", "Project total", projected.total);
+  }
+  if (patch.depositMode && patch.depositMode !== "NONE" && projected.deposit.valid) {
+    add("depositDue", "Deposit due", projected.deposit.due);
+    add("remainingBalance", "Remaining balance", projected.deposit.remaining);
+  }
+  return Object.freeze(changes);
+}
+
+function unrecognizedQuoteInstructionSegments(instruction) {
+  let residual = String(instruction || "");
+  for (const pattern of RECOGNIZED_QUOTE_INSTRUCTION_PATTERNS) {
+    residual = residual.replace(pattern, " ");
+  }
+  return Object.freeze(residual
+    .split(/[,.;!?]+|\band\b/gi)
+    .map((segment) => cleanText(segment)
+      .replace(/^(?:please|internally|also|then|quote)\b\s*/i, "")
+      .replace(/^(?:is|are|to|at|for|with)\b\s*/i, "")
+      .trim())
+    .filter((segment) => segment && !/^(?:the|a|an|it|this|that)$/i.test(segment)));
+}
+
+export function quoteConversationProposalFingerprint(current = {}) {
+  return JSON.stringify(current);
+}
+
+export function buildQuickQuoteConversationProposal({
+  prompt,
+  current = {},
+  revision = true,
+} = {}) {
+  const instruction = cleanText(prompt);
+  const patch = buildQuickQuoteConversationPatch({ prompt: instruction, current, revision });
+  const recognizedChanges = quoteProposalChanges(patch, current);
+  return Object.freeze({
+    instruction,
+    patch,
+    recognizedChanges,
+    unrecognizedSegments: unrecognizedQuoteInstructionSegments(instruction),
+    baselineFingerprint: quoteConversationProposalFingerprint(current),
+    pricing: quoteCustomerPricingProjection({ ...current, ...patch }),
+  });
 }
 
 export function mergeQuickQuoteConversationPatch(current = {}, patch = {}) {
   return Object.freeze({ ...current, ...patch });
 }
+import {
+  quoteCustomerPricingProjection,
+} from "./quotePricingPresentation.js";

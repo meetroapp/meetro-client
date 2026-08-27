@@ -163,6 +163,10 @@ export function collectCustomerDocumentText(model) {
     model.paidMinor,
     model.balanceMinor,
     model.paymentTerms,
+    model.pricingNote,
+    model.depositLabel,
+    model.depositDueMinor,
+    model.remainingBalanceMinor,
     model.estimatedDuration,
     ...model.conditions,
     ...model.exclusions,
@@ -454,6 +458,14 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     y += 16;
   }
   y += 4;
+
+  section("Pricing", model.pricingNote);
+  if (model.kind === "QUOTE" && model.depositLabel && model.depositDueMinor != null) {
+    section(
+      "Deposit",
+      `${model.depositLabel} — ${formatMoney(model.depositDueMinor, model.currency, model.locale)}${model.remainingBalanceMinor != null ? `\nRemaining balance — ${formatMoney(model.remainingBalanceMinor, model.currency, model.locale)}` : ""}`
+    );
+  }
 
   section(copy.paymentTerms, model.paymentTerms === "DUE_ON_RECEIPT"
     ? copy.dueReceipt

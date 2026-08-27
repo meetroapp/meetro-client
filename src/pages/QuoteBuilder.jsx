@@ -60,6 +60,10 @@ import {
   jobLinkedQuoteHasExistingContent,
 } from "../utils/jobLinkedQuoteContext.js";
 import {
+  quoteCustomerPricingProjection,
+  quoteDepositTerms,
+} from "../utils/quotePricingPresentation.js";
+import {
   extractProfessionalCategoryCostCandidates,
 } from "../utils/quickQuoteProfessionalCategoryCosts.js";
 import {
@@ -825,6 +829,22 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const [depositAmount, setDepositAmount] = useState(
     stringifySavedAmount(selectedQuoteForEdit?.depositAmount || selectedQuoteForEdit?.quoteMetadata?.depositAmount)
   );
+  const [pricingDisplayMode, setPricingDisplayMode] = useState(
+    selectedQuoteForEdit?.pricingDisplayMode || "DETAILED_LINE_ITEMS"
+  );
+  const [materialsDisplayMode, setMaterialsDisplayMode] = useState(
+    selectedQuoteForEdit?.materialsDisplayMode || "SHOW_SEPARATELY"
+  );
+  const [depositMode, setDepositMode] = useState(
+    selectedQuoteForEdit?.depositMode ||
+      (selectedQuoteForEdit?.depositRequired === "Yes" && selectedQuoteForEdit?.depositAmount ? "FIXED" : "NONE")
+  );
+  const [depositPercent, setDepositPercent] = useState(
+    stringifySavedAmount(selectedQuoteForEdit?.depositPercent)
+  );
+  const [depositFixedAmount, setDepositFixedAmount] = useState(
+    stringifySavedAmount(selectedQuoteForEdit?.depositFixedAmount || selectedQuoteForEdit?.depositAmount)
+  );
   const [startDate, setStartDate] = useState(
     selectedQuoteForEdit?.startDate || selectedQuoteForEdit?.quoteMetadata?.startDate || ""
   );
@@ -1542,6 +1562,20 @@ ${businessIdentity.businessName}`;
 
   function buildQuickQuotePdfModel(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
     const pricing = getCurrentPricingPayload();
+    const customerPricing = quoteCustomerPricingProjection({
+      lineItems: pricing.quoteLineItems,
+      materialItems: pricing.materialItems,
+      laborItems: pricing.laborItems,
+      totalOverride,
+      discount: pricing.discountAmount,
+      tax: pricing.taxAmount,
+      fees: pricing.feesAmount,
+      pricingDisplayMode,
+      materialsDisplayMode,
+      depositMode,
+      depositPercent,
+      depositFixedAmount,
+    });
     const businessIdentity = getBusinessIdentityProjection({}, {
       fallbackName: "Meetro Professional",
     });
@@ -1555,45 +1589,22 @@ ${businessIdentity.businessName}`;
       problemFound,
       recommendedSolution,
       scopeSummary: recommendedSolution || projectDescription || problemFound,
-      fixedPrice: Boolean(cleanText(totalOverride)) || pricingMethod === "Flat Fee",
-      lineItems: [
-        ...pricing.quoteLineItems.map((item) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          total: item.total,
-          pricingPresentation:
-            cleanText(item.quantity) && cleanText(item.unitPrice)
-              ? "unit"
-              : "flat",
-        })),
-        ...pricing.materialItems.map((item) => ({
-          description: item.name,
-          quantity: item.quantity,
-          unitPrice: item.cost,
-          total: item.total,
-          pricingPresentation:
-            cleanText(item.quantity) && cleanText(item.cost)
-              ? "unit"
-              : "flat",
-        })),
-        ...pricing.laborItems.map((item) => ({
-          description: item.description,
-          quantity: item.hours,
-          unitPrice: item.rate,
-          total: item.total,
-          pricingPresentation:
-            cleanText(item.hours) && cleanText(item.rate)
-              ? "unit"
-              : "flat",
-        })),
-      ].filter((item) => cleanText(item.description)),
-      subtotal: pricing.subtotal,
+      fixedPrice: customerPricing.pricingDisplayMode === "TOTAL_ONLY" || Boolean(cleanText(totalOverride)) || pricingMethod === "Flat Fee",
+      lineItems: customerPricing.customerRows.map((item) => ({
+        description: item.description,
+        total: item.amount,
+        pricingPresentation: "flat",
+      })),
+      subtotal: customerPricing.pricingDisplayMode === "TOTAL_ONLY" ? undefined : customerPricing.total,
       discount: pricing.discountAmount,
       tax: pricing.taxAmount,
       fees: pricing.feesAmount,
-      total: pricing.totalAmount,
-      paymentTerms: terms,
+      total: customerPricing.total,
+      paymentTerms: [terms, quoteDepositTerms(customerPricing, customerPricing.total)].filter(Boolean).join(" · "),
+      pricingNote: customerPricing.inclusionNote,
+      depositDue: customerPricing.deposit.valid ? customerPricing.deposit.due : null,
+      remainingBalance: customerPricing.deposit.valid ? customerPricing.deposit.remaining : null,
+      depositLabel: customerPricing.deposit.mode === "PERCENT" ? `${customerPricing.deposit.percent}% deposit due on approval` : customerPricing.deposit.mode === "FIXED" ? "Deposit due on approval" : "",
       estimatedDuration: estimatedDuration || timeline,
       notes,
       agreement,
@@ -2892,6 +2903,11 @@ ${businessIdentity.businessName}`;
     if (Object.hasOwn(patch, "quoteDate")) setQuoteDate(patch.quoteDate);
     if (Object.hasOwn(patch, "depositRequired")) setDepositRequired(patch.depositRequired);
     if (Object.hasOwn(patch, "depositAmount")) setDepositAmount(patch.depositAmount);
+    if (Object.hasOwn(patch, "pricingDisplayMode")) setPricingDisplayMode(patch.pricingDisplayMode);
+    if (Object.hasOwn(patch, "materialsDisplayMode")) setMaterialsDisplayMode(patch.materialsDisplayMode);
+    if (Object.hasOwn(patch, "depositMode")) setDepositMode(patch.depositMode);
+    if (Object.hasOwn(patch, "depositPercent")) setDepositPercent(patch.depositPercent);
+    if (Object.hasOwn(patch, "depositFixedAmount")) setDepositFixedAmount(patch.depositFixedAmount);
     if (Object.hasOwn(patch, "discount")) setDiscount(patch.discount);
     if (Object.hasOwn(patch, "tax")) setTax(patch.tax);
     if (Object.hasOwn(patch, "travelFee")) setTravelFee(patch.travelFee);
@@ -2987,6 +3003,16 @@ ${businessIdentity.businessName}`;
     total: calculatedTotal,
     totalOverride,
     terms,
+    pricingDisplayMode,
+    materialsDisplayMode,
+    depositMode,
+    depositPercent,
+    depositFixedAmount,
+    depositRequired,
+    depositAmount,
+    discount,
+    tax,
+    fees: String(feesAmount || ""),
     estimatedDuration,
     notes,
     agreement,

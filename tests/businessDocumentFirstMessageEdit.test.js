@@ -162,7 +162,7 @@ test("professional analysis projection is deduplicated while assistant and syste
 
   const analysisTurn = workspace.slice(
     workspace.indexOf("function AnalysisConversationTurn"),
-    workspace.indexOf("function quoteRows")
+    workspace.indexOf("function invoiceRows")
   );
   assert.doesNotMatch(analysisTurn, />Edit<\/button>|onEdit|revisionHistory/);
 });

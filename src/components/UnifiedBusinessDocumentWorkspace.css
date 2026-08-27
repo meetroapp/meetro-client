@@ -1103,3 +1103,121 @@
   .business-saved-drawer { animation: business-saved-enter 180ms ease-out; }
   @keyframes business-saved-enter { from { transform: translateX(18px); opacity: .65; } to { transform: translateX(0); opacity: 1; } }
 }
+.business-document-pricing-note {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid #d8e7de;
+  border-radius: 10px;
+  background: #f5fbf7;
+  color: #244f35;
+  font-size: 0.9rem;
+}
+
+.business-document-pricing-options {
+  margin-top: 16px;
+  border-top: 1px solid #e3e7e5;
+  padding-top: 12px;
+}
+
+.business-document-pricing-options summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.business-document-pricing-options > div,
+.business-document-proposal-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.business-document-pricing-options label,
+.business-document-proposal-editor label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.business-document-pricing-options select,
+.business-document-pricing-options input,
+.business-document-proposal-editor select,
+.business-document-proposal-editor input,
+.business-document-proposal-editor textarea {
+  width: 100%;
+}
+
+.business-document-proposal {
+  align-self: stretch;
+  margin: 8px 0;
+  padding: 16px;
+  border: 1px solid #b8d6c2;
+  border-radius: 14px;
+  background: #f7fcf8;
+  color: #173c25;
+}
+
+.business-document-proposal > header,
+.business-document-proposal > footer,
+.business-document-proposal-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.business-document-proposal > header div,
+.business-document-proposal-total {
+  display: grid;
+  gap: 2px;
+}
+
+.business-document-proposal blockquote {
+  margin: 12px 0;
+  padding-left: 12px;
+  border-left: 3px solid #6da47d;
+  color: #45614d;
+}
+
+.business-document-proposal dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.business-document-proposal dl div {
+  padding: 10px;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.business-document-proposal dt {
+  font-size: 0.75rem;
+  color: #5c6f62;
+}
+
+.business-document-proposal dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+}
+
+.business-document-proposal aside {
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 9px;
+  background: #fff7e8;
+  color: #714d0b;
+}
+
+.business-document-proposal aside p {
+  margin: 4px 0 0;
+}
+
+.business-document-proposal-total {
+  margin: 12px 0;
+}
+
+.business-document-proposal > footer {
+  justify-content: flex-end;
+}
