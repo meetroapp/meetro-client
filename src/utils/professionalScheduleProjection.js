@@ -4,12 +4,19 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VIEWS = Object.freeze(["active", "history"]);
 const PURPOSES = Object.freeze(["EVALUATION", "APPROVED_WORK"]);
-const VISIT_STATES = Object.freeze(["PROPOSED", "SCHEDULED", "CANCELLED", "COMPLETED"]);
+const VISIT_STATES = Object.freeze([
+  "PROPOSED",
+  "SCHEDULED",
+  "STARTED",
+  "CANCELLED",
+  "COMPLETED",
+]);
 const SEMANTIC_STATES = Object.freeze([
   "READY_TO_SCHEDULE",
   "WAITING_FOR_CUSTOMER",
   "CHANGE_REQUESTED",
   "SCHEDULED",
+  "STARTED",
   "CANCELLED",
   "COMPLETED",
 ]);
@@ -179,6 +186,7 @@ function normalizeVisit(value) {
   const actions = record(source?.actions);
   const cancellationReason = text(source?.cancellationReason, 2000, { nullable: true });
   const cancelledAt = timestamp(source?.cancelledAt, { nullable: true });
+  const startedAt = timestamp(source?.startedAt, { nullable: true });
   const completedAt = timestamp(source?.completedAt, { nullable: true });
   const createdAt = timestamp(source?.createdAt);
   const versionCreatedAt = timestamp(source?.versionCreatedAt);
@@ -206,6 +214,7 @@ function normalizeVisit(value) {
     ) ||
     (source.cancellationReason != null && !cancellationReason) ||
     (source.cancelledAt != null && !cancelledAt) ||
+    (source.startedAt != null && !startedAt) ||
     (source.completedAt != null && !completedAt) ||
     (source.latestCustomerChangeRequest != null && !latestCustomerChangeRequest) ||
     (source.purpose === "EVALUATION" && approvedEvidence) ||
@@ -213,7 +222,7 @@ function normalizeVisit(value) {
       (evaluationId || !approvedDecisionId || approvedEvidence?.decision !== "APPROVED")) ||
     (source.semanticState === "WAITING_FOR_CUSTOMER" && source.state !== "PROPOSED") ||
     (source.semanticState === "CHANGE_REQUESTED" && source.state !== "PROPOSED") ||
-    (["SCHEDULED", "CANCELLED", "COMPLETED"].includes(source.semanticState) &&
+    (["SCHEDULED", "STARTED", "CANCELLED", "COMPLETED"].includes(source.semanticState) &&
       source.semanticState !== source.state)
   ) return null;
   return Object.freeze({
@@ -231,6 +240,7 @@ function normalizeVisit(value) {
     location,
     cancellationReason,
     cancelledAt,
+    startedAt,
     completedAt,
     evaluationId,
     approvedQuoteDecisionEvidence: approvedDecisionId
@@ -245,6 +255,7 @@ function normalizeVisit(value) {
       canConfirm: actions.canConfirm === true,
       canReschedule: actions.canReschedule === true,
       canCancel: actions.canCancel === true,
+      canStart: actions.canStart === true,
       canComplete: actions.canComplete === true,
       canViewJob: actions.canViewJob === true,
     }),
@@ -258,6 +269,7 @@ function normalizeSummary(value) {
     readyToSchedule: integer(source.readyToSchedule),
     waitingOnCustomer: integer(source.waitingOnCustomer),
     changeRequested: integer(source.changeRequested),
+    inProgress: source.inProgress == null ? 0 : integer(source.inProgress),
     upcoming: integer(source.upcoming),
   };
   return Object.values(summary).some((count) => count == null)
@@ -299,7 +311,7 @@ export function normalizeProfessionalSchedule(payload, { view = "active", limit 
     return null;
   }
   if (view === "history" && opportunities.length > 0) return null;
-  if (view === "active" && visits.some((item) => !["PROPOSED", "SCHEDULED"].includes(item.state))) {
+  if (view === "active" && visits.some((item) => !["PROPOSED", "SCHEDULED", "STARTED"].includes(item.state))) {
     return null;
   }
   if (view === "history" && visits.some((item) => !["CANCELLED", "COMPLETED"].includes(item.state))) {
@@ -436,6 +448,9 @@ export function groupProfessionalSchedule(schedule, { now = new Date() } = {}) {
     waitingOnCustomer: Object.freeze(
       schedule.visits.filter((item) => item.semanticState === "WAITING_FOR_CUSTOMER")
     ),
+    inProgress: Object.freeze(
+      schedule.visits.filter((item) => item.semanticState === "STARTED")
+    ),
     today: Object.freeze(today),
     upcoming: Object.freeze(upcoming),
   });
@@ -448,6 +463,7 @@ export function getProfessionalScheduleCounts(schedule, options) {
     needsScheduling: groups.needsScheduling.length,
     waiting: groups.waitingOnCustomer.length,
     changeRequested: groups.changeRequested.length,
+    inProgress: groups.inProgress.length,
     today: groups.today.length,
     upcoming: groups.upcoming.length,
   });

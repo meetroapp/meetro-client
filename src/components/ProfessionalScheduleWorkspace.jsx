@@ -69,6 +69,7 @@ function defaultForm(visit = null) {
     endTime: wallPart(end, timeZone, "time") || "",
     timeZone,
     locationMode: visit?.locationMode || "JOB_SERVICE_LOCATION",
+    reason: "",
   };
 }
 
@@ -147,12 +148,19 @@ function ScheduleCard({
               ? "Customer proposed a new time"
               : item.semanticState === "COMPLETED"
                 ? t("professionalScheduleCompleted", language)
+                : item.semanticState === "STARTED"
+                  ? "In Progress"
                 : item.semanticState === "CANCELLED"
                   ? t("professionalScheduleCancelled", language)
                   : purposeLabel(item, language)}
         </span>
       </div>
       {visit && <p style={styles.scheduleTime}>{formatVisitTime(item, language)}</p>}
+      {visit && item.startedAt && (
+        <p style={styles.scheduleTime}>
+          Started {formatVisitTime({ ...item, scheduledStartAt: item.startedAt, scheduledEndAt: null }, language)}
+        </p>
+      )}
       <p style={styles.location}>{locationText(item, language)}</p>
       {item.latestCustomerChangeRequest?.reason && (
         <p style={styles.changeNote}>{item.latestCustomerChangeRequest.reason}</p>
@@ -186,6 +194,11 @@ function ScheduleCard({
         {visit && item.actions.canCancel && (
           <button type="button" style={styles.secondaryButton} disabled={running} onClick={() => onAction("cancel", item)}>
             {t("professionalScheduleCancel", language)}
+          </button>
+        )}
+        {visit && item.actions.canStart && (
+          <button type="button" style={styles.primaryButton} disabled={running} onClick={() => onAction("start", item)}>
+            Start Visit
           </button>
         )}
         {visit && item.actions.canComplete && (
@@ -391,7 +404,7 @@ export default function ProfessionalScheduleWorkspace({
       locationMode: form.locationMode,
     });
     if (
-      !["cancel", "complete", "confirm"].includes(editor.mode) &&
+      !["cancel", "start", "complete", "confirm"].includes(editor.mode) &&
       !schedule
     ) {
       setError(t("professionalScheduleInvalidTime", language));
@@ -411,9 +424,10 @@ export default function ProfessionalScheduleWorkspace({
           item.purpose === "APPROVED_WORK"
             ? item.approvedQuoteDecisionId || item.approvedQuoteDecisionEvidence?.decisionId
             : null,
-        schedule: ["cancel", "complete", "confirm"].includes(editor.mode)
+        schedule: ["cancel", "start", "complete", "confirm"].includes(editor.mode)
           ? null
           : schedule,
+        reason: editor.mode === "cancel" ? form.reason.trim() || null : null,
         setPage,
       });
       if (item.kind === "visit") {
@@ -437,7 +451,34 @@ export default function ProfessionalScheduleWorkspace({
         },
       }));
     } catch (commandError) {
-      if (commandError?.code === "STALE_VISIT_VERSION") {
+      let resolvedCommandError = commandError;
+      if (
+        editor.mode === "start" &&
+        commandError?.code === "VISIT_START_ACKNOWLEDGMENT_REQUIRED" &&
+        window.confirm(
+          "This start is outside the normal appointment window. Start the Visit now?"
+        )
+      ) {
+        try {
+          await runCanonicalVisitCommand({
+            jobId: item.jobId,
+            command: "start",
+            visit: item,
+            acknowledgeScheduleVariance: true,
+            setPage,
+          });
+          await readActive();
+          setEditor(null);
+          setNotice("Visit started. Evaluation documentation is now available.");
+          window.dispatchEvent(new CustomEvent("meetro-canonical-visit-changed", {
+            detail: { jobId: item.jobId, visitId: item.id, source: "professional-schedule" },
+          }));
+          return;
+        } catch (acknowledgedError) {
+          resolvedCommandError = acknowledgedError;
+        }
+      }
+      if (resolvedCommandError?.code === "STALE_VISIT_VERSION") {
         await readActive().catch(() => {});
         setEditor(null);
         setError(t("professionalScheduleConflict", language));
@@ -482,6 +523,11 @@ export default function ProfessionalScheduleWorkspace({
       items: canonicalGroups.waitingOnCustomer,
     },
     {
+      key: "in-progress",
+      title: "In Progress",
+      items: canonicalGroups.inProgress,
+    },
+    {
       key: "today",
       title: t("today", language),
       items: canonicalGroups.today,
@@ -524,6 +570,7 @@ export default function ProfessionalScheduleWorkspace({
           { key: "ready", icon: "schedule", label: "Visits need scheduling", value: canonicalCounts.needsScheduling },
           { key: "waiting", icon: "history", tone: "warning", label: t("professionalScheduleWaitingCount", language, { count: "" }).trim(), value: canonicalCounts.waiting },
           { key: "change", icon: "warning", tone: "warning", label: t("professionalScheduleChangeCount", language, { count: "" }).trim(), value: canonicalCounts.changeRequested },
+          { key: "in-progress", icon: "schedule", tone: "success", label: "In Progress", value: canonicalCounts.inProgress },
           { key: "today", icon: "schedule", tone: "success", label: t("today", language), value: canonicalCounts.today },
           { key: "upcoming", icon: "completion", tone: "success", label: t("professionalScheduleUpcomingCount", language, { count: "" }).trim(), value: canonicalCounts.upcoming },
         ]}
@@ -612,6 +659,8 @@ export default function ProfessionalScheduleWorkspace({
                     ? "Approve customer’s proposed time?"
                   : editor.mode === "cancel"
                     ? t("professionalScheduleCancel", language)
+                    : editor.mode === "start"
+                      ? "Start Visit"
                     : editor.mode === "complete"
                       ? t("professionalScheduleComplete", language)
                       : t(
@@ -625,7 +674,7 @@ export default function ProfessionalScheduleWorkspace({
                 {t("professionalScheduleCancelEdit", language)}
               </button>
             </div>
-            {!["cancel", "complete", "confirm"].includes(editor.mode) && (
+            {!["cancel", "start", "complete", "confirm"].includes(editor.mode) && (
               <>
                 <p style={styles.editorContext}>
                   {editor.item.customer.displayName} · {editor.item.job.title}
@@ -670,11 +719,30 @@ export default function ProfessionalScheduleWorkspace({
                 Confirm version {editor.item.currentVersion} for {formatVisitTime(editor.item, language)}. Only this exact canonical Visit version will be scheduled.
               </p>
             )}
+            {editor.mode === "cancel" && (
+              <label style={styles.label}>
+                {editor.item.state === "STARTED"
+                  ? "Why are you stopping this Visit?"
+                  : "Cancellation reason (optional)"}
+                <textarea
+                  style={styles.input}
+                  value={form.reason}
+                  required={editor.item.state === "STARTED"}
+                  maxLength={2000}
+                  onChange={(event) => setForm((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }))}
+                />
+              </label>
+            )}
             <button type="submit" style={styles.primaryButton} disabled={running}>
               {running ? t("professionalScheduleSaving", language) : editor.mode === "cancel"
                 ? t("professionalScheduleCancel", language)
                 : editor.mode === "confirm"
                   ? "Approve New Time"
+                : editor.mode === "start"
+                  ? "Start Visit"
                 : editor.mode === "complete"
                   ? t("professionalScheduleComplete", language)
                 : t("professionalScheduleSave", language)}

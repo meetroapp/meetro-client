@@ -7,6 +7,7 @@ const VISIT_PURPOSES = Object.freeze(["EVALUATION", "APPROVED_WORK"]);
 const VISIT_STATES = Object.freeze([
   "PROPOSED",
   "SCHEDULED",
+  "STARTED",
   "CANCELLED",
   "COMPLETED",
 ]);
@@ -21,11 +22,13 @@ const VISIT_EVENT_TYPES = Object.freeze([
   "VISIT_CHANGE_REQUESTED",
   "VISIT_RESCHEDULED",
   "VISIT_CANCELLED",
+  "VISIT_STARTED",
   "VISIT_COMPLETED",
 ]);
 const PROFESSIONAL_ACTIONS = Object.freeze([
   "canReschedule",
   "canCancel",
+  "canStart",
   "canComplete",
 ]);
 const CUSTOMER_CAPABILITIES = Object.freeze([
@@ -38,6 +41,7 @@ const PROFESSIONAL_CAPABILITIES = Object.freeze([
   "visit.propose",
   "visit.reschedule",
   "visit.cancel",
+  "visit.start",
   "visit.complete",
 ]);
 const AUTHORITY_SOURCES = Object.freeze({
@@ -134,7 +138,7 @@ function normalizeVisitActions(value) {
   const keys = [
     "canConfirm",
     "canRequestChange",
-    ...PROFESSIONAL_ACTIONS,
+    ...PROFESSIONAL_ACTIONS.filter((key) => key !== "canStart"),
   ];
   if (keys.some((key) => typeof value[key] !== "boolean")) return null;
   return Object.freeze({
@@ -142,6 +146,7 @@ function normalizeVisitActions(value) {
     canRequestChange: value.canRequestChange === true,
     canReschedule: value.canReschedule === true,
     canCancel: value.canCancel === true,
+    canStart: value.canStart === true,
     canComplete: value.canComplete === true,
   });
 }
@@ -158,6 +163,7 @@ function normalizeVisitVersion(value) {
     nullable: true,
   });
   const cancelledAt = canonicalTimestamp(value.cancelledAt, { nullable: true });
+  const startedAt = canonicalTimestamp(value.startedAt, { nullable: true });
   const completedAt = canonicalTimestamp(value.completedAt, { nullable: true });
   const recordedByParticipantId = canonicalUuid(value.recordedByParticipantId);
   const createdAt = canonicalTimestamp(value.createdAt);
@@ -171,6 +177,7 @@ function normalizeVisitVersion(value) {
     !VISIT_LOCATION_MODES.includes(value.locationMode) ||
     (value.cancellationReason != null && !cancellationReason) ||
     (value.cancelledAt != null && !cancelledAt) ||
+    (value.startedAt != null && !startedAt) ||
     (value.completedAt != null && !completedAt) ||
     !recordedByParticipantId ||
     !createdAt
@@ -185,6 +192,7 @@ function normalizeVisitVersion(value) {
     timeZone,
     locationMode: value.locationMode,
     cancellationReason,
+    startedAt,
     cancelledAt,
     completedAt,
     createdAt,
@@ -255,6 +263,7 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     nullable: true,
   });
   const cancelledAt = canonicalTimestamp(value.cancelledAt, { nullable: true });
+  const startedAt = canonicalTimestamp(value.startedAt, { nullable: true });
   const completedAt = canonicalTimestamp(value.completedAt, { nullable: true });
   const evaluationId = canonicalUuid(value.evaluationId, { nullable: true });
   const createdAt = canonicalTimestamp(value.createdAt);
@@ -284,6 +293,7 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     !VISIT_LOCATION_MODES.includes(value.locationMode) ||
     (value.cancellationReason != null && !cancellationReason) ||
     (value.cancelledAt != null && !cancelledAt) ||
+    (value.startedAt != null && !startedAt) ||
     (value.completedAt != null && !completedAt) ||
     (value.evaluationId != null && !evaluationId) ||
     !workstreamIds ||
@@ -316,6 +326,7 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     timeZone,
     locationMode: value.locationMode,
     cancellationReason,
+    startedAt,
     cancelledAt,
     completedAt,
     evaluationId,
@@ -376,8 +387,12 @@ export function normalizeCanonicalVisitAuthority(
       ? null
       : positiveInteger(value.issuedQuoteVersion);
   const hasCompleteCapabilities =
-    customerCapabilities?.length === CUSTOMER_CAPABILITIES.length &&
-    professionalCapabilities?.length === PROFESSIONAL_CAPABILITIES.length;
+    CUSTOMER_CAPABILITIES.every((capability) =>
+      customerCapabilities?.includes(capability)
+    ) &&
+    PROFESSIONAL_CAPABILITIES
+      .filter((capability) => capability !== "visit.start")
+      .every((capability) => professionalCapabilities?.includes(capability));
   if (
     value.authoritySource !== AUTHORITY_SOURCES[purpose] ||
     normalizedJobId !== expectedJobId ||
@@ -632,6 +647,7 @@ export async function runCanonicalVisitCommand({
   approvedQuoteDecisionId = null,
   schedule = null,
   reason = null,
+  acknowledgeScheduleVariance = false,
   setPage,
   authFetchImpl = authFetch,
   cryptoProvider = globalThis.crypto,
@@ -669,6 +685,9 @@ export async function runCanonicalVisitCommand({
       Object.assign(body, normalizedSchedule, { reason: normalizedReason });
     }
     if (command === "cancel") body.reason = normalizedReason;
+    if (command === "start") {
+      body.acknowledgeScheduleVariance = acknowledgeScheduleVariance === true;
+    }
   }
   const allowed = [
     "propose",
@@ -676,6 +695,7 @@ export async function runCanonicalVisitCommand({
     "change-request",
     "reschedule",
     "cancel",
+    "start",
     "complete",
   ];
   if (
@@ -688,7 +708,8 @@ export async function runCanonicalVisitCommand({
         (purpose === "APPROVED_WORK" &&
           !canonicalUuid(approvedQuoteDecisionId)))) ||
     (["reschedule", "change-request"].includes(command) && !normalizedSchedule) ||
-    (reason != null && !normalizedReason)
+    (reason != null && !normalizedReason) ||
+    typeof acknowledgeScheduleVariance !== "boolean"
   ) {
     throw new CanonicalVisitError({
       status: 400,

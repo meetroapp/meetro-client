@@ -155,6 +155,7 @@ export default function CanonicalJobEvaluation({
   const [evaluationVisitState, setEvaluationVisitState] = useState({
     status: "loading",
     completedVisitId: "",
+    startedVisitId: "",
     activeState: "",
   });
   const [editing, setEditing] = useState(false);
@@ -278,7 +279,7 @@ export default function CanonicalJobEvaluation({
   useEffect(() => {
     let active = true;
     if (!environmentEnabled || !jobId) {
-      setEvaluationVisitState({ status: "unavailable", completedVisitId: "", activeState: "" });
+      setEvaluationVisitState({ status: "unavailable", completedVisitId: "", startedVisitId: "", activeState: "" });
       return () => { active = false; };
     }
     setEvaluationVisitState((current) => ({ ...current, status: "loading" }));
@@ -293,21 +294,23 @@ export default function CanonicalJobEvaluation({
         setEvaluationVisitState({
           status: "ready",
           completedVisitId: completed?.id || "",
+          startedVisitId: current?.state === "STARTED" ? current.id : "",
           activeState: current?.state || "",
         });
       })
       .catch(() => {
-        if (active) setEvaluationVisitState({ status: "error", completedVisitId: "", activeState: "" });
+        if (active) setEvaluationVisitState({ status: "error", completedVisitId: "", startedVisitId: "", activeState: "" });
       });
     return () => { active = false; };
   }, [environmentEnabled, jobId, refresh, setPage]);
 
   const evaluation = loadState.evaluation;
   const actionCodes = new Set(availableActions.map((action) => String(action?.code || "")));
-  const canStart =
-    actionCodes.has("START_EVALUATION") &&
-    Boolean(evaluationVisitState.completedVisitId);
-  const canEdit = actionCodes.has("EDIT_EVALUATION") && evaluation?.evaluation?.capabilities?.canEditDraft === true;
+  const visitAllowsDocumentation = Boolean(
+    evaluationVisitState.startedVisitId || evaluationVisitState.completedVisitId
+  );
+  const canStart = actionCodes.has("START_EVALUATION") && visitAllowsDocumentation;
+  const canEdit = visitAllowsDocumentation && actionCodes.has("EDIT_EVALUATION") && evaluation?.evaluation?.capabilities?.canEditDraft === true;
   const canComplete = actionCodes.has("COMPLETE_EVALUATION") && evaluation?.evaluation?.capabilities?.canComplete === true;
   const editingAllowed = evaluation ? canEdit : canStart;
   const workflowCopy = getAskMeetroWorkflowCopy(language);
@@ -555,6 +558,14 @@ export default function CanonicalJobEvaluation({
     setEditing(true);
   }
 
+  function prepareQuoteDirectly() {
+    if (typeof onPrepareQuote !== "function") return;
+    const confirmed = window.confirm(
+      "Evaluation not completed. This Quote is being prepared from professional-entered information. Continue to Quote? Select Cancel to return to Evaluation."
+    );
+    if (confirmed) onPrepareQuote();
+  }
+
   async function requestEvaluationHelp(action, prompt) {
     const intents = {
       describe: "DESCRIBE_CONDITION",
@@ -754,20 +765,36 @@ export default function CanonicalJobEvaluation({
   }
 
   async function prepareAssistantFinding(item) {
+    if (!evaluation) {
+      if (!await reviewAssistantItem(item, "ACCEPTED")) return;
+      setForm((current) => ({
+        ...current,
+        observations: [current.observations, item.text].filter(Boolean).join("\n"),
+      }));
+      setEditing(true);
+      setAssistant((current) => ({ ...current, notice: "Added to What did you find?" }));
+      return;
+    }
     setAssistantFindingDraft(item);
   }
 
   async function prepareAssistantRecommendation(item) {
+    if (!evaluation) {
+      if (!await reviewAssistantItem(item, "ACCEPTED")) return;
+      setForm((current) => ({
+        ...current,
+        diagnosisSummary: [current.diagnosisSummary, item.text].filter(Boolean).join("\n"),
+      }));
+      setEditing(true);
+      setAssistant((current) => ({ ...current, notice: "Added to What do you recommend?" }));
+      return;
+    }
     setAssistantRecommendationDraft(item);
   }
 
   async function saveEvaluation() {
     if (!editingAllowed) {
       setLoadState((current) => ({ ...current, error: copy.updateUnavailable }));
-      return;
-    }
-    if (!form.observations.trim()) {
-      setLoadState((current) => ({ ...current, error: copy.observationsRequired }));
       return;
     }
     setLoadState((current) => ({ ...current, status: "saving", error: "", notice: "" }));
@@ -787,6 +814,10 @@ export default function CanonicalJobEvaluation({
         record: canonicalRecord({ jobId, requestId, relationshipId }),
         form,
         currentEvaluation: evaluation,
+        evaluationVisitId:
+          evaluationVisitState.completedVisitId ||
+          evaluationVisitState.startedVisitId ||
+          null,
         setPage,
       });
       setLoadState({ status: "ready", evaluation: confirmed, error: "", notice: copy.evaluationSaved });
@@ -808,6 +839,7 @@ export default function CanonicalJobEvaluation({
         record: canonicalRecord({ jobId, requestId, relationshipId }),
         form: formForEvaluation(evaluation),
         currentEvaluation: evaluation,
+        evaluationVisitId: evaluationVisitState.completedVisitId || null,
         setPage,
       });
       setLoadState({ status: "ready", evaluation: completed, error: "", notice: copy.evaluationCompleted });
@@ -827,7 +859,15 @@ export default function CanonicalJobEvaluation({
       : loadState.status === "completing"
         ? copy.completing
         : evaluation
-          ? evaluation.evaluation.status === "completed" ? copy.completed : copy.draft
+          ? evaluation.evaluation.status === "completed"
+            ? copy.completed
+            : evaluationVisitState.completedVisitId
+              ? "Visit completed — Finalize Evaluation"
+              : evaluationVisitState.activeState === "STARTED"
+                ? "Evaluation Visit In Progress"
+              : evaluationVisitState.activeState === "SCHEDULED"
+                ? "Evaluation Draft — Visit Scheduled"
+                : "Evaluation Draft"
           : copy.noEvaluation;
 
   return (
@@ -848,7 +888,16 @@ export default function CanonicalJobEvaluation({
         {loadState.status === "loading" && <p role="status" style={styles.message}>{copy.loadingEvaluation}</p>}
         {loadState.error && <p role="alert" style={styles.error}>{loadState.error}</p>}
         {loadState.notice && <p role="status" style={styles.success}>{loadState.notice}</p>}
-        {environmentEnabled && jobId && (
+        {typeof onPrepareQuote === "function" && !evaluationVisitState.completedVisitId && (
+          <div style={styles.directQuoteNotice}>
+            <strong>Need to prepare a Quote without a completed Evaluation?</strong>
+            <span>Meetro will warn you and keep the Quote as an explicit working draft.</span>
+            <button type="button" style={styles.secondaryButton} onClick={prepareQuoteDirectly}>
+              Prepare Quote Directly
+            </button>
+          </div>
+        )}
+        {environmentEnabled && jobId && visitAllowsDocumentation && (
           <ContextualAskMeetro
             language={language}
             contextLabel="evaluation"
@@ -869,7 +918,7 @@ export default function CanonicalJobEvaluation({
                 onEditEvaluation={() => void addEvaluationDraft({ edit: true })}
                 onAddFinding={(item) => void prepareAssistantFinding(item)}
                 onAddRecommendation={(item) => void prepareAssistantRecommendation(item)}
-                onDismiss={(item) => void reviewAssistantItem(item, "REJECTED")}
+                onDismiss={(item) => reviewAssistantItem(item, "REJECTED")}
               />
             )}
           </ContextualAskMeetro>
@@ -883,16 +932,27 @@ export default function CanonicalJobEvaluation({
           <div style={styles.emptyState}>
             <p style={styles.message}>
               {evaluationVisitState.completedVisitId
-                ? "Evaluation Visit completed. Document the Evaluation from this Visit."
+                ? "Evaluation Visit completed. Start or continue the Evaluation and finalize it when ready."
+                : evaluationVisitState.activeState === "STARTED"
+                  ? "Evaluation Visit in progress. Document the assessment as you work."
                 : evaluationVisitState.activeState === "SCHEDULED"
-                  ? "Evaluation visit scheduled. Complete the Visit before documenting the assessment."
-                  : "Complete the evaluation visit before documenting the assessment."}
+                  ? "Start the Evaluation Visit when you arrive to begin documenting the assessment."
+                  : "Schedule and start an Evaluation Visit before documenting the onsite assessment."}
             </p>
-            {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>{copy.startEvaluation}</button>}
+            {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>Fill manually</button>}
           </div>
         )}
         {evaluation && !editing && (
           <div style={styles.readView}>
+            {evaluation.evaluation.status === "draft" && (
+              <p style={styles.message}>
+                {evaluationVisitState.completedVisitId
+                  ? "The Evaluation Visit is complete. Review your findings and finalize the assessment when ready."
+                  : evaluationVisitState.activeState === "STARTED"
+                    ? "Document the assessment now. Finalize it only after the Visit is completed."
+                    : "Evaluation documentation is unavailable until the scheduled Visit starts."}
+              </p>
+            )}
             <div style={styles.readField}>
               <span style={styles.fieldLabel}>{copy.observations}</span>
               <p style={styles.readText}>{evaluation.evaluation.content.observations || copy.noneRecorded}</p>
@@ -927,10 +987,8 @@ export default function CanonicalJobEvaluation({
         {editing && editingAllowed && (
           <div style={styles.form}>
             {[
-              ["observations", copy.observations, true],
-              ["diagnosisSummary", copy.assessmentSummary, false],
-              ["limitations", copy.limitations, false],
-              ["internalNotes", copy.internalNotes, false],
+              ["observations", "What did you find?", true],
+              ["diagnosisSummary", "What do you recommend?", false],
             ].map(([field, label, required]) => (
               <label key={field} style={styles.label}>
                 {label}
@@ -943,6 +1001,23 @@ export default function CanonicalJobEvaluation({
                 />
               </label>
             ))}
+            <details style={styles.advancedFields}>
+              <summary style={styles.advancedSummary}>More evaluation details</summary>
+              {[
+                ["limitations", copy.limitations],
+                ["internalNotes", copy.internalNotes],
+              ].map(([field, label]) => (
+                <label key={field} style={styles.label}>
+                  {label}
+                  <textarea
+                    style={styles.textarea}
+                    value={form[field]}
+                    maxLength={5000}
+                    onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
+                  />
+                </label>
+              ))}
+            </details>
             <div style={styles.actions}>
               <button type="button" style={styles.primaryButton} disabled={loadState.status === "saving"} onClick={() => void saveEvaluation()}>
                 {loadState.status === "saving" ? copy.saving : copy.saveEvaluation}
@@ -1013,6 +1088,11 @@ function EvaluationAssistantResult({
   onDismiss,
 }) {
   const copy = getAskMeetroWorkflowCopy(language);
+  const [dismissedIds, setDismissedIds] = useState([]);
+  async function dismiss(item) {
+    if (!item?.id || !await onDismiss(item)) return;
+    setDismissedIds((current) => [...new Set([...current, item.id])]);
+  }
   const groups = [
     [copy.observed, result.observed],
     [copy.professionalInput, result.professionalInput],
@@ -1035,23 +1115,25 @@ function EvaluationAssistantResult({
             <button type="button" style={styles.secondaryButton} onClick={onEditEvaluation}>{copy.edit}</button>
           </>
         )}
-        <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(result.evaluationDraft)}>{copy.dismiss}</button>
+        {!dismissedIds.includes(result.evaluationDraft?.id) && (
+          <button type="button" style={styles.secondaryButton} onClick={() => void dismiss(result.evaluationDraft)}>{copy.dismiss}</button>
+        )}
       </div>
-      {result.findingDrafts.map((item) => (
+      {result.findingDrafts.filter((item) => !dismissedIds.includes(item.id)).map((item) => (
         <article key={item.id} style={styles.assistantDraft}>
           <p style={styles.message}>{item.text}</p>
           <div style={styles.actions}>
-            <button type="button" style={styles.secondaryButton} onClick={() => onAddFinding(item)}>{copy.addFinding}</button>
-            <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(item)}>{copy.dismiss}</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => onAddFinding(item)}>Add to Evaluation</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => void dismiss(item)}>{copy.dismiss}</button>
           </div>
         </article>
       ))}
-      {result.recommendationDrafts.map((item) => (
+      {result.recommendationDrafts.filter((item) => !dismissedIds.includes(item.id)).map((item) => (
         <article key={item.id} style={styles.assistantDraft}>
           <p style={styles.message}>{item.text}</p>
           <div style={styles.actions}>
-            <button type="button" style={styles.secondaryButton} onClick={() => onAddRecommendation(item)}>{copy.addRecommendation}</button>
-            <button type="button" style={styles.secondaryButton} onClick={() => onDismiss(item)}>{copy.dismiss}</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => onAddRecommendation(item)}>Add to Evaluation</button>
+            <button type="button" style={styles.secondaryButton} onClick={() => void dismiss(item)}>{copy.dismiss}</button>
           </div>
         </article>
       ))}
@@ -1073,11 +1155,14 @@ const styles = {
   message: { margin: 0, color: "#475569", lineHeight: 1.5 },
   error: { margin: 0, padding: 10, borderLeft: "3px solid #b91c1c", color: "#991b1b", background: "#fef2f2" },
   success: { margin: 0, padding: 10, borderLeft: "3px solid #15803d", color: "#166534", background: "#f0fdf4" },
+  directQuoteNotice: { display: "grid", gap: 8, justifyItems: "start", padding: 12, border: "1px solid #d6b45b", borderRadius: 8, background: "#fffbeb", color: "#6b4f11" },
   emptyState: { display: "grid", gap: 12, justifyItems: "start" },
   readView: { display: "grid", gap: 14 },
   readField: { display: "grid", gap: 5 },
   readText: { margin: 0, lineHeight: 1.5, overflowWrap: "anywhere" },
   form: { display: "grid", gap: 14 },
+  advancedFields: { display: "grid", gap: 12, padding: 12, border: "1px solid #d7e0d8", borderRadius: 8 },
+  advancedSummary: { color: "#334155", fontWeight: 800, cursor: "pointer" },
   label: { display: "grid", gap: 6, color: "#334155", fontWeight: 700 },
   textarea: { width: "100%", minHeight: 96, boxSizing: "border-box", resize: "vertical", padding: 10, border: "1px solid #94a3b8", borderRadius: 6, color: "#0f172a", background: "#ffffff", font: "inherit", lineHeight: 1.45 },
   actions: { display: "flex", gap: 10, flexWrap: "wrap" },

@@ -34,6 +34,7 @@ const professionalCapabilities = [
   "visit.propose",
   "visit.reschedule",
   "visit.cancel",
+  "visit.start",
   "visit.complete",
 ];
 const customerCapabilities = [
@@ -93,6 +94,7 @@ function visit(overrides = {}) {
     locationMode: "JOB_SERVICE_LOCATION",
     cancellationReason: null,
     cancelledAt: null,
+    startedAt: null,
     completedAt: null,
     evaluationId: ids.evaluation,
     workstreamIds: [],
@@ -106,6 +108,7 @@ function visit(overrides = {}) {
       canRequestChange: false,
       canReschedule: false,
       canCancel: true,
+      canStart: false,
       canComplete: false,
     },
     sentinelDatabaseField: "must-not-project",
@@ -125,6 +128,7 @@ function history(currentVisit = visit()) {
         locationMode: currentVisit.locationMode,
         cancellationReason: currentVisit.cancellationReason,
         cancelledAt: currentVisit.cancelledAt,
+        startedAt: currentVisit.startedAt,
         completedAt: currentVisit.completedAt,
         recordedByParticipantId: ids.professional,
         createdAt,
@@ -263,6 +267,7 @@ test("Visit DTO is allowlisted and drops actor identity and sentinel fields", ()
     canRequestChange: false,
     canReschedule: false,
     canCancel: true,
+    canStart: false,
     canComplete: false,
   });
 });
@@ -279,7 +284,7 @@ test("canonical Visit DTO and immutable history preserve a nullable end time", (
 });
 
 test("Visit lifecycle vocabulary remains bounded and RESCHEDULED is rejected", () => {
-  for (const state of ["PROPOSED", "SCHEDULED", "CANCELLED", "COMPLETED"]) {
+  for (const state of ["PROPOSED", "SCHEDULED", "STARTED", "CANCELLED", "COMPLETED"]) {
     assert.ok(normalizeCanonicalVisit(visit({ state }), { jobId: ids.job }));
   }
   assert.equal(
@@ -499,6 +504,55 @@ test("version commands send exact current version and never silently retry", asy
       error.code === "STALE_VISIT_VERSION"
   );
   assert.equal(calls, 1);
+});
+
+test("Visit Start sends only expected version and explicit schedule-variance acknowledgment", async () => {
+  const calls = [];
+  const current = visit({
+    state: "SCHEDULED",
+    actions: {
+      canConfirm: false,
+      canRequestChange: false,
+      canReschedule: true,
+      canCancel: true,
+      canStart: true,
+      canComplete: false,
+    },
+  });
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "start",
+    visit: current,
+    acknowledgeScheduleVariance: true,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          visit: visit({
+            state: "STARTED",
+            currentVersion: 2,
+            startedAt: "2026-08-14T13:55:00.000Z",
+            actions: {
+              canConfirm: false,
+              canRequestChange: false,
+              canReschedule: false,
+              canCancel: true,
+              canStart: false,
+              canComplete: true,
+            },
+          }),
+        },
+      };
+    },
+    cryptoProvider: cryptoProvider(),
+  });
+  assert.equal(calls[0].endpoint, `/jobs/${ids.job}/visits/${ids.visit}/start`);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    expectedVersion: 1,
+    acknowledgeScheduleVariance: true,
+  });
 });
 
 test("mutual confirmation and customer alternate-time commands target one exact Visit version", async () => {

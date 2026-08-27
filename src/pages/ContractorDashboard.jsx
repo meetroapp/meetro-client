@@ -7042,6 +7042,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         readyToSchedule: canonicalScheduleCounts.needsScheduling,
         waitingOnCustomer: canonicalScheduleCounts.waiting,
         changeRequested: canonicalScheduleCounts.changeRequested,
+        inProgress: canonicalScheduleCounts.inProgress,
         today: canonicalScheduleCounts.today,
         upcoming: canonicalScheduleCounts.upcoming,
       }
@@ -10224,8 +10225,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
           ? translate("workCenterViewSchedule", activeLanguage)
           : translate("professionalScheduleRetry", activeLanguage),
       primaryAction: translate("workCenterViewSchedule", activeLanguage),
-      badge: `${serverScheduleSummary?.readyToSchedule ?? 0} visits need scheduling`,
-      isPriority: (serverScheduleSummary?.changeRequested ?? 0) > 0,
+      badge: (serverScheduleSummary?.inProgress ?? 0) > 0
+        ? `${serverScheduleSummary.inProgress} visit in progress`
+        : `${serverScheduleSummary?.readyToSchedule ?? 0} visits need scheduling`,
+      isPriority:
+        (serverScheduleSummary?.changeRequested ?? 0) > 0 ||
+        (serverScheduleSummary?.inProgress ?? 0) > 0,
       tone: "#eff6ff",
       accent: "#2563eb",
     },

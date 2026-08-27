@@ -68,11 +68,14 @@ test("dashboard remains reminder-only and does not acquire Visit mutation author
   assert.match(dashboard, /visits need scheduling/);
 });
 
-test("Visit completion unlocks Evaluation provenance without creating downstream lifecycle state", () => {
-  assert.match(evaluation, /Complete the evaluation visit before documenting the assessment/);
-  assert.match(evaluation, /Evaluation Visit completed\. Document the Evaluation from this Visit/);
-  assert.match(evaluationController, /visit\.state === "COMPLETED"/);
-  assert.match(evaluationController, /visitId: completedVisit\.id/);
+test("onsite Evaluation documentation begins at STARTED while finalization remains provenance-gated", () => {
+  assert.match(evaluation, /Start the Evaluation Visit when you arrive/);
+  assert.match(evaluation, /Evaluation Visit in progress/);
+  assert.match(evaluation, /evaluationVisitState\.startedVisitId/);
+  assert.match(evaluation, /actionCodes\.has\("START_EVALUATION"\)/);
+  assert.match(evaluation, /visitAllowsDocumentation/);
+  assert.doesNotMatch(evaluationController, /fetchCanonicalVisits/);
+  assert.match(evaluationController, /visitId: evaluationVisitId \|\| null/);
   assert.match(evaluationApi, /JSON\.stringify\(\{ visitId, content, expectedVersion: 0 \}\)/);
   assert.doesNotMatch(visitCard, /createQuote|issueQuote|payment|invoice|workstream/i);
   assert.doesNotMatch(evaluationController, /\/quotes|\/payments|\/invoices|\/workstreams/);

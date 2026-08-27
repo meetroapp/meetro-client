@@ -15,7 +15,7 @@ const COPY = Object.freeze({
     evaluationUnavailable: "Evaluation is temporarily unavailable.",
     retry: "Retry",
     noEvaluationBody: "Start with what you observed during the visit.",
-    startEvaluation: "Start Evaluation",
+    startEvaluation: "Open Evaluation",
     observations: "Professional observations",
     noneRecorded: "None recorded.",
     assessmentSummary: "Assessment summary",

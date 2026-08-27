@@ -378,7 +378,8 @@ function BusinessDashboard({ setPage }) {
   const canonicalScheduleAttentionCount = canonicalScheduleCounts
     ? canonicalScheduleCounts.needsScheduling +
       canonicalScheduleCounts.waiting +
-      canonicalScheduleCounts.changeRequested
+      canonicalScheduleCounts.changeRequested +
+      canonicalScheduleCounts.inProgress
     : 0;
 
   function openWorkCenterSection(section, options = {}) {
@@ -750,6 +751,12 @@ function BusinessDashboard({ setPage }) {
       ? {
           label: "Review customer’s new time",
           note: "Customer proposed a new time",
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.inProgress || 0) > 0
+      ? {
+          label: "Continue Evaluation Visit",
+          note: `${canonicalScheduleCounts.inProgress} visit in progress`,
           onClick: () => openWorkCenterSection("schedule"),
         }
       : (canonicalScheduleCounts?.needsScheduling || 0) > 0
@@ -1173,6 +1180,8 @@ function BusinessDashboard({ setPage }) {
                     canonicalScheduleAttentionCount > 0
                       ? (canonicalScheduleCounts?.changeRequested || 0) > 0
                         ? "Customer proposed a new time"
+                        : (canonicalScheduleCounts?.inProgress || 0) > 0
+                          ? `${canonicalScheduleCounts.inProgress} visit in progress`
                         : (canonicalScheduleCounts?.needsScheduling || 0) > 0
                           ? `${canonicalScheduleCounts.needsScheduling} visits need scheduling`
                           : `${canonicalScheduleCounts?.waiting || 0} visit waiting for customer`

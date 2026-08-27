@@ -12,6 +12,7 @@ import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanoni
 const STATE_LABELS = Object.freeze({
   PROPOSED: "Pending customer confirmation",
   SCHEDULED: "Scheduled",
+  STARTED: "In Progress",
   CANCELLED: "Cancelled",
   COMPLETED: "Visit completed",
 });
@@ -29,6 +30,7 @@ const EVENT_LABELS = Object.freeze({
   VISIT_CHANGE_REQUESTED: "Customer requested a schedule change",
   VISIT_RESCHEDULED: "Visit rescheduled",
   VISIT_CANCELLED: "Visit cancelled",
+  VISIT_STARTED: "Visit started",
   VISIT_COMPLETED: "Visit occurred",
 });
 
@@ -352,6 +354,41 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     }
   }
 
+  async function startVisit(subject, visit, acknowledgeScheduleVariance = false) {
+    const key = `${subjectKey(subject)}:start:${visit.id}`;
+    setRunningKey(key);
+    setNotice("");
+    setCommandError("");
+    try {
+      await runCanonicalVisitCommand({
+        jobId,
+        command: "start",
+        visit,
+        acknowledgeScheduleVariance,
+        setPage,
+      });
+      setNotice("Visit started. Evaluation documentation is now available.");
+      reload();
+      notifyCanonicalVisitChanged(jobId, visit.id);
+    } catch (error) {
+      if (
+        error?.code === "VISIT_START_ACKNOWLEDGMENT_REQUIRED" &&
+        !acknowledgeScheduleVariance &&
+        window.confirm(
+          "This start is outside the normal appointment window. Start the Visit now?"
+        )
+      ) {
+        setRunningKey("");
+        await startVisit(subject, visit, true);
+        return;
+      }
+      if (error?.code === "STALE_VISIT_VERSION") reload();
+      setCommandError(getCanonicalVisitErrorMessage(error));
+    } finally {
+      setRunningKey("");
+    }
+  }
+
   async function confirmVisit(subject, visit) {
     const key = `${subjectKey(subject)}:confirm:${visit.id}`;
     setRunningKey(key);
@@ -516,6 +553,11 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                               ? "Remote Visit"
                               : "Job service location"}
                           </span>
+                          {visit.startedAt && (
+                            <span style={styles.location}>
+                              Started {formatVisitInstant(visit.startedAt, visit.timeZone)}
+                            </span>
+                          )}
 
                           {visit.state === "PROPOSED" && (
                             <p style={styles.pendingNotice}>
@@ -571,6 +613,18 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                                 onClick={() => openEditor(subject, "cancel", visit)}
                               >
                                 Cancel Visit
+                              </button>
+                            )}
+                            {visit.actions.canStart === true && (
+                              <button
+                                type="button"
+                                style={styles.primaryButton}
+                                disabled={Boolean(runningKey)}
+                                onClick={() => startVisit(subject, visit)}
+                              >
+                                {runningKey === `${key}:start:${visit.id}`
+                                  ? "Starting…"
+                                  : "Start Visit"}
                               </button>
                             )}
                             {visit.actions.canComplete === true && (
@@ -675,9 +729,12 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                     {editor.mode !== "propose" && (
                       <label style={styles.label}>
                         {editor.mode === "cancel"
-                          ? "Cancellation reason (optional)"
+                          ? editor.visit?.state === "STARTED"
+                            ? "Why are you stopping this Visit?"
+                            : "Cancellation reason (optional)"
                           : "Reason for rescheduling (optional)"}
                         <textarea
+                          required={editor.mode === "cancel" && editor.visit?.state === "STARTED"}
                           style={styles.textarea}
                           maxLength={2000}
                           value={form.reason}

@@ -90,7 +90,7 @@ test("ordinary canonical Evaluation reads no-Evaluation and existing-Evaluation 
   }
 });
 
-test("ordinary canonical Evaluation creates and versions through backend commands only", async () => {
+test("ordinary canonical Evaluation creates a pre-Visit draft and versions through backend commands only", async () => {
   const version1 = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
   const version2 = ordinaryCanonicalEvaluationFixture({
     aggregate: { version: 2 },
@@ -104,40 +104,6 @@ test("ordinary canonical Evaluation creates and versions through backend command
   });
   const browser = installBrowser([
     { status: 200, body: { success: true, evaluations: [] } },
-    {
-      status: 200,
-      body: {
-        success: true,
-        visits: [{
-          id: "99999999-9999-4999-8999-999999999999",
-          jobId,
-          purpose: "EVALUATION",
-          state: "COMPLETED",
-          currentVersion: 3,
-          scheduledStartAt: "2026-08-25T14:00:00.000Z",
-          scheduledEndAt: null,
-          timeZone: "America/New_York",
-          locationMode: "JOB_SERVICE_LOCATION",
-          cancellationReason: null,
-          cancelledAt: null,
-          completedAt: "2026-08-25T15:00:00.000Z",
-          evaluationId: null,
-          workstreamIds: [],
-          approvedQuoteDecisionEvidence: null,
-          createdByParticipantId: "77777777-7777-4777-8777-777777777777",
-          recordedByParticipantId: "77777777-7777-4777-8777-777777777777",
-          createdAt: "2026-08-24T14:00:00.000Z",
-          versionCreatedAt: "2026-08-25T15:00:00.000Z",
-          actions: {
-            canConfirm: false,
-            canRequestChange: false,
-            canReschedule: false,
-            canCancel: false,
-            canComplete: false,
-          },
-        }],
-      },
-    },
     { status: 201, body: { success: true, ...version1 } },
     { status: 200, body: { success: true, ...version2 } },
   ]);
@@ -146,7 +112,10 @@ test("ordinary canonical Evaluation creates and versions through backend command
   try {
     const created = await saveCanonicalEvaluationDraft({
       record: ordinaryRecord,
-      form: ordinaryForm(),
+      form: ordinaryForm({
+        observations: "",
+        internalNotes: "Questions prepared before the Evaluation Visit.",
+      }),
       createIdempotencyKey,
     });
     const updated = await saveCanonicalEvaluationDraft({
@@ -160,11 +129,16 @@ test("ordinary canonical Evaluation creates and versions through backend command
     assert.equal(updated.aggregate.version, 2);
     assert.deepEqual(
       browser.calls.map((call) => call.options.method),
-      ["GET", "GET", "POST", "PATCH"]
+      ["GET", "POST", "PATCH"]
     );
-    const createBody = JSON.parse(browser.calls[2].options.body);
-    const updateBody = JSON.parse(browser.calls[3].options.body);
-    assert.equal(createBody.visitId, "99999999-9999-4999-8999-999999999999");
+    const createBody = JSON.parse(browser.calls[1].options.body);
+    const updateBody = JSON.parse(browser.calls[2].options.body);
+    assert.equal(createBody.visitId, null);
+    assert.equal(createBody.content.observations, "");
+    assert.equal(
+      createBody.content.internalNotes,
+      "Questions prepared before the Evaluation Visit."
+    );
     assert.deepEqual(createBody.content.findings, []);
     assert.deepEqual(createBody.content.scopeRecommendations, []);
     assert.equal(Object.hasOwn(createBody.content, "customerConcern"), false);
@@ -172,7 +146,7 @@ test("ordinary canonical Evaluation creates and versions through backend command
     assert.equal(updateBody.content.observations, "Updated professional observations.");
     assert.doesNotMatch(
       browser.calls.map((call) => call.url).join("\n"),
-      /findings|recommendations|workstreams|activities|obligations|quotes|schedule|completion|history|change-orders/i
+      /findings|recommendations|workstreams|activities|obligations|quotes|visits|schedule|completion|history|change-orders/i
     );
   } finally {
     browser.restore();
@@ -234,7 +208,8 @@ test("bounded component keeps concern read-only and uses canonical EFR commands"
   assert.match(componentSource, /getEfrCopy/);
   assert.match(componentSource, /copy\.customerConcern/);
   assert.match(componentSource, /copy\.customerDetails/);
-  assert.match(componentSource, /copy\.startEvaluation/);
+  assert.doesNotMatch(componentSource, /if \(!form\.observations\.trim\(\)\)/);
+  assert.match(componentSource, /Fill manually/);
   assert.match(componentSource, /copy\.saveEvaluation/);
   assert.match(componentSource, /completeCanonicalEvaluationDraft/);
   assert.match(componentSource, /CanonicalFindingsPanel/);

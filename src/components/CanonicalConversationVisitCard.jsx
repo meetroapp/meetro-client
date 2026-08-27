@@ -121,8 +121,16 @@ function stateCopy(visit, viewerIsProfessional) {
     return {
       title: "Evaluation Visit Confirmed",
       guidance: viewerIsProfessional
-        ? "Complete the Visit only after it occurs."
+        ? "Start the Visit when the appointment begins."
         : "Both sides confirmed this exact schedule.",
+    };
+  }
+  if (visit.state === "STARTED") {
+    return {
+      title: "Evaluation Visit In Progress",
+      guidance: viewerIsProfessional
+        ? "Document the assessment, then complete the Visit when it ends."
+        : "The professional has started the Evaluation Visit.",
     };
   }
   if (visit.state === "COMPLETED") {
@@ -209,7 +217,7 @@ export default function CanonicalConversationVisitCard({
     setEditor(mode);
   }
 
-  async function command(commandName, schedule = null) {
+  async function command(commandName, schedule = null, acknowledgeScheduleVariance = false) {
     if (running) return;
     setRunning(true);
     setNotice("");
@@ -221,6 +229,7 @@ export default function CanonicalConversationVisitCard({
         purpose: "EVALUATION",
         schedule,
         reason: form.note.trim() || null,
+        acknowledgeScheduleVariance,
         setPage,
       });
       setEditor(null);
@@ -235,6 +244,16 @@ export default function CanonicalConversationVisitCard({
         setEditor(null);
         setReload((value) => value + 1);
         setNotice("This Visit changed elsewhere. The latest version was loaded; nothing was retried.");
+      } else if (
+        commandName === "start" &&
+        error?.code === "VISIT_START_ACKNOWLEDGMENT_REQUIRED" &&
+        window.confirm(
+          "This start is outside the normal appointment window. Start the Visit now?"
+        )
+      ) {
+        setRunning(false);
+        await command("start", null, true);
+        return;
       } else {
         setNotice(error?.message || "The Visit could not be updated.");
       }
@@ -294,6 +313,11 @@ export default function CanonicalConversationVisitCard({
           <span style={styles.location}>
             {visit.locationMode === "REMOTE" ? "Remote" : "Project service location"}
           </span>
+          {visit.startedAt && (
+            <span style={styles.location}>
+              Started {formatSchedule({ ...visit, scheduledStartAt: visit.startedAt, scheduledEndAt: null }, language)}
+            </span>
+          )}
         </>
       )}
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
@@ -316,6 +340,11 @@ export default function CanonicalConversationVisitCard({
         {viewerIsProfessional && visit?.actions.canReschedule && !["COMPLETED", "CANCELLED"].includes(visit.state) && (
           <button type="button" style={styles.secondary} disabled={running} onClick={() => open("reschedule")}>
             Edit
+          </button>
+        )}
+        {viewerIsProfessional && visit?.actions.canStart && (
+          <button type="button" style={styles.primary} disabled={running} onClick={() => command("start") }>
+            Start Visit
           </button>
         )}
         {viewerIsProfessional && visit?.actions.canComplete && (

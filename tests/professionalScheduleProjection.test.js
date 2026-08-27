@@ -30,6 +30,7 @@ function payload(overrides = {}) {
         readyToSchedule: 1,
         waitingOnCustomer: 1,
         changeRequested: 0,
+        inProgress: 0,
         upcoming: 0,
       },
       opportunities: [{
@@ -64,6 +65,7 @@ function payload(overrides = {}) {
         },
         cancellationReason: null,
         cancelledAt: null,
+        startedAt: null,
         completedAt: null,
         evaluationId: null,
         approvedQuoteDecisionEvidence: null,
@@ -76,6 +78,7 @@ function payload(overrides = {}) {
           canConfirm: false,
           canReschedule: false,
           canCancel: true,
+          canStart: false,
           canComplete: false,
           canViewJob: true,
         },
@@ -93,6 +96,7 @@ test("normalizer allowlists server Schedule truth and drops raw/private fields",
     readyToSchedule: 1,
     waitingOnCustomer: 1,
     changeRequested: 0,
+    inProgress: 0,
     upcoming: 0,
   });
   assert.equal("sentinelDatabaseField" in schedule.opportunities[0], false);
@@ -161,7 +165,7 @@ test("source state retains last confirmed truth across transient refresh failure
 
 test("confirmed canonical empty remains distinct from unavailable", () => {
   const empty = normalizeProfessionalSchedule(payload({
-    summary: { readyToSchedule: 0, waitingOnCustomer: 0, changeRequested: 0, upcoming: 0 },
+    summary: { readyToSchedule: 0, waitingOnCustomer: 0, changeRequested: 0, inProgress: 0, upcoming: 0 },
     opportunities: [],
     visits: [],
   }));
@@ -198,9 +202,37 @@ test("shared Schedule groups and counts separate Today from Upcoming in each Vis
     needsScheduling: 1,
     waiting: 0,
     changeRequested: 0,
+    inProgress: 0,
     today: 1,
     upcoming: 1,
   });
+});
+
+test("STARTED is grouped only as In Progress and retains actual start evidence", () => {
+  const response = payload();
+  Object.assign(response.schedule.visits[0], {
+    state: "STARTED",
+    semanticState: "STARTED",
+    startedAt: "2026-08-20T13:57:00.000Z",
+    actions: {
+      canConfirm: false,
+      canReschedule: false,
+      canCancel: true,
+      canStart: false,
+      canComplete: true,
+      canViewJob: true,
+    },
+  });
+  response.schedule.summary.inProgress = 1;
+  const schedule = normalizeProfessionalSchedule(response);
+  const groups = groupProfessionalSchedule(schedule, {
+    now: new Date("2026-08-20T14:10:00.000Z"),
+  });
+  assert.equal(groups.inProgress[0].id, IDS.visit);
+  assert.equal(groups.inProgress[0].startedAt, "2026-08-20T13:57:00.000Z");
+  assert.equal(groups.today.length, 0);
+  assert.equal(groups.upcoming.length, 0);
+  assert.equal(getProfessionalScheduleCounts(schedule).inProgress, 1);
 });
 
 test("wall-clock Schedule input becomes an explicit instant in the selected IANA timezone", () => {
