@@ -187,3 +187,52 @@ export function quoteDepositTerms(source = {}, total = 0) {
   }
   return `Deposit due on approval — $${deposit.due.toFixed(2)}. Remaining balance — $${deposit.remaining.toFixed(2)}.`;
 }
+
+function normalizedGeneratedTerm(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(",", "")
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[.;:]+$/g, "");
+}
+
+function numberPattern(value) {
+  const safe = Number(value);
+  if (!Number.isFinite(safe)) return "(?!)";
+  const text = String(safe).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return Number.isInteger(safe) ? `${text}(?:\\.0+)?` : text;
+}
+
+function isGeneratedDepositTerm(value, deposit) {
+  if (!deposit?.valid || deposit.mode === "NONE") return false;
+  const term = normalizedGeneratedTerm(value);
+  const due = numberPattern(deposit.due);
+  const remaining = numberPattern(deposit.remaining);
+  if (new RegExp(`^remaining balance\\s*-\\s*\\$?${remaining}$`).test(term)) return true;
+  if (deposit.mode === "PERCENT") {
+    const percent = numberPattern(deposit.percent);
+    return new RegExp(
+      `^${percent}% deposit(?: required| due on approval)?(?:\\s*-\\s*\\$?${due})?$`
+    ).test(term);
+  }
+  return new RegExp(
+    `^(?:deposit(?: required| due on approval)?(?:\\s*-\\s*\\$?${due})?|\\$?${due} deposit(?: required| due on approval)?)$`
+  ).test(term);
+}
+
+export function quoteIndependentPaymentTerms(value, pricing = {}) {
+  const deposit = pricing?.deposit;
+  const groups = String(value || "")
+    .split(/\s*·\s*|\r?\n+/)
+    .map((group) => group.trim())
+    .filter(Boolean)
+    .map((group) => group
+      .split(/(?<=[.!?])\s+(?=[A-Za-z0-9$])/)
+      .map((term) => term.trim())
+      .filter((term) => term && !isGeneratedDepositTerm(term, deposit))
+      .join(" "))
+    .filter(Boolean);
+  return groups.join(" · ");
+}

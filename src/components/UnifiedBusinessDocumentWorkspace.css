@@ -315,11 +315,14 @@
   padding: 5px 2px 24px;
   scroll-padding-bottom: 24px;
 }
-.business-document-turns article { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: start; }
-.business-document-turns article > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: #0f6139; font-size: 10px; font-weight: 950; }
-.business-document-turns article.you > span { background: #18364b; }
-.business-document-turns p { margin: 0; padding: 10px 12px; border: 1px solid #e0e6e1; border-radius: 4px 14px 14px 14px; color: #314257; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-.business-document-turns article.you p { background: #f7f8f6; }
+.business-document-turns > article.meetro,
+.business-document-turns > article.you { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: start; }
+.business-document-turns > article.meetro > span,
+.business-document-turns > article.you > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: #0f6139; font-size: 10px; font-weight: 950; }
+.business-document-turns > article.you > span { background: #18364b; }
+.business-document-turns > article.meetro p,
+.business-document-turns > article.you p { margin: 0; padding: 10px 12px; border: 1px solid #e0e6e1; border-radius: 4px 14px 14px 14px; color: #314257; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.business-document-turns > article.you p { background: #f7f8f6; }
 .business-document-turn-body { min-width: 0; }
 .business-document-turn-body > div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .business-document-turn-body button,
@@ -1162,6 +1165,11 @@
 }
 
 .business-document-proposal {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   align-self: stretch;
   container-type: inline-size;
   margin: 8px 0;

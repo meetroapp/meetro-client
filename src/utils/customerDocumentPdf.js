@@ -467,9 +467,12 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     );
   }
 
-  section(copy.paymentTerms, model.paymentTerms === "DUE_ON_RECEIPT"
-    ? copy.dueReceipt
-    : model.paymentTerms || (model.kind === "QUOTE" ? copy.confirmTerms : copy.notConfirmed));
+  const structuredQuoteDeposit = model.kind === "QUOTE" && model.depositLabel && model.depositDueMinor != null;
+  if (model.kind !== "QUOTE" || model.paymentTerms || !structuredQuoteDeposit) {
+    section(copy.paymentTerms, model.paymentTerms === "DUE_ON_RECEIPT"
+      ? copy.dueReceipt
+      : model.paymentTerms || (model.kind === "QUOTE" ? copy.confirmTerms : copy.notConfirmed));
+  }
   if (model.kind === "QUOTE") section(copy.duration, model.estimatedDuration || copy.notConfirmed);
   bulletSection(copy.conditions, model.conditions);
   bulletSection(copy.exclusions, model.exclusions);

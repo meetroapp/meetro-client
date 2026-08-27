@@ -55,23 +55,38 @@ test("proposal truth remains complete for the live R6H QA instruction", () => {
 });
 
 test("proposal layout stays conversational and contains narrow widths", () => {
+  assert.doesNotMatch(styles, /\.business-document-turns article\s*\{/);
+  assert.doesNotMatch(styles, /\.business-document-turns p\s*\{/);
+  assert.match(styles, /\.business-document-turns > article\.meetro,[\s\S]*\.business-document-turns > article\.you\s*\{[\s\S]*grid-template-columns:\s*30px minmax\(0, 1fr\)/);
+  assert.match(proposalStyles, /\.business-document-proposal\s*\{[\s\S]*display:\s*block;[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box/);
   assert.match(proposalStyles, /container-type:\s*inline-size/);
   assert.match(proposalStyles, /business-document-proposal-sections[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(proposalStyles, /business-document-proposal-section dl div[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
   assert.match(proposalStyles, /@container \(max-width: 280px\)/);
   assert.match(proposalStyles, /overflow-wrap:\s*anywhere/);
   assert.doesNotMatch(proposalStyles, /auto-fit|minmax\(145px/);
+  assert.doesNotMatch(proposalStyles, /(?:^|\n)\s*(?:height|max-height):/);
+  const footerStyles = proposalStyles.slice(
+    proposalStyles.indexOf(".business-document-proposal > footer {"),
+    proposalStyles.indexOf(".business-document-proposal > footer button")
+  );
+  assert.doesNotMatch(footerStyles, /position:\s*(?:absolute|fixed|sticky)/);
+  assert.ok(proposalMarkup.indexOf("business-document-proposal-sections") < proposalMarkup.indexOf("<footer>"));
+  assert.ok(workspace.indexOf("pendingQuoteProposal") < workspace.lastIndexOf('className="business-document-composer"'));
 });
 
-test("customer preview has readable hierarchy, structured payment, and emphasized price", () => {
+test("customer preview has readable hierarchy, structured deposit, and emphasized price", () => {
   assert.match(previewStyles, /business-document-copy p,[\s\S]*font-size:\s*13\.5px;[\s\S]*line-height:\s*1\.5/);
   assert.match(previewStyles, /business-document-meta dd[\s\S]*font-size:\s*13px/);
   assert.match(previewStyles, /business-document-table \.total strong[\s\S]*font-size:\s*18px/);
   assert.match(previewStyles, /business-document-payment-summary > div span[\s\S]*font-size:\s*13\.5px/);
   assert.match(workspace, /className="business-document-payment-summary"/);
+  assert.match(workspace, /quoteIndependentPaymentTerms/);
+  assert.match(workspace, /paymentTerms \? <section><h3>Payment Terms<\/h3>/);
+  assert.match(workspace, /!structuredDeposit \? <section><h3>Payment Terms<\/h3><p>Confirm terms before delivery\.<\/p>/);
   assert.match(workspace, /due on approval/);
-  assert.match(workspace, /remaining<\/span>/);
-  for (const label of ["Customer concern", "Scope of Work", "TOTAL PROJECT PRICE", "Payment Terms", "Estimated Duration", "Acceptance / Status"]) {
+  assert.match(workspace, /Remaining balance —/);
+  for (const label of ["Customer concern", "Scope of Work", "TOTAL PROJECT PRICE", "Deposit", "Estimated Duration", "Acceptance / Status"]) {
     assert.match(workspace, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });

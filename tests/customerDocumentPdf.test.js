@@ -138,6 +138,28 @@ test("working Quote keeps customer-facing description as Observation beside the 
   assert.doesNotMatch(renderCustomerDocumentPdf(withoutObservation).internal.pages.flat().join("\n"), /Observation/);
 });
 
+test("structured Quote deposit omits an empty duplicate Payment Terms section", () => {
+  const model = buildQuickQuoteDocumentModel({
+    customerName: "Customer",
+    projectTitle: "Cabinet repair",
+    recommendedSolution: "Repair the cabinet.",
+    fixedPrice: true,
+    lineItems: [],
+    total: 680,
+    paymentTerms: "",
+    depositLabel: "75% due on approval",
+    depositDue: 510,
+    remainingBalance: 170,
+  }, { branding: { businessName: "Business" } });
+  const rendered = renderCustomerDocumentPdf(model).internal.pages.flat().join("\n");
+  assert.match(rendered, /Deposit/);
+  assert.match(rendered, /75% due on approval/);
+  assert.match(rendered, /\$510\.00/);
+  assert.match(rendered, /Remaining balance/);
+  assert.match(rendered, /\$170\.00/);
+  assert.doesNotMatch(rendered, /Payment Terms|Confirm terms before delivery/);
+});
+
 test("canonical Invoice preserves only server financial truth", () => {
   const model = buildCanonicalInvoiceDocumentModel(invoice());
   assert.equal(model.totalMinor, 92000);

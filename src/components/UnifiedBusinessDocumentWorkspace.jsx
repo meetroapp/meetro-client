@@ -17,6 +17,7 @@ import {
 import {
   normalizeQuotePricingSettings,
   quoteCustomerPricingProjection,
+  quoteIndependentPaymentTerms,
 } from "../utils/quotePricingPresentation.js";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
@@ -286,19 +287,14 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
     ? quote.projectDescription
     : "";
   const deposit = pricing.deposit;
-  const generatedDepositTerm = deposit.mode === "PERCENT"
-    ? `${deposit.percent}% deposit`
-    : deposit.mode === "FIXED"
-      ? `$${Number(quote.depositFixedAmount ?? quote.depositAmount ?? deposit.due)} deposit`
-      : "";
-  const paymentTerms = String(quote.terms || "")
-    .split("·")
-    .map((term) => term.trim())
-    .filter((term) => term && term.toLowerCase() !== generatedDepositTerm.toLowerCase())
-    .join(" · ");
+  const paymentTerms = quoteIndependentPaymentTerms(
+    quote.paymentTerms || quote.terms,
+    pricing
+  );
+  const structuredDeposit = deposit.mode !== "NONE" && deposit.valid;
   const depositHeading = deposit.mode === "PERCENT"
-    ? `${deposit.percent}% deposit`
-    : "Deposit";
+    ? `${deposit.percent}% due on approval`
+    : "Due on approval";
   return (
     <article className="business-live-document" aria-label="Live Quote Preview">
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>QUOTE</b><span>{authorityState?.status === "ISSUED" ? "SENT" : "WORKING DRAFT"}</span></div></header>
@@ -312,7 +308,7 @@ function QuotePreview({ quote, branding, generalPhotos, beforePhotos, afterPhoto
         <div className="total" role="row"><span>{pricing.pricingDisplayMode === "TOTAL_ONLY" ? "TOTAL PROJECT PRICE" : "PROJECT PRICE"}</span><strong>{pricing.total > 0 ? money(pricing.total) : "—"}</strong></div>
       </div>
       {pricing.inclusionNote ? <p className="business-document-pricing-note">{pricing.inclusionNote}</p> : null}
-      <div className="business-document-footer-grid"><section className="business-document-payment-summary"><h3>Payment Terms</h3>{paymentTerms ? <p>{paymentTerms}</p> : null}{deposit.mode !== "NONE" && deposit.valid ? <div><strong>{depositHeading}</strong><span>{money(deposit.due)} due on approval</span><span>{money(deposit.remaining)} remaining</span></div> : !paymentTerms ? <p>Confirm terms before delivery.</p> : null}</section><section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
+      <div className="business-document-footer-grid">{structuredDeposit ? <section className="business-document-payment-summary"><h3>Deposit</h3><div><strong>{depositHeading}</strong><span>{money(deposit.due)}</span><span>Remaining balance — {money(deposit.remaining)}</span></div></section> : null}{paymentTerms ? <section><h3>Payment Terms</h3><p>{paymentTerms}</p></section> : !structuredDeposit ? <section><h3>Payment Terms</h3><p>Confirm terms before delivery.</p></section> : null}<section><h3>Estimated Duration</h3><p>{quote.estimatedDuration || "Not confirmed."}</p></section><section><h3>Acceptance / Status</h3><p>{authorityState?.status === "ISSUED" ? "Sent to customer · Waiting for customer response" : saved ? "Saved working draft · Not sent" : "Draft only. Nothing has been sent or approved."}</p></section></div>
       {agreement.exclusions.length || agreementSections.length ? <section className="business-document-agreement-preview" aria-label="Quote Agreement"><h3>Quote Agreement</h3>{agreement.exclusions.length ? <div><strong>Not Included / Exclusions</strong><ul>{agreement.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}{agreementSections.map(([key, label]) => <div key={key}><strong>{label}</strong><p>{agreement[key]}</p></div>)}</section> : null}
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>

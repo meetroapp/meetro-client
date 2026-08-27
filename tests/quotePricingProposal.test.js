@@ -10,6 +10,7 @@ import {
   calculateQuoteDeposit,
   quoteCustomerPricingProjection,
   quoteDepositTerms,
+  quoteIndependentPaymentTerms,
 } from "../src/utils/quotePricingPresentation.js";
 import {
   buildBusinessDocumentSavePayload,
@@ -193,6 +194,54 @@ test("deposit options calculate safely without implying payment", () => {
   assert.match(quoteDepositTerms({ depositMode: "PERCENT", depositPercent: 75 }, 680), /510\.00.*170\.00/);
 });
 
+test("structured deposit owns generated wording while genuine payment terms remain", () => {
+  const pricing = quoteCustomerPricingProjection({
+    laborItems: [{ description: "Labor", total: "500" }],
+    materialItems: [{ name: "Materials", total: "180" }],
+    pricingDisplayMode: "TOTAL_ONLY",
+    materialsDisplayMode: "INCLUDED_IN_TOTAL",
+    depositMode: "PERCENT",
+    depositPercent: "75",
+  });
+  assert.equal(pricing.total, 680);
+  assert.equal(pricing.deposit.due, 510);
+  assert.equal(pricing.deposit.remaining, 170);
+
+  for (const generated of [
+    "75% deposit required",
+    "75% deposit",
+    "75% deposit due on approval",
+    "75% deposit required · 75% deposit due on approval — $510.00. Remaining balance — $170.00.",
+  ]) {
+    assert.equal(quoteIndependentPaymentTerms(generated, pricing), "", generated);
+  }
+  assert.equal(
+    quoteIndependentPaymentTerms(
+      "75% deposit required. Remaining balance due upon completion.",
+      pricing
+    ),
+    "Remaining balance due upon completion."
+  );
+  assert.equal(
+    quoteIndependentPaymentTerms(
+      "75% deposit required. Balance due after final walkthrough.",
+      pricing
+    ),
+    "Balance due after final walkthrough."
+  );
+  assert.equal(
+    quoteIndependentPaymentTerms(
+      "75% deposit required. Payments accepted by check or ACH.",
+      pricing
+    ),
+    "Payments accepted by check or ACH."
+  );
+  assert.equal(
+    quoteIndependentPaymentTerms("75% deposit required before scheduling.", pricing),
+    "75% deposit required before scheduling."
+  );
+});
+
 test("total-only customer model and PDF text hide internal rows but show inclusion and deposit", () => {
   const pricing = quoteCustomerPricingProjection({
     pricingDisplayMode: "TOTAL_ONLY",
@@ -272,4 +321,11 @@ test("workspace uses a presentation-only proposal and explicit Apply/Edit/Dismis
   assert.match(source, /quoteProposalApplyInFlightRef\.current/);
   assert.match(source, /The Quote remains unsaved/);
   assert.doesNotMatch(source.slice(source.indexOf("function applyQuoteProposal"), source.indexOf("function focusComposer")), /saveDocument|issueAndSend|createBusinessDocumentDraft|deliverBusinessDocumentDraft|recordPayment/i);
+
+  const quoteBuilder = readFileSync(
+    new URL("../src/pages/QuoteBuilder.jsx", import.meta.url),
+    "utf8"
+  );
+  assert.match(quoteBuilder, /paymentTerms: quoteIndependentPaymentTerms\(terms, customerPricing\)/);
+  assert.doesNotMatch(quoteBuilder, /paymentTerms:\s*\[terms,\s*quoteDepositTerms/);
 });

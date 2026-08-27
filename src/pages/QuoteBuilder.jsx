@@ -61,7 +61,7 @@ import {
 } from "../utils/jobLinkedQuoteContext.js";
 import {
   quoteCustomerPricingProjection,
-  quoteDepositTerms,
+  quoteIndependentPaymentTerms,
 } from "../utils/quotePricingPresentation.js";
 import {
   extractProfessionalCategoryCostCandidates,
@@ -1600,11 +1600,11 @@ ${businessIdentity.businessName}`;
       tax: pricing.taxAmount,
       fees: pricing.feesAmount,
       total: customerPricing.total,
-      paymentTerms: [terms, quoteDepositTerms(customerPricing, customerPricing.total)].filter(Boolean).join(" · "),
+      paymentTerms: quoteIndependentPaymentTerms(terms, customerPricing),
       pricingNote: customerPricing.inclusionNote,
       depositDue: customerPricing.deposit.valid ? customerPricing.deposit.due : null,
       remainingBalance: customerPricing.deposit.valid ? customerPricing.deposit.remaining : null,
-      depositLabel: customerPricing.deposit.mode === "PERCENT" ? `${customerPricing.deposit.percent}% deposit due on approval` : customerPricing.deposit.mode === "FIXED" ? "Deposit due on approval" : "",
+      depositLabel: customerPricing.deposit.mode === "PERCENT" ? `${customerPricing.deposit.percent}% due on approval` : customerPricing.deposit.mode === "FIXED" ? "Due on approval" : "",
       estimatedDuration: estimatedDuration || timeline,
       notes,
       agreement,
