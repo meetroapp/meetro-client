@@ -119,6 +119,7 @@ import {
   getWorkCenterLifecycleProjectionTarget,
 } from "../utils/workCenterLifecycleProjection";
 import { hasCanonicalLiveJobAction } from "../utils/canonicalLiveJobProjection";
+import { getIncompleteEvaluationQuoteWarning } from "../utils/evaluationDraftProgression.js";
 import {
   createProfessionalScheduleSourceState,
   fetchProfessionalSchedule,
@@ -11238,11 +11239,6 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 autoOpenToken: canonicalAutoOpenToken,
                               }}
                               onCanonicalChange={() => setWorkCenterLifecycleRefreshKey((value) => value + 1)}
-                              onPrepareQuote={() => {
-                                setWorkCenterJobReturnSurface("quotes");
-                                setSelectedWorkCenterQuoteId("");
-                                openWorkTab("quotes");
-                              }}
                             />
                           </WorkCenterAccordion>
                           <WorkCenterAccordion
@@ -11286,11 +11282,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             <button
                               type="button"
                               style={startScheduleBtn}
-                              onClick={() => setPage(
-                                `quoteBuilder?jobId=${encodeURIComponent(
-                                  workCenterLifecycleProjection.projection.job?.id || ""
-                                )}`
-                              )}
+                              onClick={() => {
+                                const quoteJobId =
+                                  workCenterLifecycleProjection.projection.job?.id || "";
+                                if (!quoteJobId) return;
+                                const warning = getIncompleteEvaluationQuoteWarning(
+                                  canonicalLiveJob?.stage?.code
+                                );
+                                if (warning && !window.confirm(warning)) return;
+                                setPage(
+                                  `quoteBuilder?jobId=${encodeURIComponent(quoteJobId)}`
+                                );
+                              }}
                             >
                               {getAskMeetroWorkflowCopy(activeLanguage).estimate}
                             </button>

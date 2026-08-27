@@ -7,6 +7,7 @@ import {
 } from "../utils/findingRecommendationApi.js";
 import { loadCanonicalFindingsForEvaluation } from "../utils/findingRecommendationReadController.js";
 import { getEfrCopy } from "../utils/efrLanguage.js";
+import { getNewFindingDraftText } from "../utils/evaluationDraftProgression.js";
 import CanonicalRecommendationsPanel from "./CanonicalRecommendationsPanel.jsx";
 
 function findingState(finding, copy) {
@@ -91,10 +92,16 @@ export default function CanonicalFindingsPanel({
 
   function openEditor(finding = null, initialStatement = "", assistantDraft = null) {
     try {
+      const statement = finding?.statement || getNewFindingDraftText({
+        evaluation,
+        existingFindings: state.findings,
+        currentDraft: editor?.statement ?? null,
+        explicitDraft: initialStatement,
+      });
       setEditor({
         mode: finding ? "update" : "create",
         finding,
-        statement: finding?.statement || initialStatement,
+        statement,
         customerVisible: finding?.customerVisible === true,
         idempotencyKey: createLifecycleCommandKey(
           finding ? "finding-update" : "finding-create"
@@ -275,6 +282,9 @@ export default function CanonicalFindingsPanel({
               )}
               <CanonicalRecommendationsPanel
                 finding={finding}
+                evaluationDiagnosisSummary={
+                  evaluation?.evaluation?.content?.diagnosisSummary || ""
+                }
                 setPage={setPage}
                 language={language}
                 canManage={canReviewRecommendations}

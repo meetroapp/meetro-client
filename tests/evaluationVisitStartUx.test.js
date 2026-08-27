@@ -22,6 +22,10 @@ const quoteWorkspace = readFileSync(
   new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
   "utf8"
 );
+const contractorDashboard = readFileSync(
+  new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
+  "utf8"
+);
 
 test("all operational Visit surfaces expose one canonical Start and In Progress state", () => {
   for (const source of [conversation, workCenterVisits, schedule]) {
@@ -56,16 +60,18 @@ test("valid assistant actions mutate visible Evaluation work and Dismiss removes
   assert.match(evaluation, /filter\(\(item\) => !dismissedIds\.includes\(item\.id\)\)/);
 });
 
-test("direct Quote entry warns truthfully while governed send remains explicit", () => {
-  assert.match(
+test("Evaluation omits direct Quote promotion while exact Job Quote entry remains available", () => {
+  assert.doesNotMatch(
     evaluation,
-    /Evaluation not completed\. This Quote is being prepared from professional-entered information\./
+    /Prepare Quote Directly|prepareQuoteDirectly|Need to prepare a Quote without a completed Evaluation/
   );
-  assert.match(evaluation, /Continue to Quote/);
-  assert.match(evaluation, /return to Evaluation/i);
-  assert.match(evaluation, /onPrepareQuote\(\)/);
-  assert.match(evaluation, /evaluation\?\.evaluation\?\.status !== "completed"/);
-  assert.doesNotMatch(evaluation, /createOrdinaryJobEvaluation[\s\S]*prepareQuoteDirectly/);
+  assert.doesNotMatch(evaluation, /onPrepareQuote/);
+  assert.match(contractorDashboard, /quoteBuilder\?jobId=/);
+  assert.match(contractorDashboard, /encodeURIComponent\(/);
+  assert.match(
+    contractorDashboard,
+    /getIncompleteEvaluationQuoteWarning/
+  );
   assert.match(quoteWorkspace, /Send Quote to Customer/);
   assert.match(quoteWorkspace, /beginGovernedQuoteIssue/);
 });
@@ -74,9 +80,11 @@ test("completed Visit with a draft Evaluation is a dismissible reminder, not a l
   assert.match(evaluation, /Evaluation documentation not complete/);
   assert.match(
     evaluation,
-    /This Evaluation is still in draft\. You can finish it now or return later\./
+    /You can document the Evaluation now or return later\./
   );
   assert.match(evaluation, /Continue Evaluation/);
+  assert.match(evaluation, /Evaluation draft saved/);
+  assert.match(evaluation, /Review Findings &amp; Recommendations/);
   assert.match(evaluation, /Do this later/);
   assert.match(evaluation, /onClick=\{beginEditing\}/);
   assert.match(evaluation, /setDocumentationReminderDismissed\(true\)/);

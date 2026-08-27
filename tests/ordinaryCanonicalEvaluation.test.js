@@ -275,9 +275,11 @@ test("bounded component keeps concern read-only and uses canonical EFR commands"
     /isCanonicalReadOnlyJob[\s\S]*CanonicalJobEvaluation/
   );
   assert.match(componentSource, /Evaluation documentation not complete/);
-  assert.match(componentSource, /This Evaluation is still in draft\. You can finish it now or return later\./);
+  assert.match(componentSource, /Evaluation draft saved/);
+  assert.match(componentSource, /Your latest Evaluation work is saved\. You can finish it now or return later\./);
+  assert.match(componentSource, /Review Findings &amp; Recommendations/);
   assert.match(componentSource, /Continue Evaluation/);
   assert.match(componentSource, /Do this later/);
   assert.match(componentSource, /setDocumentationReminderDismissed\(true\)/);
-  assert.match(componentSource, /evaluation\?\.evaluation\?\.status !== "completed"/);
+  assert.doesNotMatch(componentSource, /Prepare Quote Directly|prepareQuoteDirectly/);
 });

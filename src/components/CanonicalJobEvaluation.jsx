@@ -18,6 +18,7 @@ import {
   requestWorkflowIntelligence,
 } from "../utils/contextualIntelligence.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
+import { getCanonicalEvaluationDraftProgress } from "../utils/evaluationDraftProgression.js";
 import CanonicalFindingsPanel from "./CanonicalFindingsPanel.jsx";
 import { WorkCenterAccordion } from "./WorkCenterWorkspaceSystem.jsx";
 import {
@@ -137,7 +138,6 @@ export default function CanonicalJobEvaluation({
   setPage,
   findingsPresentation = null,
   onCanonicalChange,
-  onPrepareQuote,
 }) {
   const copy = getEfrCopy(language);
   const sourceContext = getCanonicalEvaluationSourceContext(record);
@@ -160,6 +160,7 @@ export default function CanonicalJobEvaluation({
   });
   const [editing, setEditing] = useState(false);
   const [documentationReminderDismissed, setDocumentationReminderDismissed] = useState(false);
+  const [findingsReviewRequest, setFindingsReviewRequest] = useState(0);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [assistant, setAssistant] = useState({
@@ -561,14 +562,6 @@ export default function CanonicalJobEvaluation({
     setEditing(true);
   }
 
-  function prepareQuoteDirectly() {
-    if (typeof onPrepareQuote !== "function") return;
-    const confirmed = window.confirm(
-      "Evaluation not completed. This Quote is being prepared from professional-entered information. Continue to Quote? Select Cancel to return to Evaluation."
-    );
-    if (confirmed) onPrepareQuote();
-  }
-
   async function requestEvaluationHelp(action, prompt) {
     const intents = {
       describe: "DESCRIBE_CONDITION",
@@ -801,6 +794,7 @@ export default function CanonicalJobEvaluation({
       return;
     }
     setLoadState((current) => ({ ...current, status: "saving", error: "", notice: "" }));
+    const updatingExistingDraft = Boolean(evaluation);
     try {
       if (assistantEvaluationEdit) {
         const reviewed = await reviewAssistantItem(assistantEvaluationEdit, "EDITED", {
@@ -823,7 +817,15 @@ export default function CanonicalJobEvaluation({
           null,
         setPage,
       });
-      setLoadState({ status: "ready", evaluation: confirmed, error: "", notice: copy.evaluationSaved });
+      setLoadState({
+        status: "ready",
+        evaluation: confirmed,
+        error: "",
+        notice: updatingExistingDraft
+          ? "Evaluation draft updated"
+          : "Evaluation draft saved",
+      });
+      setDocumentationReminderDismissed(false);
       setForm(formForEvaluation(confirmed));
       setEditing(false);
       setAssistantEvaluationEdit(null);
@@ -833,6 +835,16 @@ export default function CanonicalJobEvaluation({
       if (/STALE_/.test(String(error?.code || ""))) setRefresh((value) => value + 1);
     }
   }
+
+  function reviewFindingsAndRecommendations() {
+    setDocumentationReminderDismissed(true);
+    setFindingsReviewRequest((value) => value + 1);
+  }
+
+  const draftProgress = getCanonicalEvaluationDraftProgress(evaluation);
+  const savedDraftIsMeaningful =
+    evaluation?.evaluation?.status === "draft" &&
+    draftProgress.hasMeaningfulSavedContent;
 
   async function completeEvaluation() {
     if (!canComplete || !evaluation) return;
@@ -864,14 +876,18 @@ export default function CanonicalJobEvaluation({
         : evaluation
           ? evaluation.evaluation.status === "completed"
             ? copy.completed
-            : evaluationVisitState.completedVisitId
-              ? "Evaluation documentation not complete"
+            : savedDraftIsMeaningful
+              ? "Evaluation draft saved"
+              : evaluationVisitState.completedVisitId
+                ? "Evaluation documentation not complete"
               : evaluationVisitState.activeState === "STARTED"
                 ? "Evaluation Visit In Progress"
               : evaluationVisitState.activeState === "SCHEDULED"
                 ? "Evaluation Draft — Visit Scheduled"
                 : "Evaluation Draft"
-          : copy.noEvaluation;
+          : evaluationVisitState.completedVisitId
+            ? "Evaluation documentation not complete"
+            : copy.noEvaluation;
 
   return (
     <>
@@ -897,15 +913,6 @@ export default function CanonicalJobEvaluation({
         {loadState.status === "loading" && <p role="status" style={styles.message}>{copy.loadingEvaluation}</p>}
         {loadState.error && <p role="alert" style={styles.error}>{loadState.error}</p>}
         {loadState.notice && <p role="status" style={styles.success}>{loadState.notice}</p>}
-        {typeof onPrepareQuote === "function" && evaluation?.evaluation?.status !== "completed" && (
-          <div style={styles.directQuoteNotice}>
-            <strong>Need to prepare a Quote without a completed Evaluation?</strong>
-            <span>Meetro will warn you and keep the Quote as an explicit working draft.</span>
-            <button type="button" style={styles.secondaryButton} onClick={prepareQuoteDirectly}>
-              Prepare Quote Directly
-            </button>
-          </div>
-        )}
         {environmentEnabled && jobId && visitAllowsDocumentation && (
           <ContextualAskMeetro
             language={language}
@@ -939,32 +946,69 @@ export default function CanonicalJobEvaluation({
         )}
         {loadState.status === "ready" && !evaluation && !editing && (
           <div style={styles.emptyState}>
-            <p style={styles.message}>
-              {evaluationVisitState.completedVisitId
-                ? "Evaluation Visit completed. Start or continue the Evaluation and finalize it when ready."
+            {!documentationReminderDismissed && evaluationVisitState.completedVisitId && (
+              <strong>Evaluation documentation not complete</strong>
+            )}
+            {!documentationReminderDismissed && (
+              <p style={styles.message}>
+                {evaluationVisitState.completedVisitId
+                ? "You can document the Evaluation now or return later."
                 : evaluationVisitState.activeState === "STARTED"
                   ? "Evaluation Visit in progress. Document the assessment as you work."
                 : evaluationVisitState.activeState === "SCHEDULED"
                   ? "Start the Evaluation Visit when you arrive to begin documenting the assessment."
                   : "Schedule and start an Evaluation Visit before documenting the onsite assessment."}
-            </p>
-            {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>Fill manually</button>}
+              </p>
+            )}
+            <div style={styles.actions}>
+              {canStart && <button type="button" style={styles.primaryButton} onClick={beginEditing}>Fill manually</button>}
+              {!documentationReminderDismissed && evaluationVisitState.completedVisitId && (
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={() => setDocumentationReminderDismissed(true)}
+                >
+                  Do this later
+                </button>
+              )}
+            </div>
           </div>
         )}
         {loadState.status === "ready" &&
           evaluation?.evaluation?.status === "draft" &&
-          evaluationVisitState.completedVisitId &&
+          (evaluationVisitState.completedVisitId || savedDraftIsMeaningful) &&
           !editing &&
           !documentationReminderDismissed && (
-            <div role="status" style={styles.documentationReminder}>
-              <strong>Evaluation documentation not complete</strong>
+            <div
+              role="status"
+              style={savedDraftIsMeaningful
+                ? styles.savedDraftGuidance
+                : styles.documentationReminder}
+            >
+              <strong>
+                {savedDraftIsMeaningful
+                  ? "Evaluation draft saved"
+                  : "Evaluation documentation not complete"}
+              </strong>
               <p style={styles.message}>
-                This Evaluation is still in draft. You can finish it now or return later.
+                {savedDraftIsMeaningful
+                  ? "Your latest Evaluation work is saved. You can finish it now or return later."
+                  : "You can document the Evaluation now or return later."}
               </p>
               <div style={styles.actions}>
-                <button type="button" style={styles.primaryButton} onClick={beginEditing}>
-                  Continue Evaluation
-                </button>
+                {savedDraftIsMeaningful ? (
+                  <button
+                    type="button"
+                    style={styles.primaryButton}
+                    onClick={reviewFindingsAndRecommendations}
+                  >
+                    Review Findings &amp; Recommendations
+                  </button>
+                ) : (
+                  <button type="button" style={styles.primaryButton} onClick={beginEditing}>
+                    Continue Evaluation
+                  </button>
+                )}
                 <button
                   type="button"
                   style={styles.secondaryButton}
@@ -1067,8 +1111,10 @@ export default function CanonicalJobEvaluation({
           icon="findingsLibrary"
           title={findingsPresentation.title}
           summary={findingsPresentation.summary}
-          defaultOpen={findingsPresentation.defaultOpen}
-          autoOpenToken={findingsPresentation.autoOpenToken}
+          defaultOpen={
+            findingsPresentation.defaultOpen || findingsReviewRequest > 0
+          }
+          autoOpenToken={`${findingsPresentation.autoOpenToken}:${findingsReviewRequest}`}
           nested
         >
           <CanonicalFindingsPanel
@@ -1078,7 +1124,6 @@ export default function CanonicalJobEvaluation({
             language={language}
             availableActions={availableActions}
             onCanonicalChange={onCanonicalChange}
-            onPrepareQuote={onPrepareQuote}
             assistantFindingDraft={assistantFindingDraft}
             assistantRecommendationDraft={assistantRecommendationDraft}
             onAssistantFindingDraftConsumed={() => setAssistantFindingDraft(null)}
@@ -1095,7 +1140,6 @@ export default function CanonicalJobEvaluation({
           language={language}
           availableActions={availableActions}
           onCanonicalChange={onCanonicalChange}
-          onPrepareQuote={onPrepareQuote}
           assistantFindingDraft={assistantFindingDraft}
           assistantRecommendationDraft={assistantRecommendationDraft}
           onAssistantFindingDraftConsumed={() => setAssistantFindingDraft(null)}
@@ -1186,8 +1230,8 @@ const styles = {
   message: { margin: 0, color: "#475569", lineHeight: 1.5 },
   error: { margin: 0, padding: 10, borderLeft: "3px solid #b91c1c", color: "#991b1b", background: "#fef2f2" },
   success: { margin: 0, padding: 10, borderLeft: "3px solid #15803d", color: "#166534", background: "#f0fdf4" },
-  directQuoteNotice: { display: "grid", gap: 8, justifyItems: "start", padding: 12, border: "1px solid #d6b45b", borderRadius: 8, background: "#fffbeb", color: "#6b4f11" },
   documentationReminder: { display: "grid", gap: 10, justifyItems: "start", padding: 12, border: "1px solid #d6b45b", borderRadius: 8, background: "#fffbeb", color: "#6b4f11" },
+  savedDraftGuidance: { display: "grid", gap: 10, justifyItems: "start", padding: 12, border: "1px solid #86a991", borderRadius: 8, background: "#f0fdf4", color: "#174b2c" },
   emptyState: { display: "grid", gap: 12, justifyItems: "start" },
   readView: { display: "grid", gap: 14 },
   readField: { display: "grid", gap: 5 },

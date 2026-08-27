@@ -6,6 +6,7 @@ import {
 } from "../utils/findingRecommendationApi.js";
 import { loadCanonicalRecommendationsForFinding } from "../utils/findingRecommendationReadController.js";
 import { getEfrCopy } from "../utils/efrLanguage.js";
+import { getNewRecommendationDraftText } from "../utils/evaluationDraftProgression.js";
 
 function recommendationLabel(recommendation, copy) {
   return recommendation.kind === "ALTERNATIVE"
@@ -34,6 +35,7 @@ function commandError(error, copy) {
 
 export default function CanonicalRecommendationsPanel({
   finding,
+  evaluationDiagnosisSummary = "",
   setPage,
   language = "en",
   canManage = false,
@@ -92,10 +94,16 @@ export default function CanonicalRecommendationsPanel({
 
   function openEditor(recommendation = null, initialStatement = "", assistantSource = null) {
     try {
+      const statement = recommendation?.statement || getNewRecommendationDraftText({
+        evaluationDiagnosisSummary,
+        existingRecommendations: state.recommendations,
+        currentDraft: editor?.statement ?? null,
+        explicitDraft: initialStatement,
+      });
       setEditor({
         mode: recommendation ? "update" : "create",
         recommendation,
-        statement: recommendation?.statement || initialStatement,
+        statement,
         customerVisible: recommendation?.customerVisible === true,
         idempotencyKey: createLifecycleCommandKey(
           recommendation ? "recommendation-update" : "recommendation-create"
